@@ -47,7 +47,7 @@ class SessionTimeoutService {
   start() {
     // If session timeout is disabled, don't start the service
     if (!this.enabled) {
-      console.log('⏰ Session timeout service DISABLED')
+      // console.log('⏰ Session timeout service DISABLED')
       return
     }
     
@@ -87,7 +87,7 @@ class SessionTimeoutService {
    * Reset session timeout (call when user extends session)
    */
   reset() {
-    console.log('⏰ Resetting session timeout')
+    // console.log('⏰ Resetting session timeout')
     this.stop()
     this.start()
   }
@@ -101,7 +101,7 @@ class SessionTimeoutService {
       return
     }
     
-    const accessToken = localStorage.getItem('access_token')
+    const accessToken = sessionStorage.getItem('access_token') || localStorage.getItem('access_token')
     if (!accessToken) {
       this.stop()
       return
@@ -201,6 +201,9 @@ class SessionTimeoutService {
    */
   performLogout() {
     // Clear all auth data
+    sessionStorage.removeItem('access_token')
+    sessionStorage.removeItem('refresh_token')
+    sessionStorage.removeItem('user')
     localStorage.removeItem('access_token')
     localStorage.removeItem('refresh_token')
     localStorage.removeItem('user_id')
@@ -234,7 +237,7 @@ class SessionTimeoutService {
    * Get remaining session time in seconds
    */
   getRemainingTime() {
-    const accessToken = localStorage.getItem('access_token')
+    const accessToken = sessionStorage.getItem('access_token') || localStorage.getItem('access_token')
     if (!accessToken) {
       return 0
     }

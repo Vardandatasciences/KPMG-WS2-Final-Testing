@@ -5,8 +5,27 @@ const cors = require('cors');
 const app = express();
 const port = 5000;
 
-// Enable CORS for all routes
-app.use(cors());
+const allowedOrigins = [
+  'http://localhost:8080',
+  'http://127.0.0.1:8080',
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  'https://grc-tprm.vardaands.com',
+  'https://riskavaire.vardaands.com',
+  'https://test-riskavaire.vardaands.com',
+];
+
+app.use(cors({
+  origin(origin, callback) {
+    // Allow non-browser clients/tools that do not send Origin.
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error('CORS origin not allowed'), false);
+  },
+  credentials: false,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+}));
 app.use(express.json());
 
 // Replace with your actual credentials
@@ -45,9 +64,9 @@ app.get('/oauth/callback', async (req, res) => {
       },
     });
 
-    // Store the access token
+    // Store the access token server-side; never put OAuth tokens in URL query params.
     accessToken = response.data.access_token;
-    res.redirect('http://localhost:8080/integration/jira?token=' + accessToken);  // Redirect back to frontend with token
+    res.redirect('http://localhost:8080/integration/jira?success=true');
   } catch (error) {
     res.status(500).send('Error during OAuth flow');
   }

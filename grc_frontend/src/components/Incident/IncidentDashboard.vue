@@ -916,7 +916,7 @@ export default {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+            'Authorization': `Bearer ${sessionStorage.getItem('access_token') || localStorage.getItem('access_token')}`
           },
           body: JSON.stringify({
             limit: 50
@@ -1229,7 +1229,10 @@ export default {
     
     // Helper method for authenticated API calls
     async authenticatedFetch(url, options = {}) {
-      const token = localStorage.getItem('access_token') || localStorage.getItem('token');
+      const token = sessionStorage.getItem('access_token') ||
+                    sessionStorage.getItem('token') ||
+                    localStorage.getItem('access_token') ||
+                    localStorage.getItem('token');
       const defaultHeaders = {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'

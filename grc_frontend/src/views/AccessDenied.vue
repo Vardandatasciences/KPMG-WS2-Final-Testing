@@ -174,8 +174,8 @@ export default {
     }
     
     // Load user info
-    const userId = localStorage.getItem('user_id')
-    const userRole = localStorage.getItem('user_role') || localStorage.getItem('role')
+    const userId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id')
+    const userRole = sessionStorage.getItem('user_role') || localStorage.getItem('user_role') || sessionStorage.getItem('role') || localStorage.getItem('role')
     this.userInfo = {
       userId: userId,
       role: userRole
@@ -258,7 +258,7 @@ export default {
         }
         
         // Get user ID
-        const userId = localStorage.getItem('user_id')
+        const userId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id')
         if (!userId) {
           this.message = 'Please log in to request access.'
           this.messageType = 'error'
@@ -267,7 +267,7 @@ export default {
         }
         
         // Get access token
-        const accessToken = localStorage.getItem('access_token')
+        const accessToken = sessionStorage.getItem('access_token') || localStorage.getItem('access_token')
         
         // Get user's framework ID if available (needed for DataSubjectRequest)
         // For now, we'll let the backend handle framework selection

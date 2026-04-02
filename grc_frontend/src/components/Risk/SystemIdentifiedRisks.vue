@@ -672,7 +672,7 @@ export default {
       try {
         const response = await axios.get(API_ENDPOINTS.SYSTEM_RISKS_STATS, {
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
+            'Authorization': `Bearer ${sessionStorage.getItem('access_token') || sessionStorage.getItem('token') || sessionStorage.getItem('session_token') || sessionStorage.getItem('jwt_token') || localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
           }
         });
         
@@ -702,7 +702,7 @@ export default {
         
         const response = await axios.get(`${API_ENDPOINTS.SYSTEM_RISKS_LIST}?${params}`, {
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
+            'Authorization': `Bearer ${sessionStorage.getItem('access_token') || sessionStorage.getItem('token') || sessionStorage.getItem('session_token') || sessionStorage.getItem('jwt_token') || localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
           }
         });
         
@@ -767,7 +767,7 @@ export default {
       try {
         const response = await axios.get(API_ENDPOINTS.SYSTEM_RISKS_DETAIL(risk.id), {
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
+            'Authorization': `Bearer ${sessionStorage.getItem('access_token') || sessionStorage.getItem('token') || sessionStorage.getItem('session_token') || sessionStorage.getItem('jwt_token') || localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
           }
         });
         if (response?.data?.status === 'success') {
@@ -810,7 +810,7 @@ export default {
           user_id: userId
         }, {
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
+            'Authorization': `Bearer ${sessionStorage.getItem('access_token') || sessionStorage.getItem('token') || sessionStorage.getItem('session_token') || sessionStorage.getItem('jwt_token') || localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
           }
         });
         
@@ -847,7 +847,7 @@ export default {
           user_id: userId
         }, {
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
+            'Authorization': `Bearer ${sessionStorage.getItem('access_token') || sessionStorage.getItem('token') || sessionStorage.getItem('session_token') || sessionStorage.getItem('jwt_token') || localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
           }
         });
 
@@ -878,7 +878,7 @@ export default {
         try {
           const response = await axios.get(API_ENDPOINTS.SYSTEM_RISKS_RUN_TEST_ANALYSIS_STATUS(this.testAnalysis.jobId), {
             headers: {
-              'Authorization': `Bearer ${localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
+              'Authorization': `Bearer ${sessionStorage.getItem('access_token') || sessionStorage.getItem('token') || sessionStorage.getItem('session_token') || sessionStorage.getItem('jwt_token') || localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
             }
           });
           const job = response?.data?.job || {};
@@ -938,7 +938,7 @@ export default {
       try {
         await axios.post(API_ENDPOINTS.SYSTEM_RISKS_RUN_TEST_ANALYSIS_CANCEL(this.testAnalysis.jobId), {}, {
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
+            'Authorization': `Bearer ${sessionStorage.getItem('access_token') || sessionStorage.getItem('token') || sessionStorage.getItem('session_token') || sessionStorage.getItem('jwt_token') || localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
           }
         });
         this.$notify?.({
@@ -961,7 +961,7 @@ export default {
       try {
         const response = await axios.get(API_ENDPOINTS.SYSTEM_RISKS_DETAIL(risk.id), {
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
+            'Authorization': `Bearer ${sessionStorage.getItem('access_token') || sessionStorage.getItem('token') || sessionStorage.getItem('session_token') || sessionStorage.getItem('jwt_token') || localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
           }
         });
         
@@ -1038,7 +1038,7 @@ export default {
           multiplier_y: this.reviewForm.multiplierY
         }, {
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
+            'Authorization': `Bearer ${sessionStorage.getItem('access_token') || sessionStorage.getItem('token') || sessionStorage.getItem('session_token') || sessionStorage.getItem('jwt_token') || localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
           }
         });
         
@@ -1084,7 +1084,7 @@ export default {
           multiplier_y: this.reviewForm.multiplierY
         }, {
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
+            'Authorization': `Bearer ${sessionStorage.getItem('access_token') || sessionStorage.getItem('token') || sessionStorage.getItem('session_token') || sessionStorage.getItem('jwt_token') || localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
           }
         });
         
@@ -1116,7 +1116,7 @@ export default {
           reason: reason
         }, {
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
+            'Authorization': `Bearer ${sessionStorage.getItem('access_token') || sessionStorage.getItem('token') || sessionStorage.getItem('session_token') || sessionStorage.getItem('jwt_token') || localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
           }
         });
         
@@ -1150,7 +1150,7 @@ export default {
           reason: reason
         }, {
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
+            'Authorization': `Bearer ${sessionStorage.getItem('access_token') || sessionStorage.getItem('token') || sessionStorage.getItem('session_token') || sessionStorage.getItem('jwt_token') || localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
           }
         });
         
@@ -1255,7 +1255,7 @@ export default {
           feedback: feedback || ''
         }, {
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
+            'Authorization': `Bearer ${sessionStorage.getItem('access_token') || sessionStorage.getItem('token') || sessionStorage.getItem('session_token') || sessionStorage.getItem('jwt_token') || localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
           }
         });
 
@@ -1305,7 +1305,7 @@ export default {
           feedback: feedback
         }, {
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
+            'Authorization': `Bearer ${sessionStorage.getItem('access_token') || sessionStorage.getItem('token') || sessionStorage.getItem('session_token') || sessionStorage.getItem('jwt_token') || localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
           }
         });
 

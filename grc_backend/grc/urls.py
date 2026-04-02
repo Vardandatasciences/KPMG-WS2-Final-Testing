@@ -3,8 +3,9 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 
 from django.http import HttpResponse
+from django.views.decorators.csrf import csrf_exempt
 
-from .authentication import jwt_login, jwt_refresh, jwt_logout, jwt_verify, accept_consent, test_consent_auth, test_consent_simple, mfa_verify_otp, mfa_resend_otp, google_oauth_initiate, google_oauth_callback,product_version_info, test_token_version
+from .authentication import jwt_login, jwt_refresh, jwt_logout, jwt_verify, accept_consent, test_consent_auth, test_consent_simple, mfa_verify_otp, mfa_resend_otp, google_oauth_initiate, google_oauth_callback, google_oauth_callback_payload, product_version_info, test_token_version
 
 from .views import test_jwt_auth, list_users, clear_ai_cache
 
@@ -588,9 +589,11 @@ auth_urlpatterns = [
     # Google OAuth SSO endpoints
     path('google/oauth/', google_oauth_initiate, name='google-oauth-initiate'),
     path('google/oauth-callback/', google_oauth_callback, name='google-oauth-callback'),
+    path('google/oauth-callback-payload/', google_oauth_callback_payload, name='google-oauth-callback-payload'),
     # Frontend-compatible Google OAuth endpoints
     path('google-oauth/initiate/', google_oauth_initiate, name='google-oauth-initiate-compat'),
     path('google-oauth/callback/', google_oauth_callback, name='google-oauth-callback-compat'),
+    path('google-oauth/callback-payload/', google_oauth_callback_payload, name='google-oauth-callback-payload-compat'),
 
 ]
 
@@ -996,7 +999,8 @@ policy_urlpatterns = [
 
     path('policy-subcategories/', get_policy_subcategories, name='policy-subcategories'),
 
-    path('policies/<int:policy_id>/request-status-change/', request_policy_status_change, name='request-policy-status-change'),
+    # URL-level csrf_exempt: DRF @api_view can prevent @csrf_exempt on the view from being seen by CsrfViewMiddleware
+    path('policies/<int:policy_id>/request-status-change/', csrf_exempt(request_policy_status_change), name='request-policy-status-change'),
 
     path('policy-approvals/<int:approval_id>/approve-status-change/', approve_policy_status_change, name='approve-policy-status-change'),
 

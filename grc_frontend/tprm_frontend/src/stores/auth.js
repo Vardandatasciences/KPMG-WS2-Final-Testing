@@ -7,6 +7,7 @@ export const useAuthStore = defineStore('auth', {
     user: null,
     isAuthenticated: false,
     loading: false,
+    // Cookie-first auth: tokens live in HttpOnly cookies (not readable by JS)
     token: null,
     refreshToken: null
   }),
@@ -40,14 +41,12 @@ export const useAuthStore = defineStore('auth', {
     initializeAuth() {
       const user = localStorage.getItem('user')
       const isAuthenticated = localStorage.getItem('isAuthenticated')
-      const token = localStorage.getItem('token')
-      const refreshToken = localStorage.getItem('refreshToken')
       
       if (user && isAuthenticated === 'true') {
         this.user = JSON.parse(user)
         this.isAuthenticated = true
-        this.token = token
-        this.refreshToken = refreshToken
+        this.token = null
+        this.refreshToken = null
       } else {
         // If no user in localStorage, initialize hardcoded user for vendor module
         this.initializeHardcodedUser()
@@ -58,13 +57,12 @@ export const useAuthStore = defineStore('auth', {
     setUser(userData, tokens = {}) {
       this.user = userData
       this.isAuthenticated = true
-      this.token = tokens.access || null
-      this.refreshToken = tokens.refresh || null
+      this.token = null
+      this.refreshToken = null
       
       localStorage.setItem('user', JSON.stringify(userData))
       localStorage.setItem('isAuthenticated', 'true')
-      if (tokens.access) localStorage.setItem('token', tokens.access)
-      if (tokens.refresh) localStorage.setItem('refreshToken', tokens.refresh)
+      // Do not store tokens in browser storage.
     },
 
     // Clear user data
@@ -76,26 +74,17 @@ export const useAuthStore = defineStore('auth', {
       
       localStorage.removeItem('user')
       localStorage.removeItem('isAuthenticated')
-      localStorage.removeItem('token')
-      localStorage.removeItem('refreshToken')
     },
 
     // Check authentication status
     async checkAuth() {
       this.loading = true
       try {
-        // If we have a token, verify it with the backend
-        if (this.token) {
-          const response = await apiClient.get('/api/auth/verify/', {
-            headers: {
-              'Authorization': `Bearer ${this.token}`
-            }
-          })
-          
-          if (response.data && response.data.user) {
-            this.setUser(response.data.user, { access: this.token, refresh: this.refreshToken })
-            return true
-          }
+        // Cookie-first: verify via backend using HttpOnly cookies
+        const response = await apiClient.get('/api/auth/verify/')
+        if (response.data && response.data.user) {
+          this.setUser(response.data.user)
+          return true
         }
         
         // Fallback to hardcoded user for vendor module
@@ -120,10 +109,7 @@ export const useAuthStore = defineStore('auth', {
         const response = await apiClient.post('/api/auth/login/', credentials)
         
         if (response.data && response.data.user) {
-          this.setUser(response.data.user, {
-            access: response.data.access,
-            refresh: response.data.refresh
-          })
+          this.setUser(response.data.user)
           return { success: true, message: 'Login successful' }
         }
         
@@ -144,13 +130,7 @@ export const useAuthStore = defineStore('auth', {
     async logout() {
       this.loading = true
       try {
-        if (this.token) {
-          await apiClient.post('/api/auth/logout/', {}, {
-            headers: {
-              'Authorization': `Bearer ${this.token}`
-            }
-          })
-        }
+        await apiClient.post('/api/auth/logout/', {})
       } catch (error) {
         console.error('Logout error:', error)
       } finally {
@@ -163,27 +143,8 @@ export const useAuthStore = defineStore('auth', {
 
     // Refresh token
     async refreshAccessToken() {
-      if (!this.refreshToken) {
-        throw new Error('No refresh token available')
-      }
-
-      try {
-        const response = await apiClient.post('/api/auth/token/refresh/', {
-          refresh: this.refreshToken
-        })
-
-        if (response.data && response.data.access) {
-          this.token = response.data.access
-          localStorage.setItem('token', response.data.access)
-          return response.data.access
-        }
-
-        throw new Error('Failed to refresh token')
-      } catch (error) {
-        console.error('Token refresh failed:', error)
-        this.clearUser()
-        throw error
-      }
+      // Cookie-first: refresh handled server-side via HttpOnly cookies.
+      throw new Error('Token refresh is not supported in cookie-first mode')
     }
   }
 })

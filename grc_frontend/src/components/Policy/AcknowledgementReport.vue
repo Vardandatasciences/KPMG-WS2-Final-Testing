@@ -156,6 +156,11 @@ import axios from 'axios'
 import { API_ENDPOINTS } from '../../config/api'
 import { PopupService } from '@/modules/popus/popupService'
 
+const sanitizeCSVCell = (value) => {
+  const text = String(value ?? '')
+  return /^\s*[=+\-@]/.test(text) ? `'${text}` : text
+}
+
 export default {
   name: 'AcknowledgementReport',
   setup() {
@@ -238,7 +243,11 @@ export default {
 
       return [
         headers.join(','),
-        ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+        ...rows.map(row =>
+          row
+            .map(cell => `"${String(sanitizeCSVCell(cell)).replace(/"/g, '""')}"`)
+            .join(',')
+        )
       ].join('\n')
     }
 

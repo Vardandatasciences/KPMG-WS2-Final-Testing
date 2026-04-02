@@ -986,7 +986,7 @@ const acceptConsent = async () => {
     isSubmitting.value = true
     errorMessage.value = ''
 
-    const token = localStorage.getItem('access_token')
+    const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token')
     if (!token) {
       throw new Error('No access token found')
     }
@@ -1003,10 +1003,10 @@ const acceptConsent = async () => {
     )
 
     if (response.data.status === 'success') {
-      // Update user data in localStorage
-      const userData = JSON.parse(localStorage.getItem('user') || '{}')
+      // Update user data in sessionStorage (localStorage fallback)
+      const userData = JSON.parse(sessionStorage.getItem('user') || localStorage.getItem('user') || '{}')
       userData.consent_accepted = '1'
-      localStorage.setItem('user', JSON.stringify(userData))
+      sessionStorage.setItem('user', JSON.stringify(userData))
       
       emit('consent-accepted')
     } else {
@@ -1073,7 +1073,7 @@ const initializeRetentionConfig = async () => {
     // If no framework ID, try to get from API
     if (!retentionFrameworkId.value) {
       try {
-        const token = localStorage.getItem('access_token')
+        const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token')
         const response = await axios.get(`${API_BASE_URL}/api/frameworks/get-selected/`, {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -1104,7 +1104,7 @@ const initializeRetentionConfig = async () => {
 
 const loadFirstApprovedFramework = async () => {
   try {
-    const token = localStorage.getItem('access_token')
+    const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token')
     const response = await axios.get(`${API_BASE_URL}/api/frameworks/`, {
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -1131,7 +1131,7 @@ const loadFirstApprovedFramework = async () => {
 
 const loadRetentionFrameworkInfo = async (frameworkId) => {
   try {
-    const token = localStorage.getItem('access_token')
+    const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token')
     const response = await axios.get(`${API_BASE_URL}/api/frameworks/${frameworkId}/`, {
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -1149,7 +1149,7 @@ const loadRetentionFrameworkInfo = async (frameworkId) => {
 
 const loadRetentionConfigs = async (frameworkId) => {
   try {
-    const token = localStorage.getItem('access_token')
+    const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token')
     
     // Load module configs
     const moduleResponse = await axios.get(

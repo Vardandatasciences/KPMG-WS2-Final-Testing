@@ -62,19 +62,12 @@ export default {
   async created() {
     // Check if user has a valid session on app start
     console.log('App created - checking session validation')
-    
-    const sessionToken = localStorage.getItem('session_token')
-    if (sessionToken) {
-      try {
-        await this.$store.dispatch('auth/validateSession')
-      } catch (error) {
-        // Session invalid, clear it
-        localStorage.removeItem('session_token')
-        this.$store.commit('auth/CLEAR_AUTH')
-      }
-    } else {
-      // No session token found, user needs to login
-      console.log('No session token found, user needs to login')
+
+    try {
+      await this.$store.dispatch('auth/validateSession')
+    } catch (error) {
+      // Session invalid, clear it
+      this.$store.commit('auth/CLEAR_AUTH')
     }
   }
 }

@@ -47,8 +47,15 @@ class JWTAuthentication(BaseAuthentication):
             token = auth_header.split(' ')[1]
             print(f"[DEBUG] Extracted token: {token[:20]}...")
             
-            # Use JWT_SECRET_KEY instead of SECRET_KEY
-            payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=['HS256'])
+            # Use centralized JWT verification configuration.
+            verification_key = getattr(settings, 'JWT_VERIFYING_KEY', None) or getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
+            payload = jwt.decode(
+                token,
+                verification_key,
+                algorithms=getattr(settings, 'JWT_ALLOWED_ALGORITHMS', [getattr(settings, 'JWT_ALGORITHM', 'RS256')]),
+                issuer=getattr(settings, 'JWT_ISSUER', None),
+                audience=getattr(settings, 'JWT_AUDIENCE', None),
+            )
             user_id = payload.get('user_id')
             print(f"[DEBUG] Decoded payload user_id: {user_id}")
             

@@ -183,6 +183,11 @@ const colorblindOptions = [
   { value: 'tritanopia', label: 'Tritanopia' }
 ]
 
+const getAuthToken = () => (
+  sessionStorage.getItem('access_token') ||
+  localStorage.getItem('access_token')
+)
+
 const getColorblindLabel = (value) => {
   const option = colorblindOptions.find(opt => opt.value === value)
   return option ? option.label : 'None'
@@ -216,7 +221,7 @@ const setTheme = async (theme) => {
         theme: theme
       }, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+          'Authorization': `Bearer ${getAuthToken() || ''}`,
           'Content-Type': 'application/json'
         }
       })
@@ -283,7 +288,7 @@ const setColorblindMode = async (mode) => {
           colorblind: mode || null
         }, {
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+            'Authorization': `Bearer ${getAuthToken() || ''}`,
             'Content-Type': 'application/json'
           }
         })
@@ -319,7 +324,7 @@ const loadUserTheme = async () => {
       try {
         const response = await axios.get(API_ENDPOINTS.GET_USER_THEME(userId), {
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+            'Authorization': `Bearer ${getAuthToken() || ''}`,
             'Content-Type': 'application/json'
           }
         })
@@ -400,7 +405,7 @@ const toggleUserMenu = () => {
 
 const fetchUnreadCount = async () => {
   try {
-    const accessToken = localStorage.getItem('access_token')
+    const accessToken = getAuthToken()
     const userId = localStorage.getItem('user_id')
     
     if (!accessToken || !userId) {

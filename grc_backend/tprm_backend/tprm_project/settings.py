@@ -80,6 +80,8 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'rfp.middleware.SecurityHeadersMiddleware',
+    # Framework-level safeguard: sanitize verbose error payloads.
+    'tprm_backend.middleware.error_sanitization.ErrorResponseSanitizationMiddleware',
 ]
 
 ROOT_URLCONF = 'tprm_project.urls'
@@ -184,9 +186,11 @@ REST_FRAMEWORK = {
         'rest_framework.authentication.SessionAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.AllowAny',  # Allow unauthenticated access for development
+        # Secure-by-default: endpoints must be authenticated unless explicitly marked public.
+        'rest_framework.permissions.IsAuthenticated',
     ],
-    'EXCEPTION_HANDLER': 'rest_framework.views.exception_handler',
+    # Framework-level: centralize exception handling to avoid leaking stack traces
+    'EXCEPTION_HANDLER': 'tprm_backend.utils.vendor_exception_handler.vendor_custom_exception_handler',
     'NON_FIELD_ERRORS_KEY': 'error',
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 10,
@@ -203,19 +207,37 @@ REST_FRAMEWORK = {
         'anon': '100/day',
         'user': '1000/day'
     },
-    'EXCEPTION_HANDLER': 'rfp.utils.custom_exception_handler',
 }
 
 # JWT Settings
+JWT_ALGORITHM = os.environ.get('JWT_ALGORITHM', 'RS256')
+JWT_ISSUER = os.environ.get('JWT_ISSUER', 'tprm-backend')
+JWT_AUDIENCE = os.environ.get('JWT_AUDIENCE', 'tprm-frontend')
+JWT_PRIVATE_KEY = os.environ.get('JWT_PRIVATE_KEY', '').replace('\\n', '\n')
+JWT_PUBLIC_KEY = os.environ.get('JWT_PUBLIC_KEY', '').replace('\\n', '\n')
+
+if JWT_ALGORITHM.startswith('RS') or JWT_ALGORITHM.startswith('ES'):
+    if not JWT_PRIVATE_KEY or not JWT_PUBLIC_KEY:
+        raise ValueError(
+            "JWT_PRIVATE_KEY and JWT_PUBLIC_KEY must be configured when using asymmetric JWT algorithms."
+        )
+    JWT_SIGNING_KEY = JWT_PRIVATE_KEY
+    JWT_VERIFYING_KEY = JWT_PUBLIC_KEY
+else:
+    JWT_SIGNING_KEY = os.environ.get('JWT_SECRET_KEY', SECRET_KEY)
+    JWT_VERIFYING_KEY = os.environ.get('JWT_VERIFYING_KEY', '')
+
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
     'ROTATE_REFRESH_TOKENS': False,
     'BLACKLIST_AFTER_ROTATION': True,
     'UPDATE_LAST_LOGIN': False,
-    'ALGORITHM': 'HS256',
-    'SIGNING_KEY': SECRET_KEY,
-    'VERIFYING_KEY': None,
+    'ALGORITHM': JWT_ALGORITHM,
+    'SIGNING_KEY': JWT_SIGNING_KEY,
+    'VERIFYING_KEY': JWT_VERIFYING_KEY,
+    'ISSUER': JWT_ISSUER,
+    'AUDIENCE': JWT_AUDIENCE,
     'AUTH_HEADER_TYPES': ('Bearer',),
     'USER_ID_FIELD': 'userid',
     'USER_ID_CLAIM': 'user_id',
@@ -233,6 +255,7 @@ CORS_ALLOWED_ORIGINS = [
     'http://127.0.0.1:8080',
     'http://localhost:3000',
     'http://127.0.0.1:3000',
+    'https://test-riskavaire.vardaands.com',
 ]
 
 CORS_ALLOW_CREDENTIALS = True
@@ -245,8 +268,8 @@ CORS_ALLOW_METHODS = [
     'PUT',
 ]
 
-# For development only
-CORS_ALLOW_ALL_ORIGINS = True
+# Security hardening: never use wildcard origin with credentials.
+CORS_ALLOW_ALL_ORIGINS = False
 
 # Security settings
 if not DEBUG:

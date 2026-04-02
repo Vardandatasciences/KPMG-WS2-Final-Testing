@@ -81,8 +81,8 @@ export default {
     },
     async fetchUnreadCount() {
       try {
-        const accessToken = localStorage.getItem('access_token')
-        const userId = localStorage.getItem('user_id')
+        const accessToken = sessionStorage.getItem('access_token') || localStorage.getItem('access_token')
+        const userId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id')
         
         if (!accessToken || !userId) {
           return

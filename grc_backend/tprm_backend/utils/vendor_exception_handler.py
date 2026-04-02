@@ -4,7 +4,6 @@ Vendor Custom Exception Handler - Secure error handling with logging
 
 import logging
 from typing import Dict, Any
-from django.http import JsonResponse
 from rest_framework.views import exception_handler
 from rest_framework.response import Response
 from rest_framework import status
@@ -63,8 +62,9 @@ def _vendor_sanitize_error_response(data: Any, exc: Exception) -> Dict[str, Any]
         'timestamp': _vendor_get_current_timestamp()
     }
     
-    # Only include detailed error information in debug mode
-    if settings.DEBUG:
+    # Detailed internals should never be exposed unless explicitly enabled.
+    expose_debug_errors = getattr(settings, 'EXPOSE_DEBUG_ERRORS', False)
+    if settings.DEBUG and expose_debug_errors:
         sanitized_data['debug_info'] = {
             'exception_type': type(exc).__name__,
             'original_data': data
@@ -130,7 +130,8 @@ def _vendor_handle_unexpected_exception(exc: Exception, context: Dict) -> Respon
         'timestamp': _vendor_get_current_timestamp()
     }
     
-    if settings.DEBUG:
+    expose_debug_errors = getattr(settings, 'EXPOSE_DEBUG_ERRORS', False)
+    if settings.DEBUG and expose_debug_errors:
         error_data['debug_info'] = {
             'exception_type': type(exc).__name__,
             'exception_message': str(exc)

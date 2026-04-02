@@ -240,13 +240,22 @@
                       </div>
                       
                       <!-- Regular File (downloadable) -->
-                      <a v-else :href="file['aws-file_link']" :download="file.fileName" target="_blank" class="downloadable-file">
+                      <a
+                        v-else-if="safeEvidenceUrl(file['aws-file_link'])"
+                        :href="safeEvidenceUrl(file['aws-file_link'])"
+                        :download="file.fileName"
+                        target="_blank"
+                        class="downloadable-file"
+                      >
                         <i class="fas fa-download"></i> {{ file.fileName }}
                         <span v-if="file.size" class="file-size">({{ formatFileSize(file.size) }})</span>
                         <span v-if="file.upload_type === 's3'" class="s3-indicator" title="Stored in S3">
                           <i class="fas fa-cloud"></i>
                         </span>
                       </a>
+                      <span v-else class="downloadable-file downloadable-file--blocked">
+                        <i class="fas fa-ban"></i> Blocked untrusted evidence URL
+                      </span>
                     </div>
                   </div>
                   <!-- Legacy single file display (fallback when no files array) -->
@@ -265,9 +274,18 @@
                     </div>
                     
                     <!-- Regular downloadable file -->
-                    <a v-else :href="mitigationSteps[currentStep]['aws-file_link']" :download="mitigationSteps[currentStep].fileName" target="_blank" class="downloadable-file">
+                    <a
+                      v-else-if="safeEvidenceUrl(mitigationSteps[currentStep]['aws-file_link'])"
+                      :href="safeEvidenceUrl(mitigationSteps[currentStep]['aws-file_link'])"
+                      :download="mitigationSteps[currentStep].fileName"
+                      target="_blank"
+                      class="downloadable-file"
+                    >
                       <i class="fas fa-download"></i> {{ mitigationSteps[currentStep].fileName }}
                     </a>
+                    <span v-else class="downloadable-file downloadable-file--blocked">
+                      <i class="fas fa-ban"></i> Blocked untrusted evidence URL
+                    </span>
                   </div>
                 </div>
               </div>
@@ -327,9 +345,18 @@
                           </div>
                         </div>
                         <div class="file-actions">
-                          <a :href="file['aws-file_link']" target="_blank" class="view-file-btn" title="View File">
+                          <a
+                            v-if="safeEvidenceUrl(file['aws-file_link'])"
+                            :href="safeEvidenceUrl(file['aws-file_link'])"
+                            target="_blank"
+                            class="view-file-btn"
+                            title="View File"
+                          >
                             <i class="fas fa-eye"></i> View
                           </a>
+                          <span v-else class="view-file-btn view-file-btn--blocked" title="Blocked untrusted URL">
+                            <i class="fas fa-ban"></i> Blocked
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -781,13 +808,22 @@
                         </div>
                         
                         <!-- Regular File (downloadable) -->
-                        <a v-else :href="file['aws-file_link']" download :filename="file.fileName" class="evidence-link">
+                        <a
+                          v-else-if="safeEvidenceUrl(file['aws-file_link'])"
+                          :href="safeEvidenceUrl(file['aws-file_link'])"
+                          download
+                          :filename="file.fileName"
+                          class="evidence-link"
+                        >
                           <i class="fas fa-download"></i> {{ file.fileName }}
                           <span v-if="file.size" class="file-size">({{ formatFileSize(file.size) }})</span>
                           <span v-if="file.upload_type === 's3'" class="s3-indicator" title="Stored in S3">
                             <i class="fas fa-cloud"></i>
                           </span>
                         </a>
+                        <span v-else class="evidence-link evidence-link--blocked">
+                          <i class="fas fa-ban"></i> Blocked untrusted evidence URL
+                        </span>
                       </div>
                     </div>
                     <!-- Legacy single file display (fallback when no files array) -->
@@ -806,9 +842,18 @@
                       </div>
                       
                       <!-- Regular downloadable file -->
-                      <a v-else :href="mitigation['aws-file_link']" download :filename="mitigation.fileName" class="evidence-link">
+                      <a
+                        v-else-if="safeEvidenceUrl(mitigation['aws-file_link'])"
+                        :href="safeEvidenceUrl(mitigation['aws-file_link'])"
+                        download
+                        :filename="mitigation.fileName"
+                        class="evidence-link"
+                      >
                         <i class="fas fa-download"></i> {{ mitigation.fileName }}
                       </a>
+                      <span v-else class="evidence-link evidence-link--blocked">
+                        <i class="fas fa-ban"></i> Blocked untrusted evidence URL
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -882,6 +927,7 @@ import CustomDropdown from '@/components/CustomDropdown.vue';
 import CollapsibleTable from '@/components/CollapsibleTable.vue';
 import EvidenceAttachment from '@/components/EventHandling/EvidenceAttachment.vue';
 import incidentService from '../../services/incidentService.js';
+import { safeEvidenceUrl } from '@/utils/trustedEvidenceUrl';
 import './IncidentUserTask.css'; // Import the CSS file
 
 export default {
@@ -1102,6 +1148,7 @@ export default {
     });
   },
   methods: {
+    safeEvidenceUrl,
     async fetchSelectedFramework() {
       try {
         console.log('🔍 Fetching selected framework for incident user tasks...');

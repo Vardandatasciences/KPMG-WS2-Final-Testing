@@ -1184,6 +1184,12 @@ const viewDocument = (doc) => {
       // Determine file type and handle accordingly
       const fileName = doc.name || doc.filename || 'document'
       const fileType = doc.type || ''
+      const safeFileName = String(fileName)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
       
       // For PDFs, open directly in new tab
       if (fileType.includes('pdf') || fileName.toLowerCase().endsWith('.pdf')) {
@@ -1192,7 +1198,7 @@ const viewDocument = (doc) => {
           newWindow.document.write(`
             <html>
               <head>
-                <title>${fileName}</title>
+                <title>${safeFileName}</title>
                 <style>
                   body { margin: 0; padding: 0; }
                   iframe { width: 100vw; height: 100vh; border: none; }
@@ -1215,14 +1221,14 @@ const viewDocument = (doc) => {
           newWindow.document.write(`
             <html>
               <head>
-                <title>${fileName}</title>
+                <title>${safeFileName}</title>
                 <style>
                   body { margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #f5f5f5; }
                   img { max-width: 100%; max-height: 90vh; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
                 </style>
               </head>
               <body>
-                <img src="${doc.content}" alt="${fileName}" />
+                <img src="${doc.content}" alt="${safeFileName}" />
               </body>
             </html>
           `)

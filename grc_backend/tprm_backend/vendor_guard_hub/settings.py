@@ -13,7 +13,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = config('SECRET_KEY', default='django-insecure-your-secret-key-here')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = config('DEBUG', default=True, cast=bool)
+DEBUG = config('DEBUG', default=False, cast=bool)
 
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=lambda v: [s.strip() for s in v.split(',')])
 
@@ -103,6 +103,8 @@ MIDDLEWARE = [
     'simple_history.middleware.HistoryRequestMiddleware',
     'debug_toolbar.middleware.DebugToolbarMiddleware',
     'rfp.middleware.SecurityHeadersMiddleware',  # RFP security middleware
+    # Framework-level safeguard: sanitize verbose error payloads.
+    'tprm_backend.middleware.error_sanitization.ErrorResponseSanitizationMiddleware',
     # 'defender.middleware.FailedLoginMiddleware',  # Temporarily disabled
     # 'middleware.vendor_logging.VendorLoggingMiddleware',
 ]
@@ -271,6 +273,23 @@ REST_FRAMEWORK = {
 }
 
 # JWT Configuration
+JWT_ALGORITHM = config('JWT_ALGORITHM', default='RS256')
+JWT_ISSUER = config('JWT_ISSUER', default='tprm-backend')
+JWT_AUDIENCE = config('JWT_AUDIENCE', default='tprm-frontend')
+JWT_PRIVATE_KEY = config('JWT_PRIVATE_KEY', default='').replace('\\n', '\n')
+JWT_PUBLIC_KEY = config('JWT_PUBLIC_KEY', default='').replace('\\n', '\n')
+
+if JWT_ALGORITHM.startswith('RS') or JWT_ALGORITHM.startswith('ES'):
+    if not JWT_PRIVATE_KEY or not JWT_PUBLIC_KEY:
+        raise ValueError(
+            "JWT_PRIVATE_KEY and JWT_PUBLIC_KEY must be configured when using asymmetric JWT algorithms."
+        )
+    JWT_SIGNING_KEY = JWT_PRIVATE_KEY
+    JWT_VERIFYING_KEY = JWT_PUBLIC_KEY
+else:
+    JWT_SIGNING_KEY = config('JWT_SECRET_KEY', default=SECRET_KEY)
+    JWT_VERIFYING_KEY = config('JWT_VERIFYING_KEY', default='')
+
 from datetime import timedelta
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
@@ -278,11 +297,11 @@ SIMPLE_JWT = {
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
     'UPDATE_LAST_LOGIN': True,
-    'ALGORITHM': 'HS256',
-    'SIGNING_KEY': SECRET_KEY,
-    'VERIFYING_KEY': None,
-    'AUDIENCE': None,
-    'ISSUER': None,
+    'ALGORITHM': JWT_ALGORITHM,
+    'SIGNING_KEY': JWT_SIGNING_KEY,
+    'VERIFYING_KEY': JWT_VERIFYING_KEY,
+    'AUDIENCE': JWT_AUDIENCE,
+    'ISSUER': JWT_ISSUER,
     'AUTH_HEADER_TYPES': ('Bearer',),
     'AUTH_HEADER_NAME': 'HTTP_AUTHORIZATION',
     'USER_ID_FIELD': 'userid',
@@ -309,9 +328,9 @@ SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 SESSION_COOKIE_AGE = 3600  # 1 hour
 
 # CORS Settings
-CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='http://localhost:3000,https://grc-tprm.vardaands.com/tprm,,https://grc-tprm.vardaands.com,http://localhost:3000,http://localhost:8080,http://127.0.0.1:8080,http://localhost:5173,http://127.0.0.1:5173', cast=lambda v: [s.strip() for s in v.split(',')])
+CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='http://localhost:3000,https://grc-tprm.vardaands.com/tprm,,https://grc-tprm.vardaands.com,https://test-riskavaire.vardaands.com,http://localhost:3000,http://localhost:8080,http://127.0.0.1:8080,http://localhost:5173,http://127.0.0.1:5173', cast=lambda v: [s.strip() for s in v.split(',')])
 CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOW_ALL_ORIGINS = True  # For development only
+CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOW_HEADERS = [
     'accept',
     'accept-encoding',
@@ -377,7 +396,7 @@ MFA_MAX_ATTEMPTS = config('MFA_MAX_ATTEMPTS', default=3, cast=int)
 
 # JWT Settings for MFA
 JWT_SECRET_KEY = config('JWT_SECRET_KEY', default=SECRET_KEY)
-JWT_ALGORITHM = 'HS256'
+JWT_ALGORITHM = config('JWT_ALGORITHM', default='RS256')
 JWT_EXPIRY_HOURS = config('JWT_EXPIRY_HOURS', default=24, cast=int)
 JWT_REFRESH_EXPIRY_DAYS = config('JWT_REFRESH_EXPIRY_DAYS', default=7, cast=int)
 

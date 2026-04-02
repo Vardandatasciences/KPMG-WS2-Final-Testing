@@ -52,9 +52,9 @@ export default {
   
   async mounted() {
     await loggingService.logPageView('Contract', 'Login')
-    // Set hardcoded user in localStorage
-    localStorage.setItem('current_user', this.currentUser)
-    localStorage.setItem('session_token', 'hardcoded_token_for_testuser1')
+    // Cookie-first auth: do not store tokens in browser storage.
+    sessionStorage.setItem('current_user', this.currentUser)
+    localStorage.removeItem('current_user')
   },
   
   methods: {

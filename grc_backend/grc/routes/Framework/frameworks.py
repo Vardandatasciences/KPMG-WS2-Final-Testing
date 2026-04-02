@@ -266,6 +266,24 @@ def create_framework_approval(request, framework_id):
                 {"error": "Reviewer assignment required. Please select a reviewer and try again."},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+        # Enforce maker–checker: creator cannot be their own reviewer
+        try:
+            creator_id_int = int(user_id)
+            reviewer_id_int = int(reviewer_id)
+        except (TypeError, ValueError):
+            logger.warning("Invalid creator/reviewer id while creating framework approval")
+            return Response(
+                {"error": "Invalid user or reviewer id. Please contact an administrator."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if creator_id_int == reviewer_id_int:
+            logger.warning(f"Self-approval attempt detected for framework ID {framework_id} by user {creator_id_int}")
+            return Response(
+                {"error": "Self-approval is not allowed. Please select a different reviewer."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         
         # Security: XSS Protection - Escape policy and subpolicy text fields before adding to approval data
         policies_data = []
@@ -340,8 +358,8 @@ def create_framework_approval(request, framework_id):
         framework_approval = FrameworkApproval.objects.create(
             FrameworkId=framework,
             ExtractedData=extracted_data,
-            UserId=user_id,
-            ReviewerId=reviewer_id,
+            UserId=creator_id_int,
+            ReviewerId=reviewer_id_int,
             Version="u1",  # Default initial version
             ApprovedNot=None  # Not yet approved
         )
@@ -645,6 +663,19 @@ def get_framework_approvals(request, framework_id=None):
         
         # Get user_id filter parameter if provided
         filter_user_id = request.GET.get('user_id')
+        if filter_user_id:
+            # IDOR protection: only allow filtering by another user if requester is system admin.
+            from ...rbac.utils import RBACUtils
+            requester_user_id = RBACUtils.get_user_id_from_request(request)
+            if not requester_user_id:
+                return Response({"error": "Authentication required"}, status=status.HTTP_401_UNAUTHORIZED)
+            try:
+                filter_user_id_int = int(str(filter_user_id))
+            except (TypeError, ValueError):
+                return Response({"error": "Invalid user id"}, status=status.HTTP_400_BAD_REQUEST)
+            if int(requester_user_id) != filter_user_id_int and not RBACUtils.is_system_admin(requester_user_id):
+                return Response({"error": "Forbidden"}, status=status.HTTP_403_FORBIDDEN)
+            filter_user_id = str(filter_user_id_int)
         
         if framework_id:
             # Security: Log framework ID safely
@@ -896,10 +927,11 @@ def submit_framework_review(request, framework_id):
         
         # Get current version info
         current_version = request.data.get('currentVersion', 'u1')
-        user_id = request.data.get('UserId') or getattr(request.user, 'id', None)
-        if not user_id:
-            return Response({"error": "User ID is required"}, status=status.HTTP_400_BAD_REQUEST)
-        reviewer_id = request.data.get('ReviewerId', 2)
+        from grc.rbac.utils import RBACUtils
+        actor_user_id = RBACUtils.get_user_id_from_request(request) or getattr(request.user, 'id', None)
+        if not actor_user_id:
+            return Response({"error": "User authentication required. Please log in and try again."}, status=status.HTTP_401_UNAUTHORIZED)
+        reviewer_id = request.data.get('ReviewerId')
         approved = request.data.get('ApprovedNot')
         extracted_data = request.data.get('ExtractedData')
         remarks = request.data.get('remarks', '')
@@ -909,6 +941,34 @@ def submit_framework_review(request, framework_id):
         # Validate required data
         if extracted_data is None:
             return Response({"error": "ExtractedData is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        if reviewer_id is None:
+            return Response({"error": "Reviewer ID is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Enforce reviewer identity and maker-checker rules
+        try:
+            actor_user_id_int = int(actor_user_id)
+            reviewer_id_int = int(reviewer_id)
+            creator_user_id_int = int(framework.CreatedBy) if framework.CreatedBy is not None else None
+        except (TypeError, ValueError):
+            logger.warning(f"Invalid user/reviewer id while submitting framework review for framework {framework_id}")
+            return Response(
+                {"error": "Invalid user or reviewer id. Please contact an administrator."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if actor_user_id_int != reviewer_id_int:
+            return Response(
+                {"error": "You are not the assigned reviewer for this request."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        if creator_user_id_int is not None and creator_user_id_int == reviewer_id_int:
+            logger.warning(f"Self-approval attempt detected for framework {framework_id} by user {reviewer_id_int}")
+            return Response(
+                {"error": "Self-approval is not allowed. Please assign a different reviewer."},
+                status=status.HTTP_403_FORBIDDEN
+            )
         
         # Convert boolean/null to proper values
         if approved == 'true' or approved is True:
@@ -932,8 +992,8 @@ def submit_framework_review(request, framework_id):
             new_approval = FrameworkApproval.objects.create(
                 FrameworkId=framework,
                 ExtractedData=extracted_data,
-                UserId=user_id,
-                ReviewerId=reviewer_id,
+                UserId=creator_user_id_int if creator_user_id_int is not None else actor_user_id_int,
+                ReviewerId=reviewer_id_int,
                 Version=new_version,
                 ApprovedNot=approved
             )
@@ -986,8 +1046,8 @@ def submit_framework_review(request, framework_id):
                 # Send notification to submitter about framework approval
                 try:
                     notification_service = NotificationService()
-                    submitter = Users.objects.get(UserId=user_id, tenant_id=tenant_id)
-                    reviewer = Users.objects.get(UserId=reviewer_id, tenant_id=tenant_id)
+                    submitter = Users.objects.get(UserId=(creator_user_id_int if creator_user_id_int is not None else actor_user_id_int), tenant_id=tenant_id)
+                    reviewer = Users.objects.get(UserId=reviewer_id_int, tenant_id=tenant_id)
                     approval_date = timezone.now().date().isoformat()
                     notification_data = {
                         'notification_type': 'frameworkFinalApproved',
@@ -2448,8 +2508,9 @@ def request_framework_status_change(request, framework_id):
     
     logger.info(f"Framework status change request for framework ID: {framework_id}")
     
-    # Get user ID from session or request data
-    user_id = request.session.get('user_id') or request.data.get('UserId') or getattr(request.user, 'id', None)
+    # Derive requester identity from authenticated context (avoid trusting body UserId)
+    from grc.rbac.utils import RBACUtils
+    user_id = RBACUtils.get_user_id_from_request(request) or request.session.get('user_id') or getattr(request.user, 'id', None)
     debug_print('UserId--------------------------------------------------------------------:', user_id)
     
     if not user_id:
@@ -2493,16 +2554,35 @@ def request_framework_status_change(request, framework_id):
         if not reviewer_id:
             return Response({"error": "Reviewer ID is required"}, status=status.HTTP_400_BAD_REQUEST)
             
-        debug_print(f"DEBUG: UserId: {user_id}, ReviewerId: {reviewer_id}")
+        # Enforce maker-checker with normalized numeric IDs
+        try:
+            creator_id_int = int(user_id)
+            reviewer_id_int = int(reviewer_id)
+        except (TypeError, ValueError):
+            logger.warning(f"Invalid creator/reviewer id while requesting framework status change for framework {framework_id}")
+            return Response(
+                {"error": "Invalid user or reviewer id. Please contact an administrator."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if creator_id_int == reviewer_id_int:
+            logger.warning(f"Self-approval attempt detected for framework status change on framework {framework_id} by user {creator_id_int}")
+            return Response(
+                {"error": "Self-approval is not allowed. Please select a different reviewer."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        debug_print(f"DEBUG: UserId: {creator_id_int}, ReviewerId: {reviewer_id_int}")
         
         reviewer_email = None
-        if reviewer_id:
+        if reviewer_id_int:
             try:
-                reviewer_user = Users.objects.get(UserId=reviewer_id, tenant_id=tenant_id)
+                reviewer_user = Users.objects.get(UserId=reviewer_id_int, tenant_id=tenant_id)
                 reviewer_email = reviewer_user.Email
                 debug_print(f"DEBUG: Found reviewer: {reviewer_user.UserName} ({reviewer_email})")
             except Users.DoesNotExist:
-                debug_print(f"DEBUG: Reviewer with ID {reviewer_id} not found in tenant")
+                debug_print(f"DEBUG: Reviewer with ID {reviewer_id_int} not found in tenant")
+                return Response({"error": "Selected reviewer not found for your organization."}, status=status.HTTP_400_BAD_REQUEST)
         
         reason = request.data.get('reason', 'No reason provided')
         debug_print(f"DEBUG: Reason: {reason}")
@@ -2593,23 +2673,23 @@ def request_framework_status_change(request, framework_id):
             framework_approval = FrameworkApproval.objects.create(
                 FrameworkId=framework,
                 ExtractedData=extracted_data,
-                UserId=user_id,
-                ReviewerId=reviewer_id,
+                UserId=creator_id_int,
+                ReviewerId=reviewer_id_int,
                 Version=new_version,
                 ApprovedNot=None  # Not yet approved
             )
-            debug_print(f"DEBUG: Created FrameworkApproval with ID: {framework_approval.ApprovalId}, Version: {new_version}, ReviewerId: {reviewer_id}")
+            debug_print(f"DEBUG: Created FrameworkApproval with ID: {framework_approval.ApprovalId}, Version: {new_version}, ReviewerId: {reviewer_id_int}")
             
             # Send notification to reviewer if email is available
             if 'reviewer_email' not in locals():
                 reviewer_email = None
-                if reviewer_id:
+                if reviewer_id_int:
                     try:
-                        reviewer_user = Users.objects.get(UserId=reviewer_id, tenant_id=tenant_id)
+                        reviewer_user = Users.objects.get(UserId=reviewer_id_int, tenant_id=tenant_id)
                         reviewer_email = reviewer_user.Email
                         debug_print(f"DEBUG: Sending notification to reviewer: {reviewer_user.UserName} ({reviewer_email})")
                     except Users.DoesNotExist:
-                        debug_print(f"DEBUG: Could not find reviewer with ID {reviewer_id} for notification")
+                        debug_print(f"DEBUG: Could not find reviewer with ID {reviewer_id_int} for notification")
             
             if reviewer_email:
                 debug_print(f"DEBUG: Attempting to send notification to {reviewer_email}")
@@ -2644,7 +2724,7 @@ def request_framework_status_change(request, framework_id):
                 "framework_id": framework_id,
                 "framework_name": framework.FrameworkName,
                 "approval_id": framework_approval.ApprovalId,
-                "reviewer_id": reviewer_id,
+                "reviewer_id": reviewer_id_int,
                 "reason": reason
             }
         )
@@ -2654,7 +2734,7 @@ def request_framework_status_change(request, framework_id):
             "ApprovalId": framework_approval.ApprovalId,
             "Version": framework_approval.Version,
             "Status": "Under Review",
-            "ReviewerId": reviewer_id,
+            "ReviewerId": reviewer_id_int,
             "ReviewerEmail": reviewer_email if reviewer_email else None
         }, status=status.HTTP_201_CREATED)
         

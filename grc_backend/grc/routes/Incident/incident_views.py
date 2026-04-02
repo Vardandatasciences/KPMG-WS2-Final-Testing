@@ -65,6 +65,7 @@ from datetime import date, time
 from django.conf import settings
 
 from ...routes.Global.validation import SecureValidator, ValidationError, IncidentValidator, QuestionnaireValidator
+from ...utils.csv_security import sanitize_csv_dataset
 from contextlib import contextmanager
 import logging
 import requests
@@ -2868,6 +2869,18 @@ def assign_incident(request, incident_id):
         # Handle mitigations if provided
         mitigations = data.get('mitigations')
         if mitigations:
+            try:
+                from django.conf import settings
+                from ...routes.Global.validation import sanitize_mitigation_evidence_urls, ValidationError as GlobalValidationError
+                mitigations = sanitize_mitigation_evidence_urls(
+                    {"mitigations": mitigations if isinstance(mitigations, dict) else {}},
+                    allowed_hosts=getattr(settings, "TRUSTED_EVIDENCE_URL_HOSTS", []),
+                    allowed_host_suffixes=getattr(settings, "TRUSTED_EVIDENCE_URL_HOST_SUFFIXES", []),
+                    allow_http_hosts=getattr(settings, "TRUSTED_EVIDENCE_URL_ALLOW_HTTP_HOSTS", []),
+                ).get("mitigations", mitigations)
+            except GlobalValidationError as e:
+                return JsonResponse({"error": "Invalid evidence URL", "field": getattr(e, "field", "unknown")}, status=400)
+        if mitigations:
             incident.Mitigation = json.dumps(mitigations) if isinstance(mitigations, dict) else mitigations
         
         # Handle due date if provided
@@ -3778,16 +3791,85 @@ import json
 import datetime
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, authentication_classes, throttle_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 
 from ...models import Incident
 from ...serializers import IncidentSerializer
 from ...routes.Global.s3_fucntions import export_data
 
+EXPORT_MAX_CLIENT_PAYLOAD_BYTES = 1_000_000
+EXPORT_MAX_CLIENT_RECORDS = 2_000
+EXPORT_MAX_NESTED_DEPTH = 6
+EXPORT_MAX_DICT_KEYS = 200
+EXPORT_MAX_LIST_ITEMS = 2_000
+EXPORT_MAX_STRING_LENGTH = 8_000
+TEMPLATE_TOKEN_RE = re.compile(r"(\{\{|\}\}|\{\%|\%\}|\{\#|\#\})")
+
+def _sanitize_export_scalar(value):
+    """Sanitize untrusted scalar values passed to export pipeline."""
+    if value is None:
+        return ""
+
+    if isinstance(value, bool):
+        return value
+
+    if isinstance(value, (int, float)):
+        return value
+
+    value_str = str(value).replace("\x00", "")
+    # Neutralize template syntax so downstream renderers treat it as plain text.
+    value_str = TEMPLATE_TOKEN_RE.sub("", value_str)
+    if len(value_str) > EXPORT_MAX_STRING_LENGTH:
+        value_str = value_str[:EXPORT_MAX_STRING_LENGTH]
+    return value_str
+
+def _sanitize_export_payload(value, depth=0):
+    """Recursively sanitize and constrain client-provided export payload."""
+    if depth > EXPORT_MAX_NESTED_DEPTH:
+        raise ValidationError("Export payload is too deeply nested")
+
+    if isinstance(value, dict):
+        if len(value) > EXPORT_MAX_DICT_KEYS:
+            raise ValidationError("Export payload has too many object keys")
+        sanitized = {}
+        for key, nested_value in value.items():
+            safe_key = _sanitize_export_scalar(key)
+            sanitized[safe_key] = _sanitize_export_payload(nested_value, depth + 1)
+        return sanitized
+
+    if isinstance(value, list):
+        if len(value) > EXPORT_MAX_LIST_ITEMS:
+            raise ValidationError("Export payload has too many list items")
+        return [_sanitize_export_payload(item, depth + 1) for item in value]
+
+    return _sanitize_export_scalar(value)
+
+def _validate_and_sanitize_client_export_data(raw_data):
+    """Parse, validate, and sanitize explicit client-provided export data."""
+    if isinstance(raw_data, str):
+        if len(raw_data.encode('utf-8')) > EXPORT_MAX_CLIENT_PAYLOAD_BYTES:
+            raise ValidationError("Export data exceeds maximum allowed payload size")
+        try:
+            raw_data = json.loads(raw_data)
+        except json.JSONDecodeError:
+            raise ValidationError("Invalid JSON format in data field")
+
+    if not isinstance(raw_data, list):
+        raise ValidationError("Export data must be a JSON array")
+
+    if len(raw_data) > EXPORT_MAX_CLIENT_RECORDS:
+        raise ValidationError(
+            f"Export data exceeds maximum record limit of {EXPORT_MAX_CLIENT_RECORDS}"
+        )
+
+    return _sanitize_export_payload(raw_data)
+
 @csrf_exempt
 @api_view(['POST'])
+@throttle_classes([ScopedRateThrottle])
 @authentication_classes([])
 @permission_classes([IncidentViewPermission])
 @rbac_required(required_permission='view_all_incident')
@@ -3801,6 +3883,8 @@ def export_incidents(request):
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
     """
+
+export_incidents.throttle_scope = 'export_incidents'
     Export incidents to various file formats.
     
     Supported formats:
@@ -3845,6 +3929,11 @@ def export_incidents(request):
                 'max_length': 5000,
                 'required': False
             },
+            'data': {
+                'type': 'string',  # JSON array as string
+                'max_length': EXPORT_MAX_CLIENT_PAYLOAD_BYTES,
+                'required': False
+            },
 
         }
         
@@ -3867,16 +3956,15 @@ def export_incidents(request):
                 export_options = {}
         elif not isinstance(export_options, dict):
             export_options = {}
+        export_options = _sanitize_export_payload(export_options)
 
         # Get incidents data from request or fetch from database
         if 'data' in request.data and request.data['data']:
-            # Use data provided in request (parse JSON string if needed)
-            incidents_data = request.data['data']
-            if isinstance(incidents_data, str):
-                try:
-                    incidents_data = json.loads(incidents_data)
-                except json.JSONDecodeError:
-                    return Response({'error': 'Invalid JSON format in data field'}, status=400)
+            # Use client-provided export data with strict sanitization and limits.
+            try:
+                incidents_data = _validate_and_sanitize_client_export_data(request.data['data'])
+            except ValidationError as e:
+                return Response({'error': str(e)}, status=400)
         else:
             filters = export_options.get('filters', {}) if isinstance(export_options.get('filters', {}), dict) else {}
 
@@ -3958,6 +4046,7 @@ def export_incidents(request):
 
             # Export complete incident payload (not just list-page subset).
             incidents_data = IncidentSerializer(incidents_qs, many=True).data
+            incidents_data = _sanitize_export_payload(incidents_data)
         
         # Log the export request
         debug_print(f"Exporting {len(incidents_data)} incidents to {file_format} format for user {user_id}")
@@ -3979,6 +4068,10 @@ def export_incidents(request):
         export_options['record_count'] = len(incidents_data)
         export_options['export_type'] = 'incidents'
         
+        # CSV formula-injection hardening at endpoint level as defense-in-depth.
+        if str(file_format).lower() == 'csv':
+            incidents_data = sanitize_csv_dataset(incidents_data)
+
         # Call the export service
         export_result = export_data(
             data=incidents_data,
@@ -4006,6 +4099,12 @@ def export_incidents(request):
         # Return the export result
         return Response(export_result)
     
+    except ValidationError as e:
+        return Response({
+            'success': False,
+            'error': str(e)
+        }, status=400)
+
     except Exception as e:
         # Log export error
         send_log(
@@ -4271,19 +4370,17 @@ def export_audit_findings(request):
         elif not isinstance(export_options, dict):
             debug_print(f"export_options is not a dict, converting: {type(export_options)}")
             export_options = {}
+        export_options = _sanitize_export_payload(export_options)
         
         debug_print(f"Final export_options: {export_options}")
         debug_print(f"export_options type: {type(export_options)}")
         
         # Get audit findings data from request or fetch from database
         if 'data' in validated_data and validated_data['data']:
-            # Use data provided in request (parse JSON string if needed)
-            audit_findings_data = validated_data['data']
-            if isinstance(audit_findings_data, str):
-                try:
-                    audit_findings_data = json.loads(audit_findings_data)
-                except json.JSONDecodeError:
-                    return Response({'error': 'Invalid JSON format in data field'}, status=400)
+            try:
+                audit_findings_data = _validate_and_sanitize_client_export_data(validated_data['data'])
+            except ValidationError as e:
+                return Response({'error': str(e)}, status=400)
         else:
             # Fetch audit finding incidents from database with filters
             audit_findings_query = Incident.objects.filter(Origin__in=['Audit Finding', 'AuditFinding', 'Compliance Gap'])
@@ -4346,6 +4443,7 @@ def export_audit_findings(request):
             
             serializer = IncidentSerializer(audit_findings_query, many=True)
             audit_findings_data = serializer.data
+            audit_findings_data = _sanitize_export_payload(audit_findings_data)
         
         # Log the export request
         debug_print(f"Exporting {len(audit_findings_data)} audit findings to {file_format} format for user {user_id}")
@@ -6080,6 +6178,8 @@ def submit_incident_assessment(request):
     """Submit incident assessment with cost impact analysis"""
     try:
         from ...routes.Global.validation import QuestionnaireValidator
+        from django.conf import settings
+        from ...routes.Global.validation import sanitize_mitigation_evidence_urls, ValidationError as GlobalValidationError
         
         # Define validation rules for incident assessment submission
         validation_rules = {
@@ -6155,6 +6255,25 @@ def submit_incident_assessment(request):
         
         # Process mitigation data to ensure S3 URLs are properly saved in aws-file_link
         processed_assessment_data = process_mitigation_s3_urls(raw_assessment_data)
+
+        # Framework-level mitigation: never store/render untrusted evidence URLs
+        try:
+            processed_assessment_data = sanitize_mitigation_evidence_urls(
+                processed_assessment_data,
+                allowed_hosts=getattr(settings, "TRUSTED_EVIDENCE_URL_HOSTS", []),
+                allowed_host_suffixes=getattr(settings, "TRUSTED_EVIDENCE_URL_HOST_SUFFIXES", []),
+                allow_http_hosts=getattr(settings, "TRUSTED_EVIDENCE_URL_ALLOW_HTTP_HOSTS", []),
+            )
+        except GlobalValidationError as e:
+            return JsonResponse(
+                {
+                    "success": False,
+                    "error": "Invalid evidence URL",
+                    "field": getattr(e, "field", "unknown"),
+                    "IncidentId": incident_id,
+                },
+                status=400,
+            )
         
         # Use validated data for storage
         assessment_data = {**processed_assessment_data, **validated_questionnaire}
@@ -6193,11 +6312,29 @@ def submit_incident_assessment(request):
                 debug_print(f"DEBUG: Framework with ID {framework_id} not found")
                 framework = None
         
+        # Enforce maker–checker: assignee/user cannot be their own reviewer
+        try:
+            assignee_id_int = int(user_id) if user_id is not None else None
+            reviewer_id_int = int(reviewer_id) if reviewer_id else None
+        except (TypeError, ValueError):
+            debug_print("Invalid assignee/reviewer id while creating IncidentApproval (user assessment submission)")
+            return Response(
+                {'error': 'Invalid user or reviewer id. Please contact an administrator.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if assignee_id_int is not None and reviewer_id_int is not None and assignee_id_int == reviewer_id_int:
+            debug_print(f"Self-approval attempt detected for incident {incident_id} by user {assignee_id_int}")
+            return Response(
+                {'error': 'Self-approval is not allowed. Please select a different reviewer.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         # Create new IncidentApproval entry for user assessment submission
         approval_entry = IncidentApproval.objects.create(
             IncidentId=incident_id,
-            AssigneeId=str(user_id),
-            ReviewerId=str(reviewer_id) if reviewer_id else None,
+            AssigneeId=str(assignee_id_int) if assignee_id_int is not None else None,
+            ReviewerId=str(reviewer_id_int) if reviewer_id_int is not None else None,
             Date=datetime.datetime.now(),
             version=user_version,
             ExtractedInfo=assessment_data,
@@ -6573,6 +6710,18 @@ def assign_audit_finding_reviewer(request):
         reviewer_id = data.get('reviewer_id')
         user_id = data.get('user_id')
         mitigations = data.get('mitigations', {})
+        if mitigations:
+            try:
+                from django.conf import settings
+                from ...routes.Global.validation import sanitize_mitigation_evidence_urls, ValidationError as GlobalValidationError
+                mitigations = sanitize_mitigation_evidence_urls(
+                    {"mitigations": mitigations if isinstance(mitigations, dict) else {}},
+                    allowed_hosts=getattr(settings, "TRUSTED_EVIDENCE_URL_HOSTS", []),
+                    allowed_host_suffixes=getattr(settings, "TRUSTED_EVIDENCE_URL_HOST_SUFFIXES", []),
+                    allow_http_hosts=getattr(settings, "TRUSTED_EVIDENCE_URL_ALLOW_HTTP_HOSTS", []),
+                ).get("mitigations", mitigations)
+            except GlobalValidationError as e:
+                return JsonResponse({"error": "Invalid evidence URL", "field": getattr(e, "field", "unknown")}, status=400)
         
         # Update the incident with reviewer and mitigation data
         incident = Incident.objects.get(IncidentId=incident_id)
@@ -6794,12 +6943,15 @@ def complete_audit_finding_review(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 @api_view(['POST'])
+@authentication_classes([])
 @permission_classes([AuditReviewPermission])
 @rbac_required(required_permission='review_audit')
 def submit_audit_finding_assessment(request):
     """Submit audit finding assessment with cost impact analysis"""
     try:
         from ...routes.Global.validation import QuestionnaireValidator
+        from django.conf import settings
+        from ...routes.Global.validation import sanitize_mitigation_evidence_urls, ValidationError as GlobalValidationError
         
         data = request.data
         incident_id = data.get('incident_id')
@@ -6819,6 +6971,23 @@ def submit_audit_finding_assessment(request):
         
         # Process mitigation data to ensure S3 URLs are properly saved in aws-file_link
         processed_assessment_data = process_mitigation_s3_urls(raw_assessment_data)
+
+        # Framework-level mitigation: never store/render untrusted evidence URLs
+        try:
+            processed_assessment_data = sanitize_mitigation_evidence_urls(
+                processed_assessment_data,
+                allowed_hosts=getattr(settings, "TRUSTED_EVIDENCE_URL_HOSTS", []),
+                allowed_host_suffixes=getattr(settings, "TRUSTED_EVIDENCE_URL_HOST_SUFFIXES", []),
+                allow_http_hosts=getattr(settings, "TRUSTED_EVIDENCE_URL_ALLOW_HTTP_HOSTS", []),
+            )
+        except GlobalValidationError as e:
+            return JsonResponse(
+                {
+                    "error": "Invalid evidence URL",
+                    "field": getattr(e, "field", "unknown"),
+                },
+                status=400,
+            )
         
         # Use validated data for storage
         assessment_data = {**processed_assessment_data, **validated_questionnaire}
@@ -7591,6 +7760,8 @@ def process_mitigation_s3_urls(assessment_data):
     are properly saved in the aws-file_link field for backward compatibility
     """
     try:
+        from django.conf import settings
+        from ...routes.Global.validation import sanitize_mitigation_evidence_urls, ValidationError as GlobalValidationError
         processed_data = assessment_data.copy()
         
         if 'mitigations' in processed_data:
@@ -7630,7 +7801,17 @@ def process_mitigation_s3_urls(assessment_data):
                     files_count = len(mitigation.get('files', []))
                     debug_print(f"  Mitigation {key}: aws-file_link={aws_link}, files_count={files_count}")
         
+        # Final security gate: sanitize/validate all evidence URLs in mitigations.
+        processed_data = sanitize_mitigation_evidence_urls(
+            processed_data,
+            allowed_hosts=getattr(settings, "TRUSTED_EVIDENCE_URL_HOSTS", []),
+            allowed_host_suffixes=getattr(settings, "TRUSTED_EVIDENCE_URL_HOST_SUFFIXES", []),
+            allow_http_hosts=getattr(settings, "TRUSTED_EVIDENCE_URL_ALLOW_HTTP_HOSTS", []),
+        )
         return processed_data
+    except GlobalValidationError:
+        # Bubble up validation errors to caller for consistent 400 response.
+        raise
         
     except Exception as e:
         debug_print(f"Error processing mitigation S3 URLs: {str(e)}")
@@ -9208,7 +9389,19 @@ def incident_dashboard(request):
     Returns aggregated metrics, status counts, and summary data for the dashboard
     """
     client_ip = get_client_ip(request)
-    user_id = request.GET.get('userId')
+    # IDOR protection: do not trust userId query param for identity; allow only self unless admin.
+    user_id = RBACUtils.get_user_id_from_request(request) or request.GET.get('userId')
+    if not user_id:
+        return JsonResponse({'success': False, 'message': 'Authentication required'}, status=401)
+
+    user_id_param = request.GET.get('user_id')
+    if user_id_param is not None and str(user_id_param).strip() != '':
+        try:
+            user_id_param_int = int(str(user_id_param))
+        except (TypeError, ValueError):
+            return JsonResponse({'success': False, 'message': 'Invalid user id'}, status=400)
+        if int(user_id) != user_id_param_int and not RBACUtils.is_system_admin(user_id):
+            return JsonResponse({'success': False, 'message': 'Forbidden'}, status=403)
     
     # Log dashboard access
     send_log(

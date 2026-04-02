@@ -15,14 +15,37 @@ const USER_STORAGE_KEYS = [
  
 const getFromStorage = (keys) => {
   for (const key of keys) {
-    const value = localStorage.getItem(key)
+    const value = sessionStorage.getItem(key) || localStorage.getItem(key)
     if (value) {
       return { key, value }
     }
   }
   return { key: null, value: null }
 }
+
+const SENSITIVE_KEYS = ['session_token', 'token', 'access_token', 'jwt_token', 'refresh_token', 'current_user']
+
+const setSensitive = (key, value) => {
+  sessionStorage.setItem(key, value)
+  localStorage.removeItem(key)
+}
+
+const removeSensitive = (key) => {
+  sessionStorage.removeItem(key)
+  localStorage.removeItem(key)
+}
+
+// One-time migration: move legacy sensitive auth data out of localStorage.
+SENSITIVE_KEYS.forEach((k) => {
+  const v = localStorage.getItem(k)
+  if (v) {
+    sessionStorage.setItem(k, v)
+    localStorage.removeItem(k)
+  }
+})
  
+// Cookie-first auth: tokens are stored in HttpOnly cookies.
+// We keep this for backward compatibility, but new flows should not depend on it.
 const getStoredToken = () => {
   const { value } = getFromStorage(TOKEN_STORAGE_KEYS)
   return value
@@ -40,10 +63,6 @@ const authApi = axios.create({
 // Request interceptor to add token
 authApi.interceptors.request.use(
   (config) => {
-    const token = getStoredToken()
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
     return config
   },
   (error) => {
@@ -56,11 +75,15 @@ authApi.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
+      const data = error.response?.data || {}
       // Token expired or invalid
-      localStorage.removeItem('session_token')
-      localStorage.removeItem('access_token')
-      localStorage.removeItem('refresh_token')
-      localStorage.removeItem('current_user')
+      removeSensitive('session_token')
+      removeSensitive('access_token')
+      removeSensitive('refresh_token')
+      removeSensitive('current_user')
+      if (data.session_invalidated === true) {
+        localStorage.setItem('auth_logout_reason', 'session_invalidated')
+      }
       if (window.location.pathname !== '/login' && window.location.pathname !== '/Login') {
         window.location.href = '/login'
       }
@@ -88,16 +111,14 @@ export default {
  
       const token = response.data.access_token
       const refreshToken = response.data.refresh_token
- 
-      if (token) {
-        localStorage.setItem('session_token', token)
-        localStorage.setItem('access_token', token)
-      }
-      if (refreshToken) {
-        localStorage.setItem('refresh_token', refreshToken)
-      }
+
+      // Cookie-first: backend sets HttpOnly cookies for access/refresh tokens.
+      // Do not store tokens in browser storage.
+      removeSensitive('session_token')
+      removeSensitive('access_token')
+      removeSensitive('refresh_token')
       if (response.data.user) {
-        localStorage.setItem('current_user', JSON.stringify(response.data.user))
+        setSensitive('current_user', JSON.stringify(response.data.user))
         const uid =
           response.data.user.UserId ??
           response.data.user.user_id ??
@@ -195,6 +216,29 @@ export default {
   },
  
   /**
+   * Fetch one-time Google OAuth callback payload from backend session
+   */
+  async getGoogleOAuthCallbackPayload(handoffKey = null) {
+    try {
+      const response = await authApi.get('/google-oauth/callback-payload/', {
+        params: handoffKey ? { handoff: handoffKey } : undefined
+      })
+      if (response.data?.status === 'success' && response.data?.data) {
+        return { success: true, data: response.data.data }
+      }
+      return {
+        success: false,
+        error: response.data?.message || 'OAuth callback payload not available'
+      }
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Failed to fetch OAuth callback payload'
+      }
+    }
+  },
+
+  /**
    * Handle Google OAuth callback
    * @param {string} accessToken - Access token from OAuth
    * @param {string} refreshToken - Refresh token from OAuth
@@ -205,13 +249,10 @@ export default {
    */
   async handleGoogleOAuthCallback(accessToken, refreshToken, userId, consentRequired, accessTokenExpires, refreshTokenExpires) {
     try {
-      if (accessToken) {
-        localStorage.setItem('session_token', accessToken)
-        localStorage.setItem('access_token', accessToken)
-      }
-      if (refreshToken) {
-        localStorage.setItem('refresh_token', refreshToken)
-      }
+      // Cookie-first: backend sets HttpOnly cookies. Do not store tokens in browser storage.
+      removeSensitive('session_token')
+      removeSensitive('access_token')
+      removeSensitive('refresh_token')
       if (userId) {
         localStorage.setItem('user_id', userId)
       }
@@ -230,7 +271,7 @@ export default {
             const userData = userResponse.data.data
             const originalData = userData.original || {}
             
-            localStorage.setItem('current_user', JSON.stringify(userResponse.data))
+            setSensitive('current_user', JSON.stringify(userResponse.data))
             
             // Build full name from firstName and lastName
             const firstName = originalData.firstName || userData.firstName || ''
@@ -285,10 +326,10 @@ export default {
    * Clear all authentication data
    */
   clearAuthData() {
-    localStorage.removeItem('session_token')
-    localStorage.removeItem('access_token')
-    localStorage.removeItem('refresh_token')
-    localStorage.removeItem('current_user')
+    removeSensitive('session_token')
+    removeSensitive('access_token')
+    removeSensitive('refresh_token')
+    removeSensitive('current_user')
     localStorage.removeItem('user_id')
     localStorage.removeItem('access_token_expires')
     localStorage.removeItem('refresh_token_expires')
@@ -323,20 +364,12 @@ export default {
    */
   async refreshToken() {
     try {
-      const refreshToken = localStorage.getItem('refresh_token')
-      if (!refreshToken) {
-        throw new Error('No refresh token available')
-      }
- 
-      const response = await authApi.post('/jwt/refresh/', {
-        refresh_token: refreshToken
-      })
- 
-      if (response.data.access_token) {
-        const newToken = response.data.access_token
-        localStorage.setItem('session_token', newToken)
-        localStorage.setItem('access_token', newToken)
-      }
+      // Cookie-first: refresh token is read from HttpOnly cookie by backend.
+      const response = await authApi.post('/jwt/refresh/', {})
+      // Ensure we don't keep any legacy token values around.
+      removeSensitive('session_token')
+      removeSensitive('access_token')
+      removeSensitive('refresh_token')
  
       return {
         success: true,
@@ -478,15 +511,12 @@ export default {
         const token = response.data.access_token
         const refreshToken = response.data.refresh_token
  
-        if (token) {
-          localStorage.setItem('session_token', token)
-          localStorage.setItem('access_token', token)
-        }
-        if (refreshToken) {
-          localStorage.setItem('refresh_token', refreshToken)
-        }
+        // Cookie-first: backend sets HttpOnly cookies. Do not store tokens in browser storage.
+        removeSensitive('session_token')
+        removeSensitive('access_token')
+        removeSensitive('refresh_token')
         if (response.data.user) {
-          localStorage.setItem('current_user', JSON.stringify(response.data.user))
+          setSensitive('current_user', JSON.stringify(response.data.user))
           const uid =
             response.data.user.UserId ??
             response.data.user.user_id ??
@@ -510,18 +540,7 @@ export default {
           localStorage.setItem('refresh_token_expires', response.data.refresh_token_expires)
         }
 
-        if (!localStorage.getItem('user_id') && token) {
-          try {
-            const payload = JSON.parse(atob(token.split('.')[1]))
-            const fromJwt =
-              payload.user_id ?? payload.userid ?? payload.UserId ?? payload.sub
-            if (fromJwt != null && fromJwt !== '') {
-              localStorage.setItem('user_id', String(fromJwt))
-            }
-          } catch (e) {
-            /* ignore */
-          }
-        }
+        // If we don't have a user_id, try to derive from response.user only (no token decoding).
        
         // CRITICAL: Set is_logged_in flag - this is required for App.vue to show sidebar/navbar
         localStorage.setItem('is_logged_in', 'true')

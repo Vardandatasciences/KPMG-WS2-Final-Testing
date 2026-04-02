@@ -674,12 +674,7 @@ def save_audit_version(request, audit_id):
     
     # Handle preflight OPTIONS request
     if request.method == 'OPTIONS':
-        response = JsonResponse({})
-        response["Access-Control-Allow-Origin"] = "http://localhost:8080"
-        response["Access-Control-Allow-Methods"] = "POST, OPTIONS"
-        response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-        response["Access-Control-Allow-Credentials"] = "true"
-        return response
+        return JsonResponse({})
     
     try:
         # Validate audit_id parameter
@@ -1011,12 +1006,6 @@ def save_audit_version(request, audit_id):
                 'data': version_data
             }, encoder=DateTimeEncoder)  # Use custom encoder for the response too
             
-            # Add CORS headers
-            response["Access-Control-Allow-Origin"] = "http://localhost:8080"
-            response["Access-Control-Allow-Methods"] = "POST, OPTIONS"
-            response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-            response["Access-Control-Allow-Credentials"] = "true"
-            
             return response
             
     except Exception as e:
@@ -1024,12 +1013,6 @@ def save_audit_version(request, audit_id):
         response = JsonResponse({
             'error': str(e)
         }, status=500)
-        
-        # Add CORS headers
-        response["Access-Control-Allow-Origin"] = "http://localhost:8080"
-        response["Access-Control-Allow-Methods"] = "POST, OPTIONS"
-        response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-        response["Access-Control-Allow-Credentials"] = "true"
         
         return response
 
@@ -1050,12 +1033,7 @@ def send_audit_for_review(request, audit_id):
     
     # Handle preflight OPTIONS request
     if request.method == 'OPTIONS':
-        response = JsonResponse({})
-        response["Access-Control-Allow-Origin"] = "http://localhost:8080"
-        response["Access-Control-Allow-Methods"] = "POST, OPTIONS"
-        response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-        response["Access-Control-Allow-Credentials"] = "true"
-        return response
+        return JsonResponse({})
     
     try:
         # Validate audit_id parameter
@@ -1109,12 +1087,6 @@ def send_audit_for_review(request, audit_id):
                 'new_status': 'Under review'
             })
             
-            # Add CORS headers
-            response["Access-Control-Allow-Origin"] = "http://localhost:8080"
-            response["Access-Control-Allow-Methods"] = "POST, OPTIONS"
-            response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-            response["Access-Control-Allow-Credentials"] = "true"
-            
             return response
             
     except Exception as e:
@@ -1122,12 +1094,6 @@ def send_audit_for_review(request, audit_id):
         response = JsonResponse({
             'error': str(e)
         }, status=500)
-        
-        # Add CORS headers
-        response["Access-Control-Allow-Origin"] = "http://localhost:8080"
-        response["Access-Control-Allow-Methods"] = "POST, OPTIONS"
-        response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-        response["Access-Control-Allow-Credentials"] = "true"
         
         return response
 
@@ -1168,12 +1134,7 @@ def upload_evidence_to_s3(request):
     tenant_id = get_tenant_id_from_request(request)
     # Handle preflight OPTIONS request
     if request.method == 'OPTIONS':
-        response = JsonResponse({})
-        response["Access-Control-Allow-Origin"] = "http://localhost:8080"
-        response["Access-Control-Allow-Methods"] = "POST, OPTIONS"
-        response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-        response["Access-Control-Allow-Credentials"] = "true"
-        return response
+        return JsonResponse({})
     
     try:
         debug_print(f"Request method: {request.method}")
@@ -1286,11 +1247,6 @@ def upload_evidence_to_s3(request):
                 debug_print(f"S3 upload successful: {file_info.get('storedName', unique_file_name)}")
                 
                 response = JsonResponse(response_data)
-                response["Access-Control-Allow-Origin"] = "http://localhost:8080"
-                response["Access-Control-Allow-Methods"] = "POST, OPTIONS"
-                response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-                response["Access-Control-Allow-Credentials"] = "true"
-                
                 return response
             else:
                 return JsonResponse({
@@ -1312,10 +1268,5 @@ def upload_evidence_to_s3(request):
             'success': False,
             'error': f'Upload failed: {str(e)}'
         }, status=500)
-        
-        response["Access-Control-Allow-Origin"] = "http://localhost:8080"
-        response["Access-Control-Allow-Methods"] = "POST, OPTIONS"
-        response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-        response["Access-Control-Allow-Credentials"] = "true"
         
         return response

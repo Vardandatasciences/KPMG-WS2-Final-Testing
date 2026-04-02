@@ -1,21 +1,24 @@
 """
 Email templates for RFP invitations
 """
- 
+
+
 def generate_rich_html_email(invitation, rfp_data):
     """
     Generate rich HTML email body for invitation with professional styling
     """
     from django.conf import settings
-   
-    deadline = rfp_data.get('deadline', 'TBD')
-    budget = rfp_data.get('estimated_value', 'TBD')
-    vendor_name = invitation.get('vendor_name', 'Contact at ' + invitation.get('company_name', 'Vendor'))
-    company_name = invitation.get('company_name', 'Vendor Company')
-    vendor_email = invitation.get('vendor_email', 'contact@vendor.com')
-    invitation_url = invitation.get('invitation_url', '')
+    from django.utils.html import escape
+
+    deadline = escape(str(rfp_data.get('deadline', 'TBD')))
+    budget = escape(str(rfp_data.get('estimated_value', 'TBD')))
+    vendor_name = escape(invitation.get('vendor_name', 'Contact at ' + invitation.get('company_name', 'Vendor')))
+    company_name = escape(invitation.get('company_name', 'Vendor Company'))
+    vendor_email = escape(invitation.get('vendor_email', 'contact@vendor.com'))
+    invitation_url = escape(invitation.get('invitation_url', ''))
     custom_message = invitation.get('custom_message', '')
-   
+    custom_message_escaped = escape(custom_message) if custom_message else ''
+
     # Get tracking URLs for acknowledge/decline buttons
     acknowledgment_url = invitation.get('acknowledgment_url', invitation_url)
     decline_url = invitation.get('decline_url', f"{invitation_url}?action=decline")
@@ -24,7 +27,7 @@ def generate_rich_html_email(invitation, rfp_data):
     # Ensure it uses localhost (not ngrok)
     import re
     external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000').rstrip('/')
-   
+
     # Replace any ngrok URLs with localhost:3000
     if 'ngrok' in external_base_url.lower():
         external_base_url = 'http://localhost:3000'
@@ -225,11 +228,11 @@ def generate_rich_html_email(invitation, rfp_data):
                 <div class="info-grid">
                     <div class="info-item">
                         <div class="info-label">Title</div>
-                        <div class="info-value">{rfp_data.get('rfp_title', 'Untitled RFP')}</div>
+                        <div class="info-value">{escape(str(rfp_data.get('rfp_title', 'Untitled RFP')))}</div>
                     </div>
                     <div class="info-item">
                         <div class="info-label">RFP Number</div>
-                        <div class="info-value">{rfp_data.get('rfp_number', 'N/A')}</div>
+                        <div class="info-value">{escape(str(rfp_data.get('rfp_number', 'N/A')))}</div>
                     </div>
                     <div class="info-item">
                         <div class="info-label">Deadline</div>
@@ -250,7 +253,7 @@ def generate_rich_html_email(invitation, rfp_data):
                 </div>
             </div>
            
-            {f'<div class="section"><h2><span class="emoji">📝</span>Additional Message</h2><p>{custom_message}</p></div>' if custom_message else ''}
+            {f'<div class="section"><h2><span class="emoji">📝</span>Additional Message</h2><p>{custom_message_escaped}</p></div>' if custom_message_escaped else ''}
            
             <div class="section">
                 <h2><span class="emoji">📋</span>RFP Process Overview</h2>

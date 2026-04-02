@@ -203,17 +203,18 @@ export default {
         
         // Fallback: try multiple possible keys and formats
         if (!userId) {
-          userId = localStorage.getItem('user_id') || 
-                   localStorage.getItem('userId') || 
-                   localStorage.getItem('UserId') ||
-                   sessionStorage.getItem('user_id') ||
-                   sessionStorage.getItem('userId')
+          userId = sessionStorage.getItem('user_id') || 
+                   sessionStorage.getItem('userId') || 
+                   sessionStorage.getItem('UserId') ||
+                   localStorage.getItem('user_id') ||
+                   localStorage.getItem('userId') ||
+                   localStorage.getItem('UserId')
         }
         
         // Try to extract from current_user or user objects
         if (!userId) {
           try {
-            const currentUser = localStorage.getItem('current_user')
+            const currentUser = sessionStorage.getItem('current_user') || localStorage.getItem('current_user')
             if (currentUser) {
               const userObj = JSON.parse(currentUser)
               userId = userObj.user_id || userObj.userId || userObj.UserId || userObj.id || userObj.UserId
@@ -226,7 +227,7 @@ export default {
         
         if (!userId) {
           try {
-            const user = localStorage.getItem('user')
+            const user = sessionStorage.getItem('user') || localStorage.getItem('user')
             if (user) {
               const userObj = JSON.parse(user)
               userId = userObj.user_id || userObj.userId || userObj.UserId || userObj.id
@@ -237,27 +238,7 @@ export default {
           }
         }
         
-        // Try to get from JWT token if available
-        if (!userId) {
-          try {
-            const token = localStorage.getItem('access_token') || localStorage.getItem('session_token')
-            if (token) {
-              // Decode JWT token to get user_id
-              const base64Url = token.split('.')[1]
-              if (base64Url) {
-                const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
-                const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
-                  return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
-                }).join(''))
-                const payload = JSON.parse(jsonPayload)
-                userId = payload.user_id || payload.userId || payload.UserId || payload.sub || payload.userid
-                console.log('🔵 [AccessDenied] Extracted user_id from JWT token:', userId)
-              }
-            }
-          } catch (e) {
-            console.warn('🔵 [AccessDenied] Error extracting user_id from token:', e)
-          }
-        }
+        // Cookie-first: do not decode JWTs from browser storage.
         
         console.log('🔵 [AccessDenied] Final User ID:', userId)
         console.log('🔵 [AccessDenied] All localStorage keys:', Object.keys(localStorage))
@@ -269,10 +250,6 @@ export default {
           this.isRequesting = false
           return
         }
-        
-        // Get access token
-        const accessToken = getAuthToken()
-        console.log('🔵 [AccessDenied] Access token:', accessToken ? 'Present' : 'Missing')
         
         // Prepare request data
         const requestData = {

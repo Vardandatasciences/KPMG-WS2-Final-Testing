@@ -145,7 +145,10 @@ api.interceptors.request.use((config) => {
   );
   
   // Get JWT token from multiple possible locations
-  const token = localStorage.getItem('access_token') || 
+  const token = sessionStorage.getItem('access_token') ||
+                sessionStorage.getItem('token') ||
+                sessionStorage.getItem('session_token') ||
+                localStorage.getItem('access_token') ||
                 localStorage.getItem('token') ||
                 localStorage.getItem('session_token') ||
                 sessionStorage.getItem('access_token') ||
@@ -182,7 +185,7 @@ api.interceptors.request.use((config) => {
   // Also check current_user object
   if (!userId) {
     try {
-      const currentUserStr = localStorage.getItem('current_user');
+      const currentUserStr = sessionStorage.getItem('current_user') || localStorage.getItem('current_user');
       if (currentUserStr) {
         const currentUser = JSON.parse(currentUserStr);
         userId = currentUser.UserId || currentUser.user_id || currentUser.userId || currentUser.id;
@@ -276,7 +279,10 @@ api.interceptors.request.use((config) => {
     }
     
     // Also ensure JWT token is set
-    const token = localStorage.getItem('access_token') || 
+    const token = sessionStorage.getItem('access_token') ||
+                  sessionStorage.getItem('token') ||
+                  sessionStorage.getItem('session_token') ||
+                  localStorage.getItem('access_token') ||
                   localStorage.getItem('token') ||
                   localStorage.getItem('session_token') ||
                   sessionStorage.getItem('access_token') ||

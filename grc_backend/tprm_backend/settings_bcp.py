@@ -64,6 +64,8 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    # Framework-level safeguard: sanitize verbose error payloads.
+    'tprm_backend.middleware.error_sanitization.ErrorResponseSanitizationMiddleware',
     # 'bcpdrp.middleware.SQLAlchemyMiddleware',  # Removed - using Django ORM
 ]
 
@@ -150,6 +152,8 @@ REST_FRAMEWORK = {
         'rest_framework.parsers.FormParser',
     ],
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    # Framework-level: central exception sanitization.
+    'EXCEPTION_HANDLER': 'tprm_backend.utils.vendor_exception_handler.vendor_custom_exception_handler',
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 10,
 }
@@ -165,7 +169,7 @@ SPECTACULAR_SETTINGS = {
 }
 
 # CORS settings
-CORS_ALLOWED_ORIGINS = os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:5173').split(',')
+CORS_ALLOWED_ORIGINS = os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:5173,https://test-riskavaire.vardaands.com').split(',')
 CORS_ALLOW_CREDENTIALS = True
 
 # Default port for development server

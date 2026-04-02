@@ -42,7 +42,7 @@
           <div v-if="result.summary" class="text-sm text-muted-foreground mb-3" v-html="highlightText(result.summary)"></div>
 
           <!-- Snippet with highlighting -->
-          <div class="text-sm text-muted-foreground mb-3" v-html="result.snippet"></div>
+          <div class="text-sm text-muted-foreground mb-3" v-html="sanitizeSnippet(result.snippet)"></div>
 
           <!-- Keywords -->
           <div v-if="result.keywords" class="mb-3">
@@ -298,14 +298,31 @@ const formatDate = (dateString) => {
 const highlightText = (text) => {
   if (!text || !props.searchTerms.length) return text
   
-  let highlightedText = text
+  let safeText = String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+
   props.searchTerms.forEach(term => {
     if (term.trim()) {
-      const regex = new RegExp(`(${term.trim()})`, 'gi')
-      highlightedText = highlightedText.replace(regex, '<mark class="bg-yellow-200 px-1 rounded">$1</mark>')
+      const escaped = term.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      const regex = new RegExp(`(${escaped})`, 'gi')
+      safeText = safeText.replace(regex, '<mark class="bg-yellow-200 px-1 rounded">$1</mark>')
     }
   })
-  return highlightedText
+  return safeText
+}
+
+const sanitizeSnippet = (text) => {
+  if (!text) return ''
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
 }
 
 const getModuleColor = (module) => {

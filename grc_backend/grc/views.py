@@ -1,7 +1,7 @@
 from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from .models import Framework, Policy, SubPolicy, FrameworkVersion, PolicyVersion, PolicyApproval, Users, Department, BusinessUnit, Entity, Location, RBAC, GRCLog
 from .serializers import FrameworkSerializer, PolicySerializer, SubPolicySerializer, PolicyApprovalSerializer, UserSerializer   
@@ -19,7 +19,7 @@ from django.db.models.functions import Coalesce, Cast
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 from .models import Users
@@ -31,13 +31,18 @@ from django.contrib.auth.hashers import make_password, check_password
 from django.core.cache import cache
 from django.core.mail import send_mail
 from django.conf import settings
+from django.utils.html import escape
 import time
 
 logger = logging.getLogger(__name__)
 from .debug_utils import debug_print
 
-# In-memory OTP storage as fallback for session issues
-otp_storage = {}
+# Password reset OTP security controls
+PASSWORD_RESET_OTP_TTL_SECONDS = 300
+PASSWORD_RESET_OTP_VERIFY_WINDOW_SECONDS = 900
+PASSWORD_RESET_OTP_MAX_SEND_ATTEMPTS = 5
+PASSWORD_RESET_OTP_MAX_VERIFY_ATTEMPTS = 8
+PASSWORD_RESET_OTP_MAX_RESET_ATTEMPTS = 5
 
 # Helper function to get default framework for logging
 def _get_default_framework():
@@ -76,10 +81,114 @@ def _get_client_ip(request):
     
     return ip
 
-# Track verified emails for password reset
-verified_emails = set()
-# Map email to UserId to ensure correct user password reset
-verified_users_mapping = {}
+def _password_reset_rate_limit_key(request, action: str, email: str = ""):
+    client_ip = _get_client_ip(request) or "unknown"
+    normalized_email = (email or "").strip().lower()
+    return f"pwd_reset_rl:{action}:{client_ip}:{normalized_email}"
+
+
+def _is_password_reset_rate_limited(request, action: str, email: str, max_attempts: int, window_seconds: int = 300):
+    key = _password_reset_rate_limit_key(request, action, email)
+    attempts = cache.get(key, 0)
+    if attempts >= max_attempts:
+        return True
+    cache.set(key, attempts + 1, timeout=window_seconds)
+    return False
+
+
+def _get_password_reset_challenge(request):
+    challenge = request.session.get('password_reset_challenge')
+    if isinstance(challenge, dict):
+        return challenge
+    return {}
+
+
+def _save_password_reset_challenge(request, challenge: dict):
+    request.session['password_reset_challenge'] = challenge
+    request.session.save()
+
+
+def _clear_password_reset_challenge(request):
+    if 'password_reset_challenge' in request.session:
+        del request.session['password_reset_challenge']
+    request.session.save()
+
+
+def _mask_email_for_forgot_password_display(email: str) -> str:
+    """Mask email for UI (e.g. j***e@domain.com). Caller must not rely on this for auth."""
+    if not email or '@' not in email:
+        return 'your registered email address'
+    local, domain = email.split('@', 1)
+    if len(local) <= 2:
+        masked_local = '*' * max(len(local), 1)
+    else:
+        masked_local = local[0] + '*' * (len(local) - 2) + local[-1]
+    return f'{masked_local}@{domain}'
+
+
+def _password_reset_response_with_session_cookie(request, payload: dict, status_code=status.HTTP_200_OK):
+    """Ensure session cookie is emitted so subsequent verify/reset use the same session."""
+    response = Response(payload, status=status_code)
+    if request.session.session_key:
+        response.set_cookie(
+            settings.SESSION_COOKIE_NAME,
+            request.session.session_key,
+            max_age=settings.SESSION_COOKIE_AGE,
+            httponly=settings.SESSION_COOKIE_HTTPONLY,
+            samesite=settings.SESSION_COOKIE_SAMESITE,
+            secure=settings.SESSION_COOKIE_SECURE,
+            domain=settings.SESSION_COOKIE_DOMAIN,
+            path=settings.SESSION_COOKIE_PATH,
+        )
+    return response
+
+
+def _issue_password_reset_otp_email(request, user, email_plain: str):
+    """
+    Create server-side password reset challenge and send OTP email.
+    Caller must enforce rate limits. Mirrors send_otp behavior.
+    """
+    import random
+
+    otp = ''.join([str(random.randint(0, 9)) for _ in range(6)])
+    challenge = {
+        'otp': otp,
+        'email': email_plain,
+        'user_id': user.UserId,
+        'otp_expiry': datetime.now().timestamp() + PASSWORD_RESET_OTP_TTL_SECONDS,
+        'verified': False,
+        'verified_at': None,
+        'consumed': False,
+    }
+    _save_password_reset_challenge(request, challenge)
+    logger.info(f"Password reset OTP challenge stored UserId={user.UserId} (session={request.session.session_key})")
+
+    from .routes.Global.notification_service import NotificationService
+
+    notification_service = NotificationService()
+    user_name = user.FirstName or user.UserName or (
+        email_plain.split('@')[0] if email_plain and '@' in email_plain else 'User'
+    )
+    notification_data = {
+        'notification_type': 'passwordResetOTP',
+        'email': email_plain,
+        'email_type': 'gmail',
+        'template_data': [
+            user_name,
+            otp,
+            '5 minutes',
+            'GRC Platform',
+        ],
+    }
+    email_result = notification_service.send_multi_channel_notification(notification_data)
+    if email_result.get('success'):
+        email_details = email_result.get('details', {}).get('email')
+        if email_details:
+            logger.info(f"[OTP] Password reset email accepted via {email_details.get('method', 'unknown')}")
+    else:
+        logger.error(f"[OTP] Password reset email failed: {email_result.get('error', 'Unknown')}")
+        # Match send_otp: do not raise; user may still have challenge (they can resend)
+
 
 # Framework CRUD operations
 
@@ -130,7 +239,7 @@ Example payload:
 }
 """
 @api_view(['GET', 'POST'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def framework_list(request):
     if request.method == 'GET':
         frameworks = Framework.objects.filter(Status='Approved', ActiveInactive='Active')
@@ -273,7 +382,7 @@ Soft-deletes a framework by setting ActiveInactive='Inactive'.
 Also marks all related policies as inactive and all related subpolicies with Status='Inactive'.
 """
 @api_view(['GET', 'PUT', 'DELETE'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def framework_detail(request, pk):
     framework = get_object_or_404(Framework, FrameworkId=pk)
     
@@ -428,7 +537,7 @@ Soft-deletes a policy by setting ActiveInactive='Inactive'.
 Also marks all related subpolicies with Status='Inactive'.
 """
 @api_view(['GET', 'PUT', 'DELETE'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def policy_detail(request, pk):
     policy = get_object_or_404(Policy, PolicyId=pk)
     
@@ -684,7 +793,7 @@ Example payload:
 }
 """
 @api_view(['POST'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def add_policy_to_framework(request, framework_id):
     framework = get_object_or_404(Framework, FrameworkId=framework_id)
    
@@ -802,7 +911,7 @@ def add_policy_to_framework(request, framework_id):
         return Response({'error': 'Error adding policy to framework', 'details': error_info}, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def list_policy_approvals_for_reviewer(request):
     # For now, reviewer_id is hardcoded as 2
     reviewer_id = 2
@@ -839,7 +948,7 @@ def list_policy_approvals_for_reviewer(request):
     return Response(data)
  
 @api_view(['PUT'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def update_policy_approval(request, approval_id):
     try:
         # Get the original approval
@@ -886,7 +995,7 @@ def update_policy_approval(request, approval_id):
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
  
 @api_view(['PUT'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def resubmit_policy_approval(request, approval_id):
     try:
         # Get the original approval
@@ -982,7 +1091,7 @@ def resubmit_policy_approval(request, approval_id):
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
  
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def list_rejected_policy_approvals_for_user(request, user_id):
     # Filter policies by ReviewerId (not UserId) since we want reviewer's view
     approvals = PolicyApproval.objects.filter(ReviewerId=user_id)
@@ -1052,7 +1161,7 @@ def list_rejected_policy_approvals_for_user(request, user_id):
     return Response(result)
  
 @api_view(['PUT'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def submit_policy_review(request, approval_id):
     try:
         # Get the original approval
@@ -1137,7 +1246,7 @@ def submit_policy_review(request, approval_id):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
 @api_view(['POST'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def add_subpolicy_to_policy(request, policy_id):
     policy = get_object_or_404(Policy, PolicyId=policy_id)
    
@@ -1201,7 +1310,7 @@ Example payload:
 Soft-deletes a subpolicy by setting Status='Inactive'.
 """
 @api_view(['GET', 'PUT', 'DELETE'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def subpolicy_detail(request, pk):
     subpolicy = get_object_or_404(SubPolicy, SubPolicyId=pk)
     
@@ -1306,7 +1415,7 @@ Example payload:
 }
 """
 @api_view(['POST'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def copy_framework(request, pk):
     # Get original framework
     original_framework = get_object_or_404(Framework, FrameworkId=pk)
@@ -1604,7 +1713,7 @@ Example payload:
 }
 """
 @api_view(['POST'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def copy_policy(request, pk):
     # Get original policy
     original_policy = get_object_or_404(Policy, PolicyId=pk)
@@ -1774,7 +1883,7 @@ Example response:
 }
 """
 @api_view(['PUT'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def toggle_framework_status(request, pk):
     framework = get_object_or_404(Framework, FrameworkId=pk)
     
@@ -1820,7 +1929,7 @@ Example response:
 }
 """
 @api_view(['PUT'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def toggle_policy_status(request, pk):
     policy = get_object_or_404(Policy, PolicyId=pk)
     
@@ -1945,7 +2054,7 @@ Example response:
 }
 """
 @api_view(['POST'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def create_framework_version(request, pk):
     original_framework = get_object_or_404(Framework, FrameworkId=pk)
     
@@ -2506,7 +2615,7 @@ Example response:
 }
 """
 @api_view(['POST'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def create_policy_version(request, pk):
     original_policy = get_object_or_404(Policy, PolicyId=pk)
 
@@ -2891,7 +3000,7 @@ Example response:
 Returns an Excel file as attachment
 """
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def export_policies_to_excel(request, framework_id):
     try:
         # Get the framework
@@ -3039,7 +3148,7 @@ def export_policies_to_excel(request, framework_id):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def policy_list(request):
     try:
         # Get query parameters
@@ -3085,13 +3194,22 @@ def policy_list(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def list_users(request):
     try:
         debug_print("DEBUG: list_users endpoint called")
         debug_print(f"DEBUG: Request method: {request.method}")
         debug_print(f"DEBUG: Request user: {request.user}")
         debug_print(f"DEBUG: Request headers: {dict(request.headers)}")
+
+        # Object-level authorization (framework-level guard):
+        # listing all users is sensitive (PII exposure). Restrict to system admins.
+        from .rbac.utils import RBACUtils
+        requester_user_id = RBACUtils.get_user_id_from_request(request)
+        if not requester_user_id:
+            return Response({'success': False, 'message': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
+        if not RBACUtils.is_system_admin(requester_user_id):
+            return Response({'success': False, 'message': 'Forbidden'}, status=status.HTTP_403_FORBIDDEN)
         
         users = Users.objects.all()
         debug_print(f"DEBUG: Found {users.count()} users in database")
@@ -3124,7 +3242,7 @@ def list_users(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['PATCH', 'PUT'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def update_user_status(request, user_id):
     """
     Update user IsActive status (activate/deactivate user)
@@ -3199,7 +3317,7 @@ def update_user_status(request, user_id):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def get_user_role_simple(request):
     """
     Get user role and permissions from RBAC table
@@ -3270,7 +3388,7 @@ def get_user_role_simple(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def get_users_for_dropdown_simple(request):
     """Simple users dropdown endpoint that gets users from session data"""
     try:
@@ -3292,7 +3410,7 @@ def get_users_for_dropdown_simple(request):
         return Response({"error": str(e)}, status=500)
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def get_framework_explorer_data(request):
     """
     API endpoint for the Framework Explorer page
@@ -3349,7 +3467,7 @@ def get_framework_explorer_data(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
  
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def get_framework_policies(request, framework_id):
     """
     API endpoint for the Framework Policies page
@@ -3392,7 +3510,7 @@ def get_framework_policies(request, framework_id):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
  
 @api_view(['POST'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def toggle_framework_status(request, framework_id):
     """
     Toggle the ActiveInactive status of a framework
@@ -3502,7 +3620,7 @@ def toggle_framework_status(request, framework_id):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['POST'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def toggle_policy_status(request, policy_id):
     """
     Toggle the ActiveInactive status of a policy
@@ -3596,7 +3714,7 @@ def toggle_policy_status(request, policy_id):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
  
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def get_framework_details(request, framework_id):
     """
     API endpoint for detailed framework information
@@ -3632,7 +3750,7 @@ def get_framework_details(request, framework_id):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
  
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def get_policy_details(request, policy_id):
     """
     API endpoint for detailed policy information
@@ -3690,7 +3808,7 @@ def get_policy_details(request, policy_id):
 
 #all policies code
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def all_policies_get_frameworks(request):
     """
     API endpoint to get all frameworks for AllPolicies.vue component.
@@ -3730,7 +3848,7 @@ def all_policies_get_frameworks(request):
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def all_policies_get_framework_version_policies(request, version_id):
     """
     API endpoint to get all policies for a specific framework version for AllPolicies.vue component.
@@ -3777,7 +3895,7 @@ def all_policies_get_framework_version_policies(request, version_id):
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def all_policies_get_policies(request):
     """
     API endpoint to get all policies for AllPolicies.vue component.
@@ -3825,7 +3943,7 @@ def all_policies_get_policies(request):
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def all_policies_get_policy_versions(request, policy_id):
     """
     API endpoint to get all versions of a specific policy for AllPolicies.vue component.
@@ -3950,7 +4068,7 @@ def all_policies_get_policy_versions(request, policy_id):
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def all_policies_get_subpolicies(request):
     """
     API endpoint to get all subpolicies for AllPolicies.vue component.
@@ -4020,7 +4138,7 @@ def all_policies_get_subpolicies(request):
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def all_policies_get_subpolicy_details(request, subpolicy_id):
     """
     API endpoint to get details of a specific subpolicy for AllPolicies.vue component.
@@ -4050,7 +4168,7 @@ def all_policies_get_subpolicy_details(request, subpolicy_id):
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def all_policies_get_framework_versions(request, framework_id):
     """
     API endpoint to get all versions of a specific framework for AllPolicies.vue component.
@@ -4158,7 +4276,7 @@ def all_policies_get_framework_versions(request, framework_id):
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def all_policies_get_policy_version_subpolicies(request, version_id):
     """
     API endpoint to get all subpolicies for a specific policy version for AllPolicies.vue component.
@@ -4230,7 +4348,7 @@ def all_policies_get_policy_version_subpolicies(request, version_id):
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def get_policy_dashboard_summary(request):
     total_policies = Policy.objects.count()
     total_subpolicies = SubPolicy.objects.count()
@@ -4257,13 +4375,13 @@ def get_policy_dashboard_summary(request):
     })
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def get_policy_status_distribution(request):
     status_counts = Policy.objects.values('Status').annotate(count=Count('Status'))
     return Response(status_counts)
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def get_reviewer_workload(request):
     reviewer_counts = Policy.objects.values('Reviewer').annotate(count=Count('Reviewer')).order_by('-count')
     return Response(reviewer_counts)
@@ -4272,7 +4390,7 @@ from django.utils import timezone
 from datetime import timedelta
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def get_recent_policy_activity(request):
     one_week_ago = timezone.now().date() - timedelta(days=7)
     recent_policies = Policy.objects.filter(CreatedByDate__gte=one_week_ago).order_by('-CreatedByDate')[:10]
@@ -4287,7 +4405,7 @@ def get_recent_policy_activity(request):
 from django.db.models import F, ExpressionWrapper, DurationField
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def get_avg_policy_approval_time(request):
     # Get all approved policies with approval dates
     approved_policies = PolicyApproval.objects.filter(
@@ -4326,7 +4444,7 @@ def get_avg_policy_approval_time(request):
     return Response({'average_days': round(avg_days, 2)})
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def get_policy_analytics(request):
     try:
         x_axis = request.GET.get('x_axis', 'time')
@@ -4733,7 +4851,7 @@ def get_policy_analytics(request):
         )
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def get_policy_kpis(request):
     try:
         # Get total policies count
@@ -4895,7 +5013,7 @@ def get_policy_kpis(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
 @api_view(['POST'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def acknowledge_policy(request, policy_id):
     try:
         # Extract user_id from JWT token or request.user
@@ -5707,26 +5825,20 @@ def register_user(request):
         logger.info(f"Auto-generated password for user {username}: Riskavaire@{name_part}{password_number}")
         debug_print(f"[DEBUG] Auto-generated password for user {username}: Riskavaire@{name_part}{password_number}")
         
-        # Check if user already exists
-        logger.info(f"Checking if username '{username}' already exists...")
-        debug_print(f"[DEBUG] Checking if username '{username}' already exists...")
-        if Users.objects.filter(UserName=username).exists():
-            logger.error(f"Username '{username}' already exists")
-            debug_print(f"[DEBUG] ❌ Username '{username}' already exists")
-            return Response({
-                'success': False,
-                'message': 'Username already exists'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        logger.info(f"Checking if email '{Email}' already exists...")
-        debug_print(f"[DEBUG] Checking if email '{Email}' already exists...")
-        if Users.objects.filter(Email=Email).exists():
-            logger.error(f"Email '{Email}' already exists")
-            debug_print(f"[DEBUG] ❌ Email '{Email}' already exists")
-            return Response({
-                'success': False,
-                'message': 'Email already exists'
-            }, status=status.HTTP_400_BAD_REQUEST)
+        # Uniqueness checks MUST NOT be "check-then-create" only; they are raceable.
+        # We still do a fast pre-check for UX, but DB unique constraints are the real enforcement.
+        username_hash = Users.compute_identifier_hash(username, kind='username')
+        email_hash = Users.compute_identifier_hash(Email, kind='email')
+
+        logger.info(f"Checking if username already exists (hash)...")
+        debug_print(f"[DEBUG] Checking if username already exists (hash)...")
+        if Users.objects.filter(username_hash=username_hash).exists():
+            return Response({'success': False, 'message': 'Username already exists'}, status=status.HTTP_400_BAD_REQUEST)
+
+        logger.info(f"Checking if email already exists (hash)...")
+        debug_print(f"[DEBUG] Checking if email already exists (hash)...")
+        if Users.objects.filter(email_hash=email_hash).exists():
+            return Response({'success': False, 'message': 'Email already exists'}, status=status.HTTP_400_BAD_REQUEST)
         
         logger.info(f"User checks passed, proceeding to license generation...")
         debug_print(f"[DEBUG] ✅ User checks passed, proceeding to license generation...")
@@ -5824,9 +5936,14 @@ def register_user(request):
         debug_print(f"[DEBUG] Attempting to create user with data: {user_data}")
         debug_print(f"[DEBUG] DepartmentId type: {type(user_data.get('DepartmentId'))}, value: {user_data.get('DepartmentId')}")
         
-        # Create user with error handling
+        # Create user with atomicity + DB-backed uniqueness.
         try:
-            user = Users.objects.create(**user_data)
+            from django.db import transaction
+            with transaction.atomic():
+                # Ensure hashes are set even if model save override is bypassed in some future refactor
+                user_data.setdefault('username_hash', username_hash)
+                user_data.setdefault('email_hash', email_hash)
+                user = Users.objects.create(**user_data)
             logger.info(f"✅ User created successfully: {user.UserId} - {user.UserName}")
             debug_print(f"[DEBUG] ✅ User created successfully: {user.UserId} - {user.UserName}")
             
@@ -5909,9 +6026,10 @@ def register_user(request):
             elif isinstance(create_error, IntegrityError):
                 error_str = str(create_error)
                 if 'duplicate' in error_str.lower() or 'unique' in error_str.lower():
-                    if 'username' in error_str.lower() or 'UserName' in error_str:
+                    # Username/email uniqueness is enforced at DB level on username_hash/email_hash
+                    if 'username_hash' in error_str.lower() or 'username' in error_str.lower() or 'UserName' in error_str:
                         user_friendly_message = 'Username already exists. Please choose a different username.'
-                    elif 'email' in error_str.lower() or 'Email' in error_str:
+                    elif 'email_hash' in error_str.lower() or 'email' in error_str.lower() or 'Email' in error_str:
                         user_friendly_message = 'Email already exists. Please use a different email address.'
                     else:
                         user_friendly_message = 'This record already exists. Please check your input and try again.'
@@ -5949,6 +6067,10 @@ def register_user(request):
             # Get frontend URL from settings for verification link
             frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:8080')
             reset_password_url = f"{frontend_url}/login?resetPassword=true&email={decrypted_email}"
+            safe_user_full_name = escape(user_full_name)
+            safe_decrypted_username = escape(decrypted_username)
+            safe_plain_password = escape(plain_password)
+            safe_reset_password_url = escape(reset_password_url)
             
             # Plain text version (using decrypted data)
             email_body_text = f"""
@@ -6003,7 +6125,7 @@ GRC System Administrator
             <h2>Welcome to GRC System</h2>
         </div>
         <div class="content">
-            <p>Dear <strong>{user_full_name}</strong>,</p>
+            <p>Dear <strong>{safe_user_full_name}</strong>,</p>
             
             <p>Your account has been created successfully by the administrator.</p>
             
@@ -6011,11 +6133,11 @@ GRC System Administrator
                 <h3 style="margin-top: 0; color: #1f2937;">Your Login Credentials:</h3>
                 <div class="credential-item">
                     <span class="label">Username:</span>
-                    <span class="value">{decrypted_username}</span>
+                    <span class="value">{safe_decrypted_username}</span>
                 </div>
                 <div class="credential-item">
                     <span class="label">Password:</span>
-                    <span class="value">{plain_password}</span>
+                    <span class="value">{safe_plain_password}</span>
                 </div>
             </div>
             
@@ -6024,7 +6146,7 @@ GRC System Administrator
             </div>
             
             <div style="text-align: center; margin: 30px 0;">
-                <a href="{reset_password_url}" class="button" style="display: inline-block; background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3); transition: transform 0.2s;">
+                <a href="{safe_reset_password_url}" class="button" style="display: inline-block; background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3); transition: transform 0.2s;">
                     🔐 Verification Link
                 </a>
             </div>
@@ -6248,27 +6370,41 @@ def test_connection(request):
     })
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def get_user_details_by_id(request, user_id):
     """
     Get user details from Users table by user ID
     """
     try:
+        # Object-level authorization: self only unless system admin.
+        from .rbac.utils import RBACUtils
+        requester_user_id = RBACUtils.get_user_id_from_request(request)
+        if not requester_user_id:
+            return Response({'success': False, 'message': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
+        try:
+            requested_user_id_int = int(user_id)
+        except (TypeError, ValueError):
+            return Response({'success': False, 'message': 'Invalid user id'}, status=status.HTTP_400_BAD_REQUEST)
+        if int(requester_user_id) != requested_user_id_int and not RBACUtils.is_system_admin(requester_user_id):
+            return Response({'success': False, 'message': 'Forbidden'}, status=status.HTTP_403_FORBIDDEN)
+
         # Get user from Users table
-        user = Users.objects.get(UserId=user_id)
+        user = Users.objects.get(UserId=requested_user_id_int)
         
         # Get RBAC info if available
         rbac_info = None
         try:
             from .rbac.utils import RBACUtils
-            rbac_info = RBACUtils.get_user_rbac_info(user_id)
+            rbac_info = RBACUtils.get_user_rbac_info(requested_user_id_int)
         except Exception as rbac_error:
             logger.warning(f"Could not get RBAC info for user {user_id}: {rbac_error}")
         
         user_details = {
             'user_id': user.UserId,
             'username': user.UserName,
-            'Email': user.Email,
+            # Do not return raw email here; this endpoint is for admin/self inspection only.
+            # Prefer masked email already used in profile endpoint.
+            'Email': getattr(user, 'email_plain', None) or user.Email,
             'created_at': user.CreatedAt,
             'updated_at': user.UpdatedAt,
             'rbac_info': rbac_info
@@ -6387,8 +6523,20 @@ def save_user_session(request):
 @require_http_methods(["GET"])
 def get_user_profile(request, user_id):
     try:
+        # Object-level authorization: self only unless system admin.
+        from .rbac.utils import RBACUtils
+        requester_user_id = RBACUtils.get_user_id_from_request(request)
+        if not requester_user_id:
+            return JsonResponse({'status': 'error', 'message': 'Authentication required'}, status=401)
+        try:
+            requested_user_id_int = int(user_id)
+        except (TypeError, ValueError):
+            return JsonResponse({'status': 'error', 'message': 'Invalid user id'}, status=400)
+        if int(requester_user_id) != requested_user_id_int and not RBACUtils.is_system_admin(requester_user_id):
+            return JsonResponse({'status': 'error', 'message': 'Forbidden'}, status=403)
+
         logger.debug(f"Fetching user profile for user_id: {user_id}")
-        user = Users.objects.get(UserId=user_id)
+        user = Users.objects.get(UserId=requested_user_id_int)
         
         # Import masking service
         from .routes.Global.data_masking import get_masking_service
@@ -6465,10 +6613,22 @@ def clear_ai_cache(request):
 @require_http_methods(["GET"])
 def get_user_business_info(request, user_id):
     try:
+        # Object-level authorization: self only unless system admin.
+        from .rbac.utils import RBACUtils
+        requester_user_id = RBACUtils.get_user_id_from_request(request)
+        if not requester_user_id:
+            return JsonResponse({'status': 'error', 'message': 'Authentication required'}, status=401)
+        try:
+            requested_user_id_int = int(user_id)
+        except (TypeError, ValueError):
+            return JsonResponse({'status': 'error', 'message': 'Invalid user id'}, status=400)
+        if int(requester_user_id) != requested_user_id_int and not RBACUtils.is_system_admin(requester_user_id):
+            return JsonResponse({'status': 'error', 'message': 'Forbidden'}, status=403)
+
         logger.debug(f"Fetching business info for user_id: {user_id}")
         
         # Get user's department ID
-        user = Users.objects.get(UserId=user_id)
+        user = Users.objects.get(UserId=requested_user_id_int)
         department_id = user.DepartmentId
         
         logger.debug(f"Found department_id: {department_id}")
@@ -6541,9 +6701,21 @@ def get_user_business_info(request, user_id):
 def get_user_permissions(request, user_id):
     try:
         logger.debug(f"Fetching permissions for user_id: {user_id}")
+
+        # Object-level authorization: user_id in path must be self, unless system admin.
+        from .rbac.utils import RBACUtils
+        requester_user_id = RBACUtils.get_user_id_from_request(request)
+        if not requester_user_id:
+            return JsonResponse({'status': 'error', 'message': 'Authentication required'}, status=401)
+        try:
+            requested_user_id_int = int(user_id)
+        except (TypeError, ValueError):
+            return JsonResponse({'status': 'error', 'message': 'Invalid user id'}, status=400)
+        if int(requester_user_id) != requested_user_id_int and not RBACUtils.is_system_admin(requester_user_id):
+            return JsonResponse({'status': 'error', 'message': 'Forbidden'}, status=403)
         
         # Get user from Users table
-        user = Users.objects.get(UserId=user_id)
+        user = Users.objects.get(UserId=requested_user_id_int)
         
         # Get RBAC permissions for the user
         from .models import RBAC
@@ -6632,17 +6804,28 @@ def get_user_permissions(request, user_id):
 
 @csrf_exempt
 @api_view(['PUT'])
-@authentication_classes([])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def update_user_permissions(request, user_id):
     """
     Update RBAC permissions for a user
     """
     try:
         logger.debug(f"Updating permissions for user_id: {user_id}")
+
+        # Object-level authorization: only system admins can change permissions.
+        from .rbac.utils import RBACUtils
+        requester_user_id = RBACUtils.get_user_id_from_request(request)
+        if not requester_user_id:
+            return Response({'status': 'error', 'message': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
+        if not RBACUtils.is_system_admin(requester_user_id):
+            return Response({'status': 'error', 'message': 'Forbidden'}, status=status.HTTP_403_FORBIDDEN)
         
         # Get user from Users table
-        user = Users.objects.get(UserId=user_id)
+        try:
+            requested_user_id_int = int(user_id)
+        except (TypeError, ValueError):
+            return Response({'status': 'error', 'message': 'Invalid user id'}, status=status.HTTP_400_BAD_REQUEST)
+        user = Users.objects.get(UserId=requested_user_id_int)
         
         # Get permissions from request body
         permissions = request.data.get('permissions', {})
@@ -6910,101 +7093,21 @@ def send_otp(request):
                 'message': 'No user found with this Email address'
             }, status=status.HTTP_404_NOT_FOUND)
         
-        # Generate 6-digit OTP
-        import random
-        otp = ''.join([str(random.randint(0, 9)) for _ in range(6)])
-        
-        # Store OTP in session with expiration (5 minutes)
-        request.session['reset_otp'] = otp
-        request.session['reset_Email'] = Email
-        request.session['otp_expiry'] = datetime.now().timestamp() + 300  # 5 minutes
-        request.session.save()
-        
-        # Also store in memory as fallback
-        otp_storage[Email] = {
-            'otp': otp,
-            'expiry': datetime.now().timestamp() + 300  # 5 minutes
-        }
-        
-        # Debug logging
-        logger.info(f"Send OTP - Stored session data: reset_otp={otp}, reset_Email={Email}, otp_expiry={request.session['otp_expiry']}")
-        logger.info(f"Send OTP - Session ID: {request.session.session_key}")
-        logger.info(f"Send OTP - Session modified: {request.session.modified}")
-        
-        # Send OTP via Email using Notification Service (Azure AD with SMTP fallback)
+        if _is_password_reset_rate_limited(
+            request, 'send_otp', Email, PASSWORD_RESET_OTP_MAX_SEND_ATTEMPTS, PASSWORD_RESET_OTP_TTL_SECONDS
+        ):
+            return Response({
+                'success': False,
+                'message': 'Too many OTP requests. Please try again after a few minutes.'
+            }, status=status.HTTP_429_TOO_MANY_REQUESTS)
+
         try:
-            from .routes.Global.notification_service import NotificationService
-            
-            notification_service = NotificationService()
-            
-            # Use the passwordResetOTP template from notification service
-            user_name = user.FirstName or user.UserName or user.Email.split('@')[0]
-            platform_name = "GRC Platform"
-            expiry_time = "5 minutes"
-            
-            notification_data = {
-                'notification_type': 'passwordResetOTP',
-                'email': Email,
-                'email_type': 'gmail',  # Will use Azure if configured, SMTP if not
-                'template_data': [
-                    user_name,
-                    otp,
-                    expiry_time,
-                    platform_name
-                ],
-            }
-            
-            logger.info(f"[OTP] Attempting to send OTP email to {Email} via Azure (with SMTP fallback)")
-            email_result = notification_service.send_multi_channel_notification(notification_data)
-            
-            # Log result
-            if email_result.get('success'):
-                email_details = email_result.get('details', {}).get('email')
-                if email_details:
-                    method_used = email_details.get('method', 'unknown')
-                    logger.info(f"[OTP] ✅ OTP email sent successfully to {Email} via {method_used}")
-                    
-                    # For Azure, log additional info to help debug delivery issues
-                    if method_used == 'azure_graph_api':
-                        logger.info(f"[OTP] Azure Graph API accepted the email. If not received, verify:")
-                        logger.info(f"[OTP]    - Azure AD app has 'Mail.Send' Application permission with admin consent")
-                        logger.info(f"[OTP]    - Sender email '{email_details.get('from', 'N/A')}' has mailbox enabled")
-                        logger.info(f"[OTP]    - Check spam/junk folder")
-                else:
-                    logger.warning(f"[OTP] ⚠️ Success reported but no email details. Result: {email_result}")
-            else:
-                error_msg = email_result.get('error', 'Unknown error')
-                error_details = email_result.get('details', {}).get('errors', [])
-                logger.error(f"[OTP] ❌ Failed to send OTP email: {error_msg}")
-                if error_details:
-                    for err in error_details:
-                        logger.error(f"[OTP]   - Channel: {err.get('channel')}, Error: {err.get('error')}")
-                
-                # Still return success to user for security (don't reveal email failures)
-                logger.warning("[OTP] Returning success to user despite email failure for security reasons")
-            response = Response({
+            _issue_password_reset_otp_email(request, user, Email)
+            logger.info(f"Send OTP - Session ID: {request.session.session_key}")
+            return _password_reset_response_with_session_cookie(request, {
                 'success': True,
                 'message': 'OTP sent to your Email address'
             })
-            
-            # Ensure session cookie is set in response
-            if request.session.session_key:
-                response.set_cookie(
-                    'grc_sessionid',  # Use the custom session cookie name from settings
-                    request.session.session_key,
-                    max_age=3600,  # 1 hour
-                    httponly=False,
-                    samesite='Lax',
-                    secure=False,
-                    domain=None,  # Allow all domains
-                    path='/'
-                )
-                logger.info(f"Send OTP - Set session cookie: grc_sessionid={request.session.session_key}")
-            else:
-                logger.warning("Send OTP - No session key available to set cookie")
-            
-            return response
-                
         except Exception as e:
             logger.error(f"Error sending OTP Email: {str(e)}")
             return Response({
@@ -7071,102 +7174,53 @@ def get_user_email_by_username(request):
                     logger.info(f"[FORGOT PASSWORD] Found user by username: {username}")
                     break
         
-        if user:
-            # Get decrypted email
+        generic_message = 'If the account exists, an OTP will be sent to the registered email.'
+        base_ok = {'success': True, 'message': generic_message}
+
+        if user and auto_send_otp:
             email = user.email_plain
-            
             if not email:
-                logger.error(f"[FORGOT PASSWORD] User {username} has no email address")
-                return Response({
-                    'success': False,
-                    'message': 'No email address associated with this account'
-                }, status=status.HTTP_404_NOT_FOUND)
-            
-            # Mask email for security (show first 3 chars and domain)
-            # Example: user@example.com -> use***@example.com
-            email_parts = email.split('@')
-            if len(email_parts) == 2:
-                masked_email = email_parts[0][:3] + '***@' + email_parts[1]
-            else:
-                masked_email = email[:3] + '***'
-            
-            response_data = {
-                'success': True,
-                'email': masked_email,  # Return masked email for security
-                'full_email': email,  # Include full email for actual OTP sending
-                'message': 'User found'
-            }
-            
-            # If auto_send_otp is true, automatically send OTP
-            if auto_send_otp:
-                logger.info(f"[FORGOT PASSWORD] Auto-sending OTP to {email}")
-                try:
-                    # Generate 6-digit OTP
-                    import random
-                    otp = ''.join([str(random.randint(0, 9)) for _ in range(6)])
-                    
-                    # Store OTP in session with expiration (5 minutes)
-                    request.session['reset_otp'] = otp
-                    request.session['reset_Email'] = email
-                    request.session['reset_UserId'] = user.UserId  # Store UserId to ensure correct user
-                    request.session['otp_expiry'] = datetime.now().timestamp() + 300  # 5 minutes
-                    request.session.save()
-                    
-                    # Also store in memory as fallback
-                    otp_storage[email] = {
-                        'otp': otp,
-                        'user_id': user.UserId,  # Store UserId to ensure correct user
-                        'expiry': datetime.now().timestamp() + 300  # 5 minutes
-                    }
-                    
-                    # Send OTP via Email using Notification Service
-                    try:
-                        from .routes.Global.notification_service import NotificationService
-                        notification_service = NotificationService()
-                        
-                        user_name = user.FirstName or getattr(user, 'UserName_plain', None) or user.UserName or email.split('@')[0]
-                        platform_name = "GRC Platform"
-                        expiry_time = "5 minutes"
-                        
-                        notification_data = {
-                            'notification_type': 'passwordResetOTP',
-                            'email': email,
-                            'email_type': 'gmail',
-                            'template_data': [
-                                user_name,
-                                otp,
-                                expiry_time,
-                                platform_name
-                            ],
-                        }
-                        
-                        logger.info(f"[FORGOT PASSWORD] Sending OTP email to {email}")
-                        email_result = notification_service.send_multi_channel_notification(notification_data)
-                        
-                        if email_result.get('success'):
-                            logger.info(f"[FORGOT PASSWORD] ✅ OTP sent successfully to {email}")
-                            response_data['otp_sent'] = True
-                            response_data['message'] = 'OTP has been sent to your email address'
-                        else:
-                            logger.error(f"[FORGOT PASSWORD] ❌ Failed to send OTP: {email_result.get('error', 'Unknown error')}")
-                            response_data['otp_sent'] = False
-                            response_data['message'] = 'User found, but failed to send OTP. Please try again.'
-                    except Exception as email_error:
-                        logger.error(f"[FORGOT PASSWORD] Error sending OTP email: {str(email_error)}")
-                        response_data['otp_sent'] = False
-                        response_data['message'] = 'User found, but failed to send OTP. Please try again.'
-                except Exception as otp_error:
-                    logger.error(f"[FORGOT PASSWORD] Error generating OTP: {str(otp_error)}")
-                    response_data['otp_sent'] = False
-            
-            logger.info(f"[FORGOT PASSWORD] Returning response for user: {username}")
-            return Response(response_data)
-        else:
-            logger.warning(f"[FORGOT PASSWORD] No user found with username/ID: {username}")
-            return Response({
-                'success': False,
-                'message': 'No user found with this username or User ID'
-            }, status=status.HTTP_404_NOT_FOUND)
+                return _password_reset_response_with_session_cookie(
+                    request,
+                    {**base_ok, 'otp_sent': False, 'message': 'No email is registered for this account. Contact support.'},
+                )
+
+            if _is_password_reset_rate_limited(
+                request, 'send_otp', email, PASSWORD_RESET_OTP_MAX_SEND_ATTEMPTS, PASSWORD_RESET_OTP_TTL_SECONDS
+            ):
+                return Response(
+                    {
+                        **base_ok,
+                        'otp_sent': False,
+                        'message': 'Too many OTP requests. Please try again after a few minutes.',
+                    },
+                    status=status.HTTP_429_TOO_MANY_REQUESTS,
+                )
+
+            try:
+                logger.info('[FORGOT PASSWORD] Auto-sending OTP (masked email in response only)')
+                _issue_password_reset_otp_email(request, user, email)
+            except Exception as send_err:
+                logger.exception('[FORGOT PASSWORD] Failed to issue OTP: %s', send_err)
+                return Response(
+                    {**base_ok, 'otp_sent': False, 'message': 'Failed to send OTP. Please try again.'},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
+
+            masked = _mask_email_for_forgot_password_display(email)
+            return _password_reset_response_with_session_cookie(
+                request,
+                {
+                    **base_ok,
+                    'otp_sent': True,
+                    'email': masked,
+                },
+            )
+
+        # No user found, or not requesting auto-send: generic message (no otp_sent — frontend stays on step 1)
+        if auto_send_otp:
+            return Response({**base_ok, 'otp_sent': False}, status=status.HTTP_200_OK)
+        return Response(base_ok, status=status.HTTP_200_OK)
             
     except Exception as e:
         logger.error(f"[FORGOT PASSWORD] Error fetching user email: {str(e)}")
@@ -7185,20 +7239,35 @@ def verify_otp(request):
     """
     try:
         data = request.data
-        Email = data.get('Email')
         otp = data.get('otp')
-        
-        if not Email or not otp:
+        challenge = _get_password_reset_challenge(request)
+        stored_Email_early = challenge.get('email') if isinstance(challenge, dict) else None
+        Email = (data.get('Email') or '').strip() or (stored_Email_early or '')
+
+        if not otp:
             return Response({
                 'success': False,
-                'message': 'Email and OTP are required'
+                'message': 'OTP is required'
             }, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Check if OTP exists and is valid (try session first, then memory)
-        stored_otp = request.session.get('reset_otp')
-        stored_Email = request.session.get('reset_Email')
-        stored_UserId = request.session.get('reset_UserId')
-        otp_expiry = request.session.get('otp_expiry')
+        if not Email:
+            return Response({
+                'success': False,
+                'message': 'Email is required, or open this flow from the same browser after requesting an OTP.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        if _is_password_reset_rate_limited(
+            request, 'verify_otp', Email, PASSWORD_RESET_OTP_MAX_VERIFY_ATTEMPTS, PASSWORD_RESET_OTP_TTL_SECONDS
+        ):
+            return Response({
+                'success': False,
+                'message': 'Too many OTP verification attempts. Please request a new OTP.'
+            }, status=status.HTTP_429_TOO_MANY_REQUESTS)
+
+        # Session-bound challenge (authoritative)
+        stored_otp = challenge.get('otp')
+        stored_Email = challenge.get('email')
+        stored_UserId = challenge.get('user_id')
+        otp_expiry = challenge.get('otp_expiry')
         
         # Debug logging
         logger.info(f"Verify OTP - Session data: stored_otp={stored_otp}, stored_Email={stored_Email}, stored_UserId={stored_UserId}, otp_expiry={otp_expiry}")
@@ -7209,36 +7278,16 @@ def verify_otp(request):
         logger.info(f"Verify OTP - Request cookies: {request.COOKIES}")
         logger.info(f"Verify OTP - Request headers: {dict(request.headers)}")
         
-        # If session data is missing, try memory storage
         if not stored_otp or not stored_Email or not otp_expiry:
-            logger.warning(f"Verify OTP - Missing session data, trying memory storage")
-            memory_data = otp_storage.get(Email)
-            if memory_data:
-                stored_otp = memory_data['otp']
-                stored_Email = Email
-                stored_UserId = memory_data.get('user_id')
-                otp_expiry = memory_data['expiry']
-                logger.info(f"Verify OTP - Found OTP in memory: stored_otp={stored_otp}, user_id={stored_UserId}, expiry={otp_expiry}")
-            else:
-                logger.warning(f"Verify OTP - Missing session data: stored_otp={stored_otp}, stored_Email={stored_Email}, otp_expiry={otp_expiry}")
-                return Response({
-                    'success': False,
-                    'message': 'No OTP request found. Please request a new OTP.'
-                }, status=status.HTTP_400_BAD_REQUEST)
+            logger.warning("Verify OTP - Missing password reset challenge in session")
+            return Response({
+                'success': False,
+                'message': 'No OTP request found. Please request a new OTP.'
+            }, status=status.HTTP_400_BAD_REQUEST)
         
         # Check if OTP has expired
         if datetime.now().timestamp() > otp_expiry:
-            # Clear expired OTP from session (only if they exist)
-            session_keys_to_clear = ['reset_otp', 'reset_Email', 'reset_UserId', 'otp_expiry']
-            for key in session_keys_to_clear:
-                if key in request.session:
-                    del request.session[key]
-            request.session.save()
-            
-            # Clear expired OTP from memory
-            if Email in otp_storage:
-                del otp_storage[Email]
-                logger.info(f"Verify OTP - Cleaned up expired OTP from memory for {Email}")
+            _clear_password_reset_challenge(request)
             
             return Response({
                 'success': False,
@@ -7254,22 +7303,9 @@ def verify_otp(request):
         
         # Verify OTP
         if otp == stored_otp:
-            # Mark OTP as verified
-            request.session['otp_verified'] = True
-            request.session['reset_UserId'] = stored_UserId  # Ensure UserId is preserved
-            request.session.save()
-            
-            # Add to verified emails set with UserId mapping
-            verified_emails.add(Email)
-            if stored_UserId:
-                # Store email -> UserId mapping
-                verified_users_mapping[Email] = stored_UserId
-            logger.info(f"Verify OTP - Added {Email} to verified emails set with UserId={stored_UserId}")
-            
-            # Clean up memory storage
-            if Email in otp_storage:
-                del otp_storage[Email]
-                logger.info(f"Verify OTP - Cleaned up memory storage for {Email}")
+            challenge['verified'] = True
+            challenge['verified_at'] = datetime.now().timestamp()
+            _save_password_reset_challenge(request, challenge)
             
             return Response({
                 'success': True,
@@ -7296,19 +7332,35 @@ def reset_password(request):
     """
     try:
         data = request.data
-        Email = data.get('Email')
         new_password = data.get('new_password')
-        
-        if not Email or not new_password:
+        challenge = _get_password_reset_challenge(request)
+        stored_for_email = challenge.get('email') if isinstance(challenge, dict) else None
+        Email = (data.get('Email') or '').strip() or (stored_for_email or '')
+
+        if not new_password:
             return Response({
                 'success': False,
-                'message': 'Email and new password are required'
+                'message': 'New password is required'
             }, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Check if OTP was verified (try session first, then memory)
-        otp_verified = request.session.get('otp_verified', False)
-        stored_Email = request.session.get('reset_Email')
-        stored_UserId = request.session.get('reset_UserId')
+        if not Email:
+            return Response({
+                'success': False,
+                'message': 'Email is required, or complete OTP verification in the same browser session.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        if _is_password_reset_rate_limited(
+            request, 'reset_password', Email, PASSWORD_RESET_OTP_MAX_RESET_ATTEMPTS, PASSWORD_RESET_OTP_TTL_SECONDS
+        ):
+            return Response({
+                'success': False,
+                'message': 'Too many password reset attempts. Please request a new OTP.'
+            }, status=status.HTTP_429_TOO_MANY_REQUESTS)
+
+        otp_verified = bool(challenge.get('verified'))
+        stored_Email = challenge.get('email')
+        stored_UserId = challenge.get('user_id')
+        verified_at = challenge.get('verified_at')
+        consumed = bool(challenge.get('consumed'))
         
         # Debug logging
         logger.info(f"Reset Password - Session data: otp_verified={otp_verified}, stored_Email={stored_Email}, stored_UserId={stored_UserId}")
@@ -7316,28 +7368,23 @@ def reset_password(request):
         logger.info(f"Reset Password - Session ID: {request.session.session_key}")
         logger.info(f"Reset Password - All session keys: {list(request.session.keys())}")
         
-        # If session data is missing, check if we have verified OTP in memory
         if not otp_verified or not stored_Email:
-            logger.warning(f"Reset Password - Missing session data, checking verified emails set")
-            # Check if this email was verified via the verified_emails set
-            if Email in verified_emails:
-                logger.info(f"Reset Password - Found {Email} in verified emails set")
-                otp_verified = True
-                stored_Email = Email
-                # Get UserId from mapping
-                stored_UserId = verified_users_mapping.get(Email)
-                logger.info(f"Reset Password - Retrieved UserId from mapping: {stored_UserId}")
-            else:
-                logger.warning(f"Reset Password - Email {Email} not found in verified emails set")
-                return Response({
-                    'success': False,
-                    'message': 'OTP verification required before password reset'
-                }, status=status.HTTP_400_BAD_REQUEST)
-        
-        if not otp_verified:
             return Response({
                 'success': False,
                 'message': 'OTP verification required before password reset'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        if consumed:
+            return Response({
+                'success': False,
+                'message': 'Password reset challenge already used. Please request a new OTP.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        if not verified_at or (datetime.now().timestamp() - verified_at) > PASSWORD_RESET_OTP_VERIFY_WINDOW_SECONDS:
+            _clear_password_reset_challenge(request)
+            return Response({
+                'success': False,
+                'message': 'OTP verification expired. Please request a new OTP.'
             }, status=status.HTTP_400_BAD_REQUEST)
         
         if Email != stored_Email:
@@ -7472,20 +7519,10 @@ def reset_password(request):
                 logger.error(f"❌ Failed to log password reset to grc_logs: {str(log_error)}")
                 # Don't fail password reset if logging fails
             
-            # Clear session data (only if they exist)
-            session_keys_to_clear = ['reset_otp', 'reset_Email', 'reset_UserId', 'otp_expiry', 'otp_verified']
-            for key in session_keys_to_clear:
-                if key in request.session:
-                    del request.session[key]
-            request.session.save()
-            
-            # Remove from verified emails set and mapping
-            if Email in verified_emails:
-                verified_emails.remove(Email)
-                logger.info(f"Reset Password - Removed {Email} from verified emails set")
-            if Email in verified_users_mapping:
-                del verified_users_mapping[Email]
-                logger.info(f"Reset Password - Removed {Email} from verified users mapping")
+            # Mark challenge as consumed (replay protection), then clear session challenge
+            challenge['consumed'] = True
+            _save_password_reset_challenge(request, challenge)
+            _clear_password_reset_challenge(request)
             
             logger.info(f"Password reset successful for user: {user.UserName}")
             
@@ -7528,22 +7565,30 @@ def update_password(request):
                 'message': 'Email, OTP, and new password are required'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        # Check if OTP was verified (try session first, then memory)
-        otp_verified = request.session.get('otp_verified', False)
-        stored_Email = request.session.get('reset_Email')
-        stored_UserId = request.session.get('reset_UserId')
-        
-        # If session data is missing, check if we have verified OTP in memory
-        if not otp_verified or not stored_Email:
-            if Email in verified_emails:
-                otp_verified = True
-                stored_Email = Email
-                stored_UserId = verified_users_mapping.get(Email)
+        challenge = _get_password_reset_challenge(request)
+        otp_verified = bool(challenge.get('verified'))
+        stored_Email = challenge.get('email')
+        stored_UserId = challenge.get('user_id')
+        verified_at = challenge.get('verified_at')
+        consumed = bool(challenge.get('consumed'))
         
         if not otp_verified:
             return Response({
                 'success': False,
                 'message': 'OTP verification required before password update'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        if consumed:
+            return Response({
+                'success': False,
+                'message': 'Password reset challenge already used. Please request a new OTP.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        if not verified_at or (datetime.now().timestamp() - verified_at) > PASSWORD_RESET_OTP_VERIFY_WINDOW_SECONDS:
+            _clear_password_reset_challenge(request)
+            return Response({
+                'success': False,
+                'message': 'OTP verification expired. Please request a new OTP.'
             }, status=status.HTTP_400_BAD_REQUEST)
         
         if Email != stored_Email:
@@ -7730,18 +7775,10 @@ def update_password(request):
                 import traceback
                 logger.error(f"Traceback: {traceback.format_exc()}")
             
-            # Clear session data
-            session_keys_to_clear = ['reset_otp', 'reset_Email', 'otp_expiry', 'otp_verified', 'reset_UserId']
-            for key in session_keys_to_clear:
-                if key in request.session:
-                    del request.session[key]
-            request.session.save()
-            
-            # Remove from verified emails set and mapping
-            if Email in verified_emails:
-                verified_emails.remove(Email)
-            if Email in verified_users_mapping:
-                del verified_users_mapping[Email]
+            # Mark challenge consumed and clear it (single-use)
+            challenge['consumed'] = True
+            _save_password_reset_challenge(request, challenge)
+            _clear_password_reset_challenge(request)
             
             logger.info(f"Password update successful for user: {user.UserName}")
             
@@ -7812,7 +7849,7 @@ def test_session_auth(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def get_rbac_roles(request):
     """
     Get all available RBAC roles for dropdown
@@ -7972,11 +8009,15 @@ def serve_document(request, doc_type):
                             content.append(paragraph.text.strip())
                    
                     # Return HTML content for viewing
+                    safe_doc_type = escape(doc_type.upper())
+                    safe_paragraphs_html = "".join(
+                        f"<p>{escape(paragraph)}</p>" for paragraph in content
+                    )
                     html_content = f"""
                     <!DOCTYPE html>
                     <html>
                     <head>
-                        <title>{doc_type.upper()} Document</title>
+                        <title>{safe_doc_type} Document</title>
                         <style>
                             body {{ font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }}
                             h1 {{ color: #1e3a8a; }}
@@ -7984,8 +8025,8 @@ def serve_document(request, doc_type):
                         </style>
                     </head>
                     <body>
-                        <h1>{doc_type.upper()} Document</h1>
-                        {"<p>" + "</p><p>".join(content) + "</p>"}
+                        <h1>{safe_doc_type} Document</h1>
+                        {safe_paragraphs_html}
                     </body>
                     </html>
                     """

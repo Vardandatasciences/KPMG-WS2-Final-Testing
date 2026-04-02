@@ -899,8 +899,8 @@ export default {
             return
           }
           
-          // Get JWT token from localStorage
-          const token = localStorage.getItem('access_token')
+          // Get JWT token from browser storage (session-first)
+          const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token')
           
           // Make API call to link evidence - use appropriate endpoint
           const linkUrl = isRiskContext ? '/api/risks/link-evidence/' : '/api/incidents/link-evidence/'

@@ -1808,8 +1808,15 @@ export default {
       
       const query = this.searchQuery.trim();
       const regex = new RegExp(`(${this.escapeRegExp(query)})`, 'gi');
+
+      const safeText = String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
       
-      return text.replace(regex, '<mark class="search-highlight">$1</mark>');
+      return safeText.replace(regex, '<mark class="search-highlight">$1</mark>');
     },
     
     escapeRegExp(string) {

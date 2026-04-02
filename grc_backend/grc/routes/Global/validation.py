@@ -2,6 +2,7 @@ from django.core.validators import validate_email
 import re
 from datetime import datetime
 import json
+from urllib.parse import urlsplit
 
 def validate_string(value, min_length=1, max_length=255, field_name="field", allow_none=False):
     """Validate string input"""
@@ -474,19 +475,28 @@ class SecureValidator:
     CURRENCY_PATTERN = r'^[$£€]?[0-9]+(\.[0-9]{1,2})?$'
     PHONE_PATTERN = r'^\+?[1-9]\d{1,14}$'  # E.164 international format
     URL_PATTERN = r'^https?://[^\s/$.?#].[^\s]*$'
-    
+
     # Predefined choice lists
     INCIDENT_PRIORITIES = ['Critical', 'High', 'Medium', 'Low']
     INCIDENT_ORIGINS = ['Manual', 'Audit Finding', 'System Generated']
-    INCIDENT_STATUSES = ['Open', 'Closed', 'In Progress', 'Scheduled', 'Under Review', 'Pending Review', 'Rejected', 'Assigned']
+    INCIDENT_STATUSES = [
+        'Open',
+        'Closed',
+        'In Progress',
+        'Scheduled',
+        'Under Review',
+        'Pending Review',
+        'Rejected',
+        'Assigned',
+    ]
     INCIDENT_CLASSIFICATIONS = ['NonConformance', 'Control GAP', 'Risk', 'Issue']
     CRITICALITY_LEVELS = ['Critical', 'High', 'Medium', 'Low']
-    
+
     # Questionnaire validation choices
     IMPACT_SCALES = ['Very Low', 'Low', 'Medium', 'High', 'Very High']
     YES_NO_MAYBE_CHOICES = ['yes', 'no', 'maybe']
     YES_NO_PARTIAL_CHOICES = ['yes', 'no', 'partially']
-    
+
     # Enhanced patterns for questionnaire
     NUMERIC_HOURS_PATTERN = r'^[0-9]+(\.[0-9]{1,2})?$'  # For hours (allows decimals)
     CURRENCY_AMOUNT_PATTERN = r'^[0-9]+(\.[0-9]{1,2})?$'  # For currency amounts (no symbols)
@@ -522,77 +532,174 @@ class SecureValidator:
             raise ValidationError(field_name, "Contains invalid or potentially dangerous characters")
         
         return cleaned_value
-    
+
     @staticmethod
-    def validate_choice(value: Any, field_name: str, choices: List[str], 
-                       required: bool = False) -> Optional[str]:
+    def validate_trusted_url(
+        value: Any,
+        field_name: str,
+        *,
+        allowed_hosts: Optional[List[str]] = None,
+        allowed_host_suffixes: Optional[List[str]] = None,
+        allow_fragment_prefixes: Optional[List[str]] = None,
+        allow_relative: bool = False,
+        allow_http_hosts: Optional[List[str]] = None,
+    ) -> Optional[str]:
+        """
+        Validate a security-critical URL that will be rendered/embedded by the UI.
+
+        Allow-list based:
+        - Only http/https URLs are accepted (https required unless host is explicitly allow-listed for http)
+        - Host must match an allow-listed host or suffix
+        - Optionally allow internal fragment identifiers like '#linked-event-...'
+        """
+        if value is None or value == "":
+            return None
+
+        if not isinstance(value, str):
+            raise ValidationError(field_name, "must be a string URL")
+
+        v = value.strip()
+        if v == "":
+            return None
+
+        # Allow internal application placeholders (never network-fetched)
+        if allow_fragment_prefixes:
+            for prefix in allow_fragment_prefixes:
+                if v.startswith(prefix):
+                    return v
+
+        if allow_relative and v.startswith("/"):
+            return v
+
+        try:
+            parts = urlsplit(v)
+        except Exception:
+            raise ValidationError(field_name, "must be a valid URL")
+
+        scheme = (parts.scheme or "").lower()
+        host = (parts.hostname or "").lower()
+
+        if scheme not in ("http", "https"):
+            raise ValidationError(field_name, "URL scheme must be http or https")
+
+        if not host:
+            raise ValidationError(field_name, "URL host is required")
+
+        # Reject credentials in URLs: https://user:pass@host/...
+        if parts.username or parts.password:
+            raise ValidationError(field_name, "URL must not contain credentials")
+
+        allowed_hosts_norm = {(h or "").strip().lower() for h in (allowed_hosts or []) if (h or "").strip()}
+        allowed_suffixes_norm = {
+            (s or "").strip().lower().lstrip(".")
+            for s in (allowed_host_suffixes or [])
+            if (s or "").strip()
+        }
+        allow_http_hosts_norm = {
+            (h or "").strip().lower()
+            for h in (allow_http_hosts or [])
+            if (h or "").strip()
+        }
+
+        def _host_allowed(h: str) -> bool:
+            if h in allowed_hosts_norm:
+                return True
+            for suffix in allowed_suffixes_norm:
+                if h == suffix or h.endswith("." + suffix):
+                    return True
+            return False
+
+        if not _host_allowed(host):
+            raise ValidationError(field_name, f"host '{host}' is not in the allow-list")
+
+        if scheme == "http" and host not in allow_http_hosts_norm:
+            raise ValidationError(field_name, "only https URLs are allowed for this host")
+
+        return v
+
+    @staticmethod
+    def validate_choice(value: Any, field_name: str, choices: List[str],
+                        required: bool = False) -> Optional[str]:
         """Validate that value is from allowed choices (strict allow-list)"""
-        
+
         if value is None or value == '':
             if required:
                 raise ValidationError(field_name, "This field is required")
             return None
-        
+
         if not isinstance(value, str):
             raise ValidationError(field_name, f"Must be a string, got {type(value).__name__}")
-        
+
         # Strict allow-list validation
         if value not in choices:
             raise ValidationError(field_name, f"Must be one of: {', '.join(choices)}")
-        
+
         return value
-    
+
     @staticmethod
-    def validate_integer(value: Any, field_name: str, min_value: Optional[int] = None,
-                        max_value: Optional[int] = None, required: bool = False) -> Optional[int]:
+    def validate_integer(
+        value: Any,
+        field_name: str,
+        min_value: Optional[int] = None,
+        max_value: Optional[int] = None,
+        required: bool = False,
+    ) -> Optional[int]:
         """Validate integer with range checks"""
-        
+
         if value is None or value == '':
             if required:
                 raise ValidationError(field_name, "This field is required")
             return None
-        
+
         try:
             int_value = int(value)
         except (ValueError, TypeError):
             raise ValidationError(field_name, "Must be a valid integer")
-        
+
         if min_value is not None and int_value < min_value:
             raise ValidationError(field_name, f"Must be at least {min_value}")
-        
+
         if max_value is not None and int_value > max_value:
             raise ValidationError(field_name, f"Must be no more than {max_value}")
-        
+
         return int_value
-    
+
     @staticmethod
     def validate_currency(value: Any, field_name: str, required: bool = False) -> Optional[str]:
         """Validate currency amount"""
-        
+
         if value is None or value == '':
             if required:
                 raise ValidationError(field_name, "This field is required")
             return None
-        
+
         currency_str = str(value).strip()
         if not re.match(SecureValidator.CURRENCY_PATTERN, currency_str):
-            raise ValidationError(field_name, "Must be a valid currency amount (e.g., $100.50, 250.75)")
-        
+            raise ValidationError(
+                field_name,
+                "Must be a valid currency amount (e.g., $100.50, 250.75)",
+            )
+
         return currency_str
-    
+
     @staticmethod
-    def validate_currency_amount(value: Any, field_name: str, required: bool = False) -> Optional[str]:
+    def validate_currency_amount(
+        value: Any, field_name: str, required: bool = False
+    ) -> Optional[str]:
         """Validate currency amount without currency symbols (for questionnaire)"""
-        
+
         if value is None or value == '':
             if required:
                 raise ValidationError(field_name, "This field is required")
             return None
-        
+
         amount_str = str(value).strip()
         if not re.match(SecureValidator.CURRENCY_AMOUNT_PATTERN, amount_str):
-            raise ValidationError(field_name, "Must be a valid numeric amount (e.g., 100.50, 250)")
-        
+            raise ValidationError(
+                field_name,
+                "Must be a valid numeric amount (e.g., 100.50, 250)",
+            )
+
         # Additional validation: check reasonable range
         try:
             amount_float = float(amount_str)
@@ -602,57 +709,70 @@ class SecureValidator:
                 raise ValidationError(field_name, "Amount exceeds maximum allowed value")
         except ValueError:
             raise ValidationError(field_name, "Must be a valid numeric amount")
-        
+
         return amount_str
-    
+
     @staticmethod
     def validate_hours(value: Any, field_name: str, required: bool = False) -> Optional[str]:
         """Validate hours (numeric with up to 2 decimal places)"""
-        
+
         if value is None or value == '':
             if required:
                 raise ValidationError(field_name, "This field is required")
             return None
-        
+
         hours_str = str(value).strip()
         if not re.match(SecureValidator.NUMERIC_HOURS_PATTERN, hours_str):
-            raise ValidationError(field_name, "Must be a valid number of hours (e.g., 8, 24.5)")
-        
+            raise ValidationError(
+                field_name,
+                "Must be a valid number of hours (e.g., 8, 24.5)",
+            )
+
         # Additional validation: check reasonable range
         try:
             hours_float = float(hours_str)
             if hours_float < 0:
                 raise ValidationError(field_name, "Hours cannot be negative")
             if hours_float > 8760:  # 1 year in hours
-                raise ValidationError(field_name, "Hours exceeds reasonable maximum (8760 hours = 1 year)")
+                raise ValidationError(
+                    field_name,
+                    "Hours exceeds reasonable maximum (8760 hours = 1 year)",
+                )
         except ValueError:
             raise ValidationError(field_name, "Must be a valid number of hours")
-        
+
         return hours_str
-    
+
     @staticmethod
-    def validate_impact_scale(value: Any, field_name: str, required: bool = False) -> Optional[str]:
+    def validate_impact_scale(
+        value: Any, field_name: str, required: bool = False
+    ) -> Optional[str]:
         """Validate impact scale selection"""
-        
+
         if value is None or value == '':
             if required:
                 raise ValidationError(field_name, "This field is required")
             return None
-        
-        return SecureValidator.validate_choice(value, field_name, SecureValidator.IMPACT_SCALES, required)
-    
+
+        return SecureValidator.validate_choice(
+            value,
+            field_name,
+            SecureValidator.IMPACT_SCALES,
+            required,
+        )
+
     @staticmethod
     def validate_date(value: Any, field_name: str, required: bool = False) -> Optional[date]:
         """Validate date format"""
-        
+
         if value is None or value == '':
             if required:
                 raise ValidationError(field_name, "This field is required")
             return None
-        
+
         if isinstance(value, date):
             return value
-        
+
         try:
             if isinstance(value, str):
                 # Try ISO format YYYY-MM-DD
@@ -660,7 +780,7 @@ class SecureValidator:
                 if len(parts) == 3:
                     year, month, day = map(int, parts)
                     return date(year, month, day)
-            
+
             raise ValidationError(field_name, "Invalid date format, expected YYYY-MM-DD")
         except (ValueError, TypeError):
             raise ValidationError(field_name, "Invalid date format, expected YYYY-MM-DD")
@@ -668,15 +788,15 @@ class SecureValidator:
     @staticmethod
     def validate_time(value: Any, field_name: str, required: bool = False) -> Optional[time]:
         """Validate time format"""
-        
+
         if value is None or value == '':
             if required:
                 raise ValidationError(field_name, "This field is required")
             return None
-        
+
         if isinstance(value, time):
             return value
-        
+
         try:
             if isinstance(value, str):
                 # Try ISO format HH:MM or HH:MM:SS
@@ -686,10 +806,80 @@ class SecureValidator:
                     minute = int(parts[1])
                     second = int(parts[2]) if len(parts) > 2 else 0
                     return time(hour, minute, second)
-            
+
             raise ValidationError(field_name, "Invalid time format, expected HH:MM or HH:MM:SS")
         except (ValueError, TypeError):
             raise ValidationError(field_name, "Invalid time format, expected HH:MM or HH:MM:SS")
+
+
+def sanitize_mitigation_evidence_urls(
+    assessment_data: Dict[str, Any],
+    *,
+    allowed_hosts: Optional[List[str]] = None,
+    allowed_host_suffixes: Optional[List[str]] = None,
+    allow_http_hosts: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    """
+    Framework-level sanitization for mitigation evidence URLs.
+
+    This prevents attacker-controlled URLs (e.g. in 'aws-file_link') from being stored and later rendered
+    as iframe/src or clickable links. It validates:
+    - legacy mitigation['aws-file_link']
+    - each mitigation.files[*]['aws-file_link']
+    """
+    if not isinstance(assessment_data, dict):
+        return assessment_data
+
+    mitigations = assessment_data.get("mitigations")
+    if not isinstance(mitigations, dict):
+        return assessment_data
+
+    sanitized = assessment_data.copy()
+    sanitized_mitigations = {}
+
+    for mitigation_key, mitigation_data in mitigations.items():
+        if not isinstance(mitigation_data, dict):
+            sanitized_mitigations[mitigation_key] = mitigation_data
+            continue
+
+        m = mitigation_data.copy()
+
+        # Validate files array (preferred format)
+        files = m.get("files", [])
+        if isinstance(files, list):
+            new_files = []
+            for idx, f in enumerate(files):
+                if not isinstance(f, dict):
+                    new_files.append(f)
+                    continue
+                f2 = f.copy()
+                if "aws-file_link" in f2 and f2.get("aws-file_link"):
+                    f2["aws-file_link"] = SecureValidator.validate_trusted_url(
+                        f2.get("aws-file_link"),
+                        f"mitigations[{mitigation_key}].files[{idx}].aws-file_link",
+                        allowed_hosts=allowed_hosts,
+                        allowed_host_suffixes=allowed_host_suffixes,
+                        allow_fragment_prefixes=["#linked-event-"],
+                        allow_http_hosts=allow_http_hosts,
+                    )
+                new_files.append(f2)
+            m["files"] = new_files
+
+        # Validate legacy single-field URL if present
+        if "aws-file_link" in m and m.get("aws-file_link"):
+            m["aws-file_link"] = SecureValidator.validate_trusted_url(
+                m.get("aws-file_link"),
+                f"mitigations[{mitigation_key}].aws-file_link",
+                allowed_hosts=allowed_hosts,
+                allowed_host_suffixes=allowed_host_suffixes,
+                allow_fragment_prefixes=["#linked-event-"],
+                allow_http_hosts=allow_http_hosts,
+            )
+
+        sanitized_mitigations[mitigation_key] = m
+
+    sanitized["mitigations"] = sanitized_mitigations
+    return sanitized
 
 
 class IncidentValidator:

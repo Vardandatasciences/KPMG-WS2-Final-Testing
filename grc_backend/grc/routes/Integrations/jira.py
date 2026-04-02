@@ -13,6 +13,7 @@ import urllib.parse as up
 
 from grc.models import Users, ExternalApplication, ExternalApplicationConnection, ExternalApplicationSyncLog
 from grc.utils.data_encryption import decrypt_data, is_encrypted_data
+from grc.rbac.utils import RBACUtils
 
 logger = logging.getLogger(__name__)
 
@@ -1962,6 +1963,10 @@ def jira_resources(request):
 def jira_users(request):
     """Get all users for JIRA project assignment"""
     try:
+        requester_user_id = RBACUtils.get_user_id_from_request(request)
+        if not requester_user_id:
+            return JsonResponse({'error': 'Authentication required'}, status=401)
+
         # Import the JiraBackendManager
         from .jira_backend import JiraBackendManager
         jira_backend = JiraBackendManager()
@@ -2009,7 +2014,22 @@ def jira_assign_project(request):
 def jira_stored_data(request):
     """Get stored Jira data"""
     try:
-        user_id = request.GET.get('user_id', 1)
+        requester_user_id = RBACUtils.get_user_id_from_request(request)
+        if not requester_user_id:
+            return JsonResponse({'error': 'Authentication required'}, status=401)
+
+        requested_user_id = request.GET.get('user_id')
+        user_id = requester_user_id
+        if requested_user_id is not None and str(requested_user_id).strip() != '':
+            try:
+                requested_user_id_int = int(str(requested_user_id))
+                requester_user_id_int = int(str(requester_user_id))
+            except (TypeError, ValueError):
+                return JsonResponse({'error': 'Invalid user id'}, status=400)
+
+            if requested_user_id_int != requester_user_id_int and not RBACUtils.is_system_admin(requester_user_id_int):
+                return JsonResponse({'error': 'Forbidden'}, status=403)
+            user_id = requested_user_id_int
         
         try:
             user = Users.objects.get(UserId=user_id)

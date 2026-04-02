@@ -18,27 +18,40 @@ class JWTAuthentication(BaseAuthentication):
     
     def authenticate(self, request):
         auth_header = request.headers.get('Authorization')
+        cookie_token = request.COOKIES.get('access_token') or request.COOKIES.get('session_token')
         
         # Debug logging
         logger.info(f"[RFP JWT Auth] Path: {request.path}")
         logger.info(f"[RFP JWT Auth] Authorization header present: {bool(auth_header)}")
+        logger.info(f"[RFP JWT Auth] Cookie token present: {bool(cookie_token)}")
         
-        # If no authorization header, return None to allow other auth methods
-        if not auth_header:
-            logger.warning(f"[RFP JWT Auth] No Authorization header for {request.path}")
+        token = None
+        if auth_header:
+            # If authorization header exists but doesn't start with Bearer, fail fast.
+            if not auth_header.startswith('Bearer '):
+                raise AuthenticationFailed('Invalid authentication header format. Expected: Bearer <token>')
+            token = auth_header.split(' ')[1]
+            logger.info("[RFP JWT Auth] Using bearer token from Authorization header")
+        elif cookie_token:
+            # Cookie-first fallback for HttpOnly auth rollout.
+            token = cookie_token
+            logger.info("[RFP JWT Auth] Using token from HttpOnly cookie fallback")
+        else:
+            logger.warning(f"[RFP JWT Auth] No Authorization header or auth cookie for {request.path}")
             return None
         
-        # If authorization header exists but doesn't start with Bearer, raise error
-        if not auth_header.startswith('Bearer '):
-            raise AuthenticationFailed('Invalid authentication header format. Expected: Bearer <token>')
-        
         try:
-            token = auth_header.split(' ')[1]
             logger.info(f"[RFP JWT Auth] Token extracted: {token[:20]}...")
             
-            # Use JWT_SECRET_KEY from settings
-            secret_key = getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
-            payload = jwt.decode(token, secret_key, algorithms=['HS256'])
+            # Use centralized JWT verification configuration.
+            verification_key = getattr(settings, 'JWT_VERIFYING_KEY', None) or getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
+            payload = jwt.decode(
+                token,
+                verification_key,
+                algorithms=getattr(settings, 'JWT_ALLOWED_ALGORITHMS', [getattr(settings, 'JWT_ALGORITHM', 'RS256')]),
+                issuer=getattr(settings, 'JWT_ISSUER', None),
+                audience=getattr(settings, 'JWT_AUDIENCE', None),
+            )
             user_id = payload.get('user_id')
             
             logger.info(f"[RFP JWT Auth] Token decoded successfully, user_id: {user_id}")
@@ -73,6 +86,7 @@ class JWTAuthentication(BaseAuthentication):
                                 class DatabaseUser:
                                     def __init__(self, user_id, username, email, first_name, last_name):
                                         self.userid = user_id
+                                        self.pk = user_id
                                         self.id = user_id
                                         self.username = username or f"user_{user_id}"
                                         self.email = email or ''
@@ -115,6 +129,7 @@ class JWTAuthentication(BaseAuthentication):
                                 class DatabaseUser:
                                     def __init__(self, user_id, username, email, first_name, last_name):
                                         self.userid = user_id
+                                        self.pk = user_id
                                         self.id = user_id
                                         self.username = username or f"user_{user_id}"
                                         self.email = email or ''

@@ -98,8 +98,11 @@ export const PolicyRbacUtils = {
    */
   async fetchUserPermissions() {
     try {
-      // Get JWT token from localStorage
-      const token = localStorage.getItem('access_token') || localStorage.getItem('token');
+      // Get JWT token from browser storage (session-first)
+      const token = sessionStorage.getItem('access_token') ||
+                    sessionStorage.getItem('token') ||
+                    localStorage.getItem('access_token') ||
+                    localStorage.getItem('token');
       const headers = {
         'Content-Type': 'application/json'
       };
@@ -137,8 +140,11 @@ export const PolicyRbacUtils = {
    */
   async fetchUserRole() {
     try {
-      // Get JWT token from localStorage
-      const token = localStorage.getItem('access_token') || localStorage.getItem('token');
+      // Get JWT token from browser storage (session-first)
+      const token = sessionStorage.getItem('access_token') ||
+                    sessionStorage.getItem('token') ||
+                    localStorage.getItem('access_token') ||
+                    localStorage.getItem('token');
       const headers = {
         'Content-Type': 'application/json'
       };

@@ -55,9 +55,14 @@ class JWTAuthentication(BaseAuthentication):
         
         try:
             token = auth_header.split(' ')[1]
-            # Use JWT_SECRET_KEY from settings
-            secret_key = getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
-            payload = jwt.decode(token, secret_key, algorithms=['HS256'])
+            verification_key = getattr(settings, 'JWT_VERIFYING_KEY', None) or getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
+            payload = jwt.decode(
+                token,
+                verification_key,
+                algorithms=getattr(settings, 'JWT_ALLOWED_ALGORITHMS', [getattr(settings, 'JWT_ALGORITHM', 'RS256')]),
+                issuer=getattr(settings, 'JWT_ISSUER', None),
+                audience=getattr(settings, 'JWT_AUDIENCE', None),
+            )
             user_id = payload.get('user_id')
             
             if user_id:
@@ -403,7 +408,7 @@ class EntityDataDropdownAPIView(APIView):
         except Exception as e:
             logger.error(f"Error in entity data dropdown API: {e}")
             return Response(
-                {'error': 'Failed to get dropdown data', 'details': str(e)}, 
+                {'error': 'Failed to get dropdown data'}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
@@ -532,7 +537,7 @@ class EntityRiskGenerationAPIView(APIView):
         except Exception as e:
             logger.error(f"Error generating risks from entity-data-row: {e}")
             return Response(
-                {'error': 'Failed to generate risks', 'details': str(e)}, 
+                {'error': 'Failed to generate risks'}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
@@ -560,7 +565,7 @@ class EntityRiskGenerationAPIView(APIView):
         except Exception as e:
             logger.error(f"Error getting row data: {e}")
             return Response(
-                {'error': 'Failed to get row data', 'details': str(e)}, 
+                {'error': 'Failed to get row data'}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
@@ -597,6 +602,6 @@ class TaskStatusAPIView(APIView):
         except Exception as e:
             logger.error(f"Error checking task status for {task_id}: {e}")
             return Response(
-                {'error': 'Failed to check task status', 'details': str(e)}, 
+                {'error': 'Failed to check task status'}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )

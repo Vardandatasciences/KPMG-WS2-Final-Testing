@@ -5,8 +5,27 @@ const cors = require('cors');
 const app = express();
 const port = 5000;
 
-// Enable CORS for all routes
-app.use(cors());
+const allowedOrigins = [
+  'http://localhost:8080',
+  'http://127.0.0.1:8080',
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  'https://grc-tprm.vardaands.com',
+  'https://riskavaire.vardaands.com',
+  'https://test-riskavaire.vardaands.com',
+];
+
+app.use(cors({
+  origin(origin, callback) {
+    // Allow non-browser clients/tools that do not send Origin.
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error('CORS origin not allowed'), false);
+  },
+  credentials: false,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+}));
 app.use(express.json());
 
 // Replace with your actual credentials
@@ -17,6 +36,11 @@ const authUrl = 'https://auth.atlassian.com/authorize';
 const tokenUrl = 'https://auth.atlassian.com/oauth/token';
 
 let accessToken = null;
+
+function getRequestToken(req) {
+  // Prefer server-side stored OAuth token; keep query token as legacy fallback.
+  return accessToken || req.query.token;
+}
 
 // Function to validate token by testing it against Atlassian API
 async function validateToken(token) {
@@ -86,9 +110,9 @@ app.get('/oauth/callback', async (req, res) => {
       },
     });
 
-    // Store the access token
+    // Store the access token server-side; never put OAuth tokens in URL query params.
     accessToken = response.data.access_token;
-    res.redirect('http://localhost:8080/integration/jira?token=' + accessToken);  // Redirect back to frontend with token
+    res.redirect('http://localhost:8080/integration/jira?success=true');
   } catch (error) {
     res.status(500).send('Error during OAuth flow');
   }
@@ -566,7 +590,7 @@ app.get('/jira-attachments-list', async (req, res) => {
               author: attachment.author?.displayName || 'Unknown',
               issueKey: issue.key,
               issueSummary: issue.fields.summary,
-              downloadUrl: `http://localhost:5000/jira-attachment?token=${token}&attachmentId=${attachment.id}&cloudId=${selectedCloudId}`,
+              downloadUrl: `http://localhost:5000/jira-attachment/${attachment.id}?cloudId=${selectedCloudId}`,
               viewUrl: attachment.content,
               thumbnailUrl: attachment.thumbnail
             });
@@ -625,8 +649,10 @@ function getFileType(filename) {
 }
 
 // Download/proxy JIRA attachment content
-app.get('/jira-attachment', async (req, res) => {
-  const { token, attachmentId, cloudId } = req.query;
+app.get('/jira-attachment/:attachmentId', async (req, res) => {
+  const { cloudId } = req.query;
+  const { attachmentId } = req.params;
+  const token = getRequestToken(req);
   
   console.log('🔍 Attachment download request received:');
   console.log('🔍 Token:', token ? token.substring(0, 20) + '...' : 'No token');

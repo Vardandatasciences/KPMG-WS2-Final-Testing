@@ -256,8 +256,11 @@
                         <!-- Show all fields from the response object -->
                         <div class="space-y-3">
                           <div v-if="response.htmlContent" class="mb-3">
-                            <label class="block text-xs font-medium text-gray-500 mb-1">Response Content (HTML)</label>
-                            <div class="text-sm text-gray-900 bg-gray-50 p-3 rounded border border-gray-200" v-html="response.htmlContent"></div>
+                            <label class="block text-xs font-medium text-gray-500 mb-1">Response Content</label>
+                            <div
+                              class="text-sm text-gray-900 bg-gray-50 p-3 rounded border border-gray-200"
+                              v-html="sanitizeVendorHtml(response.htmlContent)"
+                            ></div>
                           </div>
                           <div v-if="response.content && response.content !== response.htmlContent" class="mb-3">
                             <label class="block text-xs font-medium text-gray-500 mb-1">Response Content (Text)</label>
@@ -290,7 +293,10 @@
                       </div>
                       <div v-else-if="typeof response === 'string'">
                         <label class="block text-xs font-medium text-gray-500 mb-1">Response</label>
-                        <div class="text-sm text-gray-900 bg-gray-50 p-3 rounded border border-gray-200" v-html="response"></div>
+                        <div
+                          class="text-sm text-gray-900 bg-gray-50 p-3 rounded border border-gray-200"
+                          v-html="sanitizeVendorHtml(response)"
+                        ></div>
                       </div>
                       <div v-else class="text-sm text-gray-500 italic">No response data available</div>
                     </div>
@@ -1833,6 +1839,109 @@ const formatKey = (key) => {
     .split('_')
     .map(word => word && word.length > 0 ? word.charAt(0).toUpperCase() + word.slice(1) : '')
     .join(' ')
+}
+
+const sanitizeVendorHtml = (value) => {
+  if (!value || typeof value !== 'string') {
+    return ''
+  }
+
+  try {
+    const parser = new DOMParser()
+    const doc = parser.parseFromString(value, 'text/html')
+    const allowedTags = new Set([
+      'p', 'br', 'strong', 'b', 'em', 'i', 'u',
+      'ul', 'ol', 'li',
+      'table', 'thead', 'tbody', 'tr', 'th', 'td',
+      'div', 'span', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+      'a'
+    ])
+
+    // Remove high-risk elements entirely
+    const dangerousSelectors = [
+      'script',
+      'style',
+      'iframe',
+      'object',
+      'embed',
+      'link',
+      'meta'
+    ]
+    dangerousSelectors.forEach(selector => {
+      doc.querySelectorAll(selector).forEach(el => el.remove())
+    })
+
+    // Strip inline event handlers, unsafe urls and non-allowlisted tags/attributes
+    const walk = (node) => {
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        const tag = node.tagName.toLowerCase()
+        if (!allowedTags.has(tag)) {
+          node.replaceWith(doc.createTextNode(node.textContent || ''))
+          return
+        }
+
+        const attrs = Array.from(node.attributes)
+        attrs.forEach(attr => {
+          const name = attr.name.toLowerCase()
+          const val = (attr.value || '').trim()
+          const normalizedVal = val.toLowerCase()
+
+          if (name.startsWith('on') || name === 'style') {
+            node.removeAttribute(attr.name)
+            return
+          }
+
+          if (tag !== 'a') {
+            node.removeAttribute(attr.name)
+            return
+          }
+
+          if (name !== 'href' && name !== 'target' && name !== 'rel') {
+            node.removeAttribute(attr.name)
+            return
+          }
+
+          if (name === 'href') {
+            if (
+              normalizedVal.startsWith('javascript:') ||
+              normalizedVal.startsWith('data:') ||
+              normalizedVal.startsWith('vbscript:')
+            ) {
+              node.removeAttribute(attr.name)
+              return
+            }
+            if (
+              normalizedVal &&
+              !normalizedVal.startsWith('http://') &&
+              !normalizedVal.startsWith('https://') &&
+              !normalizedVal.startsWith('mailto:') &&
+              !normalizedVal.startsWith('/')
+            ) {
+              node.removeAttribute(attr.name)
+              return
+            }
+          }
+
+          if (name === 'target') {
+            node.setAttribute('target', '_blank')
+          }
+          if (name === 'rel') {
+            node.setAttribute('rel', 'noopener noreferrer')
+          }
+        })
+      }
+
+      node.childNodes.forEach(child => walk(child))
+    }
+
+    walk(doc.body)
+    return doc.body.innerHTML
+  } catch (e) {
+    // Fallback: escape as plain text
+    const div = document.createElement('div')
+    div.textContent = value
+    return div.innerHTML
+  }
 }
 
 const getStatusBadgeClass = (status) => {

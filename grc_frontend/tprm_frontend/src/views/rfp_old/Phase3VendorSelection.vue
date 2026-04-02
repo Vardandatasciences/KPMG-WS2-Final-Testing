@@ -1299,6 +1299,11 @@ import rfpCard from '@/components_rfp/rfpCard.vue'
 import rfpCardHeader from '@/components_rfp/rfpCardHeader.vue'
 import rfpCardContent from '@/components_rfp/rfpCardContent.vue'
 
+const sanitizeCSVCell = (value: unknown) => {
+  const text = String(value ?? '')
+  return /^\s*[=+\-@]/.test(text) ? `'${text}` : text
+}
+
 const { success, error } = rfpUseToast()
 
 // Authentication
@@ -2287,7 +2292,7 @@ const handleExportList = () => {
         vendor.status || 'APPROVED'
       ].map(field => {
         // Escape commas and quotes in CSV fields
-        const fieldStr = String(field)
+        const fieldStr = String(sanitizeCSVCell(field))
         if (fieldStr.includes(',') || fieldStr.includes('"') || fieldStr.includes('\n')) {
           return `"${fieldStr.replace(/"/g, '""')}"`
         }

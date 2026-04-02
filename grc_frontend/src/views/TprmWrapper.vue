@@ -159,11 +159,14 @@ export default {
 
     // Get auth data from GRC localStorage
     const getAuthData = () => {
-      const token = localStorage.getItem('access_token') || 
+      const token = sessionStorage.getItem('access_token') ||
+                    sessionStorage.getItem('session_token') ||
+                    sessionStorage.getItem('token') ||
+                    localStorage.getItem('access_token') ||
                     localStorage.getItem('session_token') || 
                     localStorage.getItem('token')
-      const user = localStorage.getItem('user') || localStorage.getItem('current_user')
-      const refreshToken = localStorage.getItem('refresh_token')
+      const user = sessionStorage.getItem('user') || sessionStorage.getItem('current_user') || localStorage.getItem('user') || localStorage.getItem('current_user')
+      const refreshToken = sessionStorage.getItem('refresh_token') || localStorage.getItem('refresh_token')
       
       return {
         type: 'GRC_AUTH_SYNC',

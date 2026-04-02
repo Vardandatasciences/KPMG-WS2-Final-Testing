@@ -1891,8 +1891,8 @@ export default {
       progressInterval = setInterval(async () => {
         try {
           // Check if user is still authenticated
-          const isAuthenticated = localStorage.getItem('isAuthenticated') === 'true'
-          const accessToken = localStorage.getItem('access_token')
+          const isAuthenticated = (sessionStorage.getItem('isAuthenticated') || localStorage.getItem('isAuthenticated')) === 'true'
+          const accessToken = sessionStorage.getItem('access_token') || localStorage.getItem('access_token')
           
           if (!isAuthenticated || !accessToken) {
             console.log('User not authenticated - stopping progress polling')
@@ -3002,11 +3002,11 @@ export default {
         
         const response = await axios.get(apiUrl, {
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+            'Authorization': `Bearer ${sessionStorage.getItem('access_token') || localStorage.getItem('access_token')}`,
             'Content-Type': 'application/json'
           },
           params: {
-            user_id: localStorage.getItem('user_id') || '1'
+            user_id: sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || '1'
           },
           timeout: 30000 // 30 second timeout
         })

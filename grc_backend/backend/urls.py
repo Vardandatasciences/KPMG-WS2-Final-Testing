@@ -3,6 +3,7 @@ from django.urls import path, include, re_path
 from django.conf import settings
 from django.conf.urls.static import static
 from django.http import HttpResponse
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.cache import cache_control
 from django.views.generic import TemplateView
 
@@ -57,6 +58,7 @@ from grc.routes.Integrations.Sentinel.sentinel import (
 
 # GRC views for RBAC endpoints
 from grc import views
+from grc.routes.Policy.policy import request_policy_status_change
  
 @cache_control(max_age=86400)  # Cache for 24 hours
 def favicon_view(request):
@@ -78,6 +80,12 @@ urlpatterns = [
     
     path('api/', include('grc.urls')),  # Use the correct app name for API routes
     path('api/', include('backend.api.urls')),  # Include API module URLs
+    # POST to /policies/... (no /api/) used to hit SPA catch-all → 403 CSRF, not this view. Alias for Postman/legacy clients.
+    path(
+        'policies/<int:policy_id>/request-status-change/',
+        csrf_exempt(request_policy_status_change),
+        name='request-policy-status-change-no-api-prefix',
+    ),
     
     # BambooHR Integration URLs (directly included)
     path('api/bamboohr/oauth/', bamboohr_oauth, name='bamboohr-oauth'),

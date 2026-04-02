@@ -58,9 +58,14 @@ class JWTAuthentication(BaseAuthentication):
         
         try:
             token = auth_header.split(' ')[1]
-            # Use JWT_SECRET_KEY from settings
-            secret_key = getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
-            payload = jwt.decode(token, secret_key, algorithms=['HS256'])
+            verification_key = getattr(settings, 'JWT_VERIFYING_KEY', None) or getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
+            payload = jwt.decode(
+                token,
+                verification_key,
+                algorithms=getattr(settings, 'JWT_ALLOWED_ALGORITHMS', [getattr(settings, 'JWT_ALGORITHM', 'RS256')]),
+                issuer=getattr(settings, 'JWT_ISSUER', None),
+                audience=getattr(settings, 'JWT_AUDIENCE', None),
+            )
             user_id = payload.get('user_id')
             
             if user_id:
@@ -906,18 +911,40 @@ def approve_sla(request, approval_id):
         has_permission = False
         if current_user_id:
             has_permission = RBACTPRMUtils.check_contract_permission(current_user_id, 'ApproveContract')
-        
-        # Allow approval if:
-        # 1. User is the assigned approver (assignee_id), OR
-        # 2. User has ApproveContract permission
+
+        # Require authentication
         if current_user_id is None:
             return Response(
                 {'error': 'Authentication required'},
                 status=status.HTTP_401_UNAUTHORIZED
             )
-        
+
+        # Determine if current user is the assigned approver
         is_assignee = current_user_id == int(approval.assignee_id)
-        
+
+        # Enforce maker–checker: the SLA owner/creator should not approve their own SLA
+        sla_owner_id_int = None
+        try:
+            from tprm_backend.slas.models import VendorSLA
+            sla_obj = VendorSLA.objects.filter(sla_id=approval.sla_id).first()
+            if sla_obj and hasattr(sla_obj, 'created_by'):
+                owner_raw = getattr(sla_obj, 'created_by')
+                if owner_raw is not None:
+                    sla_owner_id_int = int(owner_raw)
+        except Exception:
+            sla_owner_id_int = None
+
+        # If we can determine SLA owner and they match current user, block approval
+        if sla_owner_id_int is not None and int(current_user_id) == sla_owner_id_int:
+            logger.warning(f"[Approve SLA] Self-approval attempt detected for SLA approval {approval_id} by user {current_user_id}")
+            return Response(
+                {'error': 'Self-approval is not allowed. Please assign a different approver for this SLA.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # Allow approval if:
+        # 1. User is the assigned approver (assignee_id), OR
+        # 2. User has ApproveContract permission
         if not is_assignee and not has_permission:
             return Response(
                 {'error': 'Only the assigned approver or users with ApproveContract permission can approve this SLA'},

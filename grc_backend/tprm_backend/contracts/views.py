@@ -101,9 +101,14 @@ class JWTAuthentication(BaseAuthentication):
         
         try:
             token = auth_header.split(' ')[1]
-            # Use JWT_SECRET_KEY from settings
-            secret_key = getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
-            payload = jwt.decode(token, secret_key, algorithms=['HS256'])
+            verification_key = getattr(settings, 'JWT_VERIFYING_KEY', None) or getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
+            payload = jwt.decode(
+                token,
+                verification_key,
+                algorithms=getattr(settings, 'JWT_ALLOWED_ALGORITHMS', [getattr(settings, 'JWT_ALGORITHM', 'RS256')]),
+                issuer=getattr(settings, 'JWT_ISSUER', None),
+                audience=getattr(settings, 'JWT_AUDIENCE', None),
+            )
             user_id = payload.get('user_id')
             
             if user_id:
@@ -311,10 +316,10 @@ def simple_login(request):
                     'exp': time.time() + 86400  # 24 hours
                 }
                 
-                # Use Django's SECRET_KEY for JWT signing
+                # Use centralized JWT signing configuration.
                 from django.conf import settings
-                secret_key = settings.SECRET_KEY
-                session_token = jwt.encode(payload, secret_key, algorithm='HS256')
+                signing_key = getattr(settings, 'JWT_SIGNING_KEY', getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY))
+                session_token = jwt.encode(payload, signing_key, algorithm=getattr(settings, 'JWT_ALGORITHM', 'RS256'))
                 
                 logger.info(f"Login successful for user: {username}")
                 return Response({

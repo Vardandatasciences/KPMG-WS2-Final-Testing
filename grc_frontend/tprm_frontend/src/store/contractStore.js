@@ -74,18 +74,15 @@ const contractStore = createStore({
     // Authentication mutations
     SET_AUTH(state, { user, token }) {
       state.currentUser = user
-      state.sessionToken = token
+      // Cookie-first: do not store JWT/session tokens in browser storage
+      state.sessionToken = null
       state.isAuthenticated = true
-      if (token) {
-        localStorage.setItem('session_token', token)
-      }
     },
     
     CLEAR_AUTH(state) {
       state.currentUser = null
       state.sessionToken = null
       state.isAuthenticated = false
-      localStorage.removeItem('session_token')
     },
     
     // Contract mutations
@@ -190,8 +187,8 @@ const contractStore = createStore({
         const response = await contractsApi.login(credentials)
         
         if (response.success) {
-          const { user, session_token } = response.data
-          commit('SET_AUTH', { user, token: session_token })
+          const { user } = response.data
+          commit('SET_AUTH', { user, token: null })
           return { success: true }
         } else {
           const error = response.error || 'Login failed'
@@ -214,8 +211,7 @@ const contractStore = createStore({
         
         if (response.success) {
           const { user } = response.data
-          const token = localStorage.getItem('session_token')
-          commit('SET_AUTH', { user, token })
+          commit('SET_AUTH', { user, token: null })
           return { success: true }
         } else {
           commit('CLEAR_AUTH')

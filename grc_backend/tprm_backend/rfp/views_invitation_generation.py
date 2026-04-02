@@ -9,11 +9,12 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from django.db import transaction, connection
 from django.utils import timezone
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
 
 from .models import RFP, VendorInvitation, Vendor, RFPUnmatchedVendor
 from .email_templates import generate_rich_html_email
+from .input_sanitization import sanitize_invitation_custom_message
 from .rfp_authentication import JWTAuthentication, SimpleAuthenticatedPermission
 from tprm_backend.rbac.tprm_decorators import rbac_rfp_required
 
@@ -23,6 +24,52 @@ from tprm_backend.core.tenant_utils import (
     require_tenant,
     tenant_filter
 )
+
+
+def _get_safe_frontend_base_url(request_base_url: str | None):
+    """
+    Normalize and validate a frontend base URL used for vendor invitations.
+
+    Security expectations:
+    - Host must match the configured EXTERNAL_BASE_URL host (Riskavaire domain).
+    - Scheme must be http/https.
+    - Path/query from caller are ignored; server controls final paths.
+    - On any parsing/validation error, fall back to EXTERNAL_BASE_URL.
+    """
+    from django.conf import settings
+
+    configured = getattr(
+        settings,
+        'EXTERNAL_BASE_URL',
+        'https://riskavaire.vardaands.com'
+    ).rstrip('/')
+
+    try:
+        configured_parsed = urlparse(configured)
+        configured_root = f"{configured_parsed.scheme}://{configured_parsed.netloc}".rstrip('/')
+    except Exception:
+        # If EXTERNAL_BASE_URL is somehow malformed, just return it as-is.
+        return configured
+
+    if not request_base_url:
+        return configured_root
+
+    try:
+        requested_parsed = urlparse(request_base_url)
+        # Require a real http(s) origin with a host
+        if requested_parsed.scheme not in ('http', 'https') or not requested_parsed.netloc:
+            return configured_root
+
+        # Enforce that the hostname matches our configured frontend hostname
+        if requested_parsed.hostname != configured_parsed.hostname:
+            print(f"[SECURITY] Rejected untrusted baseUrl host for invitations: {request_base_url}")
+            return configured_root
+
+        # Even when host matches, we ignore caller-provided path/query and
+        # use only the origin; paths are appended server-side.
+        return configured_root
+    except Exception:
+        return configured_root
 
 
 def generate_tracking_urls(rfp_id: int, invitation_id: int):
@@ -56,10 +103,19 @@ def generate_invitations_new_format(request):
         data = json.loads(request.body)
         rfp_id = data.get('rfpId')
         vendors = data.get('vendors', [])
-        custom_message = data.get('customMessage', '')
-        # Prefer frontend-provided base URL (actual RFP UI origin); fall back to settings.
-        from django.conf import settings
-        frontend_base_url = (data.get('baseUrl') or getattr(settings, 'EXTERNAL_BASE_URL', 'https://riskavaire.vardaands.com')).rstrip('/')
+        try:
+            custom_message = sanitize_invitation_custom_message(
+                data.get('customMessage', ''),
+                field_name='customMessage'
+            )
+        except ValueError as validation_error:
+            return JsonResponse({
+                'success': False,
+                'error': str(validation_error)
+            }, status=400)
+        # SECURITY: Normalize and validate the base URL so that invitations
+        # always resolve to the approved Riskavaire frontend origin.
+        frontend_base_url = _get_safe_frontend_base_url(data.get('baseUrl'))
         
         if not rfp_id:
             return JsonResponse({

@@ -652,14 +652,22 @@ const login = async () => {
 
 const resolvePostLoginRoute = async () => {
   try {
-    const token = localStorage.getItem('session_token') || localStorage.getItem('access_token')
+    const token = sessionStorage.getItem('session_token') ||
+                  sessionStorage.getItem('access_token') ||
+                  localStorage.getItem('session_token') ||
+                  localStorage.getItem('access_token')
     if (!token) {
       return '/home'
     }
 
     let userId = null
     try {
-      const currentUser = JSON.parse(localStorage.getItem('current_user') || localStorage.getItem('user') || '{}')
+      const currentUser = JSON.parse(
+        sessionStorage.getItem('current_user') ||
+        localStorage.getItem('current_user') ||
+        localStorage.getItem('user') ||
+        '{}'
+      )
       userId = currentUser.userid || currentUser.id || currentUser.user_id || currentUser.UserId
     } catch (e) {
       console.error('Error getting user ID for post-login route:', e)
@@ -696,7 +704,10 @@ const navigateAfterLogin = async () => {
 
 const determineVendorFlag = async () => {
   try {
-    const token = localStorage.getItem('session_token') || localStorage.getItem('access_token')
+    const token = sessionStorage.getItem('session_token') ||
+                  sessionStorage.getItem('access_token') ||
+                  localStorage.getItem('session_token') ||
+                  localStorage.getItem('access_token')
     if (!token) {
       isVendorUser.value = false
       return

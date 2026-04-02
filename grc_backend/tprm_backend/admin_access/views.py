@@ -4,7 +4,7 @@ No RBAC or MFA dependency - accessible by default for admin configuration
 """
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from django.db.models import Q
@@ -29,7 +29,7 @@ class StandardResultsSetPagination(PageNumberPagination):
 
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def get_all_users(request):
     """
     Get list of all active users with their permission count
@@ -78,7 +78,7 @@ def get_all_users(request):
 
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def get_user_permissions(request, user_id):
     """
     Get permissions for a specific user
@@ -127,7 +127,7 @@ def get_user_permissions(request, user_id):
 
 
 @api_view(['POST', 'PUT'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def update_user_permissions(request):
     """
     Update permissions for a user
@@ -189,7 +189,7 @@ def update_user_permissions(request):
 
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def get_all_permission_fields(request):
     """
     Get metadata about all available permission fields
@@ -429,7 +429,7 @@ def get_all_permission_fields(request):
 
 
 @api_view(['POST'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def bulk_update_permissions(request):
     """
     Bulk update permissions for multiple users or apply a permission template

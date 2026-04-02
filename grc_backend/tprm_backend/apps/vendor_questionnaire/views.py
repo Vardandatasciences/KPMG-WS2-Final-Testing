@@ -598,7 +598,7 @@ class QuestionnaireViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
             print(f"ERROR - get_vendor_rfp_data failed: {str(e)}")
             print(f"ERROR - Traceback: {error_trace}")
             return Response(
-                {'error': f'Failed to fetch RFP data: {str(e)}', 'traceback': error_trace},
+                {'error': 'Failed to fetch RFP data'},
                 status=status.HTTP_200_OK
             )
     
@@ -1925,16 +1925,20 @@ def _get_assignment_responses_payload(assignment):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
-def get_assignment_by_token_view(request):
+def get_assignment_by_token_view(request, token=None):
     """Public: get assignment and questions by query parameters (no auth, like vendor portal)."""
     if request.method != 'GET':
         return Response({'error': 'Method not allowed'}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
     
-    # Accept either query parameters (like vendor portal) or token (for backward compatibility)
+    # Accept either explicit assignment query parameters or path token.
     assignment_id = request.query_params.get('assignmentId')
     vendor_id = request.query_params.get('vendorId')
     questionnaire_id = request.query_params.get('questionnaireId')
-    token = request.query_params.get('token')
+    if not token and request.query_params.get('token'):
+        return Response(
+            {'error': 'Token in query string is not allowed. Use path token endpoint instead.'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
     
     # Try query parameters first (preferred method, like vendor portal)
     if assignment_id:

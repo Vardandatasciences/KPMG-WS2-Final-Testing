@@ -1803,7 +1803,7 @@ export default {
         this.testResults.push(`Testing: ${endpoint}`);
         
         // Get JWT token for authentication
-        const token = localStorage.getItem('access_token');
+        const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
         const headers = {
           'Content-Type': 'application/json',
         };
@@ -2544,10 +2544,10 @@ export default {
     },
     checkAuthenticationStatus() {
       // Check JWT authentication status
-      const accessToken = localStorage.getItem('access_token') || localStorage.getItem('session_token');
-      const refreshToken = localStorage.getItem('refresh_token');
+      const accessToken = sessionStorage.getItem('access_token') || sessionStorage.getItem('session_token') || localStorage.getItem('access_token') || localStorage.getItem('session_token');
+      const refreshToken = sessionStorage.getItem('refresh_token') || localStorage.getItem('refresh_token');
       // Check for 'current_user' (used by authService) or 'user' (legacy)
-      const currentUser = localStorage.getItem('current_user');
+      const currentUser = sessionStorage.getItem('current_user') || localStorage.getItem('current_user');
       const legacyUser = localStorage.getItem('user');
       const user = currentUser || legacyUser;
       const userId = localStorage.getItem('user_id');

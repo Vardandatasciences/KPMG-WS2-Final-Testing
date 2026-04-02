@@ -36,8 +36,8 @@ function getFrameworkId() {
 export async function checkConsentRequired(actionType) {
   try {
     const frameworkId = getFrameworkId();
-    const token = localStorage.getItem('access_token');
-    const userId = localStorage.getItem('user_id');
+    const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
+    const userId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id');
 
     if (!token) {
       // Don't log as error - this is expected when user is logged out
@@ -120,7 +120,7 @@ export async function checkConsentRequired(actionType) {
 export async function recordConsentAcceptance(userId, configId, actionType, ipAddress = null) {
   try {
     const frameworkId = localStorage.getItem('framework_id');
-    const token = localStorage.getItem('access_token');
+    const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
 
     // If IP address not provided, let backend extract it from request
     // The backend will get it from request.META
@@ -306,7 +306,7 @@ export function useConsent() {
 export async function withdrawConsent(userId, actionType, reason = null) {
   try {
     const frameworkId = getFrameworkId();
-    const token = localStorage.getItem('access_token');
+    const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
 
     const response = await axios.post(
       `${API_BASE_URL}/api/consent/withdraw/`,
@@ -343,7 +343,7 @@ export async function withdrawConsent(userId, actionType, reason = null) {
 export async function withdrawAllConsents(userId, frameworkId = null, reason = null) {
   try {
     const fwId = frameworkId || getFrameworkId();
-    const token = localStorage.getItem('access_token');
+    const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
 
     const payload = {
       user_id: userId,
@@ -383,7 +383,7 @@ export async function withdrawAllConsents(userId, frameworkId = null, reason = n
  */
 export async function getUserConsentWithdrawals(userId, frameworkId = null, actionType = null) {
   try {
-    const token = localStorage.getItem('access_token');
+    const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
     const params = {};
 
     if (frameworkId) {
@@ -420,7 +420,7 @@ export async function getUserConsentWithdrawals(userId, frameworkId = null, acti
  */
 export async function checkConsentStatus(userId, frameworkId, actionType = null) {
   try {
-    const token = localStorage.getItem('access_token');
+    const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
     const params = {
       framework_id: frameworkId
     };

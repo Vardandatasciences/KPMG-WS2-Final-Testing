@@ -15,19 +15,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// CORS middleware for API routes
-app.use('/api', (req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization');
-  
-  if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
-  }
-  next();
-});
-
 // API proxy to Django backend
 app.use('/api', createProxyMiddleware({
   target: 'http://localhost:8000',

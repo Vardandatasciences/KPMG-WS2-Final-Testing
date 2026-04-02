@@ -259,7 +259,7 @@ export default {
     }
   },
   async mounted() {
-    this.userId = localStorage.getItem('user_id');
+    this.userId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id');
     await this.checkUserRole();
     if (this.isGRCAdministrator) {
       await this.initializeFramework();
@@ -730,7 +730,7 @@ export default {
     },
 
     getAuthHeaders() {
-      const token = localStorage.getItem('access_token');
+      const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
       return {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'

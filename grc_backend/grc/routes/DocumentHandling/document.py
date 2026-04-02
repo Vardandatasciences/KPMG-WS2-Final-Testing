@@ -7,7 +7,7 @@ from rest_framework.decorators import (
 )
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.db.models import Q
 from grc.models import (
     FileOperations,
@@ -99,6 +99,7 @@ def get_user_display_name(user_id):
 
 
 @api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def get_documents(request):
     """
     Fetch documents from FileOperations table with pagination
@@ -319,6 +320,7 @@ def get_documents(request):
 
 
 @api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def get_document_counts(request):
     """
     Get document counts by module
@@ -373,8 +375,7 @@ def format_file_size(size_in_bytes):
 
 @csrf_exempt
 @api_view(['DELETE'])
-@authentication_classes([])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def delete_document(request, doc_id: int):
     """
     Delete a single FileOperations upload record and its company-folder link.
@@ -583,8 +584,7 @@ def sanitize_filename_part(value: str) -> str:
 
 
 @api_view(['GET'])
-@authentication_classes([])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def list_company_folders(request):
     """
     List all active company folders for the current tenant (if available).
@@ -726,8 +726,7 @@ def list_company_folders(request):
 
 @csrf_exempt
 @api_view(['POST'])
-@authentication_classes([])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def create_company_folder(request):
     """
     Create a new company folder.
@@ -803,8 +802,7 @@ def create_company_folder(request):
 
 @csrf_exempt
 @api_view(['DELETE'])
-@authentication_classes([])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def delete_company_folder(request, folder_id):
     """
     Delete a company folder and its subfolders/links.
@@ -900,8 +898,7 @@ def delete_company_folder(request, folder_id):
 
 
 @api_view(['GET'])
-@authentication_classes([])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def list_company_subfolders(request, folder_id):
     """
     List subfolders for a company folder. Returns id, name, code, document_count.
@@ -961,8 +958,7 @@ def list_company_subfolders(request, folder_id):
 
 @csrf_exempt
 @api_view(['POST'])
-@authentication_classes([])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def create_company_subfolder(request, folder_id):
     """
     Create a subfolder inside a company folder.
@@ -1019,6 +1015,7 @@ def create_company_subfolder(request, folder_id):
 @csrf_exempt
 @api_view(['POST'])
 @parser_classes([MultiPartParser, FormParser])
+@permission_classes([IsAuthenticated])
 def upload_document(request):
     """
     Upload document with optional framework selection

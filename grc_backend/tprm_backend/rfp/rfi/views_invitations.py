@@ -6,6 +6,7 @@ import json
 import time
 import secrets
 import logging
+import re
 from django.http import JsonResponse
 from django.db import transaction
 from django.utils import timezone
@@ -21,8 +22,56 @@ from rest_framework.response import Response
 from .models import RFI, RFIVendorInvitation, RFIResponse
 from tprm_backend.core.tenant_utils import get_tenant_id_from_request
 from .email_templates import generate_rfi_rich_html_email
+from ..input_sanitization import sanitize_invitation_custom_message
 
 logger = logging.getLogger(__name__)
+
+
+_RFI_SCRIPT_TAG_RE = re.compile(
+    r"<\s*script[^>]*>.*?<\s*/\s*script\s*>",
+    re.IGNORECASE | re.DOTALL,
+)
+_RFI_ONEVENT_ATTR_RE = re.compile(
+    r"\son\w+\s*=\s*(\"[^\"]*\"|'[^']*'|[^\s>]+)",
+    re.IGNORECASE,
+)
+_RFI_JS_URL_RE = re.compile(
+    r"(href|src)\s*=\s*(\"javascript:[^\"]*\"|'javascript:[^']*'|javascript:[^\s>]*)",
+    re.IGNORECASE,
+)
+
+
+def _sanitize_rfi_html_value(value):
+    if not isinstance(value, str) or not value:
+        return value
+
+    sanitized = _RFI_SCRIPT_TAG_RE.sub("", value)
+    sanitized = _RFI_ONEVENT_ATTR_RE.sub("", sanitized)
+    sanitized = _RFI_JS_URL_RE.sub(r"\1=\"#\"", sanitized)
+    return sanitized
+
+
+def _sanitize_rfi_response_documents(documents):
+    """
+    Best-effort neutralization for any rich-text/HTML content in RFI response_documents.
+    """
+    if isinstance(documents, list):
+        # If later you store rich HTML inside list items, extend this as needed.
+        return documents
+
+    if not isinstance(documents, dict):
+        return documents
+
+    sanitized = {}
+    for key, value in documents.items():
+        if isinstance(value, str) and "<" in value and ">" in value:
+            sanitized[key] = _sanitize_rfi_html_value(value)
+        elif isinstance(value, dict):
+            sanitized[key] = _sanitize_rfi_response_documents(value)
+        else:
+            sanitized[key] = value
+
+    return sanitized
 
 
 def _get_tenant_id(request):
@@ -48,8 +97,14 @@ def _get_tenant_id(request):
                 import jwt
                 from django.conf import settings
                 token = auth_header.split(' ')[1]
-                secret_key = getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
-                payload = jwt.decode(token, secret_key, algorithms=['HS256'])
+                verification_key = getattr(settings, 'JWT_VERIFYING_KEY', None) or getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
+                payload = jwt.decode(
+                    token,
+                    verification_key,
+                    algorithms=getattr(settings, 'JWT_ALLOWED_ALGORITHMS', [getattr(settings, 'JWT_ALGORITHM', 'RS256')]),
+                    issuer=getattr(settings, 'JWT_ISSUER', None),
+                    audience=getattr(settings, 'JWT_AUDIENCE', None),
+                )
                 if payload:
                     user_id = payload.get('user_id') or payload.get('userid') or payload.get('id')
                     logger.info(f"[RFI Invitations] Extracted user_id {user_id} from JWT token")
@@ -122,7 +177,16 @@ def generate_rfi_invitations(request):
         data = json.loads(request.body) if isinstance(request.body, bytes) else request.data
         rfi_id = data.get('rfiId')
         vendors = data.get('vendors', [])
-        custom_message = data.get('customMessage', '')
+        try:
+            custom_message = sanitize_invitation_custom_message(
+                data.get('customMessage', ''),
+                field_name='customMessage'
+            )
+        except ValueError as validation_error:
+            return JsonResponse({
+                'success': False,
+                'error': str(validation_error)
+            }, status=400)
 
         logger.info(f"[RFI Invitations] Generating invitations for RFI {rfi_id}, {len(vendors)} vendors")
 
@@ -212,8 +276,7 @@ def generate_rfi_invitations(request):
         logger.error(traceback.format_exc())
         return JsonResponse({
             'success': False,
-            'error': str(e),
-            'traceback': traceback.format_exc(),
+            'error': 'Failed to generate invitations',
         }, status=500)
 
 
@@ -278,9 +341,9 @@ def acknowledge_rfi_invitation(request, token):
         
         logger.info(f'[RFI ACKNOWLEDGE] Invitation {inv.invitation_id} acknowledged by {inv.vendor_email}')
         
-        # Redirect to acknowledgment confirmation page first, which will then redirect to vendor portal
+        # Redirect without leaking token in query string.
         external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000').rstrip('/')
-        acknowledgment_page_url = f"{external_base_url}/rfi-invitation-acknowledged?token={token}&vendor={inv.company_name}"
+        acknowledgment_page_url = f"{external_base_url}/rfi-invitation-acknowledged/{token}"
         
         return redirect(acknowledgment_page_url)
     except Exception as e:
@@ -382,6 +445,8 @@ def create_rfi_response(request):
         contact_phone = data.get('contactPhone', '')
 
         with transaction.atomic():
+            safe_documents = _sanitize_rfi_response_documents(data.get('documents', []))
+
             resp = RFIResponse.objects.create(
                 rfi=rfi,
                 tenant_id=tenant_id,
@@ -392,7 +457,7 @@ def create_rfi_response(request):
                 contact_email=contact_email,
                 contact_phone=contact_phone,
                 proposal_data=proposal_data,
-                response_documents=data.get('documents', []),
+                response_documents=safe_documents,
                 completion_percentage=data.get('completionPercentage'),
                 submission_status='SUBMITTED',
                 evaluation_status='SUBMITTED',
@@ -415,8 +480,7 @@ def create_rfi_response(request):
         import traceback
         return JsonResponse({
             'success': False,
-            'error': str(e),
-            'traceback': traceback.format_exc(),
+            'error': 'Failed to submit RFI response',
         }, status=500)
 
 

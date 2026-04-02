@@ -5,11 +5,67 @@ Integrates the S3 microservice client with Django models and provides easy-to-us
  
 import os
 import json
+import re
 from typing import Dict, List, Optional, Union, Any
 from django.conf import settings
 from django.utils import timezone
 from .models import FileStorage, S3Files
 from .s3 import RenderS3Client, create_direct_mysql_client
+
+# Export payload guardrails (DoS protection)
+EXPORT_MAX_DATA_BYTES = 5 * 1024 * 1024
+EXPORT_MAX_RECORDS = 2_000
+EXPORT_MAX_NESTED_DEPTH = 6
+EXPORT_MAX_DICT_KEYS = 250
+EXPORT_MAX_LIST_ITEMS = 2_000
+EXPORT_MAX_STRING_LEN = 8_000
+TEMPLATE_TOKEN_RE = re.compile(r"(\{\{|\}\}|\{\%|\%\}|\{\#|\#\})")
+SUPPORTED_EXPORT_FORMATS = {"json", "csv", "xml", "txt", "pdf"}
+
+
+def _sanitize_export_scalar(value: Any) -> Any:
+    """Sanitize scalar values passed to export rendering."""
+    if value is None:
+        return ""
+    if isinstance(value, (bool, int, float)):
+        return value
+
+    text = str(value).replace("\x00", "")
+    # Neutralize template directives to avoid accidental engine evaluation.
+    text = TEMPLATE_TOKEN_RE.sub("", text)
+    if len(text) > EXPORT_MAX_STRING_LEN:
+        text = text[:EXPORT_MAX_STRING_LEN]
+    return text
+
+
+def _sanitize_export_payload(value: Any, depth: int = 0) -> Any:
+    """Recursively sanitize export payload and enforce structural limits."""
+    if depth > EXPORT_MAX_NESTED_DEPTH:
+        raise ValueError("Export payload too deeply nested")
+
+    if isinstance(value, dict):
+        if len(value) > EXPORT_MAX_DICT_KEYS:
+            raise ValueError("Export payload object has too many keys")
+        sanitized = {}
+        for key, nested_value in value.items():
+            safe_key = _sanitize_export_scalar(key)
+            sanitized[safe_key] = _sanitize_export_payload(nested_value, depth + 1)
+        return sanitized
+
+    if isinstance(value, list):
+        if len(value) > EXPORT_MAX_LIST_ITEMS:
+            raise ValueError("Export payload list has too many items")
+        return [_sanitize_export_payload(item, depth + 1) for item in value]
+
+    return _sanitize_export_scalar(value)
+
+
+def _estimate_payload_size_bytes(value: Any) -> int:
+    """Best-effort UTF-8 payload size estimation for request guardrails."""
+    try:
+        return len(json.dumps(value, ensure_ascii=False).encode("utf-8"))
+    except Exception:
+        return len(str(value).encode("utf-8"))
  
  
 class DjangoS3Service:
@@ -244,25 +300,46 @@ class DjangoS3Service:
             }
        
         try:
+            normalized_format = str(export_format or "").strip().lower()
+            if normalized_format not in SUPPORTED_EXPORT_FORMATS:
+                return {
+                    'success': False,
+                    'error': f"Unsupported export format: {export_format}. Supported: {sorted(SUPPORTED_EXPORT_FORMATS)}"
+                }
+
+            # Defensive sanitization and shape controls against export DoS payloads.
+            data = _sanitize_export_payload(data)
+            payload_size = _estimate_payload_size_bytes(data)
+            if payload_size > EXPORT_MAX_DATA_BYTES:
+                return {
+                    'success': False,
+                    'error': f'Export payload too large ({payload_size} bytes). Maximum allowed: {EXPORT_MAX_DATA_BYTES} bytes.'
+                }
+
             record_count = len(data) if isinstance(data, list) else 1
+            if record_count > EXPORT_MAX_RECORDS:
+                return {
+                    'success': False,
+                    'error': f'Export record count exceeds allowed maximum ({EXPORT_MAX_RECORDS}).'
+                }
            
             # Create Django model record first
             file_storage = FileStorage.objects.create(
                 operation_type='export',
                 user_id=user_id,
                 file_name=file_name,
-                export_format=export_format,
+                export_format=normalized_format,
                 record_count=record_count,
                 status='pending',
                 metadata={
                     'rfp_id': rfp_id,
-                    'data_size': len(str(data)),
+                    'data_size': payload_size,
                     'platform': 'S3_Microservice'
                 }
             )
            
             # Export via S3 microservice
-            result = self.client.export(data, export_format, file_name, user_id)
+            result = self.client.export(data, normalized_format, file_name, user_id)
            
             if result.get('success'):
                 export_info = result.get('export_info', {})
@@ -289,7 +366,7 @@ class DjangoS3Service:
                     's3_key': export_info.get('s3Key', ''),
                     'stored_name': export_info.get('storedName', file_name),
                     'file_size': export_info.get('size', 0),
-                    'message': f'Data exported successfully as {export_format.upper()}'
+                    'message': f'Data exported successfully as {normalized_format.upper()}'
                 }
             else:
                 # Update Django model with failure

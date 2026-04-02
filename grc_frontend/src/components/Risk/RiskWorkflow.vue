@@ -408,13 +408,22 @@
                     </div>
                     
                     <!-- Regular File -->
-                    <a v-else :href="file['aws-file_link']" :download="file.fileName" target="_blank" class="downloadable-file">
+                    <a
+                      v-else-if="safeEvidenceUrl(file['aws-file_link'])"
+                      :href="safeEvidenceUrl(file['aws-file_link'])"
+                      :download="file.fileName"
+                      target="_blank"
+                      class="downloadable-file"
+                    >
                       <i class="fas fa-download"></i> {{ file.fileName }}
                       <span v-if="file.size" class="file-size">({{ formatFileSize(file.size) }})</span>
                       <span v-if="file.upload_type === 's3'" class="s3-indicator" title="Stored in S3">
                         <i class="fas fa-cloud"></i>
                       </span>
                     </a>
+                    <span v-else class="downloadable-file downloadable-file--blocked">
+                      <i class="fas fa-ban"></i> Blocked untrusted evidence URL
+                    </span>
                   </div>
                 </div>
               </div>
@@ -884,13 +893,22 @@
                         </div>
                         
                         <!-- Regular File -->
-                        <a v-else :href="file['aws-file_link']" :download="file.fileName" target="_blank" class="evidence-link">
+                        <a
+                          v-else-if="safeEvidenceUrl(file['aws-file_link'])"
+                          :href="safeEvidenceUrl(file['aws-file_link'])"
+                          :download="file.fileName"
+                          target="_blank"
+                          class="evidence-link"
+                        >
                           <i class="fas fa-download"></i> {{ file.fileName }}
                           <span v-if="file.size" class="file-size">({{ formatFileSize(file.size) }})</span>
                           <span v-if="file.upload_type === 's3'" class="s3-indicator" title="Stored in S3">
                             <i class="fas fa-cloud"></i>
                           </span>
                         </a>
+                        <span v-else class="evidence-link evidence-link--blocked">
+                          <i class="fas fa-ban"></i> Blocked untrusted evidence URL
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -1234,6 +1252,7 @@ import { PopupService } from '../../modules/popus/popupService';
 import { API_ENDPOINTS } from '../../config/api.js';
 import EvidenceAttachment from '../EventHandling/EvidenceAttachment.vue';
 import riskDataService from '@/services/riskService';
+import { safeEvidenceUrl } from '@/utils/trustedEvidenceUrl';
 
 export default {
   name: 'UserTasks',
@@ -1534,6 +1553,7 @@ export default {
     }, 500);
   },
   methods: {
+    safeEvidenceUrl,
     // Filter risks based on search query and filters
     filterRisks() {
       // This method will be called when filters change

@@ -14,6 +14,7 @@ from django.conf import settings
 # Import the S3 microservice client
 from .s3_fucntions import create_direct_mysql_client
 from ...debug_utils import debug_print
+from ...utils.csv_security import sanitize_csv_dataset
 
 # Initialize Django settings
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.settings')
@@ -317,7 +318,8 @@ def export_to_excel(data):
 
 def export_to_csv(data):
     """Export data to CSV format"""
-    df = pd.DataFrame(data)
+    sanitized_data = sanitize_csv_dataset(data)
+    df = pd.DataFrame(sanitized_data)
     output = BytesIO()
     df.to_csv(output, index=False)
     output.seek(0)

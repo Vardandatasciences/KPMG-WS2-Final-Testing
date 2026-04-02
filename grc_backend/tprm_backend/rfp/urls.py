@@ -19,6 +19,7 @@ router.register(r'rfp-types', views.RFPTypeCustomFieldsViewSet)
  
 urlpatterns = [
     # PUBLIC Vendor invitation redirect endpoint - MUST BE FIRST (no auth required)
+    path('rfp/<int:rfp_id>/invitation/<str:token>', views.vendor_invitation_redirect, name='vendor_invitation_redirect_tokenized'),
     path('rfp/<int:rfp_id>/invitation', views.vendor_invitation_redirect, name='vendor_invitation_redirect'),
    
     # Document generation endpoints - MOVED BEFORE ROUTER to ensure they match first

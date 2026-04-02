@@ -5,7 +5,27 @@ const winston = require('winston');
 const Joi = require('joi');
 
 const app = express();
-app.use(cors());
+const allowedOrigins = [
+  'http://localhost:8080',
+  'http://127.0.0.1:8080',
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  'https://grc-tprm.vardaands.com',
+  'https://riskavaire.vardaands.com',
+  'https://test-riskavaire.vardaands.com',
+];
+
+app.use(cors({
+  origin(origin, callback) {
+    // Allow non-browser clients/tools that do not send Origin.
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error('CORS origin not allowed'), false);
+  },
+  credentials: false,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+}));
 app.use(bodyParser.json());
 
 // Winston Logger setup

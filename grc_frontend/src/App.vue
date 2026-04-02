@@ -105,15 +105,25 @@ export default {
       return normalized === '/login'
     },
     clearStaleAuthData() {
-      // Clear any stale authentication data that might cause issues
-      const hasValidToken = localStorage.getItem('access_token')
-      const hasValidUserId = localStorage.getItem('user_id')
-      const isLoggedIn = localStorage.getItem('is_logged_in') === 'true'
-     
-      // If we have partial auth data (incomplete), clear it
-      if ((hasValidToken && !hasValidUserId) || (hasValidUserId && !hasValidToken) || (hasValidToken && !isLoggedIn)) {
+      // Cookie-first auth: do not require JS-readable tokens.
+      // Only clear truly inconsistent shell flags.
+      const hasValidUserId = !!(sessionStorage.getItem('user_id') || localStorage.getItem('user_id'))
+      const isLoggedIn = (sessionStorage.getItem('is_logged_in') || localStorage.getItem('is_logged_in')) === 'true'
+
+      // Remove legacy token artifacts always (safe cleanup).
+      sessionStorage.removeItem('access_token')
+      sessionStorage.removeItem('refresh_token')
+      localStorage.removeItem('access_token')
+      localStorage.removeItem('refresh_token')
+
+      if ((hasValidUserId && !isLoggedIn) || (!hasValidUserId && isLoggedIn)) {
         console.log('🧹 Clearing stale authentication data')
-        localStorage.removeItem('access_token')
+        sessionStorage.removeItem('user_id')
+        sessionStorage.removeItem('user')
+        sessionStorage.removeItem('current_user')
+        sessionStorage.removeItem('is_logged_in')
+        sessionStorage.removeItem('user_email')
+        sessionStorage.removeItem('user_name')
         localStorage.removeItem('user_id')
         localStorage.removeItem('is_logged_in')
         localStorage.removeItem('user_email')
@@ -122,54 +132,33 @@ export default {
     },
    
     async checkAuthStatus() {
-      // Check if user is authenticated by looking for JWT token and user data
-      const accessToken = localStorage.getItem('access_token')
-      const userId = localStorage.getItem('user_id')
-      const isLoggedIn = localStorage.getItem('is_logged_in') === 'true'
-     
-      // Check if token is expired
-      let isTokenValid = true
-      let tokenExpired = false
-      if (accessToken) {
-        try {
-          const tokenPayload = JSON.parse(atob(accessToken.split('.')[1]))
-          const currentTime = Math.floor(Date.now() / 1000)
-          isTokenValid = tokenPayload.exp && tokenPayload.exp > currentTime
-          tokenExpired = !isTokenValid
-         
-          if (tokenExpired) {
-            console.warn('⚠️ Token expired, attempting to refresh...')
-            // Try to refresh the token
-            try {
-              const refreshSuccess = await this.attemptTokenRefresh()
-              if (refreshSuccess) {
-                isTokenValid = true
-                console.log('✅ Token refreshed successfully')
-              } else {
-                console.warn('❌ Token refresh failed')
-              }
-            } catch (error) {
-              console.error('❌ Error during token refresh:', error)
+      // Cookie-first auth: use shell flags + backend session verification.
+      const userId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id')
+      const isLoggedIn = (sessionStorage.getItem('is_logged_in') || localStorage.getItem('is_logged_in')) === 'true'
+      const hasAuthData = !!(userId && isLoggedIn)
+      let cookieSessionValid = false
+
+      if (hasAuthData) {
+        if (sessionStorage.getItem('cookie_session_validated') === 'true') {
+          cookieSessionValid = true
+        } else {
+          try {
+            const { default: authService } = await import('./services/authService.js')
+            const result = await authService.validateSession()
+            cookieSessionValid = !!(result && result.success)
+            if (cookieSessionValid) {
+              sessionStorage.setItem('cookie_session_validated', 'true')
+            } else {
+              sessionStorage.removeItem('cookie_session_validated')
             }
+          } catch (error) {
+            cookieSessionValid = false
+            sessionStorage.removeItem('cookie_session_validated')
           }
-        } catch (error) {
-          console.warn('⚠️ Invalid token format:', error)
-          isTokenValid = false
         }
       }
-     
-      // User is authenticated if they have a valid token, user ID, and are marked as logged in
-      // On page refresh, if we have valid auth data, consider the user authenticated
-      // If token is expired but we have auth data, still show sidebar temporarily while refresh is attempted
-      const hasAuthData = !!(accessToken && userId && isLoggedIn)
-      this.isAuthenticated = hasAuthData && (isTokenValid || tokenExpired)
-     
-      // Start periodic token refresh if we have tokens (even if user data is missing)
-      const hasTokens = !!(accessToken || localStorage.getItem('refresh_token'))
-      if (hasTokens && !this.hasExplicitlyLoggedIn) {
-        // Start periodic refresh to keep tokens alive
-        this.startPeriodicTokenRefresh()
-      }
+
+      this.isAuthenticated = hasAuthData && cookieSessionValid
       
       // If user is authenticated on page refresh, set hasExplicitlyLoggedIn to true
       if (this.isAuthenticated && !this.hasExplicitlyLoggedIn) {
@@ -177,11 +166,10 @@ export default {
       }
      
       console.log('🔐 Authentication check:', {
-        hasToken: !!accessToken,
+        hasToken: undefined, // HttpOnly cookie (not JS-readable)
         hasUserId: !!userId,
         isLoggedIn: isLoggedIn,
-        isTokenValid: isTokenValid,
-        tokenExpired: tokenExpired,
+        cookieSessionValid: cookieSessionValid,
         hasExplicitlyLoggedIn: this.hasExplicitlyLoggedIn,
         isAuthenticated: this.isAuthenticated,
         sidebarWillRender: this.isAuthenticated,
@@ -228,6 +216,14 @@ export default {
     async onLogout() {
       this.hasExplicitlyLoggedIn = false
       this.isAuthenticated = false
+      sessionStorage.removeItem('access_token')
+      sessionStorage.removeItem('refresh_token')
+      sessionStorage.removeItem('user_id')
+      sessionStorage.removeItem('user')
+      sessionStorage.removeItem('current_user')
+      sessionStorage.removeItem('is_logged_in')
+      sessionStorage.removeItem('user_email')
+      sessionStorage.removeItem('user_name')
       localStorage.removeItem('access_token')
       localStorage.removeItem('user_id')
       localStorage.removeItem('is_logged_in')
@@ -250,33 +246,7 @@ export default {
       this.checkAuthStatus()
     },
    
-    // Method to attempt token refresh
-    async attemptTokenRefresh() {
-      try {
-        const refreshToken = localStorage.getItem('refresh_token')
-        if (!refreshToken) {
-          console.warn('⚠️ No refresh token available')
-          return false
-        }
-       
-        // Import authService dynamically to avoid circular dependencies
-        const { default: authService } = await import('./services/authService.js')
-        const success = await authService.refreshAccessToken()
-       
-        if (success) {
-          console.log('✅ Token refresh successful')
-          return true
-        } else {
-          console.warn('❌ Token refresh failed')
-          return false
-        }
-      } catch (error) {
-        console.error('❌ Error during token refresh:', error)
-        return false
-      }
-    },
-   
-    // Method to start periodic token refresh
+    // Method to start periodic token refresh (optional if implemented in service)
     async startPeriodicTokenRefresh() {
       try {
         const { default: authService } = await import('./services/authService.js')

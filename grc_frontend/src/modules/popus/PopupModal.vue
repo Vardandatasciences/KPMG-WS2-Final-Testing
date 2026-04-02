@@ -2,7 +2,7 @@
   <div v-if="visible" class="popup-backdrop" @keydown.esc="onClose" tabindex="0" aria-modal="true" role="dialog">
     <div class="popup-modal" :class="type">
       <div class="popup-icon" v-if="icon">
-        <span v-html="icon"></span>
+        <span v-html="sanitizeIcon(icon)"></span>
       </div>
       <h2 class="popup-heading">{{ heading }}</h2>
       <p class="popup-message">{{ message }}</p>
@@ -97,10 +97,40 @@ export default {
       }
     }
   },
-  data() {
-    return { comment: '', selectedValue: '' }
-  },
   methods: {
+    sanitizeIcon(value) {
+      if (!value || typeof value !== 'string') return '';
+      try {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(value, 'text/html');
+        const dangerousSelectors = ['script', 'style', 'iframe', 'object', 'embed', 'link', 'meta'];
+        dangerousSelectors.forEach(selector => {
+          doc.querySelectorAll(selector).forEach(el => el.remove());
+        });
+        const walk = (node) => {
+          if (node.nodeType === Node.ELEMENT_NODE) {
+            const attrs = Array.from(node.attributes);
+            attrs.forEach(attr => {
+              const name = attr.name.toLowerCase();
+              const val = (attr.value || '').trim().toLowerCase();
+              if (name.startsWith('on')) {
+                node.removeAttribute(attr.name);
+              }
+              if ((name === 'href' || name === 'src') && val.startsWith('javascript:')) {
+                node.removeAttribute(attr.name);
+              }
+            });
+          }
+          node.childNodes.forEach(child => walk(child));
+        };
+        walk(doc.body);
+        return doc.body.innerHTML;
+      } catch (e) {
+        const div = document.createElement('div');
+        div.textContent = String(value);
+        return div.innerHTML;
+      }
+    },
     onClose() {
       this.onAction('close');
     },
@@ -128,6 +158,9 @@ export default {
       }
       return 'btn btn-submit';
     }
+  },
+  data() {
+    return { comment: '', selectedValue: '' }
   }
 }
 </script>

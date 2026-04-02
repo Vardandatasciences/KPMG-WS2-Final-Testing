@@ -4,6 +4,7 @@ import hashlib
 import logging
 import threading
 import re
+from urllib.parse import urlparse
 from django.shortcuts import get_object_or_404
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -31,6 +32,150 @@ from tprm_backend.core.tenant_utils import (
 
 # Import risk analysis service for automatic risk generation
 logger = logging.getLogger(__name__)
+
+
+# ==============================================================================
+# HTML SANITIZATION FOR VENDOR-SUBMITTED CONTENT
+# ==============================================================================
+_SCRIPT_TAG_RE = re.compile(
+    r"<\s*script[^>]*>.*?<\s*/\s*script\s*>",
+    re.IGNORECASE | re.DOTALL,
+)
+_ONEVENT_ATTR_RE = re.compile(
+    r"\son\w+\s*=\s*(\"[^\"]*\"|'[^']*'|[^\s>]+)",
+    re.IGNORECASE,
+)
+_JS_URL_RE = re.compile(
+    r"(href|src)\s*=\s*(\"javascript:[^\"]*\"|'javascript:[^']*'|javascript:[^\s>]*)",
+    re.IGNORECASE,
+)
+
+
+def sanitize_html_value(value):
+    """
+    Best-effort server-side neutralization of script content in vendor-submitted HTML.
+
+    This does NOT provide full HTML policy enforcement, but it:
+    - strips <script>...</script> blocks
+    - removes inline event handler attributes (onclick=, onload=, etc.)
+    - removes javascript: URLs from href/src attributes
+
+    It is intentionally conservative and idempotent so it can be safely called
+    multiple times on the same value.
+    """
+    if not isinstance(value, str) or not value:
+        return value
+
+    sanitized = _SCRIPT_TAG_RE.sub("", value)
+    sanitized = _ONEVENT_ATTR_RE.sub("", sanitized)
+    sanitized = _JS_URL_RE.sub(r"\1=\"#\"", sanitized)
+    return sanitized
+
+
+def sanitize_response_documents(response_documents):
+    """
+    Walk the response_documents structure and sanitize any HTML-bearing fields
+    coming from the public vendor portal before we persist them.
+    """
+    if not isinstance(response_documents, dict):
+        return response_documents
+
+    # rfpResponses section: criteriaId -> { htmlContent, ... }
+    rfp_responses = response_documents.get("rfpResponses")
+    if isinstance(rfp_responses, dict):
+        for criteria_id, entry in list(rfp_responses.items()):
+            if isinstance(entry, str):
+                # Legacy format: plain string, treat as htmlContent
+                rfp_responses[criteria_id] = {
+                    "htmlContent": sanitize_html_value(entry),
+                    "attachments": [],
+                }
+            elif isinstance(entry, dict):
+                if "htmlContent" in entry:
+                    entry["htmlContent"] = sanitize_html_value(entry.get("htmlContent") or "")
+                if "content" in entry:
+                    entry["content"] = sanitize_html_value(entry.get("content") or "")
+                if "text" in entry:
+                    entry["text"] = sanitize_html_value(entry.get("text") or "")
+                rfp_responses[criteria_id] = entry
+
+        response_documents["rfpResponses"] = rfp_responses
+
+    # dynamicFields section can also contain rich text answers
+    dynamic_fields = response_documents.get("dynamicFields")
+    if isinstance(dynamic_fields, dict):
+        for key, value in list(dynamic_fields.items()):
+            if isinstance(value, str):
+                dynamic_fields[key] = sanitize_html_value(value)
+            elif isinstance(value, dict):
+                if "htmlContent" in value:
+                    value["htmlContent"] = sanitize_html_value(value.get("htmlContent") or "")
+                if "content" in value:
+                    value["content"] = sanitize_html_value(value.get("content") or "")
+                if "text" in value:
+                    value["text"] = sanitize_html_value(value.get("text") or "")
+                dynamic_fields[key] = value
+
+        response_documents["dynamicFields"] = dynamic_fields
+
+    # companyInfo and other top-level sections could contain long-text fields;
+    # keep this minimal and focused on obvious HTML blobs.
+    company_info = response_documents.get("companyInfo")
+    if isinstance(company_info, dict):
+        for key, value in list(company_info.items()):
+            if isinstance(value, str) and "<" in value and ">" in value:
+                company_info[key] = sanitize_html_value(value)
+        response_documents["companyInfo"] = company_info
+
+    return response_documents
+
+
+def _get_safe_vendor_portal_base_url(request_base_url: str | None) -> str:
+    """
+    Normalize and validate the vendor portal base URL used in open/unmatched flows.
+
+    Security expectations:
+    - Host must match the configured EXTERNAL_BASE_URL host (Riskavaire domain).
+    - Scheme must be http/https.
+    - The concrete path for the vendor portal (`/vendor-portal`) is controlled
+      by the server; caller-supplied paths are ignored.
+    - On any parsing/validation error, fall back to EXTERNAL_BASE_URL.
+    """
+    configured_frontend = getattr(
+        settings,
+        'EXTERNAL_BASE_URL',
+        'https://riskavaire.vardaands.com'
+    ).rstrip('/')
+
+    try:
+        configured_parsed = urlparse(configured_frontend)
+        configured_root = f"{configured_parsed.scheme}://{configured_parsed.netloc}".rstrip('/')
+    except Exception:
+        # If EXTERNAL_BASE_URL is somehow malformed, fall back to a safe default path.
+        return f"{configured_frontend.rstrip('/')}/vendor-portal"
+
+    def _as_portal(base_root: str) -> str:
+        return f"{base_root.rstrip('/')}/vendor-portal"
+
+    if not request_base_url:
+        return _as_portal(configured_root)
+
+    try:
+        requested_parsed = urlparse(request_base_url)
+        if requested_parsed.scheme not in ('http', 'https') or not requested_parsed.netloc:
+            return _as_portal(configured_root)
+
+        if requested_parsed.hostname != configured_parsed.hostname:
+            logger.warning(
+                "[SECURITY] Rejected untrusted baseUrl host for vendor portal: %s",
+                request_base_url,
+            )
+            return _as_portal(configured_root)
+
+        # Host is trusted; ignore caller path/query, use our canonical portal path.
+        return _as_portal(configured_root)
+    except Exception:
+        return _as_portal(configured_root)
 
 
 def trigger_rfp_risk_analysis(rfp_response):
@@ -89,8 +234,7 @@ def trigger_rfp_risk_analysis(rfp_response):
         # Don't fail the response submission if risk analysis fails
         return {
             'success': False,
-            'error': str(e),
-            'traceback': error_traceback
+            'error': 'Risk analysis failed'
         }
 
 
@@ -284,7 +428,7 @@ def create_unmatched_vendor(request):
             }
             
             urls = build_dynamic_urls(
-                base_url=data.get('baseUrl', 'http://localhost:3000/vendor-portal'),
+                base_url=_get_safe_vendor_portal_base_url(data.get('baseUrl')),
                 utm_params=utm_params,
                 vendor_data=vendor_data,
                 rfp_id=rfp_id
@@ -335,8 +479,7 @@ def create_unmatched_vendor(request):
         print(f"[ERROR] Traceback: {error_traceback}")
         return JsonResponse({
             'success': False,
-            'error': f'Failed to create unmatched vendor: {str(e)}',
-            'details': error_traceback
+            'error': 'Failed to create unmatched vendor'
         }, status=500)
 
 
@@ -481,6 +624,9 @@ def create_rfp_response(request):
         if not response_documents['companyInfo'].get('org') and org:
             response_documents['companyInfo']['org'] = org
         
+        # SECURITY: sanitize all HTML-bearing fields before persisting
+        response_documents = sanitize_response_documents(response_documents)
+
         logger.info(f'[create_rfp_response] Final response_documents structure - keys: {list(response_documents.keys())}, has_dynamicFields: {"dynamicFields" in response_documents}')
         if 'dynamicFields' in response_documents:
             logger.debug(f'[create_rfp_response] Dynamic fields in response_documents: {list(response_documents["dynamicFields"].keys()) if isinstance(response_documents["dynamicFields"], dict) else "N/A"}')
@@ -874,7 +1020,8 @@ def create_rfp_response(request):
                         response_documents['metadata']['utmParameters'] = utm_params
                         logger.info(f'[create_rfp_response] Added UTM parameters to metadata: {utm_params}')
                 
-                existing_response.response_documents = response_documents
+                # SECURITY: re-sanitize at write-time to avoid accidental raw overwrite
+                existing_response.response_documents = sanitize_response_documents(response_documents)
                 
                 # Submission details
                 existing_response.submission_source = submission_source
@@ -965,6 +1112,8 @@ def create_rfp_response(request):
                 
                 # Get document info from request data
                 response_documents = data.get('responseDocuments', {})
+                # SECURITY: sanitize request payload in this branch as well
+                response_documents = sanitize_response_documents(response_documents)
                 document_urls = data.get('documentUrls', {})
 
                 # Create new response with all fields
@@ -1034,7 +1183,8 @@ def create_rfp_response(request):
                     # Use complete response_documents structure
                     logger.info(f'[create_rfp_response] Updating final check response with complete response_documents')
                     logger.debug(f'[create_rfp_response] Response documents: {response_documents}')
-                    final_check_response.response_documents = response_documents
+                    # SECURITY: sanitize right before persistence (defense-in-depth)
+                    final_check_response.response_documents = sanitize_response_documents(response_documents)
                     final_check_response.submission_source = submission_source
                     final_check_response.submitted_by = vendor_name
                     
@@ -1194,7 +1344,8 @@ def create_rfp_response(request):
                                 response_documents['metadata']['utmParameters'] = utm_params
                                 logger.info(f'[create_rfp_response] Added UTM parameters to metadata for duplicate prevention: {utm_params}')
                         
-                        final_duplicate_check.response_documents = response_documents
+                        # SECURITY: sanitize right before persistence (defense-in-depth)
+                        final_duplicate_check.response_documents = sanitize_response_documents(response_documents)
                         final_duplicate_check.submission_source = submission_source
                         final_duplicate_check.submitted_by = vendor_name
                         
@@ -1283,7 +1434,7 @@ def create_rfp_response(request):
                         # Add all other fields to create_kwargs
                         create_kwargs.update({
                             # Store complete nested structure in response_documents
-                            'response_documents': response_documents,
+                            'response_documents': sanitize_response_documents(response_documents),
                             
                             # Submission details
                             'submission_source': submission_source,
@@ -1452,8 +1603,7 @@ def create_rfp_response(request):
         print(f"[ERROR] Traceback: {error_traceback}")
         return JsonResponse({
             'success': False,
-            'error': f'Failed to submit RFP response: {str(e)}',
-            'details': error_traceback
+            'error': 'Failed to submit RFP response'
         }, status=500)
 
 @api_view(['POST'])
@@ -1991,8 +2141,7 @@ def test_risk_analysis(request):
         error_traceback = traceback.format_exc()
         return JsonResponse({
             'success': False,
-            'error': f'Failed to test risk analysis: {str(e)}',
-            'traceback': error_traceback
+            'error': 'Failed to test risk analysis'
         }, status=500)
 
 
@@ -2867,7 +3016,8 @@ def save_draft_response(request):
                     response_documents['companyInfo']['org'] = org
                 
                 logger.debug(f'[save_draft_response] Complete response_documents structure: {response_documents}')
-                existing_response.response_documents = response_documents
+                # SECURITY: sanitize draft payload before persistence
+                existing_response.response_documents = sanitize_response_documents(response_documents)
                 
                 # CRITICAL: Set evaluation_status to DRAFT for draft saves
                 existing_response.evaluation_status = 'DRAFT'
@@ -3012,7 +3162,7 @@ def save_draft_response(request):
                     rfp=rfp,
                     vendor_id=final_vendor_id_draft,
                     invitation_id=final_invitation_id_draft,
-                    response_documents=response_documents,
+                    response_documents=sanitize_response_documents(response_documents),
                     evaluation_status='DRAFT',  # CRITICAL: Set status to DRAFT for new drafts
                     submitted_by=vendor_name or contact_email or 'Vendor',  # Set submitted_by for draft
                     

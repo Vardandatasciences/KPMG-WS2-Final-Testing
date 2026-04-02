@@ -2,18 +2,21 @@
 Email templates for RFI invitations
 """
 
+
 def generate_rfi_rich_html_email(invitation, rfi_data):
     """
     Generate rich HTML email body for RFI invitation with professional styling
     """
     from django.conf import settings
-    
-    deadline = rfi_data.get('deadline', 'TBD')
-    vendor_name = invitation.get('vendor_name', 'Contact at ' + invitation.get('company_name', 'Vendor'))
-    company_name = invitation.get('company_name', 'Vendor Company')
-    vendor_email = invitation.get('vendor_email', 'contact@vendor.com')
-    invitation_url = invitation.get('invitation_url', '')
+    from django.utils.html import escape
+
+    deadline = escape(str(rfi_data.get('deadline', 'TBD')))
+    vendor_name = escape(invitation.get('vendor_name', 'Contact at ' + invitation.get('company_name', 'Vendor')))
+    company_name = escape(invitation.get('company_name', 'Vendor Company'))
+    vendor_email = escape(invitation.get('vendor_email', 'contact@vendor.com'))
+    invitation_url = escape(invitation.get('invitation_url', ''))
     custom_message = invitation.get('custom_message', '')
+    custom_message_escaped = escape(custom_message) if custom_message else ''
     unique_token = invitation.get('unique_token', '')
     
     # Get the backend API base URL
@@ -228,11 +231,11 @@ def generate_rfi_rich_html_email(invitation, rfi_data):
                 <div class="info-grid">
                     <div class="info-item">
                         <div class="info-label">Title</div>
-                        <div class="info-value">{rfi_data.get('rfi_title', 'Untitled RFI')}</div>
+                        <div class="info-value">{escape(str(rfi_data.get('rfi_title', 'Untitled RFI')))}</div>
                     </div>
                     <div class="info-item">
                         <div class="info-label">RFI Number</div>
-                        <div class="info-value">{rfi_data.get('rfi_number', 'N/A')}</div>
+                        <div class="info-value">{escape(str(rfi_data.get('rfi_number', 'N/A')))}</div>
                     </div>
                     <div class="info-item">
                         <div class="info-label">Deadline</div>
@@ -248,12 +251,12 @@ def generate_rfi_rich_html_email(invitation, rfi_data):
                     </div>
                     <div class="info-item">
                         <div class="info-label">Type</div>
-                        <div class="info-value">{rfi_data.get('rfi_type', 'General')}</div>
+                        <div class="info-value">{escape(str(rfi_data.get('rfi_type', 'General')))}</div>
                     </div>
                 </div>
             </div>
             
-            {f'<div class="section"><h2><span class="emoji">📝</span>Additional Message</h2><p>{custom_message}</p></div>' if custom_message else ''}
+            {f'<div class="section"><h2><span class="emoji">📝</span>Additional Message</h2><p>{custom_message_escaped}</p></div>' if custom_message_escaped else ''}
             
             <div class="section">
                 <h2><span class="emoji">📋</span>Information Required</h2>

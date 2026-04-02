@@ -610,11 +610,12 @@ export default {
       console.log('BambooHR Integration component mounted')
       
       const urlParams = new URLSearchParams(window.location.search)
-      const token = urlParams.get('token')
       const loadStoredDataParam = urlParams.get('loadStoredData')
       const subdomainParam = urlParams.get('subdomain')
       const errorParam = urlParams.get('error')
       const success = urlParams.get('success')
+      const sensitiveParams = ['token', 'access_token', 'refresh_token', 'id_token', 'session_token']
+      const hasSensitiveTokenInUrl = sensitiveParams.some((key) => !!urlParams.get(key))
       
       // Handle OAuth errors
       if (errorParam) {
@@ -625,6 +626,15 @@ export default {
         
         // Handle error in same window
         console.error('OAuth error:', errorParam)
+        return
+      }
+
+      if (hasSensitiveTokenInUrl) {
+        // Defensive hardening: never consume auth/session tokens from URL query params.
+        error.value = 'Detected sensitive token-like query parameters in URL. Please retry the OAuth flow.'
+        window.history.replaceState({}, document.title, window.location.pathname)
+        showOAuthFlow.value = false
+        loading.value = false
         return
       }
       
@@ -654,26 +664,6 @@ export default {
         // Clean up URL
         window.history.replaceState({}, document.title, window.location.pathname)
         console.log('✅ OAuth success handled and URL cleaned up')
-      } else if (token) {
-        // Legacy support for token in URL (for backward compatibility)
-        console.log('🎉 Access token found in URL from BambooHR OAuth redirect:', token.substring(0, 20) + '...')
-        accessToken.value = token
-        showOAuthFlow.value = false
-        
-        // Save OAuth connection to backend
-        await saveBambooHRConnection(token)
-        
-        // Clean up URL
-        window.history.replaceState({}, document.title, window.location.pathname)
-        console.log('✅ Token set and URL cleaned up')
-        
-        // Set company info
-        if (companyDomain.value) {
-          companyInfo.value = { name: companyDomain.value + '.bamboohr.com' }
-        }
-        
-        // Fetch employee data after successful connection
-        await handleFetchEmployees()
       } else if (loadStoredDataParam === 'true') {
         console.log('📊 Loading stored employee data from database...')
         await loadStoredData()
@@ -682,34 +672,6 @@ export default {
         await loadStoredData()
       }
     })
-
-    // Save BambooHR connection to backend
-    const saveBambooHRConnection = async (token) => {
-      try {
-        console.log('💾 Saving BambooHR connection to backend...')
-        
-        const response = await apiCall(`${API_ENDPOINTS.BAMBOOHR_OAUTH_CALLBACK}`, {
-          method: 'POST',
-          body: JSON.stringify({
-            access_token: token,
-            user_id: getCurrentUserId(),
-            account_info: {
-              account_id: 'bamboohr_account_' + Date.now(),
-              account_type: 'bamboohr',
-              name: 'BambooHR User'
-            }
-          })
-        })
-
-        if (response.success) {
-          console.log('✅ BambooHR connection saved to backend:', response)
-        } else {
-          console.error('❌ Failed to save BambooHR connection:', response.error)
-        }
-      } catch (error) {
-        console.error('❌ Error saving BambooHR connection:', error)
-      }
-    }
 
     // Load stored data
     const loadStoredData = async () => {

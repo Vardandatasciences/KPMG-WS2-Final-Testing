@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from django.conf import settings
 from django.http import JsonResponse
 from django.contrib.auth import authenticate
+from django.utils.html import escape
 from django.core.cache import cache
 from django.core.mail import send_mail
 from rest_framework import status
@@ -26,8 +27,9 @@ from .mfa_service import MfaService
 logger = logging.getLogger(__name__)
 
 # JWT Settings
-JWT_SECRET_KEY = getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
-JWT_ALGORITHM = 'HS256'
+JWT_SIGNING_KEY = getattr(settings, 'JWT_SIGNING_KEY', getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY))
+JWT_VERIFYING_KEY = getattr(settings, 'JWT_VERIFYING_KEY', None) or getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
+JWT_ALGORITHM = getattr(settings, 'JWT_ALGORITHM', 'RS256')
 JWT_ACCESS_TOKEN_LIFETIME = timedelta(days=3)  # 3 days
 JWT_REFRESH_TOKEN_LIFETIME = timedelta(days=7)  # 7 days
 
@@ -190,6 +192,9 @@ def _send_account_lockout_email(user_email, username, client_ip):
        
         subject = 'Account Locked - Multiple Failed Login Attempts'
        
+        safe_username = escape(str(username or "User"))
+        safe_client_ip = escape(str(client_ip or "unknown"))
+
         # Create HTML email content
         html_content = f"""
         <!DOCTYPE html>
@@ -211,7 +216,7 @@ def _send_account_lockout_email(user_email, username, client_ip):
                     </p>
                 </div>
                
-                <p style="font-size: 16px; margin-bottom: 15px;">Dear {username},</p>
+                <p style="font-size: 16px; margin-bottom: 15px;">Dear {safe_username},</p>
                
                 <p style="font-size: 16px; margin-bottom: 15px;">
                     We detected <strong>5 consecutive failed login attempts</strong> on your account.
@@ -221,8 +226,8 @@ def _send_account_lockout_email(user_email, username, client_ip):
                 <div style="background-color: #f8f9fa; padding: 15px; border-radius: 4px; margin: 20px 0;">
                     <p style="margin: 0; font-size: 14px; color: #6c757d;">
                         <strong>Login Details:</strong><br>
-                        Username/User ID: {username}<br>
-                        IP Address: {client_ip}<br>
+                        Username/User ID: {safe_username}<br>
+                        IP Address: {safe_client_ip}<br>
                         Lockout Duration: 15 minutes<br>
                         Lockout Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}
                     </p>
@@ -503,8 +508,9 @@ def assign_default_rbac_permissions_for_google_sso(user):
         logger.error(f"Traceback: {traceback.format_exc()}")
 
 # JWT Settings
-JWT_SECRET_KEY = getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
-JWT_ALGORITHM = 'HS256'
+JWT_SIGNING_KEY = getattr(settings, 'JWT_SIGNING_KEY', getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY))
+JWT_VERIFYING_KEY = getattr(settings, 'JWT_VERIFYING_KEY', None) or getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
+JWT_ALGORITHM = getattr(settings, 'JWT_ALGORITHM', 'RS256')
 JWT_ACCESS_TOKEN_LIFETIME = timedelta(days=3)  # 3 days
 JWT_REFRESH_TOKEN_LIFETIME = timedelta(days=7)  # 7 days
 
@@ -595,16 +601,22 @@ def verify_jwt_token(token, check_session=False):
         check_session: If True, also validates session token (multi-session management) - DISABLED
     """
     try:
-        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+        payload = jwt.decode(
+            token,
+            JWT_VERIFYING_KEY,
+            algorithms=getattr(settings, 'JWT_ALLOWED_ALGORITHMS', [JWT_ALGORITHM]),
+            issuer=getattr(settings, 'JWT_ISSUER', None),
+            audience=getattr(settings, 'JWT_AUDIENCE', None),
+        )
         
-        # Session token validation disabled - always allow valid JWT tokens
-        # if check_session:
-        #     user_id = payload.get('user_id')
-        #     session_token = payload.get('jti')  # JWT ID claim contains session token
-        #     if user_id:
-        #         if not _is_session_token_valid(user_id, session_token):
-        #             logger.warning(f"Session token invalid for user {user_id} - session may have been invalidated")
-        #             return None
+        # Enforce active-session validation when requested by caller.
+        # This blocks old tokens after a newer login rotates the active session token.
+        if check_session:
+            user_id = payload.get('user_id')
+            session_token = payload.get('jti')  # JWT ID claim contains session token
+            if user_id and not _is_session_token_valid(user_id, session_token):
+                logger.warning(f"Session token invalid for user {user_id} - session may have been invalidated")
+                return None
         
         return payload
     except jwt.ExpiredSignatureError:
@@ -670,6 +682,7 @@ def verify_recaptcha(captcha_token):
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@authentication_classes([])  # Login itself should not require prior authentication
 def jwt_login(request):
     """JWT Login endpoint with rate limiting and account lockout"""
     try:
@@ -1054,14 +1067,9 @@ def jwt_login(request):
         # Note: Password logs are only saved when password is changed, not on every login
         # Login activities are logged to grc_logs instead
         
-        # ========================================
-        # MULTI-SESSION MANAGEMENT - DISABLED
-        # ========================================
-        # Session token validation disabled to prevent constant logouts
-        # Users can now stay logged in across multiple locations
-        
-        # Generate JWT tokens without session token enforcement
+        # Generate fresh tokens and mark this as the only active session.
         tokens = generate_jwt_tokens(user)
+        _set_user_session_token(user.UserId, tokens['session_token'])
         
         # Store user info in session for compatibility with consistent naming
         # Decrypt username before storing in session
@@ -1176,7 +1184,7 @@ def jwt_login(request):
         consent_accepted_value = str(user.consent_accepted) if user.consent_accepted is not None else '0'
         consent_required = consent_accepted_value != '1'
         
-        return Response({
+        response = Response({
             'status': 'success',
             'message': 'Login successful',
             'license_verified': True,  # This indicates license validation was successful
@@ -1200,6 +1208,35 @@ def jwt_login(request):
                 'license_key': user.license_key  # Include the validated license 
             }
         })
+
+        # Set HttpOnly cookies for tokens (mitigates XSS token theft).
+        # Frontend can gradually migrate to cookie-only auth; for now we also return tokens in JSON for compatibility.
+        host = (request.get_host() or "").split(":")[0].lower()
+        is_local_host = host in ("localhost", "127.0.0.1")
+        # Use secure cookies by default, but allow local HTTP dev to function.
+        is_secure = bool(getattr(settings, 'SESSION_COOKIE_SECURE', not getattr(settings, 'DEBUG', False)))
+        if is_local_host and not request.is_secure():
+            is_secure = False
+        response.set_cookie(
+            'access_token',
+            tokens['access'],
+            max_age=int(JWT_ACCESS_TOKEN_LIFETIME.total_seconds()),
+            httponly=True,
+            secure=is_secure,
+            samesite='Lax',
+            path='/',
+        )
+        response.set_cookie(
+            'refresh_token',
+            tokens['refresh'],
+            max_age=int(JWT_REFRESH_TOKEN_LIFETIME.total_seconds()),
+            httponly=True,
+            secure=is_secure,
+            samesite='Lax',
+            path='/',
+        )
+
+        return response
         
     except Exception as e:
         logger.error(f"JWT login error: {str(e)}")
@@ -1231,7 +1268,7 @@ def jwt_refresh(request):
         cache.set(cache_key, attempts + 1, 60)  # 60 seconds
         
         data = request.data
-        refresh_token = data.get('refresh_token')
+        refresh_token = data.get('refresh_token') or request.COOKIES.get('refresh_token')
         
         if not refresh_token:
             return Response({
@@ -1252,19 +1289,18 @@ def jwt_refresh(request):
                 import time
                 old_login_time = time.time()  # Fallback for old tokens without login_time
             
-            # Session token validation disabled - allow token refresh without session checking
-            # old_session_token = refresh.get('jti')
-            # if old_session_token:
-            #     if not _is_session_token_valid(user_id, old_session_token):
-            #         logger.warning(f"Session token invalid during refresh for user {user_id} - user logged in elsewhere")
-            #         return Response({
-            #             'status': 'error',
-            #             'message': 'Session invalidated. Please log in again.'
-            #         }, status=status.HTTP_401_UNAUTHORIZED)
+            old_session_token = refresh.get('jti')
+            if not _is_session_token_valid(user_id, old_session_token):
+                logger.warning(f"Session token invalid during refresh for user {user_id} - user logged in elsewhere")
+                return Response({
+                    'status': 'error',
+                    'message': 'Session invalidated due to a newer login. Please log in again.',
+                    'session_invalidated': True
+                }, status=status.HTTP_401_UNAUTHORIZED)
             
             # Generate new tokens with preserved login_time (before blacklisting old token)
             # This ensures we have valid tokens even if blacklisting fails
-            tokens = generate_jwt_tokens(user, login_time=old_login_time)
+            tokens = generate_jwt_tokens(user, login_time=old_login_time, session_token=old_session_token)
             
             # IMPORTANT: Blacklist the old refresh token AFTER generating new tokens
             # This prevents token reuse while ensuring we have new tokens ready
@@ -1275,9 +1311,12 @@ def jwt_refresh(request):
                 # Continue even if blacklisting fails, as new tokens are already generated
                 pass
             
+            # Keep active session key aligned with refreshed token.
+            _set_user_session_token(user.UserId, tokens['session_token'])
+
             # No logging for successful refresh to keep terminal clean
             
-            return Response({
+            response = Response({
                 'status': 'success',
                 'message': 'Token refreshed successfully',
                 'access_token': tokens['access'],
@@ -1289,6 +1328,32 @@ def jwt_refresh(request):
                     'min_supported': tokens['access'].payload.get('min_ver') if hasattr(tokens['access'], 'payload') else None
                 },
             })
+
+            host = (request.get_host() or "").split(":")[0].lower()
+            is_local_host = host in ("localhost", "127.0.0.1")
+            is_secure = bool(getattr(settings, 'SESSION_COOKIE_SECURE', not getattr(settings, 'DEBUG', False)))
+            if is_local_host and not request.is_secure():
+                is_secure = False
+            response.set_cookie(
+                'access_token',
+                tokens['access'],
+                max_age=int(JWT_ACCESS_TOKEN_LIFETIME.total_seconds()),
+                httponly=True,
+                secure=is_secure,
+                samesite='Lax',
+                path='/',
+            )
+            response.set_cookie(
+                'refresh_token',
+                tokens['refresh'],
+                max_age=int(JWT_REFRESH_TOKEN_LIFETIME.total_seconds()),
+                httponly=True,
+                secure=is_secure,
+                samesite='Lax',
+                path='/',
+            )
+
+            return response
             
         except (InvalidToken, TokenError):
             # Invalid or blacklisted refresh token - silently return 401 without logging
@@ -1527,10 +1592,16 @@ def jwt_logout(request):
         
         logger.info(f"JWT logout successful for user {username}")
         
-        return Response({
+        response = Response({
             'status': 'success',
             'message': 'Logout successful'
         })
+
+        # Clear HttpOnly auth cookies
+        response.delete_cookie('access_token', path='/')
+        response.delete_cookie('refresh_token', path='/')
+
+        return response
         
     except Exception as e:
         logger.error(f"JWT logout error: {str(e)}")
@@ -1622,7 +1693,7 @@ def get_user_from_jwt(request):
             return None
         
         token = auth_header.split(' ')[1]
-        payload = verify_jwt_token(token)
+        payload = verify_jwt_token(token, check_session=True)
         
         if not payload:
             return None
@@ -1647,14 +1718,22 @@ def jwt_verify(request):
     """JWT Verify endpoint"""
     try:
         auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
+        token = None
+
+        if auth_header and auth_header.startswith('Bearer '):
+            token = auth_header.split(' ')[1]
+        else:
+            # Cookie-first fallback: allow verify to read HttpOnly cookie token
+            # when frontend no longer manages Authorization headers in JS.
+            token = request.COOKIES.get('access_token')
+
+        if not token:
             return Response({
                 'status': 'error',
-                'message': 'Authorization header with Bearer token is required'
+                'message': 'Authorization required'
             }, status=status.HTTP_401_UNAUTHORIZED)
-        
-        token = auth_header.split(' ')[1]
-        payload = verify_jwt_token(token)
+
+        payload = verify_jwt_token(token, check_session=True)
         
         if not payload:
             return Response({
@@ -1994,8 +2073,9 @@ def mfa_verify_otp(request):
             logger.error(f"❌ Failed to create password log on MFA login: {str(log_error)}")
             # Don't fail login if logging fails
         
-        # Generate JWT tokens
+        # Generate JWT tokens and rotate active session token
         tokens = generate_jwt_tokens(user)
+        _set_user_session_token(user.UserId, tokens['session_token'])
         
         # Store user info in session
         request.session['user_id'] = user.UserId
@@ -2179,6 +2259,8 @@ def google_oauth_initiate(request):
         from google_auth_oauthlib.flow import Flow
         from google.oauth2.credentials import Credentials
         import secrets
+        import hashlib
+        import base64
         
         # Get Google OAuth configuration from settings
         client_id = getattr(settings, 'GOOGLE_CLIENT_ID', '')
@@ -2236,13 +2318,32 @@ def google_oauth_initiate(request):
         
         logger.info(f"Google OAuth state saved to session: {state[:20]}...")
         
+        # Build PKCE values explicitly so verifier/challenge handling is deterministic
+        # across library versions.
+        code_verifier = secrets.token_urlsafe(64)
+        code_challenge = base64.urlsafe_b64encode(
+            hashlib.sha256(code_verifier.encode('ascii')).digest()
+        ).decode('ascii').rstrip('=')
+
         # Get authorization URL
         authorization_url, _ = flow.authorization_url(
             access_type='offline',
             include_granted_scopes='true',
             state=state,
+            code_challenge=code_challenge,
+            code_challenge_method='S256',
             prompt='consent'  # Force consent screen to get refresh token
         )
+
+        # Persist PKCE verifier for callback token exchange.
+        # Store in both session and cache keyed by state (cache fallback helps if session cookie is unavailable).
+        try:
+            request.session['google_oauth_code_verifier'] = code_verifier
+            request.session.save()
+            cache.set(f"google_oauth_pkce:{state}", code_verifier, 10 * 60)
+        except Exception:
+            # Do not block OAuth init if session write fails; callback will surface a clear error.
+            pass
         
         logger.info(f"Google OAuth initiated - redirecting to: {authorization_url[:100]}...")
         
@@ -2341,6 +2442,32 @@ def google_oauth_callback(request):
             scopes=full_scopes,
             redirect_uri=redirect_uri
         )
+
+        # If PKCE is used, we must provide the original code_verifier used at authorization time.
+        # Without it, Google returns: invalid_grant (Missing code verifier).
+        code_verifier = None
+        try:
+            code_verifier = request.session.get('google_oauth_code_verifier')
+        except Exception:
+            code_verifier = None
+
+        # Fallback for cases where session cookie is not preserved.
+        if not code_verifier and state:
+            code_verifier = cache.get(f"google_oauth_pkce:{state}")
+
+        if not code_verifier:
+            logger.warning("Google OAuth callback: PKCE code_verifier missing from both session and cache; token exchange may fail.")
+        else:
+            # Keep compatibility with oauthlib/google-auth internals and pass explicitly at fetch time.
+            flow.code_verifier = code_verifier
+            try:
+                if request.session.get('google_oauth_code_verifier'):
+                    del request.session['google_oauth_code_verifier']
+                    request.session.save()
+            except Exception:
+                pass
+            if state:
+                cache.delete(f"google_oauth_pkce:{state}")
         
         # Exchange authorization code for tokens
         # Handle scope format mismatch - Google returns full URLs, we may request short names
@@ -2350,7 +2477,7 @@ def google_oauth_callback(request):
             # Suppress UserWarning about scope changes
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", UserWarning)
-                flow.fetch_token(code=code)
+                flow.fetch_token(code=code, code_verifier=code_verifier)
         except (UserWarning, Warning) as e:
             # If it's a scope mismatch warning, try with scopes from callback URL
             error_str = str(e)
@@ -2377,7 +2504,7 @@ def google_oauth_callback(request):
                     )
                     with warnings.catch_warnings():
                         warnings.simplefilter("ignore", UserWarning)
-                        flow.fetch_token(code=code)
+                        flow.fetch_token(code=code, code_verifier=code_verifier)
                 else:
                     logger.error("No scopes returned in callback URL")
                     raise Exception("Unable to retrieve scopes from Google OAuth callback")
@@ -2408,7 +2535,7 @@ def google_oauth_callback(request):
                     )
                     with warnings.catch_warnings():
                         warnings.simplefilter("ignore", UserWarning)
-                        flow.fetch_token(code=code)
+                        flow.fetch_token(code=code, code_verifier=code_verifier)
                 else:
                     raise
             else:
@@ -2469,7 +2596,7 @@ def google_oauth_callback(request):
             # Ensure username is unique
             base_username = username
             counter = 1
-            while Users.objects.filter(UserName=username).exists():
+            while Users.objects.filter(username_hash=Users.compute_identifier_hash(username, kind='username')).exists():
                 username = f"{base_username}{counter}"
                 counter += 1
             
@@ -2478,6 +2605,8 @@ def google_oauth_callback(request):
             user = Users.objects.create(
                 UserName=username,
                 Email=email,
+                username_hash=Users.compute_identifier_hash(username, kind='username'),
+                email_hash=Users.compute_identifier_hash(email, kind='email'),
                 FirstName=first_name,
                 LastName=last_name,
                 Password=make_password(random_password),
@@ -2547,14 +2676,9 @@ def google_oauth_callback(request):
                     'message': 'No license key assigned to this user. Please contact your administrator.'
                 }, status=status.HTTP_403_FORBIDDEN)
         
-        # ========================================
-        # MULTI-SESSION MANAGEMENT - DISABLED
-        # ========================================
-        # Session token validation disabled to prevent constant logouts
-        # Users can now stay logged in across multiple locations
-        
-        # Generate JWT tokens without session token enforcement
+        # Generate JWT tokens and set this login as active session
         tokens = generate_jwt_tokens(user)
+        _set_user_session_token(user.UserId, tokens['session_token'])
         
         # Store user info in session
         import time
@@ -2613,9 +2737,25 @@ def google_oauth_callback(request):
             logger.error(f"Error assigning RBAC permissions for Google SSO user {user.UserName}: {str(rbac_error)}")
             # Continue with login even if RBAC assignment fails
         
-        # Redirect to frontend with tokens as query parameters
+        # Store OAuth login payload for one-time frontend retrieval.
+        callback_payload = {
+            'access_token': tokens['access'],
+            'refresh_token': tokens['refresh'],
+            'user_id': user.UserId,
+            'consent_required': 'true' if consent_required else 'false',
+            'access_token_expires': tokens['access_token_expires'].isoformat(),
+            'refresh_token_expires': tokens['refresh_token_expires'].isoformat()
+        }
+        request.session['google_oauth_callback_payload'] = callback_payload
+        request.session.save()
+
+        # Session can occasionally be unavailable on callback-payload fetch due to host/cookie differences.
+        # Use one-time cache handoff key as fallback (contains no token value in URL).
+        handoff_key = secrets.token_urlsafe(24)
+        cache.set(f"google_oauth_callback_payload:{handoff_key}", callback_payload, 5 * 60)
+
+        # Redirect to frontend without sensitive query parameters.
         from django.shortcuts import redirect
-        from urllib.parse import urlencode
         frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:8080')
         use_local_dev = getattr(settings, 'USE_LOCAL_DEVELOPMENT', True)
         
@@ -2624,16 +2764,7 @@ def google_oauth_callback(request):
         logger.info(f"   USE_LOCAL_DEVELOPMENT: {use_local_dev}")
         logger.info(f"   FRONTEND_URL: {frontend_url}")
         
-        # Build redirect URL with all necessary parameters
-        params = {
-            'access_token': tokens['access'],
-            'refresh_token': tokens['refresh'],
-            'user_id': user.UserId,
-            'consent_required': 'true' if consent_required else 'false',
-            'access_token_expires': tokens['access_token_expires'].isoformat(),
-            'refresh_token_expires': tokens['refresh_token_expires'].isoformat()
-        }
-        redirect_url = f"{frontend_url}/auth/google/callback?{urlencode(params)}"
+        redirect_url = f"{frontend_url}/auth/google/callback?handoff={handoff_key}"
         
         logger.info(f"✅ Redirecting to frontend: {redirect_url[:150]}...")
         
@@ -2648,3 +2779,35 @@ def google_oauth_callback(request):
             'status': 'error',
             'message': f'Google OAuth callback failed: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def google_oauth_callback_payload(request):
+    """
+    Return Google OAuth callback payload from server-side session once, then clear it.
+    This avoids leaking tokens via URL query parameters.
+    """
+    payload = request.session.get('google_oauth_callback_payload')
+    if not payload:
+        handoff_key = request.GET.get('handoff') or request.GET.get('handoff_key')
+        if handoff_key:
+            payload = cache.get(f"google_oauth_callback_payload:{handoff_key}")
+            if payload:
+                cache.delete(f"google_oauth_callback_payload:{handoff_key}")
+    if not payload:
+        return Response({
+            'status': 'error',
+            'message': 'OAuth callback session data not found or already consumed'
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    try:
+        del request.session['google_oauth_callback_payload']
+        request.session.save()
+    except Exception:
+        pass
+
+    return Response({
+        'status': 'success',
+        'data': payload
+    }, status=status.HTTP_200_OK)

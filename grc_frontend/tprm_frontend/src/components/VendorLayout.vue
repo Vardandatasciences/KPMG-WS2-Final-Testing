@@ -45,7 +45,7 @@
                 class="vendor_sidebar-link vendor_sidebar-parent vendor_cursor-pointer"
                 @click="toggleDropdown(vendor_item.id)"
               >
-                <span class="vendor_sidebar-icon" v-html="vendor_item.icon"></span>
+                <span class="vendor_sidebar-icon" v-html="sanitizeIcon(vendor_item.icon)"></span>
                 <span class="vendor_sidebar-text">{{ vendor_item.label }}</span>
                 <svg 
                   class="vendor_h-4 vendor_w-4 vendor_ml-auto vendor_transition-transform"
@@ -70,7 +70,7 @@
                       class="vendor_sidebar-link vendor_sidebar-parent vendor_cursor-pointer vendor_sidebar-sub-link"
                       @click="toggleDropdown(child.id)"
                     >
-                      <span class="vendor_sidebar-icon" v-html="child.icon"></span>
+                      <span class="vendor_sidebar-icon" v-html="sanitizeIcon(child.icon)"></span>
                       <span class="vendor_sidebar-text">{{ child.label }}</span>
                       <svg 
                         class="vendor_h-4 vendor_w-4 vendor_ml-auto vendor_transition-transform"
@@ -93,7 +93,7 @@
                         class="vendor_sidebar-link vendor_sidebar-sub-link"
                         :class="{ 'vendor_sidebar-link-active': $route.path === grandchild.path }"
                       >
-                        <span class="vendor_sidebar-icon" v-html="grandchild.icon"></span>
+                        <span class="vendor_sidebar-icon" v-html="sanitizeIcon(grandchild.icon)"></span>
                         <span class="vendor_sidebar-text">{{ grandchild.label }}</span>
                       </router-link>
                     </div>
@@ -105,7 +105,7 @@
                       class="vendor_sidebar-link vendor_sidebar-sub-link"
                       :class="{ 'vendor_sidebar-link-active': $route.path === child.path }"
                     >
-                      <span class="vendor_sidebar-icon" v-html="child.icon"></span>
+                      <span class="vendor_sidebar-icon" v-html="sanitizeIcon(child.icon)"></span>
                       <span class="vendor_sidebar-text">{{ child.label }}</span>
                     </router-link>
                   </template>
@@ -118,7 +118,7 @@
                 class="vendor_sidebar-link"
                 :class="{ 'vendor_sidebar-link-active': $route.path === vendor_item.path }"
               >
-                <span class="vendor_sidebar-icon" v-html="vendor_item.icon"></span>
+                <span class="vendor_sidebar-icon" v-html="sanitizeIcon(vendor_item.icon)"></span>
                 <span class="vendor_sidebar-text">{{ vendor_item.label }}</span>
               </router-link>
             </template>
@@ -170,6 +170,40 @@ const handleLogout = async () => {
     console.error('Logout error:', error)
   } finally {
     logoutLoading.value = false
+  }
+}
+
+const sanitizeIcon = (value) => {
+  if (!value || typeof value !== 'string') return ''
+  try {
+    const parser = new DOMParser()
+    const doc = parser.parseFromString(value, 'text/html')
+    const dangerousSelectors = ['script', 'style', 'iframe', 'object', 'embed', 'link', 'meta']
+    dangerousSelectors.forEach(selector => {
+      doc.querySelectorAll(selector).forEach(el => el.remove())
+    })
+    const walk = (node) => {
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        const attrs = Array.from(node.attributes)
+        attrs.forEach(attr => {
+          const name = attr.name.toLowerCase()
+          const val = (attr.value || '').trim().toLowerCase()
+          if (name.startsWith('on')) {
+            node.removeAttribute(attr.name)
+          }
+          if ((name === 'href' || name === 'src') && val.startsWith('javascript:')) {
+            node.removeAttribute(attr.name)
+          }
+        })
+      }
+      node.childNodes.forEach(child => walk(child))
+    }
+    walk(doc.body)
+    return doc.body.innerHTML
+  } catch (e) {
+    const div = document.createElement('div')
+    div.textContent = String(value)
+    return div.innerHTML
   }
 }
 

@@ -31,6 +31,12 @@ class TenantContextMiddleware(MiddlewareMixin):
         """
         Extract tenant from request and add to request.tenant
         """
+        # Cookie-first compatibility:
+        # Many legacy TPRM auth classes still parse Authorization header only.
+        # If header is missing but HttpOnly auth cookie is present, synthesize
+        # Bearer header for this request so existing auth classes keep working.
+        self._inject_auth_header_from_cookie(request)
+
         # Skip tenant resolution for certain public paths
         skip_paths = [
             '/api/login/',
@@ -94,6 +100,18 @@ class TenantContextMiddleware(MiddlewareMixin):
             # print(f"[Tenant Middleware] Debug - Has auth header: {has_auth}, Has user: {has_user}, Is authenticated: {is_authenticated}")
         
         return None
+
+    def _inject_auth_header_from_cookie(self, request):
+        try:
+            has_auth_header = bool(request.META.get('HTTP_AUTHORIZATION'))
+            if has_auth_header:
+                return
+
+            token = request.COOKIES.get('access_token') or request.COOKIES.get('session_token')
+            if token:
+                request.META['HTTP_AUTHORIZATION'] = f'Bearer {token}'
+        except Exception as e:
+            logger.debug(f"[Tenant Middleware] Failed to inject Authorization from cookie: {e}")
     
     def _get_tenant_from_subdomain(self, request):
         """
@@ -135,9 +153,15 @@ class TenantContextMiddleware(MiddlewareMixin):
             if auth_header and auth_header.startswith('Bearer '):
                 token = auth_header.split(' ')[1]
                 
-                # Decode JWT token
-                secret_key = getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
-                payload = jwt.decode(token, secret_key, algorithms=['HS256'])
+                # Decode JWT token using centralized JWT security settings.
+                verification_key = getattr(settings, 'JWT_VERIFYING_KEY', None) or getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
+                payload = jwt.decode(
+                    token,
+                    verification_key,
+                    algorithms=getattr(settings, 'JWT_ALLOWED_ALGORITHMS', [getattr(settings, 'JWT_ALGORITHM', 'RS256')]),
+                    issuer=getattr(settings, 'JWT_ISSUER', None),
+                    audience=getattr(settings, 'JWT_AUDIENCE', None),
+                )
                 
                 tenant_id = payload.get('tenant_id')
                 # print(f"[Tenant Middleware] JWT payload tenant_id: {tenant_id}")

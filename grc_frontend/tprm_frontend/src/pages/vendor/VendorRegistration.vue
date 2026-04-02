@@ -1763,15 +1763,8 @@ const vendor_fetchUserData = async () => {
     
     console.log('Fetching user data for userId:', userId)
     
-    // Get auth headers for API requests
-    const token = localStorage.getItem('session_token')
-    const headers = {}
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`
-    }
-    
     const response = await fetch(getTprmApiUrl(`v1/vendor-core/temp-vendors/get_user_data/?user_id=${userId}`), {
-      headers
+      credentials: 'include'
     })
     
     // Check if response is OK or if it's a 404 (no data found - this is normal for new users)
@@ -2056,11 +2049,10 @@ const vendor_saveDocument = async (id) => {
       }
       formData.append('user_id', vendor_formData.user_id.toString())
       
-      const token = localStorage.getItem('session_token')
       const response = await fetch(getTprmApiUrl('v1/vendor-core/temp-vendors/upload_document/'), {
         method: 'POST',
         body: formData,
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+        credentials: 'include'
       })
       
       const result = await response.json()
@@ -2287,18 +2279,11 @@ const submitRegistrationAction = async (consentConfig) => {
       console.log('Creating new vendor registration')
     }
     
-    const token = localStorage.getItem('session_token')
-    const headers = {
-      'Content-Type': 'application/json'
-    }
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`
-    }
-    
     const response = await fetch(getTprmApiUrl('v1/vendor-core/temp-vendors/vendor_submit_registration/'), {
       method: 'POST',
-      headers,
-      body: JSON.stringify(submissionData)
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(submissionData),
     })
     
     const result = await response.json()
@@ -2520,18 +2505,11 @@ const vendor_saveDraft = async () => {
       console.log('Updating existing temp vendor record:', vendor_formData.temp_vendor_id)
       
       // Use PUT to update existing record
-      const token = localStorage.getItem('session_token')
-      const headers = {
-        'Content-Type': 'application/json'
-      }
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`
-      }
-      
       response = await fetch(getTprmApiUrl(`v1/vendor-core/temp-vendors/${vendor_formData.temp_vendor_id}/`), {
         method: 'PUT',
-        headers,
-        body: JSON.stringify(vendor_draftData)
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(vendor_draftData),
       })
       
       result = await response.json()
@@ -2555,18 +2533,11 @@ const vendor_saveDraft = async () => {
       console.log('Creating new temp vendor record')
       
       // Use POST to create new record
-      const token = localStorage.getItem('session_token')
-      const headers = {
-        'Content-Type': 'application/json'
-      }
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`
-      }
-      
       response = await fetch(getTprmApiUrl('v1/vendor-core/temp-vendors/'), {
         method: 'POST',
-        headers,
-        body: JSON.stringify(vendor_draftData)
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(vendor_draftData),
       })
       
       result = await response.json()
@@ -2734,21 +2705,23 @@ const vendor_clearCachedUserData = () => {
 
 // Helper function to ensure user data is available in localStorage
 const vendor_ensureUserDataInStorage = () => {
-  // Check if current_user exists in localStorage
-  const currentUser = localStorage.getItem('current_user')
+  // Check if current_user exists in sessionStorage/localStorage
+  const currentUser = sessionStorage.getItem('current_user') || localStorage.getItem('current_user')
   if (!currentUser) {
     // If not, try to get from auth store and store it
     if (authStore.user) {
-      localStorage.setItem('current_user', JSON.stringify(authStore.user))
-      console.log('Stored user data from auth store to localStorage')
+      sessionStorage.setItem('current_user', JSON.stringify(authStore.user))
+      localStorage.removeItem('current_user')
+      console.log('Stored user data from auth store to sessionStorage')
       return true
     }
     
     // If auth store doesn't have user, initialize it
     authStore.initializeCurrentUser()
     if (authStore.user) {
-      localStorage.setItem('current_user', JSON.stringify(authStore.user))
-      console.log('Initialized and stored user data to localStorage')
+      sessionStorage.setItem('current_user', JSON.stringify(authStore.user))
+      localStorage.removeItem('current_user')
+      console.log('Initialized and stored user data to sessionStorage')
       return true
     }
   }

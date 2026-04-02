@@ -2222,13 +2222,16 @@ def get_proposal_id_from_approval(request, approval_id):
         print(f"[get_proposal_id_from_approval] Approval request not found: {approval_id}")
         return Response({'error': 'Approval request not found'}, status=404)
     except Exception as e:
+        # Avoid leaking internal error details to the client; log and return a generic message.
         print(f"[get_proposal_id_from_approval] Error: {str(e)}")
         import traceback
         traceback.print_exc()
-        return Response({
-            'error': str(e),
-            'error_type': type(e).__name__
-        }, status=500)
+        return Response(
+            {
+                'error': 'Internal server error. Please contact support if the problem persists.'
+            },
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
 
 @api_view(['GET'])
 @authentication_classes([JWTAuthentication])
@@ -2728,12 +2731,12 @@ def get_rfp_id_from_approval(request, approval_id):
             'tenant_id': tenant_id,
             'suggestion': 'Check if approval_id exists or if tenant_id is correct. Also check if stages exist for this approval_id.'
         }, status=404)
-    except Exception as e:
+    except Exception:
         import traceback
         error_trace = traceback.format_exc()
-        print(f"❌ [get_rfp_id_from_approval] Unexpected error: {str(e)}")
+        print("❌ [get_rfp_id_from_approval] Unexpected error")
         print(f"❌ [get_rfp_id_from_approval] Traceback: {error_trace}")
-        return Response({'error': f'Internal server error: {str(e)}'}, status=500)
+        return Response({'error': 'Internal server error'}, status=500)
 
 @api_view(['GET'])
 @authentication_classes([JWTAuthentication])
@@ -3535,14 +3538,12 @@ def update_stage_status(request):
         return Response({
             'error': 'Stage not found'
         }, status=status.HTTP_404_NOT_FOUND)
-    except Exception as e:
+    except Exception:
         import traceback
         error_traceback = traceback.format_exc()
         print(f"Full error traceback: {error_traceback}")
         return Response({
-            'error': f'Failed to update stage status: {str(e)}',
-            'details': str(e),
-            'traceback': error_traceback
+            'error': 'Failed to update stage status'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -3602,10 +3603,9 @@ def debug_approval_requests(request):
         
         return Response(debug_data)
         
-    except Exception as e:
+    except Exception:
         return Response({
-            'error': 'Debug endpoint failed',
-            'details': str(e)
+            'error': 'Debug endpoint failed'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -3644,10 +3644,9 @@ def debug_rfp_responses(request):
         
         return Response(debug_data)
         
-    except Exception as e:
+    except Exception:
         return Response({
-            'error': 'Debug endpoint failed',
-            'details': str(e)
+            'error': 'Debug endpoint failed'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -3717,10 +3716,9 @@ def debug_approval_workflow(request, workflow_id):
         
         return Response(debug_data)
         
-    except Exception as e:
+    except Exception:
         return Response({
-            'error': 'Debug endpoint failed',
-            'details': str(e)
+            'error': 'Debug endpoint failed'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -3759,8 +3757,8 @@ def debug_stage_request_data(request, stage_id):
         
     except ApprovalStages.DoesNotExist:
         return Response({'error': 'Stage not found'}, status=404)
-    except Exception as e:
-        return Response({'error': str(e)}, status=500)
+    except Exception:
+        return Response({'error': 'Failed to process debug request'}, status=500)
 
 
 @api_view(['GET'])
@@ -3795,10 +3793,9 @@ def debug_api_connectivity(request):
         
         return Response(debug_info)
         
-    except Exception as e:
+    except Exception:
         return Response({
-            'error': 'Debug connectivity failed',
-            'details': str(e)
+            'error': 'Debug connectivity failed'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -3914,15 +3911,14 @@ def get_risks_for_response(request, response_id):
             'risks': risk_data
         }, status=status.HTTP_200_OK)
         
-    except Exception as e:
+    except Exception:
         import traceback
         error_traceback = traceback.format_exc()
-        print(f"[RISKS_API] ERROR in get_risks_for_response: {str(e)}")
+        print(f"[RISKS_API] ERROR in get_risks_for_response")
         print(f"[RISKS_API] Traceback: {error_traceback}")
         traceback.print_exc()
         return Response({
-            'error': f'Failed to fetch risks for response {response_id}: {str(e)}',
-            'details': error_traceback
+            'error': f'Failed to fetch risks for response {response_id}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -3943,11 +3939,11 @@ def get_approval_version_history_api(request, approval_id):
             'versions': version_history
         })
         
-    except Exception as e:
-        print(f"Error getting approval version history: {str(e)}")
+    except Exception:
+        print("Error getting approval version history")
         return Response({
             'success': False,
-            'error': f'Failed to get version history: {str(e)}'
+            'error': 'Failed to get version history'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -4481,15 +4477,14 @@ def get_rfp_details_for_change_request(request, rfp_id):
             'success': False,
             'error': f'RFP with ID {rfp_id} not found'
         }, status=status.HTTP_404_NOT_FOUND)
-    except Exception as e:
+    except Exception:
         import traceback
         error_trace = traceback.format_exc()
-        print(f"Error in get_rfp_details_for_change_request: {str(e)}")
+        print("Error in get_rfp_details_for_change_request")
         print(f"Traceback: {error_trace}")
         return Response({
             'success': False,
-            'error': f'Failed to load RFP details: {str(e)}',
-            'details': str(e)
+            'error': 'Failed to load RFP details'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])

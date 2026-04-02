@@ -48,6 +48,7 @@ from ..Incident.incident_views import (
 )
 from ...routes.Consent import require_consent
 from ...debug_utils import debug_print
+from ...utils.csv_security import sanitize_csv_dataset
 
 # DRF Session auth variant that skips CSRF enforcement for API clients
 class CsrfExemptSessionAuthentication(SessionAuthentication):
@@ -68,12 +69,7 @@ def export_risk_register_v2(request):
     
     # Handle CORS preflight requests
     if request.method == 'OPTIONS':
-        response = HttpResponse()
-        response['Access-Control-Allow-Origin'] = '*'
-        response['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
-        response['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
-        response['Access-Control-Max-Age'] = '86400'
-        return response
+        return HttpResponse()
     
     try:
         # DRF may already consume the body stream; always prefer request.data first.
@@ -130,25 +126,20 @@ def export_risk_register_v2(request):
                     'format': 'json',
                     'file_name': f"{file_name}.json"
                 })
-                response['Access-Control-Allow-Origin'] = '*'
-                response['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
-                response['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
                 return response
             elif export_format == 'csv':
                 import csv
                 from io import StringIO
                 
                 output = StringIO()
-                if risk_data and len(risk_data) > 0:
-                    writer = csv.DictWriter(output, fieldnames=risk_data[0].keys())
+                sanitized_risk_data = sanitize_csv_dataset(risk_data)
+                if sanitized_risk_data and len(sanitized_risk_data) > 0:
+                    writer = csv.DictWriter(output, fieldnames=sanitized_risk_data[0].keys())
                     writer.writeheader()
-                    writer.writerows(risk_data)
+                    writer.writerows(sanitized_risk_data)
                 
                 response = HttpResponse(output.getvalue(), content_type='text/csv')
                 response['Content-Disposition'] = f'attachment; filename="{file_name}.csv"'
-                response['Access-Control-Allow-Origin'] = '*'
-                response['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
-                response['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
                 return response
         
         # Use async processing for large exports
@@ -188,9 +179,6 @@ def export_risk_register_v2(request):
                     'message': 'Export started in background. Use /api/export-status/<task_id>/ to check progress.',
                     'status_url': f'/api/export-status/{export_task.id}/'
                 })
-                response['Access-Control-Allow-Origin'] = '*'
-                response['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
-                response['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
                 return response
                 
             except ImportError:
@@ -233,9 +221,6 @@ def export_risk_register_v2(request):
             debug_print(f"{'='*80}\n")
             
             response = JsonResponse(result)
-            response['Access-Control-Allow-Origin'] = '*'
-            response['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
-            response['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
             return response
             
         except Exception as export_error:
@@ -289,10 +274,11 @@ def export_compliance_management(request):
             from io import StringIO
             
             output = StringIO()
-            if compliance_data and len(compliance_data) > 0:
-                writer = csv.DictWriter(output, fieldnames=compliance_data[0].keys())
+            sanitized_compliance_data = sanitize_csv_dataset(compliance_data)
+            if sanitized_compliance_data and len(sanitized_compliance_data) > 0:
+                writer = csv.DictWriter(output, fieldnames=sanitized_compliance_data[0].keys())
                 writer.writeheader()
-                writer.writerows(compliance_data)
+                writer.writerows(sanitized_compliance_data)
             
             response = HttpResponse(output.getvalue(), content_type='text/csv')
             response['Content-Disposition'] = f'attachment; filename="{file_name}.csv"'
@@ -1736,6 +1722,21 @@ def assign_risk_instance(request):
     
     if not risk_id or not user_id:
         return Response({'error': 'Risk ID and User ID are required'}, status=400)
+
+    # Framework-level mitigation: sanitize/validate evidence URLs in mitigations
+    if mitigations:
+        try:
+            from django.conf import settings
+            from ..Global.validation import sanitize_mitigation_evidence_urls, ValidationError as GlobalValidationError
+            mitigations_payload = {"mitigations": mitigations if isinstance(mitigations, dict) else {}}
+            mitigations = sanitize_mitigation_evidence_urls(
+                mitigations_payload,
+                allowed_hosts=getattr(settings, "TRUSTED_EVIDENCE_URL_HOSTS", []),
+                allowed_host_suffixes=getattr(settings, "TRUSTED_EVIDENCE_URL_HOST_SUFFIXES", []),
+                allow_http_hosts=getattr(settings, "TRUSTED_EVIDENCE_URL_ALLOW_HTTP_HOSTS", []),
+            ).get("mitigations", mitigations)
+        except GlobalValidationError as e:
+            return Response({"error": "Invalid evidence URL", "field": getattr(e, "field", "unknown")}, status=400)
     
     try:
         # Get the risk instance
@@ -2614,6 +2615,39 @@ def assign_reviewer(request):
     
     if not user_id:
         return Response({'error': 'User ID is required'}, status=400)
+
+    # Enforce maker–checker: creator cannot be their own approver/reviewer
+    try:
+        creator_id_int = int(user_id)
+        reviewer_id_int = int(reviewer_id) if reviewer_id is not None else None
+    except (TypeError, ValueError):
+        debug_print("Invalid user/reviewer id while assigning risk reviewer")
+        return Response(
+            {'error': 'Invalid user or reviewer id. Please contact an administrator.'},
+            status=400
+        )
+
+    if reviewer_id_int is not None and creator_id_int == reviewer_id_int:
+        debug_print(f"Self-approval attempt detected for risk {risk_id} by user {creator_id_int}")
+        return Response(
+            {'error': 'Self-approval is not allowed. Please select a different reviewer.'},
+            status=400
+        )
+
+    # Framework-level mitigation: sanitize/validate evidence URLs in mitigations
+    if mitigations:
+        try:
+            from django.conf import settings
+            from ..Global.validation import sanitize_mitigation_evidence_urls, ValidationError as GlobalValidationError
+            mitigations_payload = {"mitigations": mitigations if isinstance(mitigations, dict) else {}}
+            mitigations = sanitize_mitigation_evidence_urls(
+                mitigations_payload,
+                allowed_hosts=getattr(settings, "TRUSTED_EVIDENCE_URL_HOSTS", []),
+                allowed_host_suffixes=getattr(settings, "TRUSTED_EVIDENCE_URL_HOST_SUFFIXES", []),
+                allow_http_hosts=getattr(settings, "TRUSTED_EVIDENCE_URL_ALLOW_HTTP_HOSTS", []),
+            ).get("mitigations", mitigations)
+        except GlobalValidationError as e:
+            return Response({"error": "Invalid evidence URL", "field": getattr(e, "field", "unknown")}, status=400)
     
     # Ensure user_id is a string for the logging service
     user_id_str = str(user_id) if user_id is not None else None
@@ -3105,6 +3139,23 @@ def complete_review(request):
         approved = request.data.get('approved')
         mitigations = request.data.get('mitigations', {})  # Get all mitigations
         risk_form_details = request.data.get('risk_form_details', {})  # Get form details, default to empty dict
+
+        # Framework-level mitigation: never store/render untrusted evidence URLs
+        try:
+            from django.conf import settings
+            from ..Global.validation import sanitize_mitigation_evidence_urls, ValidationError as GlobalValidationError
+            sanitized = sanitize_mitigation_evidence_urls(
+                {"mitigations": mitigations},
+                allowed_hosts=getattr(settings, "TRUSTED_EVIDENCE_URL_HOSTS", []),
+                allowed_host_suffixes=getattr(settings, "TRUSTED_EVIDENCE_URL_HOST_SUFFIXES", []),
+                allow_http_hosts=getattr(settings, "TRUSTED_EVIDENCE_URL_ALLOW_HTTP_HOSTS", []),
+            )
+            mitigations = sanitized.get("mitigations", mitigations)
+        except GlobalValidationError as e:
+            return Response({"error": "Invalid evidence URL", "field": getattr(e, "field", "unknown")}, status=400)
+        except Exception:
+            # Fail closed on unexpected errors when processing evidence URLs
+            return Response({"error": "Invalid evidence URL"}, status=400)
         
         # Make sure we have the necessary data
         if not risk_id:

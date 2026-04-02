@@ -251,7 +251,7 @@
       async archive(timelineId) {
         await this.apiPost(`${API_BASE_URL}/api/retention/archive/`, {
           retention_timeline_id: timelineId,
-          archived_by: localStorage.getItem('user_id'),
+          archived_by: sessionStorage.getItem('user_id') || localStorage.getItem('user_id'),
         })
         await this.loadAll()
       },
@@ -259,14 +259,14 @@
         await this.apiPost(`${API_BASE_URL}/api/retention/pause-deletion/`, {
           retention_timeline_id: timelineId,
           reason: 'Paused from dashboard',
-          performed_by: localStorage.getItem('user_id'),
+          performed_by: sessionStorage.getItem('user_id') || localStorage.getItem('user_id'),
         })
         await this.loadAll()
       },
       async resume(timelineId) {
         await this.apiPost(`${API_BASE_URL}/api/retention/resume-deletion/`, {
           retention_timeline_id: timelineId,
-          performed_by: localStorage.getItem('user_id'),
+          performed_by: sessionStorage.getItem('user_id') || localStorage.getItem('user_id'),
         })
         await this.loadAll()
       },
@@ -274,14 +274,14 @@
         await this.apiPost(`${API_BASE_URL}/api/retention/extend/`, {
           retention_timeline_id: timelineId,
           extra_days: days,
-          performed_by: localStorage.getItem('user_id'),
+          performed_by: sessionStorage.getItem('user_id') || localStorage.getItem('user_id'),
         })
         await this.loadAll()
       },
       async deleteNow(timelineId) {
         await this.apiPost(`${API_BASE_URL}/api/retention/delete-now/`, {
           retention_timeline_id: timelineId,
-          performed_by: localStorage.getItem('user_id'),
+          performed_by: sessionStorage.getItem('user_id') || localStorage.getItem('user_id'),
         })
         await this.loadAll()
       },
@@ -301,7 +301,7 @@
         }
       },
       authHeaders() {
-        const token = localStorage.getItem('access_token')
+        const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token')
         return token ? { Authorization: `Bearer ${token}` } : {}
       },
       async loadOverview() {

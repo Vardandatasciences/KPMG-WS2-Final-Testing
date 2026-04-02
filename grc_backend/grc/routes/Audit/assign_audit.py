@@ -974,13 +974,7 @@ def add_compliance_to_audit(request, audit_id):
     
     # Handle preflight OPTIONS request
     if request.method == 'OPTIONS':
-        
-        response = JsonResponse({})
-        response["Access-Control-Allow-Origin"] = "http://localhost:8080"
-        response["Access-Control-Allow-Methods"] = "POST, OPTIONS"
-        response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-        response["Access-Control-Allow-Credentials"] = "true"
-        return response
+        return JsonResponse({})
     
     try:
         # Validate audit_id parameter
@@ -1287,12 +1281,6 @@ def add_compliance_to_audit(request, audit_id):
             'refresh_required': True  # Signal to frontend that a full refresh is needed
         }, status=status.HTTP_201_CREATED)
         
-        # Add CORS headers
-        response["Access-Control-Allow-Origin"] = "http://localhost:8080"
-        response["Access-Control-Allow-Methods"] = "POST, OPTIONS"
-        response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-        response["Access-Control-Allow-Credentials"] = "true"
-        
         return response
         
     except Exception as e:
@@ -1307,12 +1295,6 @@ def add_compliance_to_audit(request, audit_id):
             'error': f'Error adding compliance: {str(e)}',
             'traceback': error_traceback
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
-        # Add CORS headers
-        response["Access-Control-Allow-Origin"] = "http://:8080"
-        response["Access-Control-Allow-Methods"] = "POST, OPTIONS"
-        response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-        response["Access-Control-Allow-Credentials"] = "true"
         
         return response
 

@@ -22,16 +22,7 @@ export function useNotificationCount() {
 
   const initializeNotificationCount = async () => {
     if (isInitialized.value) return
-    
-    // Check if user is authenticated before fetching notification count
-    const token = localStorage.getItem('session_token')
-    if (!token) {
-      console.log('No authentication token found, skipping notification count initialization')
-      unreadCount.value = 0
-      isInitialized.value = true
-      return
-    }
-    
+ 
     try {
       console.log('Initializing notification count...')
       const stats = await apiService.getNotificationStats()
@@ -54,14 +45,6 @@ export function useNotificationCount() {
   }
 
   const refreshNotificationCount = async () => {
-    // Check if user is authenticated before fetching notification count
-    const token = localStorage.getItem('session_token')
-    if (!token) {
-      console.log('No authentication token found, skipping notification count refresh')
-      unreadCount.value = 0
-      return
-    }
-    
     try {
       const stats = await apiService.getNotificationStats()
       unreadCount.value = stats.total_unread || 0

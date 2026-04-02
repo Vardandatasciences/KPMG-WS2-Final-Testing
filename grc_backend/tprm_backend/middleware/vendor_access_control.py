@@ -8,8 +8,37 @@ from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.utils.deprecation import MiddlewareMixin
 from django.contrib.auth.models import User
 from django.core.cache import cache
+from django.db import transaction
 
 vendor_auth_logger = logging.getLogger('vendor_security')
+
+def _get_or_create_dev_vendor_admin_user():
+    """
+    Development-only fallback user bootstrap made race-safe for concurrent requests.
+    """
+    existing_user = User.objects.filter(id=60).first()
+    if existing_user:
+        return existing_user
+
+    try:
+        with transaction.atomic():
+            user, created = User.objects.get_or_create(
+                username='GRC Administrator',
+                defaults={
+                    'id': 60,
+                    'email': 'admin@vendor.com',
+                    'first_name': 'GRC',
+                    'last_name': 'Administrator',
+                    'is_active': True,
+                    'is_staff': True,
+                },
+            )
+            if created:
+                user.set_password('admin123')
+                user.save(update_fields=['password'])
+            return user
+    except Exception:
+        return User.objects.filter(id=60).first() or User.objects.filter(username='GRC Administrator').first()
 
 
 class VendorAccessControlMiddleware(MiddlewareMixin):
@@ -72,24 +101,7 @@ class VendorAccessControlMiddleware(MiddlewareMixin):
         
         # BYPASS AUTHENTICATION - Set hardcoded user for development
         if not hasattr(request, 'user') or not request.user.is_authenticated:
-            # Create a mock user object for development
-            from django.contrib.auth.models import AnonymousUser
-            from django.contrib.auth.models import User
-            
-            # Try to get or create the hardcoded user
-            try:
-                user = User.objects.get(id=60)
-            except User.DoesNotExist:
-                # Create the hardcoded user if it doesn't exist
-                user = User.objects.create_user(
-                    id=60,
-                    username='GRC Administrator',
-                    email='admin@vendor.com',
-                    first_name='GRC',
-                    last_name='Administrator',
-                    password='admin123'
-                )
-            
+            user = _get_or_create_dev_vendor_admin_user()
             request.user = user
             # Note: is_authenticated is a read-only property, so we don't need to set it
             # The user object itself being assigned makes it authenticated

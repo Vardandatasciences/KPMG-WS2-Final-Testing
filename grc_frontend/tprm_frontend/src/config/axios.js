@@ -17,11 +17,7 @@ apiClient.interceptors.request.use(
   (config) => {
     console.log(`Making ${config.method?.toUpperCase()} request to: ${config.url}`)
     
-    // Add JWT token from localStorage
-    const token = localStorage.getItem('session_token')
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
+    // Cookie-first auth: rely on HttpOnly cookies (no JS-managed tokens).
     
     // For FormData requests, let the browser set the Content-Type header
     if (config.data instanceof FormData) {
@@ -47,7 +43,15 @@ apiClient.interceptors.response.use(
     
     // Handle 401 Unauthorized - token expired or invalid
     if (error.response?.status === 401) {
-      // Clear authentication data
+      const data = error.response?.data || {}
+      if (data.session_invalidated === true) {
+        localStorage.setItem('auth_logout_reason', 'session_invalidated')
+      }
+      // Clear authentication data from both sessionStorage and localStorage
+      sessionStorage.removeItem('session_token')
+      sessionStorage.removeItem('access_token')
+      sessionStorage.removeItem('refresh_token')
+      sessionStorage.removeItem('current_user')
       localStorage.removeItem('session_token')
       localStorage.removeItem('access_token')
       localStorage.removeItem('refresh_token')

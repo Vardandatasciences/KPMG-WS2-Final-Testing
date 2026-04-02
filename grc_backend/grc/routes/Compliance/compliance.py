@@ -8,7 +8,7 @@ import datetime
 import traceback
 
 from ...serializers import ComplianceSerializer, ComplianceApprovalSerializer
-from ...models import SubPolicy, ComplianceApproval, Compliance, Framework, Policy
+from ...models import SubPolicy, ComplianceApproval, Compliance, Framework, Policy, Users
 from ...rbac.permissions import (
     ComplianceViewPermission, ComplianceCreatePermission, ComplianceEditPermission,
     ComplianceApprovePermission
@@ -23,6 +23,7 @@ from ...tenant_utils import (
     require_tenant, tenant_filter, get_tenant_id_from_request,
     validate_tenant_access, get_tenant_aware_queryset
 )
+from ...rbac.utils import RBACUtils
 
 @api_view(['POST'])
 @permission_classes([ComplianceCreatePermission])
@@ -96,12 +97,45 @@ def add_compliance(request, subpolicy_id):
             framework_id = subpolicy.PolicyId.FrameworkId
             debug_print(f"DEBUG: Using FrameworkId: {framework_id} for compliance addition")
             
+            # Resolve creator from authenticated context (do not trust request body UserId)
+            creator_user_id = RBACUtils.get_user_id_from_request(request) or getattr(request.user, 'id', None)
+            reviewer_id = data.get('ReviewerId')
+            if not creator_user_id:
+                return Response(
+                    {'error': 'User authentication required. Please log in and try again.'},
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
+            if not reviewer_id:
+                return Response(
+                    {'error': 'Reviewer assignment required. Please select a reviewer and try again.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            try:
+                creator_user_id = int(creator_user_id)
+                reviewer_id = int(reviewer_id)
+            except (TypeError, ValueError):
+                return Response(
+                    {'error': 'Invalid user or reviewer id. Please contact an administrator.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if creator_user_id == reviewer_id:
+                return Response(
+                    {'error': 'Self-approval is not allowed. Please select a different reviewer.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            reviewer_exists = Users.objects.filter(tenant_id=tenant_id, UserId=reviewer_id).exists()
+            if not reviewer_exists:
+                return Response(
+                    {'error': 'Selected reviewer not found for your organization.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
             # Create the ComplianceApproval entry with version u1
             compliance_approval = ComplianceApproval(
                 PolicyId=subpolicy.PolicyId,  # Associate with the parent policy
                 ExtractedData=extracted_data,
-                UserId=data.get('UserId') or getattr(request.user, 'id', None),  # Get user ID from request or logged in user
-                ReviewerId=data.get('ReviewerId', 1),  # Default to reviewer 1 if not provided
+                UserId=creator_user_id,
+                ReviewerId=reviewer_id,
                 Version='u1',
                 ApprovedNot=None,  # Not yet approved
                 FrameworkId=framework_id  # Add FrameworkId to compliance approval
@@ -292,12 +326,30 @@ def get_pending_compliance_approvals(request):
                         reviewer_id = request.session.get('user_id')  # Use user ID as reviewer ID if no reviewer ID found
                     if not reviewer_id:
                         return Response({'error': 'No reviewer ID found'}, status=status.HTTP_400_BAD_REQUEST)
+
+                    # Enforce maker–checker: creator cannot be their own reviewer
+                    try:
+                        creator_id_int = int(user_id)
+                        reviewer_id_int = int(reviewer_id)
+                    except (TypeError, ValueError):
+                        logger.warning("Invalid creator/reviewer id while creating ComplianceApproval in compliance.py (pending_compliances loop)")
+                        return Response(
+                            {'error': 'Invalid user or reviewer id. Please contact an administrator.'},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+
+                    if creator_id_int == reviewer_id_int:
+                        logger.warning(f"Self-approval attempt detected for compliance on PolicyId {subpolicy.PolicyId_id} by user {creator_id_int}")
+                        return Response(
+                            {'error': 'Self-approval is not allowed. Please select a different reviewer.'},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
                     
                     new_approval = ComplianceApproval.objects.create(
                         PolicyId=subpolicy.PolicyId,
                         ExtractedData=extracted_data,
-                        UserId=user_id,
-                        ReviewerId=reviewer_id,
+                        UserId=creator_id_int,
+                        ReviewerId=reviewer_id_int,
                         Version='u1',
                         ApprovedNot=None
                     )

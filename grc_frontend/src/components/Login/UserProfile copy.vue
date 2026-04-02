@@ -1149,20 +1149,20 @@ export default {
       this.success = null
 
       try {
-        const userData = JSON.parse(localStorage.getItem('user') || '{}')
+        const userData = JSON.parse(sessionStorage.getItem('user') || localStorage.getItem('user') || '{}')
         
         // Here you would typically send the updated data to your backend
-        // For now, we'll just update localStorage
+        // For now, we'll just update sessionStorage
         userData.firstName = this.form.firstName
         userData.lastName = this.form.lastName
         userData.email = this.form.email
         userData.phone = this.form.phone
 
-        localStorage.setItem('user', JSON.stringify(userData))
-        localStorage.setItem('user_name', `${this.form.firstName} ${this.form.lastName}`)
-        localStorage.setItem('fullName', `${this.form.firstName} ${this.form.lastName}`)
-        localStorage.setItem('username', `${this.form.firstName} ${this.form.lastName}`)
-        localStorage.setItem('user_email', this.form.email)
+        sessionStorage.setItem('user', JSON.stringify(userData))
+        sessionStorage.setItem('user_name', `${this.form.firstName} ${this.form.lastName}`)
+        sessionStorage.setItem('fullName', `${this.form.firstName} ${this.form.lastName}`)
+        sessionStorage.setItem('username', `${this.form.firstName} ${this.form.lastName}`)
+        sessionStorage.setItem('user_email', this.form.email)
 
         this.success = 'Personal information updated successfully!'
         window.dispatchEvent(new Event('userDataUpdated'))
@@ -1187,9 +1187,9 @@ export default {
 
     // Here you would typically send the updated data to your backend
 
-    // For now, we'll just update localStorage
+    // For now, we'll just update sessionStorage
 
-    const userData = JSON.parse(localStorage.getItem('user') || '{}')
+    const userData = JSON.parse(sessionStorage.getItem('user') || localStorage.getItem('user') || '{}')
 
     userData.departmentName = this.businessInfo.departmentName
 
@@ -1201,11 +1201,9 @@ export default {
 
     userData.departmentHead = this.businessInfo.departmentHead
 
-    localStorage.setItem('user', JSON.stringify(userData))
-
-    localStorage.setItem('user_name', this.form.username)
-
-    localStorage.setItem('user_email', this.form.email)
+    sessionStorage.setItem('user', JSON.stringify(userData))
+    sessionStorage.setItem('user_name', this.form.username)
+    sessionStorage.setItem('user_email', this.form.email)
 
     this.success = 'Business information updated successfully!'
 
@@ -1396,11 +1394,11 @@ async updatePassword() {
           try {
             console.log('Making API call to:', '/api/register/');
             console.log('Request data:', newUser);
-            console.log('Access token:', localStorage.getItem('access_token'));
+            console.log('Access token:', sessionStorage.getItem('access_token') || localStorage.getItem('access_token'));
             
             // Try with JWT first, then fallback to session-based auth
             let response;
-            const accessToken = localStorage.getItem('access_token');
+            const accessToken = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
             
             if (accessToken) {
               console.log('Using JWT authentication');
@@ -1700,7 +1698,7 @@ async updatePassword() {
       },
 
       getConsentAuthHeaders() {
-        const token = localStorage.getItem('access_token');
+        const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
         return {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'

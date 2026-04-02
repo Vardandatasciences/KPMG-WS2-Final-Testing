@@ -209,62 +209,31 @@ def get_notifications(request):
     Get all notifications for a user
     """
     try:
-        # Get user_id from JWT authentication or query parameter
-        user_id = None
-         # Debug: Check what's in request.GET (only when ENABLE_DEBUG_LOGGING=true)
-        debug_print(f"📬 DEBUG: request.GET = {dict(request.GET)}")
-        debug_print(f"📬 DEBUG: request.GET.get('user_id') = {request.GET.get('user_id')}")
-       
-        # First try to get from authenticated user (only if it's actually set and not None)
-        if hasattr(request, 'user') and request.user:
-            if hasattr(request.user, 'UserId') and request.user.UserId is not None:
-                user_id = str(request.user.UserId)
-                debug_print(f"📬 DEBUG: Got user_id from request.user.UserId = {user_id}")
-            elif hasattr(request.user, 'id') and request.user.id is not None:
-                user_id = str(request.user.id)
-                debug_print(f"📬 DEBUG: Got user_id from request.user.id = {user_id}")
-            else:
-                debug_print(f"📬 DEBUG: request.user exists but UserId/id is None, will use GET parameter")
-       
-        # Fallback to query parameter (this should work even if user is authenticated)
-        if not user_id:
-            # request.GET.get() can return a list if multiple values, so get the first one
-            user_id_raw = request.GET.get('user_id')
-            if isinstance(user_id_raw, list):
-                user_id = user_id_raw[0] if user_id_raw else None
-            else:
-                user_id = user_id_raw
-            debug_print(f"📬 DEBUG: Got user_id from request.GET.get('user_id') = {user_id} (raw: {user_id_raw})")
-            if not user_id:
-                # Try alternative methods to get user_id
-                if hasattr(request, 'query_params'):  # DRF Request
-                    user_id = request.query_params.get('user_id')
-                    debug_print(f"📬 DEBUG: Got user_id from request.query_params.get('user_id') = {user_id}")
-               
-                # Try parsing from request path directly as fallback
-                if not user_id and hasattr(request, 'get_full_path'):
-                    import urllib.parse
-                    full_path = request.get_full_path()
-                    debug_print(f"📬 DEBUG: request.get_full_path() = {full_path}")
-                    parsed = urllib.parse.urlparse(full_path)
-                    query_params = urllib.parse.parse_qs(parsed.query)
-                    debug_print(f"📬 DEBUG: Parsed query_params = {query_params}")
-                    if 'user_id' in query_params:
-                        user_id = query_params['user_id'][0] if query_params['user_id'] else None
-                        debug_print(f"📬 DEBUG: Got user_id from parsed query string = {user_id}")
-               
-                # Final fallback
-                if not user_id:
-                    user_id = 'default_user'
-                    debug_print(f"📬 DEBUG: Using default_user as fallback")
-       
-        # Ensure user_id is a string for comparison
-        if user_id is not None:
-            user_id = str(user_id)
+        # IDOR protection: always derive requester from auth context; allow admin override only.
+        from ...rbac.utils import RBACUtils
+
+        requester_user_id = RBACUtils.get_user_id_from_request(request)
+        if not requester_user_id:
+            return JsonResponse({'status': 'error', 'message': 'Authentication required'}, status=401)
+
+        requested_user_id = requester_user_id
+        user_id_param = request.GET.get('user_id')
+        if user_id_param is not None and str(user_id_param).strip() != '':
+            try:
+                user_id_param_int = int(str(user_id_param))
+            except (TypeError, ValueError):
+                return JsonResponse({'status': 'error', 'message': 'Invalid user id'}, status=400)
+
+            if int(requester_user_id) != user_id_param_int and not RBACUtils.is_system_admin(requester_user_id):
+                return JsonResponse({'status': 'error', 'message': 'Forbidden'}, status=403)
+
+            requested_user_id = str(user_id_param_int)
+
+        user_id = str(requested_user_id)
        
         # Get user email to query database
         user_email = None
-        if user_id and user_id != 'default_user':
+        if user_id:
             try:
                 user_email = get_user_email_from_id(int(user_id))
             except (ValueError, TypeError):
@@ -283,13 +252,10 @@ def get_notifications(request):
                         LIMIT 100
                     """, (user_email,))
                 else:
-                    cursor.execute("""
-                        SELECT id, recipient, type, channel, success, error, created_at, FrameworkId
-                        FROM notifications
-                        WHERE recipient LIKE %s AND type IN ('audit_completion', 'ai_audit_evidence_reminder') AND channel = 'in_app'
-                        ORDER BY created_at DESC
-                        LIMIT 100
-                    """, (f'user_{user_id}%',))
+                    # If we can't map to an email, do not attempt a wildcard lookup (can leak cross-user data).
+                    db_notifications = []
+                    columns = []
+                    return JsonResponse({'status': 'success', 'notifications': [], 'count': 0})
                 columns = [col[0] for col in cursor.description]
                 for row in cursor.fetchall():
                     db_notif = dict(zip(columns, row))

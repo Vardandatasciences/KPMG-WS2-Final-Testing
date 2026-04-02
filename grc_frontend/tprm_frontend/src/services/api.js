@@ -4,6 +4,27 @@
 import { getTprmApiBaseUrl, getApiOrigin } from '@/utils/backendEnv'
 import axios from 'axios'
 
+// Cookie-first auth: tokens live in HttpOnly cookies (not readable by JS).
+// Keep migration cleanup for any legacy stored tokens.
+const clearLegacyTokens = () => {
+  ;['session_token', 'access_token', 'refresh_token', 'current_user'].forEach((k) => {
+    sessionStorage.removeItem(k)
+    localStorage.removeItem(k)
+  })
+}
+
+const getToken = () => null
+const getRefreshToken = () => null
+const setTokenPair = () => {
+  // no-op (cookie based)
+}
+const clearSensitiveAuth = () => {
+  clearLegacyTokens()
+}
+const markSessionInvalidated = () => {
+  localStorage.setItem('auth_logout_reason', 'session_invalidated')
+}
+
 // Use environment-aware URL resolution - defaults to production
 const TPRM_BASE = getTprmApiBaseUrl();
 const API_BASE_URL = TPRM_BASE;
@@ -27,13 +48,12 @@ class APIService {
 
   async request(endpoint, options = {}) {
     const url = `${this.baseURL}${endpoint}`;
-    let token = localStorage.getItem('session_token');
     let config = {
       headers: {
         'Content-Type': 'application/json',
-        ...(token && { 'Authorization': `Bearer ${token}` }),
         ...options.headers,
       },
+      credentials: 'include',
       ...options,
     };
 
@@ -46,13 +66,10 @@ class APIService {
         const refreshed = await this.refreshTokenIfNeeded();
         
         if (refreshed) {
-          // Retry with new token
-          token = localStorage.getItem('session_token');
           config = {
             ...config,
             headers: {
               ...config.headers,
-              'Authorization': `Bearer ${token}`
             }
           };
           response = await fetch(url, config);
@@ -62,8 +79,7 @@ class APIService {
       if (!response.ok) {
         // 401 = Unauthorized (invalid/missing token) → redirect to GRC login
         if (response.status === 401) {
-          localStorage.removeItem('session_token');
-          localStorage.removeItem('current_user');
+          clearSensitiveAuth();
           // NO REDIRECT - Let pages handle errors themselves
           console.log('[APIService] 401 Unauthorized - pages will handle this');
           throw new Error(`HTTP error! status: ${response.status}`);
@@ -92,13 +108,12 @@ class APIService {
 
   async slaRequest(endpoint, options = {}) {
     const url = `${this.slaURL}${endpoint}`;
-    const token = localStorage.getItem('session_token');
     const config = {
       headers: {
         'Content-Type': 'application/json',
-        ...(token && { 'Authorization': `Bearer ${token}` }),
         ...options.headers,
       },
+      credentials: 'include',
       ...options,
     };
 
@@ -121,8 +136,7 @@ class APIService {
 
         // 401 = Unauthorized (invalid/missing token) → redirect to GRC login
         if (response.status === 401) {
-          localStorage.removeItem('session_token');
-          localStorage.removeItem('current_user');
+          clearSensitiveAuth();
           // NO REDIRECT - Let pages handle errors themselves
           console.log('[APIService] 401 Unauthorized - pages will handle this');
           const error = new Error(`HTTP error! status: ${response.status}`);
@@ -165,13 +179,12 @@ class APIService {
   async auditsRequest(endpoint, options = {}) {
     const { allow404 = false, ...fetchOptions } = options;
     const url = `${this.auditsURL}${endpoint}`;
-    const token = localStorage.getItem('session_token');
     const config = {
       headers: {
         'Content-Type': 'application/json',
-        ...(token && { 'Authorization': `Bearer ${token}` }),
         ...fetchOptions.headers,
       },
+      credentials: 'include',
       ...fetchOptions,
     };
 
@@ -185,8 +198,7 @@ class APIService {
         }
         // 401 = Unauthorized (invalid/missing token) → redirect to GRC login
         if (response.status === 401) {
-          localStorage.removeItem('session_token');
-          localStorage.removeItem('current_user');
+          clearSensitiveAuth();
           // NO REDIRECT - Let pages handle errors themselves
           console.log('[APIService] 401 Unauthorized - pages will handle this');
           throw new Error(`HTTP error! status: ${response.status}`);
@@ -217,13 +229,12 @@ class APIService {
 
   async notificationsRequest(endpoint, options = {}) {
     const url = `${this.notificationsURL}${endpoint}`;
-    let token = localStorage.getItem('session_token');
     let config = {
       headers: {
         'Content-Type': 'application/json',
-        ...(token && { 'Authorization': `Bearer ${token}` }),
         ...options.headers,
       },
+      credentials: 'include',
       ...options,
     };
 
@@ -236,13 +247,10 @@ class APIService {
         const refreshed = await this.refreshTokenIfNeeded();
         
         if (refreshed) {
-          // Retry with new token
-          token = localStorage.getItem('session_token');
           config = {
             ...config,
             headers: {
               ...config.headers,
-              'Authorization': `Bearer ${token}`
             }
           };
           response = await fetch(url, config);
@@ -252,8 +260,7 @@ class APIService {
       if (!response.ok) {
         // 401 = Unauthorized (invalid/missing token) → redirect to GRC login
         if (response.status === 401) {
-          localStorage.removeItem('session_token');
-          localStorage.removeItem('current_user');
+          clearSensitiveAuth();
           // NO REDIRECT - Let pages handle errors themselves
           console.log('[APIService] 401 Unauthorized - pages will handle this');
           throw new Error(`HTTP error! status: ${response.status}`);
@@ -994,11 +1001,9 @@ class APIService {
     // Tag uploads so they can be filtered on the backend
     formData.append('platform', 'audit-execution');
 
-    const token = localStorage.getItem('session_token');
     const response = await fetch(`${this.rfpURL}/s3/upload/`, {
       method: 'POST',
       headers: {
-        ...(token && { 'Authorization': `Bearer ${token}` })
       },
       body: formData
     });
@@ -1016,10 +1021,8 @@ class APIService {
       throw new Error('Missing document identifier');
     }
 
-    const token = localStorage.getItem('session_token');
     const response = await fetch(`${this.rfpURL}/s3-files/${documentId}/`, {
       headers: {
-        ...(token && { 'Authorization': `Bearer ${token}` })
       }
     });
 
@@ -1149,13 +1152,12 @@ class APIService {
   // BCP/DRP API methods
   async bcpdrpRequest(endpoint, options = {}) {
     const url = `${this.bcpdrpURL}${endpoint}`;
-    const token = localStorage.getItem('session_token');
     const config = {
       headers: {
         'Content-Type': 'application/json',
-        ...(token && { 'Authorization': `Bearer ${token}` }),
         ...options.headers,
       },
+      credentials: 'include',
       ...options,
     };
 
@@ -1163,13 +1165,10 @@ class APIService {
       const response = await fetch(url, config);
       
       if (!response.ok) {
-        // 401 = Unauthorized (invalid/missing token) → redirect to login
+        // 401 = Unauthorized (invalid/missing token) → clear auth, let pages handle
         if (response.status === 401) {
           console.log('BCP/DRP API: 401 Unauthorized - NO REDIRECT, pages will handle this');
-          localStorage.removeItem('session_token');
-          localStorage.removeItem('current_user');
-          localStorage.removeItem('access_token');
-          localStorage.removeItem('refresh_token');
+          clearSensitiveAuth();
           // NO REDIRECT - Let pages handle errors themselves
           throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -1184,10 +1183,7 @@ class APIService {
               errorMessage.toLowerCase().includes('credentials') ||
               errorMessage.toLowerCase().includes('not authenticated')) {
             console.log('BCP/DRP API: 403 Authentication error - NO REDIRECT, pages will handle this');
-            localStorage.removeItem('session_token');
-            localStorage.removeItem('current_user');
-            localStorage.removeItem('access_token');
-            localStorage.removeItem('refresh_token');
+            clearSensitiveAuth();
             // NO REDIRECT - Let pages handle errors themselves
             throw new Error('Authentication required');
           }
@@ -1215,13 +1211,12 @@ class APIService {
 
   async riskAnalysisRequest(endpoint, options = {}) {
     const url = `${this.riskAnalysisURL}${endpoint}`;
-    const token = localStorage.getItem('session_token');
     const config = {
       headers: {
         'Content-Type': 'application/json',
-        ...(token && { 'Authorization': `Bearer ${token}` }),
         ...options.headers,
       },
+      credentials: 'include',
       ...options,
     };
 
@@ -1595,12 +1590,6 @@ class APIService {
   // Helper to refresh token if needed
   async refreshTokenIfNeeded() {
     try {
-      const refreshToken = localStorage.getItem('refresh_token');
-      if (!refreshToken) {
-        console.warn('[APIService] No refresh token available');
-        return false;
-      }
-      
       const apiOrigin = getApiOrigin() || 'https://grc-tprm.vardaands.com'
       const refreshUrl = `${apiOrigin}/api/jwt/refresh/`
       console.log('[APIService] Refreshing token from:', refreshUrl)
@@ -1610,20 +1599,13 @@ class APIService {
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ refresh_token: refreshToken })
+        body: JSON.stringify({})
       });
       
       if (refreshResponse.ok) {
-        const data = await refreshResponse.json();
-        if (data.access_token) {
-          localStorage.setItem('session_token', data.access_token);
-          localStorage.setItem('access_token', data.access_token);
-          if (data.refresh_token) {
-            localStorage.setItem('refresh_token', data.refresh_token);
-          }
-          console.log('[APIService] ✅ Token refreshed successfully');
-          return true;
-        }
+        clearLegacyTokens()
+        console.log('[APIService] ✅ Cookie session refreshed successfully')
+        return true
       }
       
       // If refresh failed, check the error message
@@ -1632,12 +1614,10 @@ class APIService {
       console.warn('[APIService] ❌ Token refresh failed:', refreshResponse.status, errorMessage);
       
         // If session was invalidated (user logged in elsewhere), clear tokens and redirect to GRC login
-        if (refreshResponse.status === 401 && errorMessage.includes('Session invalidated')) {
+      if (refreshResponse.status === 401 && (errorData.session_invalidated === true || errorMessage.includes('Session invalidated'))) {
           console.warn('[APIService] Session invalidated - clearing tokens and redirecting to GRC login');
-          localStorage.removeItem('session_token');
-          localStorage.removeItem('access_token');
-          localStorage.removeItem('refresh_token');
-          localStorage.removeItem('current_user');
+          markSessionInvalidated();
+          clearSensitiveAuth();
           
           // NO REDIRECT - Let pages handle errors themselves
           console.log('[APIService] 401 Unauthorized - pages will handle this');
@@ -1664,10 +1644,6 @@ export const api = axios.create({
 // Add request interceptor to inject JWT token
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('session_token')
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
     return config
   },
   (error) => {
@@ -1680,9 +1656,12 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
+        const data = error.response?.data || {}
+        if (data.session_invalidated === true) {
+          markSessionInvalidated()
+        }
         // Token expired or invalid - NO REDIRECT, pages will handle this
-      localStorage.removeItem('session_token')
-      localStorage.removeItem('current_user')
+      clearSensitiveAuth()
         console.log('[Axios Interceptor] 401 Unauthorized - NO REDIRECT, pages will handle this')
         // NO REDIRECT - Let pages handle errors themselves
     } else if (error.response?.status === 403) {

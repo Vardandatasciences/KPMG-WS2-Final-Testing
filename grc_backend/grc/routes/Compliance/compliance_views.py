@@ -2177,6 +2177,31 @@ def submit_compliance_review(request, approval_id):
         
         approval = get_object_or_404(ComplianceApproval, ApprovalId=approval_id)
         debug_print(f"Found approval: {approval.ApprovalId}, Identifier: {approval.Identifier}")
+
+        # Enforce reviewer identity and maker-checker on server side
+        from ...rbac.utils import RBACUtils
+        current_user_id = RBACUtils.get_user_id_from_request(request) or getattr(request.user, 'id', None)
+        try:
+            current_user_id_int = int(current_user_id) if current_user_id is not None else None
+            approval_reviewer_id_int = int(approval.ReviewerId) if approval.ReviewerId is not None else None
+            approval_creator_id_int = int(approval.UserId) if approval.UserId is not None else None
+        except (TypeError, ValueError):
+            return Response({
+                'success': False,
+                'message': 'Invalid approval user/reviewer data. Please contact an administrator.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        if current_user_id_int is None or approval_reviewer_id_int is None or current_user_id_int != approval_reviewer_id_int:
+            return Response({
+                'success': False,
+                'message': 'You are not the assigned reviewer for this request.'
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        if approval_creator_id_int is not None and approval_creator_id_int == approval_reviewer_id_int:
+            return Response({
+                'success': False,
+                'message': 'Self-approval is not allowed. Please assign a different reviewer.'
+            }, status=status.HTTP_403_FORBIDDEN)
         
         if 'ApprovedNot' in request.data:
             approved_not = request.data.get('ApprovedNot')
@@ -3986,13 +4011,33 @@ def deactivate_compliance(request, compliance_id):
         # Get the reason from the request
         reason = request.data.get('reason', 'No longer needed')
         
-        # Get reviewer ID and user ID from the request (required)
-        reviewer_id = request.data.get('reviewer_id')
-        user_id = request.data.get('user_id')
+        # Resolve actor from authenticated context and validate reviewer assignment
+        from ...rbac.utils import RBACUtils
+        user_id = RBACUtils.get_user_id_from_request(request) or getattr(request.user, 'id', None)
+        reviewer_id = request.data.get('reviewer_id') or request.data.get('ReviewerId')
         if not reviewer_id or not user_id:
             return Response({
                 'success': False,
-                'message': 'Both reviewer_id and user_id are required.'
+                'message': 'Both reviewer_id and authenticated user are required.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            user_id = int(user_id)
+            reviewer_id = int(reviewer_id)
+        except (TypeError, ValueError):
+            return Response({
+                'success': False,
+                'message': 'Invalid reviewer_id or user_id. Both must be valid integers.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        if user_id == reviewer_id:
+            return Response({
+                'success': False,
+                'message': 'Self-approval is not allowed. Please select a different reviewer.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        reviewer_exists = Users.objects.filter(tenant_id=tenant_id, UserId=reviewer_id).exists()
+        if not reviewer_exists:
+            return Response({
+                'success': False,
+                'message': 'Selected reviewer not found for your organization.'
             }, status=status.HTTP_400_BAD_REQUEST)
         debug_print(f"Using reviewer_id: {reviewer_id}, user_id: {user_id}")
         

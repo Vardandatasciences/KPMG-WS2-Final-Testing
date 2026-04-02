@@ -6,6 +6,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
 from rest_framework.exceptions import NotFound
 from django.db.models import Q
+from django.db import transaction
 from django.utils import timezone
 from .models import RFI, RFIEvaluationCriteria
 from .serializers import RFISerializer, RFICreateSerializer, RFIListSerializer, RFIEvaluationCriteriaSerializer
@@ -16,6 +17,38 @@ from tprm_backend.core.tenant_utils import (
 )
 
 logger = logging.getLogger(__name__)
+
+def _get_or_create_dev_superuser():
+    """
+    Development fallback user bootstrap made race-safe for concurrent requests.
+    """
+    from django.contrib.auth.models import User
+
+    existing_superuser = User.objects.filter(is_superuser=True).order_by('id').first()
+    if existing_superuser:
+        return existing_superuser
+
+    try:
+        with transaction.atomic():
+            user, created = User.objects.get_or_create(
+                username='admin',
+                defaults={
+                    'email': 'admin@example.com',
+                    'is_superuser': True,
+                    'is_staff': True,
+                    'is_active': True,
+                },
+            )
+            if created:
+                user.set_password('admin123')
+                user.save(update_fields=['password'])
+            elif not user.is_superuser or not user.is_staff:
+                user.is_superuser = True
+                user.is_staff = True
+                user.save(update_fields=['is_superuser', 'is_staff'])
+            return user
+    except Exception:
+        return User.objects.filter(is_superuser=True).order_by('id').first() or User.objects.get(username='admin')
 
 
 class RFIViewSet(viewsets.ModelViewSet):
@@ -60,8 +93,14 @@ class RFIViewSet(viewsets.ModelViewSet):
                     import jwt
                     from django.conf import settings
                     token = auth_header.split(' ')[1]
-                    secret_key = getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
-                    payload = jwt.decode(token, secret_key, algorithms=['HS256'])
+                    verification_key = getattr(settings, 'JWT_VERIFYING_KEY', None) or getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
+                    payload = jwt.decode(
+                        token,
+                        verification_key,
+                        algorithms=getattr(settings, 'JWT_ALLOWED_ALGORITHMS', [getattr(settings, 'JWT_ALGORITHM', 'RS256')]),
+                        issuer=getattr(settings, 'JWT_ISSUER', None),
+                        audience=getattr(settings, 'JWT_AUDIENCE', None),
+                    )
                     if payload:
                         user_id = payload.get('user_id') or payload.get('userid') or payload.get('id')
                         logger.info(f"[RFI List] Extracted user_id {user_id} from JWT token")
@@ -216,9 +255,27 @@ class RFIViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
+        # Enforce maker–checker: creator cannot approve their own RFI
+        try:
+            creator_id_int = int(rfi.created_by) if rfi.created_by is not None else None
+            current_user_id_int = int(approved_by) if approved_by is not None else None
+        except (TypeError, ValueError):
+            logger.warning("[RFI Approve] Invalid creator or approver id while approving RFI")
+            return Response(
+                {"error": "Invalid approver id. Please contact an administrator."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if creator_id_int is not None and current_user_id_int is not None and creator_id_int == current_user_id_int:
+            logger.warning(f"[RFI Approve] Self-approval attempt detected for RFI ID {rfi.rfi_id} by user {creator_id_int}")
+            return Response(
+                {"error": "Self-approval is not allowed. Please assign a different reviewer to approve this RFI."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
         # Update status to APPROVED for normal approval workflow (after all stages approved)
         rfi.status = 'APPROVED'
-        rfi.approved_by = approved_by
+        rfi.approved_by = current_user_id_int if current_user_id_int is not None else approved_by
         rfi.save()
         
         return Response({
@@ -269,15 +326,8 @@ class RFIViewSet(viewsets.ModelViewSet):
                 logger = logging.getLogger(__name__)
                 logger.warning(f"[RFI] No tenant found in request, using default tenant_id=1 for development")
         
-        # Get or create admin user for development
-        from django.contrib.auth.models import User
-        admin_user = User.objects.filter(is_superuser=True).first()
-        if not admin_user:
-            admin_user = User.objects.create_superuser(
-                username='admin',
-                email='admin@example.com',
-                password='admin123'
-            )
+        # Get or create admin user for development (race-safe bootstrap)
+        admin_user = _get_or_create_dev_superuser()
         
         # Get user_id from request.user if available
         user_id = None
@@ -514,15 +564,8 @@ class RFIEvaluationCriteriaViewSet(viewsets.ModelViewSet):
                 logger = logging.getLogger(__name__)
                 logger.warning(f"[RFI Evaluation Criteria] No tenant found in request, using default tenant_id=1 for development")
         
-        # Get or create admin user for development
-        from django.contrib.auth.models import User
-        admin_user = User.objects.filter(is_superuser=True).first()
-        if not admin_user:
-            admin_user = User.objects.create_superuser(
-                username='admin',
-                email='admin@example.com',
-                password='admin123'
-            )
+        # Get or create admin user for development (race-safe bootstrap)
+        admin_user = _get_or_create_dev_superuser()
         
         # Get user_id from request.user if available
         user_id = None

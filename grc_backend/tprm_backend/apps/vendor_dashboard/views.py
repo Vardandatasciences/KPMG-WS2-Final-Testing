@@ -17,6 +17,7 @@ import logging
 from datetime import datetime, timedelta
 import io
 import csv
+from grc.utils.csv_security import sanitize_csv_cell
 
 # RBAC imports
 from tprm_backend.apps.vendor_core.vendor_authentication import JWTAuthentication, SimpleAuthenticatedPermission, VendorPermission
@@ -179,9 +180,7 @@ class ScreeningMatchRateAPIView(APIView):
             import traceback
             logger.error(f"Traceback: {traceback.format_exc()}")
             error_details = {
-                'error': str(e),
-                'traceback': traceback.format_exc(),
-                'message': 'Failed to calculate screening match rate',
+                'error': 'Failed to calculate screening match rate',
                 'total_vendors': 'unknown',
                 'matched_vendors': 'unknown'
             }
@@ -294,9 +293,7 @@ class QuestionnaireOverdueRateAPIView(APIView):
             import traceback
             logger.error(f"Traceback: {traceback.format_exc()}")
             error_details = {
-                'error': str(e),
-                'traceback': traceback.format_exc(),
-                'message': 'Failed to calculate questionnaire overdue rate',
+                'error': 'Failed to calculate questionnaire overdue rate',
                 'total_questionnaires': 'unknown',
                 'overdue_questionnaires': 'unknown'
             }
@@ -490,9 +487,7 @@ class VendorsFlaggedOFACPEPAPIView(APIView):
             import traceback
             logger.error(f"Traceback: {traceback.format_exc()}")
             error_details = {
-                'error': str(e),
-                'traceback': traceback.format_exc(),
-                'message': 'Failed to calculate vendors flagged in OFAC/PEP lists',
+                'error': 'Failed to calculate vendors flagged in OFAC/PEP lists',
                 'total_vendors': 'unknown',
                 'flagged_vendors': 'unknown'
             }
@@ -652,9 +647,7 @@ class VendorAcceptanceTimeAPIView(APIView):
             import traceback
             logger.error(f"Traceback: {traceback.format_exc()}")
             error_details = {
-                'error': str(e),
-                'traceback': traceback.format_exc(),
-                'message': 'Failed to calculate vendor acceptance time',
+                'error': 'Failed to calculate vendor acceptance time',
                 'avg_acceptance_time': 'unknown',
                 'total_approved_vendors': 'unknown'
             }
@@ -767,9 +760,7 @@ class DashboardMetricsAPIView(APIView):
             import traceback
             logger.error(f"Traceback: {traceback.format_exc()}")
             error_details = {
-                'error': str(e),
-                'traceback': traceback.format_exc(),
-                'message': 'Failed to fetch dashboard metrics',
+                'error': 'Failed to fetch dashboard metrics',
                 'metrics': 'unknown',
                 'recent_activity': 'unknown'
             }
@@ -902,7 +893,7 @@ class VendorAlertsAPIView(APIView):
             import traceback
             logger.error(f"Traceback: {traceback.format_exc()}")
             return Response(
-                {'error': str(e), 'message': 'Failed to fetch vendor alerts'},
+                {'error': 'Failed to fetch vendor alerts'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
@@ -1007,9 +998,7 @@ class VendorRegistrationCompletionRateAPIView(APIView):
             import traceback
             logger.error(f"Traceback: {traceback.format_exc()}")
             error_details = {
-                'error': str(e),
-                'traceback': traceback.format_exc(),
-                'message': 'Failed to calculate vendor registration completion rate',
+                'error': 'Failed to calculate vendor registration completion rate',
                 'total_notifications': 'unknown',
                 'registered_vendors': 'unknown'
             }
@@ -1219,9 +1208,7 @@ class VendorRegistrationTimeAPIView(APIView):
             import traceback
             logger.error(f"Traceback: {traceback.format_exc()}")
             error_details = {
-                'error': str(e),
-                'traceback': traceback.format_exc(),
-                'message': 'Failed to calculate vendor registration time',
+                'error': 'Failed to calculate vendor registration time',
                 'avg_registration_time': 'unknown',
                 'total_vendors_with_time': 'unknown'
             }
@@ -1349,7 +1336,7 @@ class VendorKPICategoriesAPIView(APIView):
             import traceback
             logger.error(f"Traceback: {traceback.format_exc()}")
             return Response(
-                {'error': str(e), 'message': 'Failed to fetch KPI categories'},
+                {'error': 'Failed to fetch KPI categories'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
@@ -1499,7 +1486,7 @@ class VendorDashboardExportPDFAPIView(APIView):
         except Exception as e:
             logger.error(f"Error in PDF export: {str(e)}")
             return Response(
-                {'error': str(e), 'message': 'Failed to export PDF'},
+                {'error': 'Failed to export PDF'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
@@ -1830,7 +1817,7 @@ class VendorDashboardExportExcelAPIView(APIView):
         except Exception as e:
             logger.error(f"Error in Excel export: {str(e)}")
             return Response(
-                {'error': str(e), 'message': 'Failed to export Excel'},
+                {'error': 'Failed to export Excel'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
@@ -1931,29 +1918,29 @@ class VendorDashboardExportExcelAPIView(APIView):
         
         # Write KPI data
         writer = csv.writer(csv_buffer)
-        writer.writerow(['Vendor KPI Dashboard Report'])
-        writer.writerow([f'Generated on: {datetime.now().strftime("%B %d, %Y at %I:%M %p")}'])
+        writer.writerow([sanitize_csv_cell('Vendor KPI Dashboard Report')])
+        writer.writerow([sanitize_csv_cell(f'Generated on: {datetime.now().strftime("%B %d, %Y at %I:%M %p")}')])
         writer.writerow([])
-        writer.writerow(['KPI SUMMARY'])
-        writer.writerow(['KPI Name', 'Value', 'Target', 'Category'])
+        writer.writerow([sanitize_csv_cell('KPI SUMMARY')])
+        writer.writerow([sanitize_csv_cell('KPI Name'), sanitize_csv_cell('Value'), sanitize_csv_cell('Target'), sanitize_csv_cell('Category')])
         
         for kpi in data.get('kpis', []):
             writer.writerow([
-                kpi.get('title', ''),
-                kpi.get('value', ''),
-                kpi.get('target', ''),
-                kpi.get('category', '')
+                sanitize_csv_cell(kpi.get('title', '')),
+                sanitize_csv_cell(kpi.get('value', '')),
+                sanitize_csv_cell(kpi.get('target', '')),
+                sanitize_csv_cell(kpi.get('category', ''))
             ])
         
         writer.writerow([])
-        writer.writerow(['ALERTS & NOTIFICATIONS'])
-        writer.writerow(['Alert Title', 'Description', 'Severity'])
+        writer.writerow([sanitize_csv_cell('ALERTS & NOTIFICATIONS')])
+        writer.writerow([sanitize_csv_cell('Alert Title'), sanitize_csv_cell('Description'), sanitize_csv_cell('Severity')])
         
         for alert in data.get('alerts', []):
             writer.writerow([
-                alert.get('title', ''),
-                alert.get('description', ''),
-                alert.get('severity', '')
+                sanitize_csv_cell(alert.get('title', '')),
+                sanitize_csv_cell(alert.get('description', '')),
+                sanitize_csv_cell(alert.get('severity', ''))
             ])
         
         csv_content = csv_buffer.getvalue()

@@ -72,23 +72,14 @@ export class AuthManager {
   }
   
   setToken(token, refreshToken = null) {
-    // Store in memory or secure storage, not localStorage for sensitive tokens
-    sessionStorage.setItem(this.tokenKey, token);
-    if (refreshToken) {
-      sessionStorage.setItem(this.refreshTokenKey, refreshToken);
-    }
-    
-    // DISABLED: Auto logout is disabled - do not set automatic logout timer
-    // this.setSessionTimeout();
+    // Cookie-first: tokens are HttpOnly cookies; do not store in JS-accessible storage.
   }
   
   getToken() {
-    return sessionStorage.getItem(this.tokenKey);
+    return null;
   }
   
   removeToken() {
-    sessionStorage.removeItem(this.tokenKey);
-    sessionStorage.removeItem(this.refreshTokenKey);
     this.clearSessionTimeout();
   }
   
@@ -113,18 +104,8 @@ export class AuthManager {
   }
   
   isAuthenticated() {
-    const token = this.getToken();
-    if (!token) return false;
-    
-    // Check token expiration (if JWT)
-    try {
-      const payload = JSON.parse(atob(token.split('.')[1]));
-      const now = Date.now() / 1000;
-      return payload.exp > now;
-    } catch (e) {
-      // If not JWT or parsing fails, assume valid (server will validate)
-      return true;
-    }
+    // Cookie-first: JS cannot read tokens; fall back to shell auth flags.
+    return localStorage.getItem('isAuthenticated') === 'true';
   }
 }
 
@@ -178,15 +159,10 @@ export class SecureHttpClient {
         'Content-Type': 'application/json',
         ...options.headers
       },
+      credentials: 'include',
       timeout: this.timeout,
       ...options
     };
-    
-    // Add authentication token
-    const token = this.authManager.getToken();
-    if (token) {
-      config.headers['Authorization'] = `Bearer ${token}`;
-    }
     
     // Add CSRF protection
     config.headers = CSRFProtection.addCSRFHeader(config.headers);
@@ -234,6 +210,7 @@ export class SecureHttpClient {
         'localhost:8000',
         'localhost:3000',
         'grc-tprm.vardaands.com',
+        'test-riskavaire.vardaands.com',
         '127.0.0.1:8000',
         '127.0.0.1:3000'
       ];

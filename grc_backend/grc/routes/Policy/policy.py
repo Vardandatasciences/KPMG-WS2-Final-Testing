@@ -1191,11 +1191,35 @@ def framework_list(request):
                         }
 
                         # Security: Create framework approval record with parameterized queries
+                        # Enforce maker–checker: creator cannot be their own reviewer
+                        try:
+                            creator_id_int = int(creator_user_id)
+                            reviewer_id_int = int(reviewer_id) if reviewer_id is not None else None
+                        except (TypeError, ValueError):
+                            logger.warning("Invalid creator/reviewer id while creating framework approval from policy route")
+                            return Response(
+                                {"error": "Invalid user or reviewer id. Please contact an administrator."},
+                                status=status.HTTP_400_BAD_REQUEST
+                            )
+
+                        if reviewer_id_int is None:
+                            return Response(
+                                {"error": "Reviewer assignment required. Please select a reviewer and try again."},
+                                status=status.HTTP_400_BAD_REQUEST
+                            )
+
+                        if creator_id_int == reviewer_id_int:
+                            logger.warning(f"Self-approval attempt detected for framework ID {framework.FrameworkId} by user {creator_id_int}")
+                            return Response(
+                                {"error": "Self-approval is not allowed. Please select a different reviewer."},
+                                status=status.HTTP_400_BAD_REQUEST
+                            )
+
                         FrameworkApproval.objects.create(
                             FrameworkId=framework,
                             ExtractedData=extracted_data,
-                            UserId=creator_user_id,
-                            ReviewerId=reviewer_id,
+                            UserId=creator_id_int,
+                            ReviewerId=reviewer_id_int,
                             Version="u1",
                             ApprovedNot=None
                         )
@@ -2601,8 +2625,26 @@ def submit_policy_review(request, approval_id):
             else:
                 # Fallback to original ReviewerId if no current user
                 reviewer_id = approval.ReviewerId
+
+        # Enforce maker–checker: original creator cannot approve their own policy
+        try:
+            creator_id_int = int(approval.UserId) if approval.UserId is not None else None
+            reviewer_id_int = int(reviewer_id) if reviewer_id is not None else None
+        except (TypeError, ValueError):
+            logger.warning(f"Invalid creator/reviewer id while submitting policy review for approval {approval_id}")
+            return Response(
+                {"error": "Invalid reviewer id. Please contact an administrator."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if creator_id_int is not None and reviewer_id_int is not None and creator_id_int == reviewer_id_int:
+            logger.warning(f"Self-approval attempt detected for policy ID {approval.PolicyId.PolicyId} by user {creator_id_int}")
+            return Response(
+                {"error": "Creators are not permitted to approve their own policies. Please assign a different reviewer."},
+                status=status.HTTP_403_FORBIDDEN
+            )
         
-        debug_print(f"DEBUG: Creating policy approval with ReviewerId: {reviewer_id}, Version: {new_version}")
+        debug_print(f"DEBUG: Creating policy approval with ReviewerId: {reviewer_id_int}, Version: {new_version}")
            
         # Create a new record using Django ORM
         new_approval = PolicyApproval(
@@ -2610,14 +2652,14 @@ def submit_policy_review(request, approval_id):
             Identifier=approval.Identifier,  # Make sure Identifier is included
             ExtractedData=extracted_data,
             UserId=approval.UserId,  # Original policy creator
-            ReviewerId=reviewer_id,  # Current reviewer's ID
+            ReviewerId=reviewer_id_int,  # Current reviewer's ID (validated)
             ApprovedNot=approved_not,
             ApprovedDate=approved_date,  # Set approved date
             Version=new_version,
             FrameworkId=approval.PolicyId.FrameworkId
         )
         new_approval.save()
-        debug_print(f"Created new policy approval with ID: {new_approval.ApprovalId}, Version: {new_version}, ReviewerId: {reviewer_id}")
+        debug_print(f"Created new policy approval with ID: {new_approval.ApprovalId}, Version: {new_version}, ReviewerId: {reviewer_id_int}")
        
         # Update the policy status based on the approval decision
         try:
@@ -10542,13 +10584,32 @@ def _handle_policy_status_change_request(request, policy_id, reason, reviewer_id
     if not user_id:
         return Response({"error": "User not authenticated. Please login again."}, status=status.HTTP_401_UNAUTHORIZED)
     
-    # Use the selected reviewer_id from the frontend instead of overriding it
-    # Get reviewer email for the selected reviewer
-    reviewer_email = None
-    if reviewer_id:
-        reviewer_user = Users.objects.filter(tenant_id=tenant_id, UserId=reviewer_id).first()
-        if reviewer_user:
-            reviewer_email = reviewer_user.Email
+    # Validate reviewer assignment server-side (do not trust client input)
+    try:
+        creator_id_int = int(user_id)
+        reviewer_id_int = int(reviewer_id) if reviewer_id is not None else None
+    except (TypeError, ValueError):
+        logger.warning(f"Invalid creator/reviewer id while requesting policy status change for policy {policy_id}")
+        return Response(
+            {"error": "Invalid user or reviewer id. Please contact an administrator."},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    if reviewer_id_int is None:
+        return Response({"error": "Reviewer ID is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    if creator_id_int == reviewer_id_int:
+        logger.warning(f"Self-approval attempt detected for policy status change on policy {policy_id} by user {creator_id_int}")
+        return Response(
+            {"error": "Self-approval is not allowed. Please select a different reviewer."},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # Get reviewer from tenant-scoped backend lookup
+    reviewer_user = Users.objects.filter(tenant_id=tenant_id, UserId=reviewer_id_int).first()
+    if not reviewer_user:
+        return Response({"error": "Selected reviewer not found for your organization."}, status=status.HTTP_400_BAD_REQUEST)
+    reviewer_email = reviewer_user.Email
     
     reason = escape_html(reason)
     
@@ -10655,8 +10716,8 @@ def _handle_policy_status_change_request(request, policy_id, reason, reviewer_id
         policy_approval = PolicyApproval.objects.create(
             PolicyId=policy,
             ExtractedData=extracted_data,
-            UserId=user_id,
-            ReviewerId=reviewer_id,
+            UserId=creator_id_int,
+            ReviewerId=reviewer_id_int,
             Version=new_version,
             ApprovedNot=None,  # Not yet approved
             FrameworkId=policy.FrameworkId
@@ -10692,7 +10753,10 @@ def _handle_policy_status_change_request(request, policy_id, reason, reviewer_id
         "Status": "Under Review"
     }, status=status.HTTP_201_CREATED)
 
+# csrf_exempt must wrap the DRF view (outermost) or Postman/browser API clients get 403 CSRF HTML
+@csrf_exempt
 @api_view(['POST'])
+@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([PolicyApprovalWorkflowPermission])
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
@@ -10701,6 +10765,24 @@ def request_policy_status_change(request, policy_id):
     Request approval for changing a policy's status from Active to Inactive
     Creates a policy approval entry that needs to be approved by a reviewer
     """
+    # Debug: if you do NOT see this line in the runserver console, the request never reached this view (CSRF/middleware/routing).
+    logger.warning(
+        "[POLICY_STATUS_CHANGE] ENTER path=%s method=%s policy_id=%s has_auth=%s content_type=%s",
+        getattr(request, "path", ""),
+        request.method,
+        policy_id,
+        bool(request.headers.get("Authorization")),
+        request.META.get("CONTENT_TYPE", ""),
+    )
+    print(
+        "[POLICY_STATUS_CHANGE] ENTER",
+        request.path,
+        "policy_id=",
+        policy_id,
+        "Authorization=",
+        "yes" if request.headers.get("Authorization") else "no",
+    )
+
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
 

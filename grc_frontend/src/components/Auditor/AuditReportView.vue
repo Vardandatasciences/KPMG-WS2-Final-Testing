@@ -96,7 +96,7 @@
           </a>
           <p class="s3-url">{{ reportData.Report }}</p>
         </div>
-        <div v-else class="report-text" v-html="formatReportContent(reportData.Report)"></div>
+        <div v-else class="report-text" v-html="sanitizeReportHtml(formatReportContent(reportData.Report))"></div>
       </div>
 
       <!-- Evidence Section -->
@@ -189,6 +189,47 @@ function formatReportContent(content) {
     .replace(/\n/g, '<br>')
     .replace(/^/, '<p>')
     .replace(/$/, '</p>')
+}
+
+function sanitizeReportHtml(value) {
+  if (!value || typeof value !== 'string') {
+    return ''
+  }
+
+  try {
+    const parser = new DOMParser()
+    const doc = parser.parseFromString(value, 'text/html')
+
+    const dangerousSelectors = ['script', 'style', 'iframe', 'object', 'embed', 'link', 'meta']
+    dangerousSelectors.forEach(selector => {
+      doc.querySelectorAll(selector).forEach(el => el.remove())
+    })
+
+    const walk = (node) => {
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        const attrs = Array.from(node.attributes)
+        attrs.forEach(attr => {
+          const name = attr.name.toLowerCase()
+          const val = (attr.value || '').trim().toLowerCase()
+
+          if (name.startsWith('on')) {
+            node.removeAttribute(attr.name)
+          }
+          if ((name === 'href' || name === 'src') && val.startsWith('javascript:')) {
+            node.removeAttribute(attr.name)
+          }
+        })
+      }
+      node.childNodes.forEach(child => walk(child))
+    }
+
+    walk(doc.body)
+    return doc.body.innerHTML
+  } catch (e) {
+    const div = document.createElement('div')
+    div.textContent = String(value)
+    return div.innerHTML
+  }
 }
 
 function isS3Url(content) {

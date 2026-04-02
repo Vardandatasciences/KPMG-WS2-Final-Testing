@@ -78,7 +78,12 @@ ERROR HANDLING:
 import requests
 import os
 import json
+import re
+import ipaddress
+import socket
+from urllib.parse import urlparse
 from ...debug_utils import debug_print
+from ...utils.csv_security import sanitize_csv_dataset
 import mimetypes
 from typing import Dict, List, Optional, Union, Any
 import datetime
@@ -142,6 +147,183 @@ try:
 except ImportError:
     DJANGO_SETTINGS_AVAILABLE = False
     settings = None
+
+# Shared export payload limits (DoS guardrails)
+EXPORT_MAX_DATA_BYTES = 40 * 1024 * 1024
+EXPORT_MAX_RECORDS = 10_000
+EXPORT_MAX_NESTED_DEPTH = 8
+EXPORT_MAX_DICT_KEYS = 300
+EXPORT_MAX_LIST_ITEMS = 10_000
+EXPORT_MAX_STRING_LEN = 10_000
+TEMPLATE_TOKEN_RE = re.compile(r"(\{\{|\}\}|\{\%|\%\}|\{\#|\#\})")
+URL_CANDIDATE_RE = re.compile(r"(?i)\b(?:https?|ftp|file|gopher|dict|ldap|ldaps|smb|sftp)://[^\s<>'\"]+")
+SCRIPT_URL_RE = re.compile(r"(?i)\b(?:javascript|data|vbscript):")
+
+def _normalize_domain_entries(raw_values: Any) -> set:
+    """Normalize allowlist entries from settings/env into a lowercase set."""
+    if raw_values is None:
+        return set()
+    if isinstance(raw_values, str):
+        raw_values = [item.strip() for item in raw_values.split(",")]
+    if not isinstance(raw_values, (list, tuple, set)):
+        return set()
+    normalized = set()
+    for item in raw_values:
+        if item is None:
+            continue
+        value = str(item).strip().lower()
+        if value:
+            normalized.add(value.lstrip("."))
+    return normalized
+
+def _get_export_allowed_domains() -> set:
+    """
+    Resolve export URL allowlist from settings/env.
+    Priority:
+      1) EXPORT_ALLOWED_DOMAINS
+      2) OUTBOUND_ALLOWED_DOMAINS
+      3) TRUSTED_EVIDENCE_URL_HOSTS / TRUSTED_EVIDENCE_URL_HOST_SUFFIXES
+    """
+    domain_values: List[Any] = []
+
+    settings_obj = settings if DJANGO_SETTINGS_AVAILABLE else None
+    if settings_obj is not None:
+        domain_values.extend([
+            getattr(settings_obj, "EXPORT_ALLOWED_DOMAINS", None),
+            getattr(settings_obj, "OUTBOUND_ALLOWED_DOMAINS", None),
+            getattr(settings_obj, "TRUSTED_EVIDENCE_URL_HOSTS", None),
+            getattr(settings_obj, "TRUSTED_EVIDENCE_URL_HOST_SUFFIXES", None),
+        ])
+
+    domain_values.extend([
+        os.environ.get("EXPORT_ALLOWED_DOMAINS"),
+        os.environ.get("OUTBOUND_ALLOWED_DOMAINS"),
+    ])
+
+    allowed: set = set()
+    for entry in domain_values:
+        allowed.update(_normalize_domain_entries(entry))
+    return allowed
+
+def _host_matches_allowlist(hostname: str, allowed_domains: set) -> bool:
+    """Check exact/suffix host match against allowlist domains."""
+    if not hostname:
+        return False
+    host = hostname.strip().lower().rstrip(".")
+    if not host:
+        return False
+    if host in allowed_domains:
+        return True
+    for domain in allowed_domains:
+        if host.endswith(f".{domain}"):
+            return True
+    return False
+
+def _is_private_or_internal_host(hostname: str) -> bool:
+    """Return True if hostname resolves to internal/private/link-local/loopback."""
+    if not hostname:
+        return True
+
+    host = hostname.strip().lower()
+    if host in {"localhost", "localhost.localdomain"}:
+        return True
+
+    try:
+        ip_obj = ipaddress.ip_address(host)
+        return (
+            ip_obj.is_private
+            or ip_obj.is_loopback
+            or ip_obj.is_link_local
+            or ip_obj.is_multicast
+            or ip_obj.is_reserved
+            or ip_obj.is_unspecified
+        )
+    except ValueError:
+        pass
+
+    try:
+        resolved = socket.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)
+    except Exception:
+        # Fail closed for unknown/unresolvable hosts.
+        return True
+
+    for entry in resolved:
+        try:
+            addr = entry[4][0]
+            ip_obj = ipaddress.ip_address(addr)
+            if (
+                ip_obj.is_private
+                or ip_obj.is_loopback
+                or ip_obj.is_link_local
+                or ip_obj.is_multicast
+                or ip_obj.is_reserved
+                or ip_obj.is_unspecified
+            ):
+                return True
+        except Exception:
+            return True
+
+    return False
+
+def _sanitize_potential_urls(text: str) -> str:
+    """Neutralize risky URL/script patterns to reduce SSRF risk during exports."""
+    if not text:
+        return text
+
+    sanitized = SCRIPT_URL_RE.sub("[blocked-uri]:", text)
+    allowed_domains = _get_export_allowed_domains()
+
+    def _replace_match(match):
+        raw_url = match.group(0)
+        try:
+            parsed = urlparse(raw_url)
+            host = parsed.hostname
+            if parsed.scheme.lower() not in {"http", "https"}:
+                return "[blocked-url]"
+            if _is_private_or_internal_host(host):
+                return "[blocked-url]"
+            # If allowlist is configured, permit only listed domains.
+            if allowed_domains and not _host_matches_allowlist(host, allowed_domains):
+                return "[blocked-url]"
+            return raw_url
+        except Exception:
+            return "[blocked-url]"
+
+    return URL_CANDIDATE_RE.sub(_replace_match, sanitized)
+
+def _sanitize_export_scalar(value):
+    """Sanitize scalar values before export rendering."""
+    if value is None:
+        return ""
+    if isinstance(value, (bool, int, float)):
+        return value
+    text = str(value).replace("\x00", "")
+    text = TEMPLATE_TOKEN_RE.sub("", text)
+    text = _sanitize_potential_urls(text)
+    if len(text) > EXPORT_MAX_STRING_LEN:
+        text = text[:EXPORT_MAX_STRING_LEN]
+    return text
+
+def _sanitize_export_payload(value, depth=0):
+    """Recursively sanitize payload and enforce structural limits."""
+    if depth > EXPORT_MAX_NESTED_DEPTH:
+        raise ValueError("Export payload too deeply nested")
+
+    if isinstance(value, dict):
+        if len(value) > EXPORT_MAX_DICT_KEYS:
+            raise ValueError("Export payload object has too many keys")
+        sanitized = {}
+        for key, nested_value in value.items():
+            safe_key = _sanitize_export_scalar(key)
+            sanitized[safe_key] = _sanitize_export_payload(nested_value, depth + 1)
+        return sanitized
+
+    if isinstance(value, list):
+        if len(value) > EXPORT_MAX_LIST_ITEMS:
+            raise ValueError("Export payload list has too many items")
+        return [_sanitize_export_payload(item, depth + 1) for item in value]
+
+    return _sanitize_export_scalar(value)
 
 def convert_safe_string(value):
     """Convert Django SafeString objects to regular strings for MySQL compatibility"""
@@ -4340,6 +4522,9 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
             # Check if format is supported by microservice
             if export_format.lower() not in microservice_supported_formats:
                 raise ValueError(f"Format {export_format} is not supported by the S3 microservice. Use local export instead.")
+            # SSRF mitigation: force PDF rendering to local reportlab path.
+            if export_format.lower() == 'pdf':
+                raise ValueError("PDF export via S3 microservice is disabled for SSRF mitigation. Use local export.")
             
             record_count = len(data) if isinstance(data, list) else 1
             debug_print(f"📊 Exporting {record_count} records as {export_format.upper()} via Direct...")
@@ -4477,6 +4662,9 @@ def export_to_excel(data):
         debug_print(f"   ├─ Data type: {type(data)}")
         debug_print(f"   ├─ Is list: {isinstance(data, list)}")
         debug_print(f"   ├─ Is dict: {isinstance(data, dict)}")
+
+        # Formula-injection hardening for spreadsheet exports (Excel also evaluates formulas).
+        data = sanitize_csv_dataset(data)
         
         # Convert data to DataFrame
         if isinstance(data, list):
@@ -4555,9 +4743,21 @@ def export_to_excel(data):
                     # Write data with safe handling
                     if len(df) > 0:
                         for row_num in range(len(df)):
-                            row_format = row_format_even if (row_num + 1) % 2 == 0 else row_format_odd
+                            row_format = (
+                                row_format_even if (row_num + 1) % 2 == 0 else row_format_odd
+                            )
                             for col_num in range(len(df.columns)):
                                 cell_value = df.iloc[row_num, col_num]
+
+                                # Normalize unsupported types before writing
+                                if isinstance(cell_value, dict):
+                                    # Prefer a stable string representation over raw dict
+                                    cell_value = json.dumps(cell_value, ensure_ascii=False)
+                                elif isinstance(cell_value, (list, tuple, set)):
+                                    cell_value = ", ".join(
+                                        [str(item) for item in cell_value]
+                                    )
+
                                 if cell_value is None or cell_value == '':
                                     cell_value = ''
                                 elif pd.isna(cell_value):
@@ -4565,6 +4765,7 @@ def export_to_excel(data):
                                 elif isinstance(cell_value, (float, np.floating)):
                                     if np.isnan(cell_value) or np.isinf(cell_value):
                                         cell_value = ''
+
                                 worksheet.write(row_num + 1, col_num, cell_value, row_format)
                     else:
                         # Empty DataFrame - just write headers
@@ -4663,6 +4864,9 @@ def export_to_csv(data):
         # Clean the data: Replace NaN, None, and INF values with empty string
         df = df.replace([np.nan, np.inf, -np.inf, None], '')
         
+        sanitized_data = sanitize_csv_dataset(data)
+        df = pd.DataFrame(sanitized_data)
+
         output = BytesIO()
         df.to_csv(output, index=False, encoding='utf-8')
         output.seek(0)
@@ -4853,10 +5057,21 @@ def export_data(data=None, file_format='xlsx', user_id='user123', options=None, 
         debug_print(f"ℹ️  [EXPORT] No options provided, using defaults")
     else:
         debug_print(f"ℹ️  [EXPORT] Options received: {options}")
+
+    # Centralized sanitization for every export caller (incident/compliance/risk/etc.).
+    data = _sanitize_export_payload(data)
+    if isinstance(data, list) and len(data) > EXPORT_MAX_RECORDS:
+        raise ValueError(f"Export record count exceeds allowed maximum ({EXPORT_MAX_RECORDS})")
+    options = _sanitize_export_payload(options)
+
+    # CSV formula injection hardening must apply before both local and microservice paths.
+    # Otherwise small CSV exports routed through microservice could bypass local CSV sanitizer.
+    if str(file_format).lower() == 'csv':
+        data = sanitize_csv_dataset(data)
     
     # Validate data size to prevent 413 errors
     data_size = len(str(data))
-    max_size = 40 * 1024 * 1024  # 40MB limit
+    max_size = EXPORT_MAX_DATA_BYTES  # 40MB limit
     record_count = len(data) if isinstance(data, list) else 1
     
     debug_print(f"\n📊 [EXPORT] Data validation:")
@@ -4938,6 +5153,8 @@ def export_data(data=None, file_format='xlsx', user_id='user123', options=None, 
         format_supported_by_microservice = file_format.lower() in microservice_supported
         
         use_local_export = (
+            file_format.lower() == 'pdf' or  # SSRF mitigation: avoid remote HTML/PDF rendering
+            file_format.lower() == 'csv' or  # Force local sanitized CSV generation
             not format_supported_by_microservice or  # xlsx always local
             record_count > 1000 or  # More than 1000 records
             data_size_mb > 1.0 or  # More than 1MB of data

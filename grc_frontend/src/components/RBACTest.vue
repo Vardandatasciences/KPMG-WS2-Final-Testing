@@ -146,7 +146,7 @@ export default {
       this.testResult = null
       
       try {
-        const token = localStorage.getItem('access_token')
+        const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token')
         if (!token) {
           throw new Error('No access token found')
         }

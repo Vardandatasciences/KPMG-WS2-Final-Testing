@@ -1452,8 +1452,8 @@ export default {
     this._colorblindObserver = observer;
     
     // Check authentication status first
-    const token = localStorage.getItem('access_token');
-    const isLoggedIn = localStorage.getItem('is_logged_in') === 'true';
+    const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
+    const isLoggedIn = (sessionStorage.getItem('is_logged_in') || localStorage.getItem('is_logged_in')) === 'true';
     console.log('Authentication status:', { isLoggedIn, hasToken: !!token });
     
     if (!token) {
@@ -1513,7 +1513,7 @@ export default {
         console.log("Fetching active risks data from backend...");
         console.log("API endpoint:", API_ENDPOINTS.RISK_ACTIVE_RISKS_KPI);
         
-        const token = localStorage.getItem('access_token');
+        const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
         const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
         
         // Make sure this URL points to where your Django server is running

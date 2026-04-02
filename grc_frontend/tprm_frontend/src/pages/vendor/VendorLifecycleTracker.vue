@@ -282,6 +282,11 @@ import { PopupService } from '@/popup/popupService'
 import { useNotifications } from '@/composables/useNotifications'
 import notificationService from '@/services/notificationService'
 import { getApiV1Url } from '@/utils/backendEnv'
+
+const sanitizeCSVCell = (value) => {
+  const text = String(value ?? '')
+  return /^\s*[=+\-@]/.test(text) ? `'${text}` : text
+}
 const { showSuccess, showError, showWarning, showInfo } = useNotifications()
 
 // Component state
@@ -378,8 +383,16 @@ const exportTimeline = async () => {
     // Create CSV content
     const csvContent = [
       'Stage Name,Stage Code,Status,Started At,Ended At,Duration (Days),Approval Required',
-      ...vendorTimeline.value.map(stage => 
-        `"${stage.stage_name}","${stage.stage_code}","${stage.status}","${stage.started_at || ''}","${stage.ended_at || ''}","${stage.duration?.days || ''}","${stage.approval_required ? 'Yes' : 'No'}"`
+      ...vendorTimeline.value.map(stage =>
+        [
+          stage.stage_name,
+          stage.stage_code,
+          stage.status,
+          stage.started_at || '',
+          stage.ended_at || '',
+          stage.duration?.days || '',
+          stage.approval_required ? 'Yes' : 'No'
+        ].map(cell => `"${String(sanitizeCSVCell(cell)).replace(/"/g, '""')}"`).join(',')
       )
     ].join('\n')
     

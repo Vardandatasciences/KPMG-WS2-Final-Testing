@@ -2620,7 +2620,7 @@ export default {
       }
       
       // Try localStorage user_id (primary source for JWT authentication)
-      userId = localStorage.getItem('user_id');
+      userId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id');
       if (userId) {
         console.log('Using userId from localStorage user_id:', userId);
         return userId;
@@ -2651,7 +2651,7 @@ export default {
       }
       
       // Try localStorage user object
-      const localUser = localStorage.getItem('user');
+      const localUser = sessionStorage.getItem('user') || localStorage.getItem('user');
       console.log('Local user data:', localUser);
       if (localUser) {
         try {
@@ -2668,9 +2668,9 @@ export default {
       }
       
       // Check for username in localStorage that might help identify the user
-      const userName = localStorage.getItem('user_name');
-      const fullName = localStorage.getItem('fullName');
-      const username = localStorage.getItem('username');
+      const userName = sessionStorage.getItem('user_name') || localStorage.getItem('user_name');
+      const fullName = sessionStorage.getItem('fullName') || localStorage.getItem('fullName');
+      const username = sessionStorage.getItem('username') || localStorage.getItem('username');
       console.log('Additional user info - userName:', userName, 'fullName:', fullName, 'username:', username);
       
       // TEMPORARY FIX: Check if the current user is vikram.patel and use the correct user ID
@@ -2807,7 +2807,7 @@ export default {
       this.success = null
 
       try {
-        const userData = JSON.parse(localStorage.getItem('user') || '{}')
+        const userData = JSON.parse(sessionStorage.getItem('user') || localStorage.getItem('user') || '{}')
         
         // Here you would typically send the updated data to your backend
         // For now, we'll just update localStorage
@@ -2816,11 +2816,11 @@ export default {
         userData.email = this.form.email
         userData.phone = this.form.phone
 
-        localStorage.setItem('user', JSON.stringify(userData))
-        localStorage.setItem('user_name', `${this.form.firstName} ${this.form.lastName}`)
-        localStorage.setItem('fullName', `${this.form.firstName} ${this.form.lastName}`)
-        localStorage.setItem('username', `${this.form.firstName} ${this.form.lastName}`)
-        localStorage.setItem('user_email', this.form.email)
+        sessionStorage.setItem('user', JSON.stringify(userData))
+        sessionStorage.setItem('user_name', `${this.form.firstName} ${this.form.lastName}`)
+        sessionStorage.setItem('fullName', `${this.form.firstName} ${this.form.lastName}`)
+        sessionStorage.setItem('username', `${this.form.firstName} ${this.form.lastName}`)
+        sessionStorage.setItem('user_email', this.form.email)
 
         this.success = 'Personal information updated successfully!'
         window.dispatchEvent(new Event('userDataUpdated'))
@@ -2847,7 +2847,7 @@ export default {
 
     // For now, we'll just update localStorage
 
-    const userData = JSON.parse(localStorage.getItem('user') || '{}')
+    const userData = JSON.parse(sessionStorage.getItem('user') || localStorage.getItem('user') || '{}')
 
     userData.departmentName = this.businessInfo.departmentName
 
@@ -2859,11 +2859,9 @@ export default {
 
     userData.departmentHead = this.businessInfo.departmentHead
 
-    localStorage.setItem('user', JSON.stringify(userData))
-
-    localStorage.setItem('user_name', this.form.username)
-
-    localStorage.setItem('user_email', this.form.email)
+    sessionStorage.setItem('user', JSON.stringify(userData))
+    sessionStorage.setItem('user_name', this.form.username)
+    sessionStorage.setItem('user_email', this.form.email)
 
     this.success = 'Business information updated successfully!'
 
@@ -2896,15 +2894,10 @@ export default {
       this.error = null
 
       try {
-        const { API_BASE_URL } = await import('../../config/api.js');
-        const axios = (await import('axios')).default;
-        
-        const response = await axios.post(
-          `${API_BASE_URL}/api/send-otp/`,
-          {
-            Email: this.form.email
-          }
-        )
+        const { axiosInstance, API_ENDPOINTS } = await import('../../config/api.js');
+        const response = await axiosInstance.post(API_ENDPOINTS.SEND_OTP, {
+          Email: this.form.email
+        })
 
         if (response.data.success) {
           const successMsg = 'OTP sent successfully to your email. Please check your inbox.'
@@ -2979,18 +2972,14 @@ export default {
           return
         }
 
-        // First verify the OTP
+        const { axiosInstance, API_ENDPOINTS } = await import('../../config/api.js');
+
+        // First verify the OTP (credentialed requests so Django session matches send-otp → verify → update)
         try {
-          const { API_BASE_URL } = await import('../../config/api.js');
-          const axios = (await import('axios')).default;
-          
-          const verifyResponse = await axios.post(
-            `${API_BASE_URL}/api/verify-otp/`,
-            {
-              Email: this.form.email,
-              otp: this.form.otp
-            }
-          )
+          const verifyResponse = await axiosInstance.post(API_ENDPOINTS.VERIFY_OTP, {
+            Email: this.form.email,
+            otp: this.form.otp
+          })
 
           if (!verifyResponse.data.success) {
             const errorMsg = verifyResponse.data.message || 'OTP verification failed. Please try again.'
@@ -3006,18 +2995,11 @@ export default {
           return
         }
 
-        // Now update the password
-        const { API_BASE_URL } = await import('../../config/api.js');
-        const axios = (await import('axios')).default;
-        
-        const response = await axios.post(
-          `${API_BASE_URL}/api/update-password/`,
-          {
-            Email: this.form.email,
-            otp: this.form.otp,
-            new_password: this.form.newPassword
-          }
-        )
+        const response = await axiosInstance.post(API_ENDPOINTS.UPDATE_PASSWORD, {
+          Email: this.form.email,
+          otp: this.form.otp,
+          new_password: this.form.newPassword
+        })
 
         if (response.data.success) {
           const successMsg = response.data.message || 'Password updated successfully!'
@@ -3354,7 +3336,7 @@ export default {
        try {
          const { API_BASE_URL } = await import('../../config/api.js');
          const axios = (await import('axios')).default;
-         const accessToken = localStorage.getItem('access_token');
+         const accessToken = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
 
          const response = await axios.put(
            `${API_BASE_URL}/api/user-permissions/${this.selectedUserId}/update/`,
@@ -3409,7 +3391,7 @@ export default {
        this.allUsersSuccess = null;
        
        try {
-         const accessToken = localStorage.getItem('access_token');
+         const accessToken = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
          const headers = {
            'Content-Type': 'application/json',
            'X-Requested-With': 'XMLHttpRequest'
@@ -3458,7 +3440,7 @@ export default {
        user.IsActive = newStatus;
        
        try {
-         const accessToken = localStorage.getItem('access_token');
+         const accessToken = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
          const headers = {
            'Content-Type': 'application/json',
            'X-Requested-With': 'XMLHttpRequest'
@@ -3538,11 +3520,11 @@ export default {
           try {
             console.log('Making API call to:', '/api/register/');
             console.log('Request data:', newUser);
-            console.log('Access token:', localStorage.getItem('access_token'));
+            console.log('Access token:', sessionStorage.getItem('access_token') || localStorage.getItem('access_token'));
             
             // Try with JWT first, then fallback to session-based auth
             let response;
-            const accessToken = localStorage.getItem('access_token');
+            const accessToken = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
             
             if (accessToken) {
               console.log('Using JWT authentication');
@@ -4356,7 +4338,7 @@ export default {
       },
  
       getConsentAuthHeaders() {
-        const token = localStorage.getItem('access_token');
+        const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
         return {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'

@@ -511,8 +511,8 @@ const selectExportFormatOption = (opt) => {
 // Add push notification function
 const sendPushNotification = async (notificationData) => {
   try {
-    // Get JWT token from localStorage
-    const token = localStorage.getItem('access_token');
+    // Get JWT token from browser storage (session-first)
+    const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
     const headers = {
       'Content-Type': 'application/json',
     };

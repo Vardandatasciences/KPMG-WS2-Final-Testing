@@ -257,9 +257,14 @@ class JWTAuthentication(BaseAuthentication):
         
         try:
             token = auth_header.split(' ')[1]
-            # Use JWT_SECRET_KEY from settings
-            secret_key = getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
-            payload = jwt.decode(token, secret_key, algorithms=['HS256'])
+            verification_key = getattr(settings, 'JWT_VERIFYING_KEY', None) or getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
+            payload = jwt.decode(
+                token,
+                verification_key,
+                algorithms=getattr(settings, 'JWT_ALLOWED_ALGORITHMS', [getattr(settings, 'JWT_ALGORITHM', 'RS256')]),
+                issuer=getattr(settings, 'JWT_ISSUER', None),
+                audience=getattr(settings, 'JWT_AUDIENCE', None),
+            )
             user_id = payload.get('user_id')
             
             if user_id:
@@ -2046,9 +2051,37 @@ def review_contract_audit(request, audit_id):
             audit = ContractAudit.objects.get(audit_id=audit_id, tenant_id=tenant_id)
         else:
             audit = ContractAudit.objects.get(audit_id=audit_id)
+
         action = request.data.get('action', 'approve')
         comments = request.data.get('comments', '')
-        
+
+        # Enforce maker–checker: assignee cannot review/approve their own contract audit
+        try:
+            assignee_id_int = int(audit.assignee_id) if getattr(audit, 'assignee_id', None) is not None else None
+            current_user_id = getattr(request.user, 'id', None) or getattr(request.user, 'userid', None) or getattr(request.user, 'UserId', None)
+            current_user_id_int = int(current_user_id) if current_user_id is not None else None
+        except (TypeError, ValueError):
+            logger = logging.getLogger(__name__)
+            logger.warning("[Contract Audit Review] Invalid assignee or reviewer id while reviewing contract audit")
+            return Response(
+                {'error': 'Invalid reviewer id. Please contact an administrator.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if current_user_id_int is None:
+            return Response(
+                {'error': 'User authentication required to review contract audits'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+
+        if action == 'approve' and assignee_id_int is not None and assignee_id_int == current_user_id_int:
+            logger = logging.getLogger(__name__)
+            logger.warning(f"[Contract Audit Review] Self-approval attempt detected for contract audit {audit_id} by user {current_user_id_int}")
+            return Response(
+                {'error': 'Self-approval is not allowed. Please assign a different reviewer for this contract audit.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
         if action == 'approve':
             audit.review_status = 'approved'
             audit.status = 'completed'
@@ -2056,7 +2089,7 @@ def review_contract_audit(request, audit_id):
         else:
             audit.review_status = 'rejected'
             audit.status = 'rejected'
-        
+
         audit.review_comments = comments
         audit.review_date = timezone.now().date()
         audit.save()

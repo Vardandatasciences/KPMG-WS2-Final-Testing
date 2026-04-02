@@ -500,8 +500,6 @@ export default {
   },
 
   mounted() {
-    // Extract session ID from URL/localStorage first
-    this.extractSessionId();
     // Handle query params (which may trigger status check)
     this.handleQueryParams();
     // Also do initial status check
@@ -512,13 +510,7 @@ export default {
     async checkConnectionStatus() {
       try {
         console.log('[SENTINEL] Checking connection status...');
-        // Include session_id in query params if available (for local dev workaround)
-        let url = API_ENDPOINTS.SENTINEL_STATUS;
-        if (this.sessionId) {
-          url += (url.includes('?') ? '&' : '?') + `session_id=${this.sessionId}`;
-          console.log('[SENTINEL] Using session ID from URL:', this.sessionId.substring(0, 20) + '...');
-        }
-        const response = await this.axiosInstance.get(url);
+        const response = await this.axiosInstance.get(API_ENDPOINTS.SENTINEL_STATUS);
         console.log('[SENTINEL] Status response:', response.data);
         this.isSentinelConnected = response.data.connected;
         this.userInfo = response.data.userInfo;
@@ -547,12 +539,7 @@ export default {
       try {
         // Include timeRange in the API call
         const timeRangeDays = this.filters.timeRange || '30';
-        // Include session_id if available (same as status check) so backend can load correct session
-        let url = `${API_ENDPOINTS.SENTINEL_INCIDENTS}?days=${timeRangeDays}`;
-        if (this.sessionId) {
-          url += `&session_id=${this.sessionId}`;
-          console.log('[SENTINEL] Loading incidents with session ID:', this.sessionId.substring(0, 20) + '...');
-        }
+        const url = `${API_ENDPOINTS.SENTINEL_INCIDENTS}?days=${timeRangeDays}`;
         const response = await this.axiosInstance.get(url);
         console.log('[SENTINEL] Raw response:', response.data);
         const incidentsData = response.data.alerts || response.data.incidents || [];
@@ -601,17 +588,7 @@ export default {
 
     async disconnectSentinel() {
       try {
-        // Include session_id so backend can disconnect the correct Sentinel session
-        let url = API_ENDPOINTS.SENTINEL_DISCONNECT;
-        if (this.sessionId) {
-          url += (url.includes('?') ? '&' : '?') + `session_id=${this.sessionId}`;
-          console.log('[SENTINEL] Disconnecting with session ID:', this.sessionId.substring(0, 20) + '...');
-        }
-        await this.axiosInstance.get(url);
-
-        // Clear local session tracking
-        this.sessionId = null;
-        localStorage.removeItem('sentinel_session_id');
+        await this.axiosInstance.get(API_ENDPOINTS.SENTINEL_DISCONNECT);
 
         this.isSentinelConnected = false;
         this.userInfo = null;
@@ -688,26 +665,6 @@ export default {
       }, 5000);
     },
 
-    extractSessionId() {
-      const urlParams = new URLSearchParams(window.location.search);
-      
-      // Extract session_id from URL if present (for local dev workaround)
-      const sessionId = urlParams.get('session_id');
-      if (sessionId) {
-        this.sessionId = sessionId;
-        console.log('[SENTINEL] Extracted session ID from URL:', sessionId.substring(0, 20) + '...');
-        // Store in localStorage as backup
-        localStorage.setItem('sentinel_session_id', sessionId);
-      } else {
-        // Try to get from localStorage as fallback
-        const storedSessionId = localStorage.getItem('sentinel_session_id');
-        if (storedSessionId) {
-          this.sessionId = storedSessionId;
-          console.log('[SENTINEL] Using session ID from localStorage:', storedSessionId.substring(0, 20) + '...');
-        }
-      }
-    },
-
     async handleQueryParams() {
       const urlParams = new URLSearchParams(window.location.search);
       
@@ -731,9 +688,6 @@ export default {
         }
       } else if (urlParams.get('disconnected') === 'sentinel') {
         this.showAlert('alert-info', 'Disconnected from Microsoft Sentinel.', 'fas fa-info-circle');
-        // Clear session ID on disconnect
-        this.sessionId = null;
-        localStorage.removeItem('sentinel_session_id');
         // Update connection status after disconnect
         await this.checkConnectionStatus();
       } else if (urlParams.get('error')) {

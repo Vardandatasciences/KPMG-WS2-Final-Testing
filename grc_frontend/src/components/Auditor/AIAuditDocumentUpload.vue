@@ -3918,7 +3918,7 @@ export default {
         console.log('🔍 Policy changed to:', this.selectedPolicyId, 'Type:', typeof this.selectedPolicyId)
         try {
           // Get JWT token for authentication
-          const token = localStorage.getItem('access_token')
+          const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token')
           const headers = { 'Content-Type': 'application/json' }
           if (token) {
             headers['Authorization'] = `Bearer ${token}`
@@ -6026,7 +6026,7 @@ export default {
         }
         
         // Check authentication status
-        const token = localStorage.getItem('access_token')
+        const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token')
         if (!token) {
           console.warn('No JWT token found, cannot start AI processing')
           this.$popup?.error('Authentication required. Please log in again.')

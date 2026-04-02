@@ -41,9 +41,14 @@ class JWTAuthentication(BaseAuthentication):
         
         try:
             token = auth_header.split(' ')[1]
-            # Use JWT_SECRET_KEY from settings
-            secret_key = getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
-            payload = jwt.decode(token, secret_key, algorithms=['HS256'])
+            verification_key = getattr(settings, 'JWT_VERIFYING_KEY', None) or getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
+            payload = jwt.decode(
+                token,
+                verification_key,
+                algorithms=getattr(settings, 'JWT_ALLOWED_ALGORITHMS', [getattr(settings, 'JWT_ALGORITHM', 'RS256')]),
+                issuer=getattr(settings, 'JWT_ISSUER', None),
+                audience=getattr(settings, 'JWT_AUDIENCE', None),
+            )
             user_id = payload.get('user_id')
             
             if user_id:
@@ -1001,23 +1006,45 @@ def approve_contract(request, approval_id):
         # Check if user is the assigner (handle both int and string comparisons)
         current_user_id = getattr(request.user, 'userid', None)
         assigner_id = approval.assigner_id
-        
+
         # Normalize both IDs for comparison
         try:
             current_user_id_int = int(current_user_id) if current_user_id else None
             assigner_id_int = int(assigner_id) if assigner_id else None
-            if current_user_id_int != assigner_id_int:
-                return Response({
-                    'success': False,
-                    'error': 'You can only approve contracts you assigned'
-                }, status=status.HTTP_403_FORBIDDEN)
         except (ValueError, TypeError):
-            # Fallback to string comparison
-            if str(current_user_id) != str(assigner_id):
-                return Response({
-                    'success': False,
-                    'error': 'You can only approve contracts you assigned'
-                }, status=status.HTTP_403_FORBIDDEN)
+            current_user_id_int = None
+            assigner_id_int = None
+
+        # Enforce maker–checker: the user who created the contract terms/clauses should not approve their own content
+        try:
+            # Try to derive creator from related contract object where applicable
+            creator_id_int = None
+            if approval.object_type == 'CONTRACT_CREATION' and approval.object_id:
+                from tprm_backend.contracts.models import VendorContract
+                try:
+                    contract_obj = VendorContract.objects.get(contract_id=approval.object_id)
+                    creator_id_int = int(getattr(contract_obj, 'contract_owner', None)) if getattr(contract_obj, 'contract_owner', None) is not None else None
+                except VendorContract.DoesNotExist:
+                    creator_id_int = None
+        except Exception:
+            creator_id_int = None
+
+        # First, enforce "only assigner can approve"
+        if (current_user_id_int is not None and assigner_id_int is not None and current_user_id_int != assigner_id_int) or (
+            current_user_id_int is None and str(current_user_id) != str(assigner_id)
+        ):
+            return Response({
+                'success': False,
+                'error': 'You can only approve contracts you assigned'
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        # Then enforce maker–checker: prevent creator from approving their own contract
+        if creator_id_int is not None and current_user_id_int is not None and creator_id_int == current_user_id_int:
+            logger.warning(f"[ContractApproval] Self-approval attempt detected for approval {approval_id} by user {creator_id_int}")
+            return Response({
+                'success': False,
+                'error': 'Self-approval is not allowed. Please assign a different approver for this contract.'
+            }, status=status.HTTP_403_FORBIDDEN)
         
         # Update approval status to APPROVED and set approved_date
         approval.status = 'APPROVED'

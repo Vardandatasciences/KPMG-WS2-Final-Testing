@@ -12,7 +12,7 @@ const API_URLS = {
   // AWS: Use domain without port - nginx proxies /api/ to localhost:8000/api/
   aws: 'https://riskavaire.vardaands.com',
   local: '',
-  development: 'http://127.0.0.1:8000'
+  development: 'http://localhost:8000'
 };
 
 // CRITICAL: Prevent webpack constant folding by using runtime evaluation
@@ -845,14 +845,9 @@ export const createAxiosInstance = (baseURL = API_BASE_URL) => {
     xsrfHeaderName: 'X-CSRFToken'
   });
 
-  // Add JWT token to requests
+  // Cookie-first auth: rely on HttpOnly cookies (no JS-accessible tokens).
   instance.interceptors.request.use(
     (config) => {
-      const token = localStorage.getItem('access_token');
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-        console.log(`🔐 [API] Adding JWT token to request: ${config.method.toUpperCase()} ${config.url}`);
-      }
       return config;
     },
     (error) => {

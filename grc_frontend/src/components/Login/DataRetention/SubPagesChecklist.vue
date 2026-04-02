@@ -289,7 +289,7 @@ export default {
       try {
         const { API_BASE_URL } = await import('../../../config/api.js');
         const axios = (await import('axios')).default;
-        const token = localStorage.getItem('access_token');
+        const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
         
         const response = await axios.get(
           `${API_BASE_URL}/api/retention/page-configs/`,
@@ -374,8 +374,8 @@ export default {
       try {
         const { API_BASE_URL } = await import('../../../config/api.js');
         const axios = (await import('axios')).default;
-        const token = localStorage.getItem('access_token');
-        const userId = localStorage.getItem('user_id') || sessionStorage.getItem('userId');
+        const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
+        const userId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || sessionStorage.getItem('userId');
         
         const pagesForModule = this.getSubPagesForModule(this.selectedModule);
         const configsToSave = pagesForModule

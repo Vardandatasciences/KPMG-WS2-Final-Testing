@@ -270,6 +270,10 @@ class Users(EncryptedFieldsMixin, models.Model):
     UpdatedAt = models.DateTimeField(auto_now=True)
     # Changed Email from EmailField to CharField to store encrypted data
     Email = models.CharField(max_length=1000)  # Increased for encryption support
+    # Deterministic uniqueness keys (not encrypted). Used for safe lookups + DB unique constraints.
+    # Hash is computed from normalized plaintext identifiers (lower/strip).
+    username_hash = models.CharField(max_length=64, null=True, blank=True, db_index=True)
+    email_hash = models.CharField(max_length=64, null=True, blank=True, db_index=True)
     FirstName=models.CharField(max_length=255)
     LastName=models.CharField(max_length=255)
     # PhoneNumber and Address will be encrypted before storage
@@ -285,6 +289,36 @@ class Users(EncryptedFieldsMixin, models.Model):
     retentionExpiry = models.DateField(null=True, blank=True)
     class Meta:
         db_table = 'users'
+
+    @staticmethod
+    def _normalize_identifier(value: str, *, kind: str) -> str:
+        if value is None:
+            return ''
+        value = str(value).strip()
+        # Enforce case-insensitive uniqueness to prevent bypass (e.g., User@x.com vs user@x.com)
+        value = value.lower()
+        return value
+
+    @classmethod
+    def compute_identifier_hash(cls, value: str, *, kind: str) -> str:
+        """
+        Compute a stable SHA-256 hex digest for username/email uniqueness enforcement.
+        """
+        import hashlib
+        normalized = cls._normalize_identifier(value, kind=kind)
+        return hashlib.sha256(normalized.encode('utf-8')).hexdigest()
+
+    def save(self, *args, **kwargs):
+        # Compute hashes from plaintext inputs BEFORE encryption mixin runs.
+        try:
+            if self.UserName and not self.username_hash:
+                self.username_hash = self.compute_identifier_hash(self.UserName, kind='username')
+            if self.Email and not self.email_hash:
+                self.email_hash = self.compute_identifier_hash(self.Email, kind='email')
+        except Exception:
+            # Never block persistence on hash computation; DB constraints will still guard once populated.
+            pass
+        super().save(*args, **kwargs)
     
     def __str__(self):
         return f"User {self.UserId} - {self.UserName}"

@@ -2759,7 +2759,7 @@ def get_request_with_stages(request, approval_id: str):
 
         print(f"Error fetching request with stages: {str(e)}")
 
-        return Response({'error': 'Failed to fetch request with stages', 'details': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'error': 'Failed to fetch request with stages'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 
@@ -3554,7 +3554,7 @@ def requester_final_decision(request, approval_id: str):
 
         print(f"Error saving requester final decision: {str(e)}")
 
-        return Response({'error': 'Failed to save final decision', 'details': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'error': 'Failed to save final decision'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 

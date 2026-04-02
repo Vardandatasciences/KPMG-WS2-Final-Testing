@@ -53,10 +53,14 @@ def decode_token(token_string):
         print("DECODING YOUR CURRENT TOKEN")
         print("=" * 70)
         
-        secret_key = getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
-        
-        # Decode without verification first to see payload
-        payload = jwt.decode(token_string, options={"verify_signature": False})
+        verification_key = getattr(settings, 'JWT_VERIFYING_KEY', None) or getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
+        payload = jwt.decode(
+            token_string,
+            verification_key,
+            algorithms=getattr(settings, 'JWT_ALLOWED_ALGORITHMS', [getattr(settings, 'JWT_ALGORITHM', 'RS256')]),
+            issuer=getattr(settings, 'JWT_ISSUER', None),
+            audience=getattr(settings, 'JWT_AUDIENCE', None),
+        )
         
         print("Token Payload:")
         for key, value in payload.items():

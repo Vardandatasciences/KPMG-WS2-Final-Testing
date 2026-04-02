@@ -88,7 +88,7 @@
         <!-- Step 2: Enter OTP -->
         <div v-if="currentStep === 2" class="step-content">
           <p class="step-description">
-            We've sent a 6-digit OTP to <strong>{{ email }}</strong>. Please enter it below.
+            We've sent a 6-digit OTP to <strong>{{ email || 'your registered email address' }}</strong>. Please enter it below.
           </p>
           
           <div class="input-group">
@@ -364,6 +364,16 @@ const showConfirmPassword = ref(false)
 const resendCooldown = ref(0)
 let cooldownTimer = null
 
+/** Build verify/reset payload: omit Email when only masked address is shown — backend uses session challenge. */
+const buildPasswordResetPayload = (extra = {}) => {
+  const raw = (fullEmail.value || email.value || '').trim()
+  const payload = { ...extra }
+  if (raw && !raw.includes('***')) {
+    payload.Email = raw
+  }
+  return payload
+}
+
 // Watch for modal opening and username changes
 watch(() => props.showModal, (newVal) => {
   if (newVal) {
@@ -412,21 +422,19 @@ const fetchUserEmail = async (username = null) => {
     })
     
     if (response.data.success) {
-      // Use masked email for display
-      email.value = response.data.email
-      // Store full email for API calls
-      fullEmail.value = response.data.full_email || response.data.email
-      
-      // Check if OTP was automatically sent
+      // Masked email for display only; never put masked value in fullEmail (verify uses session)
+      email.value = response.data.email || ''
+      fullEmail.value = response.data.full_email && !String(response.data.full_email).includes('***')
+        ? response.data.full_email
+        : ''
+
       if (response.data.otp_sent) {
-        // OTP was sent automatically, move to step 2
         currentStep.value = 2
         startResendCooldown()
-        console.log('✅ Email fetched and OTP sent automatically')
+        console.log('✅ OTP sent; advance to verification (session-bound on server)')
       } else {
-        // Email fetched but OTP not sent (error), show error message
-        errorMessage.value = response.data.message || 'Email found but failed to send OTP. Please try again.'
-        console.warn('⚠️ Email fetched but OTP not sent:', response.data.message)
+        errorMessage.value = response.data.message || 'Could not send OTP. Check your user ID or try again later.'
+        console.warn('⚠️ OTP not sent:', response.data.message)
       }
     } else {
       errorMessage.value = response.data.message || 'Could not find user with this username'
@@ -499,15 +507,12 @@ const sendOTP = async () => {
   
   // Check if email is masked (contains ***) - if so, we need to get full email first
   if (email.value.includes('***')) {
-    // Email is masked, need to fetch full email using username/ID
-    if (props.username) {
-      // Re-fetch with username to get full email
-      await fetchUserEmail()
-      return
-    } else {
-      errorMessage.value = 'Please enter your username or User ID to send OTP'
+    if (usernameInput.value || props.username) {
+      await fetchUserEmail(usernameInput.value || props.username)
       return
     }
+    errorMessage.value = 'Please enter your username or User ID to send OTP'
+    return
   }
   
   try {
@@ -549,13 +554,10 @@ const verifyOTP = async () => {
     isLoading.value = true
     errorMessage.value = ''
     
-    // Use full email for verification
-    const emailToUse = fullEmail.value || email.value
-    
-    const response = await axiosInstance.post(API_ENDPOINTS.VERIFY_OTP, {
-      Email: emailToUse,
-      otp: otp.value
-    })
+    const response = await axiosInstance.post(
+      API_ENDPOINTS.VERIFY_OTP,
+      buildPasswordResetPayload({ otp: otp.value })
+    )
     
     if (response.data.success) {
       currentStep.value = 3
@@ -589,13 +591,10 @@ const resetPassword = async () => {
     isLoading.value = true
     errorMessage.value = ''
     
-    // Use full email for password reset
-    const emailToUse = fullEmail.value || email.value
-    
-    const response = await axiosInstance.post(API_ENDPOINTS.RESET_PASSWORD, {
-      Email: emailToUse,
-      new_password: newPassword.value
-    })
+    const response = await axiosInstance.post(
+      API_ENDPOINTS.RESET_PASSWORD,
+      buildPasswordResetPayload({ new_password: newPassword.value })
+    )
     
     if (response.data.success) {
       currentStep.value = 4

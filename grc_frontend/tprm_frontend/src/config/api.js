@@ -10,7 +10,7 @@ const API_URLS = {
   // AWS: Use domain without port - nginx proxies /api/ to localhost:8000/api/
   aws: 'https://riskavaire.vardaands.com/api/tprm',
   local: 'http://127.0.0.1:8000/api/tprm',
-  development: 'http://127.0.0.1:8000/api/tprm'
+  development: 'http://localhost:8000/api/tprm'
 };
 
 // CRITICAL: Prevent webpack constant folding by using runtime evaluation
@@ -70,23 +70,18 @@ const buildApiUrl = (endpoint, baseUrl = API_CONFIG.RFP_APPROVAL_BASE) => {
   return `${baseUrl}${endpoint}`
 }
 
-// Helper function to get JWT token
-const getAuthToken = () => {
-  return localStorage.getItem('session_token') || 
-         localStorage.getItem('auth_token') || 
-         localStorage.getItem('access_token')
-}
+// Cookie-first auth: no JS-managed tokens
+const getAuthToken = () => null
 
 // Helper function for API calls with error handling and JWT authentication
 const apiCall = async (url, options = {}) => {
-  const token = getAuthToken()
   const { skipRedirect = false, ...fetchOptions } = options
   
   const defaultOptions = {
     headers: {
       'Content-Type': 'application/json',
-      ...(token && { 'Authorization': `Bearer ${token}` }),
     },
+    credentials: 'include',
     ...fetchOptions,
   }
 
@@ -97,10 +92,6 @@ const apiCall = async (url, options = {}) => {
     if (response.status === 401) {
       console.error('🔒 Authentication failed')
       if (!skipRedirect) {
-        localStorage.removeItem('session_token')
-        localStorage.removeItem('access_token')
-        localStorage.removeItem('refresh_token')
-        localStorage.removeItem('current_user')
         if (window.location.pathname !== '/login') {
           window.location.href = '/login'
           // Return a pending promise that never resolves to prevent further execution

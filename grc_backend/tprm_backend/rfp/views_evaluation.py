@@ -173,6 +173,12 @@ def save_evaluation_scores(request, response_id):
             return Response({
                 'error': 'evaluator_id is required'
             }, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            evaluator_id = int(evaluator_id)
+        except (TypeError, ValueError):
+            return Response({
+                'error': 'evaluator_id must be an integer'
+            }, status=status.HTTP_400_BAD_REQUEST)
         
         print(f"Evaluation scores: {evaluation_scores}")
         print(f"Comments: {comments}")
@@ -308,15 +314,10 @@ def save_evaluation_scores(request, response_id):
             'criteria_ids_updated': updated_scores
         }, status=status.HTTP_200_OK)
         
-    except Exception as e:
-        import traceback
-        error_traceback = traceback.format_exc()
-        print(f"Error saving evaluation scores: {str(e)}")
-        print(f"Full traceback: {error_traceback}")
+    except Exception:
+        print("Error saving evaluation scores")
         return Response({
-            'error': 'Failed to save evaluation scores',
-            'details': str(e),
-            'traceback': error_traceback
+            'error': 'Failed to save evaluation scores'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -356,6 +357,12 @@ def get_evaluation_scores(request, response_id):
         scores_query = RFPEvaluationScore.objects.filter(response_id=response_id)
         
         if evaluator_id:
+            try:
+                evaluator_id = int(evaluator_id)
+            except (TypeError, ValueError):
+                return Response({
+                    'error': 'evaluator_id must be an integer'
+                }, status=status.HTTP_400_BAD_REQUEST)
             scores_query = scores_query.filter(evaluator_id=evaluator_id)
         if criteria_id:
             scores_query = scores_query.filter(criteria_id=criteria_id)
@@ -406,15 +413,10 @@ def get_evaluation_scores(request, response_id):
             'evaluators': list(evaluators.values())
         }, status=status.HTTP_200_OK)
         
-    except Exception as e:
-        import traceback
-        error_traceback = traceback.format_exc()
-        print(f"Error getting evaluation scores: {str(e)}")
-        print(f"Full traceback: {error_traceback}")
+    except Exception:
+        print("Error getting evaluation scores")
         return Response({
-            'error': 'Failed to get evaluation scores',
-            'details': str(e),
-            'traceback': error_traceback
+            'error': 'Failed to get evaluation scores'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
@@ -532,15 +534,10 @@ def get_evaluation_scores_bulk(request):
             'vendor_info': vendor_info_by_response  # Include vendor information for each response
         }, status=status.HTTP_200_OK)
        
-    except Exception as e:
-        import traceback
-        error_traceback = traceback.format_exc()
-        print(f"Error getting bulk evaluation scores: {str(e)}")
-        print(f"Full traceback: {error_traceback}")
+    except Exception:
+        print("Error getting bulk evaluation scores")
         return Response({
             'success': False,
-            'error': 'Failed to get evaluation scores',
-            'details': str(e),
-            'traceback': error_traceback
+            'error': 'Failed to get evaluation scores'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
  

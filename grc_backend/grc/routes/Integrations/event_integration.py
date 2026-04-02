@@ -9,8 +9,34 @@ import logging
 
 from ...models import ExternalApplication, ExternalApplicationConnection, ExternalApplicationSyncLog, Users
 from .jira_backend import jira_backend
+from ...rbac.utils import RBACUtils
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_request_user_id(request, requested_user_id=None):
+    """
+    Resolve effective user id from auth context.
+    - normal user: can only act as self
+    - system admin: can act on requested_user_id when provided
+    """
+    requester_user_id = RBACUtils.get_user_id_from_request(request)
+    if not requester_user_id:
+        return None, JsonResponse({'error': 'Authentication required'}, status=401)
+
+    effective_user_id = requester_user_id
+    if requested_user_id is not None and str(requested_user_id).strip() != '':
+        try:
+            requested_user_id_int = int(str(requested_user_id))
+            requester_user_id_int = int(str(requester_user_id))
+        except (TypeError, ValueError):
+            return None, JsonResponse({'error': 'Invalid user id'}, status=400)
+
+        if requested_user_id_int != requester_user_id_int and not RBACUtils.is_system_admin(requester_user_id_int):
+            return None, JsonResponse({'error': 'Forbidden'}, status=403)
+        effective_user_id = requested_user_id_int
+
+    return int(effective_user_id), None
 
 
 @csrf_exempt
@@ -68,8 +94,9 @@ def get_external_applications(request):
         logger.info(f"External applications request: {request.method} {request.path}")
         logger.info(f"Request headers: {dict(request.headers)}")
         
-        # Get user ID from request (default to 1 for demo purposes)
-        user_id = request.GET.get('user_id', 1)
+        user_id, auth_error = _resolve_request_user_id(request, request.GET.get('user_id'))
+        if auth_error:
+            return auth_error
         logger.info(f"Getting external applications for user_id: {user_id}")
         
         # Get all active external applications.
@@ -165,7 +192,9 @@ def connect_external_application(request):
         connection_token = data.get('connection_token')
         refresh_token = data.get('refresh_token')
         token_expires_at = data.get('token_expires_at')
-        user_id = data.get('user_id', 1)  # Default to user 1 for demo
+        user_id, auth_error = _resolve_request_user_id(request, data.get('user_id'))
+        if auth_error:
+            return auth_error
 
         if not application_id:
             return JsonResponse({'error': 'Application ID is required'}, status=400)
@@ -233,7 +262,9 @@ def disconnect_external_application(request):
     try:
         data = json.loads(request.body)
         application_id = data.get('application_id')
-        user_id = data.get('user_id', 1)  # Default to user 1 for demo
+        user_id, auth_error = _resolve_request_user_id(request, data.get('user_id'))
+        if auth_error:
+            return auth_error
 
         if not application_id:
             return JsonResponse({'error': 'Application ID is required'}, status=400)
@@ -295,44 +326,38 @@ def get_application_details(request, application_id):
     Get detailed information about a specific external application
     """
     try:
-        # Get user from middleware (set by JWT middleware)
-        user = getattr(request, 'user', None)
-        
-        # Check if user is authenticated and is a Users model instance
-        is_authenticated = user and hasattr(user, 'UserId') and not user.is_anonymous
+        user_id, auth_error = _resolve_request_user_id(request)
+        if auth_error:
+            return auth_error
 
         try:
             application = ExternalApplication.objects.get(id=application_id, is_active=True)
         except ExternalApplication.DoesNotExist:
             return JsonResponse({'error': 'Application not found'}, status=404)
 
-        # Get user's connection status (only if authenticated)
-        if is_authenticated:
-            try:
-                connection = ExternalApplicationConnection.objects.get(
-                    application=application,
-                    user=user,
-                    connection_status='active'
-                )
-                connection_status = 'connected'
-                last_used = connection.last_used
-                token_expires_at = connection.token_expires_at
-            except ExternalApplicationConnection.DoesNotExist:
-                connection_status = 'disconnected'
-                last_used = None
-                token_expires_at = None
+        user = Users.objects.filter(UserId=user_id).first()
+        if not user:
+            return JsonResponse({'error': 'User not found'}, status=404)
 
-            # Get recent sync logs
-            recent_syncs = ExternalApplicationSyncLog.objects.filter(
+        try:
+            connection = ExternalApplicationConnection.objects.get(
                 application=application,
-                user=user
-            ).order_by('-sync_started_at')[:5]
-        else:
-            # Default values when not authenticated
+                user=user,
+                connection_status='active'
+            )
+            connection_status = 'connected'
+            last_used = connection.last_used
+            token_expires_at = connection.token_expires_at
+        except ExternalApplicationConnection.DoesNotExist:
             connection_status = 'disconnected'
             last_used = None
             token_expires_at = None
-            recent_syncs = []
+
+        # Get recent sync logs
+        recent_syncs = ExternalApplicationSyncLog.objects.filter(
+            application=application,
+            user=user
+        ).order_by('-sync_started_at')[:5]
 
         sync_logs = []
         for sync in recent_syncs:
@@ -383,17 +408,12 @@ def refresh_application_status(request):
     Refresh the status of all external applications for the current user
     """
     try:
-        # Get user from middleware (set by JWT middleware)
-        user = getattr(request, 'user', None)
-        
-        # Check if user is authenticated and is a Users model instance
-        if not user or not hasattr(user, 'UserId') or user.is_anonymous:
-            # Simplified response when not authenticated
-            return JsonResponse({
-                'success': True,
-                'message': 'Status refresh completed (simplified mode - no authentication)',
-                'refreshed_count': 0
-            })
+        user_id, auth_error = _resolve_request_user_id(request)
+        if auth_error:
+            return auth_error
+        user = Users.objects.filter(UserId=user_id).first()
+        if not user:
+            return JsonResponse({'error': 'User not found'}, status=404)
 
         # Get all user's active connections
         connections = ExternalApplicationConnection.objects.filter(

@@ -299,6 +299,11 @@ import axios from 'axios'
 import eventDataService from '../../services/eventService' // NEW: Centralized event data service
 import { convertColorForColorblind, getColorblindMode } from '../../utils/colorblindness'
 
+const sanitizeCSVCell = (value) => {
+  const text = String(value ?? '')
+  return /^\s*[=+\-@]/.test(text) ? `'${text}` : text
+}
+
 // Ensure Chart.js is properly loaded
 if (typeof Chart === 'undefined') {
   console.error('Chart.js is not loaded properly')
@@ -428,8 +433,8 @@ export default {
         headers.join(','),
         ...data.map(row =>
           headers.map(header => {
-            const value = row[header] || ''
-            return `"${String(value).replace(/"/g, '""')}"`
+            const safeValue = sanitizeCSVCell(row[header])
+            return `"${String(safeValue).replace(/"/g, '""')}"`
           }).join(',')
         )
       ].join('\n')
@@ -450,8 +455,8 @@ export default {
         headers.join(','),
         ...data.map(row =>
           headers.map(header => {
-            const value = row[header] || ''
-            const escaped = String(value).replace(/"/g, '""')
+            const safeValue = sanitizeCSVCell(row[header])
+            const escaped = String(safeValue).replace(/"/g, '""')
             return (escaped.includes(',') || escaped.includes('"') || escaped.includes('\n')) ? `"${escaped}"` : escaped
           }).join(',')
         )

@@ -6,6 +6,25 @@
 import axios from 'axios';
 import { API_BASE_URL } from '../config/api.js';
 
+const getAuthToken = () => sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
+const getRefreshToken = () => sessionStorage.getItem('refresh_token') || localStorage.getItem('refresh_token');
+const setAuthToken = (token) => {
+  if (!token) return;
+  sessionStorage.setItem('access_token', token);
+  localStorage.removeItem('access_token');
+};
+const setRefreshToken = (token) => {
+  if (!token) return;
+  sessionStorage.setItem('refresh_token', token);
+  localStorage.removeItem('refresh_token');
+};
+const clearSensitiveAuth = () => {
+  ['access_token', 'refresh_token', 'user'].forEach((k) => {
+    sessionStorage.removeItem(k);
+    localStorage.removeItem(k);
+  });
+};
+
 /**
  * Create axios instance with JWT authentication
  */
@@ -26,8 +45,7 @@ const apiClient = axios.create({
  */
 apiClient.interceptors.request.use(
   (config) => {
-    // Get JWT token from localStorage
-    const token = localStorage.getItem('access_token');
+    const token = getAuthToken();
     
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
@@ -97,10 +115,8 @@ apiClient.interceptors.response.use(
       if (errorData.session_expired === true || errorData.logout_reason === 'Session timeout after 5 minutes') {
         console.log('⏰ [API Service] Session expired after 5 minutes - redirecting to login')
         // Clear all auth data
-        localStorage.removeItem('access_token')
-        localStorage.removeItem('refresh_token')
+        clearSensitiveAuth()
         localStorage.removeItem('user_id')
-        localStorage.removeItem('user')
         localStorage.removeItem('user_email')
         localStorage.removeItem('user_name')
         localStorage.removeItem('is_logged_in')
@@ -110,11 +126,25 @@ apiClient.interceptors.response.use(
         }
         return Promise.reject(error)
       }
+
+      // Newer login detected in another browser/device.
+      if (errorData.session_invalidated === true) {
+        console.log('🔒 [API Service] Session invalidated due to newer login - redirecting to login')
+        clearSensitiveAuth()
+        localStorage.removeItem('user_id')
+        localStorage.removeItem('user_email')
+        localStorage.removeItem('user_name')
+        localStorage.removeItem('is_logged_in')
+        if (window.location.pathname !== '/login') {
+          window.location.href = '/login'
+        }
+        return Promise.reject(error)
+      }
       
       originalRequest._retry = true;
       
       try {
-        const refreshToken = localStorage.getItem('refresh_token');
+        const refreshToken = getRefreshToken();
         
         if (refreshToken) {
           console.log('🔄 [API Service] Attempting token refresh...');
@@ -128,8 +158,8 @@ apiClient.interceptors.response.use(
             const newRefreshToken = response.data.refresh_token;
             
             // Update tokens
-            localStorage.setItem('access_token', newAccessToken);
-            localStorage.setItem('refresh_token', newRefreshToken);
+            setAuthToken(newAccessToken);
+            setRefreshToken(newRefreshToken);
             
             console.log('✅ [API Service] Token refreshed successfully');
             
@@ -144,9 +174,9 @@ apiClient.interceptors.response.use(
         // IMPORTANT: Same behavior as authService - don't log out immediately
         // Check if tokens are still valid before clearing and redirecting
         
-        const accessToken = localStorage.getItem('access_token');
+        const accessToken = getAuthToken();
         const accessTokenExpires = localStorage.getItem('access_token_expires');
-        const refreshToken = localStorage.getItem('refresh_token');
+        const refreshToken = getRefreshToken();
         const refreshTokenExpires = localStorage.getItem('refresh_token_expires');
         
         // Check if refresh token is still valid
@@ -184,8 +214,7 @@ apiClient.interceptors.response.use(
         if (!refreshTokenValid && !accessTokenValid) {
           console.error('❌ [API Service] Both tokens expired - logging out');
           // Clear tokens and redirect to login
-          localStorage.removeItem('access_token');
-          localStorage.removeItem('refresh_token');
+          clearSensitiveAuth();
           localStorage.removeItem('user_id');
           localStorage.removeItem('user_name');
           

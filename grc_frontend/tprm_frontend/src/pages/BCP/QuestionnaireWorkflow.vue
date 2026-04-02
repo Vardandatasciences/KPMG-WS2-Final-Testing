@@ -1555,27 +1555,15 @@ const handleNoApprovalChange = () => {
     let userName = null
     let currentUser = null
     
-    // Method 1: Try to get from JWT token FIRST (most reliable source of current logged-in user)
-    // This should be checked first to avoid using stale localStorage values
+    // Cookie-first auth: do not read/decode JWT from storage.
+    // Prefer application state and stored user_id.
     try {
-      const token = localStorage.getItem('access_token') || localStorage.getItem('session_token')
-      if (token) {
-        // Decode JWT token to get user_id
-        const base64Url = token.split('.')[1]
-        if (base64Url) {
-          const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
-          const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
-            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
-          }).join(''))
-          const payload = JSON.parse(jsonPayload)
-          userId = payload.user_id || payload.userId || payload.UserId || payload.sub || payload.userid
-          if (userId) {
-            console.log('✅ Extracted user_id from JWT token (most reliable source):', userId)
-          }
-        }
+      userId = localStorage.getItem('user_id') || sessionStorage.getItem('user_id')
+      if (userId) {
+        console.log('✅ Using user_id from storage:', userId)
       }
     } catch (e) {
-      console.warn('⚠️ Error extracting user_id from token:', e)
+      // ignore
     }
     
     // Method 2: Try to get from Vuex store (second most reliable)
@@ -1607,7 +1595,7 @@ const handleNoApprovalChange = () => {
     // Method 3: Try to parse current_user from localStorage (check UserId with capital letters)
     if (!userId || !userName) {
       try {
-        const userStr = localStorage.getItem('current_user')
+        const userStr = sessionStorage.getItem('current_user') || localStorage.getItem('current_user')
         if (userStr) {
           const parsedUser = JSON.parse(userStr)
           // Check for UserId (capital U, capital I) first, then lowercase variants
@@ -1671,8 +1659,8 @@ const handleNoApprovalChange = () => {
     } else {
       console.error('❌ No current user found in any storage location')
       console.log('Store state:', store.getters['auth/currentUser'])
-      console.log('localStorage user_id:', localStorage.getItem('user_id'))
-      console.log('localStorage current_user:', localStorage.getItem('current_user'))
+      console.log('storage user_id:', sessionStorage.getItem('user_id') || localStorage.getItem('user_id'))
+      console.log('storage current_user:', sessionStorage.getItem('current_user') || localStorage.getItem('current_user'))
       PopupService.warning('Unable to get current user information. Please log in again or select assignee manually.', 'User Not Found')
       noApprovalNeeded.value = false
     }

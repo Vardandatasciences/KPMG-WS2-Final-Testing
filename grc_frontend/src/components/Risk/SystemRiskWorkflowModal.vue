@@ -157,7 +157,7 @@ export default {
             current_user_id: currentUserId
           },
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
+            'Authorization': `Bearer ${sessionStorage.getItem('access_token') || sessionStorage.getItem('token') || sessionStorage.getItem('session_token') || sessionStorage.getItem('jwt_token') || localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
           }
         });
 
@@ -213,7 +213,7 @@ export default {
           }
         }, {
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
+            'Authorization': `Bearer ${sessionStorage.getItem('access_token') || sessionStorage.getItem('token') || sessionStorage.getItem('session_token') || sessionStorage.getItem('jwt_token') || localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
           }
         });
 

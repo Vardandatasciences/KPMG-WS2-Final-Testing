@@ -27,14 +27,9 @@ export function useRfpApi() {
    * Get authentication headers with JWT token
    */
   const getAuthHeaders = () => {
-    const token = localStorage.getItem('session_token') || 
-                  localStorage.getItem('auth_token') || 
-                  localStorage.getItem('access_token')
-    
     return {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
-      ...(token && { 'Authorization': `Bearer ${token}` }),
     }
   }
 
@@ -44,12 +39,6 @@ export function useRfpApi() {
   const handleResponse = async (response) => {
     // Handle 401 Unauthorized
     if (response.status === 401) {
-      localStorage.removeItem('session_token')
-      localStorage.removeItem('auth_token')
-      localStorage.removeItem('access_token')
-      localStorage.removeItem('refresh_token')
-      localStorage.removeItem('current_user')
-      
       // If in iframe, request parent to redirect to login
       const isInIframe = window.self !== window.top
       if (isInIframe && window.parent) {
@@ -107,6 +96,7 @@ export function useRfpApi() {
     const response = await fetch(url, {
       method: 'GET',
       headers: getAuthHeaders(),
+      credentials: 'include',
     })
     
     const data = await handleResponse(response)
@@ -129,6 +119,7 @@ export function useRfpApi() {
     const response = await fetch(buildApiUrl(`/rfps/${rfpId}/`), {
       method: 'GET',
       headers: getAuthHeaders(),
+      credentials: 'include',
     })
     
     return handleResponse(response)
@@ -141,6 +132,7 @@ export function useRfpApi() {
     const response = await fetch(buildApiUrl('/rfps/'), {
       method: 'POST',
       headers: getAuthHeaders(),
+      credentials: 'include',
       body: JSON.stringify(rfpData),
     })
     
@@ -154,6 +146,7 @@ export function useRfpApi() {
     const response = await fetch(buildApiUrl(`/rfps/${rfpId}/`), {
       method: 'PUT',
       headers: getAuthHeaders(),
+      credentials: 'include',
       body: JSON.stringify(rfpData),
     })
     
@@ -167,6 +160,7 @@ export function useRfpApi() {
     const response = await fetch(buildApiUrl(`/rfps/${rfpId}/`), {
       method: 'DELETE',
       headers: getAuthHeaders(),
+      credentials: 'include',
     })
     
     if (!response.ok) {
@@ -183,6 +177,7 @@ export function useRfpApi() {
     const response = await fetch(buildApiUrl(`/rfps/${rfpId}/get_full_details/`), {
       method: 'GET',
       headers: getAuthHeaders(),
+      credentials: 'include',
     })
     
     return handleResponse(response)
@@ -199,6 +194,7 @@ export function useRfpApi() {
     const response = await fetch(endpoint, {
       method: 'GET',
       headers: getAuthHeaders(),
+      credentials: 'include',
     })
     
     if (!response.ok) {
@@ -215,6 +211,7 @@ export function useRfpApi() {
     const response = await fetch(buildApiUrl('/vendors/active/'), {
       method: 'GET',
       headers: getAuthHeaders(),
+      credentials: 'include',
     })
     
     return handleResponse(response)

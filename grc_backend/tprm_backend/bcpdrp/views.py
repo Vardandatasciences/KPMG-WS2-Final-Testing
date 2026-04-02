@@ -99,9 +99,14 @@ class JWTAuthentication(BaseAuthentication):
             token = auth_header.split(' ')[1]
             logger.info(f"[BCP JWT Auth] Token extracted: {token[:20]}...")
             
-            # Use JWT_SECRET_KEY from settings
-            secret_key = getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
-            payload = jwt.decode(token, secret_key, algorithms=['HS256'])
+            verification_key = getattr(settings, 'JWT_VERIFYING_KEY', None) or getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
+            payload = jwt.decode(
+                token,
+                verification_key,
+                algorithms=getattr(settings, 'JWT_ALLOWED_ALGORITHMS', [getattr(settings, 'JWT_ALGORITHM', 'RS256')]),
+                issuer=getattr(settings, 'JWT_ISSUER', None),
+                audience=getattr(settings, 'JWT_AUDIENCE', None),
+            )
             user_id = payload.get('user_id')
             
             logger.info(f"[BCP JWT Auth] Token decoded successfully, user_id: {user_id}")
@@ -1226,10 +1231,25 @@ def questionnaire_review_save_view(request, questionnaire_id):
         
         # Update the questionnaire with the reviewer comment
         questionnaire.reviewer_comment = reviewer_comment
-        
-        # Update the reviewer_user_id to track who made the review
-        reviewer_user_id = request.data.get('reviewer_user_id', 1)
-        questionnaire.reviewer_user_id = reviewer_user_id
+
+        # Enforce maker–checker and prevent spoofing of reviewer identity
+        try:
+            creator_id_int = int(questionnaire.created_by_user_id) if questionnaire.created_by_user_id is not None else None
+            current_user_id = getattr(request.user, 'id', None) or getattr(request.user, 'UserId', None)
+            current_user_id_int = int(current_user_id) if current_user_id is not None else None
+        except (TypeError, ValueError):
+            logger.warning("Invalid creator or reviewer id while saving questionnaire review comment")
+            return error_response("Invalid reviewer id. Please contact an administrator.", status.HTTP_400_BAD_REQUEST)
+
+        if current_user_id_int is None:
+            return error_response("User authentication required to save review comments", status.HTTP_401_UNAUTHORIZED)
+
+        if creator_id_int is not None and creator_id_int == current_user_id_int:
+            logger.warning(f"Self-review attempt detected for questionnaire {questionnaire_id} by user {creator_id_int}")
+            return error_response("Self-review is not allowed. Please assign a different reviewer.", status.HTTP_403_FORBIDDEN)
+
+        # Track the actual reviewer user id from the authenticated user, not from client input
+        questionnaire.reviewer_user_id = current_user_id_int
         
         # Save the questionnaire
         questionnaire.save()

@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { getTprmApiBaseUrl } from '@/utils/backendEnv'
+import { getTprmApiBaseUrl, getApiOrigin } from '@/utils/backendEnv'
 
 const API_BASE_URL = getTprmApiBaseUrl()
 
@@ -12,13 +12,26 @@ const authApi = axios.create({
   withCredentials: true
 })
 
+const setSensitive = (key, value) => {
+  sessionStorage.setItem(key, value)
+  localStorage.removeItem(key)
+}
+
+// Cookie-first auth: tokens are stored in HttpOnly cookies, not storage.
+// Keep current_user in sessionStorage for UI purposes only.
+const getSensitive = (key) => sessionStorage.getItem(key) || localStorage.getItem(key)
+
+const clearSensitive = () => {
+  ;['session_token', 'access_token', 'refresh_token', 'current_user'].forEach((k) => {
+    sessionStorage.removeItem(k)
+    localStorage.removeItem(k)
+  })
+  sessionStorage.removeItem('tprm_cookie_session_validated')
+}
+
 // Request interceptor to add token
 authApi.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('session_token')
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
     return config
   },
   (error) => {
@@ -32,8 +45,7 @@ authApi.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       // Token expired or invalid
-      localStorage.removeItem('session_token')
-      localStorage.removeItem('current_user')
+      clearSensitive()
       if (window.location.pathname !== '/login') {
         window.location.href = '/login'
       }
@@ -80,12 +92,9 @@ export default {
       })
       
       if (response.data.success) {
-        // Store authentication data
-        const token = response.data.session_token || response.data.access_token
-        localStorage.setItem('session_token', token)
-        localStorage.setItem('access_token', response.data.access_token)
-        localStorage.setItem('refresh_token', response.data.refresh_token)
-        localStorage.setItem('current_user', JSON.stringify(response.data.user))
+        // Cookie-first: backend should set HttpOnly cookies. Do not store tokens in JS storage.
+        clearSensitive()
+        setSensitive('current_user', JSON.stringify(response.data.user))
       }
       
       return {
@@ -131,10 +140,14 @@ export default {
    */
   async validateSession() {
     try {
-      const response = await authApi.get('/validate-session/')
+      // Validate against the shared GRC JWT endpoint so TPRM iframe
+      // can use the same HttpOnly cookie session.
+      const response = await axios.get(`${getApiOrigin()}/api/jwt/verify/`, {
+        withCredentials: true,
+      })
       return {
         success: true,
-        user: response.data.user
+        user: response.data.user,
       }
     } catch (error) {
       console.error('Session validation error:', error)
@@ -150,19 +163,13 @@ export default {
    */
   async refreshToken() {
     try {
-      const refreshToken = localStorage.getItem('refresh_token')
-      if (!refreshToken) {
-        throw new Error('No refresh token available')
-      }
-
-      const response = await authApi.post('/refresh-token/', {
-        refresh_token: refreshToken
+      // Refresh shared cookie session through GRC JWT endpoint.
+      const response = await axios.post(`${getApiOrigin()}/api/jwt/refresh/`, {}, {
+        withCredentials: true,
       })
 
       if (response.data.success) {
-        const newToken = response.data.access_token
-        localStorage.setItem('session_token', newToken)
-        localStorage.setItem('access_token', newToken)
+        clearSensitive()
       }
 
       return {
@@ -188,10 +195,7 @@ export default {
       console.log('AuthService: Logout API response:', response.data)
       
       // Clear local storage
-      localStorage.removeItem('session_token')
-      localStorage.removeItem('access_token')
-      localStorage.removeItem('refresh_token')
-      localStorage.removeItem('current_user')
+      clearSensitive()
       console.log('AuthService: Local storage cleared')
       
       return {
@@ -203,10 +207,7 @@ export default {
       console.error('AuthService: Error details:', error.response?.data)
       
       // Still clear local storage even if API call fails
-      localStorage.removeItem('session_token')
-      localStorage.removeItem('access_token')
-      localStorage.removeItem('refresh_token')
-      localStorage.removeItem('current_user')
+      clearSensitive()
       console.log('AuthService: Local storage cleared despite error')
       
       return {
@@ -242,7 +243,7 @@ export default {
    */
   getCurrentUser() {
     try {
-      const userStr = localStorage.getItem('current_user')
+      const userStr = getSensitive('current_user')
       return userStr ? JSON.parse(userStr) : null
     } catch (error) {
       console.error('Error getting current user:', error)
@@ -254,16 +255,32 @@ export default {
    * Get current session token
    */
   getSessionToken() {
-    return localStorage.getItem('session_token')
+    return getSensitive('session_token')
   },
 
   /**
    * Check if user is authenticated
    */
   isAuthenticated() {
-    const token = this.getSessionToken()
-    const user = this.getCurrentUser()
-    return !!(token && user)
+    // Cookie-first: validate via backend once per tab.
+    if (sessionStorage.getItem('tprm_cookie_session_validated') === 'true') {
+      return true
+    }
+
+    // Return a promise (routers updated to await this)
+    return this.validateSession()
+      .then((res) => {
+        if (res && res.success) {
+          sessionStorage.setItem('tprm_cookie_session_validated', 'true')
+          return true
+        }
+        clearSensitive()
+        return false
+      })
+      .catch(() => {
+        clearSensitive()
+        return false
+      })
   }
 }
 

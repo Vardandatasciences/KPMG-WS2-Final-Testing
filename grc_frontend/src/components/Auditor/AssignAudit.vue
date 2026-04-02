@@ -2429,7 +2429,7 @@ export default {
     async fetchFrameworks() {
       try {
         console.log('🔄 [FRAMEWORK DROPDOWN] Fetching frameworks...');
-        const token = localStorage.getItem('access_token');
+        const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
         const res = await axios.get('/api/frameworks/', {
           withCredentials: true,
           headers: token ? { Authorization: `Bearer ${token}` } : {}
@@ -2446,7 +2446,7 @@ export default {
           const sel = await axios.get('/api/frameworks/get-selected/', {
             withCredentials: true,
             headers: token ? { Authorization: `Bearer ${token}` } : {},
-            params: { userId: localStorage.getItem('user_id') || 'default_user' }
+            params: { userId: sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || 'default_user' }
           });
 
           if (sel.data && sel.data.success && sel.data.hasFramework && sel.data.frameworkId) {
@@ -2583,7 +2583,7 @@ export default {
       this.scopeCompliances = [];
       if (this.auditData.framework) {
         try {
-          const token = localStorage.getItem('access_token');
+          const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
           const res = await axios.get('/api/policies/', {
             params: { framework_id: this.auditData.framework },
             withCredentials: true,
@@ -2603,7 +2603,7 @@ export default {
       if (!this.auditData.framework) return;
       this.loadingScopeCompliances = true;
       try {
-        const token = localStorage.getItem('access_token');
+        const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
         const params = { framework_id: this.auditData.framework };
         if (this.auditData.policy) params.policy_id = this.auditData.policy;
         if (this.auditData.subPolicy) params.subpolicy_id = this.auditData.subPolicy;
@@ -2667,7 +2667,7 @@ export default {
       }
       this.loadingScopeCompliances = true;
       try {
-        const token = localStorage.getItem('access_token');
+        const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
         const params = {
           framework_id: this.auditData.framework,
           policy_id: member.assignedPolicy
@@ -2697,7 +2697,7 @@ export default {
       this.expandedComplianceScopeMemberIndex = memberIndex;
       this.loadingScopeCompliances = true;
       try {
-        const token = localStorage.getItem('access_token');
+        const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
         const params = {
           framework_id: this.auditData.framework,
           policy_id: member.assignedPolicy
@@ -2811,7 +2811,7 @@ export default {
       if (this.auditData.policy) {
         try {
           // Get JWT token for authentication
-          const token = localStorage.getItem('access_token');
+          const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
           const headers = { 'Content-Type': 'application/json' };
           if (token) {
             headers['Authorization'] = `Bearer ${token}`;
@@ -3227,7 +3227,7 @@ export default {
           };
 
           // Get JWT token for authentication
-          const token = localStorage.getItem('access_token');
+          const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
           const headers = { 'Content-Type': 'application/json' };
           if (token) {
             headers['Authorization'] = `Bearer ${token}`;

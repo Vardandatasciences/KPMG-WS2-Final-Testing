@@ -396,7 +396,7 @@ const loadLogs = async () => {
   loading.value = true;
   error.value = null;
   try {
-    const token = localStorage.getItem('access_token');
+    const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
     if (!token) {
       throw new Error('No authentication token found');
     }
@@ -581,7 +581,7 @@ const exportLogs = async () => {
   exporting.value = true;
   
   try {
-    const token = localStorage.getItem('access_token');
+    const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
     if (!token) {
       alert('No authentication token found');
       exporting.value = false;
@@ -614,6 +614,9 @@ const exportLogs = async () => {
     }
 
     const userId =
+      sessionStorage.getItem('user_id') ||
+      sessionStorage.getItem('UserId') ||
+      sessionStorage.getItem('userId') ||
       localStorage.getItem('user_id') ||
       localStorage.getItem('UserId') ||
       localStorage.getItem('userId') ||

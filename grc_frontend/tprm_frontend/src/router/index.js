@@ -2,6 +2,38 @@ import { createRouter, createWebHistory } from 'vue-router'
 import authService from '@/services/authService'
 import permissionsService from '@/services/permissionsService'
 
+const SENSITIVE_URL_PARAMS = ['access_token', 'refresh_token', 'id_token', 'token', 'session_token']
+
+function scrubSensitiveParamsFromUrl(to) {
+  try {
+    const url = new URL(window.location.href)
+    let mutated = false
+
+    for (const p of SENSITIVE_URL_PARAMS) {
+      if (url.searchParams.has(p)) {
+        url.searchParams.delete(p)
+        mutated = true
+      }
+    }
+
+    if (url.hash && /access_token|refresh_token|id_token|session_token|token/i.test(url.hash)) {
+      // Remove hash entirely if it contains token-like fragments.
+      url.hash = ''
+      mutated = true
+    }
+
+    if (mutated) {
+      // Keep the intended navigation target but scrub the visible URL.
+      const cleaned = `${url.pathname}${url.search}${url.hash}`
+      window.history.replaceState({}, document.title, cleaned)
+      return true
+    }
+  } catch (e) {
+    // Never block navigation due to scrubber issues.
+  }
+  return false
+}
+
 // Configure router base path to match Vite base configuration
 // In production, Vite uses /tprm/ base, so router must match
 // In development, both use / (root)
@@ -652,7 +684,7 @@ const router = createRouter({
       meta: { requiresAuth: false, publicRoute: true }
     },
     {
-      path: '/rfi-invitation-acknowledged',
+      path: '/rfi-invitation-acknowledged/:token?',
       name: 'RFI Invitation Acknowledged',
       component: () => import('@/views/rfi/RFIInvitationAcknowledged.vue'),
       meta: { requiresAuth: false, publicRoute: true }
@@ -928,6 +960,9 @@ const router = createRouter({
 // Navigation guard - NO REDIRECTS, always allow navigation
 // Pages will handle errors themselves
 router.beforeEach(async (to, from, next) => {
+  // Global safety net: never allow token-like params in the visible URL.
+  scrubSensitiveParamsFromUrl(to)
+
   // Check if we're in an iframe (embedded in GRC)
   const isInIframe = window.self !== window.top
   

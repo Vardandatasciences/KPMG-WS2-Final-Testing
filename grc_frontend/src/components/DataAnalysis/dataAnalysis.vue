@@ -687,7 +687,7 @@ export default {
     const fetchFrameworks = async () => {
       try {
         loadingFrameworks.value = true
-        const accessToken = localStorage.getItem('access_token')
+        const accessToken = sessionStorage.getItem('access_token') || localStorage.getItem('access_token')
         const response = await axios.get(`${API_BASE_URL}/api/frameworks/`, {
           headers: {
             'Authorization': `Bearer ${accessToken}`,
@@ -726,7 +726,7 @@ export default {
         }
 
         const url = API_ENDPOINTS.DATA_ANALYSIS(frameworkId)
-        const accessToken = localStorage.getItem('access_token')
+        const accessToken = sessionStorage.getItem('access_token') || localStorage.getItem('access_token')
 
         const response = await axios.get(url, {
           headers: {
@@ -1005,8 +1005,8 @@ export default {
           }
         })
 
-        const accessToken = localStorage.getItem('access_token')
-        const userId = localStorage.getItem('user_id') || 'default_user'
+        const accessToken = sessionStorage.getItem('access_token') || localStorage.getItem('access_token')
+        const userId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || 'default_user'
         const fileName = `data-analysis-dashboard-${new Date().toISOString().split('T')[0]}`
 
         const response = await axios.post(

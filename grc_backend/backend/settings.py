@@ -63,6 +63,17 @@ SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "changeme-in-dev-only")
 DEBUG = os.environ.get("DJANGO_DEBUG", "false").lower() == "true"
 
 
+def _env_bool(name: str, default: bool) -> bool:
+    """Parse boolean from environment; used for cookie and HTTPS flags."""
+    v = os.environ.get(name)
+    if v is None:
+        return default
+    return v.strip().lower() in ("true", "1", "yes", "on")
+
+
+# When False (production), cookies should use Secure + HSTS unless explicitly overridden.
+_default_secure_cookies = not DEBUG
+
 ALLOWED_HOSTS = [
     'localhost',
     '127.0.0.1',
@@ -73,6 +84,41 @@ ALLOWED_HOSTS = [
     '13.204.228.21',
     'e581-2405-201-c00b-4973-29e6-34b2-9eae-1e0c.ngrok-free.app',
 ]
+
+# -----------------------------------------------------------------------------
+# Trusted evidence / iframe URLs (security-critical)
+# -----------------------------------------------------------------------------
+# These lists are used to validate any URL fields that may be rendered by the UI
+# (e.g., evidence links / iframe sources). Keep them strict and environment-driven.
+def _env_csv(name: str, default: str = "") -> list[str]:
+    v = os.environ.get(name, default)
+    if not v:
+        return []
+    return [x.strip() for x in v.split(",") if x.strip()]
+
+# Explicit hosts allowed for evidence URLs.
+TRUSTED_EVIDENCE_URL_HOSTS = _env_csv(
+    "TRUSTED_EVIDENCE_URL_HOSTS",
+    # Default to your own app domains; extend via env for S3/CloudFront/custom storage.
+    "riskavaire.vardaands.com,grc-tprm.vardaands.com,grc-backend.vardaands.com",
+)
+
+# Host suffixes allowed for evidence URLs (covers bucket.s3.<region>.amazonaws.com etc).
+TRUSTED_EVIDENCE_URL_HOST_SUFFIXES = _env_csv(
+    "TRUSTED_EVIDENCE_URL_HOST_SUFFIXES",
+    "amazonaws.com,cloudfront.net",
+)
+
+# Allow http only for explicitly listed hosts (e.g., local dev or internal non-TLS services).
+TRUSTED_EVIDENCE_URL_ALLOW_HTTP_HOSTS = _env_csv(
+    "TRUSTED_EVIDENCE_URL_ALLOW_HTTP_HOSTS",
+    "localhost,127.0.0.1",
+)
+
+# Export URL allowlist used by export SSRF hardening.
+# Keep this strict in production. Empty means "allow public http/https only",
+# while internal/private/link-local/loopback hosts remain blocked.
+EXPORT_ALLOWED_DOMAINS = _env_csv("EXPORT_ALLOWED_DOMAINS", "")
 
 
 # Application definition
@@ -146,9 +192,13 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    # Framework-level safeguard: sanitize verbose JSON error payloads.
+    "tprm_backend.middleware.error_sanitization.ErrorResponseSanitizationMiddleware",
     # Enterprise Security Headers Middleware - Adds comprehensive security headers to all responses
     "grc.middleware.EnterpriseSecurityHeadersMiddleware",
     "grc.middleware.JWTAuthenticationMiddleware",
+    # Framework-level IDOR / object-level authorization (self-only unless admin)
+    "grc.middleware.ObjectLevelAuthorizationMiddleware",
     # MULTI-TENANCY: Add tenant context middleware (after JWT authentication)
     "grc.tenant_middleware.TenantContextMiddleware",
     "grc.tenant_middleware.TenantIsolationMiddleware",
@@ -290,12 +340,20 @@ SESSION_TIMEOUT_SECONDS = int(SESSION_TIMEOUT_SECONDS_STR)
 SESSION_COOKIE_AGE = SESSION_TIMEOUT_SECONDS
 
 SESSION_COOKIE_NAME = 'grc_sessionid'  # Custom session cookie name
-SESSION_COOKIE_HTTPONLY = False  # Allow JavaScript access (needed for SPA)
-SESSION_COOKIE_SECURE = False  # Set to True in production with HTTPS (False for HTTP/development)
-SESSION_COOKIE_SAMESITE = 'Lax'  # Allow cross-site requests with same-site protection (will be overridden by middleware for OAuth)
+# Session ID must not be readable by JS (mitigates XSS session theft). Override via SESSION_COOKIE_HTTPONLY.
+SESSION_COOKIE_HTTPONLY = _env_bool("SESSION_COOKIE_HTTPONLY", True)
+# Send session cookie only over HTTPS in non-debug; override with SESSION_COOKIE_SECURE in .env.
+SESSION_COOKIE_SECURE = _env_bool("SESSION_COOKIE_SECURE", _default_secure_cookies)
+SESSION_COOKIE_SAMESITE = os.environ.get("SESSION_COOKIE_SAMESITE", "Lax")
 SESSION_EXPIRE_AT_BROWSER_CLOSE = False  # Session persists after browser close
 SESSION_COOKIE_DOMAIN = None  # Use default domain
 SESSION_COOKIE_PATH = '/'  # Session cookie available for entire site
+
+# CSRF cookie: Vue/axios reads csrftoken from document.cookie (see grc_frontend api.js xsrfCookieName).
+# Keep CSRF_COOKIE_HTTPONLY=False unless you serve the token via meta/header/API only.
+CSRF_COOKIE_HTTPONLY = _env_bool("CSRF_COOKIE_HTTPONLY", False)
+CSRF_COOKIE_SECURE = _env_bool("CSRF_COOKIE_SECURE", _default_secure_cookies)
+CSRF_COOKIE_SAMESITE = os.environ.get("CSRF_COOKIE_SAMESITE", SESSION_COOKIE_SAMESITE)
 
 # Add RBAC configuration for simplified decorator-based approach
 RBAC_CONFIG = {
@@ -443,13 +501,16 @@ SILENCED_SYSTEM_CHECKS = [
     "models.W035",  # db_table used by multiple models (expected with multi-DB)
 ]
 
-# CORS settings
-# In development (DEBUG=True), allow all origins so localhost:8080 and 127.0.0.1:8000 work without CORS errors
-CORS_ALLOW_ALL_ORIGINS = DEBUG
+# CORS settings (security hardening)
+# Never combine wildcard origin with credentials.
+CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOW_CREDENTIALS = True
 
+# Optional env-driven CORS extension:
+# CORS_ALLOWED_ORIGINS_EXTRA="https://app.example.com,https://admin.example.com"
 CORS_ALLOWED_ORIGINS = [
     "https://grc-tprm.vardaands.com",
+    "https://test-riskavaire.vardaands.com",
     "http://localhost:3000",  # TPRM frontend development server
     "http://localhost:8081",  # Vue.js development server
     "http://localhost:8080",  # Alternative Vue.js port
@@ -466,13 +527,13 @@ CORS_ALLOWED_ORIGINS = [
     "http://13.201.54.231:80",  # Deployed frontend URL with port
     "http://13.201.54.231:8080",  # Deployed frontend URL with port
     "http://13.201.54.231:8081",  # Deployed frontend URL with port
-    "https://grc-backend.vardaands.com",  # New server IP with port
-    "https://13.204.228.21:8000",  # New server IP with port (HTTPS)
+    "https://grc-backend.vardaands.com",
+    "https://13.204.228.21:8000",
     "http://13.204.228.21:8000",
     "https://riskavaire.vardaands.com",
-]
+] + _env_csv("CORS_ALLOWED_ORIGINS_EXTRA")
 
-# Allow localhost / 127.0.0.1 with any port when not using ALL_ORIGINS (e.g. production with DEBUG=False)
+# Support local dev ports without opening wildcard access.
 CORS_ALLOWED_ORIGIN_REGEXES = [
     r"^http://localhost(:\d+)?$",
     r"^http://127\.0\.0\.1(:\d+)?$",
@@ -481,6 +542,7 @@ CORS_ALLOWED_ORIGIN_REGEXES = [
 # CSRF settings
 CSRF_TRUSTED_ORIGINS = [
     "https://riskavaire.vardaands.com",
+    "https://test-riskavaire.vardaands.com",
     "http://localhost:3000",  # TPRM frontend development server
     "http://localhost:8081",  # Vue.js development server
     "http://localhost:8080",  # Alternative Vue.js port
@@ -504,7 +566,6 @@ CSRF_TRUSTED_ORIGINS = [
 ]
 
 # Additional CORS settings
-CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_METHODS = [
     'DELETE',
     'GET',
@@ -527,27 +588,37 @@ CORS_ALLOW_HEADERS = [
     'set-cookie',  # Allow set-cookie header responses
 ]
 
-# HTTPS Security Settings
-# Note: Set these to True when using valid SSL certificates in production
-# For self-signed certificates in development, keep them as False
-CSRF_COOKIE_SECURE = False  # Set to True with valid SSL certificates (False for HTTP/development)
-CSRF_COOKIE_HTTPONLY = False  # Allow JavaScript access to CSRF token
-
-# Session settings for HTTPS (duplicate - remove if causing issues)
-# SESSION_COOKIE_SECURE = False  # Set to True with valid SSL certificates
-# SESSION_COOKIE_HTTPONLY = False  # Allow JavaScript access to session cookies
-# SESSION_COOKIE_SAMESITE = 'Lax'  # Allow cross-site requests
-# SESSION_COOKIE_DOMAIN = None  # Allow all domains in development
-
-# Additional HTTPS security headers (enable in production)
-SECURE_SSL_REDIRECT = False  # Set to True to redirect all HTTP to HTTPS
-SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')  # For reverse proxy
-SECURE_HSTS_SECONDS = 0  # Set to 31536000 (1 year) in production with HTTPS
-SECURE_HSTS_INCLUDE_SUBDOMAINS = False  # Set to True in production
-SECURE_HSTS_PRELOAD = False  # Set to True in production
+# HTTPS / HSTS (cookies configured above; TLS often terminates at nginx)
+SECURE_SSL_REDIRECT = _env_bool("SECURE_SSL_REDIRECT", False)
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+SECURE_HSTS_SECONDS = int(os.environ.get("SECURE_HSTS_SECONDS", str(31536000 if not DEBUG else 0)))
+SECURE_HSTS_INCLUDE_SUBDOMAINS = _env_bool("SECURE_HSTS_INCLUDE_SUBDOMAINS", not DEBUG)
+SECURE_HSTS_PRELOAD = _env_bool("SECURE_HSTS_PRELOAD", not DEBUG)
 
 # JWT Settings
-JWT_SECRET_KEY = SECRET_KEY
+JWT_ALGORITHM = os.environ.get("JWT_ALGORITHM", "RS256").upper()
+JWT_ISSUER = os.environ.get("JWT_ISSUER", "grc-backend")
+JWT_AUDIENCE = os.environ.get("JWT_AUDIENCE", "grc-frontend")
+
+# Keys can be provided inline with \n in env vars.
+JWT_PRIVATE_KEY = os.environ.get("JWT_PRIVATE_KEY", "").replace("\\n", "\n")
+JWT_PUBLIC_KEY = os.environ.get("JWT_PUBLIC_KEY", "").replace("\\n", "\n")
+
+if JWT_ALGORITHM.startswith("RS") or JWT_ALGORITHM.startswith("ES"):
+    if not JWT_PRIVATE_KEY or not JWT_PUBLIC_KEY:
+        raise ValueError(
+            "JWT_PRIVATE_KEY and JWT_PUBLIC_KEY must be configured when using asymmetric JWT algorithms."
+        )
+    JWT_SIGNING_KEY = JWT_PRIVATE_KEY
+    JWT_VERIFYING_KEY = JWT_PUBLIC_KEY
+else:
+    # Backward-compatible fallback for non-asymmetric algorithms.
+    JWT_SIGNING_KEY = os.environ.get("JWT_SECRET_KEY", SECRET_KEY)
+    JWT_VERIFYING_KEY = os.environ.get("JWT_VERIFYING_KEY", "")
+
+# Legacy alias retained for existing modules that still reference JWT_SECRET_KEY.
+JWT_SECRET_KEY = JWT_SIGNING_KEY
+JWT_ALLOWED_ALGORITHMS = [JWT_ALGORITHM]
 JWT_ACCESS_TOKEN_LIFETIME = 3600  # 1 hour in seconds
 JWT_REFRESH_TOKEN_LIFETIME = 604800  # 7 days in seconds
 # reCAPTCHA Configuration
@@ -562,21 +633,36 @@ SIMPLE_JWT = {
     "REFRESH_TOKEN_LIFETIME": timedelta(seconds=JWT_REFRESH_TOKEN_LIFETIME),
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
+    "ALGORITHM": JWT_ALGORITHM,
+    "SIGNING_KEY": JWT_SIGNING_KEY,
+    "VERIFYING_KEY": JWT_VERIFYING_KEY,
+    "ISSUER": JWT_ISSUER,
+    "AUDIENCE": JWT_AUDIENCE,
 }
 
 # Rest Framework settings
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework.authentication.SessionAuthentication',
-        'rest_framework.authentication.TokenAuthentication',  # Add token auth as fallback
+        # Use SimpleJWT's JWTAuthentication globally (JWT-only, no SessionAuthentication/CSRF)
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.AllowAny',  # Temporarily allow all for testing
+        # Secure-by-default: endpoints must be authenticated unless explicitly marked public.
+        'rest_framework.permissions.IsAuthenticated',
     ],
-    # Increase throttling and timeout settings
+    # Framework-level: sanitize API exception responses and avoid stack trace leakage.
+    'EXCEPTION_HANDLER': 'tprm_backend.utils.vendor_exception_handler.vendor_custom_exception_handler',
+    # Throttling configuration
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.UserRateThrottle',
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.ScopedRateThrottle',
+    ],
     'DEFAULT_THROTTLE_RATES': {
         'user': '1000/day',
         'anon': '500/day',
+        # Scoped throttle for incident exports to mitigate DoS by high request volume
+        'export_incidents': '20/hour',
     },
     # Allow larger request size
     'DEFAULT_PARSER_CLASSES': [

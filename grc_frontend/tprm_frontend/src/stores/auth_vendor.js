@@ -22,7 +22,8 @@ export const useAuthStore = defineStore('auth', {
       this.user = userData
       this.isAuthenticated = true
       localStorage.setItem('user', JSON.stringify(userData))
-      localStorage.setItem('current_user', JSON.stringify(userData))
+      sessionStorage.setItem('current_user', JSON.stringify(userData))
+      localStorage.removeItem('current_user')
       localStorage.setItem('isAuthenticated', 'true')
     },
 
@@ -32,6 +33,7 @@ export const useAuthStore = defineStore('auth', {
       this.isAuthenticated = false
       this.initialized = false
       localStorage.removeItem('user')
+      sessionStorage.removeItem('current_user')
       localStorage.removeItem('current_user')
       localStorage.removeItem('isAuthenticated')
       localStorage.removeItem('session_token')
@@ -49,9 +51,8 @@ export const useAuthStore = defineStore('auth', {
       try {
         const user = localStorage.getItem('user')
         const isAuthenticated = localStorage.getItem('isAuthenticated')
-        const sessionToken = localStorage.getItem('session_token')
        
-        if (user && isAuthenticated === 'true' && sessionToken) {
+        if (user && isAuthenticated === 'true') {
           // Use cached authentication
           this.user = JSON.parse(user)
           this.isAuthenticated = true

@@ -19,7 +19,7 @@ class RBACService {
      */
     async initialize() {
         try {
-            const token = localStorage.getItem('access_token');
+            const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
             if (!token) {
                 console.log('[RBAC_SERVICE] No access token found');
                 return false;
@@ -78,7 +78,10 @@ class RBACService {
             
             // Add request interceptor to include JWT token
             api.interceptors.request.use((config) => {
-                const token = localStorage.getItem('access_token') || localStorage.getItem('token');
+                const token = sessionStorage.getItem('access_token') ||
+                              sessionStorage.getItem('token') ||
+                              localStorage.getItem('access_token') ||
+                              localStorage.getItem('token');
                 if (token) {
                     config.headers.Authorization = `Bearer ${token}`;
                 }

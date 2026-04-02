@@ -77,22 +77,11 @@ onMounted(() => {
           tokenLength: event.data.token?.length || 0
         })
         
-        // Store auth data in localStorage
-        if (event.data.token) {
-          localStorage.setItem('session_token', event.data.token)
-          localStorage.setItem('access_token', event.data.token)
-          console.log('[TPRM App] ✅ Token stored in localStorage:', event.data.token.substring(0, 20) + '...')
-        } else {
-          console.warn('[TPRM App] ⚠️ No token in auth sync message')
-        }
-        
-        if (event.data.refreshToken) {
-          localStorage.setItem('refresh_token', event.data.refreshToken)
-          console.log('[TPRM App] ✅ Refresh token stored')
-        }
+        // Cookie-first auth: do not store access/refresh/session tokens in browser storage.
         
         if (event.data.user) {
-          localStorage.setItem('current_user', JSON.stringify(event.data.user))
+          sessionStorage.setItem('current_user', JSON.stringify(event.data.user))
+          localStorage.removeItem('current_user')
           localStorage.setItem('user_id', event.data.user.UserId || event.data.user.user_id || event.data.user.id)
           console.log('[TPRM App] ✅ User stored in localStorage:', event.data.user.UserName || event.data.user.username)
           
@@ -117,31 +106,6 @@ onMounted(() => {
         if (event.data.tenant_name) {
           localStorage.setItem('tenant_name', event.data.tenant_name)
           console.log('[TPRM App] ✅ Tenant name stored from message:', event.data.tenant_name)
-        }
-        
-        // MULTI-TENANCY: Extract tenant_id from JWT token if not already set
-        if (!localStorage.getItem('tenant_id') && event.data.token) {
-          try {
-            const token = event.data.token
-            const base64Url = token.split('.')[1]
-            if (base64Url) {
-              const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
-              const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
-                return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
-              }).join(''))
-              const payload = JSON.parse(jsonPayload)
-              if (payload.tenant_id) {
-                localStorage.setItem('tenant_id', payload.tenant_id)
-                console.log('[TPRM App] ✅ Tenant ID extracted from JWT token:', payload.tenant_id)
-              }
-              if (payload.tenant_name) {
-                localStorage.setItem('tenant_name', payload.tenant_name)
-                console.log('[TPRM App] ✅ Tenant name extracted from JWT token:', payload.tenant_name)
-              }
-            }
-          } catch (e) {
-            console.warn('[TPRM App] ⚠️ Error extracting tenant_id from JWT:', e)
-          }
         }
         
         // MULTI-TENANCY: Clear RFP store when tenant changes
@@ -241,9 +205,18 @@ onMounted(() => {
     
     // Also check if auth data is already in parent's localStorage (for immediate sync)
     // This is a fallback in case the message was sent before listener was set up
-    setTimeout(() => {
-      if (!localStorage.getItem('session_token')) {
-        console.log('[TPRM App] No token found, requesting auth again...')
+    setTimeout(async () => {
+      try {
+        const authService = (await import('@/services/authService')).default
+        const ok = await authService.isAuthenticated()
+        if (!ok) {
+          console.log('[TPRM App] No valid cookie session, requesting auth again...')
+          if (window.parent && window.parent !== window) {
+            window.parent.postMessage({ type: 'TPRM_AUTH_REQUEST' }, '*')
+          }
+        }
+      } catch (e) {
+        // If anything goes wrong, fall back to requesting auth again.
         if (window.parent && window.parent !== window) {
           window.parent.postMessage({ type: 'TPRM_AUTH_REQUEST' }, '*')
         }

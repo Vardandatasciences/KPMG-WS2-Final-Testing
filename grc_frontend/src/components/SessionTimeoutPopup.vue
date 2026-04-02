@@ -85,7 +85,7 @@ export default {
         this.showPopup = false
         
         // Try to refresh the token to extend session
-        const refreshToken = localStorage.getItem('refresh_token')
+        const refreshToken = sessionStorage.getItem('refresh_token') || localStorage.getItem('refresh_token')
         if (refreshToken) {
           try {
             const { default: api } = await import('../services/api.js')
@@ -95,7 +95,8 @@ export default {
             
             if (response.data && response.data.access) {
               // Update access token
-              localStorage.setItem('access_token', response.data.access)
+              sessionStorage.setItem('access_token', response.data.access)
+              localStorage.removeItem('access_token')
               
               // Reset session timeout service
               sessionTimeoutService.reset()
@@ -140,7 +141,7 @@ export default {
     },
     checkAuthAndStart() {
       // Check authentication status and start/stop service accordingly
-      const accessToken = localStorage.getItem('access_token')
+      const accessToken = sessionStorage.getItem('access_token') || localStorage.getItem('access_token')
       if (accessToken) {
         // User is authenticated - reset service to restart timer
         // This ensures the timer resets when user logs in again

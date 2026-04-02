@@ -702,7 +702,7 @@ export default {
           formData.append('fileName', file.name);
 
           // Use S3 upload endpoint with JWT token
-          const token = localStorage.getItem('access_token');
+          const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
           const headers = {};
           if (token) {
             headers['Authorization'] = `Bearer ${token}`;
@@ -813,7 +813,7 @@ export default {
           formData.append('fileName', file.name);
 
           // Use S3 upload endpoint with JWT token
-          const token = localStorage.getItem('access_token');
+          const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
           const headers = {};
           if (token) {
             headers['Authorization'] = `Bearer ${token}`;

@@ -1599,6 +1599,11 @@ const viewInvitations = () => {
   showToast("Viewing Invitations", "Switched to Distribution Status tab")
 }
 
+const sanitizeCSVCell = (value) => {
+  const text = String(value ?? '')
+  return /^\s*[=+\-@]/.test(text) ? `'${text}` : text
+}
+
 const generateInvitationsCSV = (invitations) => {
   const headers = ['Vendor Name', 'Company', 'Email', 'Status', 'Unique Token', 'Invitation URL', 'Sent Date', 'Acknowledged Date']
   const rows = invitations.map(inv => [
@@ -1612,7 +1617,9 @@ const generateInvitationsCSV = (invitations) => {
     inv.acknowledged_date ? new Date(inv.acknowledged_date).toLocaleDateString() : ''
   ])
   
-  return [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n')
+  return [headers, ...rows]
+    .map(row => row.map(cell => `"${String(sanitizeCSVCell(cell)).replace(/"/g, '""')}"`).join(','))
+    .join('\n')
 }
 
 const loadRecentActivity = async () => {

@@ -10,6 +10,7 @@ import logging
 import mysql.connector
 import requests
 import json
+from html import escape
 
 # Load environment variables
 load_dotenv()
@@ -302,6 +303,9 @@ class ForgotPasswordService:
             # SMTP Fallback
             # Create email message
             msg = MIMEMultipart()
+            safe_user_name = escape(str(user_name or "User"))
+            safe_platform_name = escape(str(platform_name or "GRC System"))
+            safe_otp = escape(str(otp or ""))
             msg['From'] = f"{self.from_name} <{self.from_email}>"
             msg['To'] = email
             msg['Subject'] = f"Password Reset OTP - {platform_name}"
@@ -313,12 +317,12 @@ class ForgotPasswordService:
                     <h1 style="color: #ffffff; margin: 0; font-size: 28px;">Password Reset OTP</h1>
                 </div>
                 <div style="padding: 20px;">
-                    <p style="color: #333333; font-size: 16px;">Hello {user_name},</p>
-                    <p style="color: #333333; font-size: 16px;">We received a request to reset your password for your {platform_name} account.</p>
+                    <p style="color: #333333; font-size: 16px;">Hello {safe_user_name},</p>
+                    <p style="color: #333333; font-size: 16px;">We received a request to reset your password for your {safe_platform_name} account.</p>
                     <p style="color: #333333; font-size: 16px;">Your One-Time Password (OTP) is:</p>
                     <div style="text-align: center; margin: 30px 0;">
                         <div style="background-color: #f8f9fa; border: 2px solid #3b82f6; border-radius: 10px; padding: 20px; display: inline-block;">
-                            <span style="font-size: 32px; font-weight: bold; color: #3b82f6; letter-spacing: 5px;">{otp}</span>
+                            <span style="font-size: 32px; font-weight: bold; color: #3b82f6; letter-spacing: 5px;">{safe_otp}</span>
                         </div>
                     </div>
                     <p style="color: #333333; font-size: 14px;"><strong>Important:</strong></p>
@@ -327,7 +331,7 @@ class ForgotPasswordService:
                         <li>Do not share this OTP with anyone</li>
                         <li>If you didn't request this, please ignore this email</li>
                     </ul>
-                    <p style="color: #333333; font-size: 14px; margin-top: 20px;">Best regards,<br>{platform_name} Team</p>
+                    <p style="color: #333333; font-size: 14px; margin-top: 20px;">Best regards,<br>{safe_platform_name} Team</p>
                 </div>
             </div>
             """

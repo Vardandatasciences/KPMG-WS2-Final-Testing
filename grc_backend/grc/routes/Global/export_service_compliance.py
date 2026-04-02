@@ -18,6 +18,7 @@ from reportlab.lib import colors
 from reportlab.lib.units import inch
 from django.utils import timezone
 from ...debug_utils import debug_print
+from ...utils.csv_security import sanitize_csv_dataset
 
 
 # Initialize S3 client
@@ -147,7 +148,8 @@ def export_to_csv(data):
     """Export data to CSV format"""
     try:
         # Convert data to DataFrame
-        df = pd.DataFrame(data)
+        sanitized_data = sanitize_csv_dataset(data)
+        df = pd.DataFrame(sanitized_data)
         
         # Create CSV string
         csv_buffer = BytesIO()

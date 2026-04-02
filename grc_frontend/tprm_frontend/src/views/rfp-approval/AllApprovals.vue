@@ -328,6 +328,11 @@ import { PopupService } from '@/popup/popupService'
 import { useNotifications } from '@/composables/useNotifications'
 import loggingService from '@/services/loggingService'
 
+const sanitizeCSVCell = (value: unknown) => {
+  const text = String(value ?? '')
+  return /^\s*[=+\-@]/.test(text) ? `'${text}` : text
+}
+
 // Router
 const router = useRouter()
 
@@ -623,7 +628,9 @@ const exportWorkflows = () => {
       formatDate(workflow.updated_at),
       getCreatorName(workflow.created_by)
     ])
-  ].map(row => row.join(',')).join('\n')
+  ].map(row =>
+    row.map(cell => `"${String(sanitizeCSVCell(cell)).replace(/"/g, '""')}"`).join(',')
+  ).join('\n')
   
   const blob = new Blob([csvContent], { type: 'text/csv' })
   const url = window.URL.createObjectURL(blob)

@@ -2,9 +2,42 @@ from rest_framework import viewsets, status, filters
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
+from django.db import transaction
 from .models import EmergencyProcurement, EmergencyEvaluationCriteria
 from .serializers import EmergencyProcurementSerializer, EmergencyProcurementCreateSerializer, EmergencyProcurementListSerializer, EmergencyEvaluationCriteriaSerializer
 from tprm_backend.core.tenant_utils import get_tenant_id_from_request
+
+def _get_or_create_dev_superuser():
+    """
+    Development fallback user bootstrap made race-safe for concurrent requests.
+    """
+    from django.contrib.auth.models import User
+
+    existing_superuser = User.objects.filter(is_superuser=True).order_by('id').first()
+    if existing_superuser:
+        return existing_superuser
+
+    try:
+        with transaction.atomic():
+            user, created = User.objects.get_or_create(
+                username='admin',
+                defaults={
+                    'email': 'admin@example.com',
+                    'is_superuser': True,
+                    'is_staff': True,
+                    'is_active': True,
+                },
+            )
+            if created:
+                user.set_password('admin123')
+                user.save(update_fields=['password'])
+            elif not user.is_superuser or not user.is_staff:
+                user.is_superuser = True
+                user.is_staff = True
+                user.save(update_fields=['is_superuser', 'is_staff'])
+            return user
+    except Exception:
+        return User.objects.filter(is_superuser=True).order_by('id').first() or User.objects.get(username='admin')
 
 
 class EmergencyProcurementViewSet(viewsets.ModelViewSet):
@@ -67,12 +100,7 @@ class EmergencyProcurementViewSet(viewsets.ModelViewSet):
             if not tenant_id:
                 tenant_id = 1
         
-        from django.contrib.auth.models import User
-        admin_user = User.objects.filter(is_superuser=True).first()
-        if not admin_user:
-            admin_user = User.objects.create_superuser(
-                username='admin', email='admin@example.com', password='admin123'
-            )
+        admin_user = _get_or_create_dev_superuser()
         
         data = request.data.copy() if hasattr(request.data, 'copy') else request.data
         if 'tenant_id' not in data:
@@ -248,12 +276,7 @@ class EmergencyEvaluationCriteriaViewSet(viewsets.ModelViewSet):
             if not tenant_id:
                 tenant_id = 1
         
-        from django.contrib.auth.models import User
-        admin_user = User.objects.filter(is_superuser=True).first()
-        if not admin_user:
-            admin_user = User.objects.create_superuser(
-                username='admin', email='admin@example.com', password='admin123'
-            )
+        admin_user = _get_or_create_dev_superuser()
         
         # Get user_id from request.user if available
         user_id = None

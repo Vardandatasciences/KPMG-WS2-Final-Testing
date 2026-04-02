@@ -593,7 +593,7 @@ export default {
     const fetchFrameworks = async () => {
       try {
         loadingFrameworks.value = true
-        const accessToken = localStorage.getItem('access_token')
+        const accessToken = sessionStorage.getItem('access_token') || localStorage.getItem('access_token')
         const response = await axios.get(`${API_BASE_URL}/api/frameworks/`, {
           headers: {
             'Authorization': `Bearer ${accessToken}`,
@@ -935,7 +935,7 @@ export default {
         params.append('include_ai', 'true')
 
         const url = `${API_BASE_URL}/api/export-privacy-report/?${params.toString()}`
-        const accessToken = localStorage.getItem('access_token')
+        const accessToken = sessionStorage.getItem('access_token') || localStorage.getItem('access_token')
 
         const response = await axios.get(url, {
           headers: {

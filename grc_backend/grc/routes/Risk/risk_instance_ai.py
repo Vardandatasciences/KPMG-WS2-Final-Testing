@@ -1305,8 +1305,6 @@ def upload_and_process_risk_instance_document_streaming(request):
         )
         response['Cache-Control'] = 'no-cache'
         response['Connection'] = 'keep-alive'
-        response['Access-Control-Allow-Origin'] = '*'
-        response['Access-Control-Allow-Headers'] = 'Cache-Control'
         
         return response
 

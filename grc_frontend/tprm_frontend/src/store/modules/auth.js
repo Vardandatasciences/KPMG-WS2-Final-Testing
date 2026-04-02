@@ -28,14 +28,13 @@ const authModule = {
   mutations: {
     SET_AUTH(state, { user, token }) {
       state.currentUser = user
-      state.sessionToken = token
+      // Cookie-first: do not store JWT/session tokens in browser storage
+      state.sessionToken = null
       state.isAuthenticated = true
       state.requiresOtp = false
       state.otpUser = null
-      if (token) {
-        localStorage.setItem('session_token', token)
-        localStorage.setItem('current_user', JSON.stringify(user))
-      }
+      sessionStorage.setItem('current_user', JSON.stringify(user))
+      localStorage.removeItem('current_user')
       // Clear permission cache on login to force fresh permission checks
       console.log('[Auth] Clearing permission cache on login')
       permissionsService.clearCache()
@@ -53,9 +52,7 @@ const authModule = {
       state.isAuthenticated = false
       state.otpUser = null
       state.requiresOtp = false
-      localStorage.removeItem('session_token')
-      localStorage.removeItem('access_token')
-      localStorage.removeItem('refresh_token')
+      sessionStorage.removeItem('current_user')
       localStorage.removeItem('current_user')
       // Clear permission cache on logout
       console.log('[Auth] Clearing permission cache on logout')
@@ -77,7 +74,8 @@ const authModule = {
     SET_USER(state, user) {
       state.currentUser = user
       if (user) {
-        localStorage.setItem('current_user', JSON.stringify(user))
+        sessionStorage.setItem('current_user', JSON.stringify(user))
+        localStorage.removeItem('current_user')
       }
     }
   },
@@ -114,7 +112,7 @@ const authModule = {
             // Direct login without OTP (shouldn't happen with MFA)
             commit('SET_AUTH', {
               user: result.user,
-              token: result.data.session_token
+              token: null
             })
             return {
               success: true,
@@ -163,7 +161,7 @@ const authModule = {
         if (result.success) {
           commit('SET_AUTH', {
             user: result.user,
-            token: result.token
+            token: null
           })
           console.log('Auth module: OTP verification successful')
           return {

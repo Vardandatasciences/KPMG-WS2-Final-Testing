@@ -294,7 +294,7 @@ export default {
         // Also check current_user object in localStorage (may contain UserId field)
         if (!userId) {
           try {
-            const currentUserStr = localStorage.getItem('current_user')
+            const currentUserStr = sessionStorage.getItem('current_user') || localStorage.getItem('current_user')
             if (currentUserStr) {
               const currentUser = JSON.parse(currentUserStr)
               userId = currentUser.UserId || currentUser.user_id || currentUser.userId || currentUser.id
@@ -327,7 +327,10 @@ export default {
         }
         
         // CRITICAL: Double-check by looking for JWT token - if token exists, user should be logged in
-        const token = localStorage.getItem('access_token') || 
+        const token = sessionStorage.getItem('access_token') ||
+                     sessionStorage.getItem('token') ||
+                     sessionStorage.getItem('session_token') ||
+                     localStorage.getItem('access_token') ||
                      localStorage.getItem('token') ||
                      localStorage.getItem('session_token')
         

@@ -35,30 +35,61 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
 import authService from '../../services/authService.js'
 import ConsentForm from './ConsentForm.vue'
 import * as roleRoutingService from '../../../tprm_frontend/src/services/roleRoutingService.js'
 
-const route = useRoute()
 const router = useRouter()
 const loading = ref(true)
 const error = ref(null)
 const showConsentForm = ref(false)
 const isVendorUser = ref(false)
 
+const scrubCallbackUrl = () => {
+  try {
+    // Defensive cleanup: if any token-like params are ever present, remove them from the visible URL.
+    const currentUrl = new URL(window.location.href)
+    const sensitiveParams = ['access_token', 'refresh_token', 'id_token', 'token', 'session_token']
+    let removed = false
+    sensitiveParams.forEach((param) => {
+      if (currentUrl.searchParams.has(param)) {
+        currentUrl.searchParams.delete(param)
+        removed = true
+      }
+    })
+
+    if (window.location.hash && /access_token|id_token|refresh_token/i.test(window.location.hash)) {
+      window.history.replaceState({}, document.title, `${currentUrl.pathname}${currentUrl.search}`)
+      return
+    }
+
+    if (removed || currentUrl.search) {
+      window.history.replaceState({}, document.title, currentUrl.pathname)
+    }
+  } catch (e) {
+    // Do not block login flow if URL parsing fails.
+  }
+}
+
 onMounted(async () => {
   try {
+    const handoffKey = new URL(window.location.href).searchParams.get('handoff')
+    scrubCallbackUrl()
     console.log('🔐 Google OAuth Callback - Starting processing...')
-    console.log('🔐 Route query params:', route.query)
-    
-    // Get parameters from URL
-    const accessToken = route.query.access_token
-    const refreshToken = route.query.refresh_token
-    const userId = route.query.user_id
-    const consentRequired = route.query.consent_required
-    const accessTokenExpires = route.query.access_token_expires
-    const refreshTokenExpires = route.query.refresh_token_expires
+
+    // Fetch one-time callback payload from backend session instead of URL query params.
+    const callbackPayloadResult = await authService.getGoogleOAuthCallbackPayload(handoffKey)
+    if (!callbackPayloadResult.success || !callbackPayloadResult.data) {
+      throw new Error(callbackPayloadResult.error || 'Missing OAuth callback payload')
+    }
+
+    const accessToken = callbackPayloadResult.data.access_token
+    const refreshToken = callbackPayloadResult.data.refresh_token
+    const userId = callbackPayloadResult.data.user_id
+    const consentRequired = callbackPayloadResult.data.consent_required
+    const accessTokenExpires = callbackPayloadResult.data.access_token_expires
+    const refreshTokenExpires = callbackPayloadResult.data.refresh_token_expires
 
     console.log('🔐 Extracted tokens:', {
       hasAccessToken: !!accessToken,
@@ -89,7 +120,7 @@ onMounted(async () => {
       console.log('✅ Google OAuth callback successful')
       
       // Verify tokens are stored
-      const storedToken = localStorage.getItem('session_token')
+      const storedToken = sessionStorage.getItem('session_token') || localStorage.getItem('session_token')
       const storedUserId = localStorage.getItem('user_id')
       console.log('🔐 Stored auth data:', {
         hasToken: !!storedToken,
@@ -122,14 +153,22 @@ onMounted(async () => {
 
 const resolvePostLoginRoute = async () => {
   try {
-    const token = localStorage.getItem('session_token') || localStorage.getItem('access_token')
+    const token = sessionStorage.getItem('session_token') ||
+                  sessionStorage.getItem('access_token') ||
+                  localStorage.getItem('session_token') ||
+                  localStorage.getItem('access_token')
     if (!token) {
       return '/home'
     }
 
     let userId = null
     try {
-      const currentUser = JSON.parse(localStorage.getItem('current_user') || localStorage.getItem('user') || '{}')
+      const currentUser = JSON.parse(
+        sessionStorage.getItem('current_user') ||
+        localStorage.getItem('current_user') ||
+        localStorage.getItem('user') ||
+        '{}'
+      )
       userId = currentUser.userid || currentUser.id || currentUser.user_id || currentUser.UserId
     } catch (e) {
       console.error('Error getting user ID for post-login route (Google OAuth):', e)
@@ -144,7 +183,10 @@ const resolvePostLoginRoute = async () => {
 
 const determineVendorFlag = async () => {
   try {
-    const token = localStorage.getItem('session_token') || localStorage.getItem('access_token')
+    const token = sessionStorage.getItem('session_token') ||
+                  sessionStorage.getItem('access_token') ||
+                  localStorage.getItem('session_token') ||
+                  localStorage.getItem('access_token')
     if (!token) {
       isVendorUser.value = false
       return

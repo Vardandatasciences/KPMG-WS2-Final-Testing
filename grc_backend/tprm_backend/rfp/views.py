@@ -17,6 +17,7 @@ from django.db import transaction, connection, connections
 from django.core.mail import send_mail, EmailMessage
 from django.template.loader import render_to_string
 from django.conf import settings
+from django.utils.html import escape
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.core.paginator import Paginator
@@ -56,6 +57,7 @@ from .serializers import (
 )
 from .permissions import IsRFPCreatorOrReviewer
 from .s3 import create_direct_mysql_client
+from .input_sanitization import sanitize_invitation_custom_message
 from .forms import (
     VendorSearchForm, VendorManualEntryForm, 
     VendorBulkUploadForm, RFPVendorSelectionForm
@@ -74,24 +76,59 @@ from tprm_backend.core.tenant_utils import (
     tenant_filter
 )
 
+def _get_or_create_dev_superuser():
+    """
+    Development fallback user bootstrap made race-safe for concurrent requests.
+    """
+    from django.contrib.auth.models import User
+
+    existing_superuser = User.objects.filter(is_superuser=True).order_by('id').first()
+    if existing_superuser:
+        return existing_superuser
+
+    try:
+        with transaction.atomic():
+            user, created = User.objects.get_or_create(
+                username='admin',
+                defaults={
+                    'email': 'admin@example.com',
+                    'is_superuser': True,
+                    'is_staff': True,
+                    'is_active': True,
+                },
+            )
+            if created:
+                user.set_password('admin123')
+                user.save(update_fields=['password'])
+            elif not user.is_superuser or not user.is_staff:
+                user.is_superuser = True
+                user.is_staff = True
+                user.save(update_fields=['is_superuser', 'is_staff'])
+            return user
+    except Exception:
+        return User.objects.filter(is_superuser=True).order_by('id').first() or User.objects.get(username='admin')
+
 
 # ==============================================================================
 # PUBLIC VENDOR INVITATION REDIRECT ENDPOINT (NO AUTHENTICATION REQUIRED)
 # ==============================================================================
 @csrf_exempt
 @require_GET
-def vendor_invitation_redirect(request, rfp_id):
+def vendor_invitation_redirect(request, rfp_id, token=None):
     """
     Public endpoint to redirect old invitation URLs to the frontend vendor portal.
     This handles backward compatibility for invitation emails sent with old URL format.
     NO DRF decorators - pure Django view for clean HTTP redirect.
     
-    URL Format: /rfp/<rfp_id>/invitation?token=<token>
+    URL Format: /rfp/<rfp_id>/invitation/<token>
     Redirects to: https://riskavaire.vardaands.com/submit?rfpId=<rfp_id>&org=<company>&vendorName=<name>&...
     """
     try:
-        # Get token from query parameters
-        token = request.GET.get('token', '')
+        # Strict: never consume token from query parameters.
+        if not token:
+            frontend_url = getattr(settings, 'EXTERNAL_BASE_URL', 'https://riskavaire.vardaands.com').rstrip('/')
+            redirect_url = f"{frontend_url}/submit?rfpId={rfp_id}"
+            return HttpResponseRedirect(redirect_url)
         
         # Look up the vendor invitation by token
         try:
@@ -221,8 +258,14 @@ class RFPViewSet(RFPAuthenticationMixin, viewsets.ModelViewSet):
                                 import jwt
                                 from django.conf import settings
                                 token = auth_header.split(' ')[1]
-                                secret_key = getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
-                                payload = jwt.decode(token, secret_key, algorithms=['HS256'])
+                                verification_key = getattr(settings, 'JWT_VERIFYING_KEY', None) or getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
+                                payload = jwt.decode(
+                                    token,
+                                    verification_key,
+                                    algorithms=getattr(settings, 'JWT_ALLOWED_ALGORITHMS', [getattr(settings, 'JWT_ALGORITHM', 'RS256')]),
+                                    issuer=getattr(settings, 'JWT_ISSUER', None),
+                                    audience=getattr(settings, 'JWT_AUDIENCE', None),
+                                )
                                 # Check if tenant_id is directly in JWT payload
                                 if payload and 'tenant_id' in payload:
                                     request.tenant_id = payload['tenant_id']
@@ -325,15 +368,8 @@ class RFPViewSet(RFPAuthenticationMixin, viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
         
-        # Add default user for development
-        from django.contrib.auth.models import User
-        admin_user = User.objects.filter(is_superuser=True).first()
-        if not admin_user:
-            admin_user = User.objects.create_superuser(
-                username='admin',
-                email='admin@example.com',
-                password='admin123'
-            )
+        # Add default user for development (race-safe bootstrap)
+        admin_user = _get_or_create_dev_superuser()
         
         data = request.data.copy() if hasattr(request.data, 'copy') else request.data
         
@@ -360,8 +396,6 @@ class RFPViewSet(RFPAuthenticationMixin, viewsets.ModelViewSet):
         MULTI-TENANCY: Ensures tenant_id is set on creation
         For development, use the first superuser if no authenticated user
         """
-        from django.contrib.auth.models import User
-        
         # MULTI-TENANCY: Get tenant_id from request
         tenant_id = get_tenant_id_from_request(self.request)
         
@@ -369,17 +403,8 @@ class RFPViewSet(RFPAuthenticationMixin, viewsets.ModelViewSet):
             serializer.save(created_by=self.request.user.id, tenant_id=tenant_id)
         else:
             # For development only - use the first superuser
-            admin_user = User.objects.filter(is_superuser=True).first()
-            if admin_user:
-                serializer.save(created_by=admin_user.id, tenant_id=tenant_id)
-            else:
-                # Create a superuser if none exists
-                admin_user = User.objects.create_superuser(
-                    username='admin',
-                    email='admin@example.com',
-                    password='admin123'
-                )
-                serializer.save(created_by=admin_user.id, tenant_id=tenant_id)
+            admin_user = _get_or_create_dev_superuser()
+            serializer.save(created_by=admin_user.id, tenant_id=tenant_id)
 
     @action(detail=True, methods=['post'])
     def submit_for_review(self, request, pk=None):
@@ -467,16 +492,34 @@ class RFPViewSet(RFPAuthenticationMixin, viewsets.ModelViewSet):
                 {"error": "Only RFPs in IN_REVIEW status can be approved"},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
+        # Enforce maker–checker: creator cannot approve their own RFP
+        try:
+            creator_id_int = int(rfp.created_by) if rfp.created_by is not None else None
+            current_user_id = getattr(request.user, 'id', None)
+            current_user_id_int = int(current_user_id) if current_user_id is not None else None
+        except (TypeError, ValueError):
+            logger.warning("Invalid creator or approver id while approving RFP")
+            return Response(
+                {"error": "Invalid approver id. Please contact an administrator."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if creator_id_int is not None and current_user_id_int is not None and creator_id_int == current_user_id_int:
+            logger.warning(f"Self-approval attempt detected for RFP ID {rfp.rfp_id} by user {creator_id_int}")
+            return Response(
+                {"error": "Self-approval is not allowed. Please assign a different reviewer to approve this RFP."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
         # Update status to PUBLISHED for normal approval workflow
         rfp.status = 'PUBLISHED'
-        rfp.approved_by = request.user.id if hasattr(request.user, 'id') else 1
+        rfp.approved_by = current_user_id_int if current_user_id_int is not None else (request.user.id if hasattr(request.user, 'id') else 1)
         rfp.save()
         
         # Update approval workflows
-        current_user_id = request.user.id if hasattr(request.user, 'id') else 1
         for workflow in rfp.approval_workflows.all():
-            if workflow.approver_id == current_user_id:
+            if workflow.approver_id == current_user_id_int:
                 workflow.status = 'approved'
                 workflow.approval_date = timezone.now()
                 workflow.save()
@@ -3187,6 +3230,11 @@ class AwardResponseView(APIView):
 
             portal_base_url = getattr(settings, 'FRONTEND_URL', None) or getattr(settings, 'EXTERNAL_BASE_URL', None) or 'https://riskavaire.vardaands.com'
             portal_login_url = f"{portal_base_url.rstrip('/')}/login"
+            safe_vendor_name = escape(vendor_name)
+            safe_vendor_email = escape(vendor_email)
+            safe_username = escape(username)
+            safe_password = escape(password)
+            safe_portal_login_url = escape(portal_login_url)
 
             # Create a more professional HTML email
             html_message = f"""
@@ -3194,14 +3242,14 @@ class AwardResponseView(APIView):
             <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
                 <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
                     <h2 style="color: #2c3e50;">Welcome to Vendor Portal</h2>
-                    <p>Dear {vendor_name},</p>
+                    <p>Dear {safe_vendor_name},</p>
                     <p>Congratulations! Your proposal has been accepted, and we're pleased to welcome you as a partner.</p>
                     <div style="background-color: #f8f9fa; border-left: 4px solid #28a745; padding: 15px; margin: 20px 0;">
                         <h3 style="margin-top: 0; color: #28a745;">Your Access Credentials</h3>
-                        <p><strong>Portal URL:</strong> <a href="{portal_login_url}">{portal_login_url}</a></p>
-                        <p><strong>Username:</strong> {username}</p>
-                        <p><strong>Email:</strong> {vendor_email}</p>
-                        <p><strong>Password:</strong> {password}</p>
+                        <p><strong>Portal URL:</strong> <a href="{safe_portal_login_url}">{safe_portal_login_url}</a></p>
+                        <p><strong>Username:</strong> {safe_username}</p>
+                        <p><strong>Email:</strong> {safe_vendor_email}</p>
+                        <p><strong>Password:</strong> {safe_password}</p>
                     </div>
                     <p><strong>Important:</strong> For security reasons, we recommend that you change your password upon first login.</p>
                     <p>Through the vendor portal, you will be able to:</p>
@@ -3664,7 +3712,16 @@ def create_vendor_invitations(request, rfp_id):
         # Parse request data
         data = json.loads(request.body)
         vendors = data.get('vendors', [])
-        custom_message = data.get('customMessage', '')
+        try:
+            custom_message = sanitize_invitation_custom_message(
+                data.get('customMessage', ''),
+                field_name='customMessage'
+            )
+        except ValueError as validation_error:
+            return JsonResponse({
+                'success': False,
+                'error': str(validation_error)
+            }, status=400)
         utm_parameters = data.get('utmParameters', {})
         
         if not vendors:
@@ -4184,14 +4241,21 @@ def decline_invitation_with_ids(request, rfp_id, invitation_id):
             invitation.declined_reason = decline_reason
         invitation.save(update_fields=['invitation_status', 'declined_reason', 'updated_at'])
         if request.method == 'GET':
+            safe_rfp_id = escape(str(rfp_id))
+            safe_invitation_id = escape(str(invitation.invitation_id))
+            safe_reason_line = (
+                f"Reason: {escape(invitation.declined_reason)}"
+                if invitation.declined_reason
+                else ''
+            )
             html = f"""
 <!DOCTYPE html>
 <html><head><meta charset='utf-8'><title>Invitation Declined</title>
 <style>body{{font-family:Arial;padding:24px;color:#111}} .err{{color:#b11}}</style>
 </head><body>
   <h2 class="err">You have declined the invitation.</h2>
-  <p>RFP ID: {rfp_id} • Invitation ID: {invitation.invitation_id}</p>
-  <p>{('Reason: ' + invitation.declined_reason) if invitation.declined_reason else ''}</p>
+  <p>RFP ID: {safe_rfp_id} • Invitation ID: {safe_invitation_id}</p>
+  <p>{safe_reason_line}</p>
   <p>You may now close this page.</p>
 </body></html>
 """
@@ -4940,6 +5004,10 @@ def create_unmatched_vendor(request, rfp_id):
             try:
                 from django.core.mail import EmailMessage
                 from .email_templates import generate_rich_html_email
+                custom_message = sanitize_invitation_custom_message(
+                    data.get('custom_message', ''),
+                    field_name='custom_message'
+                )
                 
                 # Prepare RFP data for email template
                 rfp_data = {
@@ -4957,7 +5025,7 @@ def create_unmatched_vendor(request, rfp_id):
                     'invitation_url': invitation_url,
                     'acknowledgment_url': f"{getattr(settings, 'BACKEND_API_URL', 'https://riskavaire.vardaands.com').rstrip('/')}/api/v1/vendor-invitations/ack/{rfp_id}/{vendor_invitation.invitation_id}/",
                     'decline_url': f"{getattr(settings, 'BACKEND_API_URL', 'https://riskavaire.vardaands.com').rstrip('/')}/api/v1/vendor-invitations/decline/{rfp_id}/{vendor_invitation.invitation_id}/",
-                    'custom_message': data.get('custom_message', '')
+                    'custom_message': custom_message
                 }
                 
                 # Generate rich HTML email body
@@ -4976,6 +5044,11 @@ def create_unmatched_vendor(request, rfp_id):
                 vendor_invitation.invitation_status = 'SENT'
                 vendor_invitation.save()
                 print(f"[SUCCESS] Sent rich HTML invitation email to {vendor_invitation.vendor_email}")
+            except ValueError as validation_error:
+                return Response({
+                    'success': False,
+                    'error': str(validation_error)
+                }, status=status.HTTP_400_BAD_REQUEST)
             except Exception as email_error:
                 print(f"[WARNING] Failed to send email: {str(email_error)}")
                 import traceback

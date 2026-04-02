@@ -254,7 +254,7 @@ export default {
 
     // Get current user ID
     const getCurrentUserId = () => {
-      return localStorage.getItem('user_id') || sessionStorage.getItem('user_id') || 1
+      return sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || 1
     }
 
     // Load user's assigned projects
@@ -268,7 +268,7 @@ export default {
         console.log('📊 API Endpoint:', API_ENDPOINTS.STREAMLINE_USER_PROJECTS)
         
         // Get authentication token
-        const accessToken = localStorage.getItem('access_token') || sessionStorage.getItem('access_token')
+        const accessToken = sessionStorage.getItem('access_token') || localStorage.getItem('access_token')
         console.log('📊 Access Token:', accessToken ? 'Found' : 'Not found')
         
         // Call the real API endpoint
@@ -444,7 +444,7 @@ export default {
         console.log('📋 Project key:', project.project_key, 'Project ID:', project.project_id)
         
         // Get authentication token
-        const accessToken = localStorage.getItem('access_token') || sessionStorage.getItem('access_token')
+        const accessToken = sessionStorage.getItem('access_token') || localStorage.getItem('access_token')
         
         // Call Jira API to fetch issues/tasks
         const response = await fetch(API_ENDPOINTS.JIRA_PROJECT_ISSUES, {
@@ -519,7 +519,7 @@ export default {
         console.log(`💾 Saving ${tasks.length} tasks to database for project:`, project.project_name)
         
         // Get authentication token
-        const accessToken = localStorage.getItem('access_token') || sessionStorage.getItem('access_token')
+        const accessToken = sessionStorage.getItem('access_token') || localStorage.getItem('access_token')
         
         // Call Streamline API to save tasks
         const response = await fetch(API_ENDPOINTS.STREAMLINE_SAVE_PROJECT_TASKS, {
@@ -625,7 +625,7 @@ export default {
         console.log('📤 Saving task action:', payload)
         
         // Get authentication token
-        const accessToken = localStorage.getItem('access_token') || sessionStorage.getItem('access_token')
+        const accessToken = sessionStorage.getItem('access_token') || localStorage.getItem('access_token')
         
         // Call the real API endpoint
         const response = await fetch(API_ENDPOINTS.STREAMLINE_SAVE_TASK_ACTION, {

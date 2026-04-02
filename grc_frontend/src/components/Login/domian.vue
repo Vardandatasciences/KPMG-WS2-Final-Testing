@@ -219,7 +219,7 @@ export default {
         loading.value = true
         error.value = null
         
-        const token = localStorage.getItem('access_token')
+        const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token')
         const response = await axios.get(API_ENDPOINTS.GET_DOMAINS_WITH_FRAMEWORKS, {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -437,7 +437,7 @@ export default {
       }
 
       try {
-        const token = localStorage.getItem('access_token')
+        const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token')
         const response = await axios.post(
           API_ENDPOINTS.UPDATE_FRAMEWORK_DOMAIN,
           {
@@ -507,7 +507,7 @@ export default {
       }
 
       try {
-        const token = localStorage.getItem('access_token')
+        const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token')
         const response = await axios.post(
           API_ENDPOINTS.UPDATE_FRAMEWORK_DOMAIN,
           {

@@ -5,13 +5,15 @@ Management views for vendor listing
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import IsAuthenticated
+from django.utils.html import escape
 from django.db.models import Q, OuterRef, Subquery, Exists, Value, CharField
 from django.db.models.functions import Coalesce
 from tprm_backend.apps.vendor_core.models import Vendors, TempVendor
 from tprm_backend.apps.vendor_core.serializers import VendorsSerializer
 from .serializers import AllVendorsListSerializer, TempVendorSerializer
 import csv
+from grc.utils.csv_security import sanitize_csv_cell
 
 # Try to import tenant utils - use TPRM backend version if available
 try:
@@ -40,7 +42,7 @@ class AllVendorsListView(APIView):
     3. Temporary vendor with RFP (only in temp_vendor with response_id)
     4. Temporary vendor without RFP (only in temp_vendor without response_id)
     """
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         import logging
@@ -61,25 +63,6 @@ class AllVendorsListView(APIView):
                 tenant_id = get_tenant_id_from_request(request)
                 if tenant_id:
                     logger.info(f"[AllVendorsListView] Got tenant_id from get_tenant_id_from_request: {tenant_id}")
-            
-            # Method 2.5: Try to extract from JWT token payload
-            if not tenant_id:
-                try:
-                    auth_header = request.headers.get('Authorization', '')
-                    if auth_header.startswith('Bearer '):
-                        token = auth_header.split(' ')[1]
-                        # Decode JWT token to get payload
-                        import jwt
-                        from django.conf import settings
-                        try:
-                            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=['HS256'], options={"verify_signature": False})
-                            if 'tenant_id' in payload:
-                                tenant_id = payload['tenant_id']
-                                logger.info(f"[AllVendorsListView] Got tenant_id from JWT token: {tenant_id}")
-                        except Exception as jwt_error:
-                            logger.debug(f"[AllVendorsListView] Could not decode JWT: {jwt_error}")
-                except Exception as e:
-                    logger.debug(f"[AllVendorsListView] Error extracting tenant_id from JWT: {e}")
             
             # Method 3: Try to get from authenticated user
             if not tenant_id and hasattr(request, 'user') and request.user and request.user.is_authenticated:
@@ -298,25 +281,6 @@ class VendorDetailView(APIView):
             # Method 2: Try tenant utils function
             if not tenant_id:
                 tenant_id = get_tenant_id_from_request(request)
-            
-            # Method 2.5: Try to extract from JWT token payload
-            if not tenant_id:
-                try:
-                    auth_header = request.headers.get('Authorization', '')
-                    if auth_header.startswith('Bearer '):
-                        token = auth_header.split(' ')[1]
-                        # Decode JWT token to get payload
-                        import jwt
-                        from django.conf import settings
-                        try:
-                            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=['HS256'], options={"verify_signature": False})
-                            if 'tenant_id' in payload:
-                                tenant_id = payload['tenant_id']
-                                logger.info(f"[VendorDetailView] Got tenant_id from JWT token: {tenant_id}")
-                        except Exception as jwt_error:
-                            logger.debug(f"[VendorDetailView] Could not decode JWT: {jwt_error}")
-                except Exception as e:
-                    logger.debug(f"[VendorDetailView] Error extracting tenant_id from JWT: {e}")
             
             # Method 3: Try to get from authenticated user
             if not tenant_id and hasattr(request, 'user') and request.user and request.user.is_authenticated:
@@ -1024,6 +988,12 @@ class TempVendorManagementViewSet(VendorAuthenticationMixin, viewsets.ModelViewS
  
             portal_base_url = getattr(settings, 'FRONTEND_URL', None) or getattr(settings, 'SITE_URL', None) or 'http://localhost:3000'
             portal_login_url = f"{portal_base_url.rstrip('/')}/login"
+            safe_vendor_name = escape(vendor_name)
+            safe_company_name = escape(company_name)
+            safe_username = escape(username)
+            safe_vendor_email = escape(vendor_email)
+            safe_password = escape(password)
+            safe_portal_login_url = escape(portal_login_url)
  
             # Create a professional HTML email
             html_message = f"""
@@ -1051,26 +1021,26 @@ class TempVendorManagementViewSet(VendorAuthenticationMixin, viewsets.ModelViewS
                         <h1 style="margin: 0;">Welcome to TPRM Vendor Portal</h1>
                     </div>
                     <div class="content">
-                        <p>Dear <strong>{vendor_name}</strong>,</p>
-                        <p>We are pleased to welcome <strong>{company_name}</strong> to our Third-Party Risk Management (TPRM) system. Your vendor account has been successfully created, and you now have access to the vendor portal.</p>
+                        <p>Dear <strong>{safe_vendor_name}</strong>,</p>
+                        <p>We are pleased to welcome <strong>{safe_company_name}</strong> to our Third-Party Risk Management (TPRM) system. Your vendor account has been successfully created, and you now have access to the vendor portal.</p>
                        
                         <div class="credentials-box">
                             <h3 style="margin-top: 0; color: #1f2937;">Your Access Credentials</h3>
                             <div class="credential-item">
                                 <span class="label">Portal URL:</span>
-                                <span class="value"><a href="{portal_login_url}" style="color: #3b82f6;">{portal_login_url}</a></span>
+                                <span class="value"><a href="{safe_portal_login_url}" style="color: #3b82f6;">{safe_portal_login_url}</a></span>
                             </div>
                             <div class="credential-item">
                                 <span class="label">Username:</span>
-                                <span class="value">{username}</span>
+                                <span class="value">{safe_username}</span>
                             </div>
                             <div class="credential-item">
                                 <span class="label">Email:</span>
-                                <span class="value">{vendor_email}</span>
+                                <span class="value">{safe_vendor_email}</span>
                             </div>
                             <div class="credential-item">
                                 <span class="label">Password:</span>
-                                <span class="value">{password}</span>
+                                <span class="value">{safe_password}</span>
                             </div>
                         </div>
                        
@@ -1088,7 +1058,7 @@ class TempVendorManagementViewSet(VendorAuthenticationMixin, viewsets.ModelViewS
                         </ul>
                        
                         <p style="text-align: center;">
-                            <a href="{portal_login_url}" class="button">Access Vendor Portal</a>
+                            <a href="{safe_portal_login_url}" class="button">Access Vendor Portal</a>
                         </p>
                        
                         <p>If you have any questions or need assistance, please don't hesitate to contact our support team.</p>
@@ -2438,23 +2408,6 @@ class VendorRisksListView(APIView):
                     logger.info(f"[VendorRisksListView] Got tenant_id from get_tenant_id_from_request: {tenant_id}")
            
             # Method 3: Try to extract from JWT token payload
-            if not tenant_id:
-                try:
-                    auth_header = request.headers.get('Authorization', '')
-                    if auth_header.startswith('Bearer '):
-                        token = auth_header.split(' ')[1]
-                        import jwt
-                        from django.conf import settings
-                        try:
-                            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=['HS256'], options={"verify_signature": False})
-                            if 'tenant_id' in payload:
-                                tenant_id = payload['tenant_id']
-                                logger.info(f"[VendorRisksListView] Got tenant_id from JWT token: {tenant_id}")
-                        except Exception as jwt_error:
-                            logger.debug(f"[VendorRisksListView] Could not decode JWT: {jwt_error}")
-                except Exception as e:
-                    logger.debug(f"[VendorRisksListView] Error extracting tenant_id from JWT: {e}")
-           
             logger.info(f"[VendorRisksListView] Final tenant_id: {tenant_id}")
            
             # Import RiskTPRM model
@@ -2761,23 +2714,6 @@ class VendorRisksExportExcelView(APIView):
                 tenant_id = get_tenant_id_from_request(request)
                 if tenant_id:
                     logger.info(f"[VendorRisksExportExcelView] Got tenant_id from get_tenant_id_from_request: {tenant_id}")
-           
-            if not tenant_id:
-                try:
-                    auth_header = request.headers.get('Authorization', '')
-                    if auth_header.startswith('Bearer '):
-                        token = auth_header.split(' ')[1]
-                        import jwt
-                        from django.conf import settings
-                        try:
-                            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=['HS256'], options={"verify_signature": False})
-                            if 'tenant_id' in payload:
-                                tenant_id = payload['tenant_id']
-                                logger.info(f"[VendorRisksExportExcelView] Got tenant_id from JWT token: {tenant_id}")
-                        except Exception as jwt_error:
-                            logger.debug(f"[VendorRisksExportExcelView] Could not decode JWT: {jwt_error}")
-                except Exception as e:
-                    logger.debug(f"[VendorRisksExportExcelView] Error extracting tenant_id from JWT: {e}")
            
             logger.info(f"[VendorRisksExportExcelView] Final tenant_id: {tenant_id}")
            
@@ -3092,7 +3028,7 @@ class VendorRisksExportExcelView(APIView):
                     'AI Explanation', 'Suggested Mitigations', 'Data', 'Row',
                     'Created At', 'Updated At', 'Tenant ID'
                 ]
-                writer.writerow(headers)
+                writer.writerow([sanitize_csv_cell(value) for value in headers])
                
                 # Write data rows
                 for risk in risks:
@@ -3110,24 +3046,24 @@ class VendorRisksExportExcelView(APIView):
                         updated_at = updated_at.strftime('%Y-%m-%d %H:%M:%S')
                    
                     writer.writerow([
-                        risk.get('id', ''),
-                        risk.get('title', ''),
-                        risk.get('description', ''),
-                        risk.get('likelihood', ''),
-                        risk.get('impact', ''),
-                        risk.get('score', ''),
-                        risk.get('priority', ''),
-                        risk.get('status', ''),
-                        risk.get('risk_type', ''),
-                        risk.get('entity', ''),
-                        risk.get('exposure_rating', ''),
-                        risk.get('ai_explanation', ''),
-                        risk.get('suggested_mitigations', ''),
-                        data_value,
-                        risk.get('row', ''),
-                        created_at,
-                        updated_at,
-                        risk.get('tenant_id', '')
+                        sanitize_csv_cell(risk.get('id', '')),
+                        sanitize_csv_cell(risk.get('title', '')),
+                        sanitize_csv_cell(risk.get('description', '')),
+                        sanitize_csv_cell(risk.get('likelihood', '')),
+                        sanitize_csv_cell(risk.get('impact', '')),
+                        sanitize_csv_cell(risk.get('score', '')),
+                        sanitize_csv_cell(risk.get('priority', '')),
+                        sanitize_csv_cell(risk.get('status', '')),
+                        sanitize_csv_cell(risk.get('risk_type', '')),
+                        sanitize_csv_cell(risk.get('entity', '')),
+                        sanitize_csv_cell(risk.get('exposure_rating', '')),
+                        sanitize_csv_cell(risk.get('ai_explanation', '')),
+                        sanitize_csv_cell(risk.get('suggested_mitigations', '')),
+                        sanitize_csv_cell(data_value),
+                        sanitize_csv_cell(risk.get('row', '')),
+                        sanitize_csv_cell(created_at),
+                        sanitize_csv_cell(updated_at),
+                        sanitize_csv_cell(risk.get('tenant_id', ''))
                     ])
                
                 logger.info(f"[VendorRisksExportExcelView] CSV export completed: {total_count} risks exported")

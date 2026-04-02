@@ -14,7 +14,9 @@ from django.views import View
 import json
 import os
 import tempfile
+import time
 from typing import Dict, Any
+from django.core.cache import cache
 
 from .s3_service import get_s3_service
 from .models import FileStorage, S3Files, RFP
@@ -27,6 +29,23 @@ from tprm_backend.core.tenant_utils import (
     require_tenant,
     tenant_filter
 )
+
+EXPORT_ALLOWED_FORMATS = {'json', 'csv', 'xml', 'txt', 'pdf'}
+EXPORT_MAX_REQUEST_BYTES = 5 * 1024 * 1024
+EXPORT_RATE_LIMIT_PER_MINUTE = 20
+
+
+def _export_rate_limited(request) -> bool:
+    """Simple per-user/IP export rate limiting to reduce abuse."""
+    user_part = getattr(request.user, 'id', None) or getattr(request.user, 'userid', None) or 'anonymous'
+    client_ip = request.META.get('HTTP_X_FORWARDED_FOR', request.META.get('REMOTE_ADDR', 'unknown')).split(',')[0].strip()
+    bucket = int(time.time() // 60)
+    cache_key = f"rfp_export_rate_limit:{user_part}:{client_ip}:{bucket}"
+    current_count = cache.get(cache_key, 0)
+    if current_count >= EXPORT_RATE_LIMIT_PER_MINUTE:
+        return True
+    cache.set(cache_key, current_count + 1, 120)
+    return False
 
 
 @api_view(['GET'])
@@ -209,10 +228,16 @@ def export_data(request):
         return Response({'error': 'Tenant context not found'}, status=403)
     
     try:
+        if _export_rate_limited(request):
+            return Response({
+                'success': False,
+                'error': 'Export rate limit exceeded. Please retry after a minute.'
+            }, status=status.HTTP_429_TOO_MANY_REQUESTS)
+
         data = request.data
         
         export_data = data.get('data')
-        export_format = data.get('export_format')
+        export_format = str(data.get('export_format', '')).strip().lower()
         file_name = data.get('file_name')
         user_id = data.get('user_id', 'default-user')
         rfp_id = data.get('rfp_id')
@@ -233,6 +258,23 @@ def export_data(request):
                 'success': False,
                 'error': 'data, export_format, and file_name are required'
             }, status=status.HTTP_400_BAD_REQUEST)
+
+        if export_format not in EXPORT_ALLOWED_FORMATS:
+            return Response({
+                'success': False,
+                'error': f'Unsupported export format: {export_format}. Supported formats: {sorted(EXPORT_ALLOWED_FORMATS)}'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Pre-flight request size check to fail early before microservice invocation.
+        try:
+            payload_size = len(json.dumps(export_data, ensure_ascii=False).encode('utf-8'))
+        except Exception:
+            payload_size = len(str(export_data).encode('utf-8'))
+        if payload_size > EXPORT_MAX_REQUEST_BYTES:
+            return Response({
+                'success': False,
+                'error': f'Export payload too large ({payload_size} bytes). Maximum allowed: {EXPORT_MAX_REQUEST_BYTES} bytes.'
+            }, status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE)
         
         # Export to S3
         s3_service = get_s3_service()

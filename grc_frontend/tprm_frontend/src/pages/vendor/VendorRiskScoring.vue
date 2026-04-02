@@ -935,6 +935,11 @@ import notificationService from '@/services/notificationService';
 import loggingService from '@/services/loggingService';
 import { getTprmApiV1BaseUrl } from '@/utils/backendEnv';
 
+const sanitizeCSVCell = (value) => {
+  const text = String(value ?? '');
+  return /^\s*[=+\-@]/.test(text) ? `'${text}` : text;
+};
+
 // ===== INLINED API SERVICE =====
 const API_BASE_URL = `${getTprmApiV1BaseUrl()}/vendor-risk`;
 
@@ -1008,16 +1013,11 @@ async function handleResponse(response) {
   }
 }
 
-// Helper to get auth headers with JWT token
+// Cookie-first auth: rely on HttpOnly cookies (no JS-managed tokens)
 const getAuthHeaders = () => {
-  const token = localStorage.getItem('session_token')
-  const headers = {
+  return {
     'Content-Type': 'application/json',
   }
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`
-  }
-  return headers
 }
 
 const api = {
@@ -1862,21 +1862,21 @@ const handleDownloadReport = async () => {
         : (mitigations || '');
 
       return [
-        risk.id || '',
-        `"${(risk.title || '').replace(/"/g, '""')}"`,
-        `"${(risk.description || '').replace(/"/g, '""')}"`,
-        risk.likelihood || '',
-        risk.impact || '',
-        risk.exposure_rating || '',
-        risk.score || '',
-        risk.priority || '',
-        risk.status || '',
-        risk.risk_type || '',
-        risk.entity || '',
-        `"${(risk.ai_explanation || '').replace(/"/g, '""')}"`,
-        `"${mitigationsText.replace(/"/g, '""')}"`,
-        risk.created_at || '',
-        risk.updated_at || ''
+        sanitizeCSVCell(risk.id || ''),
+        `"${String(sanitizeCSVCell(risk.title || '')).replace(/"/g, '""')}"`,
+        `"${String(sanitizeCSVCell(risk.description || '')).replace(/"/g, '""')}"`,
+        sanitizeCSVCell(risk.likelihood || ''),
+        sanitizeCSVCell(risk.impact || ''),
+        sanitizeCSVCell(risk.exposure_rating || ''),
+        sanitizeCSVCell(risk.score || ''),
+        sanitizeCSVCell(risk.priority || ''),
+        sanitizeCSVCell(risk.status || ''),
+        sanitizeCSVCell(risk.risk_type || ''),
+        sanitizeCSVCell(risk.entity || ''),
+        `"${String(sanitizeCSVCell(risk.ai_explanation || '')).replace(/"/g, '""')}"`,
+        `"${String(sanitizeCSVCell(mitigationsText)).replace(/"/g, '""')}"`,
+        sanitizeCSVCell(risk.created_at || ''),
+        sanitizeCSVCell(risk.updated_at || '')
       ];
     });
 

@@ -3,11 +3,13 @@ import json
 import logging
 import base64
 import mimetypes
+from urllib.parse import quote
 from datetime import datetime, timedelta
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.utils import timezone
+from django.utils.html import escape
 from django.db import transaction
 from django.core.exceptions import ObjectDoesNotExist
 from google.auth.transport.requests import Request
@@ -18,6 +20,7 @@ from googleapiclient.errors import HttpError
 
 from grc.models import ExternalApplication, ExternalApplicationConnection, ExternalApplicationSyncLog, Users, IntegrationDataList
 from grc.utils.data_encryption import decrypt_data, is_encrypted_data
+from grc.rbac.utils import RBACUtils
 from ....debug_utils import debug_print
 
 logger = logging.getLogger(__name__)
@@ -832,6 +835,8 @@ def gmail_oauth_callback(request):
             if request.method == 'GET':
                 # For GET requests, return HTML page with error
                 from django.http import HttpResponse
+                safe_error_text = escape(str(result.get("error", "Unknown error")))
+                encoded_error = quote(str(result.get("error", "Unknown error")), safe="")
                 html_content = f"""
                 <!DOCTYPE html>
                 <html>
@@ -845,11 +850,11 @@ def gmail_oauth_callback(request):
                 </head>
                 <body>
                     <h2 class="error">❌ Gmail Connection Failed</h2>
-                    <p>Error: {result["error"]}</p>
+                    <p>Error: {safe_error_text}</p>
                     <p class="loading">Redirecting back to integrations...</p>
                     <script>
                         setTimeout(function() {{
-                            window.location.href = 'http://localhost:8080/integrations/external?oauth_error={result["error"]}';
+                            window.location.href = 'http://localhost:8080/integrations/external?oauth_error={encoded_error}';
                         }}, 3000);
                     </script>
                 </body>
@@ -1140,7 +1145,22 @@ def test_gmail_headers(request):
     Test endpoint to debug Gmail headers
     """
     try:
-        user_id = request.GET.get('user_id', 1)
+        requester_user_id = RBACUtils.get_user_id_from_request(request)
+        if not requester_user_id:
+            return JsonResponse({'success': False, 'error': 'Authentication required'}, status=401)
+
+        requested_user_id = request.GET.get('user_id')
+        user_id = requester_user_id
+        if requested_user_id is not None and str(requested_user_id).strip() != '':
+            try:
+                requested_user_id_int = int(str(requested_user_id))
+                requester_user_id_int = int(str(requester_user_id))
+            except (TypeError, ValueError):
+                return JsonResponse({'success': False, 'error': 'Invalid user id'}, status=400)
+
+            if requested_user_id_int != requester_user_id_int and not RBACUtils.is_system_admin(requester_user_id_int):
+                return JsonResponse({'success': False, 'error': 'Forbidden'}, status=403)
+            user_id = requested_user_id_int
         
         # Get user's Gmail connection
         try:

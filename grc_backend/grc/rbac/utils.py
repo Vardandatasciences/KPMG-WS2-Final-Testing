@@ -57,6 +57,21 @@ class RBACUtils:
                     
         except Exception as e:
             logger.error(f"[RBAC] Error extracting user_id from JWT: {e}")
+
+        # Cookie-first fallback: support HttpOnly auth when Authorization
+        # header is intentionally absent from frontend requests.
+        try:
+            token = None
+            if hasattr(request, 'COOKIES'):
+                token = request.COOKIES.get('access_token') or request.COOKIES.get('session_token')
+            if token:
+                from ..authentication import verify_jwt_token
+                payload = verify_jwt_token(token)
+                user_id = payload.get('user_id') if payload else None
+                if user_id:
+                    return user_id
+        except Exception as e:
+            logger.error(f"[RBAC] Error extracting user_id from auth cookie: {e}")
         
         # Fallback to session authentication
         try:
@@ -123,6 +138,9 @@ class RBACUtils:
             }
         """
         try:
+            is_audit_assessment_submit = endpoint_name == 'submit_audit_finding_assessment' or (
+                hasattr(request, 'path') and 'submit-audit-finding-assessment' in str(request.path)
+            )
             #logger.info(f"[RBAC] ===== ENDPOINT PERMISSION CHECK =====")
             #logger.info(f"[RBAC] Endpoint: {endpoint_name}")
             #logger.info(f"[RBAC] Required Permission: {required_permission}")
@@ -130,6 +148,13 @@ class RBACUtils:
             #logger.info(f"[RBAC] Request Method: {request.method}")
             
             user_id = RBACUtils.get_user_id_from_request(request)
+            if is_audit_assessment_submit:
+                logger.warning(
+                    f"[RBAC DEBUG] submit_audit_finding_assessment request user resolution: "
+                    f"user_id={user_id}, request_user_type={type(getattr(request, 'user', None)).__name__}, "
+                    f"request_user_UserId={getattr(getattr(request, 'user', None), 'UserId', None)}, "
+                    f"request_user_id={getattr(getattr(request, 'user', None), 'id', None)}"
+                )
             if not user_id:
                 logger.warning(f"[RBAC] Access DENIED - No user_id in session for endpoint: {endpoint_name}")
                 return {
@@ -141,6 +166,12 @@ class RBACUtils:
                     'debug_info': {'session_available': hasattr(request, 'session')}
                 }
             
+            if is_audit_assessment_submit:
+                active_rows = RBAC.objects.filter(user=user_id, is_active='Y').values(
+                    'rbac_id', 'role', 'is_active', 'review_audit', 'username'
+                )
+                logger.warning(f"[RBAC DEBUG] Active RBAC rows for user_id={user_id}: {list(active_rows)}")
+
             rbac_record = RBACUtils.get_user_rbac_record(user_id)
             if not rbac_record:
                 logger.warning(f"[RBAC] Access DENIED - No RBAC record for user {user_id} on endpoint: {endpoint_name}")
@@ -417,6 +448,11 @@ class RBACUtils:
             
             # Use provided permission or look up from mapping
             permission_to_check = required_permission or endpoint_permissions.get(endpoint_name)
+            if is_audit_assessment_submit:
+                logger.warning(
+                    f"[RBAC DEBUG] Permission selected for submit_audit_finding_assessment: "
+                    f"permission_to_check={permission_to_check}, required_permission={required_permission}, endpoint_name={endpoint_name}"
+                )
             
             if not permission_to_check:
                 logger.warning(f"[RBAC] No permission mapping found for endpoint: {endpoint_name}")
@@ -435,6 +471,14 @@ class RBACUtils:
                 has_permission = rbac_record.view_all_compliance or rbac_record.view_all_incident
             else:
                 has_permission = getattr(rbac_record, permission_to_check, False)
+
+            if is_audit_assessment_submit:
+                logger.warning(
+                    f"[RBAC DEBUG] Final permission result for submit_audit_finding_assessment: "
+                    f"chosen_rbac_id={getattr(rbac_record, 'rbac_id', None)}, role={getattr(rbac_record, 'role', None)}, "
+                    f"is_active={getattr(rbac_record, 'is_active', None)}, "
+                    f"review_audit={getattr(rbac_record, 'review_audit', None)}, has_permission={has_permission}"
+                )
             
             #logger.info(f"[RBAC] ===== PERMISSION CHECK DETAILS =====")
             #logger.info(f"[RBAC] User: {user_id} ({rbac_record.username})")

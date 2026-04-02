@@ -126,8 +126,16 @@ import { CheckCircle, Info, FileText, Building2, Package, Code, Shield, Upload, 
 const route = useRoute()
 const router = useRouter()
 
+const getTokenFromRoute = () => {
+  const paramToken = route.params?.token
+  if (paramToken) {
+    return String(paramToken)
+  }
+  return null
+}
+
 const redirectToPortal = () => {
-  const token = route.query.token
+  const token = getTokenFromRoute()
   if (token) {
     router.push(`/rfi-vendor-portal/${token}`)
   } else {

@@ -1146,7 +1146,39 @@ function handleViewCompliance(row) {
   showControlDetailsModal(row);
 }
 
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function safeClassToken(value, fallback = 'default') {
+  const token = String(value ?? '')
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, '');
+  return token || fallback;
+}
+
 function showControlDetailsModal(compliance) {
+  const safeName = escapeHtml(compliance.name || 'Not specified');
+  const safeIdentifier = escapeHtml(compliance.identifier || 'Not specified');
+  const safeStatus = escapeHtml(compliance.status || 'Not specified');
+  const safeStatusClass = safeClassToken(compliance.status, 'default');
+  const safeCategory = escapeHtml(compliance.category || 'Not specified');
+  const safeCategoryClass = safeClassToken(compliance.category, 'default');
+  const safeDescription = escapeHtml(compliance.description || 'No description available');
+  const safeMandatoryOptional = escapeHtml(compliance.mandatoryOptional || 'Not specified');
+  const safeManualAutomatic = escapeHtml(compliance.manualAutomatic || 'Not specified');
+  const safeMaturityLevel = escapeHtml(compliance.maturityLevel || 'Not specified');
+  const safePossibleDamage = escapeHtml(compliance.PossibleDamage || 'Not specified');
+  const safeMitigation = escapeHtml(compliance.mitigation || 'Not specified');
+  const safeFramework = escapeHtml(selectedFramework.value?.name || 'Not specified');
+  const safePolicy = escapeHtml(selectedPolicy.value?.name || 'Not specified');
+  const safeSubPolicy = escapeHtml(selectedSubpolicy.value?.name || 'Not specified');
+
   // Create a modal to show control details
   const modalContent = `
     <div class="control-details-modal">
@@ -1160,26 +1192,26 @@ function showControlDetailsModal(compliance) {
           <div class="detail-grid">
             <div class="detail-item">
               <label>Title:</label>
-              <span>${compliance.name || 'Not specified'}</span>
+              <span>${safeName}</span>
             </div>
             <div class="detail-item">
               <label>ID:</label>
-              <span>${compliance.identifier || 'Not specified'}</span>
+              <span>${safeIdentifier}</span>
             </div>
             <div class="detail-item">
               <label>Status:</label>
-              <span class="status-badge ${compliance.status?.toLowerCase() || 'default'}">${compliance.status || 'Not specified'}</span>
+              <span class="status-badge ${safeStatusClass}">${safeStatus}</span>
             </div>
             <div class="detail-item">
               <label>Criticality:</label>
-              <span class="criticality-badge ${compliance.category?.toLowerCase() || 'default'}">${compliance.category || 'Not specified'}</span>
+              <span class="criticality-badge ${safeCategoryClass}">${safeCategory}</span>
             </div>
           </div>
         </div>
 
         <div class="detail-section">
           <h4>Description</h4>
-          <p>${compliance.description || 'No description available'}</p>
+          <p>${safeDescription}</p>
         </div>
 
         <div class="detail-section">
@@ -1187,15 +1219,15 @@ function showControlDetailsModal(compliance) {
           <div class="detail-grid">
             <div class="detail-item">
               <label>Type:</label>
-              <span>${compliance.mandatoryOptional || 'Not specified'}</span>
+              <span>${safeMandatoryOptional}</span>
             </div>
             <div class="detail-item">
               <label>Implementation:</label>
-              <span>${compliance.manualAutomatic || 'Not specified'}</span>
+              <span>${safeManualAutomatic}</span>
             </div>
             <div class="detail-item">
               <label>Maturity Level:</label>
-              <span>${compliance.maturityLevel || 'Not specified'}</span>
+              <span>${safeMaturityLevel}</span>
             </div>
           </div>
         </div>
@@ -1206,11 +1238,11 @@ function showControlDetailsModal(compliance) {
           <div class="detail-grid">
             <div class="detail-item">
               <label>Possible Damage:</label>
-              <p>${compliance.PossibleDamage || 'Not specified'}</p>
+              <p>${safePossibleDamage}</p>
             </div>
             <div class="detail-item">
               <label>Mitigation:</label>
-              <p>${compliance.mitigation || 'Not specified'}</p>
+              <p>${safeMitigation}</p>
             </div>
           </div>
         </div>
@@ -1221,15 +1253,15 @@ function showControlDetailsModal(compliance) {
           <div class="detail-grid">
             <div class="detail-item">
               <label>Framework:</label>
-              <span>${selectedFramework.value?.name || 'Not specified'}</span>
+              <span>${safeFramework}</span>
             </div>
             <div class="detail-item">
               <label>Policy:</label>
-              <span>${selectedPolicy.value?.name || 'Not specified'}</span>
+              <span>${safePolicy}</span>
             </div>
             <div class="detail-item">
               <label>SubPolicy:</label>
-              <span>${selectedSubpolicy.value?.name || 'Not specified'}</span>
+              <span>${safeSubPolicy}</span>
             </div>
           </div>
         </div>

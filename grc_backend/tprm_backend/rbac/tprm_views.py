@@ -27,8 +27,15 @@ def get_user_id_from_jwt(request):
         
         token = auth_header.split(' ')[1]
         
-        # Decode JWT token
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=['HS256'])
+        # Decode JWT token with configured JWT validation settings.
+        verification_key = getattr(settings, 'JWT_VERIFYING_KEY', None) or getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
+        payload = jwt.decode(
+            token,
+            verification_key,
+            algorithms=getattr(settings, 'JWT_ALLOWED_ALGORITHMS', [getattr(settings, 'JWT_ALGORITHM', 'RS256')]),
+            issuer=getattr(settings, 'JWT_ISSUER', None),
+            audience=getattr(settings, 'JWT_AUDIENCE', None),
+        )
         user_id = payload.get('user_id')
         
         if user_id:

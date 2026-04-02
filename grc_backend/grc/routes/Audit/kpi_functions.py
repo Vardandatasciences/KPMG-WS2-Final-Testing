@@ -169,11 +169,6 @@ def get_audit_completion_metrics(request):
             }
         })
         
-        # Add CORS headers
-        response["Access-Control-Allow-Origin"] = "http://localhost:8080"
-        response["Access-Control-Allow-Methods"] = "GET, OPTIONS"
-        response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-        
         send_log(module="KPI", actionType="GET_AUDIT_COMPLETION_METRICS", description="Fetched audit completion metrics", userId=request.session.get('user_id'))
         
         return response
@@ -232,11 +227,6 @@ def get_non_compliance_count(request):
                 }
             }
         })
-        
-        # Add CORS headers
-        response["Access-Control-Allow-Origin"] = "http://localhost:8080"
-        response["Access-Control-Allow-Methods"] = "GET, OPTIONS"
-        response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
         
         send_log(module="KPI", actionType="GET_NON_COMPLIANCE_COUNT", description="Fetched non-compliance count", userId=request.session.get('user_id'))
         
@@ -438,11 +428,6 @@ def get_audit_cycle_time(request):
             }
         })
         
-        # Add CORS headers
-        response["Access-Control-Allow-Origin"] = "http://localhost:8080"
-        response["Access-Control-Allow-Methods"] = "GET, OPTIONS"
-        response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-        
         send_log(module="KPI", actionType="GET_AUDIT_CYCLE_TIME", description="Fetched audit cycle time metrics", userId=request.session.get('user_id'))
         
         return response
@@ -593,11 +578,6 @@ def get_finding_rate(request):
                 'year': year
             }
         })
-        
-        # Add CORS headers
-        response["Access-Control-Allow-Origin"] = "http://localhost:8080"
-        response["Access-Control-Allow-Methods"] = "GET, OPTIONS"
-        response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
         
         send_log(module="KPI", actionType="GET_FINDING_RATE", description="Fetched finding rate metrics", userId=request.session.get('user_id'))
         
@@ -769,11 +749,6 @@ def get_time_to_close_findings(request):
                 'year': year
             }
         })
-        
-        # Add CORS headers
-        response["Access-Control-Allow-Origin"] = "http://localhost:8080"
-        response["Access-Control-Allow-Methods"] = "GET, OPTIONS"
-        response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
         
         send_log(module="KPI", actionType="GET_TIME_TO_CLOSE_FINDINGS", description="Fetched time to close findings metrics", userId=request.session.get('user_id'))
         
@@ -1030,11 +1005,6 @@ def get_non_compliance_issues(request):
             }
         })
         
-        # Add CORS headers
-        response["Access-Control-Allow-Origin"] = "http://localhost:8080"
-        response["Access-Control-Allow-Methods"] = "GET, OPTIONS"
-        response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-        
         send_log(module="KPI", actionType="GET_NON_COMPLIANCE_ISSUES", description="Fetched non-compliance issues metrics", userId=request.session.get('user_id'))
         
         return response
@@ -1269,11 +1239,6 @@ def get_severity_distribution(request):
             }
         })
         
-        # Add CORS headers
-        response["Access-Control-Allow-Origin"] = "http://localhost:8080"
-        response["Access-Control-Allow-Methods"] = "GET, OPTIONS"
-        response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-        
         send_log(module="KPI", actionType="GET_SEVERITY_DISTRIBUTION", description="Fetched severity distribution metrics", userId=request.session.get('user_id'))
         
         return response
@@ -1490,11 +1455,6 @@ def get_findings_closure_rate(request):
             }
         })
         
-        # Add CORS headers
-        response["Access-Control-Allow-Origin"] = "http://localhost:8080"
-        response["Access-Control-Allow-Methods"] = "GET, OPTIONS"
-        response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-        
         send_log(module="KPI", actionType="GET_FINDINGS_CLOSURE_RATE", description="Fetched findings closure rate metrics", userId=request.session.get('user_id'))
         
         return response
@@ -1666,11 +1626,6 @@ def get_evidence_completion(request):
                 'filtered_audit_id': audit_id
             }
         })
-        
-        # Add CORS headers
-        response["Access-Control-Allow-Origin"] = "http://localhost:8080"
-        response["Access-Control-Allow-Methods"] = "GET, OPTIONS"
-        response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
         
         send_log(module="KPI", actionType="GET_EVIDENCE_COMPLETION", description="Fetched evidence completion metrics", userId=request.session.get('user_id'))
         
@@ -1908,11 +1863,6 @@ def get_report_timeliness(request):
                 'year': year
             }
         })
-        
-        # Add CORS headers
-        response["Access-Control-Allow-Origin"] = "http://localhost:8080"
-        response["Access-Control-Allow-Methods"] = "GET, OPTIONS"
-        response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
         
         send_log(module="KPI", actionType="GET_REPORT_TIMELINESS", description="Fetched audit report timeliness metrics", userId=request.session.get('user_id'))
         
@@ -2167,11 +2117,6 @@ def get_compliance_readiness(request):
                 'filtered_policy_id': policy_id
             }
         })
-        
-        # Add CORS headers
-        response["Access-Control-Allow-Origin"] = "http://localhost:8080"
-        response["Access-Control-Allow-Methods"] = "GET, OPTIONS"
-        response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
         
         send_log(module="KPI", actionType="GET_COMPLIANCE_READINESS", description="Fetched compliance readiness metrics", userId=request.session.get('user_id'))
         

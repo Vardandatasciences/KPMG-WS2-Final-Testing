@@ -825,18 +825,11 @@ def upload_and_process_risk_document_optimized(request):
 debug_print(f"📤 Upload request for risk document (OPTIMIZED VERSION)")
 
     if request.method == 'OPTIONS':
-        response = HttpResponse()
-        response['Access-Control-Allow-Origin'] = '*'
-        response['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
-        response['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
-        response['Access-Control-Max-Age'] = '86400'
-        return response
+        return HttpResponse()
 
     try:
         if 'file' not in request.FILES:
-            resp = JsonResponse({'status': 'error', 'message': 'No file uploaded'}, status=400)
-            resp['Access-Control-Allow-Origin'] = '*'
-            return resp
+            return JsonResponse({'status': 'error', 'message': 'No file uploaded'}, status=400)
 
         uploaded_file = request.FILES['file']
         file_name = uploaded_file.name
@@ -844,9 +837,7 @@ debug_print(f"📤 Upload request for risk document (OPTIMIZED VERSION)")
 
         allowed = ['.pdf', '.docx', '.doc', '.xlsx', '.xls', '.txt']
         if ext not in allowed:
-            resp = JsonResponse({'status': 'error', 'message': f'Invalid file type. Allowed: {", ".join(allowed)}'}, status=400)
-            resp['Access-Control-Allow-Origin'] = '*'
-            return resp
+            return JsonResponse({'status': 'error', 'message': f'Invalid file type. Allowed: {", ".join(allowed)}'}, status=400)
 
         from django.conf import settings
         upload_dir = os.path.join(settings.MEDIA_ROOT, 'ai_uploads', 'risk')
@@ -868,9 +859,7 @@ debug_print(f"📤 Upload request for risk document (OPTIMIZED VERSION)")
             
             if not text or len(text.strip()) < 50:
                 debug_print(f"❌ ERROR: Could not extract meaningful text. Length: {len(text) if text else 0}")
-                resp = JsonResponse({'status': 'error', 'message': 'Could not extract meaningful text from document'}, status=400)
-                resp['Access-Control-Allow-Origin'] = '*'
-                return resp
+                return JsonResponse({'status': 'error', 'message': 'Could not extract meaningful text from document'}, status=400)
 
             debug_print(f"✅ STEP 1 COMPLETE: Extracted {len(text)} characters from document")
             
@@ -890,7 +879,6 @@ debug_print(f"📤 Upload request for risk document (OPTIMIZED VERSION)")
                 'risks': risks,
                 'version': 'optimized'
             })
-            resp['Access-Control-Allow-Origin'] = '*'
             return resp
         except Exception as process_error:
             if os.path.exists(file_path):
@@ -900,9 +888,7 @@ debug_print(f"📤 Upload request for risk document (OPTIMIZED VERSION)")
     except Exception as e:
         import traceback
         traceback.print_exc()
-        resp = JsonResponse({'status': 'error', 'message': f'Error processing document: {str(e)}'}, status=500)
-        resp['Access-Control-Allow-Origin'] = '*'
-        return resp
+        return JsonResponse({'status': 'error', 'message': f'Error processing document: {str(e)}'}, status=500)
 
 
 

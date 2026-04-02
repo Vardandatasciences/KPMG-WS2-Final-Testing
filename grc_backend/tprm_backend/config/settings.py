@@ -36,11 +36,18 @@ def env_config(key, default=None, cast=None):
         return cast(value)
     return value
 
+def env_csv(key, default=''):
+    """Read comma-separated environment variables as a list."""
+    value = env_config(key, default=default)
+    if not value:
+        return []
+    return [item.strip() for item in str(value).split(',') if item.strip()]
+
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = env_config('DJANGO_SECRET_KEY', default='django-insecure-development-key-change-in-production')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = env_config('DEBUG', default=True, cast=bool)
+DEBUG = env_config('DEBUG', default=False, cast=bool)
 
 ALLOWED_HOSTS = env_config('ALLOWED_HOSTS', default='localhost,127.0.0.1,testserver', cast=lambda v: [s.strip() for s in v.split(',')])
 
@@ -93,6 +100,8 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    # Framework-level safeguard: sanitize verbose error payloads.
+    'tprm_backend.middleware.error_sanitization.ErrorResponseSanitizationMiddleware',
     # 'defender.middleware.FailedLoginMiddleware',  # Temporarily disabled
     'middleware.vendor_logging.VendorLoggingMiddleware',
 ]
@@ -230,7 +239,8 @@ REST_FRAMEWORK = {
         'rest_framework.authentication.SessionAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.AllowAny',
+        # Secure-by-default: endpoints must be authenticated unless explicitly marked public.
+        'rest_framework.permissions.IsAuthenticated',
     ],
     'DEFAULT_RENDERER_CLASSES': [
         'rest_framework.renderers.JSONRenderer',
@@ -259,17 +269,34 @@ REST_FRAMEWORK = {
 }
 
 # JWT Configuration
+JWT_ALGORITHM = env_config('JWT_ALGORITHM', default='RS256')
+JWT_ISSUER = env_config('JWT_ISSUER', default='tprm-backend')
+JWT_AUDIENCE = env_config('JWT_AUDIENCE', default='tprm-frontend')
+JWT_PRIVATE_KEY = env_config('JWT_PRIVATE_KEY', default='').replace('\\n', '\n')
+JWT_PUBLIC_KEY = env_config('JWT_PUBLIC_KEY', default='').replace('\\n', '\n')
+
+if JWT_ALGORITHM.startswith('RS') or JWT_ALGORITHM.startswith('ES'):
+    if not JWT_PRIVATE_KEY or not JWT_PUBLIC_KEY:
+        raise ValueError(
+            "JWT_PRIVATE_KEY and JWT_PUBLIC_KEY must be configured when using asymmetric JWT algorithms."
+        )
+    JWT_SIGNING_KEY = JWT_PRIVATE_KEY
+    JWT_VERIFYING_KEY = JWT_PUBLIC_KEY
+else:
+    JWT_SIGNING_KEY = env_config('JWT_SECRET_KEY', default=SECRET_KEY)
+    JWT_VERIFYING_KEY = env_config('JWT_VERIFYING_KEY', default='')
+
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
     'UPDATE_LAST_LOGIN': True,
-    'ALGORITHM': 'HS256',
-    'SIGNING_KEY': SECRET_KEY,
-    'VERIFYING_KEY': None,
-    'AUDIENCE': None,
-    'ISSUER': None,
+    'ALGORITHM': JWT_ALGORITHM,
+    'SIGNING_KEY': JWT_SIGNING_KEY,
+    'VERIFYING_KEY': JWT_VERIFYING_KEY,
+    'AUDIENCE': JWT_AUDIENCE,
+    'ISSUER': JWT_ISSUER,
     'AUTH_HEADER_TYPES': ('Bearer',),
     'AUTH_HEADER_NAME': 'HTTP_AUTHORIZATION',
     'USER_ID_FIELD': 'userid',
@@ -296,9 +323,14 @@ SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 SESSION_COOKIE_AGE = 3600  # 1 hour
 
 # CORS Settings
-CORS_ALLOWED_ORIGINS = env_config('CORS_ALLOWED_ORIGINS', default='http://localhost:3000,http://localhost:3000,http://localhost:8080,http://127.0.0.1:8080', cast=lambda v: [s.strip() for s in v.split(',')])
+CORS_ALLOWED_ORIGINS = env_config('CORS_ALLOWED_ORIGINS', default='http://localhost:3000,http://localhost:3000,http://localhost:8080,http://127.0.0.1:8080,https://test-riskavaire.vardaands.com', cast=lambda v: [s.strip() for s in v.split(',')])
 CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOW_ALL_ORIGINS = True  # For development only
+CORS_ALLOW_ALL_ORIGINS = False
+
+# Export URL allowlist used by export SSRF hardening.
+# Empty means public http/https URLs are allowed, while internal/private hosts
+# are still blocked by the sanitizer.
+EXPORT_ALLOWED_DOMAINS = env_csv('EXPORT_ALLOWED_DOMAINS', default='')
 CORS_ALLOW_HEADERS = [
     'accept',
     'accept-encoding',

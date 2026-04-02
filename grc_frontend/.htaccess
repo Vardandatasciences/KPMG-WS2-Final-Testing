@@ -2,9 +2,6 @@
   RewriteEngine On
   RewriteBase /
   
-  # Handle CORS if needed
-  Header set Access-Control-Allow-Origin "*"
-  
   # If the requested resource doesn't exist as a file or directory
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d

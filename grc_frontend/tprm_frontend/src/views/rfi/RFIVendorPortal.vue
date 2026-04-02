@@ -588,7 +588,7 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { 
   Loader2, FileText, X, Clock, Building2, CheckCircle2, AlertCircle, 
   Package, Link2, Shield, Upload, Lightbulb 
@@ -597,6 +597,7 @@ import { rfpUseToast } from '@/composables/rfpUseToast.js'
 import { getTprmApiV1BaseUrl } from '@/utils/backendEnv.js'
 
 const route = useRoute()
+const router = useRouter()
 const { success, error } = rfpUseToast()
 const API_BASE = getTprmApiV1BaseUrl()
 
@@ -919,6 +920,11 @@ watch(uploadedDocuments, () => updateCompletionStatus(), { deep: true })
 onMounted(() => {
   loadRFIByToken()
   updateCompletionStatus()
+
+  // Remove sensitive token from visible URL after initial load.
+  if (route.params?.token) {
+    router.replace({ path: '/rfi-vendor-portal' }).catch(() => {})
+  }
 })
 </script>
 

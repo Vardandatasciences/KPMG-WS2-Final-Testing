@@ -131,7 +131,6 @@ def rate_limit_decorator(
                         'limit_per_hour': requests_per_hour
                     }
                 }, status=429)
-                resp['Access-Control-Allow-Origin'] = '*'
                 return resp
             
             return func(request, *args, **kwargs)

@@ -139,8 +139,14 @@ def tenant_filter(view_func):
                                 import jwt
                                 from django.conf import settings
                                 token = auth_header.split(' ')[1]
-                                secret_key = getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
-                                payload = jwt.decode(token, secret_key, algorithms=['HS256'])
+                                verification_key = getattr(settings, 'JWT_VERIFYING_KEY', None) or getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
+                                payload = jwt.decode(
+                                    token,
+                                    verification_key,
+                                    algorithms=getattr(settings, 'JWT_ALLOWED_ALGORITHMS', [getattr(settings, 'JWT_ALGORITHM', 'RS256')]),
+                                    issuer=getattr(settings, 'JWT_ISSUER', None),
+                                    audience=getattr(settings, 'JWT_AUDIENCE', None),
+                                )
                                 if payload and 'user_id' in payload:
                                     user_id = payload['user_id']
                             except Exception as e:

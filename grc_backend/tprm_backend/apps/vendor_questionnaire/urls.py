@@ -24,6 +24,7 @@ router.register(r'responses', QuestionnaireResponseViewSet, basename='questionna
 urlpatterns = [
     path('', include(router.urls)),
     # Public questionnaire response (no authentication)
+    path('public/assignment/<str:token>/', get_assignment_by_token_view),
     path('public/assignment/', get_assignment_by_token_view),
     path('public/save_responses/', save_responses_by_token_view),
     path('public/submit_final/', submit_final_by_token_view),

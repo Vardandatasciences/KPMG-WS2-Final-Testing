@@ -3384,12 +3384,7 @@ def upload_risk_evidence(request):
     
     # Handle preflight OPTIONS request
     if request.method == 'OPTIONS':
-        response = JsonResponse({})
-        response["Access-Control-Allow-Origin"] = "http://localhost:8080"
-        response["Access-Control-Allow-Methods"] = "POST, OPTIONS"
-        response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-        response["Access-Control-Allow-Credentials"] = "true"
-        return response
+        return JsonResponse({})
     
     try:
         #printf"[DEBUG] upload_risk_evidence: Request method: {request.method}")
@@ -3532,11 +3527,6 @@ def upload_risk_evidence(request):
                 #printf"[DEBUG] upload_risk_evidence: Response data: {response_data}")
                 
                 response = JsonResponse(response_data, status=200)
-                response["Access-Control-Allow-Origin"] = "http://localhost:8080"
-                response["Access-Control-Allow-Methods"] = "POST, OPTIONS"
-                response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-                response["Access-Control-Allow-Credentials"] = "true"
-                
                 return response
             else:
                 #printf"[DEBUG] upload_risk_evidence: S3 upload failed: {upload_result}")
@@ -3545,10 +3535,6 @@ def upload_risk_evidence(request):
                     'error': upload_result.get('error', 'S3 upload failed'),
                     'details': upload_result
                 }, status=500)
-                response["Access-Control-Allow-Origin"] = "http://localhost:8080"
-                response["Access-Control-Allow-Methods"] = "POST, OPTIONS"
-                response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-                response["Access-Control-Allow-Credentials"] = "true"
                 return response
                 
         finally:
@@ -3566,11 +3552,6 @@ def upload_risk_evidence(request):
             'success': False,
             'error': f'Upload failed: {str(e)}'
         }, status=500)
-        response["Access-Control-Allow-Origin"] = "http://localhost:8080"
-        response["Access-Control-Allow-Methods"] = "POST, OPTIONS"
-        response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-        response["Access-Control-Allow-Credentials"] = "true"
-        
         return response
 
 

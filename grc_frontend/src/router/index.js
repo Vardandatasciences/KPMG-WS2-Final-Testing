@@ -100,6 +100,64 @@ import PublicPolicyAcknowledgement from '../views/PublicPolicyAcknowledgement.vu
  
 import BaselineConfiguration from '../components/Compliance/BaselineConfiguration.vue'
  
+const SENSITIVE_URL_PARAMS = ['access_token', 'refresh_token', 'id_token', 'token', 'session_token']
+
+// Cookie-first auth: HttpOnly cookies cannot be read by JS, so router should not check access_token.
+function hasShellAuthFlags() {
+  const userId = localStorage.getItem('user_id')
+  const isLoggedIn = localStorage.getItem('is_logged_in') === 'true'
+  return !!(userId && isLoggedIn)
+}
+
+async function ensureCookieSessionValid() {
+  try {
+    const authService = (await import('@/services/authService.js')).default
+    const result = await authService.validateSession()
+    if (result && result.success) {
+      sessionStorage.setItem('cookie_session_validated', 'true')
+      return true
+    }
+  } catch (e) {
+    // fall through
+  }
+  sessionStorage.removeItem('cookie_session_validated')
+  try {
+    const authService = (await import('@/services/authService.js')).default
+    authService.clearAuthData()
+  } catch (e) {
+    // ignore
+    localStorage.removeItem('is_logged_in')
+    localStorage.removeItem('isAuthenticated')
+    localStorage.removeItem('user_id')
+  }
+  return false
+}
+
+function scrubSensitiveParamsFromUrl() {
+  try {
+    const url = new URL(window.location.href)
+    let mutated = false
+
+    for (const p of SENSITIVE_URL_PARAMS) {
+      if (url.searchParams.has(p)) {
+        url.searchParams.delete(p)
+        mutated = true
+      }
+    }
+
+    if (url.hash && /access_token|refresh_token|id_token|session_token|token/i.test(url.hash)) {
+      url.hash = ''
+      mutated = true
+    }
+
+    if (mutated) {
+      window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`)
+    }
+  } catch (e) {
+    // Never block navigation due to scrubber issues.
+  }
+}
+
  
 import CreateRisk from '../components/Risk/CreateRisk.vue'
 import RiskRegisterList from '../components/Risk/RiskRegisterList.vue'
@@ -177,10 +235,7 @@ const routes = [
     path: '/',
     redirect: () => {
       // Check if user is authenticated
-      const accessToken = localStorage.getItem('access_token')
-      const userId = localStorage.getItem('user_id')
-      const isLoggedIn = localStorage.getItem('is_logged_in') === 'true'
-      const isAuthenticated = !!(accessToken && userId && isLoggedIn)
+      const isAuthenticated = hasShellAuthFlags()
       
       // If authenticated, go to home, otherwise to login
       console.log('🔄 Root path redirect - authenticated:', isAuthenticated)
@@ -1088,8 +1143,9 @@ const routes = [
     name: 'NotFound',
     redirect: (to) => {
       const isLoggedIn = localStorage.getItem('is_logged_in') === 'true'
+      const hasToken = true // cookie token is not readable; rely on flags + verify guard
       console.log('🔄 Catch-all route triggered for:', to.path, 'Logged in:', isLoggedIn)
-      return isLoggedIn ? '/home' : '/login'
+      return (isLoggedIn && hasToken) ? '/home' : '/login'
     }
   }
 
@@ -1109,10 +1165,7 @@ const router = createRouter({
 })
 
 function isShellAuthComplete() {
-  const accessToken = localStorage.getItem('access_token')
-  const userId = localStorage.getItem('user_id')
-  const isLoggedIn = localStorage.getItem('is_logged_in') === 'true'
-  return !!(accessToken && userId && isLoggedIn)
+  return hasShellAuthFlags()
 }
 
 function isLoginPath(path) {
@@ -1132,6 +1185,9 @@ router.afterEach((to) => {
 router.beforeEach(async (to, from, next) => {
   console.log('🔐 Router guard checking:', { to: to.path, from: from.path })
 
+  // Global safety net: never allow token-like params in the visible URL.
+  scrubSensitiveParamsFromUrl()
+
   // Fast path: do not render login when JWT + user_id + flag are already present (avoids login inside shell)
   if (isLoginPath(to.path) && isShellAuthComplete()) {
     console.log('🔐 Already authenticated — redirecting away from /login')
@@ -1139,33 +1195,18 @@ router.beforeEach(async (to, from, next) => {
     return
   }
  
-  // Check if user is authenticated
-  const accessToken = localStorage.getItem('access_token')
-  const userId = localStorage.getItem('user_id')
-  const isLoggedIn = localStorage.getItem('is_logged_in') === 'true'
- 
-  // Check token validity
-  let isTokenValid = true
-  if (accessToken) {
-    try {
-      const tokenPayload = JSON.parse(atob(accessToken.split('.')[1]))
-      const currentTime = Math.floor(Date.now() / 1000)
-      isTokenValid = tokenPayload.exp && tokenPayload.exp > currentTime
-    } catch (error) {
-      console.warn('⚠️ Invalid token format in router guard:', error)
-      isTokenValid = false
-    }
+  // Cookie-first auth: use local flags + a one-time /jwt/verify/ check per tab.
+  const hasAuthData = hasShellAuthFlags()
+  let isAuthenticated = hasAuthData
+  if (hasAuthData && sessionStorage.getItem('cookie_session_validated') !== 'true') {
+    isAuthenticated = await ensureCookieSessionValid()
   }
  
-  // User is authenticated if they have valid auth data, even if token is expired (will be refreshed)
-  const hasAuthData = !!(accessToken && userId && isLoggedIn)
-  const isAuthenticated = hasAuthData && (isTokenValid || accessToken) // Allow expired tokens for now
- 
   console.log('🔐 Authentication status:', {
-    hasToken: !!accessToken,
-    hasUserId: !!userId,
-    isLoggedIn: isLoggedIn,
-    isTokenValid: isTokenValid,
+    hasToken: undefined, // not readable with HttpOnly cookies
+    hasUserId: !!localStorage.getItem('user_id'),
+    isLoggedIn: localStorage.getItem('is_logged_in') === 'true',
+    isTokenValid: undefined,
     isAuthenticated: isAuthenticated
   })
  

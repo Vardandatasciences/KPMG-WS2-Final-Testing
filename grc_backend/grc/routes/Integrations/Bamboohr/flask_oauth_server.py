@@ -207,8 +207,8 @@ def oauth_callback():
         except Exception as e:
             debug_print(f"⚠️ Error notifying Django backend: {e}")
         
-        # Redirect back to frontend with success
-        frontend_callback_url = f"{FRONTEND_URL}/integration/bamboohr?token={access_token}&user_id={user_id}&subdomain={subdomain}&success=true"
+        # Redirect back to frontend with non-sensitive status only.
+        frontend_callback_url = f"{FRONTEND_URL}/integration/bamboohr?user_id={user_id}&subdomain={subdomain}&success=true"
         debug_print(f"🔗 Redirecting to frontend: {frontend_callback_url}")
         
         # Clear sensitive session data

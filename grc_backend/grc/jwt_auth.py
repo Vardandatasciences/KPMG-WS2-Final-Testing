@@ -8,6 +8,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from rest_framework.authentication import BaseAuthentication
 from rest_framework.exceptions import AuthenticationFailed
+from .authentication import _is_session_token_valid
 
 logger = logging.getLogger(__name__)
 
@@ -34,18 +35,30 @@ class UnifiedJWTAuthentication(BaseAuthentication):
         token = auth_header.split(' ')[1]
         
         try:
-            # Decode JWT token
-            secret_key = getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
-            payload = jwt.decode(token, secret_key, algorithms=['HS256'])
+            # Decode JWT token with centralized algorithm/key configuration.
+            verification_key = getattr(settings, 'JWT_VERIFYING_KEY', None) or getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
+            payload = jwt.decode(
+                token,
+                verification_key,
+                algorithms=getattr(settings, 'JWT_ALLOWED_ALGORITHMS', [getattr(settings, 'JWT_ALGORITHM', 'RS256')]),
+                issuer=getattr(settings, 'JWT_ISSUER', None),
+                audience=getattr(settings, 'JWT_AUDIENCE', None),
+            )
             
             user_id = payload.get('user_id')
             username = payload.get('username')
+            session_token = payload.get('jti')
             
             logger.info(f"[Unified JWT Auth] Token decoded successfully, user_id: {user_id}, username: {username}")
             
             if not user_id:
                 logger.warning("[Unified JWT Auth] Token does not contain user_id")
                 raise AuthenticationFailed('Token does not contain user_id')
+
+            # Enforce single active session across devices/browsers.
+            if not _is_session_token_valid(user_id, session_token):
+                logger.warning(f"[Unified JWT Auth] Session invalidated for user_id {user_id}")
+                raise AuthenticationFailed('Session invalidated due to newer login')
             
             # Try to get the user from the database
             User = get_user_model()

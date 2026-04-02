@@ -1392,7 +1392,8 @@ export default {
               // Save to both keys for compatibility
               localStorage.setItem('user', JSON.stringify(user))
               if (localStorage.getItem('current_user')) {
-                localStorage.setItem('current_user', JSON.stringify(user))
+                sessionStorage.setItem('current_user', JSON.stringify(user))
+                localStorage.removeItem('current_user')
               }
               console.log('Updated localStorage with permission')
             } catch (e) {

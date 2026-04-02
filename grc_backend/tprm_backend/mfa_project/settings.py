@@ -21,7 +21,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = config('SECRET_KEY', default='django-insecure-change-me-in-production')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = config('DEBUG', default=True, cast=bool)
+DEBUG = config('DEBUG', default=False, cast=bool)
 
 ALLOWED_HOSTS = ['localhost', '127.0.0.1', '0.0.0.0', '*']
 
@@ -61,6 +61,8 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    # Framework-level safeguard: sanitize verbose error payloads.
+    'tprm_backend.middleware.error_sanitization.ErrorResponseSanitizationMiddleware',
 ]
 
 # Disable CSRF for API endpoints in development
@@ -177,6 +179,8 @@ REST_FRAMEWORK = {
     'DEFAULT_RENDERER_CLASSES': [
         'rest_framework.renderers.JSONRenderer',
     ],
+    # Framework-level: central exception sanitization.
+    'EXCEPTION_HANDLER': 'tprm_backend.utils.vendor_exception_handler.vendor_custom_exception_handler',
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
 }
@@ -189,12 +193,13 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:8080",
     "http://localhost:8081",
     "http://127.0.0.1:8081",
+    "https://test-riskavaire.vardaands.com",
 ]
 
 CORS_ALLOW_CREDENTIALS = True
 
 # Additional CORS settings for development
-CORS_ALLOW_ALL_ORIGINS = True  # Only for development
+CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOWED_HEADERS = [
     'accept',
     'accept-encoding',
@@ -221,6 +226,7 @@ CSRF_TRUSTED_ORIGINS = [
     "http://127.0.0.1:8080",
     "http://localhost:8081",
     "http://127.0.0.1:8081",
+    "https://test-riskavaire.vardaands.com",
 ]
 
 # Additional CORS settings for API endpoints
@@ -233,7 +239,7 @@ CORS_ALLOW_METHODS = [
     'PUT',
 ]
 
-CORS_ALLOW_ALL_ORIGINS = True  # For development only
+CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOW_PRIVATE_NETWORK = True
 
 # Email Configuration - SMTP for real email delivery
@@ -254,7 +260,7 @@ MFA_MAX_ATTEMPTS = config('MFA_MAX_ATTEMPTS', default=3, cast=int)
 
 # JWT Settings
 JWT_SECRET_KEY = config('JWT_SECRET_KEY', default=SECRET_KEY)
-JWT_ALGORITHM = 'HS256'
+JWT_ALGORITHM = config('JWT_ALGORITHM', default='RS256')
 JWT_EXPIRY_HOURS = config('JWT_EXPIRY_HOURS', default=24, cast=int)
 JWT_REFRESH_EXPIRY_DAYS = config('JWT_REFRESH_EXPIRY_DAYS', default=7, cast=int)
 

@@ -3242,9 +3242,9 @@ const selectAllFrameworks = async () => {
 const fetchAllDashboardMetrics = async () => {
   try {
     // Check if user is authenticated
-    const accessToken = localStorage.getItem('access_token');
-    const userId = localStorage.getItem('user_id');
-    const isLoggedIn = localStorage.getItem('is_logged_in') === 'true';
+    const accessToken = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
+    const userId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id');
+    const isLoggedIn = (sessionStorage.getItem('is_logged_in') || localStorage.getItem('is_logged_in')) === 'true';
     const isAuthenticated = !!(accessToken && userId && isLoggedIn);
    
     console.log('🚀 DEBUG: Starting to fetch all dashboard metrics...', { isAuthenticated });
@@ -3320,7 +3320,7 @@ onMounted(() => {
   });
   
   // Get user data
-  const userData = localStorage.getItem('user');
+  const userData = sessionStorage.getItem('user') || localStorage.getItem('user');
   if (userData) {
     user.value = JSON.parse(userData);
   }
