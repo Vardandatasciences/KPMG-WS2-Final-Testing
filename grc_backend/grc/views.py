@@ -1,7 +1,7 @@
 from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from .models import Framework, Policy, SubPolicy, FrameworkVersion, PolicyVersion, PolicyApproval, Users, Department, BusinessUnit, Entity, Location, RBAC, GRCLog
 from .serializers import FrameworkSerializer, PolicySerializer, SubPolicySerializer, PolicyApprovalSerializer, UserSerializer   
@@ -19,7 +19,7 @@ from django.db.models.functions import Coalesce, Cast
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 from .models import Users
@@ -3085,8 +3085,12 @@ def policy_list(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@authentication_classes([])
 def list_users(request):
+    raw_request = getattr(request, '_request', request)
+    grc_user = getattr(raw_request, '_grc_user', None)
+    if not grc_user or not hasattr(grc_user, 'UserId'):
+        return Response({'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
     try:
         debug_print("DEBUG: list_users endpoint called")
         debug_print(f"DEBUG: Request method: {request.method}")
@@ -6254,6 +6258,22 @@ def get_user_details_by_id(request, user_id):
     Get user details from Users table by user ID
     """
     try:
+        # Object-level authorization (BOLA protection):
+        # - Users can only access their own record
+        # - Exception: role == 'GRC Administrator' can access other users
+        from .rbac.utils import RBACUtils
+        current_user_id = RBACUtils.get_user_id_from_request(request)
+        if not current_user_id:
+            return Response(
+                {'success': False, 'message': 'Authentication required'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        if int(current_user_id) != int(user_id) and not RBACUtils.is_system_admin(current_user_id):
+            return Response(
+                {'success': False, 'message': 'Forbidden'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
         # Get user from Users table
         user = Users.objects.get(UserId=user_id)
         
@@ -6387,6 +6407,22 @@ def save_user_session(request):
 @require_http_methods(["GET"])
 def get_user_profile(request, user_id):
     try:
+        # Object-level authorization (BOLA protection):
+        # - Users can only access their own profile
+        # - Exception: role == 'GRC Administrator' can access other users
+        from .rbac.utils import RBACUtils
+        current_user_id = RBACUtils.get_user_id_from_request(request)
+        if not current_user_id:
+            return JsonResponse(
+                {'status': 'error', 'message': 'Authentication required'},
+                status=401
+            )
+        if int(current_user_id) != int(user_id) and not RBACUtils.is_system_admin(current_user_id):
+            return JsonResponse(
+                {'status': 'error', 'message': 'Forbidden'},
+                status=403
+            )
+            
         logger.debug(f"Fetching user profile for user_id: {user_id}")
         user = Users.objects.get(UserId=user_id)
         
@@ -6632,14 +6668,52 @@ def get_user_permissions(request, user_id):
 
 @csrf_exempt
 @api_view(['PUT'])
-@authentication_classes([])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def update_user_permissions(request, user_id):
     """
     Update RBAC permissions for a user
     """
     try:
         logger.debug(f"Updating permissions for user_id: {user_id}")
+
+        # ----------------------------
+        # Authorization (server-side)
+        # ----------------------------
+        # This endpoint must never rely on request body parameters to decide caller privileges.
+        # Only privileged/admin RBAC roles are allowed to update RBAC permissions.
+        from .models import RBAC
+        from .rbac.utils import RBACUtils
+
+        caller_user_id = RBACUtils.get_user_id_from_request(request)
+        if not caller_user_id:
+            return JsonResponse(
+                {'status': 'error', 'message': 'Authentication required'},
+                status=401,
+            )
+
+        caller_rbac = RBAC.objects.filter(user=caller_user_id, is_active='Y').first()
+        if not caller_rbac:
+            return JsonResponse(
+                {'status': 'error', 'message': 'Access denied'},
+                status=403,
+            )
+
+        caller_role = (caller_rbac.role or '').strip()
+        admin_roles = {
+            'GRC Administrator',
+            'Audit Manager',
+            'Internal Auditor',
+            'External Auditor',
+            'Audit Reviewer',
+            'System Administrator',
+            'Administrator',
+        }
+        is_admin = (caller_role in admin_roles) or ('administrator' in caller_role.lower())
+        if not is_admin:
+            return JsonResponse(
+                {'status': 'error', 'message': 'Access denied'},
+                status=403,
+            )
         
         # Get user from Users table
         user = Users.objects.get(UserId=user_id)
@@ -6654,6 +6728,12 @@ def update_user_permissions(request, user_id):
             return JsonResponse({
                 'status': 'error',
                 'message': 'No permissions provided'
+            }, status=400)
+
+        if not isinstance(permissions, dict):
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Invalid permissions payload. Expected an object/dictionary.'
             }, status=400)
         
         # Get RBAC entry for the user
@@ -6675,6 +6755,15 @@ def update_user_permissions(request, user_id):
             # Get existing RBAC entry - check by user and role if role is provided
             role = request.data.get('role')
             if role:
+                role = str(role).strip()
+
+                allowed_roles = {choice[0] for choice in RBAC.ROLE_CHOICES}
+                if role not in allowed_roles:
+                    return JsonResponse({
+                        'status': 'error',
+                        'message': f'Invalid role value: {role}'
+                    }, status=400)
+
                 rbac_entry = RBAC.objects.filter(user=user, role=role, is_active='Y').first()
             else:
                 rbac_entry = RBAC.objects.filter(user=user, is_active='Y').first()
@@ -6735,6 +6824,20 @@ def update_user_permissions(request, user_id):
             
             # Track updated fields for logging
             updated_fields = []
+
+            def _to_strict_bool(value):
+                """Parse common boolean-like values; reject unexpected types."""
+                if isinstance(value, bool):
+                    return value
+                if isinstance(value, int) and value in (0, 1):
+                    return value == 1
+                if isinstance(value, str):
+                    normalized = value.strip().lower()
+                    if normalized in ('true', '1', 'yes', 'y', 'on'):
+                        return True
+                    if normalized in ('false', '0', 'no', 'n', 'off', ''):
+                        return False
+                raise ValueError(f"Invalid boolean value: {value!r}")
             
             # Update each permission field
             for field_name, value in permissions.items():
@@ -6742,7 +6845,14 @@ def update_user_permissions(request, user_id):
                     model_field = permission_mapping[field_name]
                     if hasattr(rbac_entry, model_field):
                         old_value = getattr(rbac_entry, model_field)
-                        new_value = bool(value)
+                        try:
+                            new_value = _to_strict_bool(value)
+                        except ValueError as ve:
+                            return JsonResponse({
+                                'status': 'error',
+                                'message': str(ve),
+                                'field': field_name
+                            }, status=400)
                         setattr(rbac_entry, model_field, new_value)
                         if old_value != new_value:
                             updated_fields.append(f"{model_field}: {old_value} -> {new_value}")

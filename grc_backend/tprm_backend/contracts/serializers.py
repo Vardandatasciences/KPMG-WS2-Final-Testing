@@ -474,6 +474,8 @@ class VendorContractCreateSerializer(AutoDecryptingModelSerializer):
             'assigned_to', 'custom_fields', 'compliance_framework',
             'contract_owner', 'legal_reviewer', 'file_path', 'data_inventory'
         ]
+        # status and workflow_stage must be set server-side only; never trust client input
+        read_only_fields = ['status', 'workflow_stage']
     
     def validate_contract_number(self, value):
         """Validate contract number uniqueness"""
@@ -623,6 +625,8 @@ class VendorContractUpdateSerializer(AutoDecryptingModelSerializer):
             'assigned_to', 'custom_fields', 'compliance_framework',
             'contract_owner', 'legal_reviewer', 'file_path', 'permission_required', 'data_inventory'
         ]
+        # status and workflow_stage must be changed only through dedicated approval workflow endpoints
+        read_only_fields = ['status', 'workflow_stage']
     
     def validate_contract_value(self, value):
         """Validate contract value"""
@@ -1142,13 +1146,12 @@ class ContractAmendmentCreateSerializer(AutoDecryptingModelSerializer):
     """Simplified serializer for contract amendment creation"""
     
     contract_id = serializers.IntegerField()
-    approved_by = serializers.IntegerField(required=False, allow_null=True)
     initiated_by = serializers.IntegerField(required=False, allow_null=True)
     
     class Meta:
         model = ContractAmendment
         fields = [
-            'contract_id', 'amendment_number', 'amendment_date', 
+            'contract_id', 'amendment_number', 'amendment_date',
             'amendment_reason', 'changes_summary', 'financial_impact',
             'approved_by', 'effective_date', 'attachment_path',
             'amended_clause_ids', 'amended_term_ids', 'affected_area',
@@ -1156,20 +1159,14 @@ class ContractAmendmentCreateSerializer(AutoDecryptingModelSerializer):
             'justification', 'supporting_documents', 'initiated_by',
             'initiated_date', 'amendment_notes'
         ]
+        # approved_by, workflow_status, and approval_date must only be set through
+        # a legitimate server-side approval action, never by the requester
+        read_only_fields = ['approved_by', 'workflow_status', 'approval_date']
     
     def validate_contract_id(self, value):
         """Validate contract exists"""
         if not VendorContract.objects.filter(contract_id=value).exists():
             raise serializers.ValidationError("Contract does not exist")
-        return value
-    
-    def validate_approved_by(self, value):
-        """Validate approved_by user exists"""
-        if value is not None:
-            try:
-                User.objects.get(userid=value)
-            except User.DoesNotExist:
-                raise serializers.ValidationError("Approved by user does not exist")
         return value
     
     def validate_initiated_by(self, value):
@@ -1234,29 +1231,22 @@ class ContractAmendmentCreateSerializer(AutoDecryptingModelSerializer):
 class ContractAmendmentUpdateSerializer(AutoDecryptingModelSerializer):
     """Serializer for contract amendment updates"""
     
-    approved_by = serializers.IntegerField(required=False, allow_null=True)
     initiated_by = serializers.IntegerField(required=False, allow_null=True)
     
     class Meta:
         model = ContractAmendment
         fields = [
-            'amendment_number', 'amendment_date', 'amendment_reason', 
-            'changes_summary', 'financial_impact', 'approved_by', 
+            'amendment_number', 'amendment_date', 'amendment_reason',
+            'changes_summary', 'financial_impact', 'approved_by',
             'effective_date', 'attachment_path', 'amended_clause_ids',
             'amended_term_ids', 'affected_area', 'workflow_status',
             'approval_date', 'amendment_version', 'justification',
             'supporting_documents', 'initiated_by', 'initiated_date',
             'amendment_notes'
         ]
-    
-    def validate_approved_by(self, value):
-        """Validate approved_by user exists"""
-        if value is not None:
-            try:
-                User.objects.get(userid=value)
-            except User.DoesNotExist:
-                raise serializers.ValidationError("Approved by user does not exist")
-        return value
+        # approved_by, workflow_status, and approval_date must only be changed
+        # through a dedicated approval workflow endpoint, never via a general update
+        read_only_fields = ['approved_by', 'workflow_status', 'approval_date']
     
     def validate_initiated_by(self, value):
         """Validate initiated_by user exists"""
@@ -1265,13 +1255,6 @@ class ContractAmendmentUpdateSerializer(AutoDecryptingModelSerializer):
                 User.objects.get(userid=value)
             except User.DoesNotExist:
                 raise serializers.ValidationError("Initiated by user does not exist")
-        return value
-    
-    def validate_workflow_status(self, value):
-        """Validate workflow status"""
-        valid_statuses = ['pending', 'approved', 'rejected', 'under_review']
-        if value not in valid_statuses:
-            raise serializers.ValidationError(f"Invalid workflow status. Must be one of: {', '.join(valid_statuses)}")
         return value
     
     def validate_affected_area(self, value):

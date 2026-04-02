@@ -63,13 +63,15 @@ def get_external_applications(request):
     """
     Get all external applications with their connection status for the current user
     """
+    auth_user = getattr(request, 'user', None)
+    if not auth_user or not hasattr(auth_user, 'UserId'):
+        return JsonResponse({'error': 'Authentication required'}, status=401)
     try:
         # Debug logging
         logger.info(f"External applications request: {request.method} {request.path}")
         logger.info(f"Request headers: {dict(request.headers)}")
         
-        # Get user ID from request (default to 1 for demo purposes)
-        user_id = request.GET.get('user_id', 1)
+        user_id = auth_user.UserId
         logger.info(f"Getting external applications for user_id: {user_id}")
         
         # Get all active external applications.

@@ -798,6 +798,10 @@
             <i class="fas fa-check-square icon"></i>
             <span>All Approvals</span>
           </div>
+          <div class="menu-item" @click="navigate('/tprm-app/vendor-assignee-decision')" :class="{'active': isActive('/tprm-app/vendor-assignee-decision')}">
+            <i class="fas fa-clipboard-check icon"></i>
+            <span>Vendor Decision</span>
+          </div>
         </div>
       </div>
       <div @click="toggleSubmenu('vendorMgmtModule')" class="menu-item has-submenu" :class="{'expanded': openMenus.vendorMgmtModule}">

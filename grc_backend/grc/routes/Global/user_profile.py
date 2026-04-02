@@ -96,6 +96,20 @@ def get_user_profile(request, user_id):
         
         # Get current user for logging
         current_user_id = RBACUtils.get_user_id_from_request(request)
+        # Object-level authorization (BOLA protection):
+        # - Users can only access their own profile
+        # - Exception: role == 'GRC Administrator' can access other users
+        if not current_user_id:
+            return JsonResponse(
+                {'status': 'error', 'message': 'Authentication required'},
+                status=401
+            )
+        if int(current_user_id) != int(user_id) and not RBACUtils.is_system_admin(current_user_id):
+            return JsonResponse(
+                {'status': 'error', 'message': 'Forbidden'},
+                status=403
+            )
+
         current_user_name = None
         if current_user_id:
             try:

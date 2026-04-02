@@ -125,7 +125,8 @@ class RFPSerializer(AutoDecryptingModelSerializer):
             'executive_reviewer_details', 'data_inventory'
         ]
         read_only_fields = [
-            'rfp_id', 'rfp_number', 'created_at', 'updated_at', 
+            'rfp_id', 'rfp_number', 'created_at', 'updated_at',
+            'status', 'approved_by', 'created_by',
             'created_by_details', 'approved_by_details', 'primary_reviewer_details',
             'executive_reviewer_details'
         ]
@@ -307,8 +308,10 @@ class RFPCreateSerializer(RFPSerializer):
     
     class Meta(RFPSerializer.Meta):
         # Override read_only_fields to allow rfp_number to be writable during creation
+        # status and approved_by must always be set server-side only
         read_only_fields = [
-            'rfp_id', 'created_at', 'updated_at', 
+            'rfp_id', 'created_at', 'updated_at',
+            'status', 'approved_by', 'created_by',
             'created_by_details', 'approved_by_details', 'primary_reviewer_details',
             'executive_reviewer_details'
         ]

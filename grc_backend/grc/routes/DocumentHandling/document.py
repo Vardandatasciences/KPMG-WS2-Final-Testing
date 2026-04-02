@@ -6,7 +6,7 @@ from rest_framework.decorators import (
 )
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.db.models import Q
 from grc.models import (
     FileOperations,
@@ -75,11 +75,16 @@ def get_user_display_name(user_id):
 
 
 @api_view(['GET'])
+@authentication_classes([])
 def get_documents(request):
     """
     Fetch documents from FileOperations table with pagination
     Optionally filter by module: policy, audit, incident, risk
     """
+    raw_request = getattr(request, '_request', request)
+    grc_user = getattr(raw_request, '_grc_user', None)
+    if not grc_user or not hasattr(grc_user, 'UserId'):
+        return Response({'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
     try:
         # Get query parameters
         module_filter = request.GET.get('module', 'all')
@@ -213,9 +218,10 @@ def get_documents(request):
                 'uploadTime': file_op.created_at.isoformat() if file_op.created_at else None,
                 'uploadedBy': user_display_name,
                 'module': file_op.module or 'general',
-                's3Url': file_op.s3_url or '',
-                's3Key': file_op.s3_key or '',
-                's3Bucket': file_op.s3_bucket or '',
+                # s3Url intentionally omitted — use /api/documents/<id>/download-url/ for a short-lived signed URL
+                's3Url': '',
+                's3Key': '',
+                's3Bucket': '',
                 'description': f'{file_op.module or "General"} document uploaded on {file_op.created_at.strftime("%Y-%m-%d") if file_op.created_at else "unknown date"}',
                 'status': file_op.status,
                 'contentType': file_op.content_type or ''
@@ -241,10 +247,15 @@ def get_documents(request):
 
 
 @api_view(['GET'])
+@authentication_classes([])
 def get_document_counts(request):
     """
     Get document counts by module
     """
+    raw_request = getattr(request, '_request', request)
+    grc_user = getattr(raw_request, '_grc_user', None)
+    if not grc_user or not hasattr(grc_user, 'UserId'):
+        return Response({'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
     try:
         # Base query - all uploads (exclude downloads, exports, and system files)
         base_query = FileOperations.objects.filter(
@@ -630,6 +641,7 @@ def create_company_subfolder(request, folder_id):
 
 @csrf_exempt
 @api_view(['POST'])
+@authentication_classes([])
 @parser_classes([MultiPartParser, FormParser])
 def upload_document(request):
     """
@@ -637,6 +649,10 @@ def upload_document(request):
     Naming convention: framework_module_datetime.filetype (if framework selected)
     Or: module_datetime.filetype (if no framework)
     """
+    raw_request = getattr(request, '_request', request)
+    grc_user = getattr(raw_request, '_grc_user', None)
+    if not grc_user or not hasattr(grc_user, 'UserId'):
+        return Response({'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
     try:
         # Get form data
         uploaded_file = request.FILES.get('file')
@@ -658,6 +674,19 @@ def upload_document(request):
             return Response({
                 'success': False,
                 'error': 'Module is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Security: validate file type, MIME, magic bytes, and content
+        from grc.utils.file_validation import validate_upload
+        validation = validate_upload(uploaded_file, max_size_mb=25)
+        if not validation.is_valid:
+            logger.warning(
+                "Blocked malicious/invalid upload: user=%s file=%s reason=%s",
+                user_id, uploaded_file.name, validation.error,
+            )
+            return Response({
+                'success': False,
+                'error': validation.error
             }, status=status.HTTP_400_BAD_REQUEST)
            # Convert framework name to framework_id if framework is provided
         framework_id = None
@@ -780,7 +809,7 @@ def upload_document(request):
                     'stored_name': upload_result.get('file_info', {}).get('storedName'),
                     'original_name': custom_filename,
                     'custom_name': custom_filename,
-                    's3_url': upload_result.get('file_info', {}).get('url'),
+                    # s3_url intentionally omitted — use /api/documents/<id>/download-url/ for a signed URL
                     's3_key': upload_result.get('file_info', {}).get('s3Key'),
                     'operation_id': operation_id,
                     'file_size': upload_result.get('file_info', {}).get('size'),

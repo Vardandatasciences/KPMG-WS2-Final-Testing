@@ -302,6 +302,14 @@ const vendor_navigationItems = [
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
             </svg>`
           },
+          {
+            id: "vendor_assignee_decision",
+            label: "Vendor Decision",
+            path: "/vendor-assignee-decision",
+            icon: `<svg class="vendor_h-4 vendor_w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6M7 4h10a2 2 0 012 2v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6a2 2 0 012-2z" />
+            </svg>`
+          },
         ]
       }
     ]

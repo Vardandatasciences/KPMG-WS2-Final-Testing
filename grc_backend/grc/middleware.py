@@ -94,18 +94,17 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
             '/api/frameworks/get-selected/',  # Skip authentication for getting selected framework (home page)
             '/api/frameworks/set-selected/',  # Skip authentication for setting selected framework (home page)
             '/api/home/policies-by-status-public/',  # Skip authentication for public home page policies
-            '/api/get-notifications/',
             '/api/push-notification/',
             '/jwt/refresh/',
             '/api/test-submit-review/',  # Add test endpoint to skip list
             '/api/policies/',  # Skip authentication for policy endpoints temporarily
             '/api/tailoring/',  # Skip authentication for tailoring endpoints temporarily
             '/api/policy-approvals/',  # Skip authentication for policy approval endpoints temporarily
-            '/api/users/',  # Skip authentication for users endpoint
+            # '/api/users/' removed — requires authentication
             '/api/policy-acknowledgements/',  # Skip authentication for policy acknowledgement endpoints
             # '/api/generate-audit-report/',  # Re-enabled authentication for audit report generation
             # External Integration endpoints - some require auth, some don't
-            '/api/jira/',
+            # '/api/jira/' removed — requires authentication
             '/api/test-integration-auth/',
             '/api/streamline/',
             # BambooHR integration endpoints - no authentication required
@@ -126,8 +125,7 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
             '/api/risk/policies-for-filter/',
             '/risk/frameworks-for-filter/',
             '/risk/policies-for-filter/',
-            # Document endpoints - allow without authentication
-            '/api/documents/',
+            # '/api/documents/' removed — requires authentication
             '/api/events/archived/',  # Skip authentication for archived events endpoints
             '/api/events/archived-queue-items/',  # Skip authentication for archived queue items endpoints
             '/api/events/',
@@ -215,10 +213,7 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
         if path.startswith('/api/gmail/test-headers'):
             #logger.debug(f"[JWT Middleware] Skipping authentication for Gmail test headers: {path}")
             return None
-        # Special handling for external applications - skip all external app endpoints
-        if path.startswith('/api/external-applications/'):
-            #logger.debug(f"[JWT Middleware] Skipping authentication for external applications: {path}")
-            return None
+        # /api/external-applications/ removed from bypass — requires authentication
 
         # Special handling for vendor portal endpoints - skip authentication
         # Check both with and without trailing slash, and handle query parameters
@@ -332,6 +327,9 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
                     if is_active:
                         # Set user in request for Django REST Framework
                         request.user = user
+                        # Also store on a custom attribute so DRF views can read it
+                        # even after DRF's _not_authenticated() overwrites request.user
+                        request._grc_user = user
                         #logger.info(f"[JWT Middleware] User {user.UserName} (ID: {user.UserId}) authenticated via JWT for {request.method} {path}")
                         return None
                     else:
@@ -374,6 +372,9 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
                 if is_active:
                     # Set user in request for Django REST Framework
                     request.user = user
+                    # Also store on a custom attribute so DRF views can read it
+                    # even after DRF's _not_authenticated() overwrites request.user
+                    request._grc_user = user
                     #logger.info(f"[JWT Middleware] User {user.UserName} (ID: {user.UserId}) authenticated via session for {request.method} {path}")
                     return None
                 else:
@@ -391,22 +392,8 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
         logger.warning(f"[JWT Middleware] No authentication found for path: {path}")
         return JsonResponse({'error': 'Authentication required'}, status=401)
     
-    def process_response(self, request, response):
-        """Process outgoing response"""
-        # Add CORS headers if needed
-        if hasattr(response, 'headers'):
-            # Instead of hardcoding '*', use the Origin from the request
-            origin = request.headers.get('Origin')
-            if origin:
-                response.headers['Access-Control-Allow-Origin'] = origin
-            else:
-                response.headers['Access-Control-Allow-Origin'] = '*'
-                
-            response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS, PATCH'
-            response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With, X-CSRFToken'
-            response.headers['Access-Control-Allow-Credentials'] = 'true'
-        
-        return response
+    # CORS is handled exclusively by django-cors-headers (CorsMiddleware).
+    # Do not set Access-Control-* here — it duplicated headers and conflicted with CorsMiddleware.
 
 class CORSMiddleware(MiddlewareMixin):
     """

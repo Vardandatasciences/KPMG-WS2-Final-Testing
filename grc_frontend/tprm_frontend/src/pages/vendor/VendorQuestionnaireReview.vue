@@ -10,6 +10,14 @@
           </p>
         </div>
         <div class="header-actions">
+          <button
+            v-if="assignmentId"
+            class="btn-primary"
+            type="button"
+            @click="sendForApproval"
+          >
+            Send for Approval
+          </button>
           <button class="btn-secondary" type="button" @click="goBack">
             Back to Assignments
           </button>
@@ -190,6 +198,33 @@ const goBack = () => {
     .catch(() => {})
 }
 
+const sendForApproval = () => {
+  if (!assignmentId.value) return
+
+  const query = {
+    workflow_type: 'MULTI_PERSON',
+    approval_type: 'response_approval',
+    assignment_id: assignmentId.value,
+    auto_populate: 'true'
+  }
+
+  if (assignment.value?.vendor_id) {
+    query.vendor_id = assignment.value.vendor_id
+  }
+  if (assignment.value?.questionnaire_id) {
+    query.questionnaire_id = assignment.value.questionnaire_id
+  }
+
+  router.push({
+    name: 'Vendor Approval Workflow Creator',
+    query
+  }).catch((err) => {
+    if (err && err.name !== 'NavigationDuplicated') {
+      console.error('Error navigating to workflow creator:', err)
+    }
+  })
+}
+
 const formatStatus = (status) => {
   const map = {
     ASSIGNED: 'Assigned',
@@ -304,6 +339,22 @@ onMounted(() => {
 
 .btn-secondary:hover {
   background: #eff6ff;
+}
+
+.btn-primary {
+  border-radius: 0.5rem;
+  border: 1px solid #2563eb;
+  background: #2563eb;
+  color: #ffffff;
+  font-size: 0.875rem;
+  font-weight: 600;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+}
+
+.btn-primary:hover {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
 }
 
 .assignment-summary {

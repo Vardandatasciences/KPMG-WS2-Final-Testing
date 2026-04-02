@@ -828,7 +828,7 @@ def check_sequential_approval_ready(approval_id, stage_order):
 @api_view(['GET'])
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
-@rbac_vendor_required('view_vendors')
+@rbac_vendor_required('approve_reject_vendor')
 @require_tenant
 @tenant_filter
 def get_my_approvals(request):
@@ -837,9 +837,6 @@ def get_my_approvals(request):
     MULTI-TENANCY: Filters by tenant to ensure tenant isolation
 
     Query params:
-
-    - user_id: int (required)
-
     - include_status: comma-separated statuses to include for stages (default PENDING,IN_PROGRESS)
 
     """
@@ -849,14 +846,23 @@ def get_my_approvals(request):
         if not tenant_id:
             return Response({'error': 'Tenant context not found'}, status=403)
 
-        user_id = request.query_params.get('user_id')
+        # IMPORTANT: Always resolve "my approvals" from authenticated JWT user.
+        # Do not trust user_id from query params, since stale client storage can leak
+        # another user's approvals in shared/deployed environments.
+        auth_user_id = None
+        if hasattr(request, 'user') and request.user is not None:
+            for attr in ('id', 'user_id', 'UserId'):
+                raw_val = getattr(request.user, attr, None)
+                if raw_val is not None and str(raw_val).isdigit():
+                    auth_user_id = int(raw_val)
+                    break
 
-        if not user_id or not str(user_id).isdigit():
-
+        if auth_user_id is not None:
+            user_id = auth_user_id
+            user_source = 'authenticated_user'
+        else:
             return Response({
-
-                'error': 'user_id query parameter is required and must be numeric'
-
+                'error': 'Unable to resolve user from JWT.'
             }, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -878,7 +884,7 @@ def get_my_approvals(request):
         if 'tprm' in db_connections.databases:
             db_connection = db_connections['tprm']
             db_name = db_connection.settings_dict.get('NAME', 'tprm_integration')
-            logger.info(f"[My Approvals] Using tprm database connection: {db_name} for user_id: {user_id}")
+            logger.info(f"[My Approvals] Using tprm database connection: {db_name} for user_id: {user_id} (source={user_source})")
         else:
             db_connection = db_connections['default']
             db_name = db_connection.settings_dict.get('NAME', '')
@@ -952,7 +958,7 @@ def get_my_approvals(request):
 
                         """.format(statuses=','.join(['%s'] * len(include_statuses))),
 
-                        [int(user_id), *include_statuses, tenant_id]
+                        [user_id, *include_statuses, tenant_id]
 
                     )
 
@@ -1016,7 +1022,7 @@ def get_my_approvals(request):
 
                         """,
 
-                        [int(user_id), tenant_id]
+                        [user_id, tenant_id]
 
                     )
 

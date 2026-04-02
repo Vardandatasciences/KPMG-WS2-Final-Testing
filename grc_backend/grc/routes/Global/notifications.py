@@ -172,6 +172,9 @@ def get_notifications(request):
     """
     Get all notifications for a user
     """
+    auth_user = getattr(request, 'user', None)
+    if not auth_user or not hasattr(auth_user, 'UserId'):
+        return JsonResponse({'error': 'Authentication required'}, status=401)
     try:
         # Get user_id from JWT authentication or query parameter
         user_id = None

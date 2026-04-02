@@ -444,8 +444,12 @@ SILENCED_SYSTEM_CHECKS = [
 ]
 
 # CORS settings
-# In development (DEBUG=True), allow all origins so localhost:8080 and 127.0.0.1:8000 work without CORS errors
-CORS_ALLOW_ALL_ORIGINS = DEBUG
+# SECURITY: Never use wildcard origins (CORS_ALLOW_ALL_ORIGINS = True) combined with
+# CORS_ALLOW_CREDENTIALS = True. This allows any external site to make authenticated
+# requests on behalf of a logged-in user (data theft/CSRF risk - KPMG finding).
+# Trusted origins are explicitly listed below; localhost variants are covered via
+# CORS_ALLOWED_ORIGIN_REGEXES so local development continues to work without a wildcard.
+CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOW_CREDENTIALS = True
 
 CORS_ALLOWED_ORIGINS = [
@@ -540,11 +544,14 @@ CSRF_COOKIE_HTTPONLY = False  # Allow JavaScript access to CSRF token
 # SESSION_COOKIE_DOMAIN = None  # Allow all domains in development
 
 # Additional HTTPS security headers (enable in production)
-SECURE_SSL_REDIRECT = False  # Set to True to redirect all HTTP to HTTPS
+# Nginx handles HTTP→HTTPS redirect, so Django redirect is off to avoid double-redirect.
+SECURE_SSL_REDIRECT = False
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')  # For reverse proxy
-SECURE_HSTS_SECONDS = 0  # Set to 31536000 (1 year) in production with HTTPS
-SECURE_HSTS_INCLUDE_SUBDOMAINS = False  # Set to True in production
-SECURE_HSTS_PRELOAD = False  # Set to True in production
+# HSTS: 1 year in production; 0 in local dev (controlled by env to allow override)
+_hsts_seconds = int(os.environ.get('SECURE_HSTS_SECONDS', '31536000' if not DEBUG else '0'))
+SECURE_HSTS_SECONDS = _hsts_seconds
+SECURE_HSTS_INCLUDE_SUBDOMAINS = not DEBUG
+SECURE_HSTS_PRELOAD = not DEBUG
 
 # JWT Settings
 JWT_SECRET_KEY = SECRET_KEY
@@ -577,6 +584,10 @@ REST_FRAMEWORK = {
     'DEFAULT_THROTTLE_RATES': {
         'user': '1000/day',
         'anon': '500/day',
+        # Audit write operations: max 10 creates per minute per authenticated user
+        # Rationale: legitimate users rarely create more than a few audits per session;
+        # this blocks automated DoS/spam scripts while not impacting real usage.
+        'audit_write': '10/minute',
     },
     # Allow larger request size
     'DEFAULT_PARSER_CLASSES': [

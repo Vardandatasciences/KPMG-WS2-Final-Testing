@@ -1,6 +1,8 @@
 """
 Serializers for the SLAs app matching MySQL schema.
 """
+from decimal import Decimal, InvalidOperation
+
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from tprm_backend.utils.base_serializer import AutoDecryptingModelSerializer
@@ -10,6 +12,36 @@ from .models import (
 )
 
 User = get_user_model()
+
+COMPLIANCE_SCORE_MAX = Decimal('100')
+
+
+def _validate_non_negative_decimal(name, value, *, max_value=None):
+    """
+    Reject negative numeric inputs for SLA financial/performance fields.
+    compliance_score is bounded 0–100 (percentage scale used by analytics).
+    """
+    if value is None:
+        return value
+    try:
+        d = value if isinstance(value, Decimal) else Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        raise serializers.ValidationError(f'{name} must be a valid number.')
+    if d < 0:
+        raise serializers.ValidationError(f'{name} must be greater than or equal to 0.')
+    if max_value is not None and d > max_value:
+        raise serializers.ValidationError(f'{name} must be less than or equal to {max_value}.')
+    return value
+
+
+class VendorSLANumericFieldsMixin:
+    """Server-side bounds for SLA penalty/credit thresholds and compliance score."""
+
+    def validate_penalty_threshold(self, value):
+        return _validate_non_negative_decimal('penalty_threshold', value)
+
+    def validate_credit_threshold(self, value):
+        return _validate_non_negative_decimal('credit_threshold', value)
 
 
 class VendorSerializer(AutoDecryptingModelSerializer):
@@ -47,7 +79,7 @@ class SLAMetricSerializer(AutoDecryptingModelSerializer):
         read_only_fields = ['metric_id']
 
 
-class VendorSLASerializer(AutoDecryptingModelSerializer):
+class VendorSLASerializer(VendorSLANumericFieldsMixin, AutoDecryptingModelSerializer):
     """Serializer for VendorSLA model."""
     vendor = VendorSerializer(read_only=True)
     vendor_id = serializers.PrimaryKeyRelatedField(
@@ -76,6 +108,9 @@ class VendorSLASerializer(AutoDecryptingModelSerializer):
             'priority', 'approval_status', 'compliance_score', 'data_inventory', 'metrics'
         ]
         read_only_fields = ['sla_id']
+
+    def validate_compliance_score(self, value):
+        return _validate_non_negative_decimal('compliance_score', value, max_value=COMPLIANCE_SCORE_MAX)
 
 
 class SLADocumentSerializer(AutoDecryptingModelSerializer):
@@ -244,7 +279,7 @@ class SLAMetricCreateSerializer(AutoDecryptingModelSerializer):
         return validated_data
 
 
-class VendorSLASubmissionSerializer(AutoDecryptingModelSerializer):
+class VendorSLASubmissionSerializer(VendorSLANumericFieldsMixin, AutoDecryptingModelSerializer):
     """Serializer for VendorSLA submission."""
     vendor_id = serializers.PrimaryKeyRelatedField(
         queryset=Vendor.objects.all(),
@@ -272,10 +307,10 @@ class VendorSLASubmissionSerializer(AutoDecryptingModelSerializer):
         ]
     
     def validate_compliance_score(self, value):
-        """Ensure compliance_score is not null."""
+        """Default null to 0; otherwise enforce 0–100 (percentage scale)."""
         if value is None:
             return 0.0
-        return value
+        return _validate_non_negative_decimal('compliance_score', value, max_value=COMPLIANCE_SCORE_MAX)
     
     def create(self, validated_data):
         metrics_data = validated_data.pop('sla_metrics', [])

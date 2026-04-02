@@ -769,20 +769,10 @@ def contract_create(request):
                 contract_data['permission_required'] = 1 if contract_data['permission_required'] else 0
                 logger.info(f"Converted permission_required to: {contract_data['permission_required']}")
             
-            # Set default status if not provided, otherwise use the provided status
-            if 'status' not in contract_data or not contract_data['status']:
-                contract_data['status'] = 'UNDER_REVIEW'
-                contract_data['workflow_stage'] = 'under_review'
-            else:
-                # Map status to workflow_stage
-                status_mapping = {
-                    'DRAFT': 'draft',
-                    'UNDER_REVIEW': 'under_review',
-                    'PENDING_APPROVAL': 'pending_approval',
-                    'APPROVED': 'approved',
-                    'REJECTED': 'rejected'
-                }
-                contract_data['workflow_stage'] = status_mapping.get(contract_data['status'], 'draft')
+            # Security: status and workflow_stage are always set server-side on creation.
+            # Client-supplied values are discarded to prevent approval spoofing.
+            contract_data['status'] = 'UNDER_REVIEW'
+            contract_data['workflow_stage'] = 'under_review'
             
             # Handle JSON fields - convert plain text to JSON if needed
             if 'insurance_requirements' in contract_data:
@@ -5865,14 +5855,26 @@ def contract_amendments_create(request, contract_id):
         data['contract_id'] = contract_id
         # MULTI-TENANCY: Set tenant_id
         data['tenant_id'] = tenant_id
-        
+
+        # Security: strip client-supplied approval/identity fields before validation.
+        # These must be set exclusively by server-side approval workflow logic.
+        data.pop('approved_by', None)
+        data.pop('workflow_status', None)
+        data.pop('approval_date', None)
+
         # Add created_by from request user
         if hasattr(request, 'user') and request.user:
             data['created_by'] = getattr(request.user, 'userid', 1)
-        
+
         serializer = ContractAmendmentCreateSerializer(data=data)
         if serializer.is_valid():
-            amendment = serializer.save(**data)
+            # Pass only safe server-controlled fields to save(); do NOT spread full
+            # request data via **data as that would bypass serializer read_only guards.
+            amendment = serializer.save(
+                contract_id=contract_id,
+                tenant_id=tenant_id,
+                workflow_status='pending',
+            )
             
             # Create backup
             backup_manager = DatabaseBackupManager()

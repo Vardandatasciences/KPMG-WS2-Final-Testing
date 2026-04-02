@@ -6,6 +6,22 @@
         <p>Review assigned stages and make final decisions on approval requests</p>
       </div>
 
+      <div class="requester-filter">
+        <div class="form-item">
+          <label>Select Requester</label>
+          <select v-model="selectedRequesterId" class="form-select" @change="fetchRequesterData">
+            <option value="">Select requester ID</option>
+            <option
+              v-for="requester in (requesters || [])"
+              :key="requester.id"
+              :value="requester.id"
+            >
+              {{ requester.requester_id }} ({{ requester.id }})
+            </option>
+          </select>
+        </div>
+      </div>
+
       <!-- Requester Requests and Stages Section -->
       <div v-if="selectedRequesterId && requesterRequests.length > 0" class="requests-section">
         <div class="divider">

@@ -1588,6 +1588,53 @@ export default {
                 showMessage('Questionnaire not found. Please select manually.', 'warning')
               }
             }
+          } else if (route.query.approval_type === 'response_approval') {
+            console.log('Fetching responded questionnaire assignments...')
+            await fetchQuestionnaireAssignments()
+
+            // Wait for dropdown data to be ready
+            await new Promise(resolve => setTimeout(resolve, 1000))
+
+            const assignmentIdFromQuery = route.query.assignment_id || route.query.questionnaire_assignment_id
+            if (assignmentIdFromQuery) {
+              console.log('Looking for assignment ID:', assignmentIdFromQuery)
+
+              selectedQuestionnaireAssignment.value = assignmentIdFromQuery
+
+              const assignment = questionnaireAssignments.value.find(a =>
+                String(a.assignment_id) === String(assignmentIdFromQuery)
+              )
+
+              if (assignment) {
+                selectedAssignmentData.value = { ...assignment }
+                responseType.value = 'questionnaire_review'
+                responseData.value = `Review of questionnaire assignment ${assignment.assignment_id} for ${assignment.vendor_company_name}`
+                activeQuestionCollapse.value = []
+                if (assignment.questions_and_responses && assignment.questions_and_responses.length > 0) {
+                  const firstQuestion = assignment.questions_and_responses[0]
+                  const firstQuestionId = firstQuestion.question_id || 'q0'
+                  activeQuestionCollapse.value.push(firstQuestionId)
+                }
+
+                // Set vendor id if available for request payload context
+                if (assignment.vendor_id) {
+                  requestForm.business_object_id = assignment.vendor_id
+                }
+
+                // Auto-populate request/workflow titles
+                const defaultTitle = `${assignment.questionnaire_name} Response Approval`
+                requestForm.request_title = defaultTitle
+                workflowForm.workflow_name = `${assignment.questionnaire_name} Response Approval Workflow`
+                requestForm.request_description = `Approval request for questionnaire response submitted by ${assignment.vendor_company_name}`
+
+                isAutoPopulated.value = true
+                autoPopulateMessage.value = `Response for assignment #${assignment.assignment_id} has been automatically loaded. Please add approval stages and submit the workflow.`
+                showMessage('Response assignment loaded successfully! Please configure approval stages and submit.', 'success')
+              } else {
+                console.error('Assignment not found with ID:', assignmentIdFromQuery)
+                showMessage('Response assignment not found. Please select manually.', 'warning')
+              }
+            }
           }
         }
       } catch (error) {
