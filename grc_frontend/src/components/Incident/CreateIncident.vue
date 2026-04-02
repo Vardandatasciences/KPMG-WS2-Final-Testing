@@ -1602,16 +1602,19 @@ export default {
   },
   setup() {
     const router = useRouter()
-    
-    // Ensure framework_id is set on component mount
+
+    // Session-scoped framework context only: do not copy session data into localStorage
+    // (avoids cross-session / cross-user stale framework_id on shared browsers).
+    const getIncidentFrameworkId = () =>
+      sessionStorage.getItem('framework_id') ||
+      localStorage.getItem('selectedFrameworkId') ||
+      '1'
+
     onMounted(() => {
-      // Ensure framework_id is set
-      if (!localStorage.getItem('framework_id')) {
-        const frameworkId = sessionStorage.getItem('framework_id') || 
-                           localStorage.getItem('selectedFrameworkId') || 
-                           '1'
-        localStorage.setItem('framework_id', frameworkId)
-        console.log('💡 [Consent] Set framework_id to:', frameworkId)
+      if (!sessionStorage.getItem('framework_id')) {
+        const frameworkId = localStorage.getItem('selectedFrameworkId') || '1'
+        sessionStorage.setItem('framework_id', frameworkId)
+        console.log('💡 [Consent] Seeded session framework_id to:', frameworkId)
       }
     })
     
@@ -2290,7 +2293,7 @@ export default {
       try {
         // Check if consent is required from database
         console.log('🔍 [Consent] Checking consent requirement for create_incident')
-        console.log('🔍 [Consent] Framework ID in localStorage:', localStorage.getItem('framework_id'))
+        console.log('🔍 [Consent] Framework ID (session-scoped resolver):', getIncidentFrameworkId())
         console.log('🔍 [Consent] User ID in localStorage:', localStorage.getItem('user_id'))
         
         const consentCheck = await checkConsentRequired(CONSENT_ACTIONS.CREATE_INCIDENT)
@@ -2399,7 +2402,7 @@ export default {
         if (consentRequired && consentConfigData && consentConfig.value) {
           submissionData.consent_accepted = true
           submissionData.consent_config_id = consentConfig.value.config_id
-          submissionData.framework_id = localStorage.getItem('framework_id')
+          submissionData.framework_id = getIncidentFrameworkId()
           console.log('📋 [Consent] Including consent data in request:', {
             consent_accepted: true,
             consent_config_id: consentConfig.value.config_id

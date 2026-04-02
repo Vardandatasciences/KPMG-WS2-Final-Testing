@@ -14,6 +14,7 @@ from ...routes.Global.notification_service import NotificationService  # Add thi
 import logging
 import traceback
 from ...utils import send_log, get_client_ip
+from ...utils.bulk_limits import cap_extracted_framework_policies
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -839,8 +840,10 @@ def update_framework_approval(request, approval_id):
         # Update extracted data if provided
         extracted_data = request.data.get('ExtractedData')
         if extracted_data:
+            if isinstance(extracted_data, dict):
+                cap_extracted_framework_policies(extracted_data)
             approval.ExtractedData = extracted_data
-            
+
         approval.save()
         
         return Response({
@@ -1479,7 +1482,8 @@ def approve_reject_subpolicy_in_framework(request, framework_id, policy_id, subp
         
         # Create a copy of the extracted data for the new version
         extracted_data = latest_approval.ExtractedData.copy() if latest_approval.ExtractedData else {}
-        
+        cap_extracted_framework_policies(extracted_data)
+
         debug_print(f"DEBUG: Extracted data keys: {list(extracted_data.keys()) if isinstance(extracted_data, dict) else 'Not a dict'}")
         debug_print(f"DEBUG: Extracted data type: {type(extracted_data)}")
         debug_print(f"DEBUG: Extracted data content: {extracted_data}")
@@ -1793,7 +1797,8 @@ def approve_reject_policy_in_framework(request, framework_id, policy_id):
         
         # Create a copy of the extracted data for the new version
         extracted_data = latest_approval.ExtractedData.copy()
-        
+        cap_extracted_framework_policies(extracted_data)
+
         # Find and update the policy status in JSON
         policies = extracted_data.get('policies', [])
         policy_found = False
@@ -1991,8 +1996,9 @@ def approve_entire_framework_final(request, framework_id):
         
         if not latest_approval:
             return Response({"error": "No framework approval found"}, status=status.HTTP_404_NOT_FOUND)
-        
+
         extracted_data = latest_approval.ExtractedData.copy()
+        cap_extracted_framework_policies(extracted_data)
         policies = extracted_data.get('policies', [])
         
         # Verify all policies are approved
@@ -2830,7 +2836,8 @@ def approve_framework_status_change(request, approval_id):
         with transaction.atomic():
             # Create a copy of the extracted data
             extracted_data = approval.ExtractedData.copy()
-            
+            cap_extracted_framework_policies(extracted_data)
+
             if approved:
                 logger.info(f"Approving status change for framework {framework.FrameworkId} to Inactive")
                 # Change framework status to Inactive
@@ -3669,6 +3676,16 @@ def create_test_users(request):
     try:
         tenant_id = get_tenant_id_from_request(request)
         from datetime import datetime
+        import os
+        from django.contrib.auth.hashers import make_password
+
+        test_users_password = os.getenv('TEST_USERS_DEFAULT_PASSWORD')
+        if not test_users_password:
+            # Avoid hardcoded plaintext passwords in source code.
+            return Response(
+                {"error": "TEST_USERS_DEFAULT_PASSWORD environment variable must be set to create test users."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
         
         # Check if users already exist (in tenant)
         existing_users = Users.objects.filter(tenant_id=tenant_id).count()
@@ -3680,17 +3697,14 @@ def create_test_users(request):
             {
                 'UserName': 'John Reviewer',
                 'Email': 'john.reviewer@company.com',
-                'Password': 'password123'
             },
             {
                 'UserName': 'Jane Approver', 
                 'Email': 'jane.approver@company.com',
-                'Password': 'password123'
             },
             {
                 'UserName': 'Bob Manager',
                 'Email': 'bob.manager@company.com', 
-                'Password': 'password123'
             }
         ]
         
@@ -3699,7 +3713,7 @@ def create_test_users(request):
             user = Users.objects.create(
                 UserName=user_data['UserName'],
                 Email=user_data['Email'],
-                Password=user_data['Password'],
+                Password=make_password(test_users_password),
                 CreatedAt=datetime.now(),
                 UpdatedAt=datetime.now(),
                 tenant_id_id=tenant_id  # Set tenant

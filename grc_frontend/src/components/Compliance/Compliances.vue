@@ -916,7 +916,7 @@ async function handleExport(format) {
     if (response.data && response.data.file_url) {
       // Try to open the file URL in a new tab, fallback to download if it fails
       try {
-        const newWindow = window.open(response.data.file_url, '_blank');
+        const newWindow = window.open(response.data.file_url, '_blank', 'noopener,noreferrer');
         if (newWindow) {
           ElMessage({
             message: 'Export completed successfully! File opened in new tab.',
@@ -928,6 +928,7 @@ async function handleExport(format) {
           const link = document.createElement('a');
           link.href = response.data.file_url;
           link.setAttribute('download', response.data.file_name || `compliance_export.${format}`);
+          link.rel = 'noopener noreferrer';
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);
@@ -942,6 +943,7 @@ async function handleExport(format) {
         const link = document.createElement('a');
         link.href = response.data.file_url;
         link.setAttribute('download', response.data.file_name || `compliance_export.${format}`);
+        link.rel = 'noopener noreferrer';
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);

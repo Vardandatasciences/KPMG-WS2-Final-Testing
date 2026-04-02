@@ -2712,6 +2712,7 @@ def avg_incident_response_time(request):
                 WHERE IdentifiedAt IS NOT NULL 
                 AND CreatedAt IS NOT NULL
             """
+            query_params = []
             
             # Add time filter if specified
             if time_range != 'all':
@@ -2727,7 +2728,9 @@ def avg_incident_response_time(request):
                     start_date = today - timedelta(days=365)
                 
                 if start_date:
-                    query += f" AND CreatedAt >= '{start_date.isoformat()}'"
+                    query += " AND CreatedAt >= %s"
+                    # Use ISO format string to match original behavior while keeping parameterized SQL
+                    query_params.append(start_date.isoformat())
             
             # Add category filter if specified
             if category and category.lower() != 'all':
@@ -2739,10 +2742,11 @@ def avg_incident_response_time(request):
                     'it-security': 'IT Security'
                 }
                 db_category = category_map.get(category.lower(), category)
-                query += f" AND RiskCategory = '{db_category}'"
+                query += " AND RiskCategory = %s"
+                query_params.append(db_category)
             
             # Execute the query
-            cursor.execute(query)
+            cursor.execute(query, query_params)
             result = cursor.fetchone()
             
             # Get the average hours (handle NULL/None case)
@@ -2853,13 +2857,12 @@ def avg_incident_response_time(request):
         return JsonResponse(response_data, status=status.HTTP_200_OK)
     
     except Exception as e:
-        import traceback
+        # Do not leak exception details to the client.
         #printf"ERROR in avg_incident_response_time: {str(e)}")
-        #printtraceback.format_exc())
         
         # Return fallback data in case of error
         return JsonResponse({
-            'error': str(e),
+            'error': 'Internal server error',
             'current': 457.4,
             'target': 4,
             'sla': 8,

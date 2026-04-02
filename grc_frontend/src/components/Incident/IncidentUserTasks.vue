@@ -240,7 +240,7 @@
                       </div>
                       
                       <!-- Regular File (downloadable) -->
-                      <a v-else :href="file['aws-file_link']" :download="file.fileName" target="_blank" class="downloadable-file">
+                      <a v-else :href="file['aws-file_link']" :download="file.fileName" target="_blank" rel="noopener noreferrer" class="downloadable-file">
                         <i class="fas fa-download"></i> {{ file.fileName }}
                         <span v-if="file.size" class="file-size">({{ formatFileSize(file.size) }})</span>
                         <span v-if="file.upload_type === 's3'" class="s3-indicator" title="Stored in S3">
@@ -265,7 +265,7 @@
                     </div>
                     
                     <!-- Regular downloadable file -->
-                    <a v-else :href="mitigationSteps[currentStep]['aws-file_link']" :download="mitigationSteps[currentStep].fileName" target="_blank" class="downloadable-file">
+                    <a v-else :href="mitigationSteps[currentStep]['aws-file_link']" :download="mitigationSteps[currentStep].fileName" target="_blank" rel="noopener noreferrer" class="downloadable-file">
                       <i class="fas fa-download"></i> {{ mitigationSteps[currentStep].fileName }}
                     </a>
                   </div>
@@ -327,7 +327,7 @@
                           </div>
                         </div>
                         <div class="file-actions">
-                          <a :href="file['aws-file_link']" target="_blank" class="view-file-btn" title="View File">
+                          <a :href="file['aws-file_link']" target="_blank" rel="noopener noreferrer" class="view-file-btn" title="View File">
                             <i class="fas fa-eye"></i> View
                           </a>
                         </div>
@@ -2608,6 +2608,7 @@ export default {
           link.href = docData.s3_url;
           link.download = docData.filename || 'document';
           link.target = '_blank';
+          link.rel = 'noopener noreferrer';
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);
@@ -2626,6 +2627,7 @@ export default {
         link.href = downloadUrl;
         link.download = docData.filename || 'document';
         link.target = '_blank';
+        link.rel = 'noopener noreferrer';
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);

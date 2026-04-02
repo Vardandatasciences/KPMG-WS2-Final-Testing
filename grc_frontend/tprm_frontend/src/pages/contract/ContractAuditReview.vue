@@ -1172,9 +1172,27 @@ const formatFileSize = (bytes) => {
 
 const viewDocument = (doc) => {
   console.log('Viewing document:', doc)
+
+  const openUrlInNewTabSafe = (url) => {
+    if (!url || typeof url !== 'string') return false
+    const trimmed = url.trim()
+    const lowered = trimmed.toLowerCase()
+    // Block obvious scriptable schemes.
+    if (
+      lowered.startsWith('javascript:') ||
+      lowered.startsWith('vbscript:') ||
+      lowered.startsWith('data:text/html')
+    ) {
+      return false
+    }
+    const newWindow = window.open(trimmed, '_blank', 'noopener,noreferrer')
+    return !!newWindow
+  }
   
   if (doc.url) {
-    window.open(doc.url, '_blank')
+    if (!openUrlInNewTabSafe(doc.url)) {
+      PopupService.warning('Unable to open this document URL safely. Try download instead.', 'Blocked')
+    }
     return
   }
   
@@ -1187,47 +1205,13 @@ const viewDocument = (doc) => {
       
       // For PDFs, open directly in new tab
       if (fileType.includes('pdf') || fileName.toLowerCase().endsWith('.pdf')) {
-        const newWindow = window.open('', '_blank')
-        if (newWindow) {
-          newWindow.document.write(`
-            <html>
-              <head>
-                <title>${fileName}</title>
-                <style>
-                  body { margin: 0; padding: 0; }
-                  iframe { width: 100vw; height: 100vh; border: none; }
-                </style>
-              </head>
-              <body>
-                <iframe src="${doc.content}" type="application/pdf"></iframe>
-              </body>
-            </html>
-          `)
-          newWindow.document.close()
-        } else {
+        if (!openUrlInNewTabSafe(doc.content)) {
           // Popup blocked, trigger download instead
           triggerDownload(doc.content, fileName)
         }
       } else if (fileType.startsWith('image/')) {
         // For images, open in new tab
-        const newWindow = window.open('', '_blank')
-        if (newWindow) {
-          newWindow.document.write(`
-            <html>
-              <head>
-                <title>${fileName}</title>
-                <style>
-                  body { margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #f5f5f5; }
-                  img { max-width: 100%; max-height: 90vh; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-                </style>
-              </head>
-              <body>
-                <img src="${doc.content}" alt="${fileName}" />
-              </body>
-            </html>
-          `)
-          newWindow.document.close()
-        } else {
+        if (!openUrlInNewTabSafe(doc.content)) {
           triggerDownload(doc.content, fileName)
         }
       } else {
@@ -1240,7 +1224,9 @@ const viewDocument = (doc) => {
     }
   } else if (doc.url) {
     // If document has a URL, open it
-    window.open(doc.url, '_blank')
+    if (!openUrlInNewTabSafe(doc.url)) {
+      PopupService.warning('Unable to open this document URL safely. Try download instead.', 'Blocked')
+    }
   } else {
     // If no content or URL, show warning
     console.warn('Document has no content or URL:', doc)
@@ -1254,6 +1240,7 @@ const triggerDownload = (content, fileName) => {
     link.href = content
     link.download = fileName
     link.target = '_blank'
+    link.rel = 'noopener noreferrer'
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)

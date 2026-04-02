@@ -881,11 +881,14 @@ class EnterpriseSecurityHeadersMiddleware(MiddlewareMixin):
         # script-src: Where JavaScript can be loaded from
         # Allow same-origin scripts and inline scripts (needed for some apps)
         # In production, consider removing 'unsafe-inline' and using nonces
-        directives.append("script-src 'self' 'unsafe-inline' 'unsafe-eval'")
+        # SECURITY: do not allow inline scripts or unsafe-eval.
+        # This reduces impact of any potential DOM/script injection.
+        directives.append("script-src 'self'")
         
         # style-src: Where CSS can be loaded from
         # Allow same-origin styles and inline styles (needed for dynamic styles)
-        directives.append("style-src 'self' 'unsafe-inline'")
+        # SECURITY: do not allow inline styles.
+        directives.append("style-src 'self'")
         
         # img-src: Where images can be loaded from
         # Allow same-origin, data URIs (base64 images), and HTTPS images

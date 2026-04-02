@@ -215,16 +215,16 @@ class DocumentProcessingService:
         """Extract text from image using Tesseract OCR"""
         try:
             # Open image and perform OCR
-            image = Image.open(file_path)
-            text = pytesseract.image_to_string(image)
-            
-            # Get confidence data if available
-            try:
-                data = pytesseract.image_to_data(image, output_type=pytesseract.Output.DICT)
-                confidences = [int(conf) for conf in data['conf'] if int(conf) > 0]
-                avg_confidence = sum(confidences) / len(confidences) if confidences else 60.0
-            except:
-                avg_confidence = 60.0
+            with Image.open(file_path) as image:
+                text = pytesseract.image_to_string(image)
+                
+                # Get confidence data if available
+                try:
+                    data = pytesseract.image_to_data(image, output_type=pytesseract.Output.DICT)
+                    confidences = [int(conf) for conf in data['conf'] if int(conf) > 0]
+                    avg_confidence = sum(confidences) / len(confidences) if confidences else 60.0
+                except:
+                    avg_confidence = 60.0
             
             return {
                 'success': True,

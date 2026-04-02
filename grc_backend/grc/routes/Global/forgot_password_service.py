@@ -26,6 +26,18 @@ logging.basicConfig(
 logger = logging.getLogger("forgot_password_service")
 
 try:
+    from ...utils.log_sanitize import mask_email_for_log
+except Exception:  # pragma: no cover
+    def mask_email_for_log(email):
+        return "***" if email else ""
+
+try:
+    from ...utils.log_sanitize import sanitize_for_log
+except Exception:  # pragma: no cover
+    def sanitize_for_log(value):
+        return str(value or "")
+
+try:
     from ...debug_utils import debug_print
 except ImportError:
     def debug_print(*args, **kwargs): pass  # Standalone fallback
@@ -36,20 +48,22 @@ class ForgotPasswordService:
         self.smtp_config = {
             'server': os.getenv('SMTP_SERVER', 'smtp.gmail.com'),
             'port': int(os.getenv('SMTP_PORT', 587)),
-            'email': os.getenv('SMTP_EMAIL', 'loukyarao68@gmail.com'),
-            'password': os.getenv('SMTP_PASSWORD', 'vafx kqve dwmj mvjv')
+            # Do not hardcode SMTP credentials in code.
+            'email': os.getenv('SMTP_EMAIL'),
+            'password': os.getenv('SMTP_PASSWORD')
         }
         
         # Database connection
         self.db_config = {
             'host': os.getenv('DB_HOST', 'localhost'),
-            'user': os.getenv('DB_USER', 'root'),
-            'password': os.getenv('DB_PASSWORD', 'root'),
+            # Do not hardcode DB credentials in code.
+            'user': os.getenv('DB_USER'),
+            'password': os.getenv('DB_PASSWORD'),
             'database': os.getenv('DB_NAME', 'grc')
         }
         
         # From email configuration
-        self.from_email = os.getenv('DEFAULT_FROM_EMAIL', 'loukyarao68@gmail.com')
+        self.from_email = os.getenv('DEFAULT_FROM_EMAIL') or self.smtp_config.get('email')
         self.from_name = os.getenv('DEFAULT_FROM_NAME', 'GRC System')
         
         # OTP expiry time (in minutes)
@@ -61,6 +75,8 @@ class ForgotPasswordService:
     def get_db_connection(self):
         """Establish database connection"""
         try:
+            if not self.db_config.get('user') or not self.db_config.get('password'):
+                raise RuntimeError("DB_USER/DB_PASSWORD environment variables must be set for ForgotPasswordService")
             conn = mysql.connector.connect(**self.db_config)
             return conn
         except mysql.connector.Error as err:
@@ -149,7 +165,11 @@ class ForgotPasswordService:
                 return None
                 
         except Exception as e:
-            logger.error(f"Error fetching user by email {email}: {str(e)}")
+            logger.error(
+                "Error fetching user by email %s: %s",
+                mask_email_for_log(email),
+                type(e).__name__,
+            )
             return None
     
     def create_password_reset_token(self, user_id, email):
@@ -235,7 +255,7 @@ class ForgotPasswordService:
             cursor.close()
             conn.close()
             
-            logger.info(f"Token {token} marked as used")
+            logger.info("Password reset token marked as used")
             
         except Exception as e:
             logger.error(f"Error marking token as used: {str(e)}")
@@ -289,7 +309,11 @@ class ForgotPasswordService:
                 
                 if email_result.get('success'):
                     method_used = email_result.get('details', {}).get('email', {}).get('method', 'unknown')
-                    logger.info(f"Password reset email sent successfully to {email} via {method_used}")
+                    logger.info(
+                        "Password reset email sent successfully to %s via %s",
+                        mask_email_for_log(email),
+                        sanitize_for_log(method_used),
+                    )
                     return True
                 else:
                     logger.warning(f"Notification service failed, falling back to SMTP: {email_result.get('error', 'Unknown error')}")
@@ -335,6 +359,8 @@ class ForgotPasswordService:
             msg.attach(MIMEText(html_content, 'html'))
             
             # Connect to SMTP server and send email
+            if not self.smtp_config.get('email') or not self.smtp_config.get('password'):
+                raise RuntimeError("SMTP_EMAIL/SMTP_PASSWORD environment variables must be set for SMTP fallback")
             with smtplib.SMTP(self.smtp_config['server'], self.smtp_config['port']) as server:
                 server.ehlo()
                 server.starttls()
@@ -342,11 +368,14 @@ class ForgotPasswordService:
                 server.login(self.smtp_config['email'], self.smtp_config['password'])
                 server.send_message(msg)
             
-            logger.info(f"Password reset email sent successfully to {email} via SMTP (fallback)")
+            logger.info(
+                "Password reset email sent successfully to %s via SMTP (fallback)",
+                mask_email_for_log(email),
+            )
             return True
             
         except Exception as e:
-            logger.error(f"Error sending password reset email: {str(e)}")
+            logger.error("Error sending password reset email: %s", type(e).__name__)
             return False
     
     def initiate_password_reset(self, email, ip_address=None, user_agent=None):
@@ -404,7 +433,9 @@ class ForgotPasswordService:
                 
         except Exception as e:
             logger.error(f"Error initiating password reset: {str(e)}")
-            self.log_password_reset_action(None, email, 'initiate_reset', False, str(e), ip_address, user_agent)
+            self.log_password_reset_action(
+                None, email, 'initiate_reset', False, type(e).__name__, ip_address, user_agent
+            )
             
             return {
                 'success': False,
@@ -438,7 +469,11 @@ class ForgotPasswordService:
                 if is_reused:
                     history_count = get_password_history_count()
                     self.log_password_reset_action(user.UserId, email, 'reset_password', False, f'Password reuse detected (checked last {checked_count} passwords)', ip_address, user_agent)
-                    logger.warning(f"⚠️ Password reuse blocked for user {user.UserName}: new password matches one of the last {history_count} passwords")
+                    logger.warning(
+                        "Password reuse blocked for user id %s: new password matches one of the last %s passwords",
+                        user.UserId,
+                        history_count,
+                    )
                     return {
                         'success': False,
                         'message': f'Password has been used recently. Please choose a different password that is not one of your last {history_count} passwords.'
@@ -481,44 +516,40 @@ class ForgotPasswordService:
                     cache.delete(session_userid_cache_key)
                     cache.delete(session_userid_lockout_cache_key)
                     
-                    logger.info(f"✅ Cleared account lockout cache for user {user.UserName} (ID: {user.UserId}) after password reset")
+                    logger.info("Cleared account lockout cache after successful password reset for user id %s", user.UserId)
                 except Exception as cache_error:
-                    logger.warning(f"⚠️ Failed to clear lockout cache for user {user.UserName}: {str(cache_error)}")
+                    logger.warning("Failed to clear lockout cache for user id %s: %s", user.UserId, type(cache_error).__name__)
                     # Don't fail password reset if cache clearing fails
                 
                 # Log password reset to password_logs
                 try:
-                    logger.info(f"🔄 Attempting to create password log for user {user.UserName} (ID: {user.UserId})")
-                    logger.info(f"🔄 Password log data: UserId={user.UserId}, UserName={user.UserName}, ActionType='reset', IPAddress={ip_address}, UserAgent={user_agent[:50] if user_agent else 'None'}...")
+                    logger.info("Attempting to create password log for user id %s", user.UserId)
                     
                     password_log = PasswordLog.objects.create(
                         UserId=user.UserId,
                         UserName=user.UserName,
                         OldPassword=old_password_hash,  # Previous hashed password
-                        NewPassword=user.Password,  # New hashed password
+                        # Store only the previous hash for reuse checks; avoid storing the new password hash in the log.
+                        NewPassword='',
                         ActionType='reset',
                         IPAddress=ip_address or '',
                         UserAgent=user_agent or '',
                         AdditionalInfo={'email': email, 'reset_method': 'forgot_password_service'}
                     )
-                    logger.info(f"✅ Password log created successfully with LogId={password_log.LogId} for user: {user.UserName}")
+                    logger.info("Password log created successfully with LogId=%s for user id=%s", password_log.LogId, user.UserId)
                     
                     # Verify it was saved by querying it back
                     try:
                         verify_log = PasswordLog.objects.filter(UserId=user.UserId, ActionType='reset').order_by('-Timestamp').first()
                         if verify_log:
-                            logger.info(f"✅ Password log verified in database: LogId={verify_log.LogId}, Timestamp={verify_log.Timestamp}")
+                            logger.info("Password log verified in database: LogId=%s", verify_log.LogId)
                         else:
-                            logger.warning(f"⚠️ Password log not found in verification query for user {user.UserName}")
+                            logger.warning("Password log not found in verification query for user id=%s", user.UserId)
                     except Exception as verify_error:
-                        logger.warning(f"⚠️ Failed to verify password log: {str(verify_error)}")
+                        logger.warning("Failed to verify password log: %s", type(verify_error).__name__)
                         
                 except Exception as log_error:
-                    logger.error(f"❌ Failed to create password log on reset: {str(log_error)}")
-                    logger.error(f"❌ Exception type: {type(log_error).__name__}")
-                    logger.error(f"❌ Exception details: {repr(log_error)}")
-                    import traceback
-                    logger.error(f"❌ Traceback: {traceback.format_exc()}")
+                    logger.error("Failed to create password log on reset: %s", type(log_error).__name__)
                     # Don't fail password reset if logging fails
                 
                 # Also log password reset to grc_logs
@@ -539,9 +570,9 @@ class ForgotPasswordService:
                         additionalInfo={'reset_method': 'forgot_password_service', 'email': email},
                         frameworkId=user.FrameworkId.FrameworkId if user.FrameworkId else None
                     )
-                    logger.info(f"✅ Password reset logged to grc_logs for user: {user.UserName}")
+                    logger.info("Password reset logged to grc_logs for user id=%s", user.UserId)
                 except Exception as log_error:
-                    logger.error(f"❌ Failed to log password reset to grc_logs: {str(log_error)}")
+                    logger.error("Failed to log password reset to grc_logs: %s", type(log_error).__name__)
                     # Don't fail password reset if logging fails
             except Users.DoesNotExist:
                 raise Exception(f"User with ID {otp_validation['user_id']} not found")
@@ -566,8 +597,8 @@ class ForgotPasswordService:
             }
             
         except Exception as e:
-            logger.error(f"Error verifying OTP and resetting password: {str(e)}")
-            self.log_password_reset_action(None, email, 'reset_password', False, str(e), ip_address, user_agent)
+            logger.error("Error verifying OTP and resetting password: %s", type(e).__name__)
+            self.log_password_reset_action(None, email, 'reset_password', False, type(e).__name__, ip_address, user_agent)
             
             return {
                 'success': False,
@@ -587,6 +618,6 @@ if __name__ == "__main__":
     # otp_result = forgot_password_service.verify_otp_and_reset_password(
     #     'test@example.com', 
     #     '123456', 
-    #     'newpassword123'
+    #     'new_password_here'
     # )
     # print(f"Reset password result: {otp_result}") 

@@ -414,6 +414,7 @@ import PopupModal from '../../modules/popus/PopupModal.vue'
 import AccessUtils from '../../utils/accessUtils'
 import axios from 'axios'
 import eventDataService from '../../services/eventService' // NEW: Centralized event data service
+import { openDownloadInNewTabWithAnchorFallback } from '@/utils/safeExternalNavigation'
 
 export default {
   name: 'EventsList',
@@ -498,6 +499,34 @@ export default {
           PopupService.warning('Please select an export format first.', 'Format Required')
           return
         }
+
+        // SECURITY: Mitigate CSV formula injection and basic export-content injection.
+        // Excel/Sheets can interpret values starting with =,+,-,@ as formulas.
+        const sanitizeExportCell = (value) => {
+          if (value === null || value === undefined) return ''
+          if (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') return value
+
+          // Normalize to a string and avoid row-breaking.
+          let s = String(value)
+          s = s.split('\r').join(' ').split('\n').join(' ').split('\0').join('')
+
+          // Check for formula-like cells (ignore leading whitespace).
+          const trimmed = s.trimStart()
+          if (/^[=+\-@]/.test(trimmed)) {
+            // Prefix with apostrophe so Excel treats it as a literal string.
+            return "'" + s
+          }
+          return s
+        }
+
+        const sanitizeDownloadName = (name) => {
+          const s = String(name || '')
+            .split('\r').join('')
+            .split('\n').join('')
+            .split('\0').join('')
+            .split(/[\\/]/).pop()
+          return s || 'download'
+        }
         
         PopupService.success(`Starting export of events as ${format}...`, 'Export Started')
         
@@ -511,29 +540,30 @@ export default {
         
         // Prepare data for export
         const exportData = allEvents.map(event => ({
-          'Event ID': event.id || event.event_id || 'N/A',
-          'Event Title': event.title || 'N/A',
-          'Framework': event.framework,  // Backend now handles random assignment
-          'Module': event.module,        // Backend now handles random assignment
-          'Category': event.category || 'General',
-          'Owner': event.owner || 'Not Assigned',
-          'Reviewer': event.reviewer || 'Not Assigned',
-          'Status': event.status || 'Pending Review',
-          'Priority': event.priority || 'Medium',
-          'Created Date': event.createdDate || event.created_date || event.created_at || 'N/A',
-          'Updated Date': event.updatedDate || event.updated_date || 'N/A',
-          'Description': event.description || 'No description'
+          'Event ID': sanitizeExportCell(event.id || event.event_id || 'N/A'),
+          'Event Title': sanitizeExportCell(event.title || 'N/A'),
+          'Framework': sanitizeExportCell(event.framework),  // Backend now handles random assignment
+          'Module': sanitizeExportCell(event.module),        // Backend now handles random assignment
+          'Category': sanitizeExportCell(event.category || 'General'),
+          'Owner': sanitizeExportCell(event.owner || 'Not Assigned'),
+          'Reviewer': sanitizeExportCell(event.reviewer || 'Not Assigned'),
+          'Status': sanitizeExportCell(event.status || 'Pending Review'),
+          'Priority': sanitizeExportCell(event.priority || 'Medium'),
+          'Created Date': sanitizeExportCell(event.createdDate || event.created_date || event.created_at || 'N/A'),
+          'Updated Date': sanitizeExportCell(event.updatedDate || event.updated_date || 'N/A'),
+          'Description': sanitizeExportCell(event.description || 'No description')
         }))
         
         const userId = localStorage.getItem('user_id') || 'default_user'
         const normalizedFormat = String(format).toLowerCase()
         const fileBaseName = `events_export_${new Date().toISOString().split('T')[0]}`
+        const fileBaseNameSafe = sanitizeDownloadName(fileBaseName)
 
         const response = await eventService.exportEventsToS3({
           export_format: normalizedFormat,
           events: exportData,
           user_id: userId,
-          file_name: fileBaseName
+          file_name: fileBaseNameSafe
         })
 
         const result = response?.data || {}
@@ -541,14 +571,13 @@ export default {
           throw new Error(result.message || 'No file URL received from export service')
         }
 
-        const popup = window.open(result.file_url, '_blank')
-        if (!popup) {
-          const link = document.createElement('a')
-          link.href = result.file_url
-          link.setAttribute('download', result.file_name || `${fileBaseName}.${normalizedFormat === 'excel' ? 'xlsx' : normalizedFormat}`)
-          document.body.appendChild(link)
-          link.click()
-          document.body.removeChild(link)
+        const desiredFileName = result.file_name || `${fileBaseNameSafe}.${normalizedFormat === 'excel' ? 'xlsx' : normalizedFormat}`
+        try {
+          openDownloadInNewTabWithAnchorFallback(result.file_url, sanitizeDownloadName(desiredFileName))
+        } catch (openErr) {
+          console.error(openErr)
+          PopupService.error('Export failed: unsafe or invalid download URL.', 'Export Error')
+          return
         }
 
         PopupService.success(`Events exported successfully as ${format}!`, 'Export Complete')

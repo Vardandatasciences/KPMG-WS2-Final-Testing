@@ -11,6 +11,7 @@ import urllib.parse as up
 import requests
 from flask import Flask, redirect, request, session, url_for, jsonify
 from dotenv import load_dotenv
+from grc.utils.url_validator import validate_url, InvalidOutboundUrlError
 
 load_dotenv()
 
@@ -21,6 +22,51 @@ except ImportError:
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", secrets.token_hex(32))
+
+
+def _safe_get(url, **kwargs):
+    # SECURITY: guard against SSRF-style outbound URL abuse.
+    try:
+        validate_url(url)
+    except InvalidOutboundUrlError as exc:
+        raise requests.RequestException(str(exc)) from exc
+    return requests.get(url, **kwargs)
+
+
+def _safe_post(url, **kwargs):
+    # SECURITY: guard against SSRF-style outbound URL abuse.
+    try:
+        validate_url(url)
+    except InvalidOutboundUrlError as exc:
+        raise requests.RequestException(str(exc)) from exc
+    return requests.post(url, **kwargs)
+
+# SECURITY: Apply missing/permissive HTTP security headers to all responses.
+@app.after_request
+def apply_security_headers(response):
+    # CSP should be consistent for HTML responses returned by this service.
+    response.headers['Content-Security-Policy'] = "; ".join([
+        "default-src 'self'",
+        "script-src 'self'",
+        "style-src 'self'",
+        "img-src 'self' data: https:",
+        "connect-src 'self'",
+        "font-src 'self' data:",
+        "object-src 'none'",
+        "base-uri 'self'",
+        "form-action 'self'",
+        "frame-ancestors 'none'",
+    ])
+
+    # Enable HSTS only when HTTPS is expected (avoid breaking local HTTP dev).
+    try:
+        if request.is_secure or not USE_LOCAL:
+            response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains; preload'
+    except Exception:
+        # Never fail the request if header computation errors.
+        pass
+
+    return response
 
 # BambooHR OAuth Configuration
 CLIENT_ID = os.environ.get("BAMBOOHR_CLIENT_ID", "").strip()
@@ -127,8 +173,10 @@ def oauth_callback():
         code = request.args.get("code")
         if not code:
             error_description = request.args.get("error_description", "Missing authorization code")
+            # SECURITY: Encode attacker-controlled redirect parameters to avoid reflected injection.
+            error_description = str(error_description).replace("\r", "").replace("\n", "").strip()
             debug_print(f"❌ OAuth error: {error_description}")
-            return redirect(f"{FRONTEND_URL}/integration/bamboohr?error={error_description}")
+            return redirect(f"{FRONTEND_URL}/integration/bamboohr?{up.urlencode({'error': error_description})}")
 
         # Check if subdomain and user_id are in session
         subdomain = session.get("subdomain")
@@ -149,7 +197,7 @@ def oauth_callback():
         }
         
         debug_print(f"🔄 Exchanging code for token with {subdomain}.bamboohr.com")
-        token_resp = requests.post(f"{token_base}?request=token", headers=form_headers(), data=data, timeout=30)
+        token_resp = _safe_post(f"{token_base}?request=token", headers=form_headers(), data=data, timeout=30)
         
         if token_resp.status_code != 200:
             debug_print(f"❌ Token exchange failed: {token_resp.status_code} {token_resp.text}")
@@ -173,7 +221,7 @@ def oauth_callback():
         
         # Try to fetch company info to verify token works
         try:
-            company_resp = requests.get(f"{api_base}/meta/company", headers=headers, timeout=30)
+            company_resp = _safe_get(f"{api_base}/meta/company", headers=headers, timeout=30)
             if company_resp.status_code == 200:
                 company_info = company_resp.json()
                 debug_print(f"✅ Token verified with company: {company_info}")
@@ -197,7 +245,7 @@ def oauth_callback():
             }
             
             debug_print(f"📡 Notifying Django backend: {callback_url}")
-            django_resp = requests.post(callback_url, json=callback_data, timeout=30)
+            django_resp = _safe_post(callback_url, json=callback_data, timeout=30)
             
             if django_resp.status_code == 200:
                 debug_print("✅ Django backend notified successfully")
@@ -208,7 +256,7 @@ def oauth_callback():
             debug_print(f"⚠️ Error notifying Django backend: {e}")
         
         # Redirect back to frontend with success
-        frontend_callback_url = f"{FRONTEND_URL}/integration/bamboohr?token={access_token}&user_id={user_id}&subdomain={subdomain}&success=true"
+        frontend_callback_url = f"{FRONTEND_URL}/integration/bamboohr?{up.urlencode({'token': access_token, 'user_id': user_id, 'subdomain': subdomain, 'success': 'true'})}"
         debug_print(f"🔗 Redirecting to frontend: {frontend_callback_url}")
         
         # Clear sensitive session data

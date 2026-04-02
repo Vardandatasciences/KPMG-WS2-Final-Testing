@@ -944,12 +944,12 @@ const routes = [
   // EventHandling Routes
   {
     path: '/event-handling',
-    name: 'EventHandlingLayout',
     component: Layout,
     meta: { requiresAuth: true },
     children: [
       {
         path: '',
+        name: 'EventHandlingLayout',
         redirect: '/event-handling/dashboard'
       },
       {

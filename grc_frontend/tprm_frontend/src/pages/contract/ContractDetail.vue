@@ -1183,6 +1183,7 @@ const downloadDocument = (url) => {
     link.href = url
     link.download = filename
     link.target = '_blank'
+    link.rel = 'noopener noreferrer'
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)

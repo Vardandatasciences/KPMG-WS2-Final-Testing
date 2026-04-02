@@ -332,7 +332,7 @@
                     <i class="fas" :class="expandedDocumentId === doc.file_operation_id ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
                     {{ expandedDocumentId === doc.file_operation_id ? 'Hide Details' : 'View Details' }}
                   </button>
-                  <a :href="doc.s3_url" target="_blank" class="btn btn-outline btn-sm" @click.stop>
+                  <a :href="doc.s3_url" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm" @click.stop>
                     <i class="fas fa-download"></i>
                     Download
                   </a>
@@ -5680,6 +5680,7 @@ export default {
         link.href = url
         link.download = `AI_Audit_Comprehensive_Report_${auditId}_${new Date().toISOString().slice(0,10)}.json`
         link.target = '_blank'
+        link.rel = 'noopener noreferrer'
         
         // Trigger download
         document.body.appendChild(link)

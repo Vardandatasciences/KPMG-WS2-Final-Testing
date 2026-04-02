@@ -271,6 +271,7 @@ export default {
         link.href = url;
         link.download = `audit_report_${auditId}.docx`;
         link.target = '_blank';
+        link.rel = 'noopener noreferrer';
         
         // Trigger download
         document.body.appendChild(link);

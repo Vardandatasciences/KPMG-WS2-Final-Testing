@@ -57,7 +57,7 @@ PERPLEXITY_API_KEY = os.environ.get("PERPLEXITY_API_KEY", "")
 
 # SECURITY WARNING: keep the secret key used in production secret!
 # Must be provided via environment variable in production.
-SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "changeme-in-dev-only")
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get("DJANGO_DEBUG", "false").lower() == "true"
@@ -290,10 +290,10 @@ SESSION_TIMEOUT_SECONDS = int(SESSION_TIMEOUT_SECONDS_STR)
 SESSION_COOKIE_AGE = SESSION_TIMEOUT_SECONDS
 
 SESSION_COOKIE_NAME = 'grc_sessionid'  # Custom session cookie name
-SESSION_COOKIE_HTTPONLY = False  # Allow JavaScript access (needed for SPA)
-SESSION_COOKIE_SECURE = False  # Set to True in production with HTTPS (False for HTTP/development)
+SESSION_COOKIE_HTTPONLY = True  # SECURITY: prevent JavaScript access to session cookie
+SESSION_COOKIE_SECURE = not DEBUG  # SECURITY: only send over HTTPS in non-debug deployments
 SESSION_COOKIE_SAMESITE = 'Lax'  # Allow cross-site requests with same-site protection (will be overridden by middleware for OAuth)
-SESSION_EXPIRE_AT_BROWSER_CLOSE = False  # Session persists after browser close
+SESSION_EXPIRE_AT_BROWSER_CLOSE = not DEBUG  # SECURITY: reduce session lifetime in production
 SESSION_COOKIE_DOMAIN = None  # Use default domain
 SESSION_COOKIE_PATH = '/'  # Session cookie available for entire site
 
@@ -322,6 +322,11 @@ _CONSOLE_LEVEL = "DEBUG" if ENABLE_DEBUG_LOGGING else "ERROR"
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,  # CRITICAL: Keep Django's default loggers
+    'filters': {
+        'log_forging_safe': {
+            '()': 'grc.utils.log_sanitize.LogForgingFilter',
+        },
+    },
     'formatters': {
         'verbose': {
             'format': '{levelname} {asctime} {module} {message}',
@@ -337,6 +342,7 @@ LOGGING = {
             'level': _CONSOLE_LEVEL,
             'class': 'logging.StreamHandler',
             'formatter': 'simple',
+            'filters': ['log_forging_safe'],
         },
     },
     'loggers': {
@@ -534,17 +540,18 @@ CSRF_COOKIE_SECURE = False  # Set to True with valid SSL certificates (False for
 CSRF_COOKIE_HTTPONLY = False  # Allow JavaScript access to CSRF token
 
 # Session settings for HTTPS (duplicate - remove if causing issues)
-# SESSION_COOKIE_SECURE = False  # Set to True with valid SSL certificates
-# SESSION_COOKIE_HTTPONLY = False  # Allow JavaScript access to session cookies
-# SESSION_COOKIE_SAMESITE = 'Lax'  # Allow cross-site requests
+# SESSION_COOKIE_SECURE = True  # Send over HTTPS
+# SESSION_COOKIE_HTTPONLY = True  # Prevent JavaScript access to session cookies
+# SESSION_COOKIE_SAMESITE = 'Lax'  # Same-site protection for cross-site navigations
 # SESSION_COOKIE_DOMAIN = None  # Allow all domains in development
 
 # Additional HTTPS security headers (enable in production)
 SECURE_SSL_REDIRECT = False  # Set to True to redirect all HTTP to HTTPS
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')  # For reverse proxy
-SECURE_HSTS_SECONDS = 0  # Set to 31536000 (1 year) in production with HTTPS
-SECURE_HSTS_INCLUDE_SUBDOMAINS = False  # Set to True in production
-SECURE_HSTS_PRELOAD = False  # Set to True in production
+# SECURITY: enable HSTS in non-debug deployments.
+SECURE_HSTS_SECONDS = 31536000 if not DEBUG else 0  # 1 year
+SECURE_HSTS_INCLUDE_SUBDOMAINS = True if not DEBUG else False
+SECURE_HSTS_PRELOAD = True if not DEBUG else False
 
 # JWT Settings
 JWT_SECRET_KEY = SECRET_KEY

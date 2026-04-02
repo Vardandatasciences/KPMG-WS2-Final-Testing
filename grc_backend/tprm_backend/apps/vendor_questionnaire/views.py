@@ -55,6 +55,7 @@ def get_db_connection():
 
 # Token for public questionnaire response link (no login required)
 _questionnaire_signer = Signer(salt='vendor_questionnaire_public')
+MAX_RESPONSES_PER_REQUEST = 100
 
 
 def generate_assignment_token(assignment_id):
@@ -1440,6 +1441,16 @@ class QuestionnaireResponseViewSet(VendorAuthenticationMixin, viewsets.ModelView
         """Save responses for an assignment (public access allowed)"""
         assignment_id = request.data.get('assignment_id')
         responses = request.data.get('responses', [])
+        if not isinstance(responses, list):
+            return Response(
+                {'error': 'responses must be a list'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        if len(responses) > MAX_RESPONSES_PER_REQUEST:
+            return Response(
+                {'error': f'Too many responses in one request. Maximum allowed is {MAX_RESPONSES_PER_REQUEST}.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         
         if not assignment_id:
             return Response(
@@ -1975,6 +1986,13 @@ def save_responses_by_token_view(request):
     assignment_id = request.data.get('assignmentId')
     token = request.data.get('token')
     responses = request.data.get('responses', [])
+    if not isinstance(responses, list):
+        return Response({'error': 'responses must be a list'}, status=status.HTTP_400_BAD_REQUEST)
+    if len(responses) > MAX_RESPONSES_PER_REQUEST:
+        return Response(
+            {'error': f'Too many responses in one request. Maximum allowed is {MAX_RESPONSES_PER_REQUEST}.'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
     
     # Try assignment ID first (preferred, like vendor portal)
     if assignment_id:

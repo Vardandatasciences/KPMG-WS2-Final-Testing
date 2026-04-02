@@ -43,6 +43,7 @@ from ..uploadNist import no_index_file
 from ..Policy import policy_ai_service as centralized_policy_ai
 from ...utils.file_compression import decompress_if_needed
 from ...debug_utils import debug_print
+from ...utils.safe_paths import safe_join
 
 # Global progress tracking
 processing_status = {}
@@ -66,7 +67,7 @@ def create_user_folder(userid):
     folder_name = f"upload_{userid}"
     
     # Create the folder path in MEDIA_ROOT
-    folder_path = os.path.join(settings.MEDIA_ROOT, folder_name)
+    folder_path = safe_join(settings.MEDIA_ROOT, folder_name)
     
     max_retries = 3
     retry_delay = 1  # seconds
@@ -145,7 +146,7 @@ def process_pdf_framework_new(userid, pdf_path, task_id):
         
         # Get MEDIA_ROOT
         media_root = ai_upload.get_media_root()
-        user_folder = media_root / f"upload_{userid}"
+        user_folder = Path(safe_join(media_root, f"upload_{userid}"))
         pdf_path_obj = Path(pdf_path)
         pdf_name = pdf_path_obj.stem
         
@@ -314,9 +315,13 @@ def use_default_temp_data(task_id, output_dir):
         total_duration = 20.0  # 20 seconds
         
         # Get list of sections in temp directory
-        section_dirs = [d for d in os.listdir(temp_source_dir) 
+        from ...utils.bulk_limits import MAX_DEFAULT_TEMP_SECTIONS
+
+        section_dirs = [d for d in os.listdir(temp_source_dir)
                        if os.path.isdir(os.path.join(temp_source_dir, d))]
-        
+        if len(section_dirs) > MAX_DEFAULT_TEMP_SECTIONS:
+            section_dirs = section_dirs[:MAX_DEFAULT_TEMP_SECTIONS]
+
         if not section_dirs:
             update_progress(task_id, 100, "Error: No sections found in temp data")
             return False
@@ -427,7 +432,8 @@ def upload_framework_file(request):
             return JsonResponse({'error': f'Failed to create user folder: {str(e)}'}, status=500)
         
         # Save file in user-specific directory
-        file_path = os.path.join(user_folder, uploaded_file.name)
+        # Prevent traversal via user-controlled upload file name.
+        file_path = safe_join(user_folder, uploaded_file.name)
         with open(file_path, 'wb+') as destination:
             for chunk in uploaded_file.chunks():
                 destination.write(chunk)
@@ -583,7 +589,7 @@ def get_sections(request, task_id):
         
         if userid:
             media_root = Path(settings.MEDIA_ROOT)
-            user_folder = media_root / f"upload_{userid}"
+            user_folder = Path(safe_join(media_root, f"upload_{userid}"))
             
             # Find the policies folder (e.g., policies_PCI_DSS_1)
             if user_folder.exists():
@@ -783,12 +789,12 @@ def update_section(request):
         
         # Backend now returns clean names, so we need to find the actual file
         # subsection_name is clean (e.g., "AC-1"), but we need to find it in txt_chunks/AC-1.txt
-        txt_chunks_path = os.path.join(output_dir, section_name, 'txt_chunks')
-        file_path = os.path.join(txt_chunks_path, f"{subsection_name}.txt")
+        txt_chunks_path = safe_join(output_dir, section_name, 'txt_chunks')
+        file_path = safe_join(txt_chunks_path, f"{subsection_name}.txt")
         
         # If not found in txt_chunks, try direct file in section directory
         if not os.path.exists(file_path):
-            file_path = os.path.join(output_dir, section_name, f"{subsection_name}.txt")
+            file_path = safe_join(output_dir, section_name, f"{subsection_name}.txt")
         
         # We're only dealing with text files now, not JSON
         is_json = False
@@ -822,7 +828,7 @@ def create_checked_structure(request):
             return JsonResponse({'error': 'Extracted sections not found'}, status=404)
         
         # Create output directory for checked items - NEW STRUCTURE: "checked by user"
-        checked_output_dir = os.path.join(settings.MEDIA_ROOT, 'checked_by_user', task_id)
+        checked_output_dir = safe_join(settings.MEDIA_ROOT, 'checked_by_user', task_id)
         
         # Delete existing checked_by_user directory if it exists
         if os.path.exists(checked_output_dir):
@@ -927,7 +933,7 @@ def get_extracted_policies(request, task_id):
         
         # If no existing policies found, create a sample Excel file with default data
         media_root = settings.MEDIA_ROOT
-        extracted_policies_dir = os.path.join(media_root, 'extracted_policies', task_id)
+        extracted_policies_dir = safe_join(media_root, 'extracted_policies', task_id)
         
         if not os.path.exists(extracted_policies_dir):
             os.makedirs(extracted_policies_dir, exist_ok=True)
@@ -949,7 +955,7 @@ def get_extracted_policies(request, task_id):
         
         # Create a DataFrame and save to Excel
         df = pd.DataFrame(sample_policies)
-        output_file = os.path.join(extracted_policies_dir, f"extracted_policies_{task_id}.xlsx")
+        output_file = safe_join(extracted_policies_dir, f"extracted_policies_{task_id}.xlsx")
         df.to_excel(output_file, index=False)
         
         # Cache the policies
@@ -1047,7 +1053,7 @@ def save_updated_policies(request):
         
         # Generate filename with timestamp
         timestamp = int(time.time())
-        output_file = os.path.join(updated_policies_dir, f"updated_policies_{task_id}_{timestamp}.xlsx")
+        output_file = safe_join(updated_policies_dir, f"updated_policies_{task_id}_{timestamp}.xlsx")
         
         # Save to Excel
         df.to_excel(output_file, index=False)
@@ -1095,20 +1101,20 @@ def save_policies(request):
         
         # 1. Save to extracted_policies (original location)
         media_root = settings.MEDIA_ROOT
-        extracted_policies_dir = os.path.join(media_root, 'extracted_policies', task_id)
+        extracted_policies_dir = safe_join(media_root, 'extracted_policies', task_id)
         os.makedirs(extracted_policies_dir, exist_ok=True)
         
-        source_file = os.path.join(extracted_policies_dir, f"extracted_policies_{task_id}.xlsx")
+        source_file = safe_join(extracted_policies_dir, f"extracted_policies_{task_id}.xlsx")
         df.to_excel(source_file, index=False)
         
         # 2. Create a copy in updated_policies with timestamp
-        updated_policies_dir = os.path.join(media_root, 'updated_policies', task_id)
+        updated_policies_dir = safe_join(media_root, 'updated_policies', task_id)
         os.makedirs(updated_policies_dir, exist_ok=True)
         
         # Generate filename with timestamp
         timestamp = int(time.time())
         safe_filename = filename.replace('.xlsx', '').replace('.xls', '')
-        output_file = os.path.join(updated_policies_dir, f"{safe_filename}_bulk_save_{timestamp}.xlsx")
+        output_file = safe_join(updated_policies_dir, f"{safe_filename}_bulk_save_{timestamp}.xlsx")
         
         # Save to Excel
         df.to_excel(output_file, index=False)
@@ -1147,7 +1153,7 @@ def save_single_policy(request):
             # Try to load from the original Excel file
             try:
                 media_root = settings.MEDIA_ROOT
-                extracted_policies_dir = os.path.join(media_root, 'extracted_policies', task_id)
+                extracted_policies_dir = safe_join(media_root, 'extracted_policies', task_id)
                 
                 if not os.path.exists(extracted_policies_dir):
                     os.makedirs(extracted_policies_dir, exist_ok=True)
@@ -1183,10 +1189,10 @@ def save_single_policy(request):
         media_root = settings.MEDIA_ROOT
         
         # 1. Save to extracted_policies (original location) to update the source file
-        extracted_policies_dir = os.path.join(media_root, 'extracted_policies', task_id)
+        extracted_policies_dir = safe_join(media_root, 'extracted_policies', task_id)
         os.makedirs(extracted_policies_dir, exist_ok=True)
         
-        source_file = os.path.join(extracted_policies_dir, f"extracted_policies_{task_id}.xlsx")
+        source_file = safe_join(extracted_policies_dir, f"extracted_policies_{task_id}.xlsx")
         df = pd.DataFrame(cached_policies)
         
         # Ensure all expected columns exist
@@ -1205,12 +1211,15 @@ def save_single_policy(request):
         df.to_excel(source_file, index=False)
         
         # 2. Also save a copy to updated_policies with timestamp
-        updated_policies_dir = os.path.join(media_root, 'updated_policies', task_id)
+        updated_policies_dir = safe_join(media_root, 'updated_policies', task_id)
         os.makedirs(updated_policies_dir, exist_ok=True)
         
         # Generate filename with timestamp
         timestamp = int(time.time())
-        output_file = os.path.join(updated_policies_dir, f"updated_policy_{policy.get('Sub_policy_id')}_{timestamp}.xlsx")
+        output_file = safe_join(
+            updated_policies_dir,
+            f"updated_policy_{policy.get('Sub_policy_id')}_{timestamp}.xlsx"
+        )
         
         # Save to Excel
         df.to_excel(output_file, index=False)
@@ -1233,7 +1242,7 @@ def get_saved_excel_files(request, task_id):
     """Get list of all saved Excel files for a task"""
     try:
         media_root = settings.MEDIA_ROOT
-        updated_policies_dir = os.path.join(media_root, 'updated_policies', task_id)
+        updated_policies_dir = safe_join(media_root, 'updated_policies', task_id)
         
         if not os.path.exists(updated_policies_dir):
             return JsonResponse({
@@ -1244,7 +1253,7 @@ def get_saved_excel_files(request, task_id):
         files = []
         for filename in os.listdir(updated_policies_dir):
             if filename.endswith('.xlsx'):
-                file_path = os.path.join(updated_policies_dir, filename)
+                file_path = safe_join(updated_policies_dir, filename)
                 file_stats = os.stat(file_path)
                 
                 # Extract timestamp from filename
@@ -1304,11 +1313,11 @@ def save_policy_details(request):
         
         # Create policy details directory if it doesn't exist
         media_root = settings.MEDIA_ROOT
-        policy_details_dir = os.path.join(media_root, 'policy_details', task_id)
+        policy_details_dir = safe_join(media_root, 'policy_details', task_id)
         os.makedirs(policy_details_dir, exist_ok=True)
         
         # Save details to JSON file
-        json_file_path = os.path.join(policy_details_dir, f"policy_details_{task_id}.json")
+        json_file_path = safe_join(policy_details_dir, f"policy_details_{task_id}.json")
         with open(json_file_path, 'w') as f:
             json.dump(cached_details, f, indent=2)
         
@@ -1343,7 +1352,7 @@ def save_checked_sections_json(request):
         
         # Get the user folder path
         media_root = Path(settings.MEDIA_ROOT)
-        user_folder = media_root / f"upload_{user_id}"
+        user_folder = Path(safe_join(media_root, f"upload_{user_id}"))
         
         if not user_folder.exists():
             return JsonResponse({'error': f'User folder not found: upload_{user_id}'}, status=404)
@@ -1447,7 +1456,7 @@ def generate_compliances_for_checked_sections(request):
         
         # Get the user folder path
         media_root = Path(settings.MEDIA_ROOT)
-        user_folder = media_root / f"upload_{user_id}"
+        user_folder = Path(safe_join(media_root, f"upload_{user_id}"))
         checked_sections_path = user_folder / "checked_section.json"
         
         if not checked_sections_path.exists():
@@ -1595,7 +1604,7 @@ def get_checked_sections_with_compliances(request, task_id):
         
         # Get the user folder path
         media_root = Path(settings.MEDIA_ROOT)
-        user_folder = media_root / f"upload_{user_id}"
+        user_folder = Path(safe_join(media_root, f"upload_{user_id}"))
         checked_sections_path = user_folder / "checked_section.json"
         
         if not checked_sections_path.exists():
@@ -1644,7 +1653,7 @@ def save_complete_policy_package(request):
         
         # Create directories if they don't exist
         media_root = settings.MEDIA_ROOT
-        complete_package_dir = os.path.join(media_root, 'complete_packages', task_id)
+        complete_package_dir = safe_join(media_root, 'complete_packages', task_id)
         os.makedirs(complete_package_dir, exist_ok=True)
         
         # Create hierarchical JSON structure
@@ -1947,7 +1956,7 @@ def save_framework_to_database(request):
         
         # Find the latest JSON file in the complete_packages directory
         media_root = settings.MEDIA_ROOT
-        complete_package_dir = os.path.join(media_root, 'complete_packages', task_id)
+        complete_package_dir = safe_join(media_root, 'complete_packages', task_id)
         
         if not os.path.exists(complete_package_dir):
             return JsonResponse({'error': 'Complete package directory not found'}, status=404)
@@ -2168,7 +2177,7 @@ def get_compliance_generation_progress(request):
         
         # Get the user folder path
         media_root = Path(settings.MEDIA_ROOT)
-        user_folder = media_root / f"upload_{user_id}"
+        user_folder = Path(safe_join(media_root, f"upload_{user_id}"))
         checked_sections_path = user_folder / "checked_section.json"
         
         if not checked_sections_path.exists():

@@ -1014,7 +1014,7 @@ export default {
       // Prefer legacy direct S3 URL when present (backwards compatibility)
       if (document.s3Url) {
         console.log('📂 Opening document (legacy URL):', document.name, 'from', document.s3Url)
-        window.open(document.s3Url, '_blank')
+        window.open(document.s3Url, '_blank', 'noopener,noreferrer')
         return
       }
 
@@ -1034,7 +1034,7 @@ export default {
 
         if (response.data && response.data.success && response.data.downloadUrl) {
           console.log('📂 Opening document from secure URL:', response.data.downloadUrl)
-          window.open(response.data.downloadUrl, '_blank')
+          window.open(response.data.downloadUrl, '_blank', 'noopener,noreferrer')
         } else {
           console.error('❌ Failed to get secure URL for document:', document, response.data)
           alert('Unable to open document: No download URL available')

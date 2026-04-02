@@ -13,8 +13,10 @@ from ...models import CookiePreferences, Users
 from ...authentication import get_user_from_jwt
 import logging
 import uuid
+import os
 
 logger = logging.getLogger(__name__)
+COOKIE_DEBUG_LOGS = os.getenv('COOKIE_DEBUG_LOGS', 'false').lower() in {'1', 'true', 'yes'}
 
 
 def get_client_ip(request):
@@ -177,35 +179,30 @@ def save_cookie_preferences(request):
     """
     try:
         # ========== DEBUG: Initial Request Data ==========
-        logger.info("=" * 80)
-        logger.info("[Cookie] ========== START: Cookie Preferences Save Request ==========")
+        logger.info("[Cookie] save_cookie_preferences request started")
         
         # CRITICAL: Log raw request body BEFORE DRF parsing
-        try:
-            raw_body = request.body.decode('utf-8') if hasattr(request, 'body') and request.body else None
-            logger.info(f"[Cookie] DEBUG: Raw request body (before DRF parsing): {raw_body}")
-            if raw_body:
-                import json
-                try:
-                    parsed_raw = json.loads(raw_body)
-                    logger.info(f"[Cookie] DEBUG: Parsed raw body: {parsed_raw}")
-                    logger.info(f"[Cookie] DEBUG: user_id in raw body: {parsed_raw.get('user_id')}")
-                except:
-                    logger.info(f"[Cookie] DEBUG: Could not parse raw body as JSON")
-        except Exception as e:
-            logger.warning(f"[Cookie] DEBUG: Could not read raw body: {str(e)}")
+        if COOKIE_DEBUG_LOGS:
+            try:
+                raw_body = request.body.decode('utf-8') if hasattr(request, 'body') and request.body else None
+                logger.info(f"[Cookie] DEBUG: Raw request body length: {len(raw_body) if raw_body else 0}")
+            except Exception:
+                logger.warning("[Cookie] DEBUG: Could not read raw body")
         
-        logger.info(f"[Cookie] DEBUG: Full request data (DRF parsed): {request.data}")
+        if COOKIE_DEBUG_LOGS:
+            logger.info(f"[Cookie] DEBUG: Request data keys: {list(request.data.keys()) if hasattr(request.data, 'keys') else []}")
         logger.info(f"[Cookie] DEBUG: Request method: {request.method}")
-        logger.info(f"[Cookie] DEBUG: Request headers keys: {list(request.headers.keys())}")
+        if COOKIE_DEBUG_LOGS:
+            logger.info(f"[Cookie] DEBUG: Request headers keys: {list(request.headers.keys())}")
         
         # CRITICAL: Log ALL headers to see what's actually received
-        logger.info(f"[Cookie] DEBUG: All request headers:")
-        for key, value in request.headers.items():
-            if key.lower() == 'authorization':
-                logger.info(f"[Cookie] DEBUG:   {key}: {value[:50]}... (length: {len(value)})")
-            else:
-                logger.info(f"[Cookie] DEBUG:   {key}: {value}")
+        if COOKIE_DEBUG_LOGS:
+            logger.info("[Cookie] DEBUG: Header dump enabled (sensitive values redacted)")
+            for key in request.headers.keys():
+                if key.lower() == 'authorization':
+                    logger.info("[Cookie] DEBUG:   Authorization: <redacted>")
+                else:
+                    logger.info(f"[Cookie] DEBUG:   {key}: <present>")
         
         data = request.data
         user_id = data.get('user_id')
@@ -214,7 +211,8 @@ def save_cookie_preferences(request):
         # Log the received user_id for debugging
         logger.info(f"[Cookie] DEBUG: Received user_id from request body: {user_id} (type: {type(user_id).__name__})")
         logger.info(f"[Cookie] DEBUG: Received session_id from request body: {session_id}")
-        logger.info(f"[Cookie] DEBUG: Full request body data: {data}")
+        if COOKIE_DEBUG_LOGS:
+            logger.info(f"[Cookie] DEBUG: Full request body data: {data}")
         
         # Check if Authorization header is present - try multiple ways
         auth_header = request.headers.get('Authorization', '') or request.headers.get('authorization', '') or request.META.get('HTTP_AUTHORIZATION', '')
@@ -222,7 +220,6 @@ def save_cookie_preferences(request):
         logger.info(f"[Cookie] DEBUG: Authorization header starts with Bearer: {auth_header.startswith('Bearer ') if auth_header else False}")
         if auth_header:
             logger.info(f"[Cookie] DEBUG: Authorization header length: {len(auth_header)}")
-            logger.info(f"[Cookie] DEBUG: Authorization header preview: {auth_header[:50]}...")
         else:
             logger.warning(f"[Cookie] ⚠️ WARNING: No Authorization header found in request!")
             logger.warning(f"[Cookie] ⚠️ Checked: request.headers.get('Authorization'), request.headers.get('authorization'), request.META.get('HTTP_AUTHORIZATION')")
@@ -799,25 +796,17 @@ def save_cookie_preferences(request):
             }
         }
         
-        logger.info(f"[Cookie] DEBUG: Response data: {response_data}")
-        logger.info("[Cookie] ========== END: Cookie Preferences Save Request ==========")
-        logger.info("=" * 80)
+        if COOKIE_DEBUG_LOGS:
+            logger.info(f"[Cookie] DEBUG: Response data: {response_data}")
+        logger.info("[Cookie] save_cookie_preferences request completed")
         
         return Response(response_data, status=status.HTTP_200_OK)
     
-    except Exception as e:
-        logger.error("=" * 80)
-        logger.error("[Cookie] ========== ERROR: Cookie Preferences Save Failed ==========")
-        logger.error(f"[Cookie] ERROR: Error saving cookie preferences: {str(e)}")
-        logger.error(f"[Cookie] ERROR: Exception type: {type(e).__name__}")
-        import traceback
-        logger.error(f"[Cookie] ERROR: Traceback: {traceback.format_exc()}")
-        logger.error("[Cookie] ========== END ERROR ==========")
-        logger.error("=" * 80)
+    except Exception:
+        logger.exception("[Cookie] save_cookie_preferences failed")
         return Response({
             'status': 'error',
-            'message': str(e),
-            'error_type': type(e).__name__
+            'message': 'Unable to save cookie preferences. Please try again.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -881,10 +870,10 @@ def get_cookie_preferences(request):
                 }
             }, status=status.HTTP_200_OK)
     
-    except Exception as e:
-        logger.error(f"Error fetching cookie preferences: {str(e)}")
+    except Exception:
+        logger.exception("Error fetching cookie preferences")
         return Response({
             'status': 'error',
-            'message': str(e)
+            'message': 'Unable to fetch cookie preferences. Please try again.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 

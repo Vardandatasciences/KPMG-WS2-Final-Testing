@@ -20,9 +20,11 @@ class AzureADEmailBackend(BaseEmailBackend):
     
     def __init__(self, fail_silently=False, **kwargs):
         super().__init__(fail_silently=fail_silently, **kwargs)
-        self.tenant_id = getattr(settings, 'AZURE_AD_TENANT_ID', 'aa7c8c45-41a3-4453-bc9a-3adfe8ff5fb6')
-        self.client_id = getattr(settings, 'AZURE_AD_CLIENT_ID', '127107b0-7144-4246-b2f4-160263ceb3c9')
-        self.client_secret = getattr(settings, 'AZURE_AD_CLIENT_SECRET', 'sVr8Q~3b0OS~L5NFIaWGomhiGwSwFuNMnW7RPamR')
+        # Do not hardcode Azure client credentials in source code.
+        # If not configured, the backend will fail to get an access token and can fall back to SMTP.
+        self.tenant_id = getattr(settings, 'AZURE_AD_TENANT_ID', '')
+        self.client_id = getattr(settings, 'AZURE_AD_CLIENT_ID', '')
+        self.client_secret = getattr(settings, 'AZURE_AD_CLIENT_SECRET', '')
         self.scope = getattr(settings, 'AZURE_AD_SCOPE', 'https://graph.microsoft.com/.default')
         
         # Get configured from email

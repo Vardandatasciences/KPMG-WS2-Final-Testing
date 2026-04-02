@@ -9,8 +9,23 @@ import logging
 
 from ...models import ExternalApplication, ExternalApplicationConnection, ExternalApplicationSyncLog, Users
 from .jira_backend import jira_backend
+from ...utils.log_sanitize import sanitize_for_log
 
 logger = logging.getLogger(__name__)
+
+
+def _safe_request_meta(request):
+    """Return sanitized, bounded request metadata for logs."""
+    method = sanitize_for_log(getattr(request, "method", ""))[:16]
+    path = sanitize_for_log(getattr(request, "path", ""))[:512]
+    # Log only a small allowlist of headers and sanitize values.
+    allowed_headers = ("User-Agent", "Origin", "Referer", "Content-Type")
+    headers = {}
+    for name in allowed_headers:
+        raw_val = request.headers.get(name)
+        if raw_val:
+            headers[name] = sanitize_for_log(str(raw_val))[:200]
+    return method, path, headers
 
 
 @csrf_exempt
@@ -20,23 +35,19 @@ def test_integration_auth(request):
     Test endpoint to verify authentication is working for integrations
     """
     try:
-        logger.info(f"Test integration auth request: {request.method} {request.path}")
-        logger.info(f"Request headers: {dict(request.headers)}")
+        method, path, safe_headers = _safe_request_meta(request)
+        logger.info("Test integration auth request: %s %s", method, path)
+        logger.info("Request headers (sanitized): %s", safe_headers)
         
         # Get user from middleware (set by JWT middleware)
         user = getattr(request, 'user', None)
-        logger.info(f"User from middleware: {user}")
+        logger.info("User from middleware present: %s", bool(user))
         
         if not user:
             logger.warning("No user found in request - authentication required")
             return JsonResponse({
                 'status': 'error',
                 'message': 'Authentication required',
-                'debug': {
-                    'headers': dict(request.headers),
-                    'path': request.path,
-                    'method': request.method
-                }
             }, status=401)
         
         return JsonResponse({
@@ -49,11 +60,11 @@ def test_integration_auth(request):
             }
         })
         
-    except Exception as e:
-        logger.error(f"Test integration auth error: {str(e)}")
+    except Exception:
+        logger.exception("Test integration auth error")
         return JsonResponse({
             'status': 'error',
-            'message': f'Test failed: {str(e)}'
+            'message': 'Test failed due to an internal server error.'
         }, status=500)
 
 
@@ -64,9 +75,10 @@ def get_external_applications(request):
     Get all external applications with their connection status for the current user
     """
     try:
-        # Debug logging
-        logger.info(f"External applications request: {request.method} {request.path}")
-        logger.info(f"Request headers: {dict(request.headers)}")
+        # Debug logging (sanitized to prevent log injection/forging)
+        method, path, safe_headers = _safe_request_meta(request)
+        logger.info("External applications request: %s %s", method, path)
+        logger.info("Request headers (sanitized): %s", safe_headers)
         
         # Get user ID from request (default to 1 for demo purposes)
         user_id = request.GET.get('user_id', 1)
@@ -146,10 +158,8 @@ def get_external_applications(request):
             }
         })
 
-    except Exception as e:
-        logger.error(f"Error getting external applications: {str(e)}")
-        import traceback
-        logger.error(f"Traceback: {traceback.format_exc()}")
+    except Exception:
+        logger.exception("Error getting external applications")
         return JsonResponse({'error': 'Internal server error'}, status=500)
 
 

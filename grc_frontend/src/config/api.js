@@ -1,8 +1,7 @@
 // API Configuration - Centralized URL Management
-// Change this variable to switch between different environments
- 
-// Environment Configuration
-const ENVIRONMENT = 'development';
+// Set VUE_APP_API_ENV in .env: 'aws' | 'local' | 'development'
+// Default 'local' uses relative /api so vue-cli devServer proxy hits the backend (avoids CORS/cookie issues).
+const ENVIRONMENT = process.env.VUE_APP_API_ENV || 'local';
 // Options: 'aws', 'local', 'development'
  
 // API Base URLs for different environments
@@ -46,29 +45,31 @@ export const MFA_ENABLED = process.env.VUE_APP_MFA_ENABLED !== undefined
   ? process.env.VUE_APP_MFA_ENABLED === 'true' 
   : true; // Default to enabled if not specified
 
-// Session Timeout Configuration
-// IMPORTANT: These values MUST be set in .env file - no hardcoded defaults
-// VUE_APP_SESSION_TIMEOUT_ENABLED: Enable/disable session timeout (required)
-export const SESSION_TIMEOUT_ENABLED = process.env.VUE_APP_SESSION_TIMEOUT_ENABLED === 'true';
+// Session Timeout Configuration (frontend popup / idle warning)
+// Optional in .env; defaults match typical backend SESSION_TIMEOUT_* (see grc_backend/.env).
+const DEFAULT_SESSION_TIMEOUT_SECONDS = 21600; // 6h
+const DEFAULT_SESSION_WARNING_SECONDS = 300; // 5 min before expiry
 
-// VUE_APP_SESSION_TIMEOUT_SECONDS: Session timeout duration in seconds (required)
-// Must match SESSION_TIMEOUT_SECONDS in backend .env file
-export const SESSION_TIMEOUT_SECONDS = process.env.VUE_APP_SESSION_TIMEOUT_SECONDS 
-  ? parseInt(process.env.VUE_APP_SESSION_TIMEOUT_SECONDS, 10)
-  : null;
-
-// VUE_APP_SESSION_WARNING_SECONDS: Show warning this many seconds before expiration (required)
-export const SESSION_WARNING_SECONDS = process.env.VUE_APP_SESSION_WARNING_SECONDS
-  ? parseInt(process.env.VUE_APP_SESSION_WARNING_SECONDS, 10)
-  : null;
-
-// Validate that required env vars are set
-if (SESSION_TIMEOUT_SECONDS === null) {
-  console.error('❌ ERROR: VUE_APP_SESSION_TIMEOUT_SECONDS must be set in .env file');
+function parseEnvSeconds (envKey, fallback) {
+  const raw = process.env[envKey]
+  if (raw === undefined || raw === '') return fallback
+  const n = parseInt(String(raw), 10)
+  return Number.isFinite(n) && n >= 0 ? n : fallback
 }
-if (SESSION_WARNING_SECONDS === null) {
-  console.error('❌ ERROR: VUE_APP_SESSION_WARNING_SECONDS must be set in .env file');
-}
+
+// VUE_APP_SESSION_TIMEOUT_ENABLED: unset defaults to true (aligns with backend default)
+const stEn = process.env.VUE_APP_SESSION_TIMEOUT_ENABLED
+export const SESSION_TIMEOUT_ENABLED =
+  stEn === undefined || stEn === '' ? true : stEn === 'true'
+
+export const SESSION_TIMEOUT_SECONDS = parseEnvSeconds(
+  'VUE_APP_SESSION_TIMEOUT_SECONDS',
+  DEFAULT_SESSION_TIMEOUT_SECONDS
+)
+export const SESSION_WARNING_SECONDS = parseEnvSeconds(
+  'VUE_APP_SESSION_WARNING_SECONDS',
+  DEFAULT_SESSION_WARNING_SECONDS
+)
 // Auto Framework Check Configuration
 // Set VUE_APP_AUTO_CHECK_FRAMEWORKS=true to automatically check for framework updates on login
 // If true: Automatically checks all frameworks for updates (respects 7-day throttle)

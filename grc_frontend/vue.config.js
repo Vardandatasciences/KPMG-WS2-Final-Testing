@@ -127,7 +127,8 @@ module.exports = defineConfig({
         // Make vue-loader more lenient with TypeScript syntax
         options.compilerOptions = {
           ...options.compilerOptions,
-          isCustomElement: (tag) => false
+          // Hyphenated tags (e.g. web components) — must live here for runtime-only Vue build
+          isCustomElement: (tag) => typeof tag === 'string' && tag.includes('-')
         }
         
         // Configure template compiler to handle TypeScript

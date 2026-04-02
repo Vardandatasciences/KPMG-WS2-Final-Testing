@@ -1,0 +1,13 @@
+Security evidence checks (static)
+Repository: C:\Users\Admin\Documents\GRC_TPRM-1
+
+[PASS] F1.T1: Sentinel uses env SESSION_SECRET with strong ephemeral fallback
+[PASS] F1.T2: incident-user-tasks.html external scripts/styles have integrity + crossorigin
+[PASS] F1.T3: No high-confidence 'your-secret-key' assignment patterns in scanned app trees
+[PASS] F8.T1: GRC backend settings enable HttpOnly session cookies + SECURE logic
+[PASS] F17.T1: risk_kpi uses parameterized RiskCategory (%s pattern present)
+[PASS] F22.T1: Target files avoid hashlib.md5 for audited paths
+[PASS] F2.module: grc/utils/safe_paths.py present with safe_join / UnsafePathError
+[PASS] F14.postMessage: TprmWrapper avoids postMessage(..., '*') and uses origin helper
+
+Summary: 8 passed, 0 failed out of 8

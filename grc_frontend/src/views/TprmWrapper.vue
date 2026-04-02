@@ -107,6 +107,20 @@ export default {
     
     // Call at runtime, not module load time
     const BASE_URL = getTprmBaseUrl()
+    const isDevDebug = process.env.NODE_ENV !== 'production'
+
+    const getIframePostMessageTargetOrigin = () => {
+      try {
+        if (!BASE_URL) return window.location.origin
+        const absolute =
+          BASE_URL.startsWith('http://') || BASE_URL.startsWith('https://')
+            ? BASE_URL
+            : new URL(BASE_URL.replace(/\/$/, ''), window.location.origin).href
+        return new URL(absolute).origin
+      } catch {
+        return window.location.origin
+      }
+    }
 
     const normalizedPath = computed(() => {
       const param = route.params.tprmPath
@@ -159,19 +173,35 @@ export default {
 
     // Get auth data from GRC localStorage
     const getAuthData = () => {
-      const token = localStorage.getItem('access_token') || 
-                    localStorage.getItem('session_token') || 
+      // Prefer session-scoped auth data; only fall back to localStorage for compatibility.
+      const token = sessionStorage.getItem('access_token') ||
+                    sessionStorage.getItem('session_token') ||
+                    sessionStorage.getItem('token') ||
+                    localStorage.getItem('access_token') ||
+                    localStorage.getItem('session_token') ||
                     localStorage.getItem('token')
-      const user = localStorage.getItem('user') || localStorage.getItem('current_user')
-      const refreshToken = localStorage.getItem('refresh_token')
+      const userRaw = sessionStorage.getItem('user') ||
+                      sessionStorage.getItem('current_user') ||
+                      localStorage.getItem('user') ||
+                      localStorage.getItem('current_user')
+      const refreshToken = sessionStorage.getItem('refresh_token') || localStorage.getItem('refresh_token')
+      let parsedUser = null
+      try {
+        parsedUser = userRaw ? JSON.parse(userRaw) : null
+      } catch {
+        parsedUser = null
+      }
       
       return {
         type: 'GRC_AUTH_SYNC',
         token,
         refreshToken,
-        user: user ? JSON.parse(user) : null,
-        isAuthenticated: localStorage.getItem('isAuthenticated') === 'true' || 
-                         localStorage.getItem('is_logged_in') === 'true'
+        user: parsedUser,
+        isAuthenticated:
+          sessionStorage.getItem('isAuthenticated') === 'true' ||
+          sessionStorage.getItem('is_logged_in') === 'true' ||
+          localStorage.getItem('isAuthenticated') === 'true' ||
+          localStorage.getItem('is_logged_in') === 'true'
       }
     }
 
@@ -184,7 +214,10 @@ export default {
           hasUser: !!authData.user,
           isAuthenticated: authData.isAuthenticated 
         })
-        tprmIframe.value.contentWindow.postMessage(authData, '*')
+        tprmIframe.value.contentWindow.postMessage(
+          authData,
+          getIframePostMessageTargetOrigin()
+        )
       }
     }
 
@@ -207,7 +240,10 @@ export default {
         // Request current route from iframe after it loads
         if (tprmIframe.value && tprmIframe.value.contentWindow) {
           // Ask iframe for its current route
-          tprmIframe.value.contentWindow.postMessage({ type: 'GET_CURRENT_ROUTE' }, '*')
+          tprmIframe.value.contentWindow.postMessage(
+            { type: 'GET_CURRENT_ROUTE' },
+            getIframePostMessageTargetOrigin()
+          )
           
           // The iframe should already be at the correct route from the URL
           // Router will read it from window.location.pathname
@@ -216,10 +252,13 @@ export default {
           if (targetPath && targetPath !== '/') {
             setTimeout(() => {
               if (tprmIframe.value && tprmIframe.value.contentWindow) {
-                tprmIframe.value.contentWindow.postMessage({ 
-                  type: 'NAVIGATE_TO_ROUTE', 
-                  path: targetPath 
-                }, '*')
+                tprmIframe.value.contentWindow.postMessage(
+                  {
+                    type: 'NAVIGATE_TO_ROUTE',
+                    path: targetPath
+                  },
+                  getIframePostMessageTargetOrigin()
+                )
               }
             }, 500)
           }
@@ -245,10 +284,13 @@ export default {
           tprmIframe.value.contentWindow && 
           newPath !== lastNavigatedPath.value) {
         console.log('[TprmWrapper] Route changed, navigating iframe via postMessage (no reload):', newPath)
-        tprmIframe.value.contentWindow.postMessage({ 
-          type: 'NAVIGATE_TO_ROUTE', 
-          path: newPath 
-        }, '*')
+        tprmIframe.value.contentWindow.postMessage(
+          {
+            type: 'NAVIGATE_TO_ROUTE',
+            path: newPath
+          },
+          getIframePostMessageTargetOrigin()
+        )
         lastNavigatedPath.value = newPath
       }
     })
@@ -262,12 +304,13 @@ export default {
 
     // Listen for messages from TPRM iframe (auth requests and navigation)
     const handleMessage = (event) => {
-      // Verify origin if BASE_URL is configured
-      if (BASE_URL) {
-        const baseOrigin = new URL(BASE_URL).origin
-        if (event.origin !== baseOrigin && event.origin !== window.location.origin) {
-          return
-        }
+      if (!tprmIframe.value || !tprmIframe.value.contentWindow || event.source !== tprmIframe.value.contentWindow) {
+        return
+      }
+      // Strict target origin match (same as postMessage target); rejects '*' behavior.
+      const allowedOrigin = getIframePostMessageTargetOrigin()
+      if (event.origin !== allowedOrigin && event.origin !== window.location.origin) {
+        return
       }
 
       if (event.data && event.data.type === 'TPRM_AUTH_REQUEST') {
@@ -340,15 +383,17 @@ export default {
     // Set up message listener and log configuration on mount
     onMounted(() => {
       window.addEventListener('message', handleMessage)
-      console.log('[TprmWrapper] ========== DEBUG INFO ==========')
-      console.log('[TprmWrapper] BASE_URL:', BASE_URL)
-      console.log('[TprmWrapper] NODE_ENV:', process.env.NODE_ENV)
-      console.log('[TprmWrapper] VUE_APP_TPRM_BASE_URL:', process.env.VUE_APP_TPRM_BASE_URL)
-      console.log('[TprmWrapper] window.location.hostname:', window.location?.hostname)
-      console.log('[TprmWrapper] window.location.href:', window.location?.href)
-      console.log('[TprmWrapper] Current route:', route.path)
-      console.log('[TprmWrapper] Iframe will load:', iframeSrc.value)
-      console.log('[TprmWrapper] =================================')
+      if (isDevDebug) {
+        console.log('[TprmWrapper] ========== DEBUG INFO ==========')
+        console.log('[TprmWrapper] BASE_URL:', BASE_URL)
+        console.log('[TprmWrapper] NODE_ENV:', process.env.NODE_ENV)
+        console.log('[TprmWrapper] VUE_APP_TPRM_BASE_URL:', process.env.VUE_APP_TPRM_BASE_URL)
+        console.log('[TprmWrapper] window.location.hostname:', window.location?.hostname)
+        console.log('[TprmWrapper] window.location.href:', window.location?.href)
+        console.log('[TprmWrapper] Current route:', route.path)
+        console.log('[TprmWrapper] Iframe will load:', iframeSrc.value)
+        console.log('[TprmWrapper] =================================')
+      }
       if (!BASE_URL) {
         console.warn('[TprmWrapper] WARNING: VUE_APP_TPRM_BASE_URL is not configured!')
         console.warn('[TprmWrapper] TPRM pages will not load. Set VUE_APP_TPRM_BASE_URL in .env file')

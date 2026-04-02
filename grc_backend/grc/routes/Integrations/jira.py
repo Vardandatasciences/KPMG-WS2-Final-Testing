@@ -13,6 +13,7 @@ import urllib.parse as up
 
 from grc.models import Users, ExternalApplication, ExternalApplicationConnection, ExternalApplicationSyncLog
 from grc.utils.data_encryption import decrypt_data, is_encrypted_data
+from grc.utils.url_validator import validate_url, InvalidOutboundUrlError
 
 logger = logging.getLogger(__name__)
 
@@ -130,11 +131,42 @@ class JiraIntegration:
             "Accept": "application/json"
         }
 
+    def _safe_get(self, url, **kwargs):
+        # SECURITY: guard against SSRF-style outbound URL abuse.
+        try:
+            validate_url(url)
+        except InvalidOutboundUrlError as exc:
+            raise requests.RequestException(str(exc)) from exc
+        return requests.get(url, **kwargs)
+
+    def _safe_post(self, url, **kwargs):
+        # SECURITY: guard against SSRF-style outbound URL abuse.
+        try:
+            validate_url(url)
+        except InvalidOutboundUrlError as exc:
+            raise requests.RequestException(str(exc)) from exc
+        return requests.post(url, **kwargs)
+
+    def _safe_segment(self, value, field_name):
+        """
+        Encode untrusted path components to prevent path/query injection in constructed URLs.
+        """
+        s = str(value or '').strip()
+        if not s:
+            raise requests.RequestException(f"{field_name} is required")
+        if any(ch in s for ch in ['\r', '\n', '\x00']):
+            raise requests.RequestException(f"{field_name} contains illegal characters")
+        return up.quote(s, safe='')
+
+    def _jira_api_url(self, cloud_id, path):
+        safe_cloud_id = self._safe_segment(cloud_id, "cloud_id")
+        return f"https://api.atlassian.com/ex/jira/{safe_cloud_id}{path}"
+
     def get_accessible_resources(self):
         """Get accessible Jira resources from Atlassian API"""
         try:
             url = "https://api.atlassian.com/oauth/token/accessible-resources"
-            response = requests.get(url, headers=self.headers, timeout=30)
+            response = self._safe_get(url, headers=self.headers, timeout=30)
             
             if response.status_code == 200:
                 return {
@@ -155,8 +187,8 @@ class JiraIntegration:
     def get_current_user(self, cloud_id):
         """Get current user information from Jira"""
         try:
-            url = f"https://api.atlassian.com/ex/jira/{cloud_id}/rest/api/3/myself"
-            response = requests.get(url, headers=self.headers, timeout=30)
+            url = self._jira_api_url(cloud_id, "/rest/api/3/myself")
+            response = self._safe_get(url, headers=self.headers, timeout=30)
             
             if response.status_code == 200:
                 return {
@@ -177,8 +209,8 @@ class JiraIntegration:
     def get_projects(self, cloud_id):
         """Get all projects from Jira"""
         try:
-            url = f"https://api.atlassian.com/ex/jira/{cloud_id}/rest/api/3/project"
-            response = requests.get(url, headers=self.headers, timeout=30)
+            url = self._jira_api_url(cloud_id, "/rest/api/3/project")
+            response = self._safe_get(url, headers=self.headers, timeout=30)
             
             if response.status_code == 200:
                 return {
@@ -206,8 +238,9 @@ class JiraIntegration:
             
             # First, try with project ID if provided
             if project_id is not None:
-                project_url = f"https://api.atlassian.com/ex/jira/{cloud_id}/rest/api/3/project/{project_id}"
-                project_response = requests.get(project_url, headers=self.headers, timeout=30)
+                safe_project_id = self._safe_segment(project_id, "project_id")
+                project_url = self._jira_api_url(cloud_id, f"/rest/api/3/project/{safe_project_id}")
+                project_response = self._safe_get(project_url, headers=self.headers, timeout=30)
                 
                 if project_response.status_code == 200:
                     project_data = project_response.json()
@@ -216,8 +249,9 @@ class JiraIntegration:
             
             # If project not found by ID, try with project key (if available)
             if project_data is None and project_key:
-                project_url = f"https://api.atlassian.com/ex/jira/{cloud_id}/rest/api/3/project/{project_key}"
-                project_response = requests.get(project_url, headers=self.headers, timeout=30)
+                safe_project_key = self._safe_segment(project_key, "project_key")
+                project_url = self._jira_api_url(cloud_id, f"/rest/api/3/project/{safe_project_key}")
+                project_response = self._safe_get(project_url, headers=self.headers, timeout=30)
                 
                 if project_response.status_code == 200:
                     project_data = project_response.json()
@@ -240,8 +274,9 @@ class JiraIntegration:
             try:
                 # Try with actual project ID first
                 if actual_project_id:
-                    components_url = f"https://api.atlassian.com/ex/jira/{cloud_id}/rest/api/3/project/{actual_project_id}/components"
-                    components_response = requests.get(components_url, headers=self.headers, timeout=30)
+                    safe_actual_project_id = self._safe_segment(actual_project_id, "actual_project_id")
+                    components_url = self._jira_api_url(cloud_id, f"/rest/api/3/project/{safe_actual_project_id}/components")
+                    components_response = self._safe_get(components_url, headers=self.headers, timeout=30)
                     if components_response.status_code == 200:
                         components_data = components_response.json()
                     else:
@@ -249,8 +284,9 @@ class JiraIntegration:
                 
                 # If that failed, try with project key
                 if not components_data and actual_project_key:
-                    components_url = f"https://api.atlassian.com/ex/jira/{cloud_id}/rest/api/3/project/{actual_project_key}/components"
-                    components_response = requests.get(components_url, headers=self.headers, timeout=30)
+                    safe_actual_project_key = self._safe_segment(actual_project_key, "actual_project_key")
+                    components_url = self._jira_api_url(cloud_id, f"/rest/api/3/project/{safe_actual_project_key}/components")
+                    components_response = self._safe_get(components_url, headers=self.headers, timeout=30)
                     if components_response.status_code == 200:
                         components_data = components_response.json()
             except Exception as e:
@@ -261,8 +297,9 @@ class JiraIntegration:
             try:
                 # Try with actual project ID first
                 if actual_project_id:
-                    versions_url = f"https://api.atlassian.com/ex/jira/{cloud_id}/rest/api/3/project/{actual_project_id}/versions"
-                    versions_response = requests.get(versions_url, headers=self.headers, timeout=30)
+                    safe_actual_project_id = self._safe_segment(actual_project_id, "actual_project_id")
+                    versions_url = self._jira_api_url(cloud_id, f"/rest/api/3/project/{safe_actual_project_id}/versions")
+                    versions_response = self._safe_get(versions_url, headers=self.headers, timeout=30)
                     if versions_response.status_code == 200:
                         versions_data = versions_response.json()
                     else:
@@ -270,8 +307,9 @@ class JiraIntegration:
                 
                 # If that failed, try with project key
                 if not versions_data and actual_project_key:
-                    versions_url = f"https://api.atlassian.com/ex/jira/{cloud_id}/rest/api/3/project/{actual_project_key}/versions"
-                    versions_response = requests.get(versions_url, headers=self.headers, timeout=30)
+                    safe_actual_project_key = self._safe_segment(actual_project_key, "actual_project_key")
+                    versions_url = self._jira_api_url(cloud_id, f"/rest/api/3/project/{safe_actual_project_key}/versions")
+                    versions_response = self._safe_get(versions_url, headers=self.headers, timeout=30)
                     if versions_response.status_code == 200:
                         versions_data = versions_response.json()
             except Exception as e:
@@ -283,7 +321,7 @@ class JiraIntegration:
             try:
                 # Use the new /rest/api/3/search/jql endpoint with POST method
                 # The old /rest/api/3/search endpoint was deprecated and removed
-                search_url = f"https://api.atlassian.com/ex/jira/{cloud_id}/rest/api/3/search/jql"
+                search_url = self._jira_api_url(cloud_id, "/rest/api/3/search/jql")
                 
                 if actual_project_key:
                     # Try different JQL formats - some Jira instances prefer different syntax
@@ -305,7 +343,7 @@ class JiraIntegration:
                         }
                         post_headers = {**self.headers, 'Content-Type': 'application/json'}
                         try:
-                            issues_response = requests.post(
+                            issues_response = self._safe_post(
                                 search_url,
                                 headers=post_headers,
                                 json=search_payload,
@@ -331,7 +369,7 @@ class JiraIntegration:
                     search_payload = {'jql': jql_query, 'maxResults': 50}
                     post_headers = {**self.headers, 'Content-Type': 'application/json'}
                     try:
-                        issues_response = requests.post(search_url, headers=post_headers, json=search_payload, timeout=30)
+                        issues_response = self._safe_post(search_url, headers=post_headers, json=search_payload, timeout=30)
                         if issues_response.status_code == 200:
                             issues_data = issues_response.json()
                             logger.info(f"Successfully fetched {len(issues_data.get('issues', []))} issues for project ID {actual_project_id}")
@@ -369,7 +407,7 @@ class JiraIntegration:
         """Get issues/tasks for a specific Jira project"""
         try:
             # Use the new /rest/api/3/search/jql endpoint (migrated from deprecated /rest/api/3/search)
-            search_url = f"https://api.atlassian.com/ex/jira/{cloud_id}/rest/api/3/search/jql"
+            search_url = self._jira_api_url(cloud_id, "/rest/api/3/search/jql")
             issues_data = {"issues": [], "total": 0}
             
             # Build JQL queries to try
@@ -403,7 +441,7 @@ class JiraIntegration:
                 post_headers = {**self.headers, 'Content-Type': 'application/json'}
                 
                 try:
-                    issues_response = requests.post(
+                    issues_response = self._safe_post(
                         search_url,
                         headers=post_headers,
                         json=search_payload,
@@ -701,6 +739,10 @@ def jira_oauth_callback(request):
                 }
                 
                 logger.info("Exchanging code for token with Atlassian")
+                try:
+                    validate_url(token_url)
+                except InvalidOutboundUrlError as exc:
+                    raise requests.RequestException(str(exc)) from exc
                 token_response = requests.post(token_url, data=token_data, headers=token_headers, timeout=30)
                 
                 if token_response.status_code != 200:
@@ -1690,11 +1732,17 @@ def jira_project_issues(request):
                             if issue_id or issue_key:
                                 logger.info(f"Fetching full details for issue {issue_id or issue_key} (fields missing)")
                                 try:
-                                    issue_url = f"https://api.atlassian.com/ex/jira/{cloud_id}/rest/api/3/issue/{issue_key or issue_id}"
+                                    safe_cloud_id = up.quote(str(cloud_id or '').strip(), safe='')
+                                    safe_issue_ref = up.quote(str(issue_key or issue_id or '').strip(), safe='')
+                                    issue_url = f"https://api.atlassian.com/ex/jira/{safe_cloud_id}/rest/api/3/issue/{safe_issue_ref}"
                                     issue_headers = {
                                         "Authorization": f"Bearer {access_token}",
                                         "Accept": "application/json"
                                     }
+                                    try:
+                                        validate_url(issue_url)
+                                    except InvalidOutboundUrlError as exc:
+                                        raise requests.RequestException(str(exc)) from exc
                                     issue_response = requests.get(issue_url, headers=issue_headers, timeout=30)
                                     if issue_response.status_code == 200:
                                         full_issue = issue_response.json()

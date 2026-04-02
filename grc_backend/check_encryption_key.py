@@ -13,7 +13,28 @@ django.setup()
 
 from django.conf import settings
 from grc.utils.data_encryption import get_encryption_service
-import base64
+from cryptography.fernet import Fernet
+
+
+def _mask_key(value):
+    if not value:
+        return ""
+    text = value.decode() if isinstance(value, bytes) else str(value)
+    if len(text) <= 30:
+        return text
+    return f"{text[:20]}...{text[-10:]}"
+
+
+def _is_valid_fernet_key(value):
+    """Validate Fernet key format without using weak encoding logic."""
+    if not value:
+        return False
+    key_bytes = value if isinstance(value, bytes) else str(value).encode("utf-8")
+    try:
+        Fernet(key_bytes)
+        return True
+    except Exception:
+        return False
 
 print("=" * 80)
 print("GRC ENCRYPTION KEY CHECK")
@@ -24,7 +45,8 @@ print()
 env_key = os.environ.get('GRC_ENCRYPTION_KEY', None)
 print(f"1. Environment Variable (GRC_ENCRYPTION_KEY):")
 if env_key:
-    print(f"   ✅ FOUND: {env_key[:20]}...{env_key[-10:] if len(env_key) > 30 else ''} (length: {len(env_key)})")
+    print(f"   ✅ FOUND: {_mask_key(env_key)} (length: {len(env_key)})")
+    print(f"   {'✅' if _is_valid_fernet_key(env_key) else '❌'} Valid Fernet key format")
 else:
     print(f"   ❌ NOT FOUND")
 print()
@@ -33,7 +55,8 @@ print()
 settings_key = getattr(settings, 'GRC_ENCRYPTION_KEY', None)
 print(f"2. Django Settings (settings.GRC_ENCRYPTION_KEY):")
 if settings_key:
-    print(f"   ✅ FOUND: {settings_key[:20]}...{settings_key[-10:] if len(settings_key) > 30 else ''} (length: {len(settings_key)})")
+    print(f"   ✅ FOUND: {_mask_key(settings_key)} (length: {len(settings_key)})")
+    print(f"   {'✅' if _is_valid_fernet_key(settings_key) else '❌'} Valid Fernet key format")
 else:
     print(f"   ❌ NOT FOUND")
 print()
@@ -43,7 +66,8 @@ print(f"3. Key Actually Being Used by Encryption Service:")
 encryption_service = get_encryption_service()
 actual_key = encryption_service.encryption_key
 actual_key_str = actual_key.decode() if isinstance(actual_key, bytes) else actual_key
-print(f"   Key: {actual_key_str[:20]}...{actual_key_str[-10:] if len(actual_key_str) > 30 else ''} (length: {len(actual_key_str)})")
+print(f"   Key: {_mask_key(actual_key_str)} (length: {len(actual_key_str)})")
+print(f"   {'✅' if _is_valid_fernet_key(actual_key_str) else '❌'} Valid Fernet key format")
 print()
 
 # Check 4: Key source
@@ -78,7 +102,7 @@ print(f"6. TPRM Encryption Key (for comparison):")
 try:
     tprm_key = os.environ.get('VENDOR_ENCRYPTION_KEY', None)
     if tprm_key:
-        print(f"   TPRM Key: {tprm_key[:20]}...{tprm_key[-10:] if len(tprm_key) > 30 else ''}")
+        print(f"   TPRM Key: {_mask_key(tprm_key)}")
         if tprm_key == env_key:
             print(f"   ✅ GRC and TPRM keys MATCH")
         else:
