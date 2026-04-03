@@ -371,12 +371,17 @@ class RFPViewSet(RFPAuthenticationMixin, viewsets.ModelViewSet):
         # Add default user for development (race-safe bootstrap)
         admin_user = _get_or_create_dev_superuser()
         
-        data = request.data.copy() if hasattr(request.data, 'copy') else request.data
-        
+        data = request.data.copy() if hasattr(request.data, 'copy') else dict(request.data)
+
+        # Security: strip client-supplied identity/approval fields; these are set server-side only
+        data.pop('status', None)
+        data.pop('approved_by', None)
+        data.pop('created_by', None)
+
         # MULTI-TENANCY: Add tenant_id to data if not present
         if 'tenant_id' not in data and 'tenant' not in data:
             data['tenant_id'] = tenant_id
-        
+
         serializer = self.get_serializer(data=data)
         try:
             serializer.is_valid(raise_exception=True)

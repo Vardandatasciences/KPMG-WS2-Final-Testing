@@ -1,8 +1,9 @@
-from rest_framework.decorators import api_view, permission_classes, authentication_classes
+from rest_framework.decorators import api_view, permission_classes, authentication_classes, throttle_classes
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.authentication import SessionAuthentication, BasicAuthentication
+from ...throttles import AuditWriteThrottle
 from ...models import Framework, Policy, SubPolicy, Users, Audit, AuditFinding, Compliance
 from django.http import JsonResponse
 from django.utils import timezone
@@ -300,6 +301,7 @@ def get_users_audit(request):
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([AuditAssignPermission])
+@throttle_classes([AuditWriteThrottle])
 @audit_assign_required
 @require_consent('create_audit')
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
@@ -504,8 +506,25 @@ def create_audit(request):
                 due_date = datetime.datetime.strptime(str(validated_data['due_date']), '%Y-%m-%d').date()
             except (ValueError, TypeError) as e:
                 debug_print(f"Error parsing due_date '{validated_data.get('due_date')}': {e}")
-                due_date = datetime.date.today()
-            
+                return Response({
+                    'error': 'Invalid due date',
+                    'details': 'Due date must be a valid date in YYYY-MM-DD format.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Business logic: due date must not be in the past or unreasonably far in the future
+            _today = datetime.date.today()
+            _max_allowed_date = _today.replace(year=_today.year + 10)
+            if due_date < _today:
+                return Response({
+                    'error': 'Invalid due date',
+                    'details': 'Due date cannot be in the past.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            if due_date > _max_allowed_date:
+                return Response({
+                    'error': 'Invalid due date',
+                    'details': 'Due date cannot be more than 10 years in the future.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
             # Persist single-letter code (I/E/S/A/R). DB column will be altered to VARCHAR(10).
             db_audit_type = audit_type
 

@@ -209,8 +209,12 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
             #logger.debug(f"[JWT Middleware] Skipping authentication for Gmail OAuth callback: {path}")
             return None
        
-        # Do not bypass auth for debug endpoints in production paths.
-        # Gmail test headers must require a valid authenticated caller.
+        # Special handling for Gmail test headers - skip authentication for debugging (temporary)
+        if path.startswith('/api/gmail/test-headers'):
+            #logger.debug(f"[JWT Middleware] Skipping authentication for Gmail test headers: {path}")
+            return None
+        # /api/external-applications/ removed from bypass — requires authentication
+
         # Special handling for vendor portal endpoints - skip authentication
         # Check both with and without trailing slash, and handle query parameters
         path_without_query = path.split('?')[0]  # Remove query string if present
@@ -329,6 +333,9 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
                     if is_active:
                         # Set user in request for Django REST Framework
                         request.user = user
+                        # Also store on a custom attribute so DRF views can read it
+                        # even after DRF's _not_authenticated() overwrites request.user
+                        request._grc_user = user
                         #logger.info(f"[JWT Middleware] User {user.UserName} (ID: {user.UserId}) authenticated via JWT for {request.method} {path}")
                         return None
                     else:
@@ -371,6 +378,9 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
                 if is_active:
                     # Set user in request for Django REST Framework
                     request.user = user
+                    # Also store on a custom attribute so DRF views can read it
+                    # even after DRF's _not_authenticated() overwrites request.user
+                    request._grc_user = user
                     #logger.info(f"[JWT Middleware] User {user.UserName} (ID: {user.UserId}) authenticated via session for {request.method} {path}")
                     return None
                 else:

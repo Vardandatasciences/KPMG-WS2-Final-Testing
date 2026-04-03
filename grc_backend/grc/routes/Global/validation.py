@@ -1,6 +1,6 @@
 from django.core.validators import validate_email
 import re
-from datetime import datetime
+from datetime import datetime, date
 import json
 from urllib.parse import urlsplit
 
@@ -40,8 +40,12 @@ def validate_int(value, min_value=None, max_value=None, field_name="field", allo
         
     return val
 
-def validate_date(value, field_name="date", allow_none=False):
-    """Validate date string input - supports both DD/MM/YYYY and YYYY-MM-DD formats"""
+def validate_date(value, field_name="date", allow_none=False, check_future=False, check_past=False):
+    """Validate date string input - supports both DD/MM/YYYY and YYYY-MM-DD formats.
+    
+    check_future=True: rejects dates in the past (use for due dates)
+    check_past=True: rejects dates more than 10 years in the future (use for due dates)
+    """
     if allow_none and (value is None or value == ''):
         return None
         
@@ -61,13 +65,26 @@ def validate_date(value, field_name="date", allow_none=False):
         '%m-%d-%Y'     # MM-DD-YYYY
     ]
     
+    parsed_date = None
     for date_format in date_formats:
         try:
-            return datetime.strptime(value, date_format).date()
+            parsed_date = datetime.strptime(value, date_format).date()
+            break
         except ValueError:
             continue
-        
-    raise ValidationError(f"{field_name} must be a valid date in DD/MM/YYYY or YYYY-MM-DD format")
+
+    if parsed_date is None:
+        raise ValidationError(f"{field_name} must be a valid date in DD/MM/YYYY or YYYY-MM-DD format")
+
+    today = date.today()
+    if check_future and parsed_date < today:
+        raise ValidationError(f"{field_name} cannot be in the past.")
+    if check_past:
+        max_allowed = today.replace(year=today.year + 10)
+        if parsed_date > max_allowed:
+            raise ValidationError(f"{field_name} cannot be more than 10 years in the future.")
+
+    return parsed_date
 
 def validate_audit_type(value):
     """Validate audit type"""
@@ -422,7 +439,7 @@ def validate_audit_data(data):
             validated_members.append(validated_member)
             
         # Other fields
-        due_date = validate_date(data.get('due_date'), field_name="Due Date")
+        due_date = validate_date(data.get('due_date'), field_name="Due Date", check_future=True, check_past=True)
         frequency = validate_frequency(data.get('frequency'))
         audit_type = validate_audit_type(data.get('audit_type'))
         

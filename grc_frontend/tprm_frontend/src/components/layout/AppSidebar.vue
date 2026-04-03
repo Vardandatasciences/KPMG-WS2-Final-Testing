@@ -378,6 +378,7 @@ const mainItems = [
           { title: "Create Workflow", url: "/vendor-approval-workflow-creator" },
           { title: "My approvals", url: "/vendor-my-approvals" },
           { title: "All Approvals", url: "/vendor-all-approvals" },
+          { title: "Vendor Decision", url: "/vendor-assignee-decision" },
 
         ]
       },

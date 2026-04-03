@@ -208,6 +208,9 @@ def get_notifications(request):
     """
     Get all notifications for a user
     """
+    auth_user = getattr(request, 'user', None)
+    if not auth_user or not hasattr(auth_user, 'UserId'):
+        return JsonResponse({'error': 'Authentication required'}, status=401)
     try:
         # IDOR protection: always derive requester from auth context; allow admin override only.
         from ...rbac.utils import RBACUtils

@@ -174,33 +174,13 @@ const getCurrentUserId = () => {
 }
 
 const loadApprovals = async (retryCount = 0) => {
-  const maxRetries = 5
-  const retryDelay = 500 // 500ms delay between retries
-  
-  let currentUserId = getCurrentUserId()
-  
-  // If user ID not found and we haven't exceeded retries, wait and retry
-  // This handles race condition where auth sync hasn't completed yet
-  if (!currentUserId && retryCount < maxRetries) {
-    console.log(`User ID not found yet, retrying... (attempt ${retryCount + 1}/${maxRetries})`)
-    await new Promise(resolve => setTimeout(resolve, retryDelay))
-    return loadApprovals(retryCount + 1)
-  }
-  
-  if (!currentUserId) {
-    console.error('No current user found in localStorage or Vuex store after retries')
-    console.error('User may not be properly logged in. Please refresh the page or log in again.')
-    console.error('Available localStorage keys:', Object.keys(localStorage).filter(k => k.includes('user') || k.includes('token')))
-    loading.value = false
-    return
-  }
+  const currentUserId = getCurrentUserId()
   
   loading.value = true
   try {
-    console.log('Loading approvals for user ID:', currentUserId)
-    const res = await api.get('/api/v1/vendor-approval/my-approvals/', {
-      params: { user_id: currentUserId }
-    })
+    console.log('Loading approvals for authenticated user. Local user ID:', currentUserId)
+    // Backend resolves user from JWT to avoid stale localStorage/user_id mismatches.
+    const res = await api.get('/api/v1/vendor-approval/my-approvals/')
     console.log('Approvals API response:', res.data)
     parallel.value = res.data?.parallel || []
     sequential.value = res.data?.sequential || []
@@ -213,6 +193,17 @@ const loadApprovals = async (retryCount = 0) => {
   } finally {
     loading.value = false
   }
+}
+
+const waitForAuthContext = async (maxWaitMs = 10000, pollMs = 250) => {
+  const startedAt = Date.now()
+  while (Date.now() - startedAt < maxWaitMs) {
+    const hasToken = !!localStorage.getItem('session_token')
+    const hasUserId = !!getCurrentUserId()
+    if (hasToken && hasUserId) return true
+    await new Promise(resolve => setTimeout(resolve, pollMs))
+  }
+  return false
 }
 
 const formatDate = (d) => {
@@ -265,6 +256,7 @@ let authMessageHandler = null
 
 onMounted(async () => {
   await loggingService.logPageView('Vendor', 'My Approvals')
+  loading.value = true
   
   // Set up message listener for auth sync
   authMessageHandler = (event) => {
@@ -279,7 +271,10 @@ onMounted(async () => {
   
   window.addEventListener('message', authMessageHandler)
   
-  // Initial load with retry mechanism
+  // Wait briefly for auth sync when loaded in iframe/deployed environments
+  await waitForAuthContext()
+
+  // Initial load
   await loadApprovals()
 })
 

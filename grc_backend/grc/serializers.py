@@ -178,8 +178,12 @@ class PolicyAllocationSerializer(serializers.Serializer):
  
     # Custom validation for due date
     def validate_duedate(self, value):
-        if value < date.today():
+        today = date.today()
+        if value < today:
             raise serializers.ValidationError("Due date cannot be in the past.")
+        max_allowed = today.replace(year=today.year + 10)
+        if value > max_allowed:
+            raise serializers.ValidationError("Due date cannot be more than 10 years in the future.")
         return value
    
     def validate_audit_type(self, value):

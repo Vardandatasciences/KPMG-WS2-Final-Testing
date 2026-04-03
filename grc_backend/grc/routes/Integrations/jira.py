@@ -1962,6 +1962,9 @@ def jira_resources(request):
 @require_http_methods(["GET"])
 def jira_users(request):
     """Get all users for JIRA project assignment"""
+    user = getattr(request, 'user', None)
+    if not user or not hasattr(user, 'UserId'):
+        return JsonResponse({'error': 'Authentication required'}, status=401)
     try:
         requester_user_id = RBACUtils.get_user_id_from_request(request)
         if not requester_user_id:
@@ -2013,6 +2016,9 @@ def jira_assign_project(request):
 @require_http_methods(["GET"])
 def jira_stored_data(request):
     """Get stored Jira data"""
+    auth_user = getattr(request, 'user', None)
+    if not auth_user or not hasattr(auth_user, 'UserId'):
+        return JsonResponse({'error': 'Authentication required'}, status=401)
     try:
         requester_user_id = RBACUtils.get_user_id_from_request(request)
         if not requester_user_id:

@@ -700,30 +700,24 @@ def vendor_upload_view(request):
                 logger.warning(f"File not found for document: {file_name}")
                 continue
             
-            # Validate file type (case-insensitive check)
-            allowed_types = [
-                'application/pdf', 
-                'application/msword', 
-                'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-            ]
-            content_type = uploaded_file.content_type.lower() if uploaded_file.content_type else ''
-            file_extension = os.path.splitext(uploaded_file.name)[1].lower()
-            allowed_extensions = ['.pdf', '.doc', '.docx']
-            
-            # Check both content type and file extension
-            is_valid_type = any(allowed.lower() == content_type for allowed in allowed_types)
-            is_valid_extension = file_extension in allowed_extensions
-            
-            if not (is_valid_type or is_valid_extension):
-                return error_response(
-                    f"Invalid file type for {uploaded_file.name} (type: {uploaded_file.content_type}). Only PDF, DOC, and DOCX files are allowed.", 
-                    status.HTTP_400_BAD_REQUEST
+            # Security: validate file type, MIME, magic bytes, and content.
+            # Only PDF, DOC, and DOCX are accepted for BCP/DRP strategy documents.
+            from grc.utils.file_validation import validate_upload
+            bcp_allowed_profiles = ['pdf', 'word']
+            validation = validate_upload(
+                uploaded_file,
+                allowed_profiles=bcp_allowed_profiles,
+                max_size_mb=10,
+            )
+            if not validation.is_valid:
+                logger.warning(
+                    "Blocked malicious/invalid BCP upload: file=%s reason=%s",
+                    uploaded_file.name, validation.error,
                 )
-            
-            # Validate file size (max 10MB)
-            max_size = 10 * 1024 * 1024  # 10MB
-            if uploaded_file.size > max_size:
-                return error_response(f"File {uploaded_file.name} is too large. Maximum size is 10MB.", status.HTTP_400_BAD_REQUEST)
+                return error_response(
+                    f"File rejected for '{uploaded_file.name}': {validation.error}",
+                    status.HTTP_400_BAD_REQUEST,
+                )
             
             # Generate file path
             file_extension = os.path.splitext(uploaded_file.name)[1]

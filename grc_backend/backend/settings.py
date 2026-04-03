@@ -594,6 +594,25 @@ SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SECURE_HSTS_SECONDS = int(os.environ.get("SECURE_HSTS_SECONDS", str(31536000 if not DEBUG else 0)))
 SECURE_HSTS_INCLUDE_SUBDOMAINS = _env_bool("SECURE_HSTS_INCLUDE_SUBDOMAINS", not DEBUG)
 SECURE_HSTS_PRELOAD = _env_bool("SECURE_HSTS_PRELOAD", not DEBUG)
+# HTTPS Security Settings
+# Note: Set these to True when using valid SSL certificates in production
+# For self-signed certificates in development, keep them as False
+CSRF_COOKIE_SECURE = False  # Set to True with valid SSL certificates (False for HTTP/development)
+CSRF_COOKIE_HTTPONLY = False  # Allow JavaScript access to CSRF token
+
+# Session settings for HTTPS (duplicate - remove if causing issues)
+# SESSION_COOKIE_SECURE = False  # Set to True with valid SSL certificates
+# SESSION_COOKIE_HTTPONLY = False  # Allow JavaScript access to session cookies
+# SESSION_COOKIE_SAMESITE = 'Lax'  # Allow cross-site requests
+# SESSION_COOKIE_DOMAIN = None  # Allow all domains in development
+
+# Additional HTTPS security headers (enable in production)
+# Nginx handles HTTP→HTTPS redirect, so Django redirect is off to avoid double-redirect.
+
+ # For reverse proxy
+# HSTS: 1 year in production; 0 in local dev (controlled by env to allow override)
+_hsts_seconds = int(os.environ.get('SECURE_HSTS_SECONDS', '31536000' if not DEBUG else '0'))
+
 
 # JWT Settings
 JWT_ALGORITHM = os.environ.get("JWT_ALGORITHM", "RS256").upper()
@@ -663,6 +682,10 @@ REST_FRAMEWORK = {
         'anon': '500/day',
         # Scoped throttle for incident exports to mitigate DoS by high request volume
         'export_incidents': '20/hour',
+        # Audit write operations: max 10 creates per minute per authenticated user
+        # Rationale: legitimate users rarely create more than a few audits per session;
+        # this blocks automated DoS/spam scripts while not impacting real usage.
+        'audit_write': '10/minute',
     },
     # Allow larger request size
     'DEFAULT_PARSER_CLASSES': [
