@@ -5,8 +5,10 @@ import os
 def debug_static_file(request, filename):
     """Debug function to check static file serving"""
     try:
-        # Try to find the file in staticfiles directory
-        file_path = os.path.join(settings.STATIC_ROOT, filename)
+        from grc.utils.safe_paths import safe_join
+
+        # Try to find the file in staticfiles directory (defensive against traversal)
+        file_path = safe_join(settings.STATIC_ROOT, filename)
         
         if os.path.exists(file_path):
             with open(file_path, 'rb') as f:
@@ -24,7 +26,8 @@ def debug_static_file(request, filename):
             response['Content-Length'] = len(content)
             return response
         else:
-            return HttpResponse(f"File not found: {file_path}", status=404)
+            # Avoid disclosing full server path on missing/unsafe targets.
+            return HttpResponse("File not found", status=404)
     
     except Exception as e:
-        return HttpResponse(f"Error: {str(e)}", status=500)
+        return HttpResponse("Error", status=500)

@@ -10,33 +10,23 @@ import logging
 from ...models import ExternalApplication, ExternalApplicationConnection, ExternalApplicationSyncLog, Users
 from .jira_backend import jira_backend
 from ...rbac.utils import RBACUtils
+from ...utils.log_sanitize import sanitize_for_log
 
 logger = logging.getLogger(__name__)
 
 
-def _resolve_request_user_id(request, requested_user_id=None):
-    """
-    Resolve effective user id from auth context.
-    - normal user: can only act as self
-    - system admin: can act on requested_user_id when provided
-    """
-    requester_user_id = RBACUtils.get_user_id_from_request(request)
-    if not requester_user_id:
-        return None, JsonResponse({'error': 'Authentication required'}, status=401)
-
-    effective_user_id = requester_user_id
-    if requested_user_id is not None and str(requested_user_id).strip() != '':
-        try:
-            requested_user_id_int = int(str(requested_user_id))
-            requester_user_id_int = int(str(requester_user_id))
-        except (TypeError, ValueError):
-            return None, JsonResponse({'error': 'Invalid user id'}, status=400)
-
-        if requested_user_id_int != requester_user_id_int and not RBACUtils.is_system_admin(requester_user_id_int):
-            return None, JsonResponse({'error': 'Forbidden'}, status=403)
-        effective_user_id = requested_user_id_int
-
-    return int(effective_user_id), None
+def _safe_request_meta(request):
+    """Return sanitized, bounded request metadata for logs."""
+    method = sanitize_for_log(getattr(request, "method", ""))[:16]
+    path = sanitize_for_log(getattr(request, "path", ""))[:512]
+    # Log only a small allowlist of headers and sanitize values.
+    allowed_headers = ("User-Agent", "Origin", "Referer", "Content-Type")
+    headers = {}
+    for name in allowed_headers:
+        raw_val = request.headers.get(name)
+        if raw_val:
+            headers[name] = sanitize_for_log(str(raw_val))[:200]
+    return method, path, headers
 
 
 @csrf_exempt
@@ -46,23 +36,19 @@ def test_integration_auth(request):
     Test endpoint to verify authentication is working for integrations
     """
     try:
-        logger.info(f"Test integration auth request: {request.method} {request.path}")
-        logger.info(f"Request headers: {dict(request.headers)}")
+        method, path, safe_headers = _safe_request_meta(request)
+        logger.info("Test integration auth request: %s %s", method, path)
+        logger.info("Request headers (sanitized): %s", safe_headers)
         
         # Get user from middleware (set by JWT middleware)
         user = getattr(request, 'user', None)
-        logger.info(f"User from middleware: {user}")
+        logger.info("User from middleware present: %s", bool(user))
         
         if not user:
             logger.warning("No user found in request - authentication required")
             return JsonResponse({
                 'status': 'error',
                 'message': 'Authentication required',
-                'debug': {
-                    'headers': dict(request.headers),
-                    'path': request.path,
-                    'method': request.method
-                }
             }, status=401)
         
         return JsonResponse({
@@ -75,11 +61,11 @@ def test_integration_auth(request):
             }
         })
         
-    except Exception as e:
-        logger.error(f"Test integration auth error: {str(e)}")
+    except Exception:
+        logger.exception("Test integration auth error")
         return JsonResponse({
             'status': 'error',
-            'message': f'Test failed: {str(e)}'
+            'message': 'Test failed due to an internal server error.'
         }, status=500)
 
 
@@ -93,9 +79,10 @@ def get_external_applications(request):
     if not auth_user or not hasattr(auth_user, 'UserId'):
         return JsonResponse({'error': 'Authentication required'}, status=401)
     try:
-        # Debug logging
-        logger.info(f"External applications request: {request.method} {request.path}")
-        logger.info(f"Request headers: {dict(request.headers)}")
+        # Debug logging (sanitized to prevent log injection/forging)
+        method, path, safe_headers = _safe_request_meta(request)
+        logger.info("External applications request: %s %s", method, path)
+        logger.info("Request headers (sanitized): %s", safe_headers)
         
         user_id, auth_error = _resolve_request_user_id(request, request.GET.get('user_id'))
         if auth_error:
@@ -176,10 +163,8 @@ def get_external_applications(request):
             }
         })
 
-    except Exception as e:
-        logger.error(f"Error getting external applications: {str(e)}")
-        import traceback
-        logger.error(f"Traceback: {traceback.format_exc()}")
+    except Exception:
+        logger.exception("Error getting external applications")
         return JsonResponse({'error': 'Internal server error'}, status=500)
 
 

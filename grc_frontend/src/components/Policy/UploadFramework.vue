@@ -1356,6 +1356,12 @@ export default {
     
     // Dynamic forms data
     const policyFormData = ref({})
+    // SECURITY: prevent prototype pollution via externally-controlled object keys.
+    const unsafeObjectKeys = new Set(['__proto__', 'prototype', 'constructor'])
+    const sanitizeObjectKey = (key) => {
+      const k = String(key ?? '')
+      return unsafeObjectKeys.has(k) ? `_${k}_` : k
+    }
     
     // Compliance data
     const complianceData = ref({})
@@ -1608,7 +1614,11 @@ export default {
 
     const uniqueSectionNames = computed(() => {
       if (!policies.value || policies.value.length === 0) return []
-      const sections = [...new Set(policies.value.map(p => p.policy_name).filter(name => name))]
+      const sections = [...new Set(
+        policies.value
+          .map(p => sanitizeObjectKey(p.policy_name))
+          .filter(name => name)
+      )]
       return sections.sort()
     })
 
@@ -1635,8 +1645,9 @@ export default {
 
     // Ensure form data is always properly initialized
     const ensureFormData = (policyName) => {
-      if (!policyFormData.value[policyName]) {
-        policyFormData.value[policyName] = {
+      const safePolicyName = sanitizeObjectKey(policyName)
+      if (!policyFormData.value[safePolicyName]) {
+        policyFormData.value[safePolicyName] = {
           documentUrl: '',
           identifier: '',
           createdBy: '',
@@ -1649,11 +1660,13 @@ export default {
           coverageRate: 0
         }
       }
-      return policyFormData.value[policyName]
+      return policyFormData.value[safePolicyName]
     }
 
     const ensureSubPolicyFormData = (policyName, subPolicyId) => {
-      const key = `${policyName}_${subPolicyId}`
+      const safePolicyName = sanitizeObjectKey(policyName)
+      const safeSubPolicyId = sanitizeObjectKey(subPolicyId)
+      const key = `${safePolicyName}_${safeSubPolicyId}`
       if (!policyFormData.value[key]) {
         policyFormData.value[key] = {
           documentUrl: '',
@@ -1674,14 +1687,15 @@ export default {
 
     const ensureComplianceInfo = (policyName, subPolicyId, sectionKey) => {
       const formData = ensureSubPolicyFormData(policyName, subPolicyId)
-      if (!formData.complianceInfo[sectionKey]) {
-        formData.complianceInfo[sectionKey] = {
+      const safeSectionKey = sanitizeObjectKey(sectionKey)
+      if (!formData.complianceInfo[safeSectionKey]) {
+        formData.complianceInfo[safeSectionKey] = {
           section: sectionKey,
           text: '',
           order: 0
         }
       }
-      return formData.complianceInfo[sectionKey]
+      return formData.complianceInfo[safeSectionKey]
     }
 
 
@@ -3285,9 +3299,10 @@ export default {
             // Create a fallback policy name
             policy.policy_name = `Policy_${index + 1}`
           }
-          
+
+          const safePolicyName = sanitizeObjectKey(policy.policy_name)
           // Initialize main policy form data
-          policyFormData.value[policy.policy_name] = {
+          policyFormData.value[safePolicyName] = {
             documentUrl: '',
             identifier: '',
             createdBy: '',
@@ -3314,7 +3329,8 @@ export default {
                 subPolicy.id = `sub_${subIndex + 1}`
               }
               
-              const sectionKey = `${policy.policy_name}_${subPolicy.id}`
+              const safeSubPolicyId = sanitizeObjectKey(subPolicy.id)
+              const sectionKey = `${safePolicyName}_${safeSubPolicyId}`
               
               // Create form data for this sub-policy
               policyFormData.value[sectionKey] = {
@@ -3341,7 +3357,8 @@ export default {
                     if (!policyFormData.value[sectionKey].complianceInfo) {
                       policyFormData.value[sectionKey].complianceInfo = {}
                     }
-                    policyFormData.value[sectionKey].complianceInfo[key] = {
+                    const safeSectionKey = sanitizeObjectKey(key)
+                    policyFormData.value[sectionKey].complianceInfo[safeSectionKey] = {
                       section: key,
                       text: sectionData.text || '',
                       order: sectionData.order || 0
@@ -3565,7 +3582,7 @@ export default {
       policies.value.forEach(policy => {
         if (!policy.control || policy.control.trim() === '') return;
         
-        const policyKey = `${policy.section_name}_${policy.Sub_policy_id}`
+        const policyKey = sanitizeObjectKey(`${policy.section_name}_${policy.Sub_policy_id}`)
         const complianceItems = getComplianceItems(policy.control)
         
         if (complianceItems.length > 0) {
@@ -3577,18 +3594,20 @@ export default {
     }
     
     const handleComplianceFileUpload = (event, policyKey, complianceIndex) => {
+      const safePolicyKey = sanitizeObjectKey(policyKey)
       const file = event.target.files[0]
-      if (file && complianceData.value[policyKey] && complianceData.value[policyKey][complianceIndex]) {
-        complianceData.value[policyKey][complianceIndex].evidence = file
+      if (file && complianceData.value[safePolicyKey] && complianceData.value[safePolicyKey][complianceIndex]) {
+        complianceData.value[safePolicyKey][complianceIndex].evidence = file
       }
     }
     
     const addComplianceItem = (policyKey) => {
-      if (!complianceData.value[policyKey]) {
-        complianceData.value[policyKey] = []
+      const safePolicyKey = sanitizeObjectKey(policyKey)
+      if (!complianceData.value[safePolicyKey]) {
+        complianceData.value[safePolicyKey] = []
       }
       
-      const newIndex = complianceData.value[policyKey].length
+      const newIndex = complianceData.value[safePolicyKey].length
       const newItem = {
         id: `compliance_${newIndex + 1}`,
         letter: String.fromCharCode(97 + newIndex),
@@ -3600,14 +3619,15 @@ export default {
         evidence: null
       }
       
-      complianceData.value[policyKey].push(newItem)
+      complianceData.value[safePolicyKey].push(newItem)
     }
     
     const removeComplianceItem = (policyKey, index) => {
-      if (complianceData.value[policyKey] && complianceData.value[policyKey].length > 1) {
-        complianceData.value[policyKey].splice(index, 1)
+      const safePolicyKey = sanitizeObjectKey(policyKey)
+      if (complianceData.value[safePolicyKey] && complianceData.value[safePolicyKey].length > 1) {
+        complianceData.value[safePolicyKey].splice(index, 1)
         
-        complianceData.value[policyKey].forEach((item, idx) => {
+        complianceData.value[safePolicyKey].forEach((item, idx) => {
           item.letter = String.fromCharCode(97 + idx)
           item.id = `compliance_${idx + 1}`
         })

@@ -539,7 +539,7 @@ class SessionTimeoutMiddleware(MiddlewareMixin):
 class AuditLoggingMiddleware(MiddlewareMixin):
     """
     Audit Logging Middleware
-    Logs user actions for audit purposes
+    Logs user actions for audit purposes to grc_logs table
     """
     
     def process_request(self, request):
@@ -871,7 +871,8 @@ class EnterpriseSecurityHeadersMiddleware(MiddlewareMixin):
         
         # style-src: Where CSS can be loaded from
         # Allow same-origin styles and inline styles (needed for dynamic styles)
-        directives.append("style-src 'self' 'unsafe-inline'")
+        # SECURITY: do not allow inline styles.
+        directives.append("style-src 'self'")
         
         # img-src: Where images can be loaded from
         # Allow same-origin, data URIs (base64 images), and HTTPS images

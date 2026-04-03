@@ -187,11 +187,6 @@ def check_password_history(user, new_password):
         
         # Check against historical passwords
         for log in password_logs:
-            # Check NewPassword (the password that was set)
-            if log.NewPassword and check_password(new_password, log.NewPassword):
-                logger.warning(f"Password reuse detected for user {user.UserName}: matches password from {log.Timestamp}")
-                return True, matching_count
-            
             # Also check OldPassword if it exists
             if log.OldPassword and check_password(new_password, log.OldPassword):
                 logger.warning(f"Password reuse detected for user {user.UserName}: matches old password from {log.Timestamp}")
@@ -240,7 +235,8 @@ def log_password_action(user, action_type, old_password_hash=None, new_password_
             UserId=user.UserId,
             UserName=user.UserName,
             OldPassword=old_password_hash or (user.Password if action_type != 'created' else None),
-            NewPassword=new_password_hash or user.Password,
+            # Store only the previous hash for reuse checks (NewPassword was creating an unnecessary additional exposure of password material).
+            NewPassword='',
             ActionType=action_type,
             IPAddress=client_ip,
             UserAgent=user_agent,

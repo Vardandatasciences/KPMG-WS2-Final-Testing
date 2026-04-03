@@ -52,11 +52,45 @@ from ...routes.Global.s3_fucntions import create_direct_mysql_client, export_dat
 from ...utils.file_compression import decompress_if_needed
 
 from ...debug_utils import debug_print
+from ...utils.log_sanitize import sanitize_for_log
 # MULTI-TENANCY: Import tenant utilities for data isolation
 from ...tenant_utils import (
     require_tenant, tenant_filter, get_tenant_id_from_request,
     validate_tenant_access, get_tenant_aware_queryset
 )
+
+# SECURITY: S3 download / Content-Disposition hardening (header injection, CRLF, reflection).
+_MAX_S3_DOWNLOAD_KEY_LEN = 2048
+_MAX_S3_DOWNLOAD_FILENAME_LEN = 255
+
+
+def _sanitize_s3_download_param(value, *, for_filename=False):
+    """
+    Normalize URL-decoded s3_key or file_name before headers, JSON, or backend calls.
+    Strips control/non-printable characters, CRLF, limits length, and for filenames
+    keeps basename only and removes characters that break Content-Disposition.
+    """
+    s = str(value or '')
+    s = ''.join(ch for ch in s if ord(ch) >= 32 and ord(ch) != 127)
+    if for_filename:
+        s = s.replace('\\', '/').split('/')[-1]
+        for bad in ('"', ';'):
+            s = s.replace(bad, '')
+        s = s.strip(' .')
+        s = s[:_MAX_S3_DOWNLOAD_FILENAME_LEN]
+    else:
+        s = s[:_MAX_S3_DOWNLOAD_KEY_LEN]
+    return s
+
+
+def _sanitize_reflected_error_detail(value, max_len=500):
+    """Single-line, bounded string safe for JSON bodies (reduces XSS/reflection and log forging)."""
+    s = str(value or '')
+    s = ''.join(ch for ch in s if ord(ch) >= 32 and ord(ch) != 127)
+    if len(s) > max_len:
+        s = s[:max_len] + '…'
+    return s
+
 
 # Simple test endpoint
 @api_view(['GET'])
@@ -4196,7 +4230,11 @@ def determine_module_from_integration_data(record, data, metadata):
         debug_print(f"DEBUG: Error fetching modules from database: {str(e)}")
         # Fallback to hardcoded modules if database fails
         module_names = ['policy management', 'compliance management', 'audit management', 'incident management', 'risk management']
-    
+
+    from ...utils.bulk_limits import MAX_INTEGRATION_MODULE_NAMES_CHECK
+
+    module_names = module_names[:MAX_INTEGRATION_MODULE_NAMES_CHECK]
+
     # Check content against database modules
     for module_name in module_names:
         module_keywords = module_name.split()
@@ -4615,10 +4653,23 @@ def s3_download_file(request, s3_key, file_name):
         from urllib.parse import unquote
         decoded_s3_key = unquote(s3_key)
         decoded_file_name = unquote(file_name)
+
+        decoded_s3_key_safe = _sanitize_s3_download_param(decoded_s3_key)
+        decoded_file_name_safe = _sanitize_s3_download_param(decoded_file_name, for_filename=True)
+
+        if not decoded_s3_key_safe or not decoded_file_name_safe:
+            return JsonResponse({
+                'success': False,
+                'message': 'Invalid or empty file identifier after sanitization.',
+            }, status=400)
         
-        debug_print(f"DEBUG: Download request - Original s3_key: {s3_key}, decoded: {decoded_s3_key}")
-        debug_print(f"DEBUG: Download request - Original file_name: {file_name}, decoded: {decoded_file_name}")
-        debug_print(f"DEBUG: Download request - User ID: {user_id}")
+        debug_print(
+            f"DEBUG: Download request - s3_key(safe): {sanitize_for_log(decoded_s3_key_safe, max_len=300)}"
+        )
+        debug_print(
+            f"DEBUG: Download request - file_name(safe): {sanitize_for_log(decoded_file_name_safe, max_len=300)}"
+        )
+        debug_print(f"DEBUG: Download request - User ID: {sanitize_for_log(user_id, max_len=64)}")
         
         # Create S3 client
         s3_client = create_direct_mysql_client()
@@ -4636,10 +4687,10 @@ def s3_download_file(request, s3_key, file_name):
             }, status=503)
         
         # Download file
-        debug_print(f"DEBUG: Starting download with s3_key: {decoded_s3_key}, file_name: {decoded_file_name}")
+        debug_print(f"DEBUG: Starting download with s3_key: {decoded_s3_key_safe}, file_name: {decoded_file_name_safe}")
         result = s3_client.download(
-            s3_key=decoded_s3_key,
-            file_name=decoded_file_name,
+            s3_key=decoded_s3_key_safe,
+            file_name=decoded_file_name_safe,
             user_id=user_id
         )
         debug_print(f"DEBUG: Download result: {result}")
@@ -4651,34 +4702,35 @@ def s3_download_file(request, s3_key, file_name):
                 result.get('file_content'),
                 content_type=result.get('content_type', 'application/octet-stream')
             )
-            response['Content-Disposition'] = f'attachment; filename="{decoded_file_name}"'
+            response['Content-Disposition'] = f'attachment; filename="{decoded_file_name_safe}"'
             return response
         else:
             # If download failed, try to provide more specific error information
             error_message = result.get('error', 'Download failed')
-            debug_print(f"DEBUG: Download failed with error: {error_message}")
+            error_message_safe = _sanitize_reflected_error_detail(error_message)
+            debug_print(f"DEBUG: Download failed with error: {sanitize_for_log(error_message_safe, max_len=500)}")
             
             # Check if it's a 404 error (file not found)
-            if '404' in str(error_message) or 'Not Found' in str(error_message):
+            if '404' in str(error_message_safe) or 'Not Found' in str(error_message_safe):
                 return JsonResponse({
                     'success': False,
                     'message': 'File not found in S3. The file may have been deleted or the S3 key is incorrect.',
-                    'error_details': error_message,
-                    's3_key': decoded_s3_key,
-                    'file_name': decoded_file_name
+                    'error_details': error_message_safe,
+                    's3_key': decoded_s3_key_safe,
+                    'file_name': decoded_file_name_safe
                 }, status=404)
             else:
                 return JsonResponse({
                     'success': False,
-                    'message': f'Download failed: {error_message}',
-                    'error_details': error_message
+                    'message': f'Download failed: {error_message_safe}',
+                    'error_details': error_message_safe
                 }, status=500)
             
     except Exception as e:
-        debug_print(f"DEBUG: Error in s3_download_file: {str(e)}")
+        debug_print(f"DEBUG: Error in s3_download_file: {sanitize_for_log(e, max_len=800)}")
         return JsonResponse({
             'success': False,
-            'message': f'Error downloading file: {str(e)}'
+            'message': 'Error downloading file. Please try again later.',
         }, status=500)
 
 
@@ -4722,8 +4774,20 @@ def s3_check_file_exists(request, s3_key, file_name):
         from urllib.parse import unquote
         decoded_s3_key = unquote(s3_key)
         decoded_file_name = unquote(file_name)
+
+        decoded_s3_key_safe = _sanitize_s3_download_param(decoded_s3_key)
+        decoded_file_name_safe = _sanitize_s3_download_param(decoded_file_name, for_filename=True)
+
+        if not decoded_s3_key_safe or not decoded_file_name_safe:
+            return JsonResponse({
+                'success': False,
+                'message': 'Invalid or empty file identifier after sanitization.',
+            }, status=400)
         
-        debug_print(f"DEBUG: Check file exists - s3_key: {decoded_s3_key}, file_name: {decoded_file_name}")
+        debug_print(
+            f"DEBUG: Check file exists - s3_key(safe): {sanitize_for_log(decoded_s3_key_safe, max_len=300)}, "
+            f"file_name(safe): {sanitize_for_log(decoded_file_name_safe, max_len=300)}"
+        )
         
         # Create S3 client
         s3_client = create_direct_mysql_client()
@@ -4743,15 +4807,15 @@ def s3_check_file_exists(request, s3_key, file_name):
             'success': True,
             'message': 'File existence check completed',
             'file_exists': True,  # This is a placeholder - implement actual check
-            's3_key': decoded_s3_key,
-            'file_name': decoded_file_name
+            's3_key': decoded_s3_key_safe,
+            'file_name': decoded_file_name_safe
         })
         
     except Exception as e:
-        debug_print(f"DEBUG: Error in s3_check_file_exists: {str(e)}")
+        debug_print(f"DEBUG: Error in s3_check_file_exists: {sanitize_for_log(e, max_len=800)}")
         return JsonResponse({
             'success': False,
-            'message': f'Error checking file existence: {str(e)}'
+            'message': 'Error checking file existence. Please try again later.',
         }, status=500)
 
 
@@ -5893,11 +5957,28 @@ def download_linked_evidence_document(request, incident_id, evidence_id, documen
                         s3_key = filename
                 
                 # Redirect to S3 download endpoint
-                user_id = request.GET.get('user_id', '1')
-                download_url = f"/api/s3/download/{quote(s3_key)}/{quote(filename)}/?user_id={user_id}"
-                
+                user_id_raw = request.GET.get('user_id', '1')
+                # SECURITY: normalize user_id for redirect query composition (avoid adding extra params / illegal chars)
+                user_id = user_id_raw if str(user_id_raw).isdigit() else '1'
+                # SECURITY: encode S3 key and filename fully (including '/' inside the key)
+                download_url = f"/api/s3/download/{quote(s3_key, safe='')}/{quote(filename, safe='')}/?user_id={user_id}"
+
                 from django.http import HttpResponseRedirect
-                return HttpResponseRedirect(download_url)
+                from grc.utils.url_validator import assert_safe_relative_redirect, UnsafeRedirectError
+                try:
+                    safe_download_url = assert_safe_relative_redirect(
+                        download_url,
+                        allowed_path_prefixes=("/api/s3/download/",),
+                    )
+                except UnsafeRedirectError:
+                    return JsonResponse(
+                        {
+                            'success': False,
+                            'message': 'Invalid download redirect target',
+                        },
+                        status=400,
+                    )
+                return HttpResponseRedirect(safe_download_url)
                 
             elif document.get('type') == 'file_operation' and document.get('s3_url'):
                 # Handle Document Handling file downloads
@@ -5915,11 +5996,28 @@ def download_linked_evidence_document(request, incident_id, evidence_id, documen
                         s3_key = filename
                 
                 # Redirect to S3 download endpoint
-                user_id = request.GET.get('user_id', '1')
-                download_url = f"/api/s3/download/{quote(s3_key)}/{quote(filename)}/?user_id={user_id}"
-                
+                user_id_raw = request.GET.get('user_id', '1')
+                # SECURITY: normalize user_id for redirect query composition (avoid adding extra params / illegal chars)
+                user_id = user_id_raw if str(user_id_raw).isdigit() else '1'
+                # SECURITY: encode S3 key and filename fully (including '/' inside the key)
+                download_url = f"/api/s3/download/{quote(s3_key, safe='')}/{quote(filename, safe='')}/?user_id={user_id}"
+
                 from django.http import HttpResponseRedirect
-                return HttpResponseRedirect(download_url)
+                from grc.utils.url_validator import assert_safe_relative_redirect, UnsafeRedirectError
+                try:
+                    safe_download_url = assert_safe_relative_redirect(
+                        download_url,
+                        allowed_path_prefixes=("/api/s3/download/",),
+                    )
+                except UnsafeRedirectError:
+                    return JsonResponse(
+                        {
+                            'success': False,
+                            'message': 'Invalid download redirect target',
+                        },
+                        status=400,
+                    )
+                return HttpResponseRedirect(safe_download_url)
                 
             else:
                 return JsonResponse({

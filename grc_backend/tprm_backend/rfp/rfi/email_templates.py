@@ -2,7 +2,6 @@
 Email templates for RFI invitations
 """
 
-
 def generate_rfi_rich_html_email(invitation, rfi_data):
     """
     Generate rich HTML email body for RFI invitation with professional styling

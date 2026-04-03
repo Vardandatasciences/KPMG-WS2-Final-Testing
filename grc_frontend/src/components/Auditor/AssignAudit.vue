@@ -193,34 +193,49 @@
                   </div>
                 </div>
               </label>
-              <div class="dynamic-desc">Select the auditor responsible for this audit.</div>
+              <div class="dynamic-desc">
+                <span v-if="auditData.type === 'S'">The logged-in user is automatically assigned as the auditor for Self-Audit.</span>
+                <span v-else>Select the auditor responsible for this audit.</span>
+              </div>
               <div class="field-with-ai">
-                <CustomDropdown
-                  v-model="member.auditor"
-                  :config="{
-                    name: 'Auditor',
-                    label: 'Auditor',
-                    values: filteredUsers.map(user => ({ value: user.UserId, label: user.UserName })),
-                    defaultValue: 'Select Auditor'
-                  }"
-                  :showSearchBar="true"
-                  :error="getFieldError('auditor', index)"
+                <!-- For Self-Audit: Show read-only input with logged-in user -->
+                <input
+                  v-if="auditData.type === 'S'"
+                  type="text"
+                  :value="getUserName(member.auditor) || 'Current User'"
+                  readonly
+                  class="dynamic-input"
+                  style="background-color: #f3f4f6; cursor: not-allowed;"
                 />
-                <button 
-                  type="button" 
-                  class="ai-recommendation-btn" 
-                  @click="getAIRecommendations('auditor', index)"
-                  :disabled="isLoadingAuditorAI || !isAuditorAIEnabled(index)"
-                  :title="isAuditorAIEnabled(index) ? 'Get AI Recommendations' : 'Please select a policy first'"
-                  @mouseenter="checkAuditorButtonState(index)"
-                  :style="{ 
-                    opacity: (isLoadingAuditorAI || !isAuditorAIEnabled(index)) ? 0.5 : 1,
-                    cursor: (isLoadingAuditorAI || !isAuditorAIEnabled(index)) ? 'not-allowed' : 'pointer'
-                  }"
-                >
-                  <i class="fas fa-lightbulb"></i>
-                  <i v-if="isLoadingAuditorAI" class="fas fa-spinner fa-spin"></i>
-                </button>
+                <!-- For other audit types: Show dropdown -->
+                <template v-else>
+                  <CustomDropdown
+                    v-model="member.auditor"
+                    :config="{
+                      name: 'Auditor',
+                      label: 'Auditor',
+                      values: filteredUsers.map(user => ({ value: user.UserId, label: user.UserName })),
+                      defaultValue: 'Select Auditor'
+                    }"
+                    :showSearchBar="true"
+                    :error="getFieldError('auditor', index)"
+                  />
+                  <button 
+                    type="button" 
+                    class="ai-recommendation-btn" 
+                    @click="getAIRecommendations('auditor', index)"
+                    :disabled="isLoadingAuditorAI || !isAuditorAIEnabled(index)"
+                    :title="isAuditorAIEnabled(index) ? 'Get AI Recommendations' : 'Please select a policy first'"
+                    @mouseenter="checkAuditorButtonState(index)"
+                    :style="{ 
+                      opacity: (isLoadingAuditorAI || !isAuditorAIEnabled(index)) ? 0.5 : 1,
+                      cursor: (isLoadingAuditorAI || !isAuditorAIEnabled(index)) ? 'not-allowed' : 'pointer'
+                    }"
+                  >
+                    <i class="fas fa-lightbulb"></i>
+                    <i v-if="isLoadingAuditorAI" class="fas fa-spinner fa-spin"></i>
+                  </button>
+                </template>
               </div>
             </div>
             <div class="dynamic-field-col">
@@ -887,6 +902,7 @@
                       :options="[
                         { value: '0', label: 'Only Once' },
                         { value: '1', label: 'Daily' },
+                        { value: '30', label: 'Monthly' },
                         { value: '60', label: 'Every 2 Months' },
                         { value: '120', label: 'Every 4 Months' },
                         { value: '182', label: 'Half Yearly' },
@@ -1287,6 +1303,7 @@
                       :options="[
                         { value: '0', label: 'Only Once' },
                         { value: '1', label: 'Daily' },
+                        { value: '30', label: 'Monthly' },
                         { value: '60', label: 'Every 2 Months' },
                         { value: '120', label: 'Every 4 Months' },
                         { value: '182', label: 'Half Yearly' },
@@ -1581,7 +1598,12 @@
                   </div>
                   <div class="review-item">
                     <span class="review-label">Business Unit:</span>
-                    <span class="review-value">{{ member.businessUnit || 'Not specified' }}</span>
+                    <span class="review-value">
+                      <span v-if="member.businessUnits && member.businessUnits.length > 0">
+                        {{ member.businessUnits.join(', ') }}
+                      </span>
+                      <span v-else>{{ member.businessUnit || 'Not specified' }}</span>
+                    </span>
                   </div>
                   <div class="review-item">
                     <span class="review-label">Scope:</span>
@@ -1768,7 +1790,18 @@
                   <div class="dynamic-fields-row">
                     <div class="dynamic-field-col">
                       <label class="dynamic-label">Auditor</label>
+                      <!-- For Self-Audit: Show read-only input -->
+                      <input
+                        v-if="auditData.type === 'S'"
+                        type="text"
+                        :value="getUserName(member.auditor) || 'Current User'"
+                        readonly
+                        class="dynamic-input"
+                        style="background-color: #f3f4f6; cursor: not-allowed;"
+                      />
+                      <!-- For other audit types: Show dropdown -->
                       <CustomDropdown
+                        v-else
                         v-model="member.auditor"
                         :config="{
                           name: 'Auditor',
@@ -2492,11 +2525,13 @@ export default {
         });
         
         // Fetch auditors (users with ConductAudit permission)
+        // For Self-Audit, don't exclude current user so they can select themselves
+        const excludeCurrentUser = this.auditData.type !== 'S';
         const auditorsRes = await axios.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
           params: {
             module: 'audit',
             permission_type: 'auditor',
-            current_user_id: currentUserId
+            current_user_id: excludeCurrentUser ? currentUserId : ''
           },
           withCredentials: true,
           headers: {
@@ -2533,7 +2568,68 @@ export default {
           Email: user.Email || user.email || '',
           ...user
         })).filter(user => user.UserId);
+        
+        // For Self-Audit, include the current logged-in user in the auditors list if not already present
+        if (this.auditData.type === 'S' && currentUserId) {
+          const currentUserIdNum = parseInt(currentUserId);
+          const currentUserInList = auditors.find(a => parseInt(a.UserId) === currentUserIdNum);
+          
+          if (!currentUserInList) {
+            // Try to get username from storage or construct from available data
+            let currentUserName = sessionStorage.getItem('user_name') || 
+                                 localStorage.getItem('user_name') ||
+                                 sessionStorage.getItem('username') ||
+                                 localStorage.getItem('username') ||
+                                 'Current User';
+            
+            // Try to fetch current user details from API
+            try {
+              const currentUserRes = await axios.get(`/api/users/${currentUserId}/`, {
+                withCredentials: true,
+                headers: { 'Content-Type': 'application/json' }
+              });
+              
+              if (currentUserRes.data && currentUserRes.data.user) {
+                const currentUser = currentUserRes.data.user;
+                currentUserName = currentUser.username || currentUser.name || currentUserName;
+                auditors.push({
+                  UserId: currentUser.id || currentUserIdNum,
+                  UserName: currentUserName,
+                  Role: currentUser.role || '',
+                  Email: currentUser.email || '',
+                });
+                console.log('✅ Added current user to auditors list for Self-Audit:', currentUserName);
+              } else if (currentUserRes.data) {
+                // Handle different response formats
+                const userData = currentUserRes.data.UserName ? currentUserRes.data : (currentUserRes.data.user || currentUserRes.data);
+                auditors.push({
+                  UserId: userData.UserId || userData.id || userData.user_id || currentUserIdNum,
+                  UserName: userData.UserName || userData.username || userData.name || currentUserName,
+                  Role: userData.Role || userData.role || '',
+                  Email: userData.Email || userData.email || '',
+                });
+                console.log('✅ Added current user to auditors list for Self-Audit:', userData.UserName || userData.username);
+              }
+            } catch (e) {
+              console.warn('⚠️ Could not fetch current user details, using basic info:', e);
+              // Fallback: add basic user info with username from storage
+              auditors.push({
+                UserId: currentUserIdNum,
+                UserName: currentUserName,
+                Role: '',
+                Email: ''
+              });
+              console.log('✅ Added current user to auditors list (fallback):', currentUserName);
+            }
+          }
+        }
+        
         this.auditors = auditors;
+        
+        // If Self-Audit is selected, auto-populate auditor with logged-in user
+        this.$nextTick(() => {
+          this.autoPopulateSelfAuditAuditor();
+        });
         
         console.log('✅ Reviewers processed successfully:', reviewers.length, 'users');
         console.log('✅ Auditors processed successfully:', auditors.length, 'users');
@@ -2719,6 +2815,23 @@ export default {
       }
     },
     
+    // Helper method to auto-populate auditor for Self-Audit
+    autoPopulateSelfAuditAuditor() {
+      if (this.auditData.type === 'S' && this.teamMembers.length > 0) {
+        const currentUserId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || '';
+        if (currentUserId && this.auditors.length > 0) {
+          // Find the current user in the auditors list
+          const currentUser = this.auditors.find(auditor => 
+            String(auditor.UserId) === String(currentUserId)
+          );
+          if (currentUser) {
+            // Direct assignment for Vue 3 (no need for $set)
+            this.teamMembers[0].auditor = currentUser.UserId;
+            console.log('✅ Auto-populated auditor for Self-Audit:', currentUser.UserName);
+          }
+        }
+      }
+    },
     onAuditTypeChange() {
       // Reset team members and update workflow based on audit type
       if (this.auditData.type === 'AI') {
@@ -2740,7 +2853,9 @@ export default {
           objective: '',
           businessUnit: '',
           type: 'AI',
-          frequency: '',
+          // Backend expects an int frequency even for AI audits.
+          // AI UI hides frequency, so default to "0" (Only Once) to avoid int('.')/int('') errors.
+          frequency: '0',
           dueDate: '',
           reports: '',
           businessUnits: [],
@@ -2765,8 +2880,22 @@ export default {
         ];
       } else {
         // For Internal/External/Self audits, reset to basic team member structure
+        // Get current user ID for Self-Audit
+        const currentUserId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || '';
+        let defaultAuditor = '';
+        
+        // For Self-Audit, try to set auditor immediately if user is already in auditors list
+        if (this.auditData.type === 'S' && currentUserId && this.auditors.length > 0) {
+          const currentUser = this.auditors.find(auditor => 
+            String(auditor.UserId) === String(currentUserId)
+          );
+          if (currentUser) {
+            defaultAuditor = currentUser.UserId;
+          }
+        }
+        
         this.teamMembers = [{
-          auditor: '',
+          auditor: defaultAuditor,
           role: '',
           responsibilities: '',
           assignedPolicy: '',
@@ -2801,6 +2930,21 @@ export default {
           { name: 'Policy Assignment', required: [] },
           { name: 'Review & Assign', required: ['scope', 'objective', 'type', 'frequency', 'dueDate'] }
         ];
+        
+        // For Self-Audit, re-fetch auditors to include current user if not already set
+        if (this.auditData.type === 'S') {
+          // Re-fetch auditors without excluding current user
+          this.fetchUsers().then(() => {
+            this.$nextTick(() => {
+              this.autoPopulateSelfAuditAuditor();
+            });
+          });
+        } else {
+          // Try to auto-populate auditor for Self-Audit after a short delay to ensure auditors are loaded
+          this.$nextTick(() => {
+            this.autoPopulateSelfAuditAuditor();
+          });
+        }
       }
       // Reset to first tab when audit type changes
       this.currentTab = 0;
@@ -3001,6 +3145,14 @@ export default {
         const validTeamMembers = this.teamMembers.filter(member => 
           member.auditor && member.auditor !== '' && member.auditor !== 'Select Auditor'
         );
+
+        // Backend always casts frequency to int; AI UI may keep it empty/blank.
+        if (this.auditData.type === 'AI') {
+          const f = templateMember?.frequency;
+          if (f == null || f === '' || f === '.' ) {
+            templateMember.frequency = '0';
+          }
+        }
         
         console.log('🔍 Valid team members for submission:', validTeamMembers.map(m => ({
           auditor: m.auditor,
@@ -3192,7 +3344,13 @@ export default {
       this.currentTab = 0;
     },
     getUserName(userId) {
-      const user = this.users.find(u => u.UserId === userId);
+      if (!userId) return '';
+      // Check in reviewers list first
+      let user = this.users.find(u => u.UserId === userId);
+      // If not found, check in auditors list
+      if (!user) {
+        user = this.auditors.find(u => u.UserId === userId);
+      }
       return user ? user.UserName : '';
     },
     getPolicyName(policyId) {
@@ -3962,11 +4120,26 @@ return;
         });
       }
     },
+    'auditors': {
+      handler() {
+        // When auditors list is loaded/updated, auto-populate for Self-Audit if needed
+        if (this.auditors.length > 0 && this.auditData.type === 'S') {
+          this.$nextTick(() => {
+            this.autoPopulateSelfAuditAuditor();
+          });
+        }
+      }
+    },
     'currentTab': function() {
       if (this.isReviewTab) { // Review & Assign tab
         this.$nextTick(() => {
           this.resetCollapsibleSections();
           console.log('Reset collapsible sections for Review & Assign tab');
+          // Reload scope compliances if we have selected compliance IDs but scopeCompliances is empty
+          if (this.auditData.selectedComplianceIds && this.auditData.selectedComplianceIds.length > 0 && 
+              this.scopeCompliances.length === 0 && this.firstMemberWithPolicy) {
+            this.loadScopeCompliancesForPolicyAssignment();
+          }
         });
       }
     }

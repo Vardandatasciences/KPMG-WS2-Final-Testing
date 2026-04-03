@@ -57,7 +57,7 @@ PERPLEXITY_API_KEY = os.environ.get("PERPLEXITY_API_KEY", "")
 
 # SECURITY WARNING: keep the secret key used in production secret!
 # Must be provided via environment variable in production.
-SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "changeme-in-dev-only")
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get("DJANGO_DEBUG", "false").lower() == "true"
@@ -380,6 +380,11 @@ _CONSOLE_LEVEL = "DEBUG" if ENABLE_DEBUG_LOGGING else "ERROR"
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,  # CRITICAL: Keep Django's default loggers
+    'filters': {
+        'log_forging_safe': {
+            '()': 'grc.utils.log_sanitize.LogForgingFilter',
+        },
+    },
     'formatters': {
         'verbose': {
             'format': '{levelname} {asctime} {module} {message}',
@@ -395,6 +400,7 @@ LOGGING = {
             'level': _CONSOLE_LEVEL,
             'class': 'logging.StreamHandler',
             'formatter': 'simple',
+            'filters': ['log_forging_safe'],
         },
     },
     'loggers': {
@@ -539,6 +545,12 @@ CORS_ALLOWED_ORIGIN_REGEXES = [
     r"^http://127\.0\.0\.1(:\d+)?$",
 ]
 
+# Allow localhost / 127.0.0.1 with any port when not using ALL_ORIGINS (e.g. production with DEBUG=False)
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^http://localhost(:\d+)?$",
+    r"^http://127\.0\.0\.1(:\d+)?$",
+]
+
 # CSRF settings
 CSRF_TRUSTED_ORIGINS = [
     "https://riskavaire.vardaands.com",
@@ -601,9 +613,9 @@ CSRF_COOKIE_SECURE = False  # Set to True with valid SSL certificates (False for
 CSRF_COOKIE_HTTPONLY = False  # Allow JavaScript access to CSRF token
 
 # Session settings for HTTPS (duplicate - remove if causing issues)
-# SESSION_COOKIE_SECURE = False  # Set to True with valid SSL certificates
-# SESSION_COOKIE_HTTPONLY = False  # Allow JavaScript access to session cookies
-# SESSION_COOKIE_SAMESITE = 'Lax'  # Allow cross-site requests
+# SESSION_COOKIE_SECURE = True  # Send over HTTPS
+# SESSION_COOKIE_HTTPONLY = True  # Prevent JavaScript access to session cookies
+# SESSION_COOKIE_SAMESITE = 'Lax'  # Same-site protection for cross-site navigations
 # SESSION_COOKIE_DOMAIN = None  # Allow all domains in development
 
 # Additional HTTPS security headers (enable in production)
@@ -613,6 +625,12 @@ CSRF_COOKIE_HTTPONLY = False  # Allow JavaScript access to CSRF token
 # HSTS: 1 year in production; 0 in local dev (controlled by env to allow override)
 _hsts_seconds = int(os.environ.get('SECURE_HSTS_SECONDS', '31536000' if not DEBUG else '0'))
 
+SECURE_SSL_REDIRECT = False  # Set to True to redirect all HTTP to HTTPS
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')  # For reverse proxy
+# SECURITY: enable HSTS in non-debug deployments.
+SECURE_HSTS_SECONDS = 31536000 if not DEBUG else 0  # 1 year
+SECURE_HSTS_INCLUDE_SUBDOMAINS = True if not DEBUG else False
+SECURE_HSTS_PRELOAD = True if not DEBUG else False
 
 # JWT Settings
 JWT_ALGORITHM = os.environ.get("JWT_ALGORITHM", "RS256").upper()

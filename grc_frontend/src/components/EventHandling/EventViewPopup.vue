@@ -360,6 +360,7 @@ export default {
           link.href = downloadUrl
           link.download = evidence.fileName || evidence.filename || evidence.name || 'evidence-file'
           link.target = '_blank'
+          link.rel = 'noopener noreferrer'
           
           // Add to DOM, click, and remove
           document.body.appendChild(link)
@@ -371,7 +372,7 @@ export default {
       } catch (error) {
         console.error('Error downloading evidence:', error)
         // Fallback: open in new tab
-        window.open(downloadUrl, '_blank')
+        window.open(downloadUrl, '_blank', 'noopener,noreferrer')
       }
     }
 

@@ -3638,7 +3638,10 @@
         }
         if (!hasInitialized) {
           hasInitialized = true;
-          var keys = Object.keys(defaultValues);
+          // SECURITY: filter out prototype-pollution keys.
+          var keys = Object.keys(defaultValues).filter(function(k) {
+            return k !== '__proto__' && k !== 'constructor' && k !== 'prototype';
+          });
           setProps(RecordTypePrototype, keys);
           RecordTypePrototype.size = keys.length;
           RecordTypePrototype._name = name;

@@ -52,7 +52,8 @@ from ...rbac.decorators import (
 # Custom JSON encoder to handle date objects
 class DateTimeEncoder(json.JSONEncoder):
     def default(self, obj):
-        if isinstance(obj, (date, datetime)):
+        # Fix: use datetime.datetime (the class) not datetime (the module)
+        if isinstance(obj, (date, datetime.datetime, datetime.date)):
             return obj.isoformat()
         return super().default(obj)
 
@@ -328,8 +329,27 @@ def get_audit_task_details(request, audit_id):
                             
                             finding_row = cursor.fetchone()
                             if finding_row:
+                                # Only set status to '0' if it's explicitly set in the database
+                                # If it's NULL, return None/empty so frontend can show "Select"
+                                finding_status = finding_row[0]
+                                # Check if any other fields are filled to determine if status was explicitly set
+                                has_other_data = any([
+                                    finding_row[1],  # evidence
+                                    finding_row[2],   # comments
+                                    finding_row[3],   # how_to_verify
+                                    finding_row[4],   # impact
+                                    finding_row[5],   # recommendation
+                                    finding_row[6]    # details_of_finding
+                                ])
+                                
+                                # If status is NULL and no other data exists, treat as unset
+                                if finding_status is None and not has_other_data:
+                                    status_value = None
+                                else:
+                                    status_value = finding_status if finding_status is not None else '0'
+                                
                                 compliance_data = {
-                                    'status': finding_row[0] or '0',
+                                    'status': status_value,
                                     'evidence': finding_row[1] or '',
                                     'comments': finding_row[2] or '',
                                     'how_to_verify': finding_row[3] or '',
@@ -355,10 +375,29 @@ def get_audit_task_details(request, audit_id):
                         elif criticality == 'not applicable':
                             major_minor_value = '2'
                             
+                        # Get status from compliance_data
+                        # Version data stores 'compliance_status' as text (e.g. "Fully Compliant")
+                        # while audit_findings fallback stores 'status' as numeric ('0','1','2','3')
+                        # Try both keys; convert text to numeric if needed
+                        compliance_status = compliance_data.get('status')
+                        if not compliance_status:
+                            # Try the text-based key used by version data
+                            status_text = (compliance_data.get('compliance_status') or '').strip().lower()
+                            if status_text in ('fully compliant', 'fully_compliant'):
+                                compliance_status = '2'
+                            elif status_text in ('partially compliant', 'partially_compliant'):
+                                compliance_status = '1'
+                            elif status_text in ('not compliant', 'not_compliant', 'non compliant', 'non_compliant'):
+                                compliance_status = '0'
+                            elif status_text in ('not applicable', 'not_applicable'):
+                                compliance_status = '3'
+                            else:
+                                compliance_status = None  # truly unset
+                        
                         compliances.append({
                             'id': compliance_id,
                             'description': description,
-                            'status': compliance_data.get('compliance_status', '0'),
+                            'status': compliance_status,  # Will be None if not set, allowing frontend to show "Select"
                             'evidence': compliance_data.get('evidence', ''),
                             'comments': compliance_data.get('comments', ''),
                             'how_to_verify': compliance_data.get('how_to_verify', ''),
@@ -672,6 +711,12 @@ def save_audit_version(request, audit_id):
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
     
+    if not tenant_id:
+        debug_print("ERROR: tenant_id is None or invalid in save_audit_version")
+        return JsonResponse({
+            'error': 'Tenant ID is required. Please ensure you are logged in.'
+        }, status=400)
+    
     # Handle preflight OPTIONS request
     if request.method == 'OPTIONS':
         return JsonResponse({})
@@ -685,12 +730,17 @@ def save_audit_version(request, audit_id):
                 'error': f'Invalid audit ID: {str(e)}'
             }, status=400)
         
-        # Parse and validate request body
+        # Parse request body - use request.data (DRF already parsed it)
+        # DO NOT use request.body directly - DRF's @api_view has already read the stream
         try:
-            raw_data = json.loads(request.body)
-        except json.JSONDecodeError:
+            raw_data = request.data
+            if not isinstance(raw_data, dict):
+                return JsonResponse({
+                    'error': 'Invalid JSON in request body - expected a JSON object'
+                }, status=400)
+        except Exception as e:
             return JsonResponse({
-                'error': 'Invalid JSON in request body'
+                'error': f'Could not parse request body: {str(e)}'
             }, status=400)
         
         # Validate the audit version data
@@ -769,6 +819,7 @@ def save_audit_version(request, audit_id):
                 new_version_num = 1
             
             new_version = f"A{new_version_num}"
+            print(f"[DEBUG SAVE] STEP 2: New version will be {new_version}")
             
             # Prepare the JSON data structure
             version_data = {}
@@ -971,6 +1022,7 @@ def save_audit_version(request, audit_id):
                 version_data['overall_review_comments'] = latest_review_comments
                 debug_print(f"Preserving existing overall review comments: {latest_review_comments}")
             
+            print(f"[DEBUG SAVE] STEP 3: Compliance loop done, updating audit comments")
             # Update the audit table's Comments field with the overall audit comments
             cursor.execute("""
                 UPDATE audit
@@ -978,10 +1030,27 @@ def save_audit_version(request, audit_id):
                 WHERE AuditId = %s AND TenantId = %s
             """, [validated_data.get('overall_comments', ''), validated_audit_id, tenant_id])
             
-            # Get FrameworkId from the audit
-            cursor.execute("SELECT FrameworkId FROM audit WHERE AuditId = %s", [validated_audit_id])
+            # Get FrameworkId from the audit (with tenant check)
+            cursor.execute("SELECT FrameworkId FROM audit WHERE AuditId = %s AND TenantId = %s", [validated_audit_id, tenant_id])
             framework_row = cursor.fetchone()
             framework_id = framework_row[0] if framework_row else None
+            
+            if framework_id is None:
+                debug_print(f"Warning: Could not find FrameworkId for audit {validated_audit_id} with tenant {tenant_id}")
+                # Try to get it without tenant check as fallback (for migration scenarios)
+                cursor.execute("SELECT FrameworkId FROM audit WHERE AuditId = %s", [validated_audit_id])
+                fallback_row = cursor.fetchone()
+                framework_id = fallback_row[0] if fallback_row else None
+                # FrameworkId column in audit_version is nullable - allow NULL if not found
+                debug_print(f"FrameworkId resolved to: {framework_id} (None is allowed)")
+            
+            print(f"[DEBUG SAVE] STEP 4: framework_id={framework_id}, about to serialize version_data to JSON")
+            try:
+                version_json = json.dumps(version_data, cls=DateTimeEncoder)
+                print(f"[DEBUG SAVE] STEP 5: JSON serialization OK, length={len(version_json)}")
+            except Exception as json_err:
+                print(f"[DEBUG SAVE] JSON SERIALIZATION FAILED: {json_err}")
+                raise
             
             # Insert the new version - use custom DateTimeEncoder to handle date objects
             cursor.execute("""
@@ -990,12 +1059,13 @@ def save_audit_version(request, audit_id):
             """, [
                 validated_audit_id,
                 new_version,
-                json.dumps(version_data, cls=DateTimeEncoder),  # Use custom JSON encoder
+                version_json,  # Already serialized above
                 user_id,
                 datetime.datetime.now(),
                 'A',
                 framework_id
             ])
+            print(f"[DEBUG SAVE] STEP 6: INSERT into audit_version succeeded")
             
             debug_print(f"Successfully saved audit version {new_version} for audit {validated_audit_id}")
             
@@ -1011,7 +1081,9 @@ def save_audit_version(request, audit_id):
     except Exception as e:
         debug_print(f"Error in save_audit_version: {str(e)}")
         response = JsonResponse({
-            'error': str(e)
+            'error': error_message,
+            'error_type': e.__class__.__name__ if hasattr(e, '__class__') else 'Unknown',
+            'traceback': error_traceback  # Included for debugging - shows exact line in browser Network tab
         }, status=500)
         
         return response
@@ -1044,12 +1116,13 @@ def send_audit_for_review(request, audit_id):
                 'error': f'Invalid audit ID: {str(e)}'
             }, status=400)
         
-        # Parse and validate request body
+        # Parse request body - use request.data (DRF already parsed it)
+        # DO NOT use request.body - DRF's @api_view has already read the stream
         try:
-            data = json.loads(request.body)
-        except json.JSONDecodeError:
+            data = request.data if isinstance(request.data, dict) else {}
+        except Exception as e:
             return JsonResponse({
-                'error': 'Invalid JSON in request body'
+                'error': f'Could not parse request body: {str(e)}'
             }, status=400)
         
         # Validate version parameter if provided
@@ -1064,7 +1137,60 @@ def send_audit_for_review(request, audit_id):
         debug_print(f"Sending audit {validated_audit_id} for review with version {version}")
         
         with connection.cursor() as cursor:
-            # Update the audit status to "Under Review"
+            # First, check if audit exists
+            cursor.execute("""
+                SELECT AuditId FROM audit 
+                WHERE AuditId = %s AND TenantId = %s
+            """, [validated_audit_id, tenant_id])
+            
+            if cursor.fetchone() is None:
+                return JsonResponse({
+                    'error': f'Audit with ID {validated_audit_id} not found'
+                }, status=404)
+            
+            # Check if all compliance items have status set
+            # Status must be one of: '0' (Not Compliant), '1' (Partially Compliant), '2' (Fully Compliant), '3' (Not Applicable)
+            # NULL or empty string means status is not set
+            cursor.execute("""
+                SELECT 
+                    af.ComplianceId,
+                    c.ComplianceItemDescription,
+                    af.`Check` as status
+                FROM 
+                    audit_findings af
+                JOIN
+                    compliance c ON af.ComplianceId = c.ComplianceId
+                WHERE 
+                    af.AuditId = %s
+                    AND (af.`Check` IS NULL OR af.`Check` = '')
+            """, [validated_audit_id])
+            
+            missing_status_compliances = cursor.fetchall()
+            
+            if missing_status_compliances:
+                # Get compliance descriptions for the error message
+                compliance_descriptions = [row[1] for row in missing_status_compliances]
+                missing_count = len(missing_status_compliances)
+                
+                debug_print(f"Validation failed: {missing_count} compliance items without status set")
+                
+                response = JsonResponse({
+                    'success': False,
+                    'error': 'Cannot send audit for review',
+                    'message': f'All compliance statuses must be set before sending for review. {missing_count} compliance item(s) still need status.',
+                    'missing_count': missing_count,
+                    'missing_compliances': compliance_descriptions[:5]  # Limit to first 5 for display
+                }, status=400)
+                
+                # Add CORS headers
+                response["Access-Control-Allow-Origin"] = "http://localhost:8080"
+                response["Access-Control-Allow-Methods"] = "POST, OPTIONS"
+                response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+                response["Access-Control-Allow-Credentials"] = "true"
+                
+                return response
+            
+            # All compliances have status set, proceed with updating audit status
             cursor.execute("""
                 UPDATE audit 
                 SET Status = 'Under review'

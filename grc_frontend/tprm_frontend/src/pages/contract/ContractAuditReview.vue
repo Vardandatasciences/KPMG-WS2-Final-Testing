@@ -1172,9 +1172,27 @@ const formatFileSize = (bytes) => {
 
 const viewDocument = (doc) => {
   console.log('Viewing document:', doc)
+
+  const openUrlInNewTabSafe = (url) => {
+    if (!url || typeof url !== 'string') return false
+    const trimmed = url.trim()
+    const lowered = trimmed.toLowerCase()
+    // Block obvious scriptable schemes.
+    if (
+      lowered.startsWith('javascript:') ||
+      lowered.startsWith('vbscript:') ||
+      lowered.startsWith('data:text/html')
+    ) {
+      return false
+    }
+    const newWindow = window.open(trimmed, '_blank', 'noopener,noreferrer')
+    return !!newWindow
+  }
   
   if (doc.url) {
-    window.open(doc.url, '_blank')
+    if (!openUrlInNewTabSafe(doc.url)) {
+      PopupService.warning('Unable to open this document URL safely. Try download instead.', 'Blocked')
+    }
     return
   }
   
@@ -1246,7 +1264,9 @@ const viewDocument = (doc) => {
     }
   } else if (doc.url) {
     // If document has a URL, open it
-    window.open(doc.url, '_blank')
+    if (!openUrlInNewTabSafe(doc.url)) {
+      PopupService.warning('Unable to open this document URL safely. Try download instead.', 'Blocked')
+    }
   } else {
     // If no content or URL, show warning
     console.warn('Document has no content or URL:', doc)
@@ -1260,6 +1280,7 @@ const triggerDownload = (content, fileName) => {
     link.href = content
     link.download = fileName
     link.target = '_blank'
+    link.rel = 'noopener noreferrer'
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)

@@ -348,6 +348,7 @@ import DynamicTable from '../DynamicTable.vue'
 import AccessUtils from '@/utils/accessUtils'
 import { API_ENDPOINTS } from '../../config/api.js'
 import complianceDataService from '@/services/complianceService' // NEW: Use cached compliance data
+import { assertSafeDownloadUrl, openUrlInNewTabSafe } from '@/utils/safeExternalNavigation'
 
 // State
 const frameworks = ref([])
@@ -531,7 +532,12 @@ const checkPendingExports = async () => {
               `Your export completed! ${exportState.recordCount} records exported as ${exportState.format.toUpperCase()}. Click to download.`,
               'Export Completed',
               () => {
-                window.open(statusData.file_url, '_blank');
+                try {
+                  openUrlInNewTabSafe(statusData.file_url);
+                } catch (e) {
+                  console.error('Blocked unsafe export URL:', e)
+                  PopupService.error('Export link is not safe to open automatically.')
+                }
               }
             );
           } else if (statusData.status === 'failed') {
@@ -551,7 +557,13 @@ const checkPendingExports = async () => {
         `Your export is ready! ${exportState.recordCount} records exported as ${exportState.format.toUpperCase()}. Click to download.`,
         'Export Ready',
         () => {
-          window.open(exportState.fileUrl, '_blank');
+          try {
+            openUrlInNewTabSafe(exportState.fileUrl);
+          } catch (e) {
+            console.error('Blocked unsafe export URL:', e)
+            PopupService.error('Export link is not safe to open automatically.')
+            return
+          }
           localStorage.removeItem('compliance_export_state');
         }
       );
@@ -1006,6 +1018,19 @@ const exportCompliances = async () => {
     if (result.success && result.file_url && result.file_name) {
       console.log('File URL found:', result.file_url);
       console.log('File name:', result.file_name);
+
+      let safeFileUrl;
+      try {
+        safeFileUrl = assertSafeDownloadUrl(result.file_url);
+      } catch (urlErr) {
+        console.error('Unsafe export URL from server:', urlErr);
+        exportState.status = 'failed';
+        exportState.error = 'Unsafe file URL received from server';
+        localStorage.setItem('compliance_export_state', JSON.stringify(exportState));
+        PopupService.error('Export failed: unsafe download URL received.');
+        isExporting.value = false;
+        return;
+      }
       
       // Update export state
       exportState.status = 'completed';
@@ -1013,11 +1038,19 @@ const exportCompliances = async () => {
       exportState.fileName = result.file_name;
       exportState.completedAt = new Date().toISOString();
       localStorage.setItem('compliance_export_state', JSON.stringify(exportState));
+
+      // SECURITY: sanitize download filename to avoid control chars / path injection in download attribute.
+      const safeFileName =
+        String(result.file_name || 'download')
+          .replace(/[\r\n]/g, '')
+          .split('\0').join('')
+          .split(/[\\/]/)
+          .pop() || 'download';
       
       // Try to open the file URL in a new tab, fallback to download if it fails
       try {
         console.log('Attempting to open file in new tab...');
-        const newWindow = window.open(result.file_url, '_blank');
+        const newWindow = openUrlInNewTabSafe(safeFileUrl);
         console.log('Window result:', newWindow);
         if (newWindow) {
           console.log('File opened successfully in new tab');
@@ -1025,12 +1058,12 @@ const exportCompliances = async () => {
         } else {
           console.log('Popup blocked, falling back to download');
           // Fallback to download if popup is blocked
-          const fileRes = await fetch(result.file_url);
+          const fileRes = await fetch(safeFileUrl);
           const blob = await fileRes.blob();
           const url = window.URL.createObjectURL(blob);
           const link = document.createElement('a');
           link.href = url;
-          link.setAttribute('download', result.file_name);
+          link.setAttribute('download', safeFileName);
           document.body.appendChild(link);
           link.click();
           link.remove();
@@ -1042,12 +1075,12 @@ const exportCompliances = async () => {
         // Fallback to download if window.open fails
         try {
           console.log('Attempting final download fallback...');
-          const fileRes = await fetch(result.file_url);
+          const fileRes = await fetch(safeFileUrl);
           const blob = await fileRes.blob();
           const url = window.URL.createObjectURL(blob);
           const link = document.createElement('a');
           link.href = url;
-          link.setAttribute('download', result.file_name);
+          link.setAttribute('download', safeFileName);
           document.body.appendChild(link);
           link.click();
           link.remove();
@@ -1180,6 +1213,17 @@ function showControlDetailsModal(compliance) {
   const safeSubPolicy = escapeHtml(selectedSubpolicy.value?.name || 'Not specified');
 
   // Create a modal to show control details
+  const esc = (v) => String(v ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+
+  // SECURITY: prevent untrusted values from breaking out of class attributes.
+  const safeStatusClass = String(compliance?.status?.toLowerCase?.() || 'default').replace(/[^a-z0-9_-]/gi, '');
+  const safeCategoryClass = String(compliance?.category?.toLowerCase?.() || 'default').replace(/[^a-z0-9_-]/gi, '');
+
   const modalContent = `
     <div class="control-details-modal">
       <div class="modal-header">

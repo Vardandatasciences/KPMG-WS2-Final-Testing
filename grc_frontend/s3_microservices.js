@@ -18,6 +18,35 @@ const s3 = new S3({
   secretAccessKey,
 });
 
+// SECURITY: only follow redirects to expected object-storage hosts (mitigate open redirects).
+function assertSafeS3DownloadRedirect(urlString) {
+  let parsed;
+  try {
+    parsed = new URL(urlString);
+  } catch (e) {
+    throw new Error('Invalid download URL');
+  }
+
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+    throw new Error('Unsupported download URL scheme');
+  }
+
+  const host = parsed.hostname.toLowerCase();
+  const allowedSuffixes = [
+    'amazonaws.com',
+    'amazonaws.com.cn',
+    'cloudfront.net',
+    'blob.core.windows.net',
+  ];
+
+  const isAllowed = allowedSuffixes.some((suffix) => host === suffix || host.endsWith(`.${suffix}`));
+  if (!isAllowed) {
+    throw new Error('Download URL host is not allowed');
+  }
+
+  return urlString;
+}
+
 // Configure MySQL
 const dbConfig = {
   host: process.env.DB_HOST || 'localhost',
@@ -478,11 +507,13 @@ app.post('http://15.207.108.158:8000/api/upload', upload.single('file'), async (
     const fileName = req.body.fileName || originalname;
     
     // Extract all parameters from the request body
-    const params = {};
-    for (const key in req.body) {
-      if (key !== 'userId' && key !== 'fileName') {
-        params[key] = req.body[key];
-      }
+    const params = Object.create(null);
+    const unsafeKeys = new Set(['__proto__', 'prototype', 'constructor']);
+    const body = req.body || {};
+    for (const key of Object.keys(body)) {
+      if (key === 'userId' || key === 'fileName') continue;
+      if (unsafeKeys.has(key)) continue; // SECURITY: avoid prototype pollution
+      params[key] = body[key];
     }
 
     const result = await uploadFile(req.file, fileExtension, fileName, userId, params);
@@ -524,7 +555,8 @@ app.get('http://15.207.108.158:8000/api/download/:fileId', async (req, res) => {
     const result = await getDownloadUrl(fileId, expiresIn);
     
     if (req.query.redirect === 'true') {
-      res.redirect(result.downloadUrl);
+      const safeUrl = assertSafeS3DownloadRedirect(result.downloadUrl);
+      res.redirect(safeUrl);
     } else {
       res.json(result);
     }

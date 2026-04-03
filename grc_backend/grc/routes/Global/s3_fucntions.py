@@ -3,7 +3,7 @@
 """
 S3 Microservice Client for Direct Deployment with MySQL Database
 Direct URL: http://15.207.1.40:3000
-MySQL Database for operation tracking (uses Django settings)
+MySQL Database for operation trftg6hy7uracking (uses Django settings)
 No AWS credentials required - handled by the microservice
 
 ================================================================================

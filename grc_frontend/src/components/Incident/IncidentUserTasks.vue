@@ -245,6 +245,7 @@
                         :href="safeEvidenceUrl(file['aws-file_link'])"
                         :download="file.fileName"
                         target="_blank"
+                        rel="noopener noreferrer"
                         class="downloadable-file"
                       >
                         <i class="fas fa-download"></i> {{ file.fileName }}
@@ -279,6 +280,7 @@
                       :href="safeEvidenceUrl(mitigationSteps[currentStep]['aws-file_link'])"
                       :download="mitigationSteps[currentStep].fileName"
                       target="_blank"
+                      rel="noopener noreferrer"
                       class="downloadable-file"
                     >
                       <i class="fas fa-download"></i> {{ mitigationSteps[currentStep].fileName }}
@@ -350,6 +352,7 @@
                             :href="safeEvidenceUrl(file['aws-file_link'])"
                             target="_blank"
                             class="view-file-btn"
+                            rel="noopener noreferrer"
                             title="View File"
                           >
                             <i class="fas fa-eye"></i> View
@@ -2655,6 +2658,7 @@ export default {
           link.href = docData.s3_url;
           link.download = docData.filename || 'document';
           link.target = '_blank';
+          link.rel = 'noopener noreferrer';
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);
@@ -2673,6 +2677,7 @@ export default {
         link.href = downloadUrl;
         link.download = docData.filename || 'document';
         link.target = '_blank';
+        link.rel = 'noopener noreferrer';
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);

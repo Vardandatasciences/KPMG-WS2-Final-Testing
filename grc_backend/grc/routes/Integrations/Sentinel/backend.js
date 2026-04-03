@@ -9,6 +9,16 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// SECURITY: prevent SSRF-style URL abuse in outbound fetch calls.
+function safeFetch(url, options) {
+  const parsed = new URL(url);
+  const allowedHosts = new Set(['graph.microsoft.com', 'login.microsoftonline.com']);
+  if (parsed.protocol !== 'https:' || !allowedHosts.has(parsed.hostname)) {
+    throw new Error(`Blocked unsafe outbound URL: ${url}`);
+  }
+  return fetch(url, options);
+}
+
 // ==================== SERVICE CLASSES ====================
 
 // OAuth Service
@@ -43,7 +53,7 @@ class SentinelOAuthService {
     params.append('redirect_uri', this.redirectUri);
     params.append('scope', this.scope);
 
-    const response = await fetch(tokenUrl, {
+    const response = await safeFetch(tokenUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: params
@@ -66,7 +76,7 @@ class SentinelOAuthService {
     params.append('grant_type', 'refresh_token');
     params.append('scope', this.scope);
 
-    const response = await fetch(tokenUrl, {
+    const response = await safeFetch(tokenUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: params
@@ -352,7 +362,7 @@ class DefenderAPIService {
         url += `&$filter=${encodeURIComponent(oDataFilters.join(' and '))}`;
       }
 
-      const response = await fetch(url, {
+      const response = await safeFetch(url, {
         headers: {
           'Authorization': `Bearer ${this.accessToken}`,
           'Content-Type': 'application/json'
@@ -377,7 +387,7 @@ class DefenderAPIService {
       let pageCount = 1;
       
       while (nextLink && pageCount < 3) {
-        const nextResponse = await fetch(nextLink, {
+        const nextResponse = await safeFetch(nextLink, {
           headers: {
             'Authorization': `Bearer ${this.accessToken}`,
             'Content-Type': 'application/json'
@@ -430,7 +440,7 @@ class DefenderAPIService {
 
   async getIncident(incidentId) {
     const url = `${this.baseUrl}/incidents/${incidentId}`;
-    const response = await fetch(url, {
+    const response = await safeFetch(url, {
       headers: {
         'Authorization': `Bearer ${this.accessToken}`,
         'Content-Type': 'application/json'
@@ -445,7 +455,7 @@ class DefenderAPIService {
   async getIncidentAlerts(incidentId) {
     try {
       const incidentUrl = `${this.baseUrl}/incidents/${incidentId}`;
-      const incidentResponse = await fetch(incidentUrl, {
+      const incidentResponse = await safeFetch(incidentUrl, {
         headers: {
           'Authorization': `Bearer ${this.accessToken}`,
           'Content-Type': 'application/json'
@@ -465,7 +475,7 @@ class DefenderAPIService {
         const listUrl = `https://graph.microsoft.com/v1.0/security/alerts_v2?$filter=${encodeURIComponent(filter)}&$top=100`;
         
         try {
-          const listResponse = await fetch(listUrl, {
+          const listResponse = await safeFetch(listUrl, {
             headers: {
               'Authorization': `Bearer ${this.accessToken}`,
               'Content-Type': 'application/json'
@@ -482,7 +492,7 @@ class DefenderAPIService {
 
       if (alerts.length === 0) {
         const allAlertsUrl = `https://graph.microsoft.com/v1.0/security/alerts_v2?$top=200&$orderby=createdDateTime desc`;
-        const allAlertsResponse = await fetch(allAlertsUrl, {
+        const allAlertsResponse = await safeFetch(allAlertsUrl, {
           headers: {
             'Authorization': `Bearer ${this.accessToken}`,
             'Content-Type': 'application/json'
@@ -740,7 +750,7 @@ class DefenderAPIService {
   async testConnection() {
     try {
       const url = `${this.baseUrl}/incidents?$top=1`;
-      const response = await fetch(url, {
+      const response = await safeFetch(url, {
         headers: {
           'Authorization': `Bearer ${this.accessToken}`,
           'Content-Type': 'application/json'
@@ -767,11 +777,48 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'your-secret-key',
+  secret: process.env.SESSION_SECRET || (() => {
+    console.warn('SESSION_SECRET is not set. Using an ephemeral session secret. Sessions will be invalid after restart.');
+    return crypto.randomBytes(64).toString('hex');
+  })(),
   resave: false,
   saveUninitialized: false,
   cookie: { secure: false }
 }));
+
+// SECURITY: ensure client-side protections on all rendered HTML responses.
+app.use((req, res, next) => {
+  // Use HTTPS-only HSTS when running behind HTTPS (or in non-development).
+  const isSecure =
+    req.secure ||
+    (req.headers['x-forwarded-proto'] || '').toString().toLowerCase() === 'https' ||
+    process.env.NODE_ENV !== 'development';
+
+  if (isSecure) {
+    res.setHeader(
+      'Strict-Transport-Security',
+      'max-age=31536000; includeSubDomains; preload'
+    );
+  }
+
+  res.setHeader(
+    'Content-Security-Policy',
+    [
+      "default-src 'self'",
+      "script-src 'self'",
+      "style-src 'self'",
+      "img-src 'self' data: https:",
+      "connect-src 'self'",
+      "font-src 'self' data:",
+      "object-src 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
+      "frame-ancestors 'none'",
+    ].join('; ')
+  );
+
+  next();
+});
 
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
@@ -835,6 +882,64 @@ async function refreshCredentialToken(req) {
 
 // ==================== ROUTES ====================
 
+// SECURITY: sanitize user-controlled values before passing into templates.
+// Express EJS template escaping is usually on by default, but some templates
+// may use unescaped output tags; stripping control chars reduces risk.
+function sanitizeForTemplate(value) {
+  if (value === null || value === undefined) return value;
+  if (typeof value === 'string') {
+    return value
+      .replace(/[\r\n]/g, '')
+      .replace(/[<>"']/g, '');
+  }
+  if (Array.isArray(value)) {
+    return value.map(v => sanitizeForTemplate(v));
+  }
+  if (typeof value === 'object') {
+    try {
+      return JSON.stringify(value);
+    } catch (e) {
+      return '';
+    }
+  }
+  return String(value).replace(/[\r\n]/g, '');
+}
+
+function sanitizeQuery(query) {
+  const safe = {};
+  for (const [k, v] of Object.entries(query || {})) {
+    safe[k] = sanitizeForTemplate(v);
+  }
+  return safe;
+}
+
+// SECURITY: block unexpected redirect targets (open redirect hardening).
+function assertSafeMicrosoftAuthorizeRedirect(urlString) {
+  const parsed = new URL(urlString);
+  if (parsed.protocol !== 'https:') {
+    throw new Error('Invalid Microsoft OAuth redirect protocol');
+  }
+  const host = parsed.hostname.toLowerCase();
+  if (host !== 'login.microsoftonline.com' && host !== 'login.microsoft.com') {
+    throw new Error('Invalid Microsoft OAuth redirect host');
+  }
+  if (!parsed.pathname.toLowerCase().endsWith('/oauth2/v2.0/authorize')) {
+    throw new Error('Invalid Microsoft OAuth redirect path');
+  }
+  return parsed.toString();
+}
+
+function assertSafeIntegrationsRedirect(pathWithQuery) {
+  const parsed = new URL(pathWithQuery, 'http://localhost');
+  if (parsed.protocol !== 'http:' || parsed.hostname !== 'localhost') {
+    throw new Error('Invalid integrations redirect');
+  }
+  if (!parsed.pathname || parsed.pathname !== '/integrations') {
+    throw new Error('Invalid integrations redirect path');
+  }
+  return `${parsed.pathname}${parsed.search || ''}${parsed.hash || ''}`;
+}
+
 app.get('/', (req, res) => {
   res.render('index');
 });
@@ -843,7 +948,7 @@ app.get('/integrations', (req, res) => {
   res.render('integrations', {
     isSentinelConnected: req.session.isSentinelConnected || false,
     userInfo: req.session.userInfo || null,
-    query: req.query
+    query: sanitizeQuery(req.query)
   });
 });
 
@@ -852,7 +957,7 @@ app.get('/auth/sentinel', (req, res) => {
     const state = oauthService.generateRandomState();
     req.session.oauthState = state;
     const authUrl = oauthService.getAuthorizationUrl(state);
-    res.redirect(authUrl);
+    res.redirect(assertSafeMicrosoftAuthorizeRedirect(authUrl));
   } catch (error) {
     res.status(500).send('Error initiating authentication');
   }
@@ -861,7 +966,11 @@ app.get('/auth/sentinel', (req, res) => {
 app.get('/auth/sentinel/callback', async (req, res) => {
   const { code, state, error } = req.query;
   
-  if (error) return res.redirect('/integrations?error=' + encodeURIComponent(error));
+  if (error) {
+    return res.redirect(
+      assertSafeIntegrationsRedirect('/integrations?error=' + encodeURIComponent(error))
+    );
+  }
   if (!oauthService.verifyState(state, req.session.oauthState)) {
     return res.status(400).send('Invalid state parameter');
   }
@@ -887,9 +996,11 @@ app.get('/auth/sentinel/callback', async (req, res) => {
       };
     }
     
-    res.redirect('/integrations?connected=sentinel');
+    res.redirect(assertSafeIntegrationsRedirect('/integrations?connected=sentinel'));
   } catch (error) {
-    res.redirect('/integrations?error=' + encodeURIComponent('Authentication failed'));
+    res.redirect(
+      assertSafeIntegrationsRedirect('/integrations?error=' + encodeURIComponent('Authentication failed'))
+    );
   }
 });
 
@@ -899,7 +1010,7 @@ app.get('/auth/sentinel/disconnect', (req, res) => {
   delete req.session.sentinelRefreshToken;
   delete req.session.sentinelTokenExpiry;
   delete req.session.userInfo;
-  res.redirect('/integrations?disconnected=sentinel');
+  res.redirect(assertSafeIntegrationsRedirect('/integrations?disconnected=sentinel'));
 });
 
 app.get('/api/sentinel/alerts', async (req, res) => {

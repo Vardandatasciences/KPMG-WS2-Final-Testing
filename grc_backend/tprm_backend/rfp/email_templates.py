@@ -27,7 +27,6 @@ def generate_rich_html_email(invitation, rfp_data):
     # Ensure it uses localhost (not ngrok)
     import re
     external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000').rstrip('/')
-
     # Replace any ngrok URLs with localhost:3000
     if 'ngrok' in external_base_url.lower():
         external_base_url = 'http://localhost:3000'

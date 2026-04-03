@@ -760,43 +760,26 @@ export default {
     const fetchMyApprovals = async () => {
       isLoadingApprovals.value = true
       try {
-        // Get current user from store
+        const hasToken = !!localStorage.getItem('session_token')
         const currentUser = store.getters['auth/currentUser']
-        if (!currentUser) {
-          console.warn('No current user found in store, waiting for authentication...')
-          // Wait a bit and try again
-          setTimeout(() => {
-            if (store.getters['auth/currentUser']) {
-              fetchMyApprovals()
-            } else {
-              console.error('Still no user found after waiting')
-              assignedApprovals.value = []
-              isLoadingApprovals.value = false
-            }
-          }, 1000)
-          return
-        }
-
-        // Add current user's ID to filters to get only their assigned approvals
-        const userId = resolveCurrentUserId()
-        if (!userId) {
-          console.error('No user ID found in current user data:', currentUser)
-          console.error('Available user fields:', Object.keys(currentUser))
+        if (!currentUser && !hasToken) {
+          console.warn('No session token or store user; skipping approvals fetch')
           assignedApprovals.value = []
           return
         }
-        
-        console.log('Using user ID for approvals:', userId)
-
-        const filtersWithUser = {
-          ...filters.value,
-          assignee_id: userId
+        if (!currentUser && hasToken) {
+          console.log(
+            'Approvals: no Vuex user yet; listing by JWT (omit assignee_id so server uses request.user)'
+          )
         }
-        
-        console.log('Fetching approvals with filters:', filtersWithUser)
-        const response = await contractApprovalApi.getApprovals(filtersWithUser)
-        
-        console.log('API Response for user', userId, ':', response)
+
+        // Do not pass assignee_id: backend approval_list() uses request.user.userid when absent.
+        // Hosted often had wrong assignee_id from token/store shape vs DB, yielding empty lists.
+        const params = { ...filters.value }
+        console.log('Fetching approvals with filters:', params)
+        const response = await contractApprovalApi.getApprovals(params)
+
+        console.log('API Response (JWT-scoped assignee):', response)
         console.log('Response structure:', {
           success: response.success,
           hasData: !!response.data,
@@ -833,32 +816,23 @@ export default {
     const fetchMyReviews = async () => {
       isLoadingReviews.value = true
       try {
-        // Get current user from store
+        const hasToken = !!localStorage.getItem('session_token')
         const currentUser = store.getters['auth/currentUser']
-        if (!currentUser) {
-          console.warn('No current user found in store for reviews')
+        if (!currentUser && !hasToken) {
+          console.warn('No session token or store user; skipping reviews fetch')
           reviewApprovals.value = []
           return
         }
-
-        // Add current user's ID to filters to get only their assigned reviews
-        const userId = resolveCurrentUserId()
-        if (!userId) {
-          console.error('No user ID found in current user data:', currentUser)
-          console.error('Available user fields:', Object.keys(currentUser))
-          reviewApprovals.value = []
-          return
+        if (!currentUser && hasToken) {
+          console.log(
+            'Reviews: no Vuex user yet; listing by JWT (omit assigner_id so server uses request.user)'
+          )
         }
-        
-        console.log('Using user ID for reviews:', userId)
 
-        const filtersWithUser = {
-          ...filters.value,
-          assigner_id: userId
-        }
-        
-        console.log('Fetching reviews with filters:', filtersWithUser)
-        const response = await contractApprovalApi.getAssignerApprovals(filtersWithUser)
+        // Do not pass assigner_id: get_assigner_approvals uses request.user when absent.
+        const params = { ...filters.value }
+        console.log('Fetching reviews with filters:', params)
+        const response = await contractApprovalApi.getAssignerApprovals(params)
         
         console.log('API Response for reviews:', response)
         console.log('Response structure:', {

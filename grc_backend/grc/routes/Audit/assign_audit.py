@@ -1437,7 +1437,10 @@ def bulk_update_findings(request):
         # Update audit status based on completion
         old_status = audit.Status
         if completion_percentage == 100:
+            # Mark audit as completed and set completion timestamp if not already set
             audit.Status = 'Completed'
+            if not audit.CompletionDate:
+                audit.CompletionDate = timezone.now()
         elif completion_percentage > 0:
             audit.Status = 'Work In Progress'
         audit.save()

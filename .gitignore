@@ -1,0 +1,4 @@
+# PyInstaller / local release artifacts (too large for GitHub; max 100 MB per file)
+/build/
+/dist/
+/sri_tmp/

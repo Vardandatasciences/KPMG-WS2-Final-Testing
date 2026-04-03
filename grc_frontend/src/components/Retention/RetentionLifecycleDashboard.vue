@@ -285,6 +285,13 @@
         })
         await this.loadAll()
       },
+      async deleteNow(timelineId) {
+        await this.apiPost(`${API_BASE_URL}/api/retention/delete-now/`, {
+          retention_timeline_id: timelineId,
+          performed_by: localStorage.getItem('user_id'),
+        })
+        await this.loadAll()
+      },
       async loadAll() {
         try {
           await Promise.all([

@@ -341,7 +341,7 @@
                     <i class="fas" :class="expandedDocumentId === doc.file_operation_id ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
                     {{ expandedDocumentId === doc.file_operation_id ? 'Hide Details' : 'View Details' }}
                   </button>
-                  <a :href="doc.s3_url" target="_blank" class="btn btn-outline btn-sm" @click.stop>
+                  <a :href="doc.s3_url" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm" @click.stop>
                     <i class="fas fa-download"></i>
                     Download
                   </a>
@@ -1171,7 +1171,6 @@
                 <th>Policy ID</th>
                 <th>Subpolicy ID</th>
                 <th>Compliant</th>
-                <th>Partially</th>
                 <th>Non‑Compliant</th>
                 <th>Unknown</th>
                 <th>Prev Year Non‑Compl iant</th>
@@ -1310,8 +1309,6 @@
                 {{ viewingDocumentId === fileGroup.document_id ? 'Opening...' : 'View' }}
               </button>
               <button 
-                v-if="fileGroup.document_id" 
-                @click="deleteDocument(fileGroup.document_id)" 
                 class="btn btn-sm btn-danger"
               >
                 <i class="fas fa-trash"></i> Delete
@@ -3186,11 +3183,49 @@ export default {
             }
           }
 
-          // Build hierarchy: for each policy, get subpolicies, then compliances
-          hierarchyPolicies = await Promise.all(
-            policies.map(async (policy) => {
-                  const policyId = policy.PolicyId || policy.policy_id || policy.id
-                  if (!policyId) return null
+          // Build hierarchy: for each policy, get subpolicies, then compliances.
+          // IMPORTANT: avoid request storms that can exhaust DB connections.
+          const POLICY_CONCURRENCY = 2
+          const SUBPOLICY_CONCURRENCY = 2
+
+          // Simple concurrency-limited async mapper (worker pool).
+          const mapWithConcurrency = async (items, concurrency, mapper) => {
+            const results = new Array(items.length)
+            if (!items.length) return results
+
+            let index = 0
+            const workerCount = Math.min(concurrency, items.length)
+            const workers = new Array(workerCount).fill(null).map(async () => {
+              while (index < items.length) {
+                const currentIndex = index++
+                if (currentIndex >= items.length) break
+                results[currentIndex] = await mapper(items[currentIndex], currentIndex)
+              }
+            })
+
+            await Promise.all(workers)
+            return results
+          }
+
+          hierarchyPolicies = await mapWithConcurrency(policies, POLICY_CONCURRENCY, async (policy) => {
+            const policyId = policy.PolicyId || policy.policy_id || policy.id
+            if (!policyId) return null
+
+            try {
+              // Get subpolicies for this policy
+              const subpoliciesResp = await api.get(
+                `/api/tree/policies/${policyId}/subpolicies/`,
+                { timeout: 15000 }
+              )
+              const subpoliciesData = subpoliciesResp.data?.data || subpoliciesResp.data || []
+
+              // For each subpolicy, get compliances (throttled)
+              const subpolicies = await mapWithConcurrency(
+                subpoliciesData,
+                SUBPOLICY_CONCURRENCY,
+                async (subpolicy) => {
+                  const subpolicyId = subpolicy.SubPolicyId || subpolicy.subpolicy_id || subpolicy.id
+                  if (!subpolicyId) return null
 
                   try {
                     // Get subpolicies for this policy
@@ -3228,22 +3263,43 @@ export default {
                         }
                       })
                     )
+                    const compliancesData = compliancesResp.data?.data || compliancesResp.data || []
 
                     return {
-                      policy_id: policyId,
-                      policy_name: policy.PolicyName || policy.policy_name || policy.name,
-                      subpolicies: subpolicies.filter(sp => sp !== null)
+                      subpolicy_id: subpolicyId,
+                      subpolicy_name: subpolicy.SubPolicyName || subpolicy.subpolicy_name || subpolicy.name,
+                      compliances: compliancesData.map(c => ({
+                        compliance_id: c.ComplianceId || c.compliance_id || c.id,
+                        compliance_title: c.ComplianceTitle || c.compliance_title || c.title || c.ComplianceItemDescription,
+                        compliance_description: c.ComplianceItemDescription || c.compliance_description || c.description,
+                        Criticality: c.Criticality || c.criticality
+                      }))
                     }
                   } catch (e) {
-                    console.warn(`⚠️ Could not load subpolicies for policy ${policyId}:`, e)
+                    console.warn(`⚠️ Could not load compliances for subpolicy ${subpolicyId}:`, e)
                     return {
-                      policy_id: policyId,
-                      policy_name: policy.PolicyName || policy.policy_name || policy.name,
-                      subpolicies: []
+                      subpolicy_id: subpolicyId,
+                      subpolicy_name: subpolicy.SubPolicyName || subpolicy.subpolicy_name || subpolicy.name,
+                      compliances: []
                     }
                   }
-                })
+                }
               )
+
+              return {
+                policy_id: policyId,
+                policy_name: policy.PolicyName || policy.policy_name || policy.name,
+                subpolicies: subpolicies.filter(sp => sp !== null)
+              }
+            } catch (e) {
+              console.warn(`⚠️ Could not load subpolicies for policy ${policyId}:`, e)
+              return {
+                policy_id: policyId,
+                policy_name: policy.PolicyName || policy.policy_name || policy.name,
+                subpolicies: []
+              }
+            }
+          })
 
               hierarchyPolicies = hierarchyPolicies.filter(p => p !== null)
               console.log('📚 Built hierarchy from framework tree. Policies:', hierarchyPolicies.length)
@@ -6502,6 +6558,7 @@ export default {
         link.href = url
         link.download = `AI_Audit_Comprehensive_Report_${auditId}_${new Date().toISOString().slice(0,10)}.json`
         link.target = '_blank'
+        link.rel = 'noopener noreferrer'
         
         // Trigger download
         document.body.appendChild(link)

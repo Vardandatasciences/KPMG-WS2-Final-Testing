@@ -80,7 +80,6 @@ console.log('🛡️ Setting up HTTP interceptor for access control')
 // );
 
 const app = createApp(App)
-app.config.compilerOptions.isCustomElement = tag => tag.includes('-')
 app.config.performance = true
 app.config.warnHandler = () => null 
 app.use(router)

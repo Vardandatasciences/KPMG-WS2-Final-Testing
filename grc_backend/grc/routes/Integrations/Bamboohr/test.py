@@ -5,16 +5,62 @@ import urllib.parse as up
 from flask import Flask, redirect, request, session, url_for, jsonify
 import requests
 from dotenv import load_dotenv
+from html import escape as html_escape
+from grc.utils.url_validator import validate_url, InvalidOutboundUrlError
 
 load_dotenv()
 
 try:
     from ....debug_utils import debug_print
 except ImportError:
-    def debug_debug_print(*args, **kwargs): debug_print(*args, **kwargs)
+    def debug_print(*args, **kwargs):
+        pass
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", secrets.token_hex(32))
+
+
+def _safe_get(url, **kwargs):
+    # SECURITY: guard against SSRF-style outbound URL abuse.
+    try:
+        validate_url(url)
+    except InvalidOutboundUrlError as exc:
+        raise requests.RequestException(str(exc)) from exc
+    return requests.get(url, **kwargs)
+
+
+def _safe_post(url, **kwargs):
+    # SECURITY: guard against SSRF-style outbound URL abuse.
+    try:
+        validate_url(url)
+    except InvalidOutboundUrlError as exc:
+        raise requests.RequestException(str(exc)) from exc
+    return requests.post(url, **kwargs)
+
+# SECURITY: ensure this Flask service sends CSP + HSTS for browser responses.
+@app.after_request
+def apply_security_headers(response):
+    response.headers['Content-Security-Policy'] = "; ".join([
+        "default-src 'self'",
+        "script-src 'self'",
+        "style-src 'self'",
+        "img-src 'self' data: https:",
+        "connect-src 'self'",
+        "font-src 'self' data:",
+        "object-src 'none'",
+        "base-uri 'self'",
+        "form-action 'self'",
+        "frame-ancestors 'none'",
+    ])
+
+    # Avoid forcing HSTS during local HTTP development.
+    try:
+        if request.is_secure:
+            response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains; preload'
+    except Exception:
+        pass
+
+    return response
 
 SUBDOMAIN     = os.environ["BAMBOOHR_SUBDOMAIN"].strip()
 CLIENT_ID     = os.environ["BAMBOOHR_CLIENT_ID"].strip()
@@ -106,9 +152,10 @@ def oauth_callback():
         "client_id": CLIENT_ID,
         "client_secret": CLIENT_SECRET,
     }
-    token_resp = requests.post(f"{token_base}?request=token", headers=form_headers(), data=data, timeout=30)
+    token_resp = _safe_post(f"{token_base}?request=token", headers=form_headers(), data=data, timeout=30)
     if token_resp.status_code != 200:
-        return f"Token exchange failed: {token_resp.status_code} {token_resp.text}", 400
+        # SECURITY: escape any upstream response text before returning HTML/text to browser.
+        return f"Token exchange failed: {token_resp.status_code} {html_escape(token_resp.text)}", 400
 
     tok = token_resp.json()
     session["access_token"] = tok.get("access_token")
@@ -129,10 +176,12 @@ def me():
     headers = auth_headers()
     data_collected = {}
     access_token = session.get('access_token', 'None')[:20]
+    subdomain_safe = html_escape(subdomain)
+    access_token_safe = html_escape(access_token)
 
     # Step 1: Try to get logged-in user from /meta/users
     try:
-        users_resp = requests.get(f"{api_base}/meta/users", headers=headers, timeout=30)
+        users_resp = _safe_get(f"{api_base}/meta/users", headers=headers, timeout=30)
         debug_print(f"Users API response: {users_resp.status_code}")
         
         if users_resp.status_code == 200:
@@ -149,7 +198,7 @@ def me():
                     "division","location","workEmail","mobilePhone","workPhone","hireDate",
                     "supervisor","supervisorId","status"
                 ]
-                emp_resp = requests.get(
+                emp_resp = _safe_get(
                     f"{api_base}/employees/{employee_id}",
                     params={"fields": ",".join(fields)},
                     headers=headers,
@@ -172,7 +221,7 @@ def me():
 
     # Step 2: Try to get company information
     try:
-        company_resp = requests.get(f"{api_base}/meta/company", headers=headers, timeout=30)
+        company_resp = _safe_get(f"{api_base}/meta/company", headers=headers, timeout=30)
         debug_print(f"Company API response: {company_resp.status_code}")
         if company_resp.status_code == 200:
             data_collected["company_info"] = company_resp.json()
@@ -184,7 +233,7 @@ def me():
 
     # Step 3: Try to get employee directory
     try:
-        directory_resp = requests.get(f"{api_base}/employees/directory", headers=headers, timeout=30)
+        directory_resp = _safe_get(f"{api_base}/employees/directory", headers=headers, timeout=30)
         debug_print(f"Directory API response: {directory_resp.status_code}")
         if directory_resp.status_code == 200:
             data_collected["employee_directory"] = directory_resp.json()
@@ -196,7 +245,7 @@ def me():
 
     # Step 4: Try to get reports list
     try:
-        reports_resp = requests.get(f"{api_base}/reports", headers=headers, timeout=30)
+        reports_resp = _safe_get(f"{api_base}/reports", headers=headers, timeout=30)
         debug_print(f"Reports API response: {reports_resp.status_code}")
         if reports_resp.status_code == 200:
             data_collected["reports"] = reports_resp.json()
@@ -208,18 +257,25 @@ def me():
 
     # If we got any data, display it
     if data_collected:
+        keys_html = ''.join([
+            f'<li><strong>{html_escape(key.replace("_", " ").title())}:</strong> Retrieved ✓</li>'
+            for key in data_collected.keys()
+        ])
+        raw_json = jsonify(data_collected).get_data(as_text=True)
+        raw_json_safe = html_escape(raw_json)
+
         return f"""
         <h2>BambooHR Data Retrieved Successfully!</h2>
-        <h3>Company: {subdomain}.bamboohr.com</h3>
-        <h3>Access Token: {access_token}...</h3>
+        <h3>Company: {subdomain_safe}.bamboohr.com</h3>
+        <h3>Access Token: {access_token_safe}...</h3>
         <hr>
         <h3>Available Data:</h3>
         <ul>
-        {''.join([f'<li><strong>{key.replace("_", " ").title()}:</strong> Retrieved ✓</li>' for key in data_collected.keys()])}
+        {keys_html}
         </ul>
         <hr>
         <h3>Raw Data:</h3>
-        <pre>{jsonify(data_collected).get_data(as_text=True)}</pre>
+        <pre>{raw_json_safe}</pre>
         <hr>
         <p><a href="/">← Back to Home</a> | <a href="/logout">Logout</a></p>
         """
@@ -227,9 +283,9 @@ def me():
         # If no data was retrieved, show error and redirect
         return f"""
         <h2>No Data Retrieved</h2>
-        <p>Company: {subdomain}.bamboohr.com</p>
+        <p>Company: {subdomain_safe}.bamboohr.com</p>
         <p>The access token may not have sufficient permissions for any of the available endpoints.</p>
-        <p>Access Token: {access_token}...</p>
+        <p>Access Token: {access_token_safe}...</p>
         <p>Try logging in again or check your BambooHR app permissions.</p>
         <p><a href="/">← Back to Home</a> | <a href="/logout">Logout</a></p>
         """
@@ -240,4 +296,8 @@ def logout():
     return "Logged out."
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", "5000")), debug=True)
+    app.run(
+        host="0.0.0.0",
+        port=int(os.environ.get("PORT", "5000")),
+        debug=app.config.get("DEBUG", False),
+    )
