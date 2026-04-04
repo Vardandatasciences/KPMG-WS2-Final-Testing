@@ -235,6 +235,23 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
             '/create-unmatched-vendor/' in path_without_query):
             logger.info(f"[JWT Middleware] Skipping authentication for vendor portal path: {path}")
             return None
+
+        # Cookie preferences: anonymous users only have session_id (query/body). If user_id is in the
+        # query, require normal JWT so ObjectLevel + DRF can enforce access.
+        path_no_q = path.split('?')[0]
+        if path_no_q.startswith('/api/cookie/preferences/'):
+            uid_in_query = None
+            try:
+                uid_in_query = (
+                    request.GET.get('user_id')
+                    or request.GET.get('userId')
+                    or request.GET.get('UserId')
+                )
+            except Exception:
+                uid_in_query = None
+            if not uid_in_query:
+                logger.debug(f"[JWT Middleware] Skipping authentication for cookie preferences (no user_id in query): {path}")
+                return None
         
         # Check public allowlist (prefix match)
         for public_prefix in public_path_prefixes:

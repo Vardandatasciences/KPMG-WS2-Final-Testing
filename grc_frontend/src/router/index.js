@@ -109,16 +109,22 @@ function hasShellAuthFlags() {
   return !!(userId && isLoggedIn)
 }
 
+const SESSION_VERIFY_TIMEOUT_MS = 12000
+
 async function ensureCookieSessionValid() {
   try {
     const authService = (await import('@/services/authService.js')).default
-    const result = await authService.validateSession()
+    const verifyPromise = authService.validateSession()
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('session verify timeout')), SESSION_VERIFY_TIMEOUT_MS)
+    })
+    const result = await Promise.race([verifyPromise, timeoutPromise])
     if (result && result.success) {
       sessionStorage.setItem('cookie_session_validated', 'true')
       return true
     }
   } catch (e) {
-    // fall through
+    // fall through (network error, 401, or timeout)
   }
   sessionStorage.removeItem('cookie_session_validated')
   try {
@@ -1182,96 +1188,105 @@ router.afterEach((to) => {
 })
  
 // Navigation guard
-router.beforeEach(async (to, from, next) => {
-  console.log('🔐 Router guard checking:', { to: to.path, from: from.path })
+// Vue Router 4: use return values with async guards — mixing `next` + returned Promise can leave router-view empty.
+router.beforeEach(async (to, from) => {
+  try {
+    console.log('🔐 Router guard checking:', { to: to.path, from: from.path })
 
-  // Global safety net: never allow token-like params in the visible URL.
-  scrubSensitiveParamsFromUrl()
+    scrubSensitiveParamsFromUrl()
 
-  // Fast path: do not render login when JWT + user_id + flag are already present (avoids login inside shell)
-  if (isLoginPath(to.path) && isShellAuthComplete()) {
-    console.log('🔐 Already authenticated — redirecting away from /login')
-    next({ path: '/home', replace: true })
-    return
-  }
- 
-  // Cookie-first auth: use local flags + a one-time /jwt/verify/ check per tab.
-  const hasAuthData = hasShellAuthFlags()
-  let isAuthenticated = hasAuthData
-  if (hasAuthData && sessionStorage.getItem('cookie_session_validated') !== 'true') {
-    isAuthenticated = await ensureCookieSessionValid()
-  }
- 
-  console.log('🔐 Authentication status:', {
-    hasToken: undefined, // not readable with HttpOnly cookies
-    hasUserId: !!localStorage.getItem('user_id'),
-    isLoggedIn: localStorage.getItem('is_logged_in') === 'true',
-    isTokenValid: undefined,
-    isAuthenticated: isAuthenticated
-  })
- 
-  // If route requires authentication and user is not authenticated
-  if (to.meta.requiresAuth && !isAuthenticated) {
-    console.log('🚫 Access denied - redirecting to login')
-    next('/login')
-    return
-  }
- 
-  // If user is authenticated and trying to access login page, redirect to home
-  if (isAuthenticated && isLoginPath(to.path)) {
-    console.log('🔄 User already authenticated - redirecting to home')
-    next('/home')
-    return
-  }
- 
-  // Check RBAC permissions if route requires specific permissions
-  if (to.meta.requiresPermission && isAuthenticated) {
-    try {
-      const { module, permission } = to.meta.requiresPermission
-      console.log(`🔐 Checking permission: ${module}.${permission}`)
-     
-      // Import and check permission using RBAC service
-      const rbacService = await import('@/services/rbacService.js')
-      const hasPermission = await rbacService.default.checkPermission(module, permission)
-     
-      if (!hasPermission) {
-        console.log(`🚫 Permission denied for ${module}.${permission}`)
-       
-        // Store access denied information
-        const accessDeniedInfo = {
-          feature: to.name || to.path,
-          message: `You don't have permission to access ${to.name || 'this page'}. Required permission: ${module}.${permission}`,
-          timestamp: new Date().toISOString(),
-          url: to.fullPath,
-          requiredPermission: `${module}.${permission}`
-        }
-        sessionStorage.setItem('accessDeniedInfo', JSON.stringify(accessDeniedInfo))
-       
-        next('/access-denied')
-        return
+    if (isLoginPath(to.path) && isShellAuthComplete()) {
+      console.log('🔐 Already authenticated — redirecting away from /login')
+      return { path: '/home', replace: true }
+    }
+
+    if (isLoginPath(to.path)) {
+      const hasAuthDataLogin = hasShellAuthFlags()
+      if (hasAuthDataLogin && sessionStorage.getItem('cookie_session_validated') !== 'true') {
+        void ensureCookieSessionValid().then((ok) => {
+          if (
+            ok &&
+            isShellAuthComplete() &&
+            sessionStorage.getItem('cookie_session_validated') === 'true' &&
+            router.currentRoute.value.path === '/login'
+          ) {
+            router.replace({ path: '/home', replace: true }).catch(() => {})
+          }
+        })
       }
-     
-      console.log(`✅ Permission granted for ${module}.${permission}`)
-    } catch (error) {
-      console.error('🔐 Error checking permissions:', error)
-     
-      // Store access denied information
-      const accessDeniedInfo = {
-        feature: to.name || to.path,
-        message: 'Error checking permissions. Please contact your administrator.',
-        timestamp: new Date().toISOString(),
-        url: to.fullPath,
-        error: error.message
-      }
-      sessionStorage.setItem('accessDeniedInfo', JSON.stringify(accessDeniedInfo))
-     
-      next('/access-denied')
+      console.log('🔐 Login route — proceed without blocking on session verify')
       return
     }
+
+    const hasAuthData = hasShellAuthFlags()
+    let isAuthenticated = hasAuthData
+    if (hasAuthData && sessionStorage.getItem('cookie_session_validated') !== 'true') {
+      isAuthenticated = await ensureCookieSessionValid()
+    }
+
+    console.log('🔐 Authentication status:', {
+      hasToken: undefined,
+      hasUserId: !!localStorage.getItem('user_id'),
+      isLoggedIn: localStorage.getItem('is_logged_in') === 'true',
+      isTokenValid: undefined,
+      isAuthenticated: isAuthenticated
+    })
+
+    if (to.meta.requiresAuth && !isAuthenticated) {
+      console.log('🚫 Access denied - redirecting to login')
+      return '/login'
+    }
+
+    if (isAuthenticated && isLoginPath(to.path)) {
+      console.log('🔄 User already authenticated - redirecting to home')
+      return '/home'
+    }
+
+    if (to.meta.requiresPermission && isAuthenticated) {
+      try {
+        const { module, permission } = to.meta.requiresPermission
+        console.log(`🔐 Checking permission: ${module}.${permission}`)
+
+        const rbacService = await import('@/services/rbacService.js')
+        const hasPermission = await rbacService.default.checkPermission(module, permission)
+
+        if (!hasPermission) {
+          console.log(`🚫 Permission denied for ${module}.${permission}`)
+
+          const accessDeniedInfo = {
+            feature: to.name || to.path,
+            message: `You don't have permission to access ${to.name || 'this page'}. Required permission: ${module}.${permission}`,
+            timestamp: new Date().toISOString(),
+            url: to.fullPath,
+            requiredPermission: `${module}.${permission}`
+          }
+          sessionStorage.setItem('accessDeniedInfo', JSON.stringify(accessDeniedInfo))
+
+          return '/access-denied'
+        }
+
+        console.log(`✅ Permission granted for ${module}.${permission}`)
+      } catch (error) {
+        console.error('🔐 Error checking permissions:', error)
+
+        const accessDeniedInfo = {
+          feature: to.name || to.path,
+          message: 'Error checking permissions. Please contact your administrator.',
+          timestamp: new Date().toISOString(),
+          url: to.fullPath,
+          error: error.message
+        }
+        sessionStorage.setItem('accessDeniedInfo', JSON.stringify(accessDeniedInfo))
+
+        return '/access-denied'
+      }
+    }
+
+    return
+  } catch (err) {
+    console.error('🔐 Router guard error:', err)
+    return
   }
- 
-  // Allow navigation
-  next()
 })
  
 export default router

@@ -529,21 +529,7 @@ export const API_ENDPOINTS = {
   SYSTEM_RISKS_SEND_FOR_APPROVAL: (id) => `${API_BASE_URL}/api/system-risks/${id}/send-for-approval/`,
   SYSTEM_RISKS_WORKFLOW_APPROVE: (riskInstanceId) => `${API_BASE_URL}/api/system-risks/workflow/${riskInstanceId}/approve/`,
   SYSTEM_RISKS_WORKFLOW_REJECT: (riskInstanceId) => `${API_BASE_URL}/api/system-risks/workflow/${riskInstanceId}/reject/`,
-
-  // System Identified Risk Queue
-  SYSTEM_RISKS_RUN_SCAN_INCIDENT: `${API_BASE_URL}/api/system-risks/run-scan/incident/`,
-  SYSTEM_RISKS_RUN_TEST_ANALYSIS: `${API_BASE_URL}/api/system-risks/run-test-analysis/`,
-  SYSTEM_RISKS_RUN_TEST_ANALYSIS_STATUS: (jobId) => `${API_BASE_URL}/api/system-risks/run-test-analysis/${jobId}/status/`,
-  SYSTEM_RISKS_RUN_TEST_ANALYSIS_CANCEL: (jobId) => `${API_BASE_URL}/api/system-risks/run-test-analysis/${jobId}/cancel/`,
-  SYSTEM_RISKS_LIST: `${API_BASE_URL}/api/system-risks/`,
-  SYSTEM_RISKS_STATS: `${API_BASE_URL}/api/system-risks/stats/`,
-  SYSTEM_RISKS_DETAIL: (id) => `${API_BASE_URL}/api/system-risks/${id}/`,
-  SYSTEM_RISKS_REVIEW: (id) => `${API_BASE_URL}/api/system-risks/${id}/review/`,
-  SYSTEM_RISKS_ACCEPT: (id) => `${API_BASE_URL}/api/system-risks/${id}/accept/`,
-  SYSTEM_RISKS_REJECT: (id) => `${API_BASE_URL}/api/system-risks/${id}/reject/`,
-  SYSTEM_RISKS_SEND_FOR_APPROVAL: (id) => `${API_BASE_URL}/api/system-risks/${id}/send-for-approval/`,
-  SYSTEM_RISKS_WORKFLOW_APPROVE: (riskInstanceId) => `${API_BASE_URL}/api/system-risks/workflow/${riskInstanceId}/approve/`,
-  SYSTEM_RISKS_WORKFLOW_REJECT: (riskInstanceId) => `${API_BASE_URL}/api/system-risks/workflow/${riskInstanceId}/reject/`,
+  // Do not add a second copy of SYSTEM_RISKS_* keys here (eslint no-dupe-keys / duplicate object keys).
 
   // Tree/Data Workflow API endpoints
   TREE_GET_FRAMEWORKS: `${API_BASE_URL}/api/tree/frameworks/`,

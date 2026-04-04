@@ -1247,6 +1247,7 @@ def jwt_login(request):
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@authentication_classes([])  # Do not run SimpleJWT before view; refresh reads body/cookies only
 def jwt_refresh(request):
     """JWT Refresh endpoint with rate limiting"""
     try:
@@ -1714,27 +1715,26 @@ def get_user_from_jwt(request):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
+@authentication_classes([])
 def jwt_verify(request):
-    """JWT Verify endpoint"""
+    """JWT Verify endpoint — no global DRF JWT auth (avoids SimpleJWT InvalidToken spam on stale Bearer)."""
     try:
         auth_header = request.headers.get('Authorization')
-        token = None
-
+        header_token = None
         if auth_header and auth_header.startswith('Bearer '):
-            token = auth_header.split(' ')[1]
-        else:
-            # Cookie-first fallback: allow verify to read HttpOnly cookie token
-            # when frontend no longer manages Authorization headers in JS.
-            token = request.COOKIES.get('access_token')
+            header_token = auth_header.split(' ', 1)[1].strip()
+        cookie_token = request.COOKIES.get('access_token')
 
-        if not token:
-            return Response({
-                'status': 'error',
-                'message': 'Authorization required'
-            }, status=status.HTTP_401_UNAUTHORIZED)
+        # Prefer HttpOnly cookie first (cookie-first auth), then Authorization.
+        # Stale Bearer from old sessionStorage/localStorage must not block a valid cookie.
+        payload = None
+        for tok in (cookie_token, header_token):
+            if not tok:
+                continue
+            payload = verify_jwt_token(tok, check_session=True)
+            if payload:
+                break
 
-        payload = verify_jwt_token(token, check_session=True)
-        
         if not payload:
             return Response({
                 'status': 'error',

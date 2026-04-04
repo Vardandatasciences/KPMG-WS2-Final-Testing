@@ -178,4 +178,10 @@ const initializeTheme = () => {
 // Apply theme before mounting
 initializeTheme()
 
-app.mount('#app')
+// Wait for initial navigation; always mount so a stuck guard does not leave a blank document
+router.isReady().then(() => {
+  app.mount('#app')
+}).catch((e) => {
+  console.error('Router isReady failed, mounting anyway:', e)
+  app.mount('#app')
+})

@@ -117,8 +117,7 @@
             <p>Sign in to your GRC dashboard</p>
           </div>
           
-          <!-- MFA Step (only shown if MFA is enabled) -->
-          <div v-if="MFA_ENABLED && showMfaStep" class="mfa-step">
+          <div v-if="showMfaPanel" class="mfa-step">
             <div class="mfa-header">
               <h3>Verify Your Identity</h3>
               <p>Enter the 6-digit code sent to your email</p>
@@ -210,9 +209,7 @@
               </div>
             </form>
           </div>
-          
-          <!-- Login Form -->
-          <form v-else @submit.prevent="login" class="login-form">
+          <form v-if="!showMfaPanel" @submit.prevent="login" class="login-form">
             <!-- Login Type Selector -->
             <div class="login-type-selector">
               <!-- Username Option -->
@@ -456,9 +453,17 @@ import { useRouter } from 'vue-router'
 import authService from '../../services/authService.js'
 import ForgotPassword from './ForgotPassword.vue'
 import ConsentForm from './ConsentForm.vue'
-import logo from '../../assets/RiskaVaire.png'
+// Use bundled SVG (RiskaVaire.png is often missing from repo → module resolve failure blanks login)
+import logo from '../../assets/service_logo1.svg'
 import { RECAPTCHA_SITE_KEY, MFA_ENABLED } from '../../config/api.js'
-import * as roleRoutingService from '../../../tprm_frontend/src/services/roleRoutingService.js'
+/* Webpack-safe: @import './login.css?v=…' in <style> can fail resolution and drop all login UI styles */
+import './login.css'
+
+/** Lazy-load TPRM role helper so a bundling/alias issue cannot blank the entire login screen */
+async function loadRoleRoutingService() {
+  const mod = await import('../../../tprm_frontend/src/services/roleRoutingService.js')
+  return mod
+}
 
 const password = ref('')
 const rememberMe = ref(false)
@@ -472,6 +477,8 @@ const showForgotPasswordModal = ref(false)
 const showConsentForm = ref(false)
 const isVendorUser = ref(false)
 const showMfaStep = ref(false)
+/** Avoid v-else adjacency bugs: show exactly one of MFA panel or login form */
+const showMfaPanel = computed(() => Boolean(MFA_ENABLED && showMfaStep.value))
 const otp = ref('')
 const otpDigits = ref(['', '', '', '', '', ''])
 const otpInputRefs = ref([])
@@ -673,6 +680,7 @@ const resolvePostLoginRoute = async () => {
       console.error('Error getting user ID for post-login route:', e)
     }
 
+    const roleRoutingService = await loadRoleRoutingService()
     return await roleRoutingService.getPostLoginRoute(token, userId)
   } catch (error) {
     console.error('Failed to resolve post-login route, defaulting to /home', error)
@@ -712,6 +720,7 @@ const determineVendorFlag = async () => {
       isVendorUser.value = false
       return
     }
+    const roleRoutingService = await loadRoleRoutingService()
     const roleResult = await roleRoutingService.getUserRole(token)
     if (roleResult.success && roleResult.role) {
       isVendorUser.value = roleResult.role.toLowerCase() === 'vendor'
@@ -1222,5 +1231,16 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-@import './login.css?v=2.0';
+/* If login.css ever fails to load, keep the shell visible (dark page + in-flow content) */
+.login-page {
+  min-height: 100vh;
+  width: 100%;
+  position: relative;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 30%, #334155 70%, #475569 100%);
+}
 </style>

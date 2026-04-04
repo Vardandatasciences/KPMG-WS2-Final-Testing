@@ -3228,43 +3228,8 @@ export default {
                   if (!subpolicyId) return null
 
                   try {
-                    // Get subpolicies for this policy
-                    const subpoliciesResp = await api.get(`/api/tree/policies/${policyId}/subpolicies/`, { timeout: 15000 })
-                    const subpoliciesData = subpoliciesResp.data?.data || subpoliciesResp.data || []
-                    
-                    // For each subpolicy, get compliances
-                    const subpolicies = await Promise.all(
-                      subpoliciesData.map(async (subpolicy) => {
-                        const subpolicyId = subpolicy.SubPolicyId || subpolicy.subpolicy_id || subpolicy.id
-                        if (!subpolicyId) return null
-
-                        try {
-                          const compliancesResp = await api.get(`/api/tree/subpolicies/${subpolicyId}/compliances/`, { timeout: 15000 })
-                          const compliancesData = compliancesResp.data?.data || compliancesResp.data || []
-                          
-                          return {
-                            subpolicy_id: subpolicyId,
-                            subpolicy_name: subpolicy.SubPolicyName || subpolicy.subpolicy_name || subpolicy.name,
-                            compliances: compliancesData.map(c => ({
-                              compliance_id: c.ComplianceId || c.compliance_id || c.id,
-                              compliance_title: c.ComplianceTitle || c.compliance_title || c.title || c.ComplianceItemDescription,
-                              compliance_description: c.ComplianceItemDescription || c.compliance_description || c.description,
-                              Criticality: c.Criticality || c.criticality,
-                              AuditFrequency: c.AuditFrequency || c.audit_frequency || null
-                            }))
-                          }
-                        } catch (e) {
-                          console.warn(`⚠️ Could not load compliances for subpolicy ${subpolicyId}:`, e)
-                          return {
-                            subpolicy_id: subpolicyId,
-                            subpolicy_name: subpolicy.SubPolicyName || subpolicy.subpolicy_name || subpolicy.name,
-                            compliances: []
-                          }
-                        }
-                      })
-                    )
+                    const compliancesResp = await api.get(`/api/tree/subpolicies/${subpolicyId}/compliances/`, { timeout: 15000 })
                     const compliancesData = compliancesResp.data?.data || compliancesResp.data || []
-
                     return {
                       subpolicy_id: subpolicyId,
                       subpolicy_name: subpolicy.SubPolicyName || subpolicy.subpolicy_name || subpolicy.name,
@@ -3272,7 +3237,8 @@ export default {
                         compliance_id: c.ComplianceId || c.compliance_id || c.id,
                         compliance_title: c.ComplianceTitle || c.compliance_title || c.title || c.ComplianceItemDescription,
                         compliance_description: c.ComplianceItemDescription || c.compliance_description || c.description,
-                        Criticality: c.Criticality || c.criticality
+                        Criticality: c.Criticality || c.criticality,
+                        AuditFrequency: c.AuditFrequency || c.audit_frequency || null
                       }))
                     }
                   } catch (e) {
@@ -3303,7 +3269,6 @@ export default {
 
               hierarchyPolicies = hierarchyPolicies.filter(p => p !== null)
               console.log('📚 Built hierarchy from framework tree. Policies:', hierarchyPolicies.length)
-          console.log('📚 Built hierarchy from framework tree. Policies:', hierarchyPolicies.length)
         } catch (e) {
           console.error('❌ Error building hierarchy from framework tree/framework endpoints:', e)
         }

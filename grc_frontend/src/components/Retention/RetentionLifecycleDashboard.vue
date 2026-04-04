@@ -74,7 +74,7 @@
                     <i class="fas fa-clock"></i>
                     <span>+30d</span>
                   </button>
-                  <button class="btn btn-ghost btn-xs" @click="deleteNow(item.id)">
+                  <button class="btn btn-ghost btn-xs" @click="runRetentionDeleteNow(item.id)">
                     <i class="fas fa-trash-alt"></i>
                     <span>Delete now</span>
                   </button>
@@ -278,17 +278,10 @@
         })
         await this.loadAll()
       },
-      async deleteNow(timelineId) {
+      async runRetentionDeleteNow(timelineId) {
         await this.apiPost(`${API_BASE_URL}/api/retention/delete-now/`, {
           retention_timeline_id: timelineId,
           performed_by: sessionStorage.getItem('user_id') || localStorage.getItem('user_id'),
-        })
-        await this.loadAll()
-      },
-      async deleteNow(timelineId) {
-        await this.apiPost(`${API_BASE_URL}/api/retention/delete-now/`, {
-          retention_timeline_id: timelineId,
-          performed_by: localStorage.getItem('user_id'),
         })
         await this.loadAll()
       },

@@ -3,7 +3,7 @@ Cookie Preferences Management Views
 Handles cookie preference storage and retrieval for GDPR compliance
 """
 
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework import status
@@ -164,6 +164,7 @@ def link_cookie_preferences_to_user(user, session_id=None):
 @csrf_exempt
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@authentication_classes([])
 def save_cookie_preferences(request):
     """
     Save or update cookie preferences
@@ -812,6 +813,7 @@ def save_cookie_preferences(request):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
+@authentication_classes([])
 def get_cookie_preferences(request):
     """
     Get cookie preferences for a user or session

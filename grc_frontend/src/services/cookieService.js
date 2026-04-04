@@ -81,6 +81,26 @@ class CookieService {
       const response = await api.get('/api/cookie/preferences/', { params })
       return response.data
     } catch (error) {
+      const status = error.response?.status
+      // Backend may 401 if middleware blocks; still allow UI (login page) to load
+      if (status === 401 || status === 403) {
+        console.warn('🍪 [CookieService] getPreferences unauthorized — using defaults', { status })
+        return {
+          status: 'success',
+          data: {
+            preference_id: null,
+            user_id: userId,
+            session_id: sessionId,
+            essential_cookies: true,
+            functional_cookies: false,
+            analytics_cookies: false,
+            marketing_cookies: false,
+            preferences_saved: false,
+            created_at: null,
+            updated_at: null
+          }
+        }
+      }
       console.error('Error fetching cookie preferences:', error)
       throw error
     }

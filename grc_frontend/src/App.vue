@@ -299,6 +299,16 @@ body {
  
 .login-container {
   min-height: 100vh;
+  width: 100%;
+  position: relative;
+  z-index: 0;
+  flex: 1;
+  display: block;
+}
+
+/* :deep() is for scoped SFC styles only; here it can produce invalid CSS */
+.login-container .login-page {
+  min-height: 100vh;
 }
 </style>
  

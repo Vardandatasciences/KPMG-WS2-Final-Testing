@@ -179,7 +179,15 @@ export default {
                     localStorage.getItem('access_token') ||
                     localStorage.getItem('session_token') || 
                     localStorage.getItem('token')
-      const user = sessionStorage.getItem('user') || sessionStorage.getItem('current_user') || localStorage.getItem('user') || localStorage.getItem('current_user')
+      const userRaw = sessionStorage.getItem('user') || sessionStorage.getItem('current_user') || localStorage.getItem('user') || localStorage.getItem('current_user')
+      let parsedUser = null
+      if (userRaw) {
+        try {
+          parsedUser = JSON.parse(userRaw)
+        } catch {
+          parsedUser = userRaw
+        }
+      }
       const refreshToken = sessionStorage.getItem('refresh_token') || localStorage.getItem('refresh_token')
       
       return {

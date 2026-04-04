@@ -1212,18 +1212,6 @@ function showControlDetailsModal(compliance) {
   const safePolicy = escapeHtml(selectedPolicy.value?.name || 'Not specified');
   const safeSubPolicy = escapeHtml(selectedSubpolicy.value?.name || 'Not specified');
 
-  // Create a modal to show control details
-  const esc = (v) => String(v ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
-
-  // SECURITY: prevent untrusted values from breaking out of class attributes.
-  const safeStatusClass = String(compliance?.status?.toLowerCase?.() || 'default').replace(/[^a-z0-9_-]/gi, '');
-  const safeCategoryClass = String(compliance?.category?.toLowerCase?.() || 'default').replace(/[^a-z0-9_-]/gi, '');
-
   const modalContent = `
     <div class="control-details-modal">
       <div class="modal-header">
