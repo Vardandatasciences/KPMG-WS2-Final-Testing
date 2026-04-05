@@ -82,7 +82,7 @@ def send_log(module, actionType, description=None, userId=None, userName=None,
         # Mask sensitive data before saving (but NOT for authentication and security-critical logs)
         # Authentication logs and password-related logs should keep UserName and UserId unmasked for audit purposes
         skip_masking = False
-        if module == 'Authentication' and actionType in ['LOGIN', 'LOGOUT', 'LOGIN_SUCCESS', 'LOGIN_FAILED', 'PASSWORD_RESET']:
+        if module == 'Authentication' and actionType in ['LOGIN', 'LOGOUT', 'LOGIN_SUCCESS', 'LOGIN_FAILED', 'LOGIN_ANOMALY', 'PASSWORD_RESET']:
             skip_masking = True
             logger.debug(f"Skipping masking for authentication log: {actionType}")
         elif module == 'User Profile' and actionType in ['PASSWORD_UPDATE', 'PASSWORD_RESET', 'PASSWORD_CHANGE']:

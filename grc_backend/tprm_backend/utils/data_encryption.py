@@ -15,10 +15,12 @@ if grc_path not in sys.path:
 # Import encryption functions from GRC
 from grc.utils.data_encryption import (
     DataEncryptionService,
-    get_encryption_service,
-    encrypt_data,
+    decrypt_blob_with_key,
     decrypt_data,
-    is_encrypted_data
+    encrypt_blob_with_key,
+    encrypt_data,
+    get_encryption_service,
+    is_encrypted_data,
 )
 
 # Re-export for TPRM module usage
@@ -27,6 +29,8 @@ __all__ = [
     'get_encryption_service',
     'encrypt_data',
     'decrypt_data',
-    'is_encrypted_data'
+    'is_encrypted_data',
+    'encrypt_blob_with_key',
+    'decrypt_blob_with_key',
 ]
 

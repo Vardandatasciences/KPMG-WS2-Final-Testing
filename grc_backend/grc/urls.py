@@ -16,7 +16,7 @@ from .views import test_jwt_auth, list_users, clear_ai_cache
 from .views import serve_document
 
 # MULTI-TENANCY: Tenant management views
-from .routes.Global import tenant_views
+from .routes.Global import tenant_views, security_audit_views
 
 from .routes.EventHandling import event_views, riskavaire_integration
 
@@ -585,6 +585,12 @@ auth_urlpatterns = [
     # MFA endpoints
     path('jwt/mfa/verify-otp/', mfa_verify_otp, name='mfa-verify-otp'),
     path('jwt/mfa/resend-otp/', mfa_resend_otp, name='mfa-resend-otp'),
+
+    path(
+        'security/verify-audit-log-chain/',
+        security_audit_views.verify_audit_log_chain,
+        name='verify-audit-log-chain',
+    ),
 
     # Google OAuth SSO endpoints
     path('google/oauth/', google_oauth_initiate, name='google-oauth-initiate'),

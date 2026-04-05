@@ -11,8 +11,9 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 from sqlalchemy.exc import SQLAlchemyError, OperationalError
 from sqlalchemy.pool import QueuePool
 from django.conf import settings
-from cryptography.fernet import Fernet
 import json
+
+from grc.utils.data_encryption import decrypt_blob_with_key, encrypt_blob_with_key
 
 # Configure logging
 vendor_logger = logging.getLogger('vendor_security')
@@ -35,9 +36,12 @@ class VendorDatabaseManager:
         """Get or generate encryption key for sensitive data"""
         key = getattr(settings, 'VENDOR_SETTINGS', {}).get('ENCRYPTION_KEY')
         if not key:
-            # Generate a new key if not provided
+            from cryptography.fernet import Fernet
+
             key = Fernet.generate_key()
-            vendor_logger.warning("No encryption key provided, generated new key")
+            vendor_logger.warning(
+                "No encryption key provided, generated ephemeral key (data will not decrypt after restart)"
+            )
         return key.encode() if isinstance(key, str) else key
     
     def _vendor_initialize_engine(self):
@@ -157,21 +161,17 @@ class VendorDatabaseManager:
                 raise
     
     def vendor_encrypt_sensitive_data(self, data: str) -> str:
-        """Encrypt sensitive data before storage"""
+        """Encrypt sensitive data before storage (AES-256-GCM; legacy Fernet decrypt still supported)."""
         try:
-            fernet = Fernet(self.vendor_encryption_key)
-            encrypted_data = fernet.encrypt(data.encode())
-            return encrypted_data.decode()
+            return encrypt_blob_with_key(self.vendor_encryption_key, data)
         except Exception as e:
             vendor_logger.error(f"Encryption failed: {str(e)}")
             raise
-    
+
     def vendor_decrypt_sensitive_data(self, encrypted_data: str) -> str:
-        """Decrypt sensitive data after retrieval"""
+        """Decrypt sensitive data after retrieval (GCM or legacy Fernet)."""
         try:
-            fernet = Fernet(self.vendor_encryption_key)
-            decrypted_data = fernet.decrypt(encrypted_data.encode())
-            return decrypted_data.decode()
+            return decrypt_blob_with_key(self.vendor_encryption_key, encrypted_data)
         except Exception as e:
             vendor_logger.error(f"Decryption failed: {str(e)}")
             raise

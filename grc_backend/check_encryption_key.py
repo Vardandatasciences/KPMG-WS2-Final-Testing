@@ -12,7 +12,7 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.settings')
 django.setup()
 
 from django.conf import settings
-from grc.utils.data_encryption import get_encryption_service
+from grc.utils.data_encryption import GCM_ENVELOPE_PREFIX, get_encryption_service
 from cryptography.fernet import Fernet
 
 
@@ -67,7 +67,8 @@ encryption_service = get_encryption_service()
 actual_key = encryption_service.encryption_key
 actual_key_str = actual_key.decode() if isinstance(actual_key, bytes) else actual_key
 print(f"   Key: {_mask_key(actual_key_str)} (length: {len(actual_key_str)})")
-print(f"   {'✅' if _is_valid_fernet_key(actual_key_str) else '❌'} Valid Fernet key format")
+print(f"   {'✅' if _is_valid_fernet_key(actual_key_str) else '❌'} Valid Fernet key format (also used to derive AES-256-GCM)")
+print(f"   Field encryption backend: {encryption_service._encrypt_backend()}")
 print()
 
 # Check 4: Key source
@@ -90,7 +91,11 @@ try:
     decrypted = encryption_service.decrypt(encrypted)
     if decrypted == test_text:
         print(f"   ✅ Encryption/Decryption working correctly")
-        print(f"   Encrypted: {encrypted[:30]}...")
+        print(f"   Encrypted: {encrypted[:50]}...")
+        if encrypted.startswith(GCM_ENVELOPE_PREFIX):
+            print(f"   ✅ New writes use AES-256-GCM envelope ({GCM_ENVELOPE_PREFIX}…)")
+        elif encrypted.startswith("gAAAAA"):
+            print("   ℹ️  Ciphertext is legacy Fernet (GRC_FIELD_ENCRYPTION_BACKEND=fernet)")
     else:
         print(f"   ❌ Decryption failed - got '{decrypted}' instead of '{test_text}'")
 except Exception as e:

@@ -34,7 +34,6 @@ import jwt
 import hashlib
 import hmac
 import base64
-from cryptography.fernet import Fernet
 import os
 import shutil
 from pathlib import Path
@@ -181,12 +180,11 @@ class SecurityManager:
     
     @staticmethod
     def encrypt_sensitive_data(data):
-        """Encrypt sensitive contract data"""
+        """Encrypt sensitive contract data (AES-256-GCM via shared GRC key)."""
         try:
-            key = Fernet.generate_key()
-            f = Fernet(key)
-            encrypted_data = f.encrypt(json.dumps(data).encode())
-            return base64.b64encode(encrypted_data).decode()
+            from grc.utils.data_encryption import encrypt_data
+
+            return encrypt_data(json.dumps(data))
         except Exception as e:
             logger.error(f"Encryption failed: {str(e)}")
             return data

@@ -25,6 +25,7 @@ from grc.routes.Global.s3_fucntions import create_direct_mysql_client, RenderS3C
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.views.decorators.csrf import csrf_exempt
 from grc.utils.auto_decrypt_helper import decrypt_any_encrypted_value
+from grc.utils.data_encryption import GCM_ENVELOPE_PREFIX
 import re
 
 logger = logging.getLogger(__name__)
@@ -43,7 +44,9 @@ def _safe_for_display(value):
     s = value.strip()
     if len(s) < 20:
         return value
-    # Fernet tokens start with gAAAAA; DB/UI may show capital G
+    # Fernet tokens start with gAAAAA; AES-GCM field blobs use GRCv2$ prefix
+    if s.startswith(GCM_ENVELOPE_PREFIX):
+        return ENCRYPTED_PLACEHOLDER
     lower = s.lower()
     if lower.startswith('gaaaaa') or (len(s) >= 6 and lower[1:6] == 'aaaaa'):
         return ENCRYPTED_PLACEHOLDER

@@ -210,11 +210,19 @@ REST_FRAMEWORK = {
 }
 
 # JWT Settings
-JWT_ALGORITHM = os.environ.get('JWT_ALGORITHM', 'RS256')
+JWT_ALGORITHM = os.environ.get('JWT_ALGORITHM', 'RS256').upper().strip()
 JWT_ISSUER = os.environ.get('JWT_ISSUER', 'tprm-backend')
 JWT_AUDIENCE = os.environ.get('JWT_AUDIENCE', 'tprm-frontend')
 JWT_PRIVATE_KEY = os.environ.get('JWT_PRIVATE_KEY', '').replace('\\n', '\n')
 JWT_PUBLIC_KEY = os.environ.get('JWT_PUBLIC_KEY', '').replace('\\n', '\n')
+
+_JWT_ASYMMETRIC_ALGS = ('RS256', 'RS384', 'RS512', 'ES256', 'ES384', 'ES512')
+if not DEBUG and JWT_ALGORITHM not in _JWT_ASYMMETRIC_ALGS:
+    raise ValueError(
+        'Production requires asymmetric JWT (e.g. RS256). '
+        'Set JWT_ALGORITHM=RS256 and JWT_PRIVATE_KEY / JWT_PUBLIC_KEY. '
+        'HS256 is not allowed when DEBUG=False.'
+    )
 
 if JWT_ALGORITHM.startswith('RS') or JWT_ALGORITHM.startswith('ES'):
     if not JWT_PRIVATE_KEY or not JWT_PUBLIC_KEY:

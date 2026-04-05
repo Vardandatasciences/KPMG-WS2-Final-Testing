@@ -5487,6 +5487,15 @@ def login_user(request):
                 except Exception as retry_error:
                     logger.error(f"❌ CRITICAL: Retry also failed: {str(retry_error)}")
             
+            try:
+                from grc.utils.login_anomalies import record_login_security_events
+
+                record_login_security_events(
+                    user.UserId, request, "SESSION", username=getattr(user, "UserName", None)
+                )
+            except Exception as sec_ex:
+                logger.warning("login security audit hook failed: %s", sec_ex, exc_info=True)
+
             return Response(response_data)
             
         except Users.DoesNotExist:

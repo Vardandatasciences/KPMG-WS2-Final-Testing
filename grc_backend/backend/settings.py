@@ -349,6 +349,14 @@ SESSION_EXPIRE_AT_BROWSER_CLOSE = False  # Session persists after browser close
 SESSION_COOKIE_DOMAIN = None  # Use default domain
 SESSION_COOKIE_PATH = '/'  # Session cookie available for entire site
 
+# Django cache (rate limits, login anomaly baselines). Use Redis in production if multiple workers.
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "grc-default-locmem",
+    }
+}
+
 # CSRF cookie: Vue/axios reads csrftoken from document.cookie (see grc_frontend api.js xsrfCookieName).
 # Keep CSRF_COOKIE_HTTPONLY=False unless you serve the token via meta/header/API only.
 CSRF_COOKIE_HTTPONLY = _env_bool("CSRF_COOKIE_HTTPONLY", False)
@@ -370,6 +378,23 @@ RBAC_DECORATOR_BYPASS = True  # Bypass RBAC decorators temporarily to fix 403 er
 # Set ENABLE_DEBUG_LOGGING=true to enable DEBUG/INFO logs, false to disable (clean terminal)
 # -----------------------------------------------------------------------------
 ENABLE_DEBUG_LOGGING = os.environ.get("ENABLE_DEBUG_LOGGING", "false").lower() == "true"
+
+# -----------------------------------------------------------------------------
+# Security audit log: append-only file with SHA-256 hash chain (tamper detection).
+# Production: also ship this file to WORM / S3 Object Lock / immutable storage.
+# -----------------------------------------------------------------------------
+SECURITY_AUDIT_LOG_ENABLED = _env_bool("SECURITY_AUDIT_LOG_ENABLED", True)
+_logs_dir = BASE_DIR / "logs"
+_logs_dir.mkdir(exist_ok=True)
+SECURITY_AUDIT_LOG_PATH = str(
+    Path(os.environ.get("SECURITY_AUDIT_LOG_PATH", _logs_dir / "security_audit_chain.log")).resolve()
+)
+
+LOGIN_ANOMALY_DETECTION_ENABLED = _env_bool("LOGIN_ANOMALY_DETECTION_ENABLED", True)
+LOGIN_ANOMALY_MIN_BASELINE_LOGINS = int(os.environ.get("LOGIN_ANOMALY_MIN_BASELINE_LOGINS", "3"))
+LOGIN_ANOMALY_HOUR_TOLERANCE = int(os.environ.get("LOGIN_ANOMALY_HOUR_TOLERANCE", "4"))
+LOGIN_ANOMALY_REGION_WINDOW_SECONDS = int(os.environ.get("LOGIN_ANOMALY_REGION_WINDOW_SECONDS", "3600"))
+LOGIN_ANOMALY_BASELINE_TTL = int(os.environ.get("LOGIN_ANOMALY_BASELINE_TTL", str(86400 * 90)))
 
 # Log level: DEBUG when enabled, ERROR when disabled (suppresses DEBUG/INFO/WARNING)
 _DEBUG_LOG_LEVEL = "DEBUG" if ENABLE_DEBUG_LOGGING else "ERROR"
@@ -435,6 +460,18 @@ LOGGING = {
         'level': _DEBUG_LOG_LEVEL,
     },
 }
+
+if SECURITY_AUDIT_LOG_ENABLED:
+    LOGGING['handlers']['security_audit_chain'] = {
+        'level': 'INFO',
+        'class': 'grc.utils.integrity_log_handler.HashChainAppendOnlyFileHandler',
+        'filename': SECURITY_AUDIT_LOG_PATH,
+    }
+    LOGGING['loggers']['grc.security_audit'] = {
+        'handlers': ['security_audit_chain'],
+        'level': 'INFO',
+        'propagate': False,
+    }
 
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
@@ -632,7 +669,7 @@ SECURE_HSTS_SECONDS = 31536000 if not DEBUG else 0  # 1 year
 SECURE_HSTS_INCLUDE_SUBDOMAINS = True if not DEBUG else False
 SECURE_HSTS_PRELOAD = True if not DEBUG else False
 
-# JWT Settings
+# JWT Settings (default RS256 asymmetric; HS256 is not allowed when DEBUG is False)
 JWT_ALGORITHM = os.environ.get("JWT_ALGORITHM", "RS256").upper()
 JWT_ISSUER = os.environ.get("JWT_ISSUER", "grc-backend")
 JWT_AUDIENCE = os.environ.get("JWT_AUDIENCE", "grc-frontend")
@@ -640,6 +677,14 @@ JWT_AUDIENCE = os.environ.get("JWT_AUDIENCE", "grc-frontend")
 # Keys can be provided inline with \n in env vars.
 JWT_PRIVATE_KEY = os.environ.get("JWT_PRIVATE_KEY", "").replace("\\n", "\n")
 JWT_PUBLIC_KEY = os.environ.get("JWT_PUBLIC_KEY", "").replace("\\n", "\n")
+
+_JWT_ASYMMETRIC_ALGS = ("RS256", "RS384", "RS512", "ES256", "ES384", "ES512")
+if not DEBUG and JWT_ALGORITHM not in _JWT_ASYMMETRIC_ALGS:
+    raise ValueError(
+        "Production deployments must use asymmetric JWT (e.g. RS256). "
+        "Set JWT_ALGORITHM=RS256 and configure JWT_PRIVATE_KEY / JWT_PUBLIC_KEY. "
+        "Symmetric algorithms (HS256) are rejected when DEBUG=False."
+    )
 
 if JWT_ALGORITHM.startswith("RS") or JWT_ALGORITHM.startswith("ES"):
     if not JWT_PRIVATE_KEY or not JWT_PUBLIC_KEY:

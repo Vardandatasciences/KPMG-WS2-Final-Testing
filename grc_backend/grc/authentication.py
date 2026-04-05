@@ -1099,6 +1099,18 @@ def jwt_login(request):
         logger.info(f"JWT login successful for user {user.UserName} (ID: {user.UserId}) using {login_type}")
         logger.info(f"🔑 Session key created: {request.session.session_key}")
         
+        try:
+            from grc.utils.login_anomalies import record_login_security_events
+
+            record_login_security_events(
+                user.UserId,
+                request,
+                "JWT",
+                username=getattr(user, "UserName_plain", None) or getattr(user, "UserName", None),
+            )
+        except Exception as sec_ex:
+            logger.warning("login security audit hook failed: %s", sec_ex, exc_info=True)
+
         # Log successful login to grc_logs - DIRECT DATABASE SAVE (fallback if send_log fails)
         log_saved = False
         try:
@@ -2143,6 +2155,18 @@ def mfa_verify_otp(request):
             logger.error(f"Error logging successful MFA login to grc_logs: {str(log_error)}")
             # Don't fail login if logging fails
         
+        try:
+            from grc.utils.login_anomalies import record_login_security_events
+
+            record_login_security_events(
+                user.UserId,
+                request,
+                "JWT_MFA",
+                username=getattr(user, "UserName_plain", None) or getattr(user, "UserName", None),
+            )
+        except Exception as sec_ex:
+            logger.warning("login security audit hook failed: %s", sec_ex, exc_info=True)
+
         return Response({
             'status': 'success',
             'message': 'Login successful',
@@ -2754,6 +2778,18 @@ def google_oauth_callback(request):
             logger.error(f"Error logging successful Google SSO login to grc_logs: {str(log_error)}")
             # Don't fail login if logging fails
         
+        try:
+            from grc.utils.login_anomalies import record_login_security_events
+
+            record_login_security_events(
+                user.UserId,
+                request,
+                "GOOGLE_SSO",
+                username=getattr(user, "UserName_plain", None) or getattr(user, "UserName", None),
+            )
+        except Exception as sec_ex:
+            logger.warning("login security audit hook failed: %s", sec_ex, exc_info=True)
+
         # Assign default RBAC permissions for Google SSO users (view permissions for all modules)
         try:
             assign_default_rbac_permissions_for_google_sso(user)

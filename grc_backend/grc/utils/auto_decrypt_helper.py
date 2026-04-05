@@ -19,7 +19,7 @@ Usage:
 
 import logging
 from typing import List, Dict, Any, Optional
-from .data_encryption import decrypt_data, is_encrypted_data
+from .data_encryption import decrypt_data, is_encrypted_data, GCM_ENVELOPE_PREFIX
 from .encryption_config import get_encrypted_fields_for_model
 
 logger = logging.getLogger(__name__)
@@ -264,7 +264,19 @@ def decrypt_any_encrypted_value(value: Any) -> Any:
     
     if not isinstance(value, str):
         return value
-    
+
+    if value.startswith(GCM_ENVELOPE_PREFIX):
+        try:
+            decrypted = decrypt_data(value)
+            if decrypted and decrypted != value:
+                logger.debug(
+                    f"Decrypted GCM value (length: {len(value)} -> {len(decrypted)})"
+                )
+                return decrypted
+        except Exception:
+            pass
+        return value
+
     # Normalize corrupted prefix (e.g. BSAAAAA -> gAAAAA) then check
     value = _normalize_fernet_prefix(value)
     if not value.startswith('gAAAAA'):

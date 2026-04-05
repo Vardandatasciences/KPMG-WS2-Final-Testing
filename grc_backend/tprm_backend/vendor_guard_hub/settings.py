@@ -273,11 +273,19 @@ REST_FRAMEWORK = {
 }
 
 # JWT Configuration
-JWT_ALGORITHM = config('JWT_ALGORITHM', default='RS256')
+JWT_ALGORITHM = config('JWT_ALGORITHM', default='RS256').upper().strip()
 JWT_ISSUER = config('JWT_ISSUER', default='tprm-backend')
 JWT_AUDIENCE = config('JWT_AUDIENCE', default='tprm-frontend')
 JWT_PRIVATE_KEY = config('JWT_PRIVATE_KEY', default='').replace('\\n', '\n')
 JWT_PUBLIC_KEY = config('JWT_PUBLIC_KEY', default='').replace('\\n', '\n')
+
+_JWT_ASYMMETRIC_ALGS = ('RS256', 'RS384', 'RS512', 'ES256', 'ES384', 'ES512')
+if not DEBUG and JWT_ALGORITHM not in _JWT_ASYMMETRIC_ALGS:
+    raise ValueError(
+        'Production requires asymmetric JWT (e.g. RS256). '
+        'Set JWT_ALGORITHM=RS256 and JWT_PRIVATE_KEY / JWT_PUBLIC_KEY. '
+        'HS256 is not allowed when DEBUG=False.'
+    )
 
 if JWT_ALGORITHM.startswith('RS') or JWT_ALGORITHM.startswith('ES'):
     if not JWT_PRIVATE_KEY or not JWT_PUBLIC_KEY:
@@ -394,9 +402,8 @@ MFA_DEFAULT_FROM_EMAIL = config('MFA_DEFAULT_FROM_EMAIL', default='preethibejadu
 MFA_OTP_EXPIRY_MINUTES = config('MFA_OTP_EXPIRY_MINUTES', default=10, cast=int)
 MFA_MAX_ATTEMPTS = config('MFA_MAX_ATTEMPTS', default=3, cast=int)
 
-# JWT Settings for MFA
+# JWT Settings for MFA (uses JWT_ALGORITHM from JWT Configuration above)
 JWT_SECRET_KEY = config('JWT_SECRET_KEY', default=SECRET_KEY)
-JWT_ALGORITHM = config('JWT_ALGORITHM', default='RS256')
 JWT_EXPIRY_HOURS = config('JWT_EXPIRY_HOURS', default=24, cast=int)
 JWT_REFRESH_EXPIRY_DAYS = config('JWT_REFRESH_EXPIRY_DAYS', default=7, cast=int)
 
