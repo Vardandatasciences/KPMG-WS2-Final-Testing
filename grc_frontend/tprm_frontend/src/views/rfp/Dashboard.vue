@@ -286,7 +286,7 @@ const navigateToPhase = (phase: number) => {
   }
   
   const route = phaseRoutes[phase] || '/rfp-creation'
-  window.location.href = route
+  router.push(route)
 }
 </script>
 

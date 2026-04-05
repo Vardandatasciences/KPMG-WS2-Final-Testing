@@ -682,6 +682,9 @@
 <script setup lang="ts">
 import './RiskAnalytics.css'
 import { ref, computed, watch, onMounted, onUnmounted, reactive } from 'vue';
+import { useRouter } from 'vue-router';
+
+const router = useRouter();
 import { Download, RotateCcw, Search, Shield, ChevronDown, Check, RefreshCw, ChevronUp, CheckCircle, AlertTriangle, Info, ChevronLeft, ChevronRight } from "lucide-vue-next";
 import { useNotifications } from '@/composables/useNotifications';
 import { PopupService } from '@/popup/popupService';
@@ -755,7 +758,11 @@ async function handleResponse<T>(response: Response): Promise<T> {
         }));
         
         // Redirect to access denied page
-        window.location.href = '/access-denied';
+        if (router) {
+          router.push('/access-denied')
+        } else {
+          window.location.href = '/access-denied'
+        }
       } catch (e) {
         // If JSON parsing fails, just redirect with generic message
         sessionStorage.setItem('access_denied_error', JSON.stringify({
@@ -764,7 +771,11 @@ async function handleResponse<T>(response: Response): Promise<T> {
           timestamp: new Date().toISOString(),
           path: window.location.pathname
         }));
-        window.location.href = '/access-denied';
+        if (router) {
+          router.push('/access-denied')
+        } else {
+          window.location.href = '/access-denied'
+        }
       }
     }
     

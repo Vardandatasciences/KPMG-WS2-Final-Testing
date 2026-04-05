@@ -7,6 +7,7 @@ const API_BASE_URL = getApiOrigin()
 const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 20000,
+  withCredentials: true,  // Send cookies for same-origin requests
 })
 
 // Add JWT authentication to all requests (except public endpoints)
@@ -23,7 +24,13 @@ api.interceptors.request.use(
                              (config.url?.includes('remove_file') && isOnPublicQuestionnairePage)
     
     if (!isPublicEndpoint) {
-      const token = localStorage.getItem('session_token')
+      // Read token from sessionStorage (synced from GRC parent via postMessage)
+      // Check multiple possible keys to be robust
+      const token = sessionStorage.getItem('access_token') ||
+                    sessionStorage.getItem('session_token') ||
+                    sessionStorage.getItem('accessToken') ||
+                    localStorage.getItem('access_token') ||
+                    localStorage.getItem('session_token')
       if (token) {
         config.headers.Authorization = `Bearer ${token}`
       }
@@ -64,10 +71,16 @@ api.interceptors.response.use(
       
       // Handle 401 Unauthorized (but NOT for public endpoints)
       if (error.response.status === 401 && !isPublicEndpoint) {
-        console.error('[API] Authentication failed - redirecting to login')
-        localStorage.removeItem('session_token')
-        localStorage.removeItem('user')
-        window.location.href = '/login'
+        console.error('[API] Authentication failed - redirecting via parent shell')
+        
+        // Use message-based redirect for iframe context
+        const isInIframe = window.self !== window.top
+        if (isInIframe && window.parent) {
+          window.parent.postMessage({ type: 'TPRM_REDIRECT_TO_LOGIN' }, '*')
+        } else if (window.location.pathname !== '/login') {
+          // Fallback if not in iframe (unlikely in this architecture)
+          window.location.href = '/login'
+        }
       }
       // Handle 403 Forbidden
       else if (error.response.status === 403) {

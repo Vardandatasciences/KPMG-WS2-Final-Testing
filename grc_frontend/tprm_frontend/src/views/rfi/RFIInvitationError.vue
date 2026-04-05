@@ -172,7 +172,7 @@ function closeWindow() {
   window.close()
   // If window.close() doesn't work (some browsers block it), redirect to home
   setTimeout(() => {
-    window.location.href = '/'
+    router.push('/')
   }, 100)
 }
 </script>

@@ -3,6 +3,7 @@ import { getTprmApiBaseUrl } from '@/utils/backendEnv'
 
 const api = axios.create({
   baseURL: getTprmApiBaseUrl(),
+  withCredentials: true, // Support session cookies
   headers: {
     'Content-Type': 'application/json',
   },
@@ -11,7 +12,12 @@ const api = axios.create({
 // Add request interceptor to inject JWT token
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('session_token')
+    // Standard token retrieval: check sessionStorage first (populated by GRC parent)
+    const token = sessionStorage.getItem('access_token') || 
+                  sessionStorage.getItem('session_token') ||
+                  localStorage.getItem('session_token') ||
+                  localStorage.getItem('auth_token') || 
+                  localStorage.getItem('access_token')
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
@@ -31,25 +37,33 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       // Session expired or invalid
       localStorage.removeItem('session_token')
+      localStorage.removeItem('access_token')
+      localStorage.removeItem('refresh_token')
       localStorage.removeItem('current_user')
-      window.location.href = '/login'
+      
+      // If in iframe, request auth from GRC parent
+      const isInIframe = window.self !== window.top
+      if (isInIframe && window.parent) {
+        window.parent.postMessage({ type: 'TPRM_REDIRECT_TO_LOGIN' }, '*')
+      } else if (window.location.pathname !== '/login') {
+        window.location.href = '/login'
+      }
     } else if (error.response?.status === 403) {
       // Permission denied - RBAC check failed
-      const errorMessage = error.response?.data?.error || error.response?.data?.message || 'You do not have permission to access this resource.'
-      const errorCode = error.response?.data?.code || '403'
+      // Removed auto-redirect to prevent loops; individual components handle 403.
+      const errorData = error.response.data
+      const errorMessage = errorData?.error || errorData?.message || 'You do not have permission to access this resource.'
+      const errorCode = errorData?.code || '403'
       
-      // Store error info in sessionStorage so the AccessDenied page can display it
+      console.warn('[api_contract] 403 Forbidden:', errorMessage, error.config?.url)
+      
+      // Store error info in sessionStorage for optional display by components
       sessionStorage.setItem('access_denied_error', JSON.stringify({
         message: errorMessage,
         code: errorCode,
         timestamp: new Date().toISOString(),
         path: window.location.pathname
       }))
-      
-      // Redirect to access denied page
-      if (window.location.pathname !== '/access-denied') {
-        window.location.href = '/access-denied'
-      }
     }
     return Promise.reject(error)
   }

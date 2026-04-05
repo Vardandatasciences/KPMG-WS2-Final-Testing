@@ -45,8 +45,14 @@ authApi.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       // Token expired or invalid
+      console.warn('[TPRM Auth] 401 Unauthorized - redirecting via parent shell')
       clearSensitive()
-      if (window.location.pathname !== '/login') {
+      
+      // Notify parent GRC context to handle the login redirect
+      const isInIframe = window.self !== window.top
+      if (isInIframe && window.parent) {
+        window.parent.postMessage({ type: 'TPRM_REDIRECT_TO_LOGIN' }, '*')
+      } else if (window.location.pathname !== '/login') {
         window.location.href = '/login'
       }
     }

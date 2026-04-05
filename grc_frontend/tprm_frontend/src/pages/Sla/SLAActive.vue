@@ -248,6 +248,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -437,6 +438,6 @@ const viewSLADetails = async (slaId) => {
   // Log action
   await loggingService.logPageView('SLA', 'SLA Details', slaId)
   // Navigate to SLA details page
-  window.location.href = `/slas/${slaId}`
+  router.push(`/slas/${slaId}`)
 }
 </script>

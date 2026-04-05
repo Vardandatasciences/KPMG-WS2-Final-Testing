@@ -957,6 +957,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { InfoIcon, TrendingUp } from 'lucide-vue-next'
 import axios from 'axios'
 import { useRfpApi } from '@/composables/useRfpApi'
@@ -974,6 +975,7 @@ const { showSuccess, showError, showWarning, showInfo } = useNotifications()
 
 // Get authenticated headers for API calls
 const { getAuthHeaders } = useRfpApi()
+const router = useRouter()
 
 const summaryKPIs = ref([
   { 
@@ -1059,7 +1061,7 @@ const fetchKPISummary = async () => {
         path: window.location.pathname
       }))
       console.log('🔄 Redirecting to /access-denied page...')
-      window.location.href = '/access-denied'
+      router.push('/access-denied')
       return
     }
     
@@ -1183,7 +1185,7 @@ const fetchRFPCreationRate = async (timeline = '6M') => {
         path: window.location.pathname
       }))
       console.log('🔄 Redirecting to /access-denied page...')
-      window.location.href = '/access-denied'
+      router.push('/access-denied')
       return
     }
     
@@ -1282,7 +1284,7 @@ const fetchRFPApprovalTime = async (timeline = '6M') => {
         path: window.location.pathname
       }))
       console.log('🔄 Redirecting to /access-denied page...')
-      window.location.href = '/access-denied'
+      router.push('/access-denied')
       return
     }
     
@@ -1324,7 +1326,7 @@ const fetchFirstTimeApprovalRate = async () => {
         path: window.location.pathname
       }))
       console.log('🔄 Redirecting to /access-denied page...')
-      window.location.href = '/access-denied'
+      router.push('/access-denied')
       return
     }
     
@@ -1400,7 +1402,7 @@ const fetchApprovalStagePerformance = async () => {
         path: window.location.pathname
       }))
       console.log('🔄 Redirecting to /access-denied page...')
-      window.location.href = '/access-denied'
+      router.push('/access-denied')
       return
     }
     
@@ -1497,7 +1499,7 @@ const fetchRFPLifecycleTime = async () => {
         path: window.location.pathname
       }))
       console.log('🔄 Redirecting to /access-denied page...')
-      window.location.href = '/access-denied'
+      router.push('/access-denied')
       return
     }
     
@@ -1591,7 +1593,7 @@ const fetchNewVsExistingVendors = async () => {
         path: window.location.pathname
       }))
       console.log('🔄 Redirecting to /access-denied page...')
-      window.location.href = '/access-denied'
+      router.push('/access-denied')
       return
     }
     
@@ -1678,7 +1680,7 @@ const fetchReviewerWorkload = async () => {
         path: window.location.pathname
       }))
       console.log('🔄 Redirecting to /access-denied page...')
-      window.location.href = '/access-denied'
+      router.push('/access-denied')
       return
     }
     
@@ -1740,7 +1742,7 @@ const fetchCompletionTime = async () => {
         path: window.location.pathname
       }))
       console.log('🔄 Redirecting to /access-denied page...')
-      window.location.href = '/access-denied'
+      router.push('/access-denied')
       return
     }
     
@@ -1814,7 +1816,7 @@ const fetchEvaluatorConsistency = async () => {
         path: window.location.pathname
       }))
       console.log('🔄 Redirecting to /access-denied page...')
-      window.location.href = '/access-denied'
+      router.push('/access-denied')
       return
     }
     
@@ -1899,7 +1901,7 @@ const fetchVendorResponseRate = async () => {
         path: window.location.pathname
       }))
       console.log('🔄 Redirecting to /access-denied page...')
-      window.location.href = '/access-denied'
+      router.push('/access-denied')
       return
     }
     
@@ -1992,7 +1994,7 @@ const fetchCategoryPerformance = async () => {
         path: window.location.pathname
       }))
       console.log('🔄 Redirecting to /access-denied page...')
-      window.location.href = '/access-denied'
+      router.push('/access-denied')
       return
     }
     
@@ -2069,7 +2071,7 @@ const fetchAwardAcceptanceRate = async () => {
         path: window.location.pathname
       }))
       console.log('🔄 Redirecting to /access-denied page...')
-      window.location.href = '/access-denied'
+      router.push('/access-denied')
       return
     }
     
@@ -2132,7 +2134,7 @@ const fetchVendorConversionFunnel = async () => {
         path: window.location.pathname
       }))
       console.log('🔄 Redirecting to /access-denied page...')
-      window.location.href = '/access-denied'
+      router.push('/access-denied')
       return
     }
     
@@ -2209,7 +2211,7 @@ const fetchConsensusQuality = async () => {
         path: window.location.pathname
       }))
       console.log('🔄 Redirecting to /access-denied page...')
-      window.location.href = '/access-denied'
+      router.push('/access-denied')
       return
     }
     
@@ -2288,7 +2290,7 @@ const fetchScoreDistribution = async () => {
         path: window.location.pathname
       }))
       console.log('🔄 Redirecting to /access-denied page...')
-      window.location.href = '/access-denied'
+      router.push('/access-denied')
       return
     }
     
@@ -2354,7 +2356,7 @@ const fetchCriteriaEffectiveness = async () => {
         path: window.location.pathname
       }))
       console.log('🔄 Redirecting to /access-denied page...')
-      window.location.href = '/access-denied'
+      router.push('/access-denied')
       return
     }
     
@@ -2419,7 +2421,7 @@ const fetchBudgetVariance = async () => {
         path: window.location.pathname
       }))
       console.log('🔄 Redirecting to /access-denied page...')
-      window.location.href = '/access-denied'
+      router.push('/access-denied')
       return
     }
     
@@ -2517,7 +2519,7 @@ const fetchPriceSpread = async () => {
         path: window.location.pathname
       }))
       console.log('🔄 Redirecting to /access-denied page...')
-      window.location.href = '/access-denied'
+      router.push('/access-denied')
       return
     }
     
@@ -2638,7 +2640,7 @@ const fetchProcessFunnel = async () => {
         path: window.location.pathname
       }))
       console.log('🔄 Redirecting to /access-denied page...')
-      window.location.href = '/access-denied'
+      router.push('/access-denied')
       return
     }
     

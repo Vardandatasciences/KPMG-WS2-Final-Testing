@@ -13,11 +13,9 @@
           <RefreshCw class="h-4 w-4 mr-2" :class="{ 'animate-spin': loading }" />
           Refresh
         </Button>
-        <Button as-child class="gradient-primary">
-          <a href="/rfp-creation">
-            <Plus class="h-4 w-4 mr-2" />
-            Create New RFP
-          </a>
+        <Button @click="router.push('/rfp-creation')" class="gradient-primary">
+          <Plus class="h-4 w-4 mr-2" />
+          Create New RFP
         </Button>
       </div>
     </div>
@@ -154,11 +152,9 @@
           <p class="text-muted-foreground mb-4">
             {{ searchQuery || statusFilter || typeFilter ? 'No RFPs match your current filters.' : 'You haven\'t created any RFPs yet.' }}
           </p>
-          <Button as-child>
-            <a href="/rfp-creation">
-              <Plus class="h-4 w-4 mr-2" />
-              Create Your First RFP
-            </a>
+          <Button @click="router.push('/rfp-creation')">
+            <Plus class="h-4 w-4 mr-2" />
+            Create Your First RFP
           </Button>
         </div>
       </Card>
@@ -849,7 +845,7 @@ const handleRFPSaved = (updatedRFP) => {
 const goToConsensusAndAward = (rfp) => {
   const rfpId = rfp.id || rfp.rfp_id
   if (rfpId) {
-    window.location.href = `/rfp-consensus?rfp_id=${rfpId}`
+    router.push({ path: '/rfp-consensus', query: { rfp_id: rfpId } })
   } else {
     showError('Unable to navigate: RFP ID not found')
   }

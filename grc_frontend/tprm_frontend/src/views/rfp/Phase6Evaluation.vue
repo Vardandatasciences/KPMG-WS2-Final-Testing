@@ -15,18 +15,18 @@
         </p>
       </div>
             <div class="flex items-center gap-3 mt-4 md:mt-0">
-              <a href="/rfp-url-generation" class="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-all duration-200 shadow-sm">
+              <button @click="router.push('/rfp-url-generation')" class="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-all duration-200 shadow-sm">
                 <Icons name="arrow-left" class="h-4 w-4 mr-2" />
                 Previous
-              </a>
+              </button>
               <button @click="navigateToMyApprovals" class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-purple-600 to-indigo-600 border border-transparent rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-all duration-200 shadow-lg">
                 <Icons name="clipboard-check" class="h-4 w-4 mr-2" />
                 My Approvals
               </button>
-              <a href="/rfp-comparison" class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-indigo-600 border border-transparent rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg">
+              <button @click="navigateToComparison" class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-indigo-600 border border-transparent rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg">
                 Next
                 <Icons name="arrow-right" class="h-4 w-4 ml-2" />
-        </a>
+              </button>
       </div>
     </div>
         </div>
@@ -829,7 +829,8 @@ const navigateToComparison = () => {
       query: { rfp_id: selectedRFP.value }
     }).catch(err => {
       console.error('Navigation error:', err)
-      window.location.href = `/rfp-comparison?rfp_id=${selectedRFP.value}`
+      // If push fails, showing an error is better than a full page reload loop
+      showError('Navigation failed. Please try again.')
     })
   } else {
     PopupService.warning('Please select an RFP first.', 'No RFP Selected')
@@ -879,8 +880,8 @@ onMounted(async () => {
       
     } catch (error) {
       console.error('Error loading proposal for evaluation:', error);
-      PopupService.error('Failed to load proposal data. Returning to approvals.', 'Loading Failed');
-      window.location.href = '/my-approvals';
+      showError('Failed to load proposal data. Returning to approvals.');
+      router.push('/my-approvals');
     }
   } else {
     // Regular flow - load initial data

@@ -32,6 +32,7 @@ class RfpApiClient {
     return axios.create({
       baseURL: this.config.baseURL,
       timeout: this.config.timeout,
+      withCredentials: true, // Support session cookies
       headers: {
         'Content-Type': 'application/json',
         'X-Requested-With': 'XMLHttpRequest'
@@ -43,14 +44,17 @@ class RfpApiClient {
     // Request interceptor for security
     this.client.interceptors.request.use(
       (config) => {
-        // Add authentication token if available (from instance or localStorage)
+        // Standard token retrieval: check sessionStorage first (populated by GRC parent)
         const token = this.authToken || 
-                      localStorage.getItem('session_token') || 
-                      localStorage.getItem('auth_token') || 
-                      localStorage.getItem('access_token')
-        if (token) {
-          config.headers.Authorization = `Bearer ${token}`
-        }
+                      sessionStorage.getItem('access_token') || 
+                      sessionStorage.getItem('session_token') ||
+                      sessionStorage.getItem('accessToken') ||
+                      localStorage.getItem('access_token') || 
+                      localStorage.getItem('session_token') ||
+                      localStorage.getItem('authToken')
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`
+      }
 
         // Sanitize request data
         if (config.data) {
@@ -81,36 +85,35 @@ class RfpApiClient {
       (error) => {
         // Handle 401 Unauthorized
         if (error.response?.status === 401) {
-          localStorage.removeItem('auth_token')
+          console.error('[RfpApiClient] 401 Unauthorized - redirecting via parent shell')
+          
+          // Clear local sensitive data
           localStorage.removeItem('session_token')
           localStorage.removeItem('access_token')
-          localStorage.removeItem('refresh_token')
           localStorage.removeItem('current_user')
           
-          if (window.location.pathname !== '/login') {
+          // Notify parent GRC shell
+          const isInIframe = window.self !== window.top
+          if (isInIframe && window.parent) {
+            window.parent.postMessage({ type: 'TPRM_REDIRECT_TO_LOGIN' }, '*')
+          } else if (window.location.pathname !== '/login') {
             window.location.href = '/login'
           }
         }
         
         // Handle 403 Forbidden
+        // Removed auto-redirect to prevent loops; individual components handle 403.
         if (error.response?.status === 403) {
           const errorData = error.response.data
           const errorMessage = errorData?.error || errorData?.message || 'You do not have permission to access this resource.'
-          const errorCode = errorData?.code || '403'
+          console.warn('[RfpApiClient] 403 Forbidden:', errorMessage, error.config?.url)
           
           sessionStorage.setItem('access_denied_error', JSON.stringify({
             message: errorMessage,
-            code: errorCode,
+            code: errorData?.code || '403',
             timestamp: new Date().toISOString(),
             path: window.location.pathname
           }))
-          
-          if (window.location.pathname !== '/access-denied') {
-            console.log('🔄 Redirecting to /access-denied page...')
-            window.location.href = '/access-denied'
-            // Return a promise that never resolves to stop execution
-            return new Promise(() => {})
-          }
         }
         
         return Promise.reject(this.handleError(error))

@@ -5,6 +5,7 @@ const API_BASE_URL = process.env.VUE_APP_API_URL || 'http://localhost:3001/api'
 // Create axios instance with default config
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
+  withCredentials: true, // Support session cookies
   headers: {
     'Content-Type': 'application/json',
   },
@@ -13,8 +14,12 @@ const apiClient = axios.create({
 // Add request interceptor to handle authentication
 apiClient.interceptors.request.use(
   (config) => {
-    // Add JWT token from localStorage (using session_token key)
-    const token = localStorage.getItem('session_token')
+    // Standard token retrieval: check sessionStorage first (populated by GRC parent)
+    const token = sessionStorage.getItem('access_token') || 
+                  sessionStorage.getItem('session_token') ||
+                  localStorage.getItem('session_token') ||
+                  localStorage.getItem('auth_token') || 
+                  localStorage.getItem('access_token')
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
@@ -39,22 +44,26 @@ apiClient.interceptors.response.use(
       localStorage.removeItem('refresh_token')
       localStorage.removeItem('current_user')
       
-      // Redirect to login if not already there
-      if (window.location.pathname !== '/login' && !window.location.pathname.includes('/vendor-login')) {
+      // If in iframe, request auth from GRC parent
+      const isInIframe = window.self !== window.top
+      if (isInIframe && window.parent) {
+        window.parent.postMessage({ type: 'TPRM_REDIRECT_TO_LOGIN' }, '*')
+      } else if (window.location.pathname !== '/login' && !window.location.pathname.includes('/vendor-login')) {
         window.location.href = '/login'
       }
     }
     
     // Handle 403 Forbidden - permission denied
+    // Removed auto-redirect to prevent loops; individual components handle 403.
     if (error.response?.status === 403) {
       const errorData = error.response.data
       const errorMessage = errorData?.error || errorData?.message || 'You do not have permission to access this resource.'
       const errorCode = errorData?.code || '403'
       const permissionType = errorData?.permission_type || 'unknown'
       
-      console.error(`[VendorService] Permission denied: ${permissionType}`, error.response.data)
+      console.warn(`[VendorService] Permission denied: ${permissionType}`, error.response.data)
       
-      // Store error info in sessionStorage so AccessDenied page can display it
+      // Store error info in sessionStorage for optional display by components
       sessionStorage.setItem('access_denied_error', JSON.stringify({
         message: errorMessage,
         code: errorCode,
@@ -63,12 +72,6 @@ apiClient.interceptors.response.use(
         permission: permissionType,
         permissionRequired: permissionType
       }))
-      
-      // Redirect to access denied page
-      if (window.location.pathname !== '/access-denied') {
-        console.log('🔄 Redirecting to /access-denied page...')
-        window.location.href = '/access-denied'
-      }
     }
     
     return Promise.reject(error)

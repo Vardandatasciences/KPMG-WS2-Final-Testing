@@ -100,7 +100,12 @@ export class AuthManager {
   logout() {
     this.removeToken();
     // Redirect to login page
-    window.location.href = '/login';
+    const isInIframe = window.self !== window.top
+    if (isInIframe && window.parent) {
+      window.parent.postMessage({ type: 'TPRM_REDIRECT_TO_LOGIN' }, '*')
+    } else {
+      window.location.href = '/login';
+    }
   }
   
   isAuthenticated() {
@@ -426,11 +431,13 @@ export function initializeSecurity() {
     });
   });
   
-  // Prevent clickjacking
+  // Prevent clickjacking - DISABLED for GRC iframe integration
+  /*
   if (window.top !== window.self) {
     document.body.style.display = 'none';
     SecurityLogger.logSecurityEvent('clickjacking_attempt', {});
   }
+  */
 }
 
 // Export singleton instances

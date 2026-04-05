@@ -39,8 +39,12 @@ export const useQuestionnaireStore = defineStore('questionnaire', () => {
   // Helper function for API calls with JWT authentication
   const apiCall = async (url, options = {}) => {
     try {
-      // Get JWT token from localStorage
-      const token = localStorage.getItem('session_token')
+      // Standard token retrieval: check sessionStorage first (populated by GRC parent)
+      const token = sessionStorage.getItem('access_token') || 
+                    sessionStorage.getItem('session_token') ||
+                    localStorage.getItem('session_token') ||
+                    localStorage.getItem('auth_token') || 
+                    localStorage.getItem('access_token')
       
       const response = await fetch(url, {
         headers: {
@@ -54,11 +58,17 @@ export const useQuestionnaireStore = defineStore('questionnaire', () => {
 
       // Handle 401 Unauthorized
       if (response.status === 401) {
+        // Clear local auth data
         localStorage.removeItem('session_token')
         localStorage.removeItem('access_token')
         localStorage.removeItem('refresh_token')
         localStorage.removeItem('current_user')
-        if (window.location.pathname !== '/login') {
+        
+        // If in iframe, request auth from GRC parent
+        const isInIframe = window.self !== window.top
+        if (isInIframe && window.parent) {
+          window.parent.postMessage({ type: 'TPRM_REDIRECT_TO_LOGIN' }, '*')
+        } else if (window.location.pathname !== '/login') {
           window.location.href = '/login'
         }
         throw new Error('Authentication required')
@@ -68,15 +78,17 @@ export const useQuestionnaireStore = defineStore('questionnaire', () => {
       if (response.status === 403) {
         const errorData = await response.json().catch(() => ({}))
         const errorMessage = errorData?.error || errorData?.message || 'You do not have permission to access this resource.'
+        console.warn('[QuestionnaireStore] 403 Forbidden:', errorMessage, url)
+        
+        // Store error info in sessionStorage for optional display by components
         sessionStorage.setItem('access_denied_error', JSON.stringify({
           message: errorMessage,
           code: '403',
           timestamp: new Date().toISOString(),
           path: window.location.pathname
         }))
-        if (window.location.pathname !== '/access-denied') {
-          window.location.href = '/access-denied'
-        }
+        
+        // Removed auto-redirect to prevent loops; individual components handle 403.
         throw new Error(errorMessage)
       }
 

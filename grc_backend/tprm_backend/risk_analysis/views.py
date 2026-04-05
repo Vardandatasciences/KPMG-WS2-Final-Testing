@@ -32,75 +32,9 @@ from tprm_backend.core.tenant_utils import (
     tenant_filter
 )
 
+from tprm_backend.utils.authentication import JWTAuthentication, SimpleAuthenticatedPermission
+
 logger = logging.getLogger(__name__)
-
-
-class SimpleAuthenticatedPermission(BasePermission):
-    """Custom permission class that checks for authenticated users"""
-    def has_permission(self, request, view):
-        # Check if user is authenticated
-        return bool(
-            request.user and 
-            hasattr(request.user, 'userid') and
-            getattr(request.user, 'is_authenticated', False)
-        )
-
-
-class JWTAuthentication(BaseAuthentication):
-    """Custom JWT authentication class for DRF"""
-    def authenticate(self, request):
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return None
-        
-        try:
-            token = auth_header.split(' ')[1]
-            verification_key = getattr(settings, 'JWT_VERIFYING_KEY', None) or getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
-            payload = jwt.decode(
-                token,
-                verification_key,
-                algorithms=getattr(settings, 'JWT_ALLOWED_ALGORITHMS', [getattr(settings, 'JWT_ALGORITHM', 'RS256')]),
-                issuer=getattr(settings, 'JWT_ISSUER', None),
-                audience=getattr(settings, 'JWT_AUDIENCE', None),
-            )
-            user_id = payload.get('user_id')
-            
-            if user_id:
-                try:
-                    from mfa_auth.models import User
-                    user = User.objects.get(userid=user_id)
-                    # Add is_authenticated attribute for DRF compatibility
-                    user.is_authenticated = True
-                    return (user, token)
-                except ImportError:
-                    # If User model import fails, create a mock user
-                    logger.warning(f"User model import failed, creating mock user for user_id: {user_id}")
-                    class MockUser:
-                        def __init__(self, user_id):
-                            self.userid = user_id
-                            self.username = f"user_{user_id}"
-                            self.is_authenticated = True
-                    
-                    return (MockUser(user_id), token)
-                except Exception as e:
-                    # If User model doesn't exist or other error, create a mock user
-                    logger.warning(f"User {user_id} not found or error: {e}, creating mock user")
-                    class MockUser:
-                        def __init__(self, user_id):
-                            self.userid = user_id
-                            self.username = f"user_{user_id}"
-                            self.is_authenticated = True
-                    
-                    return (MockUser(user_id), token)
-        except jwt.ExpiredSignatureError:
-            logger.warning("JWT token expired")
-            return None
-        except jwt.InvalidTokenError:
-            logger.warning("Invalid JWT token")
-            return None
-        except Exception as e:
-            logger.error(f"JWT authentication error: {str(e)}")
-            return None
 
 
 # Removed TPRMModuleViewSet and ModuleDataViewSet - using entity-data-row approach

@@ -113,10 +113,22 @@ export default {
       const refreshToken = response.data.refresh_token
 
       // Cookie-first: backend sets HttpOnly cookies for access/refresh tokens.
-      // Do not store tokens in browser storage.
-      removeSensitive('session_token')
-      removeSensitive('access_token')
-      removeSensitive('refresh_token')
+      // BUT: We must also store in sessionStorage so TprmWrapper can pass token to TPRM iframe.
+      // GRC API calls use cookies; TPRM iframe receives token via postMessage.
+      if (token) {
+        sessionStorage.setItem('access_token', token)
+        localStorage.removeItem('access_token')
+      } else {
+        sessionStorage.removeItem('access_token')
+      }
+      if (refreshToken) {
+        sessionStorage.setItem('refresh_token', refreshToken)
+        localStorage.removeItem('refresh_token')
+      } else {
+        sessionStorage.removeItem('refresh_token')
+      }
+      sessionStorage.removeItem('session_token')
+      localStorage.removeItem('session_token')
       if (response.data.user) {
         setSensitive('current_user', JSON.stringify(response.data.user))
         const uid =
@@ -511,10 +523,21 @@ export default {
         const token = response.data.access_token
         const refreshToken = response.data.refresh_token
  
-        // Cookie-first: backend sets HttpOnly cookies. Do not store tokens in browser storage.
-        removeSensitive('session_token')
-        removeSensitive('access_token')
-        removeSensitive('refresh_token')
+        // Cookie-first: backend sets HttpOnly cookies. But also store in sessionStorage for TPRM iframe.
+        if (token) {
+          sessionStorage.setItem('access_token', token)
+          localStorage.removeItem('access_token')
+        } else {
+          sessionStorage.removeItem('access_token')
+        }
+        if (refreshToken) {
+          sessionStorage.setItem('refresh_token', refreshToken)
+          localStorage.removeItem('refresh_token')
+        } else {
+          sessionStorage.removeItem('refresh_token')
+        }
+        sessionStorage.removeItem('session_token')
+        localStorage.removeItem('session_token')
         if (response.data.user) {
           setSensitive('current_user', JSON.stringify(response.data.user))
           const uid =

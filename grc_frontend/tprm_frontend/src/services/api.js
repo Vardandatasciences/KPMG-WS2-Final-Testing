@@ -13,14 +13,18 @@ const clearLegacyTokens = () => {
   })
 }
 
-const getToken = () => null
-const getRefreshToken = () => null
-const setTokenPair = () => {
-  // no-op (cookie based)
+const getAuthToken = () => {
+  return sessionStorage.getItem('access_token') || 
+         sessionStorage.getItem('session_token') ||
+         localStorage.getItem('session_token') ||
+         localStorage.getItem('auth_token') || 
+         localStorage.getItem('access_token')
 }
+
 const clearSensitiveAuth = () => {
   clearLegacyTokens()
 }
+
 const markSessionInvalidated = () => {
   localStorage.setItem('auth_logout_reason', 'session_invalidated')
 }
@@ -48,9 +52,12 @@ class APIService {
 
   async request(endpoint, options = {}) {
     const url = `${this.baseURL}${endpoint}`;
+    const token = getAuthToken();
+    
     let config = {
       headers: {
         'Content-Type': 'application/json',
+        ...(token && { 'Authorization': `Bearer ${token}` }),
         ...options.headers,
       },
       credentials: 'include',
@@ -80,8 +87,14 @@ class APIService {
         // 401 = Unauthorized (invalid/missing token) → redirect to GRC login
         if (response.status === 401) {
           clearSensitiveAuth();
-          // NO REDIRECT - Let pages handle errors themselves
-          console.log('[APIService] 401 Unauthorized - pages will handle this');
+          // Use standardized postMessage redirect for iframe context
+          const isInIframe = window.self !== window.top
+          if (isInIframe && window.parent) {
+            console.warn('[APIService] 401 Unauthorized - requesting redirect via parent shell');
+            window.parent.postMessage({ type: 'TPRM_REDIRECT_TO_LOGIN' }, '*')
+          } else if (window.location.pathname !== '/login') {
+            window.location.href = '/login'
+          }
           throw new Error(`HTTP error! status: ${response.status}`);
         }
         
@@ -108,9 +121,12 @@ class APIService {
 
   async slaRequest(endpoint, options = {}) {
     const url = `${this.slaURL}${endpoint}`;
+    const token = getAuthToken();
+    
     const config = {
       headers: {
         'Content-Type': 'application/json',
+        ...(token && { 'Authorization': `Bearer ${token}` }),
         ...options.headers,
       },
       credentials: 'include',
@@ -137,8 +153,15 @@ class APIService {
         // 401 = Unauthorized (invalid/missing token) → redirect to GRC login
         if (response.status === 401) {
           clearSensitiveAuth();
-          // NO REDIRECT - Let pages handle errors themselves
-          console.log('[APIService] 401 Unauthorized - pages will handle this');
+          
+          // Use standardized postMessage redirect for iframe context
+          const isInIframe = window.self !== window.top
+          if (isInIframe && window.parent) {
+            console.warn('[APIService] 401 Unauthorized in SLA - requesting redirect via parent shell');
+            window.parent.postMessage({ type: 'TPRM_REDIRECT_TO_LOGIN' }, '*')
+          } else if (window.location.pathname !== '/login') {
+            window.location.href = '/login'
+          }
           const error = new Error(`HTTP error! status: ${response.status}`);
           error.response = { status: response.status, data: errorData, text: errorText };
           throw error;
@@ -179,9 +202,12 @@ class APIService {
   async auditsRequest(endpoint, options = {}) {
     const { allow404 = false, ...fetchOptions } = options;
     const url = `${this.auditsURL}${endpoint}`;
+    const token = getAuthToken();
+    
     const config = {
       headers: {
         'Content-Type': 'application/json',
+        ...(token && { 'Authorization': `Bearer ${token}` }),
         ...fetchOptions.headers,
       },
       credentials: 'include',
@@ -199,8 +225,14 @@ class APIService {
         // 401 = Unauthorized (invalid/missing token) → redirect to GRC login
         if (response.status === 401) {
           clearSensitiveAuth();
-          // NO REDIRECT - Let pages handle errors themselves
-          console.log('[APIService] 401 Unauthorized - pages will handle this');
+          // Use standardized postMessage redirect for iframe context
+          const isInIframe = window.self !== window.top
+          if (isInIframe && window.parent) {
+            console.warn('[APIService] 401 Unauthorized - requesting redirect via parent shell');
+            window.parent.postMessage({ type: 'TPRM_REDIRECT_TO_LOGIN' }, '*')
+          } else if (window.location.pathname !== '/login') {
+            window.location.href = '/login'
+          }
           throw new Error(`HTTP error! status: ${response.status}`);
         }
         
@@ -229,9 +261,12 @@ class APIService {
 
   async notificationsRequest(endpoint, options = {}) {
     const url = `${this.notificationsURL}${endpoint}`;
+    const token = getAuthToken();
+    
     let config = {
       headers: {
         'Content-Type': 'application/json',
+        ...(token && { 'Authorization': `Bearer ${token}` }),
         ...options.headers,
       },
       credentials: 'include',
@@ -261,8 +296,14 @@ class APIService {
         // 401 = Unauthorized (invalid/missing token) → redirect to GRC login
         if (response.status === 401) {
           clearSensitiveAuth();
-          // NO REDIRECT - Let pages handle errors themselves
-          console.log('[APIService] 401 Unauthorized - pages will handle this');
+          // Use standardized postMessage redirect for iframe context
+          const isInIframe = window.self !== window.top
+          if (isInIframe && window.parent) {
+            console.warn('[APIService] 401 Unauthorized - requesting redirect via parent shell');
+            window.parent.postMessage({ type: 'TPRM_REDIRECT_TO_LOGIN' }, '*')
+          } else if (window.location.pathname !== '/login') {
+            window.location.href = '/login'
+          }
           throw new Error(`HTTP error! status: ${response.status}`);
         }
         
@@ -1644,6 +1685,11 @@ export const api = axios.create({
 // Add request interceptor to inject JWT token
 api.interceptors.request.use(
   (config) => {
+    // Standard token retrieval: check sessionStorage first (populated by GRC parent)
+    const token = getAuthToken()
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
+    }
     return config
   },
   (error) => {
@@ -1660,14 +1706,23 @@ api.interceptors.response.use(
         if (data.session_invalidated === true) {
           markSessionInvalidated()
         }
-        // Token expired or invalid - NO REDIRECT, pages will handle this
-      clearSensitiveAuth()
-        console.log('[Axios Interceptor] 401 Unauthorized - NO REDIRECT, pages will handle this')
-        // NO REDIRECT - Let pages handle errors themselves
+        // Token expired or invalid - request redirect via parent shell
+        clearSensitiveAuth()
+        
+        const isInIframe = window.self !== window.top
+        if (isInIframe && window.parent) {
+          console.warn('[Axios Interceptor] 401 Unauthorized - requesting redirect via parent shell')
+          window.parent.postMessage({ type: 'TPRM_REDIRECT_TO_LOGIN' }, '*')
+        } else if (window.location.pathname !== '/login') {
+          window.location.href = '/login'
+        }
     } else if (error.response?.status === 403) {
-      // Permission denied - RBAC check failed - NO REDIRECT
-      const errorMessage = error.response?.data?.error || error.response?.data?.message || 'You do not have permission to access this resource.'
-      const errorCode = error.response?.data?.code || '403'
+      // Permission denied - RBAC check failed
+      const errorData = error.response?.data || {}
+      const errorMessage = errorData.error || errorData.message || 'You do not have permission to access this resource.'
+      const errorCode = errorData.code || '403'
+      
+      console.warn('[Axios Interceptor] 403 Forbidden:', errorMessage, error.config?.url)
       
       // Store error info in sessionStorage so pages can display it
       sessionStorage.setItem('access_denied_error', JSON.stringify({
@@ -1677,8 +1732,7 @@ api.interceptors.response.use(
         path: window.location.pathname
       }))
       
-      // NO REDIRECT - Let pages handle errors themselves
-      console.log('[Axios Interceptor] 403 Forbidden - NO REDIRECT, pages will handle this')
+      // Removed auto-redirect to prevent loops; individual components handle 403.
     }
     return Promise.reject(error)
   }

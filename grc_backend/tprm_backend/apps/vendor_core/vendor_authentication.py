@@ -13,108 +13,12 @@ from rest_framework.exceptions import AuthenticationFailed, NotAuthenticated, Pe
 logger = logging.getLogger(__name__)
 
 
-class JWTAuthentication(BaseAuthentication):
-    """
-    Custom JWT Authentication for Vendor module
-    """
-    
-    def authenticate(self, request):
-        auth_header = request.headers.get('Authorization')
-        
-        if not auth_header:
-            logger.warning("[Vendor Auth] No Authorization header provided")
-            return None
-        
-        if not auth_header.startswith('Bearer '):
-            logger.warning("[Vendor Auth] Invalid Authorization header format")
-            return None
-        
-        token = auth_header.split(' ')[1]
-        
-        try:
-            verification_key = getattr(settings, 'JWT_VERIFYING_KEY', None) or getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
-            payload = jwt.decode(
-                token,
-                verification_key,
-                algorithms=getattr(settings, 'JWT_ALLOWED_ALGORITHMS', [getattr(settings, 'JWT_ALGORITHM', 'RS256')]),
-                issuer=getattr(settings, 'JWT_ISSUER', None),
-                audience=getattr(settings, 'JWT_AUDIENCE', None),
-            )
-            
-            user_id = payload.get('user_id')
-            username = payload.get('username', 'Unknown')
-            
-            if not user_id:
-                logger.warning("[Vendor Auth] No user_id in JWT payload")
-                raise AuthenticationFailed('Invalid token: missing user_id')
-            
-            # Get tenant_id from User model and set it on request for multi-tenancy
-            try:
-                from mfa_auth.models import User
-                user_obj = User.objects.get(userid=user_id)
-                tenant_id = user_obj.tenant_id if hasattr(user_obj, 'tenant_id') else None
-                if tenant_id:
-                    request.tenant_id = tenant_id
-                    logger.info(f"[Vendor Auth] Set tenant_id {tenant_id} on request for user {user_id}")
-                else:
-                    logger.warning(f"[Vendor Auth] User {user_id} has no tenant_id")
-            except Exception as e:
-                logger.warning(f"[Vendor Auth] Could not fetch tenant_id for user {user_id}: {e}")
-            
-            # Create a simple user object
-            class SimpleUser:
-                def __init__(self, userid, username):
-                    self.userid = userid
-                    self.id = userid  # Add id attribute for DRF compatibility
-                    self.pk = userid  # Add pk attribute for DRF throttling and other features
-                    self.username = username
-                    self.is_authenticated = True
-                    
-                def __str__(self):
-                    return f"User({self.username}, id={self.userid})"
-                
-                def __repr__(self):
-                    return f"SimpleUser(pk={self.pk}, username='{self.username}')"
-            
-            user = SimpleUser(user_id, username)
-            logger.info(f"[Vendor Auth] Successfully authenticated user: {user}")
-            
-            return (user, None)
-            
-        except jwt.ExpiredSignatureError:
-            logger.warning("[Vendor Auth] JWT token has expired")
-            raise AuthenticationFailed('Token has expired')
-        except jwt.DecodeError:
-            logger.warning("[Vendor Auth] JWT token decode error")
-            raise AuthenticationFailed('Error decoding token')
-        except Exception as e:
-            logger.error(f"[Vendor Auth] JWT authentication error: {e}")
-            raise AuthenticationFailed(f'Authentication failed: {str(e)}')
+from tprm_backend.utils.authentication import JWTAuthentication, SimpleUser, SimpleAuthenticatedPermission
+
+logger = logging.getLogger(__name__)
 
 
-class SimpleAuthenticatedPermission(BasePermission):
-    """
-    Basic permission that only checks if user is authenticated
-    """
-    
-    def has_permission(self, request, view):
-        # Check if user is authenticated
-        is_authenticated = bool(
-            request.user and 
-            request.user.is_authenticated and
-            hasattr(request.user, 'userid')
-        )
-        
-        if not is_authenticated:
-            from django.contrib.auth.models import AnonymousUser
-            if isinstance(request.user, AnonymousUser):
-                logger.warning("[Vendor Auth] Anonymous user attempting access")
-            else:
-                logger.warning(f"[Vendor Auth] User not properly authenticated: {request.user}")
-        
-        return is_authenticated
-
-
+# Vendor-specific permission class that checks RBAC
 class VendorPermission(BasePermission):
     """
     Custom permission class that checks both authentication and RBAC permissions

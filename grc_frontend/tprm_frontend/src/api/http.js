@@ -13,8 +13,10 @@ const http = axios.create({
 // Request interceptor to add JWT token
 http.interceptors.request.use(
   (config) => {
-    // Add JWT token from localStorage
-    const token = localStorage.getItem('session_token')
+    // Add JWT token - read from sessionStorage (received from GRC parent via postMessage)
+    const token = sessionStorage.getItem('access_token') ||
+                  sessionStorage.getItem('session_token') ||
+                  localStorage.getItem('session_token')
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
@@ -61,13 +63,18 @@ http.interceptors.response.use(
       // In TPRM iframe, the parent GRC app manages authentication
       const isInIframe = window.self !== window.top
       
-      // Check if token exists - if it does, this might be a server-side auth error, not a missing token
-      const hasToken = localStorage.getItem('session_token') || localStorage.getItem('access_token')
+      // Check if token exists - check both storage mechanisms as GRC shell syncs to sessionStorage
+      const hasToken = sessionStorage.getItem('access_token') || 
+                       sessionStorage.getItem('session_token') ||
+                       localStorage.getItem('session_token') || 
+                       localStorage.getItem('access_token')
       
       // Only clear and redirect if:
       // 1. Not in iframe AND no token exists, OR
       // 2. Error message indicates token is actually expired/invalid (not a server error)
-      const errorMessage = error.response?.data?.error || error.response?.data?.detail || ''
+      const errorRaw = error.response?.data?.error || error.response?.data?.detail || ''
+      // Safely convert to string before calling .includes (value may be bool/object)
+      const errorMessage = typeof errorRaw === 'string' ? errorRaw : JSON.stringify(errorRaw)
       const isTokenExpired = errorMessage.includes('expired') || errorMessage.includes('invalid') || errorMessage.includes('Token')
       
       if (!isInIframe && (!hasToken || isTokenExpired)) {
@@ -84,33 +91,26 @@ http.interceptors.response.use(
       } else if (isInIframe && !hasToken) {
         // In iframe but no token - request auth from parent
         if (window.parent && window.parent !== window) {
-          window.parent.postMessage({ type: 'TPRM_AUTH_REQUEST' }, '*')
+          window.parent.postMessage({ type: 'TPRM_REDIRECT_TO_LOGIN' }, '*')
         }
       }
       // If we have a token and it's a server error, don't clear tokens - just throw the error
     }
     
     // Handle 403 Forbidden - permission denied
+    // NOTE: Do NOT auto-redirect here - components handle 403 individually.
+    // Auto-redirect was causing loops.
     if (error.response?.status === 403) {
       const errorData = error.response.data
       const errorMessage = errorData?.error || errorData?.message || 'You do not have permission to access this resource.'
-      const errorCode = errorData?.code || '403'
-      
-      // Store error info in sessionStorage so AccessDenied page can display it
+      console.warn('[TPRM http] 403 Forbidden:', errorMessage, error.config?.url)
       sessionStorage.setItem('access_denied_error', JSON.stringify({
-        message: errorMessage,
-        code: errorCode,
+        message: typeof errorMessage === 'string' ? errorMessage : JSON.stringify(errorMessage),
+        code: errorData?.code || '403',
         timestamp: new Date().toISOString(),
         path: window.location.pathname
       }))
-      
-      // Redirect to access denied page
-      if (window.location.pathname !== '/access-denied') {
-        console.log('🔄 Redirecting to /access-denied page...')
-        window.location.href = '/access-denied'
-        // Return a promise that never resolves to stop execution
-        return new Promise(() => {})
-      }
+      // Fall through - let component handle the error
     }
     
     // Handle network errors or other axios errors

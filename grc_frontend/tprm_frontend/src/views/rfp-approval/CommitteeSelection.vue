@@ -665,8 +665,7 @@ const saveCommittee = async () => {
           query: { rfp_id: rfpId }
         })
       } catch (navigationError) {
-        console.warn('CommitteeSelection: navigation to comparison failed, falling back to direct path', navigationError)
-        window.location.href = `/rfp-comparison?rfp_id=${encodeURIComponent(rfpId)}`
+        console.warn('CommitteeSelection: navigation to comparison failed', navigationError)
       }
     } else {
       const errorText = await response.text()

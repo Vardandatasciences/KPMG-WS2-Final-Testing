@@ -1237,13 +1237,13 @@
           
           <!-- Action Buttons -->
           <div class="flex items-center justify-end gap-3 pt-4 border-t border-blue-200">
-            <a 
-              href="/rfp-approval" 
+            <button 
+              @click="router.push('/rfp-approval')" 
               class="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-gray-700 bg-white border-2 border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 shadow-sm hover:shadow-md"
             >
               <ArrowRight class="h-4 w-4 rotate-180" />
-        Previous
-      </a>
+              Previous
+            </button>
               <button 
                 @click="handleGenerateURLs"
               class="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 border-2 border-blue-600 hover:border-blue-700 rounded-lg transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
@@ -2349,7 +2349,10 @@ onMounted(async () => {
         return
       }
     } else {
-      error("No RFP Selected", "No RFP data found. Please select an RFP first.")
+      error("No RFP Selected", "No RFP data found. Redirecting to RFP list...")
+      setTimeout(() => {
+        router.push('/rfp-list')
+      }, 1500)
       return
     }
     

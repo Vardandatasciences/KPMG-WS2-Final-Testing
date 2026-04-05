@@ -27,10 +27,23 @@ export function useRfpApi() {
    * Get authentication headers with JWT token
    */
   const getAuthHeaders = () => {
-    return {
+    // Standard token retrieval: check sessionStorage first (populated by GRC parent)
+    const token = sessionStorage.getItem('access_token') || 
+                  sessionStorage.getItem('session_token') ||
+                  localStorage.getItem('session_token') ||
+                  localStorage.getItem('auth_token') || 
+                  localStorage.getItem('access_token')
+    
+    const headers = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
     }
+    
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`
+    }
+    
+    return headers
   }
 
   /**
@@ -39,10 +52,14 @@ export function useRfpApi() {
   const handleResponse = async (response) => {
     // Handle 401 Unauthorized
     if (response.status === 401) {
-      // If in iframe, request parent to redirect to login
+      // Clear local auth data
+      localStorage.removeItem('session_token')
+      localStorage.removeItem('access_token')
+      localStorage.removeItem('refresh_token')
+      localStorage.removeItem('current_user')
+      
       const isInIframe = window.self !== window.top
       if (isInIframe && window.parent) {
-        console.log('[useRfpApi] 401 - Requesting parent to redirect to login')
         window.parent.postMessage({ type: 'TPRM_REDIRECT_TO_LOGIN' }, '*')
       } else if (window.location.pathname !== '/login') {
         window.location.href = '/login'
@@ -56,6 +73,9 @@ export function useRfpApi() {
       const errorMessage = errorData?.error || errorData?.message || 'You do not have permission to access this resource.'
       const errorCode = errorData?.code || '403'
       
+      console.warn('[useRfpApi] 403 Forbidden:', errorMessage, response.url)
+      
+      // Store error info in sessionStorage for optional display by components
       sessionStorage.setItem('access_denied_error', JSON.stringify({
         message: errorMessage,
         code: errorCode,
@@ -63,16 +83,8 @@ export function useRfpApi() {
         path: window.location.pathname
       }))
       
-      console.log('🔄 Redirecting to /access-denied page...')
-      // If in iframe, use postMessage; otherwise direct redirect
-      const isInIframe = window.self !== window.top
-      if (isInIframe && window.parent) {
-        window.parent.postMessage({ type: 'TPRM_REDIRECT', path: '/access-denied' }, '*')
-      } else {
-        window.location.href = '/access-denied'
-      }
-      // Return a never-resolving promise to stop execution
-      return new Promise(() => {})
+      // Removed auto-redirect to prevent loops; individual components handle 403.
+      throw new Error(errorMessage)
     }
     
     if (!response.ok) {

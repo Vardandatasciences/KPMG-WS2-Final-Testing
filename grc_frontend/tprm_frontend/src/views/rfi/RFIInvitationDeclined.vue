@@ -102,10 +102,11 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { XCircle, Building2, Info, CheckCircle, MessageSquare, Mail, Phone, X } from 'lucide-vue-next'
 
 const route = useRoute()
+const router = useRouter()
 const vendorName = ref('')
 
 onMounted(() => {
@@ -116,7 +117,7 @@ function closeWindow() {
   window.close()
   // If window.close() doesn't work (some browsers block it), redirect to home
   setTimeout(() => {
-    window.location.href = '/'
+    router.push('/')
   }, 100)
 }
 </script>

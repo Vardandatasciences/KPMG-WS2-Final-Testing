@@ -27,7 +27,12 @@ class QuickAccessAPI {
         if (response.status === 401) {
           localStorage.removeItem('session_token')
           localStorage.removeItem('current_user')
-          if (window.location.pathname !== '/login') {
+          
+          // If in iframe, request auth from GRC parent
+          const isInIframe = window.self !== window.top
+          if (isInIframe && window.parent) {
+            window.parent.postMessage({ type: 'TPRM_REDIRECT_TO_LOGIN' }, '*')
+          } else if (window.location.pathname !== '/login') {
             window.location.href = '/login'
           }
           throw new Error(`HTTP error! status: ${response.status}`)

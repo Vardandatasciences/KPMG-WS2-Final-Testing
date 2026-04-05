@@ -365,7 +365,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useStore } from 'vuex'
 import { apiCall } from '@/utils/api'
 import PopupModal from '@/popup/PopupModal.vue'
@@ -376,6 +376,7 @@ import loggingService from '@/services/loggingService'
 import permissionsService from '@/services/permissionsService'
 
 const route = useRoute()
+const router = useRouter()
 const { showSuccess, showError, showWarning, showInfo } = useNotifications()
 
 // Reactive data
@@ -1403,7 +1404,7 @@ onMounted(async () => {
         permission: 'submit_questionnaire_responses',
         permissionRequired: 'submit_questionnaire_responses'
       }))
-      window.location.href = '/access-denied'
+      router.push('/access-denied')
       return
     }
   } catch (e) {
@@ -1414,7 +1415,7 @@ onMounted(async () => {
       permission: 'submit_questionnaire_responses',
       permissionRequired: 'submit_questionnaire_responses'
     }))
-    window.location.href = '/access-denied'
+    router.push('/access-denied')
     return
   }
   

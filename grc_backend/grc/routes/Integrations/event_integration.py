@@ -69,6 +69,39 @@ def test_integration_auth(request):
         }, status=500)
 
 
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def _resolve_request_user_id(request, provided_user_id):
+    """
+    Safely resolve user_id from request or provided user_id.
+    Returns (user_id, error_response).
+    """
+    auth_user = getattr(request, 'user', None)
+    if not auth_user or not hasattr(auth_user, 'UserId'):
+        return None, JsonResponse({'error': 'Authentication required'}, status=401)
+    
+    # If no user_id provided, use the authenticated user's ID
+    if not provided_user_id:
+        return auth_user.UserId, None
+    
+    try:
+        user_id = int(provided_user_id)
+        # If user is trying to access another user's data, check permissions
+        if user_id != auth_user.UserId:
+            # Check if user is admin
+            if not RBACUtils.is_system_admin(auth_user.UserId):
+                logger.warning(f"User {auth_user.UserId} unauthorized access attempt to user {provided_user_id}")
+                return None, JsonResponse({'error': 'Unauthorized access to other user data'}, status=403)
+        
+        return user_id, None
+    except (ValueError, TypeError):
+        return None, JsonResponse({'error': 'Invalid user_id format'}, status=400)
+    except Exception as e:
+        logger.error(f"Error resolving user_id: {str(e)}")
+        return None, JsonResponse({'error': 'Internal server error resolving user'}, status=500)
+
+
 @csrf_exempt
 @require_http_methods(["GET"])
 def get_external_applications(request):

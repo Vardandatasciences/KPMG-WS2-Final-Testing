@@ -70,17 +70,31 @@ const buildApiUrl = (endpoint, baseUrl = API_CONFIG.RFP_APPROVAL_BASE) => {
   return `${baseUrl}${endpoint}`
 }
 
-// Cookie-first auth: no JS-managed tokens
-const getAuthToken = () => null
+// Standard token retrieval: check sessionStorage first (populated by GRC parent)
+const getAuthToken = () => {
+  return sessionStorage.getItem('access_token') || 
+         sessionStorage.getItem('session_token') ||
+         localStorage.getItem('session_token') ||
+         localStorage.getItem('auth_token') || 
+         localStorage.getItem('access_token')
+}
 
 // Helper function for API calls with error handling and JWT authentication
 const apiCall = async (url, options = {}) => {
   const { skipRedirect = false, ...fetchOptions } = options
   
+  const token = getAuthToken()
+  const headers = {
+    'Content-Type': 'application/json',
+    ...fetchOptions.headers
+  }
+  
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
+  
   const defaultOptions = {
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers,
     credentials: 'include',
     ...fetchOptions,
   }
@@ -91,8 +105,19 @@ const apiCall = async (url, options = {}) => {
     // Handle 401 Unauthorized
     if (response.status === 401) {
       console.error('🔒 Authentication failed')
+      
+      // Clear local auth data
+      localStorage.removeItem('session_token')
+      localStorage.removeItem('access_token')
+      localStorage.removeItem('refresh_token')
+      localStorage.removeItem('current_user')
+      
       if (!skipRedirect) {
-        if (window.location.pathname !== '/login') {
+        // If in iframe, request auth from GRC parent
+        const isInIframe = window.self !== window.top
+        if (isInIframe && window.parent) {
+          window.parent.postMessage({ type: 'TPRM_REDIRECT_TO_LOGIN' }, '*')
+        } else if (window.location.pathname !== '/login') {
           window.location.href = '/login'
           // Return a pending promise that never resolves to prevent further execution
           return new Promise(() => {})
@@ -109,18 +134,13 @@ const apiCall = async (url, options = {}) => {
       const errorCode = errorData?.code || '403'
       
       if (!skipRedirect) {
+        // Removed auto-redirect to prevent loops; individual components handle 403.
         sessionStorage.setItem('access_denied_error', JSON.stringify({
           message: errorMessage,
           code: errorCode,
           timestamp: new Date().toISOString(),
           path: window.location.pathname
         }))
-        if (window.location.pathname !== '/access-denied') {
-          console.log('🔄 Redirecting to /access-denied page...')
-          window.location.href = '/access-denied'
-          // Return a pending promise that never resolves to prevent further execution
-          return new Promise(() => {})
-        }
       }
       throw new Error(errorMessage)
     }

@@ -1080,11 +1080,17 @@ def jwt_login(request):
         request.session['grc_username'] = username_plain
         request.session['session_created_at'] = time.time()  # Store session creation time for timeout check
         
-        # Initialize framework session keys if needed
-        if 'grc_framework_selected' not in request.session:
-            request.session['grc_framework_selected'] = None
-        if 'selected_framework_id' not in request.session:
-            request.session['selected_framework_id'] = None
+        # Initialize framework session keys if needed - Set default if None to avoid "Framework context not found"
+        if request.session.get('grc_framework_selected') is None:
+            default_fw = _get_default_framework()
+            if default_fw:
+                request.session['grc_framework_selected'] = default_fw.FrameworkId
+                request.session['selected_framework_id'] = default_fw.FrameworkId
+                logger.info(f"✅ Set default framework context: {default_fw.FrameworkId}")
+            else:
+                request.session['grc_framework_selected'] = None
+                request.session['selected_framework_id'] = None
+
         
         # CRITICAL: Explicitly save the session to persist changes
         request.session.save()
@@ -1407,7 +1413,13 @@ def jwt_logout(request):
                 if user:
                     user_id = user.UserId
                     username = user.UserName
-                    framework_id = user.FrameworkId.FrameworkId if user.FrameworkId else None
+                    # Fixed: Users model doesn't have FrameworkId field, use None or fallback
+                    framework_id = getattr(user, 'FrameworkId', None)
+                    if framework_id and hasattr(framework_id, 'FrameworkId'):
+                        framework_id = framework_id.FrameworkId
+                    else:
+                        framework_id = None
+
                     logger.info(f"✅ Got user from token: {username} (ID: {user_id})")
         except Exception as token_error:
             logger.warning(f"Could not get user from token: {str(token_error)}")
@@ -1442,7 +1454,13 @@ def jwt_logout(request):
                         user = Users.objects.get(UserId=user_id)
                         username = user.UserName
                     
-                    framework_id = user.FrameworkId.FrameworkId if user.FrameworkId else None
+                    # Fixed: Users model doesn't have FrameworkId field
+                    framework_id = getattr(user, 'FrameworkId', None)
+                    if framework_id and hasattr(framework_id, 'FrameworkId'):
+                        framework_id = framework_id.FrameworkId
+                    else:
+                        framework_id = None
+
                     logger.info(f"✅ Got user from session: {username} (ID: {user_id})")
                 except (Users.DoesNotExist, ValueError, TypeError) as e:
                     logger.warning(f"User ID {user_id} from session not found in database: {str(e)}")
@@ -1451,8 +1469,14 @@ def jwt_logout(request):
                         if user_id and str(user_id).isdigit():
                             user = Users.objects.get(UserId=int(user_id))
                             username = user.UserName
-                            framework_id = user.FrameworkId.FrameworkId if user.FrameworkId else None
+                            # Fixed: Users model doesn't have FrameworkId field
+                            framework_id = getattr(user, 'FrameworkId', None)
+                            if framework_id and hasattr(framework_id, 'FrameworkId'):
+                                framework_id = framework_id.FrameworkId
+                            else:
+                                framework_id = None
                             logger.info(f"✅ Got user after retry: {username} (ID: {user_id})")
+
                     except:
                         pass
         

@@ -77,7 +77,12 @@ onMounted(() => {
           tokenLength: event.data.token?.length || 0
         })
         
-        // Cookie-first auth: do not store access/refresh/session tokens in browser storage.
+        // Store token in sessionStorage for API calls via Authorization header
+        if (event.data.token) {
+          sessionStorage.setItem('access_token', event.data.token)
+          localStorage.removeItem('access_token')
+          localStorage.removeItem('session_token')
+        }
         
         if (event.data.user) {
           sessionStorage.setItem('current_user', JSON.stringify(event.data.user))

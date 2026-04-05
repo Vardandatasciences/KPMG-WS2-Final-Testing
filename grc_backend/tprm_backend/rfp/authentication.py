@@ -11,6 +11,18 @@ class CustomJWTAuthentication(JWTAuthentication):
     Custom JWT authentication that adds additional security checks
     """
     
+    def authenticate(self, request):
+        header = self.get_header(request)
+        if header is None:
+            # Fallback to access_token cookie
+            raw_token = request.COOKIES.get('access_token')
+            if raw_token is None:
+                return None
+            return self.get_user(self.get_validated_token(raw_token)), raw_token
+        
+        return super().authenticate(request)
+
+    
     def get_user(self, validated_token):
         """
         Attempt to find and return a user using the given validated token.
