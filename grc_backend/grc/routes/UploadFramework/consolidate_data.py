@@ -7,6 +7,8 @@ import os
 from pathlib import Path
 from django.conf import settings
 
+from ...utils.safe_paths import safe_join, require_safe_user_key, UnsafePathError
+
 try:
     from ...debug_utils import debug_print
 except ImportError:
@@ -23,9 +25,9 @@ def create_consolidated_json(userid):
     Returns:
         dict: Consolidated data structure
     """
-    media_root = Path(settings.MEDIA_ROOT)
-    user_folder = media_root / f"upload_{userid}"
-    
+    key = require_safe_user_key(userid)
+    user_folder = Path(safe_join(settings.MEDIA_ROOT, f"upload_{key}"))
+
     if not user_folder.exists():
         raise FileNotFoundError(f"User folder not found: {user_folder}")
     
@@ -144,14 +146,18 @@ def load_consolidated_json(userid):
     Returns:
         dict: Consolidated data structure or None if not found
     """
-    media_root = Path(settings.MEDIA_ROOT)
-    user_folder = media_root / f"upload_{userid}"
-    
+    try:
+        key = require_safe_user_key(userid)
+    except UnsafePathError:
+        debug_print(f"[ERROR] Invalid userid for consolidated JSON: {userid}")
+        return None
+
+    user_folder = Path(safe_join(settings.MEDIA_ROOT, f"upload_{key}"))
+
     if not user_folder.exists():
         debug_print(f"[ERROR] User folder not found: {user_folder}")
         return None
-    
-    # Check if consolidated JSON exists
+
     consolidated_file = user_folder / "framework_data.json"
     
     if not consolidated_file.exists():
@@ -185,10 +191,13 @@ def regenerate_consolidated_json_for_all_users():
     
     results = []
     for user_folder in upload_folders:
-        # Extract userid from folder name
         folder_name = user_folder.name
         userid = folder_name.replace('upload_', '')
-        
+        try:
+            require_safe_user_key(userid)
+        except UnsafePathError:
+            continue
+
         try:
             debug_print(f"\n[INFO] Processing user: {userid}")
             data = create_consolidated_json(userid)

@@ -175,6 +175,7 @@
 import { ref, computed, onMounted } from 'vue';
 import axios from 'axios';
 import { API_BASE_URL } from '@/config/api.js';
+import { getSessionFrameworkId, setSessionFrameworkId } from '@/utils/frameworkContextStorage.js';
 
 export default {
   name: 'ConsentManagementAdmin',
@@ -201,8 +202,7 @@ export default {
     // Load frameworks on mount
     onMounted(async () => {
       await loadFrameworks();
-      // Auto-select if framework_id in localStorage
-      const savedFrameworkId = localStorage.getItem('framework_id');
+      const savedFrameworkId = getSessionFrameworkId();
       if (savedFrameworkId) {
         selectedFrameworkId.value = savedFrameworkId;
         await loadConfigurations();
@@ -228,6 +228,8 @@ export default {
 
     const loadConfigurations = async () => {
       if (!selectedFrameworkId.value) return;
+
+      setSessionFrameworkId(selectedFrameworkId.value);
 
       loading.value = true;
       try {

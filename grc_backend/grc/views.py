@@ -38,6 +38,10 @@ from .mfa_service import MfaService
 logger = logging.getLogger(__name__)
 from .debug_utils import debug_print
 
+# Client-safe API errors (finding 14 — do not expose str(exception) to browsers)
+_CLIENT_SAFE_ERROR_MSG = 'An internal error occurred. Please try again later.'
+_CLIENT_SAFE_BAD_REQUEST_MSG = 'Invalid request. Please try again.'
+
 # Password reset OTP security controls
 PASSWORD_RESET_OTP_TTL_SECONDS = 300
 PASSWORD_RESET_OTP_VERIFY_WINDOW_SECONDS = 900
@@ -993,7 +997,8 @@ def update_policy_approval(request, approval_id):
     except PolicyApproval.DoesNotExist:
         return Response({'error': 'Policy approval not found'}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
-        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        logger.exception('Error updating policy approval')
+        return Response({'error': _CLIENT_SAFE_BAD_REQUEST_MSG}, status=status.HTTP_400_BAD_REQUEST)
  
 @api_view(['PUT'])
 @permission_classes([IsAuthenticated])
@@ -1089,7 +1094,8 @@ def resubmit_policy_approval(request, approval_id):
         debug_print("Error in resubmit_policy_approval:", str(e))
         import traceback
         traceback.print_exc()
-        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        logger.exception('Error resubmitting policy approval')
+        return Response({'error': _CLIENT_SAFE_BAD_REQUEST_MSG}, status=status.HTTP_400_BAD_REQUEST)
  
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -1243,7 +1249,6 @@ def submit_policy_review(request, approval_id):
         debug_print(f"Error in submit_policy_review: {str(e)}")
         return Response({
             'error': 'Error submitting policy review',
-            'details': str(e)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
 @api_view(['POST'])
@@ -3145,7 +3150,6 @@ def export_policies_to_excel(request, framework_id):
     except Exception as e:
         return Response({
             'error': 'Error exporting policies to Excel',
-            'details': str(e)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
@@ -3191,7 +3195,6 @@ def policy_list(request):
     except Exception as e:
         return Response({
             'error': 'Error fetching policies',
-            'details': str(e)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
@@ -3241,10 +3244,10 @@ def list_users(request):
         debug_print(f"ERROR: Error in list_users: {str(e)}")
         import traceback
         traceback.print_exc()
+        logger.exception('list_users failed')
         return Response({
             'success': False,
-            'error': 'Error fetching users',
-            'details': str(e)
+            'error': _CLIENT_SAFE_ERROR_MSG,
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['PATCH', 'PUT'])
@@ -3319,7 +3322,6 @@ def update_user_status(request, user_id):
         return Response({
             'success': False,
             'error': 'Error updating user status',
-            'details': str(e)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
@@ -3413,7 +3415,8 @@ def get_users_for_dropdown_simple(request):
         return Response(user_data)
     except Exception as e:
         debug_print(f"Error fetching users for dropdown: {e}")
-        return Response({"error": str(e)}, status=500)
+        logger.exception('Error fetching users for dropdown')
+        return Response({"error": _CLIENT_SAFE_ERROR_MSG}, status=500)
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -3851,7 +3854,8 @@ def all_policies_get_frameworks(request):
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        logger.exception('Internal server error in API view')
+        return Response({'error': _CLIENT_SAFE_ERROR_MSG}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -3898,7 +3902,8 @@ def all_policies_get_framework_version_policies(request, version_id):
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        logger.exception('Internal server error in API view')
+        return Response({'error': _CLIENT_SAFE_ERROR_MSG}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -3946,7 +3951,8 @@ def all_policies_get_policies(request):
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        logger.exception('Internal server error in API view')
+        return Response({'error': _CLIENT_SAFE_ERROR_MSG}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -4071,7 +4077,8 @@ def all_policies_get_policy_versions(request, policy_id):
         import traceback
         debug_print(f"Error in all_policies_get_policy_versions: {str(e)}")
         traceback.print_exc()
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        logger.exception('Internal server error in API view')
+        return Response({'error': _CLIENT_SAFE_ERROR_MSG}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -4141,7 +4148,8 @@ def all_policies_get_subpolicies(request):
         import traceback
         debug_print(f"Error in all_policies_get_subpolicies: {str(e)}")
         traceback.print_exc()
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        logger.exception('Internal server error in API view')
+        return Response({'error': _CLIENT_SAFE_ERROR_MSG}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -4171,7 +4179,8 @@ def all_policies_get_subpolicy_details(request, subpolicy_id):
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        logger.exception('Internal server error in API view')
+        return Response({'error': _CLIENT_SAFE_ERROR_MSG}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -4279,7 +4288,8 @@ def all_policies_get_framework_versions(request, framework_id):
         import traceback
         debug_print(f"Error in all_policies_get_framework_versions: {str(e)}")
         traceback.print_exc()
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        logger.exception('Internal server error in API view')
+        return Response({'error': _CLIENT_SAFE_ERROR_MSG}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -4351,7 +4361,8 @@ def all_policies_get_policy_version_subpolicies(request, version_id):
         import traceback
         debug_print(f"Error in all_policies_get_policy_version_subpolicies: {str(e)}")
         traceback.print_exc()
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        logger.exception('Internal server error in API view')
+        return Response({'error': _CLIENT_SAFE_ERROR_MSG}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -5015,7 +5026,6 @@ def get_policy_kpis(request):
         debug_print(f"Error in get_policy_kpis: {str(e)}")
         return Response({
             'error': 'Error fetching policy KPIs',
-            'details': str(e)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
 @api_view(['POST'])
@@ -5105,7 +5115,6 @@ def acknowledge_policy(request, policy_id):
         debug_print(f"Error in acknowledge_policy: {str(e)}")  # Add logging
         return Response({
             'error': 'Error acknowledging policy',
-            'details': str(e)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['POST'])
@@ -5632,11 +5641,10 @@ def login_user(request):
             }, status=status.HTTP_400_BAD_REQUEST)
             
     except Exception as e:
-        logger.error(f"Login error: {str(e)}")
+        logger.exception("Login error")
         return Response({
             'status': 'error',
-            'message': 'Server error during login',
-            'details': str(e)
+            'message': _CLIENT_SAFE_ERROR_MSG,
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['POST'])
@@ -5820,11 +5828,10 @@ def logout_user(request):
             'message': 'Logged out successfully'
         })
     except Exception as e:
-        logger.error(f"Logout error: {str(e)}")
+        logger.exception("Logout error")
         return Response({
             'status': 'error',
-            'message': 'Error during logout',
-            'details': str(e)
+            'message': _CLIENT_SAFE_ERROR_MSG,
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['POST'])
@@ -6021,8 +6028,8 @@ def register_user(request):
                 PasswordLog.objects.create(
                     UserId=user.UserId,
                     UserName=user.UserName,
-                    OldPassword=None,  # No old password for new user
-                    NewPassword=user.Password,  # Hashed password
+                    OldPassword=None,
+                    NewPassword='',
                     ActionType='created',
                     IPAddress=request.META.get('REMOTE_ADDR', ''),
                     UserAgent=request.META.get('HTTP_USER_AGENT', ''),
@@ -6421,9 +6428,7 @@ GRC System Administrator
         logger.error(f"❌❌❌ Registration error traceback:\n{error_traceback}")
         return Response({
             'success': False,
-            'message': f'An error occurred during registration: {str(e)}',
-            'error_details': str(e),
-            'error_type': type(e).__name__
+            'message': 'Registration could not be completed. Please try again later.',
         }, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['GET'])
@@ -7156,12 +7161,12 @@ def send_otp(request):
     logger.info("[SEND OTP] ========== SEND OTP ENDPOINT CALLED ==========")
     logger.info(f"[SEND OTP] Request method: {request.method}")
     logger.info(f"[SEND OTP] Request path: {request.path}")
-    logger.info(f"[SEND OTP] Request data: {request.data}")
+    logger.info("[SEND OTP] Request received (body redacted from logs)")
     try:
         data = request.data
         Email = data.get('Email')
         
-        logger.info(f"[SEND OTP] Received request to send OTP to email: {Email}")
+        logger.info("[SEND OTP] OTP send requested for submitted identifier (email not logged)")
         
         if not Email:
             logger.error("[SEND OTP] No email provided in request")
@@ -7172,7 +7177,7 @@ def send_otp(request):
         
         # Check if email is masked (contains ***) - if so, we need to get full email from username/ID
         if '***' in Email:
-            logger.warning(f"[SEND OTP] Received masked email: {Email}. Cannot use masked email to send OTP.")
+            logger.warning("[SEND OTP] Masked email pattern received; cannot send OTP to masked value")
             return Response({
                 'success': False,
                 'message': 'Please use the full email address. If you entered username/ID, the system should automatically fetch and use your email.'
@@ -7182,16 +7187,14 @@ def send_otp(request):
         try:
             user = Users.find_by_email(Email)
             if not user:
-                logger.warning(f"[SEND OTP] No user found with email: {Email}")
+                logger.warning("[SEND OTP] No user found for supplied email identifier")
                 return Response({
                     'success': False,
                     'message': 'No user found with this Email address'
                 }, status=status.HTTP_404_NOT_FOUND)
-            logger.info(f"[SEND OTP] Found user: UserId={user.UserId}, UserName={getattr(user, 'UserName_plain', None) or user.UserName}")
+            logger.info("[SEND OTP] User record resolved for OTP (user id=%s)", user.UserId)
         except Exception as e:
-            logger.error(f"[SEND OTP] Error finding user by email: {str(e)}")
-            import traceback
-            logger.error(f"[SEND OTP] Traceback: {traceback.format_exc()}")
+            logger.exception("[SEND OTP] Error resolving user by email")
             return Response({
                 'success': False,
                 'message': 'No user found with this Email address'
@@ -7327,9 +7330,7 @@ def get_user_email_by_username(request):
         return Response(base_ok, status=status.HTTP_200_OK)
             
     except Exception as e:
-        logger.error(f"[FORGOT PASSWORD] Error fetching user email: {str(e)}")
-        import traceback
-        logger.error(f"[FORGOT PASSWORD] Traceback: {traceback.format_exc()}")
+        logger.exception("[FORGOT PASSWORD] Error fetching user email")
         return Response({
             'success': False,
             'message': 'An error occurred while fetching user information'
@@ -7520,19 +7521,19 @@ def reset_password(request):
                         'message': 'No user found with this Email address'
                     }, status=status.HTTP_404_NOT_FOUND)
             
-            # Check password history to prevent reuse
-            from .routes.Global.password_expiry_utils import check_password_history, get_password_history_count
-            is_reused, checked_count = check_password_history(user, new_password)
+            # Check password history to prevent reuse (current password only)
+            from .routes.Global.password_expiry_utils import check_password_history
+            is_reused, _ = check_password_history(user, new_password)
             if is_reused:
-                history_count = get_password_history_count()
-                logger.warning(f"⚠️ Password reuse blocked for user {user.UserName}: new password matches one of the last {history_count} passwords")
+                logger.warning(
+                    "⚠️ Password reuse blocked for user %s: new password matches current password",
+                    user.UserName,
+                )
                 return Response({
                     'success': False,
-                    'message': f'Password has been used recently. Please choose a different password that is not one of your last {history_count} passwords.'
+                    'message': 'Password cannot be the same as your current password. Please choose a different password.'
                 }, status=status.HTTP_400_BAD_REQUEST)
-            
-            # Store old password hash for logging
-            old_password_hash = user.Password
+
             # Always store password as a secure hash
             user.Password = make_password(new_password)
             user.save(update_fields=['Password'])
@@ -7577,13 +7578,7 @@ def reset_password(request):
             # Log password reset using utility function (to password_logs)
             try:
                 from .routes.Global.password_expiry_utils import log_password_action
-                log_password_action(
-                    user, 
-                    'reset', 
-                    old_password_hash=old_password_hash,
-                    new_password_hash=user.Password,
-                    request=request
-                )
+                log_password_action(user, 'reset', request=request)
                 logger.info(f"✅ Password log created for reset: {user.UserName}")
             except Exception as log_error:
                 logger.error(f"❌ Failed to create password log on reset: {str(log_error)}")
@@ -7721,44 +7716,16 @@ def update_password(request):
                         'message': 'No user found with this Email address'
                     }, status=status.HTTP_404_NOT_FOUND)
             
-            # Check password history to prevent reuse (check last 3 passwords)
             from .routes.Global.password_expiry_utils import check_password_history
-            from .models import PasswordLog
-            
-            # Get the last 3 password change logs for this user
-            password_logs = PasswordLog.objects.filter(
-                UserId=user.UserId,
-                ActionType__in=['changed', 'reset', 'created']
-            ).order_by('-Timestamp')[:3]
-            
-            # Check current password first
-            if user.Password and check_password(new_password, user.Password):
+
+            is_reused, _ = check_password_history(user, new_password)
+            if is_reused:
                 logger.warning(f"Password reuse blocked for user {user.UserName}: matches current password")
                 return Response({
                     'success': False,
                     'message': 'Password cannot be the same as your current password. Please choose a different password.'
                 }, status=status.HTTP_400_BAD_REQUEST)
-            
-            # Check against historical passwords (last 3)
-            for log in password_logs:
-                # Check NewPassword (the password that was set)
-                if log.NewPassword and check_password(new_password, log.NewPassword):
-                    logger.warning(f"Password reuse blocked for user {user.UserName}: matches password from {log.Timestamp}")
-                    return Response({
-                        'success': False,
-                        'message': 'Password has been used recently. Please choose a different password that is not one of your last 3 passwords.'
-                    }, status=status.HTTP_400_BAD_REQUEST)
-                
-                # Also check OldPassword if it exists
-                if log.OldPassword and check_password(new_password, log.OldPassword):
-                    logger.warning(f"Password reuse blocked for user {user.UserName}: matches old password from {log.Timestamp}")
-                    return Response({
-                        'success': False,
-                        'message': 'Password has been used recently. Please choose a different password that is not one of your last 3 passwords.'
-                    }, status=status.HTTP_400_BAD_REQUEST)
-            
-            # Store old password hash for logging
-            old_password_hash = user.Password
+
             # Always store password as a secure hash
             user.Password = make_password(new_password)
             user.save(update_fields=['Password'])
@@ -7797,13 +7764,7 @@ def update_password(request):
             # Log password change to PasswordLog table
             try:
                 from .routes.Global.password_expiry_utils import log_password_action
-                log_password_action(
-                    user, 
-                    'changed', 
-                    old_password_hash=old_password_hash,
-                    new_password_hash=user.Password,
-                    request=request
-                )
+                log_password_action(user, 'changed', request=request)
                 logger.info(f"✅ Password log created for update: {user.UserName}")
             except Exception as log_error:
                 logger.error(f"❌ Failed to create password log on update: {str(log_error)}")
@@ -8039,11 +8000,10 @@ def test_jwt_auth(request):
             }, status=status.HTTP_401_UNAUTHORIZED)
         
     except Exception as e:
-        logger.error(f"JWT test error: {str(e)}")
+        logger.exception("JWT test error")
         return Response({
             'success': False,
-            'message': 'Server error during JWT test',
-            'details': str(e)
+            'message': _CLIENT_SAFE_ERROR_MSG,
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 

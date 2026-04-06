@@ -777,7 +777,7 @@ export default {
                 
                 if (url) {
                   console.log(`✅ Opening report URL:`, url);
-                  window.open(url, '_blank');
+                  window.open(url, '_blank', 'noopener,noreferrer');
                   return;
                 } else {
                   console.warn('No URL found in S3 response');

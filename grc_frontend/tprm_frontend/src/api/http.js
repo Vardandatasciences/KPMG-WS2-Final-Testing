@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { getTprmApiBaseUrl } from '@/utils/backendEnv'
+import { getParentPostMessageTargetOrigin } from '@/utils/parentPostMessageOrigin.js'
 
 // Create axios instance with base configuration
 const http = axios.create({
@@ -94,7 +95,7 @@ http.interceptors.response.use(
       } else if (isInIframe && !hasToken) {
         // In iframe but no token - request auth from parent
         if (window.parent && window.parent !== window) {
-          window.parent.postMessage({ type: 'TPRM_REDIRECT_TO_LOGIN' }, '*')
+          window.parent.postMessage({ type: 'TPRM_REDIRECT_TO_LOGIN' }, getParentPostMessageTargetOrigin())
         }
       }
       // If we have a token and it's a server error, don't clear tokens - just throw the error

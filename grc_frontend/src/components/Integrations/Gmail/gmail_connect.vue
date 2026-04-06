@@ -191,6 +191,7 @@
 <script>
 import axios from 'axios'
 import { API_BASE_URL } from '../../../config/api.js'
+import { assertTrustedGmailOAuthUrl } from '../../../utils/safeExternalNavigation'
 
 export default {
   name: 'GmailConnect',
@@ -327,9 +328,12 @@ export default {
         if (response.data.success) {
           // Store state for callback handling
           localStorage.setItem('gmail_oauth_state', response.data.state)
-          
-          // Redirect to OAuth URL
-          window.location.href = response.data.auth_url
+
+          const authUrl = response.data.auth_url
+          if (!assertTrustedGmailOAuthUrl(authUrl)) {
+            throw new Error('Invalid Gmail OAuth URL from server')
+          }
+          window.location.href = authUrl.trim()
         } else {
           throw new Error(response.data.error || 'Failed to initiate Gmail OAuth')
         }

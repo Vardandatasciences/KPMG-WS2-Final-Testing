@@ -478,7 +478,7 @@ def login(request):
         # Check if user exists in database
         user = Users.objects.filter(UserName=username).first()
         
-        if user and user.Password == password:  # Note: You should use hashed passwords in production
+        if user and user.Password and check_password(password, user.Password):
             return Response({
                 'success': True,
                 'message': 'Login successful',

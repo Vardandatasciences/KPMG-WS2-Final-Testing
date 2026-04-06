@@ -2142,7 +2142,7 @@ const vendor_viewDocument = (id) => {
   if (document) {
     if (document.s3_url) {
       // Open S3 URL in new tab for viewing
-      window.open(document.s3_url, '_blank')
+      window.open(document.s3_url, '_blank', 'noopener,noreferrer')
     } else {
       const docName = document.name || document.document_name
       const docType = document.type || document.document_type
@@ -2609,7 +2609,7 @@ const vendor_formatDate = (dateString) => {
 
 const vendor_openDocument = (url) => {
   if (url) {
-    window.open(url, '_blank')
+    window.open(url, '_blank', 'noopener,noreferrer')
   } else {
     PopupService.warning('No document URL available', 'Document Not Available')
   }

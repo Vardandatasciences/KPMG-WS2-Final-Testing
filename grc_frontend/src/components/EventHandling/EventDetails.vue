@@ -445,7 +445,7 @@ export default {
 
       try {
         // Simply open the S3 URL in a new tab
-        window.open(s3Url, '_blank')
+        window.open(s3Url, '_blank', 'noopener,noreferrer')
         console.log('EventDetails - Evidence opened in new tab')
       } catch (error) {
         console.error('EventDetails - Error opening evidence:', error)

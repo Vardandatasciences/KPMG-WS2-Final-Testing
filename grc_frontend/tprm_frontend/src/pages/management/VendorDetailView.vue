@@ -87,7 +87,7 @@
               <div class="info-item">
                 <label>Website</label>
                 <p>
-                  <a v-if="vendor.website" :href="vendor.website" target="_blank" class="link">
+                  <a v-if="vendor.website" :href="vendor.website" target="_blank" rel="noopener noreferrer" class="link">
                     {{ vendor.website }}
                   </a>
                   <span v-else>N/A</span>
@@ -501,7 +501,7 @@
                       <i class="fas fa-file-alt document-icon"></i>
                       <div class="document-info">
                         <h4 class="document-name">{{ docName }}</h4>
-                        <a :href="url" target="_blank" class="link">View Document</a>
+                        <a :href="url" target="_blank" rel="noopener noreferrer" class="link">View Document</a>
                       </div>
                     </div>
                   </div>
@@ -1264,7 +1264,7 @@ const JsonRenderer = {
             <div class="document-details">
               <div v-if="doc.filename || doc.key" class="doc-name">{{ doc.filename || doc.key }}</div>
               <div v-if="doc.url" class="doc-url">
-                <a :href="doc.url" target="_blank" class="json-link">
+                <a :href="doc.url" target="_blank" rel="noopener noreferrer" class="json-link">
                   <i class="fas fa-external-link-alt"></i> View Document
                 </a>
               </div>
@@ -1380,7 +1380,7 @@ const JsonRenderer = {
                 <div class="doc-name">{{ formatKey(key) }}</div>
                 <template v-if="typeof value === 'object' && value !== null">
                   <div v-if="value.url" class="doc-url">
-                    <a :href="value.url" target="_blank" class="json-link">
+                    <a :href="value.url" target="_blank" rel="noopener noreferrer" class="json-link">
                       <i class="fas fa-external-link-alt"></i> View Document
                     </a>
                   </div>
@@ -1391,7 +1391,7 @@ const JsonRenderer = {
                 </template>
                 <template v-else-if="typeof value === 'string' && (value.startsWith('http://') || value.startsWith('https://'))">
                   <div class="doc-url">
-                    <a :href="value" target="_blank" class="json-link">
+                    <a :href="value" target="_blank" rel="noopener noreferrer" class="json-link">
                       <i class="fas fa-external-link-alt"></i> View Document
                     </a>
                   </div>

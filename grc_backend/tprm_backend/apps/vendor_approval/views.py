@@ -2127,6 +2127,12 @@ def get_approvals_by_requester(request):
             logger.error(f"[Get Approvals By Requester] Invalid requester_id: {requester_id}")
             return Response({'error': 'requester_id must be a valid integer'}, status=status.HTTP_400_BAD_REQUEST)
 
+        from .approval_object_authz import forbid_cross_user_requester_list
+
+        denied_rq = forbid_cross_user_requester_list(request, requester_id_int)
+        if denied_rq is not None:
+            return denied_rq
+
         stage_type = str(request.query_params.get('stage_type', 'ALL')).upper()
 
         flow_filter = None
@@ -2675,7 +2681,11 @@ def get_request_with_stages(request, approval_id: str):
 
                 stages.append(sd)
 
+            from .approval_object_authz import forbid_vendor_approval_detail_access
 
+            denied_detail = forbid_vendor_approval_detail_access(request, req, stages)
+            if denied_detail is not None:
+                return denied_detail
 
             # Check if this is a questionnaire approval and fetch questions
 

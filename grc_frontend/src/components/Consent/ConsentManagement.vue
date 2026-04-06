@@ -259,6 +259,7 @@ import {
   getActionLabel 
 } from '@/utils/consentManager.js';
 import api from '@/services/api.js';
+import { getFrameworkIdForClient } from '@/utils/frameworkContextStorage.js';
 
 export default {
   name: 'ConsentManagement',
@@ -286,7 +287,7 @@ export default {
       return localStorage.getItem('user_id');
     },
     frameworkId() {
-      return localStorage.getItem('framework_id') || '1';
+      return getFrameworkIdForClient();
     }
   },
   mounted() {

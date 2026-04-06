@@ -41,6 +41,9 @@ from tprm_backend.utils.authentication import JWTAuthentication, SimpleAuthentic
 
 logger = logging.getLogger(__name__)
 
+# Limit unbounded DB work from user-controlled response batches (resource / DoS hardening).
+MAX_AUDIT_RESPONSES_PER_REQUEST = 500
+
 
 class PerformContractAuditPermission(BasePermission):
     """Permission class that checks for PerformContractAudit permission"""
@@ -725,7 +728,22 @@ def submit_audit_response(request, audit_id):
         else:
             audit = Audit.objects.get(audit_id=audit_id)
         responses_data = request.data.get('responses', [])
-        
+        if not isinstance(responses_data, list):
+            return Response(
+                {'error': 'responses must be a JSON array'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if len(responses_data) > MAX_AUDIT_RESPONSES_PER_REQUEST:
+            return Response(
+                {
+                    'error': (
+                        f'Too many responses in one request. '
+                        f'Maximum allowed is {MAX_AUDIT_RESPONSES_PER_REQUEST}.'
+                    ),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         # Validate and save responses
         saved_responses = []
         for response_data in responses_data:

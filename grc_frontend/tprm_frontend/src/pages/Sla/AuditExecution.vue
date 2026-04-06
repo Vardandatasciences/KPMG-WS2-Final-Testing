@@ -1649,7 +1649,7 @@ const openEvidenceDocument = async (file) => {
   if (typeof window === 'undefined') return
   try {
     if (file.url) {
-      window.open(file.url, '_blank', 'noopener')
+      window.open(file.url, '_blank', 'noopener,noreferrer')
       return
     }
 
@@ -1657,7 +1657,7 @@ const openEvidenceDocument = async (file) => {
       const response = await apiService.getS3File(file.documentId)
       const downloadUrl = response?.s3_file?.url || response?.file_operation?.s3_url || response?.url
       if (downloadUrl) {
-        window.open(downloadUrl, '_blank', 'noopener')
+        window.open(downloadUrl, '_blank', 'noopener,noreferrer')
         return
       }
     }

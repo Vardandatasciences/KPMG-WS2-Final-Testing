@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { API_BASE_URL } from '../config/api.js'
+import { navigateTopLevelToGoogleOAuth } from '../utils/safeExternalNavigation'
  
 const TOKEN_STORAGE_KEYS = [
   'session_token',
@@ -35,17 +36,13 @@ const removeSensitive = (key) => {
   localStorage.removeItem(key)
 }
 
-// One-time migration: move legacy sensitive auth data out of localStorage.
+// Purge legacy JWT/session secrets from Web Storage (cookie-first auth; no tokens in JS storage).
 SENSITIVE_KEYS.forEach((k) => {
-  const v = localStorage.getItem(k)
-  if (v) {
-    sessionStorage.setItem(k, v)
-    localStorage.removeItem(k)
-  }
+  localStorage.removeItem(k)
+  sessionStorage.removeItem(k)
 })
- 
-// Cookie-first auth: tokens are stored in HttpOnly cookies.
-// We keep this for backward compatibility, but new flows should not depend on it.
+
+// Cookie-first auth: access/refresh tokens are HttpOnly; JS must not persist them.
 const getStoredToken = () => {
   const { value } = getFromStorage(TOKEN_STORAGE_KEYS)
   return value
@@ -116,22 +113,11 @@ export default {
       const token = response.data.access_token
       const refreshToken = response.data.refresh_token
 
-      // Cookie-first: backend sets HttpOnly cookies for access/refresh tokens.
-      // BUT: We must also store in sessionStorage so TprmWrapper can pass token to TPRM iframe.
-      // GRC API calls use cookies; TPRM iframe receives token via postMessage.
-      if (token) {
-        sessionStorage.setItem('access_token', token)
-        localStorage.removeItem('access_token')
-      } else {
-        sessionStorage.removeItem('access_token')
-      }
-      if (refreshToken) {
-        sessionStorage.setItem('refresh_token', refreshToken)
-        localStorage.removeItem('refresh_token')
-      } else {
-        sessionStorage.removeItem('refresh_token')
-      }
-      sessionStorage.removeItem('session_token')
+      removeSensitive('access_token')
+      removeSensitive('refresh_token')
+      removeSensitive('session_token')
+      localStorage.removeItem('access_token')
+      localStorage.removeItem('refresh_token')
       localStorage.removeItem('session_token')
       if (response.data.user) {
         setSensitive('current_user', JSON.stringify(response.data.user))
@@ -220,8 +206,7 @@ export default {
       const response = await authApi.get('/google-oauth/initiate/')
      
       if (response.data.status === 'success' && response.data.authorization_url) {
-        // Redirect to Google OAuth
-        window.location.href = response.data.authorization_url
+        navigateTopLevelToGoogleOAuth(response.data.authorization_url)
       } else {
         throw new Error(response.data.message || 'Failed to initiate Google OAuth')
       }
@@ -351,6 +336,15 @@ export default {
     localStorage.removeItem('refresh_token_expires')
     localStorage.removeItem('isAuthenticated')
     localStorage.removeItem('is_logged_in')
+    // Session / context identifiers: prevent cross-session reuse (client isolation)
+    localStorage.removeItem('framework_id')
+    localStorage.removeItem('framework_id_for_compliances')
+    try {
+      sessionStorage.removeItem('framework_id')
+      sessionStorage.removeItem('selectedFrameworkId')
+    } catch (e) {
+      /* ignore storage access errors */
+    }
     // MULTI-TENANCY: Clear tenant data
     localStorage.removeItem('tenant_id')
     localStorage.removeItem('tenant_name')
@@ -456,10 +450,9 @@ export default {
    * Check if user is authenticated
    */
   isAuthenticated() {
-    const token = this.getSessionToken()
     const user = this.getCurrentUser()
     const grcAuthFlag = localStorage.getItem('isAuthenticated') === 'true' || localStorage.getItem('is_logged_in') === 'true'
-    return !!user && (!!token || grcAuthFlag)
+    return grcAuthFlag && !!user
   },
  
   /**
@@ -527,20 +520,11 @@ export default {
         const token = response.data.access_token
         const refreshToken = response.data.refresh_token
  
-        // Cookie-first: backend sets HttpOnly cookies. But also store in sessionStorage for TPRM iframe.
-        if (token) {
-          sessionStorage.setItem('access_token', token)
-          localStorage.removeItem('access_token')
-        } else {
-          sessionStorage.removeItem('access_token')
-        }
-        if (refreshToken) {
-          sessionStorage.setItem('refresh_token', refreshToken)
-          localStorage.removeItem('refresh_token')
-        } else {
-          sessionStorage.removeItem('refresh_token')
-        }
-        sessionStorage.removeItem('session_token')
+        removeSensitive('access_token')
+        removeSensitive('refresh_token')
+        removeSensitive('session_token')
+        localStorage.removeItem('access_token')
+        localStorage.removeItem('refresh_token')
         localStorage.removeItem('session_token')
         if (response.data.user) {
           setSensitive('current_user', JSON.stringify(response.data.user))

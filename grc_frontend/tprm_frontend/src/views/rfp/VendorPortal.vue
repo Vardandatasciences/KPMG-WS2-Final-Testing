@@ -2789,7 +2789,7 @@
                         <div>
                           <FileText class="h-12 w-12 text-gray-400 mx-auto mb-3" />
                           <p class="text-sm text-gray-700 mb-3">Preview not available for this file type.</p>
-                          <a :href="selectedDocument.url" target="_blank" class="inline-flex items-center px-4 py-2 border border-blue-300 shadow-sm text-sm font-medium rounded-md text-blue-700 bg-white hover:bg-blue-50">
+                          <a :href="selectedDocument.url" target="_blank" rel="noopener noreferrer" class="inline-flex items-center px-4 py-2 border border-blue-300 shadow-sm text-sm font-medium rounded-md text-blue-700 bg-white hover:bg-blue-50">
                             <Download class="h-4 w-4 mr-2" />
                             Open in new tab
                           </a>
@@ -3499,7 +3499,7 @@ const downloadDynamicFileValue = (field, index) => {
 
   if (typeof fileData === 'string') {
     if (/^https?:\/\//i.test(fileData)) {
-      window.open(fileData, '_blank')
+      window.open(fileData, '_blank', 'noopener,noreferrer')
     } else {
       showErrorToast('Unable to download this file reference.')
     }
@@ -3514,7 +3514,7 @@ const downloadDynamicFileValue = (field, index) => {
     link.click()
     document.body.removeChild(link)
   } else if (fileData.url) {
-    window.open(fileData.url, '_blank')
+    window.open(fileData.url, '_blank', 'noopener,noreferrer')
   }
 }
 
@@ -4365,7 +4365,7 @@ const downloadRfpDocument = async (doc) => {
     console.log('📥 Downloading RFP document:', doc.label)
     
     // Open the document URL in a new tab for download
-    window.open(doc.url, '_blank')
+    window.open(doc.url, '_blank', 'noopener,noreferrer')
     showSuccessToast(`Downloading ${doc.label}`)
   } catch (error) {
     console.error('Error downloading RFP document:', error)
@@ -5049,7 +5049,7 @@ const saveSingleDocument = async (index) => {
 const downloadVendorDocument = async (doc) => {
   try {
     if (doc.url) {
-      window.open(doc.url, '_blank')
+      window.open(doc.url, '_blank', 'noopener,noreferrer')
       showSuccessToast('Download started')
     } else if (doc.s3Id) {
       // Fetch document details to get URL
@@ -5059,7 +5059,7 @@ const downloadVendorDocument = async (doc) => {
       const data = await response.json()
       const fileData = data.s3_file || data
       if (fileData.url) {
-        window.open(fileData.url, '_blank')
+        window.open(fileData.url, '_blank', 'noopener,noreferrer')
         showSuccessToast('Download started')
       } else {
         showErrorToast('Document URL not available')
@@ -5105,7 +5105,7 @@ const downloadDocument = async (documentType) => {
       const downloadUrl = data.download_url || data.url || data.s3_url
       if (downloadUrl) {
         // Open download URL in new tab
-        window.open(downloadUrl, '_blank')
+        window.open(downloadUrl, '_blank', 'noopener,noreferrer')
         showSuccessToast('Document download started')
       } else {
         showErrorToast('Download URL not found in response')
@@ -5775,7 +5775,7 @@ const downloadCustomFieldFile = (field, category = null) => {
 
   if (typeof fileData === 'string') {
     if (/^https?:\/\//i.test(fileData)) {
-      window.open(fileData, '_blank')
+      window.open(fileData, '_blank', 'noopener,noreferrer')
     } else {
       showErrorToast('Unable to download this file reference.')
     }
@@ -5790,7 +5790,7 @@ const downloadCustomFieldFile = (field, category = null) => {
     link.click()
     document.body.removeChild(link)
   } else if (fileData.url) {
-    window.open(fileData.url, '_blank')
+    window.open(fileData.url, '_blank', 'noopener,noreferrer')
   }
 }
 

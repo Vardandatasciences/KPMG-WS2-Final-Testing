@@ -2052,7 +2052,7 @@ const editRFPForChanges = async (stage) => {
     
     // Navigate to RFP edit page with change request context
     const editUrl = `/rfp-creation?mode=change_request&rfpId=${rfpId}&changeRequest=${encodeURIComponent(JSON.stringify(changeRequest))}`
-    window.open(editUrl, '_blank')
+    window.open(editUrl, '_blank', 'noopener,noreferrer')
     
     showMessage('Opening RFP editor with change request context', 'info')
     

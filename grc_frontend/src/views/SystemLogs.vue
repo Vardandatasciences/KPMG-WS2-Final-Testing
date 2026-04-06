@@ -660,7 +660,7 @@ const exportLogs = async () => {
     }
 
     // Open the exported file (S3 or HTTP URL) in new tab/window
-    window.open(fileUrl, '_blank');
+    window.open(fileUrl, '_blank', 'noopener,noreferrer');
     console.log(
       `Exported system logs to ${result.file_name || filename} in ${selectedExportFormat.value.toUpperCase()} format via S3 export service`
     );

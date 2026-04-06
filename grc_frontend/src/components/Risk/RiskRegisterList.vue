@@ -171,6 +171,7 @@ import DynamicTable from '../DynamicTable.vue'
 import { PopupModal } from '@/modules/popup'
 import { API_ENDPOINTS, axiosInstance } from '../../config/api.js'
 import riskDataService from '@/services/riskService' // NEW: Use cached risk data
+import { getFrameworkIdForClient } from '@/utils/frameworkContextStorage.js'
 
 export default {
   name: 'RiskRegisterList',
@@ -504,8 +505,7 @@ export default {
     async checkRetentionForPage(pageKey) {
       try {
         const params = { module_key: 'risk' }
-        const frameworkId = localStorage.getItem('framework_id') || localStorage.getItem('frameworkId')
-        if (frameworkId) params.framework_id = frameworkId
+        params.framework_id = getFrameworkIdForClient()
 
         const response = await axiosInstance.get('/api/retention/page-configs/', { params })
         const configs = this.normalizeRetentionConfigs(response.data?.data || response.data || {})
@@ -565,7 +565,7 @@ export default {
         if (result.success && result.file_url && result.file_name) {
           // Try to open the file URL in a new tab, fallback to download if it fails
           try {
-            const newWindow = window.open(result.file_url, '_blank');
+            const newWindow = window.open(result.file_url, '_blank', 'noopener,noreferrer');
             if (newWindow) {
               if (this.$popup) {
                 this.$popup.success('Export completed successfully! File opened in new tab.', 'Export Success');

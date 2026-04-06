@@ -904,6 +904,7 @@ import rfpCardTitle from '@/components_rfp/rfpCardTitle.vue'
 import newInvitationService from '@/services/newInvitationService.js'
 import vendorInvitationService from '@/services/vendorInvitationService.js'
 import { useRouter } from 'vue-router'
+import { sanitizeExportCellValue as sanitizeCSVCell } from '@/utils/exportSanitize'
 
 const { success: showToast, error: showErrorToast } = rfpUseToast()
 
@@ -1656,11 +1657,6 @@ const viewInvitations = () => {
   // Switch to distribution tab to view invitations
   activeTab.value = 'distribution'
   showToast("Viewing Invitations", "Switched to Distribution Status tab")
-}
-
-const sanitizeCSVCell = (value) => {
-  const text = String(value ?? '')
-  return /^\s*[=+\-@]/.test(text) ? `'${text}` : text
 }
 
 const generateInvitationsCSV = (invitations) => {

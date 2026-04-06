@@ -1031,7 +1031,7 @@ export default {
           throw new Error(result.message || 'No file URL received from export service')
         }
 
-        const popup = window.open(result.file_url, '_blank')
+        const popup = window.open(result.file_url, '_blank', 'noopener,noreferrer')
         if (!popup) {
           const link = document.createElement('a')
           link.href = result.file_url

@@ -14,7 +14,9 @@ logger = logging.getLogger(__name__)
 
 # AI Microservice Configuration
 AI_MICROSERVICE_URL = getattr(settings, 'AI_MICROSERVICE_URL', os.getenv('AI_MICROSERVICE_URL', 'http://localhost:8001'))
-AI_MICROSERVICE_API_KEY = getattr(settings, 'AI_MICROSERVICE_API_KEY', os.getenv('AI_MICROSERVICE_API_KEY', 'your-secret-key-here'))
+AI_MICROSERVICE_API_KEY = getattr(
+    settings, 'AI_MICROSERVICE_API_KEY', os.getenv('AI_MICROSERVICE_API_KEY', '')
+)
 
 
 class AIServiceUnavailable(Exception):

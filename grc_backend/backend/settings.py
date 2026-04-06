@@ -58,6 +58,10 @@ PERPLEXITY_API_KEY = os.environ.get("PERPLEXITY_API_KEY", "")
 # SECURITY WARNING: keep the secret key used in production secret!
 # Must be provided via environment variable in production.
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY")
+if not SECRET_KEY:
+    raise ValueError(
+        "DJANGO_SECRET_KEY is required. Set it in the environment or .env (never commit the value)."
+    )
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get("DJANGO_DEBUG", "false").lower() == "true"
@@ -363,8 +367,11 @@ SESSION_COOKIE_NAME = 'grc_sessionid'  # Custom session cookie name
 SESSION_COOKIE_HTTPONLY = _env_bool("SESSION_COOKIE_HTTPONLY", True)
 # Send session cookie only over HTTPS in non-debug; override with SESSION_COOKIE_SECURE in .env.
 SESSION_COOKIE_SECURE = _env_bool("SESSION_COOKIE_SECURE", _default_secure_cookies)
+# Lax is the default so top-level OAuth returns (e.g. Google) still send the session cookie.
+# Use SESSION_COOKIE_SAMESITE=Strict in .env only if you do not rely on cross-site login redirects.
 SESSION_COOKIE_SAMESITE = os.environ.get("SESSION_COOKIE_SAMESITE", "Lax")
-SESSION_EXPIRE_AT_BROWSER_CLOSE = False  # Session persists after browser close
+# High-security deployments: set SESSION_EXPIRE_AT_BROWSER_CLOSE=true to drop sessions when the browser closes.
+SESSION_EXPIRE_AT_BROWSER_CLOSE = _env_bool("SESSION_EXPIRE_AT_BROWSER_CLOSE", False)
 SESSION_COOKIE_DOMAIN = None  # Use default domain
 SESSION_COOKIE_PATH = '/'  # Session cookie available for entire site
 
@@ -494,6 +501,7 @@ if SECURITY_AUDIT_LOG_ENABLED:
         'level': 'INFO',
         'class': 'grc.utils.integrity_log_handler.HashChainAppendOnlyFileHandler',
         'filename': SECURITY_AUDIT_LOG_PATH,
+        'filters': ['log_forging_safe'],
     }
     LOGGING['loggers']['grc.security_audit'] = {
         'handlers': ['security_audit_chain'],
@@ -541,6 +549,7 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'  # For collectstatic command
 # Additional locations for static files (includes Vue.js dist)
 # Only add directories that actually exist to avoid warnings
 _potential_static_dirs = [
+    BASE_DIR / "static_vendor_overrides",  # Overrides DRF/admin vendor JS (deprecated API mitigations)
     BASE_DIR.parent / 'frontend' / 'dist' / 'assets',  # Vue.js compiled assets
     BASE_DIR.parent / 'frontend' / 'dist' / 'css',     # Vue.js CSS
     BASE_DIR.parent / 'frontend' / 'dist' / 'js',      # Vue.js JS
@@ -665,7 +674,7 @@ CORS_ALLOW_HEADERS = [
     'set-cookie',  # Allow set-cookie header responses
 ]
 
-# HTTPS / HSTS (cookies configured above; TLS often terminates at nginx)
+# HTTPS / HSTS (session/CSRF cookie flags are set earlier; TLS often terminates at nginx)
 SECURE_SSL_REDIRECT = _env_bool("SECURE_SSL_REDIRECT", False)
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SECURE_HSTS_SECONDS = int(os.environ.get("SECURE_HSTS_SECONDS", str(31536000 if not DEBUG else 0)))
@@ -676,17 +685,6 @@ SECURE_HSTS_PRELOAD = _env_bool("SECURE_HSTS_PRELOAD", not DEBUG)
 
 # Additional HTTPS security headers (enable in production)
 # Nginx handles HTTP→HTTPS redirect, so Django redirect is off to avoid double-redirect.
-
- # For reverse proxy
-# HSTS: 1 year in production; 0 in local dev (controlled by env to allow override)
-_hsts_seconds = int(os.environ.get('SECURE_HSTS_SECONDS', '31536000' if not DEBUG else '0'))
-
-SECURE_SSL_REDIRECT = False  # Set to True to redirect all HTTP to HTTPS
-SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')  # For reverse proxy
-# SECURITY: enable HSTS in non-debug deployments.
-SECURE_HSTS_SECONDS = 31536000 if not DEBUG else 0  # 1 year
-SECURE_HSTS_INCLUDE_SUBDOMAINS = True if not DEBUG else False
-SECURE_HSTS_PRELOAD = True if not DEBUG else False
 
 # JWT Settings (Strictly asymmetric RS256; symmetric algorithms like HS256 are NOT allowed)
 JWT_ALGORITHM = os.environ.get("JWT_ALGORITHM", "RS256").upper().strip()
@@ -889,11 +887,10 @@ S3_MICRO_API_KEY = os.environ.get("S3_MICRO_API_KEY", "")
 SECURITY_ALERT_EMAIL = os.environ.get('SECURITY_ALERT_EMAIL', '')
 ALERT_USER_ON_LOGIN_ANOMALY = os.environ.get('ALERT_USER_ON_LOGIN_ANOMALY', 'true').lower() == 'true'
 
-# Azure AD Email Configuration
-# Note: Environment variables take precedence. Defaults provided for immediate use.
-AZURE_AD_TENANT_ID = os.environ.get('AZURE_AD_TENANT_ID', 'aa7c8c45-41a3-4453-bc9a-3adfe8ff5fb6')
-AZURE_AD_CLIENT_ID = os.environ.get('AZURE_AD_CLIENT_ID', '127107b0-7144-4246-b2f4-160263ceb3c9')
-AZURE_AD_CLIENT_SECRET = os.environ.get('AZURE_AD_CLIENT_SECRET', 'sVr8Q~3b0OS~L5NFIaWGomhiGwSwFuNMnW7RPamR')
+# Azure AD Email Configuration (no hardcoded secrets; configure via environment)
+AZURE_AD_TENANT_ID = os.environ.get('AZURE_AD_TENANT_ID', '')
+AZURE_AD_CLIENT_ID = os.environ.get('AZURE_AD_CLIENT_ID', '')
+AZURE_AD_CLIENT_SECRET = os.environ.get('AZURE_AD_CLIENT_SECRET', '')
 AZURE_AD_SCOPE = os.environ.get('AZURE_AD_SCOPE', 'https://graph.microsoft.com/.default')
 # WhatsApp API Configuration
 WHATSAPP_API_URL = os.environ.get('WHATSAPP_API_URL', 'https://graph.facebook.com/v21.0/521803094347148/messages')

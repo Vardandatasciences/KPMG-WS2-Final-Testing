@@ -240,6 +240,7 @@ import PopupModal from '@/modules/popus/PopupModal.vue'
 import CustomDropdown from '@/components/CustomDropdown.vue'
 import CreateAcknowledgementModal from './CreateAcknowledgementModal.vue'
 import {  API_ENDPOINTS } from '../../config/api.js'
+import { openDownloadInNewTabWithAnchorFallback } from '@/utils/safeExternalNavigation'
 
 // Add view state
 const currentView = ref('list') // 'list' or 'card' - default to list view
@@ -339,40 +340,9 @@ const exportPolicies = async () => {
       });
       return;
     }
-    // Try to open the file URL in a new tab, fallback to download if it fails
-    try {
-      const newWindow = window.open(file_url, '_blank');
-      if (newWindow) {
-        PopupService.success('Export completed successfully! File opened in new tab.', 'Export Success');
-        sendPushNotification({
-          title: 'Policy Export Completed',
-          message: `Policy export completed successfully in ${selectedExportFormat.value.toUpperCase()} format. File opened in new tab.`,
-          category: 'policy',
-          priority: 'medium',
-          user_id: 'default_user'
-        });
-      } else {
-        // Fallback to download if popup is blocked
-        const fileRes = await axios.get(file_url, { responseType: 'blob' });
-        const url = window.URL.createObjectURL(new Blob([fileRes.data]));
-        const link = document.createElement('a');
-        link.href = url;
-        link.setAttribute('download', file_name);
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        window.URL.revokeObjectURL(url);
-        PopupService.success('Export completed successfully! File downloaded.', 'Export Success');
-        sendPushNotification({
-          title: 'Policy Export Completed',
-          message: `Policy export completed successfully in ${selectedExportFormat.value.toUpperCase()} format. File downloaded.`,
-          category: 'policy',
-          priority: 'medium',
-          user_id: 'default_user'
-        });
-      }
-    } catch (downloadErr) {
-      PopupService.success('Export completed successfully!', 'Export Success');
+    const ok = await openDownloadInNewTabWithAnchorFallback(file_url, file_name)
+    if (ok) {
+      PopupService.success('Export completed successfully! File opened or downloaded.', 'Export Success');
       sendPushNotification({
         title: 'Policy Export Completed',
         message: `Policy export completed successfully in ${selectedExportFormat.value.toUpperCase()} format.`,
@@ -380,7 +350,8 @@ const exportPolicies = async () => {
         priority: 'medium',
         user_id: 'default_user'
       });
-      console.error(downloadErr);
+    } else {
+      PopupService.warning('Export link is not from an allowed host.', 'Export');
     }
   } catch (err) {
     PopupService.error('Export failed. Please try again.', 'Export Error');

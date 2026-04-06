@@ -84,49 +84,19 @@ export default {
         // Hide popup temporarily
         this.showPopup = false
         
-        // Try to refresh the token to extend session
-        const refreshToken = sessionStorage.getItem('refresh_token') || localStorage.getItem('refresh_token')
-        if (refreshToken) {
+        const { default: api } = await import('../services/api.js')
+        try {
+          await api.post('/api/jwt/refresh/', {})
+          sessionTimeoutService.reset()
+          console.log('✅ Session extended (cookie refresh)')
+          this.$popup.success('Session extended successfully')
+        } catch (error) {
+          console.error('❌ Cookie refresh failed, trying activity ping:', error)
           try {
-            const { default: api } = await import('../services/api.js')
-            const response = await api.post('/api/jwt/refresh/', {
-              refresh: refreshToken
-            })
-            
-            if (response.data && response.data.access) {
-              // Update access token
-              sessionStorage.setItem('access_token', response.data.access)
-              localStorage.removeItem('access_token')
-              
-              // Reset session timeout service
-              sessionTimeoutService.reset()
-              
-              console.log('✅ Session extended successfully')
-              this.$popup.success('Session extended successfully')
-            }
-          } catch (error) {
-            console.error('❌ Error refreshing token:', error)
-            // If refresh fails, try to make any API call to reset backend session
-            try {
-              const { default: api } = await import('../services/api.js')
-              await api.get('/api/get-notifications/')
-              // Reset session timeout service
-              sessionTimeoutService.reset()
-              console.log('✅ Session extended via API call')
-            } catch (e) {
-              console.error('❌ Error extending session:', e)
-              this.$popup.error('Unable to extend session. Please log in again.')
-              this.showPopup = true
-            }
-          }
-        } else {
-          // No refresh token, try to make an API call to reset backend session
-          try {
-            const { default: api } = await import('../services/api.js')
             await api.get('/api/get-notifications/')
-            // Reset session timeout service
             sessionTimeoutService.reset()
             console.log('✅ Session extended via API call')
+            this.$popup.success('Session extended successfully')
           } catch (e) {
             console.error('❌ Error extending session:', e)
             this.$popup.error('Unable to extend session. Please log in again.')
@@ -140,9 +110,10 @@ export default {
       }
     },
     checkAuthAndStart() {
-      // Check authentication status and start/stop service accordingly
-      const accessToken = sessionStorage.getItem('access_token') || localStorage.getItem('access_token')
-      if (accessToken) {
+      const loggedIn =
+        localStorage.getItem('is_logged_in') === 'true' ||
+        localStorage.getItem('isAuthenticated') === 'true'
+      if (loggedIn) {
         // User is authenticated - reset service to restart timer
         // This ensures the timer resets when user logs in again
         this.showPopup = false

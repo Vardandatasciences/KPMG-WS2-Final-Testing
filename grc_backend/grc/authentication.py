@@ -1068,7 +1068,6 @@ def jwt_login(request):
             is_password_expired,
             is_password_expiring_soon,
             send_password_expiry_email,
-            log_password_action
         )
         from django.utils import timezone
         

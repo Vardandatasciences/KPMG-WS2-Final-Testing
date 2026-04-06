@@ -87,7 +87,7 @@
                 <div class="info-item">
                   <label>Website</label>
                   <p>
-                    <a v-if="vendor.website" :href="vendor.website" target="_blank" class="link">
+                    <a v-if="vendor.website" :href="vendor.website" target="_blank" rel="noopener noreferrer" class="link">
                       {{ vendor.website }}
                     </a>
                     <span v-else>N/A</span>

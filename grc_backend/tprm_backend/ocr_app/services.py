@@ -183,18 +183,14 @@ class DocumentProcessingService:
     def extract_text_from_pdf(self, file_path: str) -> Dict:
         """Extract text from PDF using PyMuPDF"""
         try:
-            doc = fitz.open(file_path)
             text_content = ""
-            page_count = len(doc)
-            
-            for page_num in range(page_count):
-                page = doc.load_page(page_num)
-                text_content += page.get_text()
-            
-            doc.close()
-            
-            # Calculate confidence based on text length and page count
-            confidence = min(95.0, max(60.0, (len(text_content) / (page_count * 100)) * 100))
+            with fitz.open(file_path) as doc:
+                page_count = len(doc)
+                for page_num in range(page_count):
+                    page = doc.load_page(page_num)
+                    text_content += page.get_text()
+            denom_pages = max(page_count, 1)
+            confidence = min(95.0, max(60.0, (len(text_content) / (denom_pages * 100)) * 100))
             
             return {
                 'success': True,

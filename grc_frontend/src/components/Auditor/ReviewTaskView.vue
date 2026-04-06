@@ -238,7 +238,7 @@
                   <div v-for="(file, index) in selectedCompliance.evidence_files" :key="index" class="audit_file-item" :class="{ 'audit_from-version': file.fromVersion }">
                     <span class="audit_file-name">{{ file.name }}</span>
                     <span v-if="file.fromVersion" class="audit_version-badge-small">From Version</span>
-                    <a v-if="file.url" :href="file.url" target="_blank" class="audit_view-file-btn" title="View File"><i class="fas fa-eye"></i></a>
+                    <a v-if="file.url" :href="file.url" target="_blank" rel="noopener noreferrer" class="audit_view-file-btn" title="View File"><i class="fas fa-eye"></i></a>
                   </div>
                 </div>
                 <div v-else class="audit_no-evidence">
@@ -257,7 +257,7 @@
           <div v-for="(file, index) in auditEvidenceFiles" :key="index" class="audit_file-item" :class="{ 'audit_from-version': file.fromVersion }">
             <span class="audit_file-name">{{ file.name }}</span>
             <span v-if="file.fromVersion" class="audit_version-badge-small">From Version</span>
-            <a v-if="file.url" :href="file.url" target="_blank" class="audit_view-file-btn" title="View File"><i class="fas fa-eye"></i></a>
+            <a v-if="file.url" :href="file.url" target="_blank" rel="noopener noreferrer" class="audit_view-file-btn" title="View File"><i class="fas fa-eye"></i></a>
           </div>
         </div>
         <div v-else class="audit_no-evidence">

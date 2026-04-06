@@ -357,6 +357,7 @@
 <script>
 import { ref, computed } from 'vue'
 import { eventService } from '../../services/api'
+import { getFrameworkIdForClient } from '@/utils/frameworkContextStorage.js'
 
 export default {
   name: 'EvidenceAttachment',
@@ -557,11 +558,11 @@ export default {
           if (consentConfig) {
             formData.append('consent_accepted', 'true')
             formData.append('consent_config_id', consentConfig.config_id.toString())
-            formData.append('framework_id', consentConfig.framework_id || localStorage.getItem('framework_id') || '1')
+            formData.append('framework_id', consentConfig.framework_id || getFrameworkIdForClient())
             console.log('📋 [Consent] Including consent data in upload request:', {
               consent_accepted: true,
               consent_config_id: consentConfig.config_id,
-              framework_id: consentConfig.framework_id || localStorage.getItem('framework_id') || '1'
+              framework_id: consentConfig.framework_id || getFrameworkIdForClient()
             })
           }
           

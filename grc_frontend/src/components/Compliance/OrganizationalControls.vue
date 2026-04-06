@@ -1804,18 +1804,16 @@ export default {
     },
     
     highlightText(text) {
-      if (!text || !this.searchQuery.trim()) return text;
-      
-      const query = this.searchQuery.trim();
-      const regex = new RegExp(`(${this.escapeRegExp(query)})`, 'gi');
-
+      if (text == null || text === '') return '';
       const safeText = String(text)
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
-      
+      if (!this.searchQuery.trim()) return safeText;
+      const query = this.searchQuery.trim();
+      const regex = new RegExp(`(${this.escapeRegExp(query)})`, 'gi');
       return safeText.replace(regex, '<mark class="search-highlight">$1</mark>');
     },
     

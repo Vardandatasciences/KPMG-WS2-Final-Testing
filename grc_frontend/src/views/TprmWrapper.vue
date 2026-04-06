@@ -171,15 +171,13 @@ export default {
       return BASE_URL ? BASE_URL : 'default'
     })
 
-    // Get auth data from GRC localStorage
+    // Sync non-secret context to TPRM iframe; JWTs stay in HttpOnly cookies (same-site requests send them).
     const getAuthData = () => {
-      const token = sessionStorage.getItem('access_token') ||
-                    sessionStorage.getItem('session_token') ||
-                    sessionStorage.getItem('token') ||
-                    localStorage.getItem('access_token') ||
-                    localStorage.getItem('session_token') || 
-                    localStorage.getItem('token')
-      const userRaw = sessionStorage.getItem('user') || sessionStorage.getItem('current_user') || localStorage.getItem('user') || localStorage.getItem('current_user')
+      const userRaw =
+        sessionStorage.getItem('current_user') ||
+        sessionStorage.getItem('user') ||
+        localStorage.getItem('current_user') ||
+        localStorage.getItem('user')
       let parsedUser = null
       if (userRaw) {
         try {
@@ -188,18 +186,20 @@ export default {
           parsedUser = userRaw
         }
       }
-      const refreshToken = sessionStorage.getItem('refresh_token') || localStorage.getItem('refresh_token')
-      
+      const isAuthenticated =
+        sessionStorage.getItem('isAuthenticated') === 'true' ||
+        sessionStorage.getItem('is_logged_in') === 'true' ||
+        localStorage.getItem('isAuthenticated') === 'true' ||
+        localStorage.getItem('is_logged_in') === 'true'
+
       return {
         type: 'GRC_AUTH_SYNC',
-        token,
-        refreshToken,
+        authMode: 'cookie',
         user: parsedUser,
-        isAuthenticated:
-          sessionStorage.getItem('isAuthenticated') === 'true' ||
-          sessionStorage.getItem('is_logged_in') === 'true' ||
-          localStorage.getItem('isAuthenticated') === 'true' ||
-          localStorage.getItem('is_logged_in') === 'true'
+        isAuthenticated,
+        userId: localStorage.getItem('user_id'),
+        tenantId: localStorage.getItem('tenant_id'),
+        tenantName: localStorage.getItem('tenant_name')
       }
     }
 
@@ -207,10 +207,10 @@ export default {
     const sendAuthToIframe = () => {
       if (tprmIframe.value && tprmIframe.value.contentWindow) {
         const authData = getAuthData()
-        console.log('[TprmWrapper] Sending auth data to TPRM iframe:', { 
-          hasToken: !!authData.token, 
+        console.log('[TprmWrapper] Sending auth sync to TPRM iframe:', {
+          authMode: authData.authMode,
           hasUser: !!authData.user,
-          isAuthenticated: authData.isAuthenticated 
+          isAuthenticated: authData.isAuthenticated
         })
         tprmIframe.value.contentWindow.postMessage(
           authData,

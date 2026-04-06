@@ -14,7 +14,11 @@ load_dotenv()
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-key-for-development-only')
+SECRET_KEY = os.environ.get('SECRET_KEY', '').strip()
+if not SECRET_KEY:
+    raise ValueError(
+        "SECRET_KEY environment variable is required. Set it in .env for local development."
+    )
 
 # Encryption key for TPRM data encryption (reuses GRC encryption service)
 # This key is used to encrypt/decrypt sensitive data at rest
@@ -278,11 +282,20 @@ CORS_ALLOW_METHODS = [
 # Security hardening: never use wildcard origin with credentials.
 CORS_ALLOW_ALL_ORIGINS = False
 
+
+def _hsts_env_bool(key, default):
+    v = os.environ.get(key)
+    if v is None:
+        return default
+    return str(v).lower() in ("true", "1", "yes", "on")
+
+
+SECURE_HSTS_SECONDS = int(os.environ.get("SECURE_HSTS_SECONDS", str(31536000 if not DEBUG else 0)))
+SECURE_HSTS_INCLUDE_SUBDOMAINS = _hsts_env_bool("SECURE_HSTS_INCLUDE_SUBDOMAINS", not DEBUG)
+SECURE_HSTS_PRELOAD = _hsts_env_bool("SECURE_HSTS_PRELOAD", not DEBUG)
+
 # Security settings
 if not DEBUG:
-    SECURE_HSTS_SECONDS = 31536000  # 1 year
-    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-    SECURE_HSTS_PRELOAD = True
     SECURE_SSL_REDIRECT = True
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
@@ -306,11 +319,11 @@ if not DEBUG:
 
 # Email configuration - Azure AD OAuth2 with fallback
 EMAIL_BACKEND = 'rfp.azure_email_backend.AzureADEmailBackend'
-AZURE_AD_TENANT_ID = os.environ.get('AZURE_AD_TENANT_ID', 'aa7c8c45-41a3-4453-bc9a-3adfe8ff5fb6')
-AZURE_AD_CLIENT_ID = os.environ.get('AZURE_AD_CLIENT_ID', '127107b0-7144-4246-b2f4-160263ceb3c9')
-AZURE_AD_CLIENT_SECRET = os.environ.get('AZURE_AD_CLIENT_SECRET', 'sVr8Q~3b0OS~L5NFIaWGomhiGwSwFuNMnW7RPamR')
+AZURE_AD_TENANT_ID = os.environ.get('AZURE_AD_TENANT_ID', '')
+AZURE_AD_CLIENT_ID = os.environ.get('AZURE_AD_CLIENT_ID', '')
+AZURE_AD_CLIENT_SECRET = os.environ.get('AZURE_AD_CLIENT_SECRET', '')
 AZURE_AD_SCOPE = 'https://graph.microsoft.com/.default'
-DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'riskavaire@vardaanglobal.com')
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', '')
 
 # Verify Azure AD configuration
 print(f"🔧 [DEBUG] Azure AD Configuration:")
@@ -324,7 +337,7 @@ print(f"  Email Backend: {EMAIL_BACKEND}")
 EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.office365.com')
 EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
 EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True').lower() == 'true'
-EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', 'riskavaire@vardaanglobal.com')
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
 
 # Ollama Configuration for Risk Analysis

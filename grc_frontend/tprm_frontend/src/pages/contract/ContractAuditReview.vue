@@ -1208,10 +1208,19 @@ const viewDocument = (doc) => {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;')
+
+      const escapeHtmlAttr = (raw) =>
+        String(raw)
+          .replace(/&/g, '&amp;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+      const safeContentSrc = escapeHtmlAttr(doc.content)
       
       // For PDFs, open directly in new tab
       if (fileType.includes('pdf') || fileName.toLowerCase().endsWith('.pdf')) {
-        const newWindow = window.open('', '_blank')
+        const newWindow = window.open('', '_blank', 'noopener,noreferrer')
         if (newWindow) {
           newWindow.document.write(`
             <html>
@@ -1223,7 +1232,7 @@ const viewDocument = (doc) => {
                 </style>
               </head>
               <body>
-                <iframe src="${doc.content}" type="application/pdf"></iframe>
+                <iframe src="${safeContentSrc}" type="application/pdf" sandbox="allow-downloads" referrerpolicy="no-referrer"></iframe>
               </body>
             </html>
           `)
@@ -1234,7 +1243,7 @@ const viewDocument = (doc) => {
         }
       } else if (fileType.startsWith('image/')) {
         // For images, open in new tab
-        const newWindow = window.open('', '_blank')
+        const newWindow = window.open('', '_blank', 'noopener,noreferrer')
         if (newWindow) {
           newWindow.document.write(`
             <html>
@@ -1246,7 +1255,7 @@ const viewDocument = (doc) => {
                 </style>
               </head>
               <body>
-                <img src="${doc.content}" alt="${safeFileName}" />
+                <img src="${safeContentSrc}" alt="${safeFileName}" referrerpolicy="no-referrer" />
               </body>
             </html>
           `)

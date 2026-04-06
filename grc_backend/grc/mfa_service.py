@@ -11,7 +11,8 @@ from django.utils import timezone
 from django.core.mail import send_mail
 from django.conf import settings
 from .models import Users, MfaEmailChallenge, MfaAuditLog
- 
+from .utils.log_sanitize import sanitize_for_log
+
 logger = logging.getLogger(__name__)
  
  
@@ -110,7 +111,11 @@ class MfaService:
                     request=request
                 )
                
-                logger.info(f"MFA OTP verified successfully for user {user.UserName} (ID: {user.UserId})")
+                logger.info(
+                    "MFA OTP verified successfully for user_id=%s user_name=%s",
+                    user.UserId,
+                    sanitize_for_log(user.UserName, 128),
+                )
                 return {
                     'success': True,
                     'challenge_id': challenge.ChallengeId
@@ -136,7 +141,10 @@ class MfaService:
                 }
                
         except Exception as e:
-            logger.error(f"Error verifying OTP for user {user.UserName}: {str(e)}")
+            logger.exception(
+                "Error verifying OTP for user_id=%s",
+                user.UserId,
+            )
             return {'success': False, 'error': f'Verification failed: {str(e)}'}
    
     @classmethod

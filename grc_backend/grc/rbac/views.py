@@ -7,56 +7,37 @@ This module provides views for RBAC functionality including user permissions.
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from django.views.decorators.http import require_http_methods
+import json
 import logging
+
+from rest_framework import status
+from rest_framework.decorators import api_view, authentication_classes, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+
+from ..jwt_auth import UnifiedJWTAuthentication
 from .utils import RBACUtils
-from .decorators import rbac_required
-import jwt
-from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
-def get_user_id_from_jwt(request):
-    """
-    Extract user_id from JWT token in Authorization header
-    """
-    try:
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            logger.warning("[RBAC VIEWS] No Bearer token found in Authorization header")
-            return None
-        
-        token = auth_header.split(' ')[1]
-        
-        # Decode JWT token using configured algorithm/key validation rules.
-        verification_key = getattr(settings, 'JWT_VERIFYING_KEY', None) or getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
-        payload = jwt.decode(
-            token,
-            verification_key,
-            algorithms=getattr(settings, 'JWT_ALLOWED_ALGORITHMS', [getattr(settings, 'JWT_ALGORITHM', 'RS256')]),
-            issuer=getattr(settings, 'JWT_ISSUER', None),
-            audience=getattr(settings, 'JWT_AUDIENCE', None),
-        )
-        user_id = payload.get('user_id')
-        
-        if user_id:
-            #logger.info(f"[RBAC VIEWS] Successfully extracted user_id from JWT: {user_id}")
-            return user_id
-        else:
-            logger.warning("[RBAC VIEWS] No user_id found in JWT payload")
-            return None
-            
-    except jwt.ExpiredSignatureError:
-        logger.error("[RBAC VIEWS] JWT token has expired")
-        return None
-    except jwt.InvalidTokenError as e:
-        logger.error(f"[RBAC VIEWS] Invalid JWT token: {e}")
-        return None
-    except Exception as e:
-        logger.error(f"[RBAC VIEWS] Error extracting user_id from JWT: {e}")
-        return None
 
-@csrf_exempt
-@require_http_methods(["GET"])
+def _authenticated_grc_user_id(request):
+    """Resolve GRC user id from DRF-authenticated request.user."""
+    user = getattr(request, 'user', None)
+    if not user or not getattr(user, 'is_authenticated', False):
+        return None
+    uid = getattr(user, 'pk', None)
+    if uid is not None:
+        return uid
+    uid = getattr(user, 'id', None)
+    if uid is not None:
+        return uid
+    return getattr(user, 'userid', None)
+
+
+@api_view(['GET'])
+@authentication_classes([UnifiedJWTAuthentication])
+@permission_classes([IsAuthenticated])
 def get_user_permissions(request):
     """
     Get user permissions for frontend RBAC service
@@ -65,23 +46,26 @@ def get_user_permissions(request):
         JSON response with user permissions organized by module
     """
     try:
-        # Get user_id from JWT token
-        user_id = get_user_id_from_jwt(request)
-        
+        user_id = _authenticated_grc_user_id(request)
         if not user_id:
-            return JsonResponse({
-                'error': 'Authentication required',
-                'message': 'Valid JWT token required'
-            }, status=401)
-        
-        # Get user permissions summary
+            return Response(
+                {
+                    'error': 'Authentication required',
+                    'message': 'Valid JWT authentication required',
+                },
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
         permissions_summary = RBACUtils.get_user_permissions_summary(user_id)
-        
+
         if not permissions_summary:
-            return JsonResponse({
-                'error': 'User not found',
-                'message': 'User not found in RBAC system'
-            }, status=404)
+            return Response(
+                {
+                    'error': 'User not found',
+                    'message': 'User not found in RBAC system',
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
         
         # Organize permissions by module
         organized_permissions = {
@@ -236,18 +220,22 @@ def get_user_permissions(request):
             'is_admin': permissions_summary.get('is_admin', False)
         }
         
-        #logger.info(f"[RBAC VIEWS] Returning permissions for user {user_id}")
-        return JsonResponse(response_data, status=200)
-        
-    except Exception as e:
-        logger.error(f"[RBAC VIEWS] Error getting user permissions: {e}")
-        return JsonResponse({
-            'error': 'Internal server error',
-            'message': 'Error retrieving user permissions'
-        }, status=500)
+        return Response(response_data, status=status.HTTP_200_OK)
 
-@csrf_exempt
-@require_http_methods(["GET", "POST"])
+    except Exception:
+        logger.exception('[RBAC VIEWS] Error getting user permissions')
+        return Response(
+            {
+                'error': 'Internal server error',
+                'message': 'Error retrieving user permissions',
+            },
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+
+@api_view(['GET', 'POST'])
+@authentication_classes([UnifiedJWTAuthentication])
+@permission_classes([IsAuthenticated])
 def check_permission(request):
     """
     Check if user has a specific permission
@@ -257,63 +245,60 @@ def check_permission(request):
         permission: Permission name (e.g., 'create_policy', 'view_all_policy')
     """
     try:
-        # Get user_id from JWT token
-        user_id = get_user_id_from_jwt(request)
-        
+        user_id = _authenticated_grc_user_id(request)
         if not user_id:
-            return JsonResponse({
-                'error': 'Authentication required',
-                'message': 'Valid JWT token required'
-            }, status=401)
-        
-        # Get parameters from GET query string or POST JSON body
+            return Response(
+                {
+                    'error': 'Authentication required',
+                    'message': 'Valid JWT authentication required',
+                },
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
         module = None
         permission = None
-        
-        logger.info(f"[RBAC CHECK] Request method: {request.method}")
-        logger.info(f"[RBAC CHECK] Request path: {request.path}")
-        
+
+        logger.debug('[RBAC CHECK] method=%s path=%s', request.method, request.path)
+
         if request.method == 'GET':
             module = request.GET.get('module')
             permission = request.GET.get('permission')
-            logger.info(f"[RBAC CHECK] GET params - module: {module}, permission: {permission}")
         elif request.method == 'POST':
-            import json
-            logger.info(f"[RBAC CHECK] POST body (raw): {request.body}")
             try:
                 body_data = json.loads(request.body)
-                logger.info(f"[RBAC CHECK] POST body (parsed): {body_data}")
                 module = body_data.get('module')
                 permission = body_data.get('permission')
-            except (json.JSONDecodeError, AttributeError) as e:
-                logger.error(f"[RBAC CHECK] JSON decode error: {e}")
-                # Fallback to form data if JSON parsing fails
+            except (json.JSONDecodeError, AttributeError):
                 module = request.POST.get('module')
                 permission = request.POST.get('permission')
-                logger.info(f"[RBAC CHECK] POST form data - module: {module}, permission: {permission}")
-        
+
         if not module or not permission:
-            return JsonResponse({
-                'error': 'Missing parameters',
-                'message': 'Both module and permission parameters are required'
-            }, status=400)
-        
-        # Check permission
+            return Response(
+                {
+                    'error': 'Missing parameters',
+                    'message': 'Both module and permission parameters are required',
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         has_permission = RBACUtils.has_permission(user_id, module, permission)
-        
-        response_data = {
-            'user_id': user_id,
-            'module': module,
-            'permission': permission,
-            'has_permission': has_permission
-        }
-        
-        #logger.info(f"[RBAC VIEWS] Permission check: user {user_id} - {module}.{permission} = {has_permission}")
-        return JsonResponse(response_data, status=200)
-        
-    except Exception as e:
-        logger.error(f"[RBAC VIEWS] Error checking permission: {e}")
-        return JsonResponse({
-            'error': 'Internal server error',
-            'message': 'Error checking permission'
-        }, status=500) 
+
+        return Response(
+            {
+                'user_id': user_id,
+                'module': module,
+                'permission': permission,
+                'has_permission': has_permission,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    except Exception:
+        logger.exception('[RBAC VIEWS] Error checking permission')
+        return Response(
+            {
+                'error': 'Internal server error',
+                'message': 'Error checking permission',
+            },
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )

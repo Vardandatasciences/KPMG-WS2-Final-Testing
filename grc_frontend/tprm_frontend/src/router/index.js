@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import authService from '@/services/authService'
 import permissionsService from '@/services/permissionsService'
+import { getParentPostMessageTargetOrigin } from '@/utils/parentPostMessageOrigin.js'
 
 const SENSITIVE_URL_PARAMS = ['access_token', 'refresh_token', 'id_token', 'token', 'session_token']
 
@@ -971,7 +972,7 @@ router.beforeEach(async (to, from, next) => {
     console.log('[Router Guard] In iframe, requesting auth sync from parent (non-blocking)...')
     // Request auth from parent
     if (window.parent && window.parent !== window) {
-      window.parent.postMessage({ type: 'TPRM_AUTH_REQUEST' }, '*')
+      window.parent.postMessage({ type: 'TPRM_AUTH_REQUEST' }, getParentPostMessageTargetOrigin())
     }
   }
   

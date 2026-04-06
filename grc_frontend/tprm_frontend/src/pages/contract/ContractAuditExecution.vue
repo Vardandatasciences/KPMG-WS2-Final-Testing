@@ -1374,7 +1374,7 @@ const viewQuestionDocument = (doc) => {
   console.log('Viewing document:', doc)
   
   if (doc.url) {
-    window.open(doc.url, '_blank')
+    window.open(doc.url, '_blank', 'noopener,noreferrer')
     return
   }
   
@@ -1417,10 +1417,19 @@ const openDocumentViewer = (content, fileName, fileType) => {
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#39;')
 
+    const escapeHtmlAttr = (raw) =>
+      String(raw)
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+    const safeContentSrc = escapeHtmlAttr(content)
+
     // Determine file type and handle accordingly
     // For PDFs, open directly in new tab
     if (fileType.includes('pdf') || fileName.toLowerCase().endsWith('.pdf')) {
-      const newWindow = window.open('', '_blank')
+      const newWindow = window.open('', '_blank', 'noopener,noreferrer')
       if (newWindow) {
         newWindow.document.write(`
           <html>
@@ -1432,7 +1441,7 @@ const openDocumentViewer = (content, fileName, fileType) => {
               </style>
             </head>
             <body>
-              <iframe src="${content}" type="application/pdf"></iframe>
+              <iframe src="${safeContentSrc}" type="application/pdf" sandbox="allow-downloads" referrerpolicy="no-referrer"></iframe>
             </body>
           </html>
         `)
@@ -1443,7 +1452,7 @@ const openDocumentViewer = (content, fileName, fileType) => {
       }
     } else if (fileType.startsWith('image/')) {
       // For images, open in new tab
-      const newWindow = window.open('', '_blank')
+      const newWindow = window.open('', '_blank', 'noopener,noreferrer')
       if (newWindow) {
         newWindow.document.write(`
           <html>
@@ -1455,7 +1464,7 @@ const openDocumentViewer = (content, fileName, fileType) => {
               </style>
             </head>
             <body>
-              <img src="${content}" alt="${safeFileName}" />
+              <img src="${safeContentSrc}" alt="${safeFileName}" referrerpolicy="no-referrer" />
             </body>
           </html>
         `)

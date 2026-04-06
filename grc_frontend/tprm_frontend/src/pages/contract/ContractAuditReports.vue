@@ -331,6 +331,7 @@ import jsPDF from 'jspdf'
 import contractAuditApi from '@/services/contractAuditApi.js'
 import loggingService from '@/services/loggingService'
 import { PopupService } from '@/popup/popupService'
+import { openUrlInNewTabSafe } from '@grcApp/utils/safeExternalNavigation'
 import { 
   Card, CardHeader, CardTitle, CardDescription, CardContent, Button, Badge, Label
 } from '@/components/ui_contract'
@@ -547,7 +548,13 @@ const getStoredReport = (auditId) => {
 const viewStoredReport = (auditId) => {
   const storedReport = getStoredReport(auditId)
   if (storedReport?.report_link) {
-    window.open(storedReport.report_link, '_blank')
+    const opened = openUrlInNewTabSafe(storedReport.report_link)
+    if (!opened) {
+      PopupService.warning(
+        'Report link is not from an allowed host or the browser blocked the popup.',
+        'Cannot Open Report'
+      )
+    }
   } else {
     PopupService.warning('No stored report link available for this audit yet.', 'Report Not Available')
   }

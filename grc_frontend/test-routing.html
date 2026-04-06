@@ -231,46 +231,63 @@
 
         async function testAPI() {
             const resultDiv = document.getElementById('api-result');
-            resultDiv.innerHTML = '<p>Testing API connection...</p>';
-            
+            resultDiv.textContent = '';
+            const loading = document.createElement('p');
+            loading.textContent = 'Testing API connection...';
+            resultDiv.appendChild(loading);
+
             try {
-                // Get base URL from api.js configuration
-                const baseUrl = window.location.origin;
-                const apiUrl = baseUrl.includes('localhost') 
-                    ? 'http://localhost:8000/api/' 
-                    : 'http://15.207.108.158:8000/api/';
-                
-                // Test a simple endpoint
+                const pageOrigin = window.location.origin;
+                const loc = window.location;
+                let apiUrl;
+                if (loc.hostname === 'localhost' || loc.hostname === '127.0.0.1') {
+                    apiUrl = loc.protocol + '//localhost:8000/api/';
+                } else {
+                    apiUrl = new URL('/api/', pageOrigin + '/').href;
+                }
+
                 const response = await fetch(apiUrl + 'test-connection/', {
                     method: 'GET',
                     headers: {
                         'Accept': 'application/json',
                     }
                 });
-                
+
+                resultDiv.textContent = '';
+                const wrap = document.createElement('div');
+                wrap.style.cssText = 'padding: 10px; border-radius: 5px;';
                 if (response.ok) {
-                    resultDiv.innerHTML = `
-                        <div style="padding: 10px; background: #d4edda; border-radius: 5px; color: #155724;">
-                            ✅ API Connection Successful!<br>
-                            <small>Endpoint: ${apiUrl}</small>
-                        </div>
-                    `;
+                    wrap.style.background = '#d4edda';
+                    wrap.style.color = '#155724';
+                    wrap.appendChild(document.createTextNode('✅ API Connection Successful!'));
+                    wrap.appendChild(document.createElement('br'));
+                    const small = document.createElement('small');
+                    small.textContent = 'Endpoint: ' + apiUrl;
+                    wrap.appendChild(small);
                 } else {
-                    resultDiv.innerHTML = `
-                        <div style="padding: 10px; background: #f8d7da; border-radius: 5px; color: #721c24;">
-                            ⚠️ API Response: ${response.status}<br>
-                            <small>This might be normal if authentication is required</small>
-                        </div>
-                    `;
+                    wrap.style.background = '#f8d7da';
+                    wrap.style.color = '#721c24';
+                    wrap.appendChild(document.createTextNode('⚠️ API Response: ' + String(response.status)));
+                    wrap.appendChild(document.createElement('br'));
+                    const hint = document.createElement('small');
+                    hint.textContent = 'This might be normal if authentication is required';
+                    wrap.appendChild(hint);
                 }
+                resultDiv.appendChild(wrap);
             } catch (error) {
-                resultDiv.innerHTML = `
-                    <div style="padding: 10px; background: #f8d7da; border-radius: 5px; color: #721c24;">
-                        ❌ API Connection Failed<br>
-                        <small>Error: ${error.message}</small><br>
-                        <small>Make sure backend is running on port 8000</small>
-                    </div>
-                `;
+                resultDiv.textContent = '';
+                const wrap = document.createElement('div');
+                wrap.style.cssText = 'padding: 10px; background: #f8d7da; border-radius: 5px; color: #721c24;';
+                wrap.appendChild(document.createTextNode('❌ API Connection Failed'));
+                wrap.appendChild(document.createElement('br'));
+                const errLine = document.createElement('small');
+                errLine.textContent = 'Error: ' + (error && error.message ? String(error.message) : 'Unknown error');
+                wrap.appendChild(errLine);
+                wrap.appendChild(document.createElement('br'));
+                const hint = document.createElement('small');
+                hint.textContent = 'Make sure backend is running (e.g. port 8000 for local API).';
+                wrap.appendChild(hint);
+                resultDiv.appendChild(wrap);
             }
         }
     </script>

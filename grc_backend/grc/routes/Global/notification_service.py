@@ -61,19 +61,13 @@ class AzureEmailSender:
         self.client_secret = ''
         self.from_email = ''
         
-        # Default values (can be overridden by environment variables or Django settings)
-        default_tenant_id = 'aa7c8c45-41a3-4453-bc9a-3adfe8ff5fb6'
-        default_client_id = '127107b0-7144-4246-b2f4-160263ceb3c9'
-        default_client_secret = 'sVr8Q~3b0OS~L5NFIaWGomhiGwSwFuNMnW7RPamR'
-        default_from_email = 'riskavaire@vardaanglobal.com'
-        
         if DJANGO_AVAILABLE and django_settings:
             try:
                 # Prioritize Django settings over environment variables for Azure AD email
                 # This ensures we use the correct Azure AD registered email
-                self.tenant_id = getattr(django_settings, 'AZURE_AD_TENANT_ID', '') or os.getenv('AZURE_AD_TENANT_ID', default_tenant_id)
-                self.client_id = getattr(django_settings, 'AZURE_AD_CLIENT_ID', '') or os.getenv('AZURE_AD_CLIENT_ID', default_client_id)
-                self.client_secret = getattr(django_settings, 'AZURE_AD_CLIENT_SECRET', '') or os.getenv('AZURE_AD_CLIENT_SECRET', default_client_secret)
+                self.tenant_id = getattr(django_settings, 'AZURE_AD_TENANT_ID', '') or os.getenv('AZURE_AD_TENANT_ID', '')
+                self.client_id = getattr(django_settings, 'AZURE_AD_CLIENT_ID', '') or os.getenv('AZURE_AD_CLIENT_ID', '')
+                self.client_secret = getattr(django_settings, 'AZURE_AD_CLIENT_SECRET', '') or os.getenv('AZURE_AD_CLIENT_SECRET', '')
                 # For from_email, always prefer Django settings default (riskavaire@vardaanglobal.com)
                 # Only use env var if Django settings doesn't have it
                 django_from_email = getattr(django_settings, 'DEFAULT_FROM_EMAIL', '')
@@ -81,39 +75,41 @@ class AzureEmailSender:
                     self.from_email = django_from_email
                     logger.info(f"[AZURE CONFIG] Using DEFAULT_FROM_EMAIL from Django settings: {self.from_email}")
                 else:
-                    # If no Django setting, check env var, but default to Azure AD email
                     env_from_email = os.getenv('DEFAULT_FROM_EMAIL', '')
                     if env_from_email:
-                        # Check if env var email is Gmail - if so, use Azure AD email instead for Azure
                         if '@gmail.com' in env_from_email.lower():
-                            logger.warning(f"[AZURE CONFIG] Environment DEFAULT_FROM_EMAIL is Gmail ({env_from_email}), using Azure AD email instead: {default_from_email}")
-                            self.from_email = default_from_email
+                            logger.warning(
+                                "[AZURE CONFIG] DEFAULT_FROM_EMAIL is Gmail; Azure Graph may require a tenant-registered address. "
+                                "Set DEFAULT_FROM_EMAIL to your Azure-registered sender."
+                            )
+                            self.from_email = ''
                         else:
-                            self.from_email = env_from_email  
+                            self.from_email = env_from_email
                             logger.info(f"[AZURE CONFIG] Using DEFAULT_FROM_EMAIL from environment: {self.from_email}")
                     else:
-                        self.from_email = default_from_email
-                        logger.info(f"[AZURE CONFIG] Using default Azure AD email: {self.from_email}")
+                        self.from_email = ''
+                        logger.info("[AZURE CONFIG] DEFAULT_FROM_EMAIL not set; configure for Azure outbound mail.")
             except Exception as e:
                 logger.warning(f"Error accessing Django settings, falling back to environment variables: {str(e)}")
-                self.tenant_id = os.getenv('AZURE_AD_TENANT_ID', default_tenant_id)
-                self.client_id = os.getenv('AZURE_AD_CLIENT_ID', default_client_id)
-                self.client_secret = os.getenv('AZURE_AD_CLIENT_SECRET', default_client_secret)
-                self.from_email = os.getenv('DEFAULT_FROM_EMAIL', default_from_email)
+                self.tenant_id = os.getenv('AZURE_AD_TENANT_ID', '')
+                self.client_id = os.getenv('AZURE_AD_CLIENT_ID', '')
+                self.client_secret = os.getenv('AZURE_AD_CLIENT_SECRET', '')
+                self.from_email = os.getenv('DEFAULT_FROM_EMAIL', '')
         else:
-            self.tenant_id = os.getenv('AZURE_AD_TENANT_ID', default_tenant_id)
-            self.client_id = os.getenv('AZURE_AD_CLIENT_ID', default_client_id)
-            self.client_secret = os.getenv('AZURE_AD_CLIENT_SECRET', default_client_secret)
-            self.from_email = os.getenv('DEFAULT_FROM_EMAIL', default_from_email)
+            self.tenant_id = os.getenv('AZURE_AD_TENANT_ID', '')
+            self.client_id = os.getenv('AZURE_AD_CLIENT_ID', '')
+            self.client_secret = os.getenv('AZURE_AD_CLIENT_SECRET', '')
+            self.from_email = os.getenv('DEFAULT_FROM_EMAIL', '')
         
         self.scope = 'https://graph.microsoft.com/.default'
         
-        # Ensure from_email is always set to Azure AD email if credentials are present
-        # This prevents is_configured() from failing due to missing email
         if self.tenant_id and self.client_id and self.client_secret:
-            if not self.from_email or '@gmail.com' in self.from_email.lower() or '@vardaanglobal.com' not in self.from_email.lower():
-                logger.info(f"[AZURE CONFIG] Setting from_email to Azure AD email: {default_from_email}")
-                self.from_email = default_from_email
+            if not self.from_email or '@gmail.com' in self.from_email.lower():
+                logger.warning(
+                    "[AZURE CONFIG] Azure credentials are set but DEFAULT_FROM_EMAIL is missing or invalid for Graph. "
+                    "Set DEFAULT_FROM_EMAIL to a sender registered in your tenant."
+                )
+                self.from_email = ''
         
         if self.is_configured():
             logger.info("AzureEmailSender initialized and configured")

@@ -100,11 +100,9 @@
                       <span class="file-size">
                         {{ formatFileSize(file.file_size || file.size) }}
                       </span>
-                      <a
-                        v-if="file.s3_url"
+                      <a v-if="file.s3_url"
                         :href="file.s3_url"
-                        target="_blank"
-                        class="file-link"
+                        target="_blank" rel="noopener noreferrer" class="file-link"
                       >
                         Download
                       </a>

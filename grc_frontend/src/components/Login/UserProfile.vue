@@ -1745,6 +1745,7 @@ import { PopupService } from '../../modules/popus/popupService';
 import PopupModal from '../../modules/popus/PopupModal.vue';
 import ForgotPassword from './ForgotPassword.vue';
 import ModulePagesTree from './DataRetention/ModulePagesTree.vue';
+import { getSessionFrameworkId, setSessionFrameworkId, getDefaultFrameworkId } from '@/utils/frameworkContextStorage.js';
 
 export default {
   name: 'UserProfile',
@@ -2507,7 +2508,7 @@ export default {
           this.success = 'Data exported successfully!';
           // Open download link
           if (response.data.data && response.data.data.download_url) {
-            window.open(response.data.data.download_url, '_blank');
+            window.open(response.data.data.download_url, '_blank', 'noopener,noreferrer');
           }
           // Reload requests to show the new portability request
           await this.loadDataSubjectRequests();
@@ -3724,16 +3725,10 @@ export default {
 
       // Consent Configuration Methods
       async initializeConsentConfiguration() {
-        // Get framework ID from storage
-        this.consentFrameworkId = localStorage.getItem('framework_id') || 
-                                  localStorage.getItem('selectedFrameworkId') ||
-                                  sessionStorage.getItem('framework_id');
-        
-        if (this.consentFrameworkId) {
-          this.consentFrameworkId = parseInt(this.consentFrameworkId);
-          if (isNaN(this.consentFrameworkId)) {
-            this.consentFrameworkId = null;
-          }
+        const sid = getSessionFrameworkId();
+        this.consentFrameworkId = sid ? parseInt(sid, 10) : null;
+        if (this.consentFrameworkId != null && isNaN(this.consentFrameworkId)) {
+          this.consentFrameworkId = null;
         }
         
         // Always load configurations - TPRM doesn't need framework_id
@@ -3746,7 +3741,7 @@ export default {
           await this.loadConsentFrameworks();
           if (this.consentFrameworks.length > 0) {
             this.consentFrameworkId = this.consentFrameworks[0].FrameworkId;
-            localStorage.setItem('framework_id', this.consentFrameworkId);
+            setSessionFrameworkId(this.consentFrameworkId);
             await this.loadConsentConfigurations();
           } else {
             this.showConsentFrameworkSelector = true;
@@ -3777,7 +3772,7 @@ export default {
 
       onConsentFrameworkChange() {
         if (this.consentFrameworkId) {
-          localStorage.setItem('framework_id', this.consentFrameworkId);
+          setSessionFrameworkId(this.consentFrameworkId);
           this.showConsentFrameworkSelector = false;
           this.loadConsentConfigurations();
         }
@@ -3806,7 +3801,7 @@ export default {
               console.log('[UserProfile] 🔵 Loading TPRM consent configurations...');
               
               const tprmResponse = await axios.get(`${API_BASE_URL}/api/tprm/consent/configurations/`, {
-                params: { framework_id: this.consentFrameworkId || 1 },
+                params: { framework_id: this.consentFrameworkId || parseInt(getDefaultFrameworkId(), 10) },
                 headers: this.getConsentAuthHeaders()
               });
 
@@ -3822,7 +3817,7 @@ export default {
                     action_label: c.ActionLabel || c.action_label,
                     is_enabled: Boolean(c.IsEnabled !== undefined ? c.IsEnabled : (c.is_enabled !== undefined ? c.is_enabled : false)),
                     consent_text: c.ConsentText || c.consent_text || '',
-                    framework_id: c.FrameworkId || c.framework_id || 1,
+                    framework_id: c.FrameworkId || c.framework_id || parseInt(getDefaultFrameworkId(), 10),
                     updated_at: c.UpdatedAt || c.updated_at || null,
                     updated_by_name: c.updated_by_name || null,
                     is_tprm: true // Flag to identify TPRM configs

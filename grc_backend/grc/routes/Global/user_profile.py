@@ -18,6 +18,8 @@ from ...debug_utils import debug_print
 
 logger = logging.getLogger(__name__)
 
+_CLIENT_SAFE_ERROR = 'An internal error occurred. Please try again later.'
+
 
 class AlwaysAllowPermission(BasePermission):
     """
@@ -203,12 +205,10 @@ def get_user_profile(request, user_id):
             'message': 'User not found'
         }, status=404)
     except Exception as e:
-        logger.error(f"Error fetching user profile: {str(e)}")
-        import traceback
-        logger.error(traceback.format_exc())
+        logger.exception('Error fetching user profile')
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': _CLIENT_SAFE_ERROR
         }, status=500) 
 
 
@@ -358,8 +358,9 @@ def check_encryption_key(request):
             'message': 'Key is auto-generated from SECRET_KEY. Set GRC_ENCRYPTION_KEY in environment!' if key_source == 'AUTO_GENERATED_FROM_SECRET_KEY' else 'Key is configured correctly'
         })
     except Exception as e:
+        logger.exception('check_encryption_key failed')
         return Response({
-            'error': f'Failed to check encryption key: {str(e)}'
+            'error': _CLIENT_SAFE_ERROR
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -595,9 +596,9 @@ def get_data_subject_requests(request, user_id):
             status=status.HTTP_404_NOT_FOUND
         )
     except Exception as e:
-        logger.error(f"Error fetching data subject requests: {str(e)}")
+        logger.exception('Error fetching data subject requests')
         return Response(
-            {'status': 'error', 'message': f'Failed to fetch requests: {str(e)}'}, 
+            {'status': 'error', 'message': _CLIENT_SAFE_ERROR},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
@@ -612,7 +613,7 @@ def create_data_subject_request(request):
     For GDPR compliance, this endpoint must be accessible without authentication
     """
     logger.info(f"[Data Subject Request] Received request: {request.method} {request.path}")
-    logger.info(f"[Data Subject Request] Request data: {request.data}")
+    logger.info("[Data Subject Request] Request body omitted from logs (PII)")
     logger.info(f"[Data Subject Request] Has user attribute: {hasattr(request, 'user')}")
     if hasattr(request, 'user'):
         logger.info(f"[Data Subject Request] User object: {request.user}, type: {type(request.user)}")
@@ -1204,24 +1205,20 @@ def create_data_subject_request(request):
         }, status=status.HTTP_201_CREATED)
         
     except Users.DoesNotExist as e:
-        logger.error(f"[Data Subject Request] User not found: {str(e)}")
+        logger.warning('[Data Subject Request] User not found')
         return Response(
-            {'status': 'error', 'message': f'User not found: {str(e)}'}, 
+            {'status': 'error', 'message': 'User not found'},
             status=status.HTTP_404_NOT_FOUND
         )
     except Exception as e:
-        logger.error(f"[Data Subject Request] Error creating request: {str(e)}")
-        import traceback
-        logger.error(f"[Data Subject Request] Traceback: {traceback.format_exc()}")
-        # Check if it's a permission error
+        logger.exception('[Data Subject Request] Error creating request')
         if '403' in str(e) or 'Forbidden' in str(e) or 'Permission' in str(e):
-            logger.error(f"[Data Subject Request] Permission error detected: {str(e)}")
             return Response(
-                {'status': 'error', 'message': f'Permission denied: {str(e)}'}, 
+                {'status': 'error', 'message': 'Permission denied.'},
                 status=status.HTTP_403_FORBIDDEN
             )
         return Response(
-            {'status': 'error', 'message': f'Failed to create request: {str(e)}'}, 
+            {'status': 'error', 'message': _CLIENT_SAFE_ERROR},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
@@ -1517,11 +1514,9 @@ def export_user_data_portability(request):
             )
         
     except Exception as e:
-        logger.error(f"Error in export_user_data_portability: {str(e)}")
-        import traceback
-        logger.error(traceback.format_exc())
+        logger.exception('Error in export_user_data_portability')
         return Response(
-            {'status': 'error', 'message': f'Failed to export data: {str(e)}'}, 
+            {'status': 'error', 'message': _CLIENT_SAFE_ERROR},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
@@ -2161,9 +2156,9 @@ def update_data_subject_request_status(request, request_id):
         }, status=status.HTTP_200_OK)
             
     except Exception as e:
-        logger.error(f"Error updating data subject request status: {str(e)}")
+        logger.exception('Error updating data subject request status')
         return Response(
-            {'status': 'error', 'message': f'Failed to update request: {str(e)}'}, 
+            {'status': 'error', 'message': _CLIENT_SAFE_ERROR},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
@@ -2308,9 +2303,9 @@ def get_access_requests(request, user_id):
             }, status=status.HTTP_200_OK)
             
     except Exception as e:
-        logger.error(f"Error fetching access requests: {str(e)}")
+        logger.exception('Error fetching access requests')
         return Response(
-            {'status': 'error', 'message': f'Failed to fetch access requests: {str(e)}'}, 
+            {'status': 'error', 'message': _CLIENT_SAFE_ERROR},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
@@ -2426,9 +2421,9 @@ def create_access_request(request):
         }, status=status.HTTP_201_CREATED)
         
     except Exception as e:
-        logger.error(f"Error creating access request: {str(e)}")
+        logger.exception('Error creating access request')
         return Response(
-            {'status': 'error', 'message': f'Failed to create request: {str(e)}'}, 
+            {'status': 'error', 'message': _CLIENT_SAFE_ERROR},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
@@ -2736,8 +2731,8 @@ def update_access_request_status(request, request_id):
             }, status=status.HTTP_200_OK)
             
     except Exception as e:
-        logger.error(f"Error updating access request status: {str(e)}")
+        logger.exception('Error updating access request status')
         return Response(
-            {'status': 'error', 'message': f'Failed to update request: {str(e)}'}, 
+            {'status': 'error', 'message': _CLIENT_SAFE_ERROR},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )

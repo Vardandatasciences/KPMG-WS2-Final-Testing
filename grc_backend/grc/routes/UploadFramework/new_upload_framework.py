@@ -34,6 +34,13 @@ from ...utils.file_compression import decompress_if_needed
 from ...routes.Global.s3_fucntions import create_direct_mysql_client
 from datetime import datetime
 from ...debug_utils import debug_print
+from ...utils.safe_paths import (
+    safe_join,
+    require_safe_user_key,
+    require_safe_rel_segment,
+    safe_upload_filename,
+    UnsafePathError,
+)
 
 # Global progress tracking
 processing_status = {}
@@ -63,11 +70,9 @@ def create_user_folder(userid):
     Raises:
         OSError: If there's an error creating the folder after retries
     """
-    # Create folder name with the user ID
-    folder_name = f"upload_{userid}"
-    
-    # Create the folder path in MEDIA_ROOT
-    folder_path = os.path.join(settings.MEDIA_ROOT, folder_name)
+    key = require_safe_user_key(userid)
+    folder_name = f"upload_{key}"
+    folder_path = safe_join(settings.MEDIA_ROOT, folder_name)
     
     max_retries = 3
     retry_delay = 1  # seconds
@@ -93,7 +98,7 @@ def create_user_folder(userid):
                         try:
                             # Clear folder contents instead of deleting
                             for item in os.listdir(folder_path):
-                                item_path = os.path.join(folder_path, item)
+                                item_path = safe_join(folder_path, item)
                                 if os.path.isdir(item_path):
                                     shutil.rmtree(item_path, ignore_errors=True)
                                 else:
@@ -139,8 +144,7 @@ def save_uploaded_file(uploaded_file, user_folder):
         str: Path to the saved file
     """
     try:
-        # Create the full file path
-        file_path = os.path.join(user_folder, uploaded_file.name)
+        file_path = safe_join(user_folder, safe_upload_filename(uploaded_file.name))
         
         # Save the file
         with open(file_path, 'wb+') as destination:
@@ -169,9 +173,9 @@ def process_document_background(userid, file_path, task_id):
         try:
             update_progress(task_id, 10, "Starting document processing...")
             
-            # Get MEDIA_ROOT
             media_root = ai_upload.get_media_root()
-            user_folder = media_root / f"upload_{userid}"
+            user_key = require_safe_user_key(userid)
+            user_folder = Path(safe_join(str(media_root), f"upload_{user_key}"))
             pdf_path = Path(file_path)
             pdf_name = pdf_path.stem
             
@@ -338,12 +342,15 @@ def upload_framework_file(request):
         # Step 1: Create user folder (delete if exists, create new)
         try:
             user_folder = create_user_folder(userid)
+        except UnsafePathError as e:
+            return JsonResponse({'error': str(e)}, status=400)
         except Exception as e:
             return JsonResponse({'error': f'Failed to create user folder: {str(e)}'}, status=500)
         
-        # Step 2: Save uploaded file to user folder
         try:
             file_path = save_uploaded_file(uploaded_file, user_folder)
+        except UnsafePathError as e:
+            return JsonResponse({'error': str(e)}, status=400)
         except Exception as e:
             return JsonResponse({'error': f'Failed to save uploaded file: {str(e)}'}, status=500)
         
@@ -501,10 +508,14 @@ def get_sections_by_user(request, userid):
     """
     try:
         debug_print(f"[INFO] Getting sections for user: {userid}")
-        
+        try:
+            require_safe_user_key(userid)
+        except UnsafePathError as e:
+            return JsonResponse({'success': False, 'error': str(e)}, status=400)
+
         # Import the consolidate_data module
         from .consolidate_data import load_consolidated_json
-        
+
         # Load consolidated JSON (will create if doesn't exist)
         data = load_consolidated_json(userid)
         
@@ -532,7 +543,7 @@ def get_sections_by_user(request, userid):
         if not data:
             # Fallback: Check if we have basic files and return minimal data
             debug_print(f"[WARNING] No consolidated data found, checking for basic files...")
-            user_folder = os.path.join(settings.MEDIA_ROOT, f"upload_{userid}")
+            user_folder = safe_join(settings.MEDIA_ROOT, f"upload_{require_safe_user_key(userid)}")
             
             if os.path.exists(user_folder):
                 # Check if we have at least the PDF and index file
@@ -648,7 +659,11 @@ def generate_consolidated_json(request):
     try:
         data = json.loads(request.body)
         userid = data.get('userid', '1')
-        
+        try:
+            require_safe_user_key(userid)
+        except UnsafePathError as e:
+            return JsonResponse({'error': str(e), 'success': False}, status=400)
+
         debug_print(f"[INFO] Generating consolidated JSON for user: {userid}")
         
         # Import the consolidate_data module
@@ -704,8 +719,7 @@ def read_sections_from_directory(sections_dir):
     sections = []
     
     try:
-        # Look for sections_index.json file
-        index_file = os.path.join(sections_dir, 'sections_index.json')
+        index_file = safe_join(sections_dir, 'sections_index.json')
         if os.path.exists(index_file):
             with open(index_file, 'r', encoding='utf-8') as f:
                 index_data = json.load(f)
@@ -720,16 +734,22 @@ def read_sections_from_directory(sections_dir):
                     'subsections': []
                 }
                 
-                # Add subsections if they exist
-                section_folder = os.path.join(sections_dir, 'sections', section_info.get('folder', ''))
+                raw_folder = (section_info.get('folder') or '').strip()
+                if not raw_folder:
+                    sections.append(section)
+                    continue
+                try:
+                    folder_seg = require_safe_rel_segment(raw_folder)
+                except UnsafePathError:
+                    sections.append(section)
+                    continue
+                section_folder = safe_join(sections_dir, 'sections', folder_seg)
                 if os.path.exists(section_folder):
-                    # Read content.json for section details
-                    content_file = os.path.join(section_folder, 'content.json')
+                    content_file = safe_join(section_folder, 'content.json')
                     if os.path.exists(content_file):
                         with open(content_file, 'r', encoding='utf-8') as f:
                             content_data = json.load(f)
                             section['content'] = content_data.get('content', '')
-                
                 sections.append(section)
         
         return sections
@@ -751,9 +771,9 @@ def get_sections_from_user_folder(userid):
         list: List of sections with their titles and metadata
     """
     try:
-        # Create the user folder path
-        user_folder = os.path.join(settings.MEDIA_ROOT, f"upload_{userid}")
-        
+        key = require_safe_user_key(userid)
+        user_folder = safe_join(settings.MEDIA_ROOT, f"upload_{key}")
+
         if not os.path.exists(user_folder):
             debug_print(f"User folder not found: {user_folder}")
             return []
@@ -761,9 +781,9 @@ def get_sections_from_user_folder(userid):
         # Look for sections_index.json - try multiple possible locations
         sections_index_path = None
         possible_paths = [
-            os.path.join(user_folder, 'extracted_sections', 'sections_index.json'),
-            os.path.join(user_folder, 'sections_PCI_DSS_1', 'sections_index.json'),
-            os.path.join(user_folder, 'sections_PCI_DSS', 'sections_index.json'),
+            safe_join(user_folder, 'extracted_sections', 'sections_index.json'),
+            safe_join(user_folder, 'sections_PCI_DSS_1', 'sections_index.json'),
+            safe_join(user_folder, 'sections_PCI_DSS', 'sections_index.json'),
         ]
         
         for path in possible_paths:
@@ -793,9 +813,19 @@ def get_sections_from_user_folder(userid):
                 'subsections': []
             }
             
-            # Check if there's a content.json file in the section folder
-            section_folder = os.path.join(user_folder, 'extracted_sections', 'sections', section_info.get('folder', ''))
-            content_file = os.path.join(section_folder, 'content.json')
+            raw_folder = (section_info.get('folder') or '').strip()
+            if not raw_folder:
+                section['content'] = ''
+                sections.append(section)
+                continue
+            try:
+                folder_seg = require_safe_rel_segment(raw_folder)
+            except UnsafePathError:
+                section['content'] = ''
+                sections.append(section)
+                continue
+            section_folder = safe_join(user_folder, 'extracted_sections', 'sections', folder_seg)
+            content_file = safe_join(section_folder, 'content.json')
             
             if os.path.exists(content_file):
                 try:
@@ -808,17 +838,14 @@ def get_sections_from_user_folder(userid):
             else:
                 section['content'] = ''
             
-            # Check for extracted controls in the section folder
-            extracted_controls_folder = os.path.join(section_folder, 'extracted_controls')
+            extracted_controls_folder = safe_join(section_folder, 'extracted_controls')
             if os.path.exists(extracted_controls_folder):
                 try:
-                    # Read control headings from control_headings.json
-                    control_headings_file = os.path.join(extracted_controls_folder, 'control_headings.json')
+                    control_headings_file = safe_join(extracted_controls_folder, 'control_headings.json')
                     if os.path.exists(control_headings_file):
                         with open(control_headings_file, 'r', encoding='utf-8') as f:
                             control_data = json.load(f)
                             
-                        # Extract control names from the JSON structure
                         controls = control_data.get('controls', [])
                         for control in controls:
                             control_name = control.get('name', '')
@@ -833,11 +860,9 @@ def get_sections_from_user_folder(userid):
                                 }
                                 section['subsections'].append(subsection)
                     
-                    # Also check for subdirectories in extracted_controls
                     for item in os.listdir(extracted_controls_folder):
-                        item_path = os.path.join(extracted_controls_folder, item)
+                        item_path = safe_join(extracted_controls_folder, item)
                         if os.path.isdir(item_path):
-                            # This is a control subfolder
                             subsection = {
                                 'id': len(section['subsections']),
                                 'title': item.replace('_', ' '),
@@ -876,7 +901,10 @@ def find_user_folders():
         
         # Look for folders that start with 'upload_'
         for item in os.listdir(media_root):
-            item_path = os.path.join(media_root, item)
+            try:
+                item_path = safe_join(media_root, item)
+            except UnsafePathError:
+                continue
             if os.path.isdir(item_path) and item.startswith('upload_'):
                 userid = item.replace('upload_', '')
                 user_folders.append(userid)
@@ -897,14 +925,12 @@ def load_default_data(request):
         request: Django request object
     """
     try:
-        # Path to the main_default folder
-        main_default_folder = os.path.join(settings.MEDIA_ROOT, 'main_default')
+        main_default_folder = safe_join(settings.MEDIA_ROOT, 'main_default')
         
         if not os.path.exists(main_default_folder):
             return JsonResponse({'error': 'Default data folder not found'}, status=404)
         
-        # Check for extracted_sections folder
-        extracted_sections_folder = os.path.join(main_default_folder, 'extracted_sections')
+        extracted_sections_folder = safe_join(main_default_folder, 'extracted_sections')
         if not os.path.exists(extracted_sections_folder):
             return JsonResponse({'error': 'Default extracted sections not found'}, status=404)
         
@@ -937,25 +963,21 @@ def get_sections_from_main_default():
         list: List of sections with their titles and metadata
     """
     try:
-        # Path to the main_default folder
-        main_default_folder = os.path.join(settings.MEDIA_ROOT, 'main_default')
+        main_default_folder = safe_join(settings.MEDIA_ROOT, 'main_default')
         
         if not os.path.exists(main_default_folder):
             debug_print(f"Main default folder not found: {main_default_folder}")
             return []
         
-        # Look for sections_index.json in the extracted_sections folder
-        sections_index_path = os.path.join(main_default_folder, 'extracted_sections', 'sections_index.json')
+        sections_index_path = safe_join(main_default_folder, 'extracted_sections', 'sections_index.json')
         
         if not os.path.exists(sections_index_path):
             debug_print(f"Sections index file not found: {sections_index_path}")
             return []
         
-        # Read the sections index file
         with open(sections_index_path, 'r', encoding='utf-8') as f:
             sections_data = json.load(f)
         
-        # Extract sections from the sections_written array
         sections = []
         for section_info in sections_data.get('sections_written', []):
             section = {
@@ -968,9 +990,19 @@ def get_sections_from_main_default():
                 'subsections': []
             }
             
-            # Check if there's a content.json file in the section folder
-            section_folder = os.path.join(main_default_folder, 'extracted_sections', 'sections', section_info.get('folder', ''))
-            content_file = os.path.join(section_folder, 'content.json')
+            raw_folder = (section_info.get('folder') or '').strip()
+            if not raw_folder:
+                section['content'] = ''
+                sections.append(section)
+                continue
+            try:
+                folder_seg = require_safe_rel_segment(raw_folder)
+            except UnsafePathError:
+                section['content'] = ''
+                sections.append(section)
+                continue
+            section_folder = safe_join(main_default_folder, 'extracted_sections', 'sections', folder_seg)
+            content_file = safe_join(section_folder, 'content.json')
             
             if os.path.exists(content_file):
                 try:
@@ -983,17 +1015,14 @@ def get_sections_from_main_default():
             else:
                 section['content'] = ''
             
-            # Check for extracted controls in the section folder
-            extracted_controls_folder = os.path.join(section_folder, 'extracted_controls')
+            extracted_controls_folder = safe_join(section_folder, 'extracted_controls')
             if os.path.exists(extracted_controls_folder):
                 try:
-                    # Read control headings from control_headings.json
-                    control_headings_file = os.path.join(extracted_controls_folder, 'control_headings.json')
+                    control_headings_file = safe_join(extracted_controls_folder, 'control_headings.json')
                     if os.path.exists(control_headings_file):
                         with open(control_headings_file, 'r', encoding='utf-8') as f:
                             control_data = json.load(f)
                             
-                        # Extract control names from the JSON structure
                         controls = control_data.get('controls', [])
                         for control in controls:
                             control_name = control.get('name', '')
@@ -1008,11 +1037,9 @@ def get_sections_from_main_default():
                                 }
                                 section['subsections'].append(subsection)
                     
-                    # Also check for subdirectories in extracted_controls
                     for item in os.listdir(extracted_controls_folder):
-                        item_path = os.path.join(extracted_controls_folder, item)
+                        item_path = safe_join(extracted_controls_folder, item)
                         if os.path.isdir(item_path):
-                            # This is a control subfolder
                             subsection = {
                                 'id': len(section['subsections']),
                                 'title': item.replace('_', ' '),

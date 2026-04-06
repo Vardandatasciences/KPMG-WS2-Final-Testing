@@ -273,7 +273,7 @@ export default {
 
     viewReport(report) {
       if (report && report.Report) {
-        window.open(report.Report, '_blank');
+        window.open(report.Report, '_blank', 'noopener,noreferrer');
       }
     },
 

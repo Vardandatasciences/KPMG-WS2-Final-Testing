@@ -753,18 +753,14 @@ class RenderS3Client:
                 # For other formats, send the full data structure
                 payload = {'data': data}
             
-            # Include AWS credentials in payload (required by the microservice)
-            aws_credentials = {
-                'awsAccessKey': 'AKIAW76SP14WHQGXV47T',
-                'awsSecretKey': 'wJLUGFOQtXYOqzhyvmM2ljZPVbW+LTLJo2ft3A',
-                'awsRegion': 'ap-south-1',
-                'bucketName': 'vardaanwebsites'
-            }
+            from .microservice_aws_payload import aws_credentials_for_microservice_export
+
+            aws_credentials = aws_credentials_for_microservice_export()
             payload.update(aws_credentials)
-            
+
             debug_print(f"🔗 Export URL: {url}")
             debug_print(f"📦 Payload size: {len(str(payload))} characters")
-            debug_print(f"🔑 Using AWS credentials: {aws_credentials['awsAccessKey'][:10]}...")
+            debug_print("🔑 Using AWS credentials from environment for microservice export")
             
             response = requests.post(url, json=payload, timeout=300)
             debug_print(f"📊 Response status: {response.status_code}")

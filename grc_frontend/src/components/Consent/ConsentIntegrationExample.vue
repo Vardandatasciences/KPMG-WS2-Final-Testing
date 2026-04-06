@@ -47,6 +47,7 @@ import ConsentModal from './ConsentModal.vue';
 import { checkConsentRequired, recordConsentAcceptance, CONSENT_ACTIONS } from '@/utils/consentManager.js';
 import axios from 'axios';
 import { API_BASE_URL } from '@/config/api.js';
+import { getFrameworkIdForClient } from '@/utils/frameworkContextStorage.js';
 
 export default {
   name: 'ConsentIntegrationExample',
@@ -146,14 +147,14 @@ export default {
           ...(consentConfig && {
             consent_accepted: true,
             consent_config_id: consentConfig.config_id,
-            framework_id: localStorage.getItem('framework_id')
+            framework_id: getFrameworkIdForClient()
           })
         };
 
         console.log('📤 [Create Policy] Sending request with data:', policyData);
 
         const response = await axios.post(
-          `${API_BASE_URL}/api/frameworks/${localStorage.getItem('framework_id')}/policies/`,
+          `${API_BASE_URL}/api/frameworks/${getFrameworkIdForClient()}/policies/`,
           policyData,
           {
             headers: {
@@ -204,7 +205,7 @@ export default {
         if (consentConfig) {
           formData.append('consent_accepted', 'true');
           formData.append('consent_config_id', consentConfig.config_id);
-          formData.append('framework_id', localStorage.getItem('framework_id'));
+          formData.append('framework_id', getFrameworkIdForClient());
         }
 
         console.log('📤 [Upload] Sending file:', selectedFile.value.name);
@@ -255,7 +256,7 @@ export default {
           ...(consentConfig && {
             consent_accepted: true,
             consent_config_id: consentConfig.config_id,
-            framework_id: localStorage.getItem('framework_id')
+            framework_id: getFrameworkIdForClient()
           })
         };
 

@@ -44,7 +44,11 @@ def env_csv(key, default=''):
     return [item.strip() for item in str(value).split(',') if item.strip()]
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = env_config('DJANGO_SECRET_KEY', default='django-insecure-development-key-change-in-production')
+SECRET_KEY = env_config('DJANGO_SECRET_KEY')
+if not SECRET_KEY:
+    raise ValueError(
+        "DJANGO_SECRET_KEY environment variable is required."
+    )
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env_config('DEBUG', default=False, cast=bool)
@@ -309,9 +313,18 @@ SIMPLE_JWT = {
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = 'DENY'
-SECURE_HSTS_SECONDS = 31536000 if not DEBUG else 0
-SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-SECURE_HSTS_PRELOAD = True
+
+
+def _hsts_env_bool(key, default):
+    v = os.environ.get(key)
+    if v is None:
+        return default
+    return str(v).lower() in ("true", "1", "yes", "on")
+
+
+SECURE_HSTS_SECONDS = int(os.environ.get("SECURE_HSTS_SECONDS", str(31536000 if not DEBUG else 0)))
+SECURE_HSTS_INCLUDE_SUBDOMAINS = _hsts_env_bool("SECURE_HSTS_INCLUDE_SUBDOMAINS", not DEBUG)
+SECURE_HSTS_PRELOAD = _hsts_env_bool("SECURE_HSTS_PRELOAD", not DEBUG)
 SECURE_SSL_REDIRECT = not DEBUG
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG

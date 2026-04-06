@@ -530,31 +530,31 @@ onMounted(() => {
 // PDF download functions
 const downloadFAQs = () => {
   const pdfUrl = '/assets/help_docs/RiskaVaire FAQs.pdf'
-  window.open(pdfUrl, '_blank')
+  window.open(pdfUrl, '_blank', 'noopener,noreferrer')
 }
 
 const downloadAdminManual = () => {
   const pdfUrl = '/assets/help_docs/RiskaVaire Admin User Manual.pdf'
-  window.open(pdfUrl, '_blank')
+  window.open(pdfUrl, '_blank', 'noopener,noreferrer')
 }
 
 const downloadNonAdminManual = () => {
   const pdfUrl = '/assets/help_docs/RiskaVaire Non-admin user manual.pdf'
-  window.open(pdfUrl, '_blank')
+  window.open(pdfUrl, '_blank', 'noopener,noreferrer')
 }
 
 const downloadPrivacyPDF = () => {
   const pdfUrl = '/assets/help_docs/Privacy and Security Policy1.pdf'
-  window.open(pdfUrl, '_blank')
+  window.open(pdfUrl, '_blank', 'noopener,noreferrer')
 }
 
 const openFeedbackForm = () => {
-  window.open('https://forms.office.com/r/wGG9gwkkXN', '_blank')
+  window.open('https://forms.office.com/r/wGG9gwkkXN', '_blank', 'noopener,noreferrer')
 }
 
 const openPDF = () => {
   const pdfUrl = '/assets/help_docs/RiskaVaire Open-Source Attribution.pdf'
-  window.open(pdfUrl, '_blank')
+  window.open(pdfUrl, '_blank', 'noopener,noreferrer')
 }
 </script>
 

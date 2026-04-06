@@ -58,7 +58,6 @@ from django.db import connection
 import json
 import uuid
 import re
-import base64
 import tempfile
 import os
 from datetime import date, time

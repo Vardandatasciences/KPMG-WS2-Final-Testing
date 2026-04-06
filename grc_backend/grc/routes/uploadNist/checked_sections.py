@@ -15,6 +15,13 @@ import glob
 # COMMENTED OUT OLD IMPORT - Policy extraction now handled by policy_extractor_enhanced.py
 # from .json_Policy_extractor import extract_policy_from_pdf
 from . import policy_extractor_enhanced
+from ...utils.safe_paths import (
+    safe_join,
+    require_safe_user_key,
+    require_safe_rel_segment,
+    resolved_path_under_base,
+    UnsafePathError,
+)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -49,18 +56,16 @@ class CheckedSectionsManager:
         Create the checked_sections folder inside the user's upload folder
         """
         try:
-            # Determine the user folder path
             if task_id and task_id.startswith('default_'):
-                # For default data, use user_id = 1
-                user_folder = f"upload_1"
+                user_folder = "upload_1"
             else:
-                user_folder = f"upload_{user_id}"
-            
-            # Create the checked_sections folder path
-            checked_sections_path = os.path.join(
-                self.base_media_path, 
-                user_folder, 
-                "checked_sections"
+                safe_uid = require_safe_user_key(str(user_id))
+                user_folder = f"upload_{safe_uid}"
+
+            checked_sections_path = safe_join(
+                self.base_media_path,
+                user_folder,
+                "checked_sections",
             )
             
             # Create the folder if it doesn't exist
@@ -84,13 +89,12 @@ class CheckedSectionsManager:
             
             # Determine the source folder path
             if task_id and task_id.startswith('default_'):
-                # For default data, use the main_default folder
-                source_base_path = os.path.join(self.base_media_path, "main_default")
+                source_base_path = safe_join(self.base_media_path, "main_default")
                 user_folder = "upload_1"
             else:
-                # For normal uploads, use the user's upload folder
-                source_base_path = os.path.join(self.base_media_path, f"upload_{user_id}")
-                user_folder = f"upload_{user_id}"
+                safe_uid = require_safe_user_key(str(user_id))
+                user_folder = f"upload_{safe_uid}"
+                source_base_path = safe_join(self.base_media_path, user_folder)
             
             copied_sections = []
             failed_sections = []
@@ -110,7 +114,7 @@ class CheckedSectionsManager:
                     
                     # Create section folder in checked_sections
                     section_folder_name = secure_filename(section_name)
-                    section_checked_path = os.path.join(checked_sections_path, section_folder_name)
+                    section_checked_path = safe_join(checked_sections_path, section_folder_name)
                     os.makedirs(section_checked_path, exist_ok=True)
                     
                     # Find the source section folder
@@ -147,7 +151,7 @@ class CheckedSectionsManager:
                         'destination_path': section_checked_path
                     }
                     
-                    metadata_file = os.path.join(section_checked_path, 'selection_metadata.json')
+                    metadata_file = safe_join(section_checked_path, 'selection_metadata.json')
                     with open(metadata_file, 'w') as f:
                         json.dump(metadata, f, indent=2)
                     
@@ -179,7 +183,7 @@ class CheckedSectionsManager:
                 'failed_sections': failed_sections
             }
             
-            summary_file = os.path.join(checked_sections_path, 'copy_summary.json')
+            summary_file = safe_join(checked_sections_path, 'copy_summary.json')
             with open(summary_file, 'w') as f:
                 json.dump(summary, f, indent=2)
             
@@ -207,7 +211,7 @@ class CheckedSectionsManager:
             section_files = ['section_content.txt', 'section_info.json', 'controls']
             
             for file_name in section_files:
-                file_path = os.path.join(folder_path, file_name)
+                file_path = safe_join(folder_path, file_name)
                 if os.path.exists(file_path):
                     return True
             
@@ -229,7 +233,7 @@ class CheckedSectionsManager:
         copied_controls = []
         try:
             # Look for the extracted_controls directory in the source section
-            extracted_controls_path = os.path.join(source_section_path, "extracted_controls")
+            extracted_controls_path = safe_join(source_section_path, "extracted_controls")
             
             if not os.path.exists(extracted_controls_path):
                 logger.warning(f"Extracted controls directory not found: {extracted_controls_path}")
@@ -259,8 +263,8 @@ class CheckedSectionsManager:
                     logger.warning(f"Control folder not found for {control_id}")
                     continue
                 
-                source_control_path = os.path.join(extracted_controls_path, control_folder_name)
-                destination_control_path = os.path.join(destination_section_path, control_folder_name)
+                source_control_path = safe_join(extracted_controls_path, control_folder_name)
+                destination_control_path = safe_join(destination_section_path, control_folder_name)
                 
                 if os.path.exists(source_control_path):
                     # Copy the entire control folder
@@ -287,12 +291,12 @@ class CheckedSectionsManager:
         """
         try:
             # First, try to find in extracted_sections/sections folder
-            extracted_sections_path = os.path.join(source_base_path, "extracted_sections", "sections")
+            extracted_sections_path = safe_join(source_base_path, "extracted_sections", "sections")
             
             if os.path.exists(extracted_sections_path):
                 # Look for the section folder with multiple matching strategies
                 for folder in os.listdir(extracted_sections_path):
-                    folder_path = os.path.join(extracted_sections_path, folder)
+                    folder_path = safe_join(extracted_sections_path, folder)
                     if os.path.isdir(folder_path):
                         # Strategy 1: Exact folder name match (highest priority)
                         if folder.lower() == section_name.lower():
@@ -333,10 +337,10 @@ class CheckedSectionsManager:
                             return folder_path
             
             # If not found in extracted_sections/sections, try extracted_sections folder
-            extracted_sections_path = os.path.join(source_base_path, "extracted_sections")
+            extracted_sections_path = safe_join(source_base_path, "extracted_sections")
             if os.path.exists(extracted_sections_path):
                 for folder in os.listdir(extracted_sections_path):
-                    folder_path = os.path.join(extracted_sections_path, folder)
+                    folder_path = safe_join(extracted_sections_path, folder)
                     if os.path.isdir(folder_path):
                         # Check if folder name matches section name
                         if section_name.lower() in folder.lower():
@@ -345,7 +349,7 @@ class CheckedSectionsManager:
             
             # If not found in extracted_sections, try direct folder matching
             for folder in os.listdir(source_base_path):
-                folder_path = os.path.join(source_base_path, folder)
+                folder_path = safe_join(source_base_path, folder)
                 if os.path.isdir(folder_path):
                     # Check if folder name matches section name
                     if section_name.lower() in folder.lower():
@@ -457,7 +461,7 @@ class CheckedSectionsManager:
                 pdf_files = [f for f in files if f.lower().endswith('.pdf')]
                 
                 for pdf_file in pdf_files:
-                    pdf_path = os.path.join(root, pdf_file)
+                    pdf_path = safe_join(root, pdf_file)
                     relative_path = os.path.relpath(pdf_path, checked_sections_path)
                     
                     try:
@@ -468,7 +472,7 @@ class CheckedSectionsManager:
                         
                         # Create output filename for extracted content
                         base_name = os.path.splitext(pdf_file)[0]
-                        output_file = os.path.join(root, f"{base_name}_extracted.json")
+                        output_file = safe_join(root, f"{base_name}_extracted.json")
                         
                         # Save extracted content to JSON file
                         with open(output_file, 'w', encoding='utf-8') as f:
@@ -478,7 +482,7 @@ class CheckedSectionsManager:
                         restructured_content = self._restructure_control_text(extracted_content)
                         
                         # Save the restructured content
-                        restructured_file = os.path.join(root, f"{base_name}_restructured.json")
+                        restructured_file = safe_join(root, f"{base_name}_restructured.json")
                         with open(restructured_file, 'w', encoding='utf-8') as f:
                             json.dump(restructured_content, f, indent=2, ensure_ascii=False)
                         
@@ -516,7 +520,7 @@ class CheckedSectionsManager:
             }
             
             # Save processing summary
-            summary_file = os.path.join(checked_sections_path, 'pdf_processing_summary.json')
+            summary_file = safe_join(checked_sections_path, 'pdf_processing_summary.json')
             with open(summary_file, 'w') as f:
                 json.dump(summary, f, indent=2)
             
@@ -549,10 +553,10 @@ class CheckedSectionsManager:
             
             sections = []
             for item in os.listdir(checked_sections_path):
-                item_path = os.path.join(checked_sections_path, item)
+                item_path = safe_join(checked_sections_path, item)
                 if os.path.isdir(item_path):
                     # Read metadata if available
-                    metadata_file = os.path.join(item_path, 'selection_metadata.json')
+                    metadata_file = safe_join(item_path, 'selection_metadata.json')
                     metadata = None
                     if os.path.exists(metadata_file):
                         try:
@@ -604,7 +608,7 @@ class CheckedSectionsManager:
                 restructured_files = [f for f in files if f.endswith('_restructured.json')]
                 
                 for restructured_file in restructured_files:
-                    file_path = os.path.join(root, restructured_file)
+                    file_path = safe_join(root, restructured_file)
                     relative_path = os.path.relpath(file_path, checked_sections_path)
                     
                     try:
@@ -875,7 +879,7 @@ class CheckedSectionsManager:
             total_size = 0
             for dirpath, dirnames, filenames in os.walk(folder_path):
                 for filename in filenames:
-                    file_path = os.path.join(dirpath, filename)
+                    file_path = safe_join(dirpath, filename)
                     if os.path.exists(file_path):
                         total_size += os.path.getsize(file_path)
             return total_size
@@ -1090,72 +1094,76 @@ def serve_checked_section_pdf(request, user_id, section_folder, control_id):
     """
     try:
         task_id = request.GET.get('task_id')
-        
+        try:
+            uid_key = require_safe_user_key(str(user_id))
+            section_seg = require_safe_rel_segment(section_folder, label="section_folder")
+            control_seg = require_safe_rel_segment(control_id, label="control_id")
+        except UnsafePathError:
+            raise Http404("Invalid path parameters")
+
         logger.info(f"Serving PDF for user {user_id}, section {section_folder}, control {control_id}")
-        
-        # Get the checked sections folder path
+
         checked_sections_path = checked_sections_manager.create_checked_sections_folder(user_id, task_id)
-        
-        # Get the original upload path
-        upload_base_path = os.path.join(settings.MEDIA_ROOT, f"upload_{user_id}")
-        
-        # Look for the PDF file in multiple locations
+        upload_base_path = safe_join(settings.MEDIA_ROOT, f"upload_{uid_key}")
+
         pdf_path = None
-        
-        # Strategy 1: Look in checked_sections folder (after Step 3)
+
+        checked_dir = safe_join(checked_sections_path, section_seg)
         checked_paths = [
-            os.path.join(checked_sections_path, section_folder, control_id, f"{control_id}.pdf"),
-            os.path.join(checked_sections_path, section_folder, f"{control_id}_*", f"{control_id}.pdf"),
-            os.path.join(checked_sections_path, section_folder, f"{control_id}-*", f"{control_id}.pdf")
+            safe_join(checked_dir, control_seg, f"{control_seg}.pdf"),
+            os.path.join(checked_dir, f"{control_seg}_*", f"{control_seg}.pdf"),
+            os.path.join(checked_dir, f"{control_seg}-*", f"{control_seg}.pdf"),
         ]
-        
+
         for path_pattern in checked_paths:
             if '*' in path_pattern:
-                matching_files = glob.glob(path_pattern)
+                matching_files = [
+                    p for p in glob.glob(path_pattern)
+                    if resolved_path_under_base(p, settings.MEDIA_ROOT)
+                ]
                 if matching_files:
                     pdf_path = matching_files[0]
                     break
-            elif os.path.exists(path_pattern):
+            elif os.path.exists(path_pattern) and resolved_path_under_base(path_pattern, settings.MEDIA_ROOT):
                 pdf_path = path_pattern
                 break
-        
-        # Strategy 2: Look in original upload structure (before Step 3)
+
         if not pdf_path:
+            base_sections = safe_join(upload_base_path, "extracted_sections", "sections", section_seg, "extracted_controls")
             original_paths = [
-                # Path: upload_1/extracted_sections/sections/015-3_1_ACCESS_CONTROL/extracted_controls/AC-5_SEPARATION_OF_DUTIES/AC-5_SEPARATION_OF_DUTIES.pdf
-                os.path.join(upload_base_path, "extracted_sections", "sections", section_folder, "extracted_controls", control_id, f"{control_id}.pdf"),
-                # Alternative: upload_1/extracted_sections/sections/015-3_1_ACCESS_CONTROL/extracted_controls/AC-5_SEPARATION_OF_DUTIES_*/AC-5_SEPARATION_OF_DUTIES.pdf
-                os.path.join(upload_base_path, "extracted_sections", "sections", section_folder, "extracted_controls", f"{control_id}_*", f"{control_id}.pdf"),
-                # Alternative: upload_1/extracted_sections/sections/015-3_1_ACCESS_CONTROL/extracted_controls/AC-5_SEPARATION_OF_DUTIES-*/AC-5_SEPARATION_OF_DUTIES.pdf
-                os.path.join(upload_base_path, "extracted_sections", "sections", section_folder, "extracted_controls", f"{control_id}-*", f"{control_id}.pdf"),
-                # Alternative: upload_1/extracted_sections/015-3_1_ACCESS_CONTROL/controls/AC-5_SEPARATION_OF_DUTIES.pdf
-                os.path.join(upload_base_path, "extracted_sections", section_folder, "controls", f"{control_id}.pdf"),
-                # Alternative: upload_1/015-3_1_ACCESS_CONTROL/AC-5_SEPARATION_OF_DUTIES.pdf
-                os.path.join(upload_base_path, section_folder, f"{control_id}.pdf")
+                safe_join(base_sections, control_seg, f"{control_seg}.pdf"),
+                os.path.join(base_sections, f"{control_seg}_*", f"{control_seg}.pdf"),
+                os.path.join(base_sections, f"{control_seg}-*", f"{control_seg}.pdf"),
+                safe_join(upload_base_path, "extracted_sections", section_seg, "controls", f"{control_seg}.pdf"),
+                safe_join(upload_base_path, section_seg, f"{control_seg}.pdf"),
             ]
-            
+
             for path_pattern in original_paths:
                 if '*' in path_pattern:
-                    matching_files = glob.glob(path_pattern)
+                    matching_files = [
+                        p for p in glob.glob(path_pattern)
+                        if resolved_path_under_base(p, settings.MEDIA_ROOT)
+                    ]
                     if matching_files:
                         pdf_path = matching_files[0]
                         logger.info(f"Found PDF in original structure: {pdf_path}")
                         break
-                elif os.path.exists(path_pattern):
+                elif os.path.exists(path_pattern) and resolved_path_under_base(path_pattern, settings.MEDIA_ROOT):
                     pdf_path = path_pattern
                     logger.info(f"Found PDF in original structure: {pdf_path}")
                     break
-        
-        # Strategy 3: Look for any PDF file with the control_id in the filename
+
         if not pdf_path:
-            # Search recursively in the upload directory for any PDF with the control_id
-            search_pattern = os.path.join(upload_base_path, "**", f"*{control_id}*.pdf")
-            matching_files = glob.glob(search_pattern, recursive=True)
+            search_pattern = os.path.join(upload_base_path, "**", f"*{control_seg}*.pdf")
+            matching_files = [
+                p for p in glob.glob(search_pattern, recursive=True)
+                if resolved_path_under_base(p, upload_base_path)
+            ]
             if matching_files:
                 pdf_path = matching_files[0]
                 logger.info(f"Found PDF using recursive search: {pdf_path}")
         
-        if pdf_path and os.path.exists(pdf_path):
+        if pdf_path and os.path.exists(pdf_path) and resolved_path_under_base(pdf_path, settings.MEDIA_ROOT):
             logger.info(f"Serving PDF from: {pdf_path}")
             response = FileResponse(open(pdf_path, 'rb'), content_type='application/pdf')
             # Allow iframe embedding for PDF viewing

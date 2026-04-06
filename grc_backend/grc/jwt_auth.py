@@ -9,6 +9,7 @@ from django.contrib.auth import get_user_model
 from rest_framework.authentication import BaseAuthentication
 from rest_framework.exceptions import AuthenticationFailed
 from .authentication import _is_session_token_valid
+from .utils.log_sanitize import sanitize_for_log
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +58,10 @@ class UnifiedJWTAuthentication(BaseAuthentication):
 
             # Enforce single active session across devices/browsers.
             if not _is_session_token_valid(user_id, session_token):
-                logger.warning(f"[Unified JWT Auth] Session invalidated for user_id {user_id}")
+                logger.warning(
+                    "[Unified JWT Auth] Session invalidated for user_id %s",
+                    sanitize_for_log(user_id, 32),
+                )
                 raise AuthenticationFailed('Session invalidated due to newer login')
             
             # Try to get the user from the database
@@ -74,11 +78,17 @@ class UnifiedJWTAuthentication(BaseAuthentication):
                 if not hasattr(user, 'userid'):
                     user.userid = user.pk
                 
-                logger.info(f"[Unified JWT Auth] GRC User authenticated: {user.username}")
+                logger.info(
+                    "[Unified JWT Auth] GRC User authenticated: %s",
+                    sanitize_for_log(user.username, 128),
+                )
                 return (user, token)
                 
             except User.DoesNotExist:
-                logger.warning(f"[Unified JWT Auth] User with ID {user_id} not found in database. Creating MockUser.")
+                logger.warning(
+                    "[Unified JWT Auth] User with ID %s not found in database. Creating MockUser.",
+                    sanitize_for_log(user_id, 32),
+                )
                 
                 # Create a mock user for cases where user might not exist in local DB
                 class MockUser:
@@ -102,12 +112,18 @@ class UnifiedJWTAuthentication(BaseAuthentication):
                         return self.username
                 
                 mock_user = MockUser(user_id, username)
-                logger.info(f"[Unified JWT Auth] MockUser created: {mock_user.username}")
+                logger.info(
+                    "[Unified JWT Auth] MockUser created: %s",
+                    sanitize_for_log(mock_user.username, 128),
+                )
                 return (mock_user, token)
                 
-            except Exception as db_error:
-                logger.error(f"[Unified JWT Auth] Database error during user lookup: {db_error}")
-                
+            except Exception:
+                logger.exception(
+                    "[Unified JWT Auth] Database error during user lookup for user_id=%s",
+                    sanitize_for_log(user_id, 32),
+                )
+
                 # For database errors, still create a MockUser to allow access
                 class MockUser:
                     def __init__(self, user_id, username):
@@ -130,7 +146,10 @@ class UnifiedJWTAuthentication(BaseAuthentication):
                         return self.username
                 
                 mock_user = MockUser(user_id, username)
-                logger.warning(f"[Unified JWT Auth] Database error, using MockUser: {mock_user.username}")
+                logger.warning(
+                    "[Unified JWT Auth] Database error, using MockUser: %s",
+                    sanitize_for_log(mock_user.username, 128),
+                )
                 return (mock_user, token)
         
         except jwt.ExpiredSignatureError:

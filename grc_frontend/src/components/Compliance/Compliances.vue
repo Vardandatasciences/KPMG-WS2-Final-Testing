@@ -433,6 +433,7 @@ import { useRouter } from 'vue-router'
 import DynamicTable from '../DynamicTable.vue'
 import { API_ENDPOINTS } from '../../config/api.js'
 import complianceDataService from '@/services/complianceService' // NEW: Use cached compliance data
+import { openDownloadInNewTabWithAnchorFallback } from '@/utils/safeExternalNavigation'
 
 export default {
   name: 'ComplianceManagement',
@@ -914,46 +915,17 @@ async function handleExport(format) {
     
     // Check if we have a file URL
     if (response.data && response.data.file_url) {
-      // Try to open the file URL in a new tab, fallback to download if it fails
-      try {
-        const newWindow = window.open(response.data.file_url, '_blank', 'noopener,noreferrer');
-        if (newWindow) {
-          ElMessage({
-            message: 'Export completed successfully! File opened in new tab.',
-            type: 'success',
-            duration: 3000
-          });
-        } else {
-          // Fallback to download if popup is blocked
-          const link = document.createElement('a');
-          link.href = response.data.file_url;
-          link.setAttribute('download', response.data.file_name || `compliance_export.${format}`);
-          link.rel = 'noopener noreferrer';
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          ElMessage({
-            message: 'Export completed successfully! File downloaded.',
-            type: 'success',
-            duration: 3000
-          });
-        }
-      } catch (downloadErr) {
-        // Fallback to download if window.open fails
-        const link = document.createElement('a');
-        link.href = response.data.file_url;
-        link.setAttribute('download', response.data.file_name || `compliance_export.${format}`);
-        link.rel = 'noopener noreferrer';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        ElMessage({
-          message: 'Export completed successfully! File downloaded.',
-          type: 'success',
-          duration: 3000
-        });
-        console.error(downloadErr);
-      }
+      const ok = await openDownloadInNewTabWithAnchorFallback(
+        response.data.file_url,
+        response.data.file_name || `compliance_export.${format}`
+      )
+      ElMessage({
+        message: ok
+          ? 'Export completed successfully! File opened or downloaded.'
+          : 'Export link is not from an allowed host.',
+        type: ok ? 'success' : 'warning',
+        duration: 3000
+      })
     } else {
       ElMessage({
         message: 'Export completed successfully!',

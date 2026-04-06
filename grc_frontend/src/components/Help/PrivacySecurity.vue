@@ -134,7 +134,7 @@
 <script setup>
 const downloadPDF = () => {
   const pdfUrl = '/assets/help_docs/Privacy and Security Policy1.pdf';
-  window.open(pdfUrl, '_blank');
+  window.open(pdfUrl, '_blank', 'noopener,noreferrer');
 };
 </script>
 

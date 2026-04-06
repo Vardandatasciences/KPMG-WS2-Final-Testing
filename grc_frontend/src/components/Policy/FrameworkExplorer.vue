@@ -69,7 +69,7 @@
         <div class="detail-row" v-if="frameworkDetails.DocURL">
           <span class="detail-label">Documentation</span>
           <span class="detail-value doc-value">
-            <a :href="frameworkDetails.DocURL" target="_blank" class="doc-link">View Documentation</a>
+            <a :href="frameworkDetails.DocURL" target="_blank" rel="noopener noreferrer" class="doc-link">View Documentation</a>
           </span>
         </div>
       </div>
@@ -439,6 +439,7 @@ import PopupModal from '@/modules/popus/PopupModal.vue'
 import CustomDropdown from '@/components/CustomDropdown.vue'
 import CreateAcknowledgementModal from './CreateAcknowledgementModal.vue'
 import { API_ENDPOINTS, API_BASE_URL, axiosInstance } from '@/config/api.js'
+import { openDownloadInNewTabWithAnchorFallback } from '@/utils/safeExternalNavigation'
 
 // Add view state
 const currentView = ref('list') // 'list' or 'card'
@@ -560,52 +561,18 @@ const exportFrameworkPolicies = async () => {
       return;
     }
     
-    // Automatically open the AWS URL in a new tab
-    try {
-      // Open the file URL in a new tab
-      window.open(file_url, '_blank');
-      
-      PopupService.success('Export completed successfully! File opened in new tab.', 'Export Success');
+    const ok = await openDownloadInNewTabWithAnchorFallback(file_url, file_name)
+    if (ok) {
+      PopupService.success('Export completed successfully! File opened or downloaded.', 'Export Success');
       sendPushNotification({
         title: 'Framework Export Completed',
-        message: `Framework export completed successfully in ${selectedExportFormat.value.toUpperCase()} format (ALL frameworks). File opened in new tab.`,
+        message: `Framework export completed successfully in ${selectedExportFormat.value.toUpperCase()} format (ALL frameworks).`,
         category: 'framework',
         priority: 'medium',
         user_id: 'default_user'
       });
-    } catch (openErr) {
-      // Fallback: if opening in new tab fails, try to download the file
-      console.warn('Failed to open file in new tab, falling back to download:', openErr);
-      try {
-        const fileRes = await axios.get(file_url, { responseType: 'blob' });
-        const url = window.URL.createObjectURL(new Blob([fileRes.data]));
-        const link = document.createElement('a');
-        link.href = url;
-        link.setAttribute('download', file_name);
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        window.URL.revokeObjectURL(url);
-        
-        PopupService.success('Export completed successfully! File downloaded.', 'Export Success');
-        sendPushNotification({
-          title: 'Framework Export Completed',
-          message: `Framework export completed successfully in ${selectedExportFormat.value.toUpperCase()} format (ALL frameworks). File downloaded.`,
-          category: 'framework',
-          priority: 'medium',
-          user_id: 'default_user'
-        });
-      } catch (downloadErr) {
-        PopupService.success('Export completed successfully! File available at AWS URL.', 'Export Success');
-        sendPushNotification({
-          title: 'Framework Export Completed',
-          message: `Framework export completed successfully in ${selectedExportFormat.value.toUpperCase()} format (ALL frameworks). File available at AWS URL.`,
-          category: 'framework',
-          priority: 'medium',
-          user_id: 'default_user'
-        });
-        console.error('Download fallback also failed:', downloadErr);
-      }
+    } else {
+      PopupService.warning('Export link is not from an allowed host.', 'Export');
     }
   } catch (err) {
     PopupService.error('Export failed. Please try again.', 'Export Error');

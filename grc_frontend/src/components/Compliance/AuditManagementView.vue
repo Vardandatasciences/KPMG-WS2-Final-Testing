@@ -301,6 +301,7 @@ import { ElMessage } from 'element-plus'
 import DynamicTable from '../DynamicTable.vue'
 import CustomDropdown from '../CustomDropdown.vue'
 import { API_ENDPOINTS } from '../../config/api.js'
+import { openDownloadInNewTabWithAnchorFallback } from '@/utils/safeExternalNavigation'
 
 const router = useRouter()
 
@@ -1103,52 +1104,14 @@ async function handleExport(format) {
     const result = response.data;
     
     if (result.success && result.file_url && result.file_name) {
-      // Try to open the file URL in a new tab, fallback to download if it fails
-      try {
-        const newWindow = window.open(result.file_url, '_blank');
-        if (newWindow) {
-          ElMessage({
-            message: 'Export completed successfully! File opened in new tab.',
-            type: 'success',
-            duration: 3000
-          })
-        } else {
-          // Fallback to download if popup is blocked
-          const fileRes = await fetch(result.file_url);
-          const blob = await fileRes.blob();
-          const url = window.URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          link.href = url;
-          link.setAttribute('download', result.file_name);
-          document.body.appendChild(link);
-          link.click();
-          link.remove();
-          window.URL.revokeObjectURL(url);
-          ElMessage({
-            message: 'Export completed successfully! File downloaded.',
-            type: 'success',
-            duration: 3000
-          })
-        }
-      } catch (downloadErr) {
-        // Fallback to download if window.open fails
-        const fileRes = await fetch(result.file_url);
-        const blob = await fileRes.blob();
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.setAttribute('download', result.file_name);
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        window.URL.revokeObjectURL(url);
-        ElMessage({
-          message: 'Export completed successfully! File downloaded.',
-          type: 'success',
-          duration: 3000
-        })
-        console.error(downloadErr);
-      }
+      const ok = await openDownloadInNewTabWithAnchorFallback(result.file_url, result.file_name)
+      ElMessage({
+        message: ok
+          ? 'Export completed successfully! File opened or downloaded.'
+          : 'Export link is not from an allowed host.',
+        type: ok ? 'success' : 'warning',
+        duration: 3000
+      })
     } else {
       ElMessage({
         message: 'Export failed: ' + (result.error || 'Unknown error'),

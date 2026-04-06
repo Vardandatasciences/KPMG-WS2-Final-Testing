@@ -305,7 +305,7 @@
                   
                   <!-- Actions Column -->
                   <td class="event-actions-cell">
-                    <a v-if="event.htmlLink" :href="event.htmlLink" target="_blank" class="view-calendar-btn" title="View in Google Calendar">
+                    <a v-if="event.htmlLink" :href="event.htmlLink" target="_blank" rel="noopener noreferrer" class="view-calendar-btn" title="View in Google Calendar">
                       🔗
                     </a>
                     <span v-else class="no-data">—</span>

@@ -11,6 +11,7 @@ from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from django.utils import timezone
 from ...models import CookiePreferences, Users
 from ...authentication import get_user_from_jwt
+from ...utils.log_sanitize import sanitize_for_log
 import logging
 import uuid
 import os
@@ -55,7 +56,7 @@ def link_cookie_preferences_to_user(user, session_id=None):
         logger.warning(f"[Cookie] Cannot link preferences: Invalid user")
         return 0
     
-    logger.info(f"[Cookie] ========== Linking Cookie Preferences to User {user.UserId} ==========")
+    logger.info("[Cookie] ========== Linking Cookie Preferences to User %s ==========", user.UserId)
     from django.db import connection
     from django.utils import timezone
     from datetime import timedelta
@@ -66,7 +67,10 @@ def link_cookie_preferences_to_user(user, session_id=None):
         # Strategy 1: Link by session_id if provided (most accurate)
         # NOTE: SessionId is encrypted, so we need to use ORM to decrypt it for matching
         if session_id:
-            logger.info(f"[Cookie] DEBUG: Attempting to link preferences by session_id: {session_id}")
+            logger.info(
+                "[Cookie] DEBUG: Attempting to link preferences by session_id: %s",
+                sanitize_for_log(session_id, 128),
+            )
             try:
                 # Use ORM to find preferences with matching session_id (ORM handles decryption)
                 # Filter for preferences with NULL UserId and matching SessionId
@@ -88,24 +92,33 @@ def link_cookie_preferences_to_user(user, session_id=None):
                             )
                             if cursor.rowcount > 0:
                                 linked_by_session += 1
-                                logger.info(f"[Cookie] ✅ DEBUG: Linked preference {pref.PreferenceId} by session_id to user {user.UserId}")
+                                logger.info(
+                                    "[Cookie] DEBUG: Linked preference %s by session_id to user %s",
+                                    pref.PreferenceId,
+                                    user.UserId,
+                                )
                 
                 if linked_by_session > 0:
                     updated_count += linked_by_session
-                    logger.info(f"[Cookie] ✅ DEBUG: Linked {linked_by_session} preference(s) by session_id to user {user.UserId}")
+                    logger.info(
+                        "[Cookie] DEBUG: Linked %s preference(s) by session_id to user %s",
+                        linked_by_session,
+                        user.UserId,
+                    )
                 else:
-                    logger.info(f"[Cookie] DEBUG: No preferences found with session_id {session_id} and NULL UserId")
-            except Exception as session_error:
-                logger.error(f"[Cookie] ❌ ERROR: Failed to link by session_id: {str(session_error)}")
-                import traceback
-                logger.error(f"[Cookie] ERROR: Traceback: {traceback.format_exc()}")
+                    logger.info(
+                        "[Cookie] DEBUG: No preferences found with session_id %s and NULL UserId",
+                        sanitize_for_log(session_id, 128),
+                    )
+            except Exception:
+                logger.exception("[Cookie] ERROR: Failed to link by session_id")
         
         # Strategy 2: Link most recent preferences without UserId (within last 1 hour)
         # This catches cases where session_id might be different but user is the same
         # ALWAYS attempt to link recent preferences, even if user already has preferences
         # This handles cases where user accepted cookies before login
-        logger.info(f"[Cookie] DEBUG: Attempting to link recent preferences without UserId (fallback)")
-        
+        logger.info("[Cookie] DEBUG: Attempting to link recent preferences without UserId (fallback)")
+
         # Get the most recent preferences without UserId (within last hour)
         # This catches preferences created just before login
         one_hour_ago = timezone.now() - timedelta(hours=1)
@@ -115,7 +128,7 @@ def link_cookie_preferences_to_user(user, session_id=None):
         ).order_by('-CreatedAt')[:10]  # Increased to 10 to catch more potential matches
         
         if recent_prefs:
-            logger.info(f"[Cookie] DEBUG: Found {len(recent_prefs)} recent preference(s) without UserId")
+            logger.info("[Cookie] DEBUG: Found %s recent preference(s) without UserId", len(recent_prefs))
             # Update those specific preferences using raw SQL
             pref_ids = [pref.PreferenceId for pref in recent_prefs]
             with connection.cursor() as cursor:
@@ -131,8 +144,12 @@ def link_cookie_preferences_to_user(user, session_id=None):
                 updated_recent = cursor.rowcount
                 if updated_recent > 0:
                     updated_count += updated_recent
-                    logger.info(f"[Cookie] ✅ DEBUG: Linked {updated_recent} recent preference(s) (fallback) to user {user.UserId}")
-                    
+                    logger.info(
+                        "[Cookie] DEBUG: Linked %s recent preference(s) (fallback) to user %s",
+                        updated_recent,
+                        user.UserId,
+                    )
+
                     # Verify the update using raw SQL
                     for pref_id in pref_ids:
                         cursor.execute(
@@ -142,22 +159,24 @@ def link_cookie_preferences_to_user(user, session_id=None):
                         result = cursor.fetchone()
                         if result:
                             db_user_id = result[0]
-                            logger.info(f"[Cookie] ✅ VERIFIED: PreferenceId {pref_id} now has UserId: {db_user_id}")
+                            logger.info(
+                                "[Cookie] VERIFIED: PreferenceId %s now has UserId: %s",
+                                pref_id,
+                                db_user_id,
+                            )
         else:
-            logger.info(f"[Cookie] DEBUG: No recent preferences found to link (fallback)")
+            logger.info("[Cookie] DEBUG: No recent preferences found to link (fallback)")
         
         if updated_count > 0:
-            logger.info(f"[Cookie] ✅ DEBUG: Total linked {updated_count} preference(s) to user {user.UserId}")
+            logger.info("[Cookie] DEBUG: Total linked %s preference(s) to user %s", updated_count, user.UserId)
         else:
-            logger.info(f"[Cookie] DEBUG: No preferences found to link (all already have UserId or none found)")
-        
-        logger.info(f"[Cookie] ========== End Linking Cookie Preferences ==========")
+            logger.info("[Cookie] DEBUG: No preferences found to link (all already have UserId or none found)")
+
+        logger.info("[Cookie] ========== End Linking Cookie Preferences ==========")
         return updated_count
             
-    except Exception as bulk_error:
-        logger.error(f"[Cookie] ❌ ERROR: Bulk update failed: {str(bulk_error)}")
-        import traceback
-        logger.error(f"[Cookie] ERROR: Traceback: {traceback.format_exc()}")
+    except Exception:
+        logger.exception("[Cookie] ERROR: Bulk update failed")
         return 0
 
 

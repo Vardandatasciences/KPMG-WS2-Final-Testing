@@ -5,7 +5,7 @@ Handles password expiry checking, email notifications, forced password reset, an
 from datetime import datetime, timedelta
 from django.utils import timezone
 from django.conf import settings
-from django.contrib.auth.hashers import make_password, check_password
+from django.contrib.auth.hashers import check_password
 from grc.models import Users, PasswordLog
 import logging
 
@@ -157,62 +157,36 @@ def send_password_expiry_email(user, is_expired=False, days_until_expiry=0):
 
 def check_password_history(user, new_password):
     """
-    Check if the new password matches any of the user's previous N passwords.
-    Returns (is_reused, matching_count) where:
-        - is_reused: True if password was used before, False otherwise
-        - matching_count: Number of passwords checked from history
-    
-    Args:
-        user: Users model instance
-        new_password: Plain text password to check
-    
-    Returns:
-        tuple: (is_reused: bool, matching_count: int)
+    Detect reuse of the user's current password only.
+
+    Password hashes are not read from PasswordLog (audit: avoid credential material in log tables).
+    For full N-password history, use a dedicated protected store — not general audit logs.
+
+    Returns (is_reused, checked_count).
     """
     try:
-        history_count = get_password_history_count()
-        
-        # Get the last N password change logs for this user
-        password_logs = PasswordLog.objects.filter(
-            UserId=user.UserId,
-            ActionType__in=['changed', 'reset', 'created']
-        ).order_by('-Timestamp')[:history_count]
-        
-        matching_count = password_logs.count()
-        
-        # Check current password first
         if user.Password and check_password(new_password, user.Password):
-            logger.warning(f"Password reuse detected for user {user.UserName}: matches current password")
-            return True, matching_count
-        
-        # Check against historical passwords
-        for log in password_logs:
-            # Also check OldPassword if it exists
-            if log.OldPassword and check_password(new_password, log.OldPassword):
-                logger.warning(f"Password reuse detected for user {user.UserName}: matches old password from {log.Timestamp}")
-                return True, matching_count
-        
-        logger.info(f"Password history check passed for user {user.UserName}: checked {matching_count} previous passwords")
-        return False, matching_count
-        
+            logger.warning(
+                "Password reuse detected for user %s: matches current password",
+                user.UserName,
+            )
+            return True, 1
+        logger.info("Password history check passed for user %s", user.UserName)
+        return False, 0
     except Exception as e:
         logger.error(f"Error checking password history for user {user.UserId}: {str(e)}")
-        # On error, allow password change to avoid blocking users
-        # Security note: This is a fail-open approach. Consider fail-close for stricter security.
         return False, 0
 
 
 def log_password_action(user, action_type, old_password_hash=None, new_password_hash=None, request=None):
     """
-    Log password action to PasswordLog table.
-    Only logs password changes (created, changed, reset) - NOT login events.
-    Login events should be logged to grc_logs instead.
-    
+    Log password lifecycle metadata to PasswordLog (no password hashes — audit compliance).
+
     Args:
         user: Users model instance
         action_type: 'created', 'changed', or 'reset' (login is not logged here)
-        old_password_hash: Old password hash (optional)
-        new_password_hash: New password hash (optional, defaults to user.Password)
+        old_password_hash: Ignored (kept for call-site compatibility)
+        new_password_hash: Ignored (kept for call-site compatibility)
         request: Django request object (optional, for IP and User-Agent)
     """
     # Don't log login events to password_logs - they should go to grc_logs
@@ -234,8 +208,7 @@ def log_password_action(user, action_type, old_password_hash=None, new_password_
         PasswordLog.objects.create(
             UserId=user.UserId,
             UserName=user.UserName,
-            OldPassword=old_password_hash or (user.Password if action_type != 'created' else None),
-            # Store only the previous hash for reuse checks (NewPassword was creating an unnecessary additional exposure of password material).
+            OldPassword=None,
             NewPassword='',
             ActionType=action_type,
             IPAddress=client_ip,

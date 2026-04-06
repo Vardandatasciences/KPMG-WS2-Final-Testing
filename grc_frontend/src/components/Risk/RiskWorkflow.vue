@@ -408,12 +408,10 @@
                     </div>
                     
                     <!-- Regular File -->
-                    <a
-                      v-else-if="safeEvidenceUrl(file['aws-file_link'])"
+                    <a v-else-if="safeEvidenceUrl(file['aws-file_link'])"
                       :href="safeEvidenceUrl(file['aws-file_link'])"
                       :download="file.fileName"
-                      target="_blank"
-                      class="downloadable-file"
+                      target="_blank" rel="noopener noreferrer" class="downloadable-file"
                     >
                       <i class="fas fa-download"></i> {{ file.fileName }}
                       <span v-if="file.size" class="file-size">({{ formatFileSize(file.size) }})</span>
@@ -893,12 +891,10 @@
                         </div>
                         
                         <!-- Regular File -->
-                        <a
-                          v-else-if="safeEvidenceUrl(file['aws-file_link'])"
+                        <a v-else-if="safeEvidenceUrl(file['aws-file_link'])"
                           :href="safeEvidenceUrl(file['aws-file_link'])"
                           :download="file.fileName"
-                          target="_blank"
-                          class="evidence-link"
+                          target="_blank" rel="noopener noreferrer" class="evidence-link"
                         >
                           <i class="fas fa-download"></i> {{ file.fileName }}
                           <span v-if="file.size" class="file-size">({{ formatFileSize(file.size) }})</span>

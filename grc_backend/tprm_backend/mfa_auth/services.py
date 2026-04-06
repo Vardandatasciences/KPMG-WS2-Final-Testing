@@ -3,6 +3,7 @@ import secrets
 import string
 from datetime import timedelta
 from django.utils import timezone
+from django.contrib.auth.hashers import check_password
 from django.core.mail import send_mail
 from django.conf import settings
 from django.template.loader import render_to_string
@@ -28,9 +29,9 @@ class MfaService:
             user = User.objects.filter(username=username).order_by('-updated_at', '-created_at').first()
             if not user:
                 return None
-        # Note: In production, use proper password hashing (bcrypt, pbkdf2, etc.)
-        # This is a simple comparison - replace with proper password verification
-        if user.password == password and user.is_active:
+        if not user.is_active:
+            return None
+        if user.password and check_password(password, user.password):
             return user
         return None
     

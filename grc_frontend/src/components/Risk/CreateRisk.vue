@@ -1091,6 +1091,7 @@ import { API_ENDPOINTS, axiosInstance } from '../../config/api.js'
 import consentService from '@/services/consentService.js'
 import { CONSENT_ACTIONS } from '@/utils/consentManager.js'
 import riskDataService from '@/services/riskService'
+import { getFrameworkIdForClient } from '@/utils/frameworkContextStorage.js'
 // import AccessUtils from '@/utils/accessUtils';
 
 
@@ -2277,7 +2278,7 @@ export default {
       if (consentConfig) {
         sanitizedRiskData.consent_accepted = true;
         sanitizedRiskData.consent_config_id = consentConfig.config_id;
-        sanitizedRiskData.framework_id = consentConfig.framework_id || localStorage.getItem('framework_id');
+        sanitizedRiskData.framework_id = consentConfig.framework_id || getFrameworkIdForClient();
         console.log('📋 [Consent] Including consent data in request:', {
           consent_accepted: true,
           consent_config_id: consentConfig.config_id,

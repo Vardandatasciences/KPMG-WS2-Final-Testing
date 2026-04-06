@@ -649,7 +649,7 @@
               <div v-for="(doc, idx) in selectedResponse.response_documents" :key="idx" class="bg-white rounded p-2 border border-gray-200">
                 <p class="text-sm text-gray-900">{{ doc.name || doc.filename || `Document ${idx + 1}` }}</p>
                 <p v-if="doc.url" class="text-xs text-blue-600 mt-1">
-                  <a :href="doc.url" target="_blank" class="hover:underline">View Document</a>
+                  <a :href="doc.url" target="_blank" rel="noopener noreferrer" class="hover:underline">View Document</a>
                 </p>
               </div>
             </div>

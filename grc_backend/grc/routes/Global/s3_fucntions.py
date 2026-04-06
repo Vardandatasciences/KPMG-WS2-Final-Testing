@@ -83,7 +83,7 @@ import ipaddress
 import socket
 from urllib.parse import urlparse
 from ...debug_utils import debug_print
-from ...utils.csv_security import sanitize_csv_dataset
+from ...utils.csv_security import sanitize_csv_dataset, sanitize_export_filename
 import mimetypes
 from typing import Dict, List, Optional, Union, Any
 import datetime
@@ -4557,18 +4557,14 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                 # For other formats, send the full data structure
                 payload = {'data': data}
             
-            # Include AWS credentials in payload (required by the microservice)
-            aws_credentials = {
-                'awsAccessKey': 'AKIAW76SP14WHQGXV47T',
-                'awsSecretKey': 'wJLUGFOQtXYOqzhyvmM2ljZPVbW+LTLJo2ft3A',
-                'awsRegion': 'ap-south-1',
-                'bucketName': 'vardaanwebsites'
-            }
+            from .microservice_aws_payload import aws_credentials_for_microservice_export
+
+            aws_credentials = aws_credentials_for_microservice_export()
             payload.update(aws_credentials)
-            
+
             debug_print(f"🔗 Export URL: {url}")
             debug_print(f"📦 Payload size: {len(str(payload))} characters")
-            debug_print(f"🔑 Using AWS credentials: {aws_credentials['awsAccessKey'][:10]}...")
+            debug_print("🔑 Using AWS credentials from environment for microservice export")
             
             # Increased timeout for large exports (10 minutes)
             # Note: For very large datasets (>1000 records), use local export instead
@@ -5064,9 +5060,8 @@ def export_data(data=None, file_format='xlsx', user_id='user123', options=None, 
         raise ValueError(f"Export record count exceeds allowed maximum ({EXPORT_MAX_RECORDS})")
     options = _sanitize_export_payload(options)
 
-    # CSV formula injection hardening must apply before both local and microservice paths.
-    # Otherwise small CSV exports routed through microservice could bypass local CSV sanitizer.
-    if str(file_format).lower() == 'csv':
+    # Formula-injection hardening for any export that embeds user strings (CSV/Excel/JSON/XML/TXT).
+    if str(file_format).lower() in ('csv', 'xlsx', 'json', 'xml', 'txt'):
         data = sanitize_csv_dataset(data)
     
     # Validate data size to prevent 413 errors
@@ -5096,6 +5091,7 @@ def export_data(data=None, file_format='xlsx', user_id='user123', options=None, 
         base_name = options.get('file_name')
         if '.' in base_name:
             base_name = base_name.rsplit('.', 1)[0]
+        base_name = sanitize_export_filename(base_name)
         file_name = f"{base_name}.{file_format}"
         debug_print(f"   └─ Using provided filename: {file_name}")
     else:

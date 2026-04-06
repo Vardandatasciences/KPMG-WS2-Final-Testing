@@ -694,7 +694,7 @@ const assignApproval = (contract) => {
 
 const viewContract = (contract) => {
   // Navigate to contract detail page
-  window.open(`/contracts/${contract.contract_id}`, '_blank')
+  window.open(`/contracts/${contract.contract_id}`, '_blank', 'noopener,noreferrer')
 }
 
 const formatCurrency = (value) => {

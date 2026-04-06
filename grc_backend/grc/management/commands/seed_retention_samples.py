@@ -132,10 +132,13 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f"Seeded {created} retention timeline samples."))
 
     def _get_or_create_user(self):
+        from django.contrib.auth.hashers import make_password
+        from secrets import token_urlsafe
+
         user, _ = Users.objects.get_or_create(
             UserName='retention.tester',
             defaults={
-                'Password': 'dummy',
+                'Password': make_password(token_urlsafe(32)),
                 'Email': 'retention.tester@example.com',
                 'FirstName': 'Retention',
                 'LastName': 'Tester',

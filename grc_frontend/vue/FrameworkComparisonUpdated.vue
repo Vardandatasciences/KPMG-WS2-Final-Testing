@@ -1452,7 +1452,7 @@ export default {
       
       // Open document in new tab
       const documentUrl = this.documentInfo.document.url
-      window.open(documentUrl, '_blank')
+      window.open(documentUrl, '_blank', 'noopener,noreferrer')
     },
     
     async startAnalysis() {

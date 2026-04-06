@@ -20,6 +20,7 @@ import PopupModal from './popup/PopupModal.vue'
 import { computed, onMounted } from 'vue'
 import { useStore } from 'vuex'
 import { useRFPStore } from '@/store/index_rfp'
+import { getParentPostMessageTargetOrigin } from '@/utils/parentPostMessageOrigin.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -58,11 +59,21 @@ onMounted(() => {
     // Request auth from parent immediately
     if (window.parent && window.parent !== window) {
       console.log('[TPRM App] Requesting auth from parent...')
-      window.parent.postMessage({ type: 'TPRM_AUTH_REQUEST' }, '*')
+      window.parent.postMessage({ type: 'TPRM_AUTH_REQUEST' }, getParentPostMessageTargetOrigin())
     }
     
     // Listen for messages from parent (auth sync and navigation)
     const handleMessage = (event) => {
+      if (window.parent !== window) {
+        const allowed = getParentPostMessageTargetOrigin()
+        if (allowed && event.origin !== allowed) {
+          return
+        }
+        if (event.source !== window.parent) {
+          return
+        }
+      }
+
       // Debug: log all messages (can be removed later)
       if (event.data && event.data.type) {
         console.log('[TPRM App] 📨 Received message from parent:', event.data.type, event.data)
@@ -71,67 +82,63 @@ onMounted(() => {
       // Handle auth sync from parent
       if (event.data && event.data.type === 'GRC_AUTH_SYNC') {
         console.log('[TPRM App] ✅ Received auth sync from GRC parent:', {
-          hasToken: !!event.data.token,
+          authMode: event.data.authMode,
           hasUser: !!event.data.user,
-          isAuthenticated: event.data.isAuthenticated,
-          tokenLength: event.data.token?.length || 0
+          isAuthenticated: event.data.isAuthenticated
         })
-        
-        // Store token in sessionStorage for API calls via Authorization header
-        if (event.data.token) {
-          sessionStorage.setItem('access_token', event.data.token)
-          localStorage.removeItem('access_token')
-          localStorage.removeItem('session_token')
-        }
-        
-        if (event.data.user) {
-          sessionStorage.setItem('current_user', JSON.stringify(event.data.user))
+
+        sessionStorage.removeItem('access_token')
+        sessionStorage.removeItem('refresh_token')
+        sessionStorage.removeItem('session_token')
+        localStorage.removeItem('access_token')
+        localStorage.removeItem('refresh_token')
+        localStorage.removeItem('session_token')
+
+        let userPayload = event.data.user
+        if (userPayload) {
+          sessionStorage.setItem('current_user', JSON.stringify(userPayload))
           localStorage.removeItem('current_user')
-          localStorage.setItem('user_id', event.data.user.UserId || event.data.user.user_id || event.data.user.id)
-          console.log('[TPRM App] ✅ User stored in localStorage:', event.data.user.UserName || event.data.user.username)
-          
-          // MULTI-TENANCY: Store tenant_id from user object
-          if (event.data.user.tenant_id) {
-            localStorage.setItem('tenant_id', event.data.user.tenant_id)
-            console.log('[TPRM App] ✅ Tenant ID stored from user:', event.data.user.tenant_id)
+          const uid = userPayload.UserId ?? userPayload.user_id ?? userPayload.id
+          if (uid != null && uid !== '') {
+            localStorage.setItem('user_id', String(uid))
           }
-          if (event.data.user.tenant_name) {
-            localStorage.setItem('tenant_name', event.data.user.tenant_name)
-            console.log('[TPRM App] ✅ Tenant name stored:', event.data.user.tenant_name)
+          if (userPayload.tenant_id) {
+            localStorage.setItem('tenant_id', userPayload.tenant_id)
+          }
+          if (userPayload.tenant_name) {
+            localStorage.setItem('tenant_name', userPayload.tenant_name)
+          }
+        } else if (event.data.isAuthenticated && event.data.userId) {
+          localStorage.setItem('user_id', String(event.data.userId))
+          userPayload = {
+            UserId: event.data.userId,
+            user_id: event.data.userId,
+            id: event.data.userId
           }
         } else {
-          console.warn('[TPRM App] ⚠️ No user in auth sync message')
+          console.warn('[TPRM App] ⚠️ No user payload in auth sync (cookie mode)')
         }
-        
-        // MULTI-TENANCY: Also check for tenant_id in the message itself
+
+        if (event.data.tenantId) {
+          localStorage.setItem('tenant_id', event.data.tenantId)
+        }
+        if (event.data.tenantName) {
+          localStorage.setItem('tenant_name', event.data.tenantName)
+        }
         if (event.data.tenant_id) {
           localStorage.setItem('tenant_id', event.data.tenant_id)
-          console.log('[TPRM App] ✅ Tenant ID stored from message:', event.data.tenant_id)
         }
         if (event.data.tenant_name) {
           localStorage.setItem('tenant_name', event.data.tenant_name)
-          console.log('[TPRM App] ✅ Tenant name stored from message:', event.data.tenant_name)
         }
-        
-        // MULTI-TENANCY: Clear RFP store when tenant changes
+
         const previousTenantId = sessionStorage.getItem('rfp_store_tenant_id')
-        const newTenantId = event.data.user?.tenant_id || event.data.tenant_id || 
-                           (event.data.token ? (() => {
-                             try {
-                               const base64Url = event.data.token.split('.')[1]
-                               if (base64Url) {
-                                 const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
-                                 const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
-                                   return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
-                                 }).join(''))
-                                 const payload = JSON.parse(jsonPayload)
-                                 return payload.tenant_id
-                               }
-                             } catch (e) {
-                               return null
-                             }
-                           })() : null)
-        
+        const newTenantId =
+          userPayload?.tenant_id ||
+          event.data.tenantId ||
+          event.data.tenant_id ||
+          localStorage.getItem('tenant_id')
+
         if (previousTenantId && newTenantId && previousTenantId !== newTenantId) {
           console.log(`[TPRM App] 🔄 Tenant changed from ${previousTenantId} to ${newTenantId}, clearing RFP store`)
           try {
@@ -141,16 +148,13 @@ onMounted(() => {
             console.warn('[TPRM App] ⚠️ Could not clear RFP store:', e)
           }
         }
-        
-        // Update Vuex store
-        if (event.data.token && event.data.user) {
+
+        if (userPayload && event.data.isAuthenticated) {
           store.commit('auth/SET_AUTH', {
-            user: event.data.user,
-            token: event.data.token
+            user: userPayload,
+            token: null
           })
-          console.log('[TPRM App] ✅ Auth synced to Vuex store')
-        } else {
-          console.warn('[TPRM App] ⚠️ Cannot sync to Vuex - missing token or user')
+          console.log('[TPRM App] ✅ Auth synced to Vuex store (cookie-first)')
         }
       }
       
@@ -217,13 +221,13 @@ onMounted(() => {
         if (!ok) {
           console.log('[TPRM App] No valid cookie session, requesting auth again...')
           if (window.parent && window.parent !== window) {
-            window.parent.postMessage({ type: 'TPRM_AUTH_REQUEST' }, '*')
+            window.parent.postMessage({ type: 'TPRM_AUTH_REQUEST' }, getParentPostMessageTargetOrigin())
           }
         }
       } catch (e) {
         // If anything goes wrong, fall back to requesting auth again.
         if (window.parent && window.parent !== window) {
-          window.parent.postMessage({ type: 'TPRM_AUTH_REQUEST' }, '*')
+          window.parent.postMessage({ type: 'TPRM_AUTH_REQUEST' }, getParentPostMessageTargetOrigin())
         }
       }
     }, 500)

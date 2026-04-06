@@ -1593,6 +1593,12 @@ import { PopupService, PopupModal } from '@/modules/popup'
 import { AccessUtils } from '@/utils/accessUtils'
 import ConsentModal from '@/components/Consent/ConsentModal.vue'
 import { checkConsentRequired, CONSENT_ACTIONS } from '@/utils/consentManager.js'
+import {
+  getFrameworkIdForClient,
+  getSessionFrameworkId,
+  setSessionFrameworkId,
+  getDefaultFrameworkId,
+} from '@/utils/frameworkContextStorage.js'
 
 export default {
   name: 'CreateIncident',
@@ -1603,18 +1609,14 @@ export default {
   setup() {
     const router = useRouter()
 
-    // Session-scoped framework context only: do not copy session data into localStorage
-    // (avoids cross-session / cross-user stale framework_id on shared browsers).
-    const getIncidentFrameworkId = () =>
-      sessionStorage.getItem('framework_id') ||
-      localStorage.getItem('selectedFrameworkId') ||
-      '1'
+    const getIncidentFrameworkId = () => getFrameworkIdForClient()
 
     onMounted(() => {
-      if (!sessionStorage.getItem('framework_id')) {
-        const frameworkId = localStorage.getItem('selectedFrameworkId') || '1'
-        sessionStorage.setItem('framework_id', frameworkId)
-        console.log('💡 [Consent] Seeded session framework_id to:', frameworkId)
+      if (!getSessionFrameworkId()) {
+        setSessionFrameworkId(getDefaultFrameworkId())
+        console.log(
+          '💡 [Consent] Seeded session framework_id from default (set session when user selects a framework; VITE_DEFAULT_FRAMEWORK_ID overrides)'
+        )
       }
     })
     

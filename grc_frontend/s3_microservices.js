@@ -50,8 +50,8 @@ function assertSafeS3DownloadRedirect(urlString) {
 // Configure MySQL
 const dbConfig = {
   host: process.env.DB_HOST || 'localhost',
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || 'root',
+  user: process.env.DB_USER || '',
+  password: process.env.DB_PASSWORD || '',
   database: process.env.DB_NAME || 'grc',
   waitForConnections: true,
   connectionLimit: 10,
@@ -443,8 +443,9 @@ async function getDownloadUrl(fileId, expiresIn = 3600) {
   }
 }
 
-// API Routes
-app.get('http://15.207.108.158:8000/api/health', (req, res) => {
+// API routes (path only — host/port come from where this service is deployed)
+const API = '/api';
+app.get(`${API}/health`, (req, res) => {
   // Check S3 connection
   let s3Status = "unknown";
   let dbStatus = "unknown";
@@ -495,7 +496,7 @@ app.get('http://15.207.108.158:8000/api/health', (req, res) => {
     });
 });
 
-app.post('http://15.207.108.158:8000/api/upload', upload.single('file'), async (req, res) => {
+app.post(`${API}/upload`, upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
@@ -512,7 +513,7 @@ app.post('http://15.207.108.158:8000/api/upload', upload.single('file'), async (
     const body = req.body || {};
     for (const key of Object.keys(body)) {
       if (key === 'userId' || key === 'fileName') continue;
-      if (unsafeKeys.has(key)) continue; // SECURITY: avoid prototype pollution
+      if (unsafeKeys.has(key) || key.startsWith('__')) continue; // prototype pollution / dunder keys
       params[key] = body[key];
     }
 
@@ -524,7 +525,7 @@ app.post('http://15.207.108.158:8000/api/upload', upload.single('file'), async (
   }
 });
 
-app.get('http://15.207.108.158:8000/api/files/:userId', async (req, res) => {
+app.get(`${API}/files/:userId`, async (req, res) => {
   try {
     const { userId } = req.params;
     // Get filters from query parameters
@@ -548,7 +549,7 @@ app.get('http://15.207.108.158:8000/api/file/:fileId', async (req, res) => {
   }
 });
 
-app.get('http://15.207.108.158:8000/api/download/:fileId', async (req, res) => {
+app.get(`${API}/download/:fileId`, async (req, res) => {
   try {
     const { fileId } = req.params;
     const expiresIn = req.query.expiresIn ? parseInt(req.query.expiresIn) : 3600;
@@ -566,7 +567,7 @@ app.get('http://15.207.108.158:8000/api/download/:fileId', async (req, res) => {
   }
 });
 
-app.delete('http://15.207.108.158:8000/api/file/:fileId', async (req, res) => {
+app.delete(`${API}/file/:fileId`, async (req, res) => {
   try {
     const { fileId } = req.params;
     const result = await deleteFile(fileId);

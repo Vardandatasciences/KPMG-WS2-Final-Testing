@@ -94,7 +94,7 @@ app.config.globalProperties.$initializeStores = async () => {
   try {
     const { useAuthStore } = await import('./stores/auth')
     const authStore = useAuthStore()
-    authStore.initializeAuth()
+    await authStore.bootstrapAuth()
   } catch (error) {
     console.error('Failed to initialize stores:', error)
   }
@@ -105,11 +105,7 @@ router.beforeEach(async (to, from, next) => {
   try {
     const { useAuthStore } = await import('./stores/auth')
     const authStore = useAuthStore()
-    
-    // Initialize auth if not already done
-    if (!authStore.isAuthenticated) {
-      authStore.initializeAuth()
-    }
+    await authStore.bootstrapAuth()
     
     // Initialize RFP stores for RFP routes
     if (to.path.startsWith('/rfp') || to.path.startsWith('/vendor-portal') || to.path.startsWith('/submit')) {

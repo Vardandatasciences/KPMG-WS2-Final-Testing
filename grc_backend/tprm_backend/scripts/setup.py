@@ -22,19 +22,27 @@ def run_migrations():
     print("✅ Migrations completed!")
 
 def create_superuser():
-    """Create superuser if it doesn't exist"""
+    """Create superuser if it doesn't exist (password from DJANGO_SUPERUSER_PASSWORD)."""
     from django.contrib.auth.models import User
-    
-    if not User.objects.filter(is_superuser=True).exists():
-        print("Creating superuser...")
-        User.objects.create_superuser(
-            username='admin',
-            email='admin@example.com',
-            password='admin123'
-        )
-        print("✅ Superuser created! (username: admin, password: admin123)")
-    else:
+
+    if User.objects.filter(is_superuser=True).exists():
         print("✅ Superuser already exists!")
+        return
+
+    password = os.environ.get("DJANGO_SUPERUSER_PASSWORD", "").strip()
+    if not password:
+        print(
+            "⚠️ Skipping superuser creation: set DJANGO_SUPERUSER_PASSWORD in the environment."
+        )
+        return
+
+    print("Creating superuser...")
+    User.objects.create_superuser(
+        username=os.environ.get("DJANGO_SUPERUSER_USERNAME", "admin"),
+        email=os.environ.get("DJANGO_SUPERUSER_EMAIL", "admin@example.com"),
+        password=password,
+    )
+    print("✅ Superuser created (username from DJANGO_SUPERUSER_USERNAME or admin).")
 
 def collect_static():
     """Collect static files"""

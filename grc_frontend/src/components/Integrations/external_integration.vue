@@ -830,7 +830,7 @@ export default {
         if (platform.name === 'Jira') {
           // Open Jira integration page with stored data
           const jiraUrl = '/integration/jira?loadStoredData=true'
-          window.open(jiraUrl, '_blank')
+          window.open(jiraUrl, '_blank', 'noopener,noreferrer')
         } else if (platform.name === 'BambooHR') {
           // Navigate to BambooHR integration page with stored data in same tab
           const bamboohrUrl = '/integration/bamboohr?loadStoredData=true'

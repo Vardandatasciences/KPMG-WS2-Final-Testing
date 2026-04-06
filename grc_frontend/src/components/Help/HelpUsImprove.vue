@@ -74,7 +74,7 @@
 <script setup>
 // Function to open feedback form in new tab
 const openFeedbackForm = () => {
-  window.open('https://forms.office.com/r/wGG9gwkkXN', '_blank');
+  window.open('https://forms.office.com/r/wGG9gwkkXN', '_blank', 'noopener,noreferrer');
 };
 </script>
 

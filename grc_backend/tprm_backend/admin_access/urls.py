@@ -1,7 +1,4 @@
-"""
-URL patterns for Admin Access Control
-No RBAC or MFA dependency - accessible by default
-"""
+"""URL patterns for Admin Access Control (see admin_access.authz for BOLA rules)."""
 from django.urls import path
 from . import views
 

@@ -21,22 +21,19 @@ export const useAuthStore = defineStore('auth', {
     setUser(userData) {
       this.user = userData
       this.isAuthenticated = true
-      localStorage.setItem('user', JSON.stringify(userData))
       sessionStorage.setItem('current_user', JSON.stringify(userData))
       localStorage.removeItem('current_user')
-      localStorage.setItem('isAuthenticated', 'true')
     },
 
-    // Clear user data
     clearUser() {
       this.user = null
       this.isAuthenticated = false
       this.initialized = false
-      localStorage.removeItem('user')
       sessionStorage.removeItem('current_user')
       localStorage.removeItem('current_user')
-      localStorage.removeItem('isAuthenticated')
       localStorage.removeItem('session_token')
+      localStorage.removeItem('access_token')
+      localStorage.removeItem('refresh_token')
     },
 
     // Initialize auth state from localStorage or check with backend
@@ -49,19 +46,8 @@ export const useAuthStore = defineStore('auth', {
       
       this.loading = true
       try {
-        const user = localStorage.getItem('user')
-        const isAuthenticated = localStorage.getItem('isAuthenticated')
-       
-        if (user && isAuthenticated === 'true') {
-          // Use cached authentication
-          this.user = JSON.parse(user)
-          this.isAuthenticated = true
-          console.log('[AuthStore] Restored auth from localStorage')
-        } else {
-          // Check with backend if user is authenticated
-          console.log('[AuthStore] No cached auth, checking with backend')
-          await this.checkAuth()
-        }
+        console.log('[AuthStore] Verifying session with backend')
+        await this.checkAuth()
       } finally {
         this.initialized = true
         this.loading = false
