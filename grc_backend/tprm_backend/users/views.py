@@ -7,6 +7,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import login, logout
+from django.conf import settings
 from django.shortcuts import get_object_or_404
 from django.db.models import Q
 from django_filters.rest_framework import DjangoFilterBackend
@@ -56,11 +57,33 @@ class LoginView(APIView):
                 user_agent=request.META.get('HTTP_USER_AGENT', '')
             )
             
-            return Response({
+            response = Response({
                 'user': UserSerializer(user).data,
                 'refresh': str(refresh),
                 'access': str(refresh.access_token),
             })
+
+            # Set HttpOnly cookies for security (XSS protection)
+            # We still return them in the body for backward compatibility as requested
+            cookie_params = {
+                'httponly': True,
+                'secure': not settings.DEBUG,
+                'samesite': 'Lax',
+            }
+
+            response.set_cookie(
+                key='access_token',
+                value=str(refresh.access_token),
+                max_age=3600,  # 1 hour
+                **cookie_params
+            )
+            response.set_cookie(
+                key='refresh_token',
+                value=str(refresh),
+                max_age=86400,  # 24 hours
+                **cookie_params
+            )
+            return response
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     def get_client_ip(self, request):
@@ -78,7 +101,11 @@ class LogoutView(APIView):
     
     def post(self, request):
         logout(request)
-        return Response({'message': 'Successfully logged out'})
+        response = Response({'message': 'Successfully logged out'})
+        response.delete_cookie('access_token')
+        response.delete_cookie('refresh_token')
+        response.delete_cookie('session_token')
+        return response
 
 
 class UserListView(generics.ListCreateAPIView):

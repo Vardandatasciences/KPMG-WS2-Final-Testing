@@ -209,31 +209,30 @@ REST_FRAMEWORK = {
     },
 }
 
-# JWT Settings
+# JWT Settings (Strictly asymmetric RS256; symmetric algorithms like HS256 are NOT allowed)
 JWT_ALGORITHM = os.environ.get('JWT_ALGORITHM', 'RS256').upper().strip()
 JWT_ISSUER = os.environ.get('JWT_ISSUER', 'tprm-backend')
 JWT_AUDIENCE = os.environ.get('JWT_AUDIENCE', 'tprm-frontend')
+
+# Keys can be provided inline with \n in env vars.
 JWT_PRIVATE_KEY = os.environ.get('JWT_PRIVATE_KEY', '').replace('\\n', '\n')
 JWT_PUBLIC_KEY = os.environ.get('JWT_PUBLIC_KEY', '').replace('\\n', '\n')
 
 _JWT_ASYMMETRIC_ALGS = ('RS256', 'RS384', 'RS512', 'ES256', 'ES384', 'ES512')
-if not DEBUG and JWT_ALGORITHM not in _JWT_ASYMMETRIC_ALGS:
+if JWT_ALGORITHM not in _JWT_ASYMMETRIC_ALGS:
     raise ValueError(
-        'Production requires asymmetric JWT (e.g. RS256). '
-        'Set JWT_ALGORITHM=RS256 and JWT_PRIVATE_KEY / JWT_PUBLIC_KEY. '
-        'HS256 is not allowed when DEBUG=False.'
+        f"Insecure JWT_ALGORITHM ({JWT_ALGORITHM}) detected. "
+        "The system strictly requires asymmetric signing (e.g., RS256 or ES256). "
+        "Set JWT_ALGORITHM=RS256 and configure JWT_PRIVATE_KEY / JWT_PUBLIC_KEY."
     )
 
-if JWT_ALGORITHM.startswith('RS') or JWT_ALGORITHM.startswith('ES'):
-    if not JWT_PRIVATE_KEY or not JWT_PUBLIC_KEY:
-        raise ValueError(
-            "JWT_PRIVATE_KEY and JWT_PUBLIC_KEY must be configured when using asymmetric JWT algorithms."
-        )
-    JWT_SIGNING_KEY = JWT_PRIVATE_KEY
-    JWT_VERIFYING_KEY = JWT_PUBLIC_KEY
-else:
-    JWT_SIGNING_KEY = os.environ.get('JWT_SECRET_KEY', SECRET_KEY)
-    JWT_VERIFYING_KEY = os.environ.get('JWT_VERIFYING_KEY', '')
+if not JWT_PRIVATE_KEY or not JWT_PUBLIC_KEY:
+    raise ValueError(
+        "JWT_PRIVATE_KEY and JWT_PUBLIC_KEY must be configured when using asymmetric JWT algorithms."
+    )
+
+JWT_SIGNING_KEY = JWT_PRIVATE_KEY
+JWT_VERIFYING_KEY = JWT_PUBLIC_KEY
 
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),

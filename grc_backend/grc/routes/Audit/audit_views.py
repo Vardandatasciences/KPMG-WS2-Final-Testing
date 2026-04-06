@@ -1,4 +1,5 @@
-from rest_framework.decorators import api_view, permission_classes, authentication_classes
+from rest_framework.decorators import api_view, permission_classes, authentication_classes, throttle_classes
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import AllowAny
@@ -6744,6 +6745,7 @@ def generate_audit_report(request, audit_id):
 @csrf_exempt
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([AuditViewPermission])
+@throttle_classes([ScopedRateThrottle])
 def export_audit_compliances(request, format, item_type, item_id):
     """Export audit compliances based on format and item type (framework, policy, subpolicy)"""
     try:
@@ -6878,13 +6880,14 @@ def export_audit_compliances(request, format, item_type, item_id):
             status='pending'
         )
         
-        # Use the export_data function from export_service
-        from ...routes.Global.export_service1 import export_data
+        # Use the hardened export_data function from s3_fucntions (includes DoS protection)
+        from ...routes.Global.s3_fucntions import export_data
         result = export_data(
             data=compliances_data,
             file_format=format,
             user_id=str(user_id),
-            options={'item_type': item_type, 'item_id': item_id}
+            options={'item_type': item_type, 'item_id': item_id},
+            export_id=export_task.id
         )
         
         # Task is already updated by export_data function

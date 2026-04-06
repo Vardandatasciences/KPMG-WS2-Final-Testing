@@ -255,8 +255,8 @@ def oauth_callback():
         except Exception as e:
             debug_print(f"⚠️ Error notifying Django backend: {e}")
         
-        # Redirect back to frontend with success
-        frontend_callback_url = f"{FRONTEND_URL}/integration/bamboohr?{up.urlencode({'token': access_token, 'user_id': user_id, 'subdomain': subdomain, 'success': 'true'})}"
+        # OAuth access_token is only sent to Django via POST above; do not append it to the browser URL.
+        frontend_callback_url = f"{FRONTEND_URL}/integration/bamboohr?{up.urlencode({'user_id': user_id, 'subdomain': subdomain, 'success': 'true'})}"
         debug_print(f"🔗 Redirecting to frontend: {frontend_callback_url}")
         
         # Clear sensitive session data

@@ -35,99 +35,80 @@ logger = logging.getLogger(__name__)
 
 
 # ==============================================================================
-# HTML SANITIZATION FOR VENDOR-SUBMITTED CONTENT
-# ==============================================================================
+# Robust regex to catch <script> tags and blocks - improved to handle various cases
 _SCRIPT_TAG_RE = re.compile(
-    r"<\s*script[^>]*>.*?<\s*/\s*script\s*>",
+    r"<\s*script[^>]*>.*?<\s*/\s*script\s*>|<\s*script[^>]*>",
     re.IGNORECASE | re.DOTALL,
 )
-_ONEVENT_ATTR_RE = re.compile(
-    r"\son\w+\s*=\s*(\"[^\"]*\"|'[^']*'|[^\s>]+)",
+
+# Block other high-risk tags entirely
+_DANGEROUS_TAGS_RE = re.compile(
+    r"<\s*(?:iframe|object|embed|svg|math|base|meta|form|link|style|applet|frameset|frame|audio|video|canvas)[^>]*>|<\s*/\s*(?:iframe|object|embed|svg|math|base|meta|form|link|style|applet|frameset|frame|audio|video|canvas)\s*>",
     re.IGNORECASE,
 )
+
+# Block other high-risk tags entirely
+_DANGEROUS_TAGS_RE = re.compile(
+    r"<\s*(?:iframe|object|embed|svg|math|base|meta|form|link|style|applet|frameset|frame|audio|video|canvas)[^>]*>|<\s*/\s*(?:iframe|object|embed|svg|math|base|meta|form|link|style|applet|frameset|frame|audio|video|canvas)\s*>",
+    re.IGNORECASE,
+)
+
+# Catch event handlers like onclick=, onload=, etc.
+# FIXED: Now catches bypasses like <img/onerror=...> by not requiring a preceding space
+_ONEVENT_ATTR_RE = re.compile(
+    r"(?:\s|/|>)on\w+\s*=\s*(?:\"[^\"]*\"|'[^']*'|[^\s>]+)",
+    re.IGNORECASE,
+)
+
+# Catch javascript:, vbscript:, data: URIs in sensitive attributes
 _JS_URL_RE = re.compile(
-    r"(href|src)\s*=\s*(\"javascript:[^\"]*\"|'javascript:[^']*'|javascript:[^\s>]*)",
+    r"(?:href|src|action|data|formaction)\s*=\s*(?:\"(?:javascript|vbscript|data):[^\"]*\"|'(?:javascript|vbscript|data):[^']*'|(?:javascript|vbscript|data):[^\s>]*)",
     re.IGNORECASE,
 )
 
 
 def sanitize_html_value(value):
     """
-    Best-effort server-side neutralization of script content in vendor-submitted HTML.
-
-    This does NOT provide full HTML policy enforcement, but it:
-    - strips <script>...</script> blocks
-    - removes inline event handler attributes (onclick=, onload=, etc.)
-    - removes javascript: URLs from href/src attributes
-
-    It is intentionally conservative and idempotent so it can be safely called
-    multiple times on the same value.
+    Tighter server-side neutralization of script content in vendor-submitted HTML.
+    
+    This performs a multi-pass regex cleanup to:
+    - Strip <script> tags and blocks
+    - Strip high-risk tags (iframe, object, etc.)
+    - Remove inline event handlers (even without preceding space)
+    - Nullify dangerous URIs (javascript:, etc.)
     """
-    if not isinstance(value, str) or not value:
+    if not value or not isinstance(value, str):
         return value
 
+    # Neutralize dangerous tags and scripts
     sanitized = _SCRIPT_TAG_RE.sub("", value)
+    sanitized = _DANGEROUS_TAGS_RE.sub("", sanitized)
+    
+    # Neutralize event handlers
     sanitized = _ONEVENT_ATTR_RE.sub("", sanitized)
-    sanitized = _JS_URL_RE.sub(r"\1=\"#\"", sanitized)
+    
+    # Neutralize dangerous URIs in sensitive attributes
+    sanitized = _JS_URL_RE.sub(r'href="#"', sanitized)
+    
     return sanitized
 
 
-def sanitize_response_documents(response_documents):
+def sanitize_response_documents(data):
     """
-    Walk the response_documents structure and sanitize any HTML-bearing fields
-    coming from the public vendor portal before we persist them.
+    Recursively walk any JSON-like structure (dict, list) and sanitize string values.
+    This ensures that even deeply nested vendor-submitted content is cleaned.
     """
-    if not isinstance(response_documents, dict):
-        return response_documents
-
-    # rfpResponses section: criteriaId -> { htmlContent, ... }
-    rfp_responses = response_documents.get("rfpResponses")
-    if isinstance(rfp_responses, dict):
-        for criteria_id, entry in list(rfp_responses.items()):
-            if isinstance(entry, str):
-                # Legacy format: plain string, treat as htmlContent
-                rfp_responses[criteria_id] = {
-                    "htmlContent": sanitize_html_value(entry),
-                    "attachments": [],
-                }
-            elif isinstance(entry, dict):
-                if "htmlContent" in entry:
-                    entry["htmlContent"] = sanitize_html_value(entry.get("htmlContent") or "")
-                if "content" in entry:
-                    entry["content"] = sanitize_html_value(entry.get("content") or "")
-                if "text" in entry:
-                    entry["text"] = sanitize_html_value(entry.get("text") or "")
-                rfp_responses[criteria_id] = entry
-
-        response_documents["rfpResponses"] = rfp_responses
-
-    # dynamicFields section can also contain rich text answers
-    dynamic_fields = response_documents.get("dynamicFields")
-    if isinstance(dynamic_fields, dict):
-        for key, value in list(dynamic_fields.items()):
-            if isinstance(value, str):
-                dynamic_fields[key] = sanitize_html_value(value)
-            elif isinstance(value, dict):
-                if "htmlContent" in value:
-                    value["htmlContent"] = sanitize_html_value(value.get("htmlContent") or "")
-                if "content" in value:
-                    value["content"] = sanitize_html_value(value.get("content") or "")
-                if "text" in value:
-                    value["text"] = sanitize_html_value(value.get("text") or "")
-                dynamic_fields[key] = value
-
-        response_documents["dynamicFields"] = dynamic_fields
-
-    # companyInfo and other top-level sections could contain long-text fields;
-    # keep this minimal and focused on obvious HTML blobs.
-    company_info = response_documents.get("companyInfo")
-    if isinstance(company_info, dict):
-        for key, value in list(company_info.items()):
-            if isinstance(value, str) and "<" in value and ">" in value:
-                company_info[key] = sanitize_html_value(value)
-        response_documents["companyInfo"] = company_info
-
-    return response_documents
+    if isinstance(data, dict):
+        return {k: sanitize_response_documents(v) for k, v in data.items()}
+    elif isinstance(data, list):
+        return [sanitize_response_documents(item) for item in data]
+    elif isinstance(data, str):
+        # Only bother sanitizing if it looks like it might contain HTML
+        if "<" in data or "javascript:" in data.lower():
+            return sanitize_html_value(data)
+        return data
+    else:
+        return data
 
 
 def _get_safe_vendor_portal_base_url(request_base_url: str | None) -> str:
@@ -1037,8 +1018,8 @@ def create_rfp_response(request):
                 existing_response.document_urls = document_urls if isinstance(document_urls, dict) else {}
                 
                 # Proposal data
-                existing_response.proposal_data = proposal_data if isinstance(proposal_data, dict) else {}
-                existing_response.draft_data = proposal_data if isinstance(proposal_data, dict) else {}
+                existing_response.proposal_data = sanitize_response_documents(proposal_data if isinstance(proposal_data, dict) else {})
+                existing_response.draft_data = sanitize_response_documents(proposal_data if isinstance(proposal_data, dict) else {})
                 
                 # CRITICAL: Store UTM parameters in external_submission_data
                 # Always save UTM parameters, even if empty dict
@@ -1214,8 +1195,8 @@ def create_rfp_response(request):
                         print(f"[FINAL CHECK] Setting new document_urls: {len(document_urls or {})} documents")
                    
  
-                    final_check_response.draft_data = proposal_data if isinstance(proposal_data, dict) else {}
-                    final_check_response.proposal_data = proposal_data if isinstance(proposal_data, dict) else {}
+                    final_check_response.draft_data = sanitize_response_documents(proposal_data if isinstance(proposal_data, dict) else {})
+                    final_check_response.proposal_data = sanitize_response_documents(proposal_data if isinstance(proposal_data, dict) else {})
                     final_check_response.proposed_value = proposed_value
                     final_check_response.evaluation_status = 'SUBMITTED'
                     final_check_response.submission_status = 'SUBMITTED'  # CRITICAL: Set submission_status (required field)
@@ -1356,8 +1337,8 @@ def create_rfp_response(request):
                         final_duplicate_check.contact_phone = contact_phone
                         
                         final_duplicate_check.document_urls = document_urls if isinstance(document_urls, dict) else {}
-                        final_duplicate_check.draft_data = proposal_data if isinstance(proposal_data, dict) else {}
-                        final_duplicate_check.proposal_data = proposal_data if isinstance(proposal_data, dict) else {}
+                        final_duplicate_check.draft_data = sanitize_response_documents(proposal_data if isinstance(proposal_data, dict) else {})
+                        final_duplicate_check.proposal_data = sanitize_response_documents(proposal_data if isinstance(proposal_data, dict) else {})
                         final_duplicate_check.proposed_value = proposed_value
                         final_duplicate_check.evaluation_status = 'SUBMITTED'
                         final_duplicate_check.submission_status = 'SUBMITTED'  # CRITICAL: Set submission_status (required field)

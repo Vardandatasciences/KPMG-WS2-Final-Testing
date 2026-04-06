@@ -253,8 +253,8 @@ def simple_login(request):
                 
                 # Use centralized JWT signing configuration.
                 from django.conf import settings
-                signing_key = getattr(settings, 'JWT_SIGNING_KEY', getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY))
-                session_token = jwt.encode(payload, signing_key, algorithm=getattr(settings, 'JWT_ALGORITHM', 'RS256'))
+                signing_key = settings.JWT_SIGNING_KEY
+                session_token = jwt.encode(payload, signing_key, algorithm=settings.JWT_ALGORITHM)
                 
                 logger.info(f"Login successful for user: {username}")
                 return Response({

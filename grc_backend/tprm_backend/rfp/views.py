@@ -58,6 +58,7 @@ from .serializers import (
 from .permissions import IsRFPCreatorOrReviewer
 from .s3 import create_direct_mysql_client
 from .input_sanitization import sanitize_invitation_custom_message
+from tprm_backend.utils.pdf_security import sanitize_for_pdf
 from .forms import (
     VendorSearchForm, VendorManualEntryForm, 
     VendorBulkUploadForm, RFPVendorSelectionForm
@@ -1447,7 +1448,8 @@ def convert_to_pdf(file_path, file_extension):
                    
                     for para in doc.paragraphs:
                         if para.text.strip():
-                            story.append(Paragraph(para.text, styles['Normal']))
+                            sanitized_text = sanitize_for_pdf(para.text)
+                            story.append(Paragraph(sanitized_text, styles['Normal']))
                             story.append(Spacer(1, 12))
                    
                     # Handle tables
@@ -1455,7 +1457,8 @@ def convert_to_pdf(file_path, file_extension):
                         for row in table.rows:
                             for cell in row.cells:
                                 if cell.text.strip():
-                                    story.append(Paragraph(cell.text, styles['Normal']))
+                                    sanitized_cell = sanitize_for_pdf(cell.text)
+                                    story.append(Paragraph(sanitized_cell, styles['Normal']))
                                     story.append(Spacer(1, 6))
                    
                     pdf_doc.build(story)
@@ -1489,7 +1492,8 @@ def convert_to_pdf(file_path, file_extension):
                        
                         pdf_doc = SimpleDocTemplate(pdf_path, pagesize=letter)
                         styles = getSampleStyleSheet()
-                        story = [Paragraph(text[:1000], styles['Normal'])]  # Limit text length
+                        sanitized_text = sanitize_for_pdf(text[:1000])
+                        story = [Paragraph(sanitized_text, styles['Normal'])]  # Limit text length
                         pdf_doc.build(story)
                         return pdf_path
                     except Exception as e:
@@ -1574,7 +1578,8 @@ def convert_to_pdf(file_path, file_extension):
                 paragraphs = text.split('\n')
                 for para in paragraphs:
                     if para.strip():
-                        story.append(Paragraph(para.strip(), styles['Normal']))
+                        sanitized_para = sanitize_for_pdf(para.strip())
+                        story.append(Paragraph(sanitized_para, styles['Normal']))
                         story.append(Spacer(1, 12))
                
                 pdf_doc.build(story)
@@ -1613,7 +1618,8 @@ def convert_to_pdf(file_path, file_extension):
                         sheet = wb[sheet_name]
                        
                         # Add sheet title
-                        story.append(Paragraph(f"<b>Sheet: {sheet_name}</b>", styles['Heading1']))
+                        sanitized_sheet_name = sanitize_for_pdf(sheet_name)
+                        story.append(Paragraph(f"<b>Sheet: {sanitized_sheet_name}</b>", styles['Heading1']))
                         story.append(Spacer(1, 12))
                        
                         # Collect data from sheet
@@ -1679,7 +1685,8 @@ def convert_to_pdf(file_path, file_extension):
                         sheet_name = sheet.name
                        
                         # Add sheet title
-                        story.append(Paragraph(f"<b>Sheet: {sheet_name}</b>", styles['Heading1']))
+                        sanitized_sheet_name = sanitize_for_pdf(sheet_name)
+                        story.append(Paragraph(f"<b>Sheet: {sanitized_sheet_name}</b>", styles['Heading1']))
                         story.append(Spacer(1, 12))
                        
                         # Collect data from sheet

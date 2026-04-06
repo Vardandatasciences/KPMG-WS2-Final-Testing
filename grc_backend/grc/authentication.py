@@ -26,10 +26,15 @@ from .mfa_service import MfaService
 
 logger = logging.getLogger(__name__)
 
-# JWT Settings
-JWT_SIGNING_KEY = getattr(settings, 'JWT_SIGNING_KEY', getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY))
-JWT_VERIFYING_KEY = getattr(settings, 'JWT_VERIFYING_KEY', None) or getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
+# JWT Settings (Strictly asymmetric RS256)
 JWT_ALGORITHM = getattr(settings, 'JWT_ALGORITHM', 'RS256')
+JWT_SIGNING_KEY = getattr(settings, 'JWT_SIGNING_KEY', None)
+JWT_VERIFYING_KEY = getattr(settings, 'JWT_VERIFYING_KEY', None)
+
+if not JWT_SIGNING_KEY or not JWT_VERIFYING_KEY:
+    # Safegauard to ensure keys are loaded
+    import logging
+    logging.getLogger(__name__).error("JWT_SIGNING_KEY or JWT_VERIFYING_KEY missing from settings.")
 JWT_ACCESS_TOKEN_LIFETIME = timedelta(days=3)  # 3 days
 JWT_REFRESH_TOKEN_LIFETIME = timedelta(days=7)  # 7 days
 
@@ -507,10 +512,15 @@ def assign_default_rbac_permissions_for_google_sso(user):
         import traceback
         logger.error(f"Traceback: {traceback.format_exc()}")
 
-# JWT Settings
-JWT_SIGNING_KEY = getattr(settings, 'JWT_SIGNING_KEY', getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY))
-JWT_VERIFYING_KEY = getattr(settings, 'JWT_VERIFYING_KEY', None) or getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
+# JWT Settings (Strictly asymmetric RS256)
 JWT_ALGORITHM = getattr(settings, 'JWT_ALGORITHM', 'RS256')
+JWT_SIGNING_KEY = getattr(settings, 'JWT_SIGNING_KEY', None)
+JWT_VERIFYING_KEY = getattr(settings, 'JWT_VERIFYING_KEY', None)
+
+if not JWT_SIGNING_KEY or not JWT_VERIFYING_KEY:
+    # Safegauard to ensure keys are loaded
+    import logging
+    logging.getLogger(__name__).error("JWT_SIGNING_KEY or JWT_VERIFYING_KEY missing from settings.")
 JWT_ACCESS_TOKEN_LIFETIME = timedelta(days=3)  # 3 days
 JWT_REFRESH_TOKEN_LIFETIME = timedelta(days=7)  # 7 days
 
@@ -601,10 +611,14 @@ def verify_jwt_token(token, check_session=False):
         check_session: If True, also validates session token (multi-session management) - DISABLED
     """
     try:
+        if not JWT_VERIFYING_KEY:
+            logger.error("JWT_VERIFYING_KEY not configured. Cannot verify token.")
+            return None
+            
         payload = jwt.decode(
             token,
             JWT_VERIFYING_KEY,
-            algorithms=getattr(settings, 'JWT_ALLOWED_ALGORITHMS', [JWT_ALGORITHM]),
+            algorithms=[JWT_ALGORITHM],  # Strictly use the configured algorithm
             issuer=getattr(settings, 'JWT_ISSUER', None),
             audience=getattr(settings, 'JWT_AUDIENCE', None),
         )

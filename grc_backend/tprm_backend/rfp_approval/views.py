@@ -943,6 +943,12 @@ def workflows(request):
             stages_config = workflow_data.pop('stages_config', [])
             rfp_data = workflow_data.pop('rfp_data', None)
             
+            # BUSINESS LOGIC FIX: Strictly enforce created_by from authenticated user
+            if hasattr(request.user, 'userid'):
+                authenticated_user_id = request.user.userid
+                print(f"[SECURITY] Set workflow created_by to authenticated user: {authenticated_user_id}")
+                workflow_data['created_by'] = authenticated_user_id
+            
             # Check if RFP has auto_approve enabled - if so, prevent workflow creation (skip for RFI)
             business_object_type = workflow_data.get('business_object_type', '')
             if rfp_data and business_object_type != 'RFI':
@@ -1748,6 +1754,13 @@ def approval_requests(request):
             request_data['approval_id'] = approval_id
             request_data['tenant_id'] = tenant_id  # MULTI-TENANCY: Add tenant_id
             
+            # BUSINESS LOGIC FIX: Strictly enforce requester_id from authenticated user
+            # Do NOT rely on client input for requester_id to prevent self-approval vulnerabilities
+            if hasattr(request.user, 'userid'):
+                authenticated_user_id = request.user.userid
+                print(f"[SECURITY] Overriding requester_id from {request_data.get('requester_id')} to {authenticated_user_id}")
+                request_data['requester_id'] = authenticated_user_id
+            
             approval_request = ApprovalRequests.objects.create(**request_data)
             
             return Response({
@@ -1827,6 +1840,22 @@ def stages(request):
             stage_data['stage_id'] = stage_id
             stage_data['tenant_id'] = tenant_id  # MULTI-TENANCY: Add tenant_id
             
+            # BUSINESS LOGIC FIX: Prevent self-assignment of reviewers
+            try:
+                approval_id_to_check = stage_data.get('approval_id')
+                if approval_id_to_check:
+                    approval_req = ApprovalRequests.objects.get(approval_id=approval_id_to_check, tenant_id=tenant_id)
+                    assigned_user_id = str(stage_data.get('assigned_user_id'))
+                    
+                    # Check if current user is trying to assign themselves as reviewer for their own request
+                    if str(approval_req.requester_id) == assigned_user_id:
+                        print(f"[SECURITY] Blocking self-assignment: requester {approval_req.requester_id} attempting to be reviewer for stage.")
+                        return Response({
+                            'error': 'Business logic violation: Requester cannot be assigned as a reviewer/approver for their own request.'
+                        }, status=status.HTTP_403_FORBIDDEN)
+            except ApprovalRequests.DoesNotExist:
+                print(f"Warning: ApprovalRequest {stage_data.get('approval_id')} not found during self-assignment check.")
+            
             stage = ApprovalStages.objects.create(**stage_data)
             
             return Response({
@@ -1894,8 +1923,16 @@ def comments(request):
             
             # Create comment
             comment_data = request.data.copy()
+            comment_id = f"CM_{uuid.uuid4().hex[:8].upper()}"
             comment_data['comment_id'] = comment_id
             comment_data['tenant_id'] = tenant_id  # MULTI-TENANCY: Add tenant_id
+            
+            # BUSINESS LOGIC FIX: Strictly enforce commented_by from authenticated user
+            if hasattr(request.user, 'userid'):
+                authenticated_user_id = request.user.userid
+                print(f"[SECURITY] Overriding commented_by from {comment_data.get('commented_by')} to {authenticated_user_id}")
+                comment_data['commented_by'] = authenticated_user_id
+                comment_data['commented_by_name'] = getattr(request.user, 'username', f"User {authenticated_user_id}")
             
             comment = ApprovalComments.objects.create(**comment_data)
             
@@ -3239,6 +3276,30 @@ def update_stage_status(request):
         # MULTI-TENANCY: Filter by tenant
         print(f"Looking for stage with ID: {stage_id}")  # Debug log
         stage = ApprovalStages.objects.get(stage_id=stage_id, tenant_id=tenant_id)
+        
+        # BUSINESS LOGIC FIX: Strict check to prevent self-approval
+        # Fetch the original approval request to verify the requester
+        try:
+            approval_req = ApprovalRequests.objects.get(approval_id=stage.approval_id, tenant_id=tenant_id)
+            authenticated_user_id = str(request.user.userid) if hasattr(request.user, 'userid') else None
+            
+            if authenticated_user_id and str(approval_req.requester_id) == authenticated_user_id:
+                if db_status == 'APPROVED':
+                    print(f"[SECURITY ALERT] Self-approval blocked: User {authenticated_user_id} attempted to approve their own request {approval_req.approval_id}")
+                    return Response({
+                        'error': 'Business logic violation: You cannot approve your own request. Please assign a different reviewer.'
+                    }, status=status.HTTP_403_FORBIDDEN)
+            
+            # Also ensure the user is actually the assigned reviewer for this stage
+            if authenticated_user_id and str(stage.assigned_user_id) != authenticated_user_id:
+                print(f"[SECURITY ALERT] Authorization blocked: User {authenticated_user_id} attempted to process stage {stage_id} assigned to {stage.assigned_user_id}")
+                return Response({
+                    'error': 'You are not the assigned reviewer for this stage.'
+                }, status=status.HTTP_403_FORBIDDEN)
+                
+        except ApprovalRequests.DoesNotExist:
+            print(f"Warning: ApprovalRequest {stage.approval_id} not found during security check.")
+            
         print(f"Found stage: {stage.stage_name}")  # Debug log
 
        # Check if this is a multi-level workflow and enforce sequential approval
@@ -3334,10 +3395,15 @@ def update_stage_status(request):
 
         # Create version log for stage status change
         try:
-            # Get user information for version logging
-            user_id = request.data.get('user_id', stage.assigned_user_id)
-            user_name = request.data.get('user_name', stage.assigned_user_name)
-            user_role = request.data.get('user_role', stage.assigned_user_role)
+            # BUSINESS LOGIC FIX: Strictly use authenticated user info for version logging
+            # Do not use values from request.data as they can be spoofed
+            authenticated_user_id = request.user.userid if hasattr(request.user, 'userid') else stage.assigned_user_id
+            authenticated_user_name = getattr(request.user, 'username', stage.assigned_user_name)
+            authenticated_user_role = getattr(request.user, 'role', stage.assigned_user_role)
+            
+            user_id = authenticated_user_id
+            user_name = authenticated_user_name
+            user_role = authenticated_user_role
             
             # Create version record
             version_change_reason = comments or (
@@ -4936,6 +5002,16 @@ def approve_version(request, version_id):
             version = ApprovalRequestVersions.objects.get(version_id=version_id)
             # Verify the approval request belongs to tenant
             approval = ApprovalRequests.objects.get(approval_id=version.approval_id, tenant_id=tenant_id)
+            
+            # BUSINESS LOGIC FIX: Strict check to prevent self-approval
+            authenticated_user_id = str(request.user.userid) if hasattr(request.user, 'userid') else None
+            if authenticated_user_id and str(approval.requester_id) == authenticated_user_id:
+                print(f"[SECURITY ALERT] Self-approval blocked on version: User {authenticated_user_id} attempted to approve their own request version {version_id}")
+                return Response({
+                    'success': False,
+                    'error': 'Business logic violation: You cannot approve your own request version.'
+                }, status=status.HTTP_403_FORBIDDEN)
+                
         except (ApprovalRequestVersions.DoesNotExist, ApprovalRequests.DoesNotExist):
             return Response({
                 'success': False,

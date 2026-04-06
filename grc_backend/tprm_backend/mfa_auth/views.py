@@ -60,7 +60,7 @@ def login_step1(request):
             tokens = JWTService.generate_tokens(user)
             user.session_token = tokens['access_token']
             user.save(update_fields=['session_token'])
-            response_data = {
+            response = Response({
                 'success': True,
                 'message': 'Login successful',
                 'requires_otp': False,
@@ -70,8 +70,35 @@ def login_step1(request):
                 'refresh_token': tokens['refresh_token'],
                 'expires_in': tokens['expires_in'],
                 'refresh_expires_in': tokens['refresh_expires_in']
+            }, status=status.HTTP_200_OK)
+
+            # Set HttpOnly cookies for security (XSS protection)
+            cookie_params = {
+                'httponly': True,
+                'secure': not getattr(settings, 'DEBUG', False),
+                'samesite': 'Lax',
             }
-            return Response(response_data, status=status.HTTP_200_OK)
+
+            response.set_cookie(
+                key='access_token',
+                value=tokens['access_token'],
+                max_age=tokens['expires_in'],
+                **cookie_params
+            )
+            response.set_cookie(
+                key='refresh_token',
+                value=tokens['refresh_token'],
+                max_age=tokens['refresh_expires_in'],
+                **cookie_params
+            )
+            # Support both cookie names for maximum compatibility
+            response.set_cookie(
+                key='session_token',
+                value=tokens['access_token'],
+                max_age=tokens['expires_in'],
+                **cookie_params
+            )
+            return response
         
         # Create MFA challenge and send OTP
         MfaService.create_mfa_challenge(user, request)
@@ -123,7 +150,7 @@ def verify_otp(request):
     result = MfaService.verify_otp(user, otp, request)
     
     if result['success']:
-        response_data = {
+        response = Response({
             'success': True,
             'message': 'Login successful',
             'user': UserSerializer(user).data,
@@ -132,8 +159,34 @@ def verify_otp(request):
             'refresh_token': result['tokens']['refresh_token'],
             'expires_in': result['tokens']['expires_in'],
             'refresh_expires_in': result['tokens']['refresh_expires_in']
+        }, status=status.HTTP_200_OK)
+
+        # Set HttpOnly cookies for security (XSS protection)
+        cookie_params = {
+            'httponly': True,
+            'secure': not getattr(settings, 'DEBUG', False),
+            'samesite': 'Lax',
         }
-        return Response(response_data, status=status.HTTP_200_OK)
+
+        response.set_cookie(
+            key='access_token',
+            value=result['tokens']['access_token'],
+            max_age=result['tokens']['expires_in'],
+            **cookie_params
+        )
+        response.set_cookie(
+            key='refresh_token',
+            value=result['tokens']['refresh_token'],
+            max_age=result['tokens']['refresh_expires_in'],
+            **cookie_params
+        )
+        response.set_cookie(
+            key='session_token',
+            value=result['tokens']['access_token'],
+            max_age=result['tokens']['expires_in'],
+            **cookie_params
+        )
+        return response
     else:
         return Response({
             'success': False,
@@ -222,10 +275,17 @@ def logout(request):
         print(f"After logout - session_token: {user.session_token}")
         print("=== LOGOUT SUCCESSFUL - TOKEN CLEARED FROM DATABASE ===")
         
-        return Response({
+        response = Response({
             'success': True,
             'message': 'Logged out successfully'
         }, status=status.HTTP_200_OK)
+        
+        # Clear HttpOnly cookies
+        response.delete_cookie('access_token')
+        response.delete_cookie('refresh_token')
+        response.delete_cookie('session_token')
+        
+        return response
     
     print("ERROR: Invalid or expired token")
     return Response({
@@ -281,11 +341,31 @@ def refresh_token(request):
     result = JWTService.refresh_access_token(refresh_token)
     
     if result:
-        return Response({
+        response = Response({
             'success': True,
             'access_token': result['access_token'],
             'expires_in': result['expires_in']
         }, status=status.HTTP_200_OK)
+
+        # Update access_token cookie
+        response.set_cookie(
+            key='access_token',
+            value=result['access_token'],
+            max_age=result['expires_in'],
+            httponly=True,
+            secure=not getattr(settings, 'DEBUG', False),
+            samesite='Lax'
+        )
+        # Also update session_token cookie if present
+        response.set_cookie(
+            key='session_token',
+            value=result['access_token'],
+            max_age=result['expires_in'],
+            httponly=True,
+            secure=not getattr(settings, 'DEBUG', False),
+            samesite='Lax'
+        )
+        return response
     
     return Response({
         'success': False,

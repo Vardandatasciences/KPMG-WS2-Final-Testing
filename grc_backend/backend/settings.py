@@ -643,17 +643,8 @@ SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SECURE_HSTS_SECONDS = int(os.environ.get("SECURE_HSTS_SECONDS", str(31536000 if not DEBUG else 0)))
 SECURE_HSTS_INCLUDE_SUBDOMAINS = _env_bool("SECURE_HSTS_INCLUDE_SUBDOMAINS", not DEBUG)
 SECURE_HSTS_PRELOAD = _env_bool("SECURE_HSTS_PRELOAD", not DEBUG)
-# HTTPS Security Settings
-# Note: Set these to True when using valid SSL certificates in production
-# For self-signed certificates in development, keep them as False
-CSRF_COOKIE_SECURE = False  # Set to True with valid SSL certificates (False for HTTP/development)
-CSRF_COOKIE_HTTPONLY = False  # Allow JavaScript access to CSRF token
-
-# Session settings for HTTPS (duplicate - remove if causing issues)
-# SESSION_COOKIE_SECURE = True  # Send over HTTPS
-# SESSION_COOKIE_HTTPONLY = True  # Prevent JavaScript access to session cookies
-# SESSION_COOKIE_SAMESITE = 'Lax'  # Same-site protection for cross-site navigations
-# SESSION_COOKIE_DOMAIN = None  # Allow all domains in development
+# CSRF_COOKIE_* and SESSION_COOKIE_* are defined earlier; do not override here (that forced
+# CSRF_COOKIE_SECURE=False in production and undid env-based settings).
 
 # Additional HTTPS security headers (enable in production)
 # Nginx handles HTTP→HTTPS redirect, so Django redirect is off to avoid double-redirect.
@@ -669,8 +660,8 @@ SECURE_HSTS_SECONDS = 31536000 if not DEBUG else 0  # 1 year
 SECURE_HSTS_INCLUDE_SUBDOMAINS = True if not DEBUG else False
 SECURE_HSTS_PRELOAD = True if not DEBUG else False
 
-# JWT Settings (default RS256 asymmetric; HS256 is not allowed when DEBUG is False)
-JWT_ALGORITHM = os.environ.get("JWT_ALGORITHM", "RS256").upper()
+# JWT Settings (Strictly asymmetric RS256; symmetric algorithms like HS256 are NOT allowed)
+JWT_ALGORITHM = os.environ.get("JWT_ALGORITHM", "RS256").upper().strip()
 JWT_ISSUER = os.environ.get("JWT_ISSUER", "grc-backend")
 JWT_AUDIENCE = os.environ.get("JWT_AUDIENCE", "grc-frontend")
 
@@ -679,24 +670,20 @@ JWT_PRIVATE_KEY = os.environ.get("JWT_PRIVATE_KEY", "").replace("\\n", "\n")
 JWT_PUBLIC_KEY = os.environ.get("JWT_PUBLIC_KEY", "").replace("\\n", "\n")
 
 _JWT_ASYMMETRIC_ALGS = ("RS256", "RS384", "RS512", "ES256", "ES384", "ES512")
-if not DEBUG and JWT_ALGORITHM not in _JWT_ASYMMETRIC_ALGS:
+if JWT_ALGORITHM not in _JWT_ASYMMETRIC_ALGS:
     raise ValueError(
-        "Production deployments must use asymmetric JWT (e.g. RS256). "
-        "Set JWT_ALGORITHM=RS256 and configure JWT_PRIVATE_KEY / JWT_PUBLIC_KEY. "
-        "Symmetric algorithms (HS256) are rejected when DEBUG=False."
+        f"Insecure JWT_ALGORITHM ({JWT_ALGORITHM}) detected. "
+        "The system strictly requires asymmetric signing (e.g., RS256 or ES256). "
+        "Set JWT_ALGORITHM=RS256 and configure JWT_PRIVATE_KEY / JWT_PUBLIC_KEY."
     )
 
-if JWT_ALGORITHM.startswith("RS") or JWT_ALGORITHM.startswith("ES"):
-    if not JWT_PRIVATE_KEY or not JWT_PUBLIC_KEY:
-        raise ValueError(
-            "JWT_PRIVATE_KEY and JWT_PUBLIC_KEY must be configured when using asymmetric JWT algorithms."
-        )
-    JWT_SIGNING_KEY = JWT_PRIVATE_KEY
-    JWT_VERIFYING_KEY = JWT_PUBLIC_KEY
-else:
-    # Backward-compatible fallback for non-asymmetric algorithms.
-    JWT_SIGNING_KEY = os.environ.get("JWT_SECRET_KEY", SECRET_KEY)
-    JWT_VERIFYING_KEY = os.environ.get("JWT_VERIFYING_KEY", "")
+if not JWT_PRIVATE_KEY or not JWT_PUBLIC_KEY:
+    raise ValueError(
+        "JWT_PRIVATE_KEY and JWT_PUBLIC_KEY must be configured when using asymmetric JWT algorithms."
+    )
+
+JWT_SIGNING_KEY = JWT_PRIVATE_KEY
+JWT_VERIFYING_KEY = JWT_PUBLIC_KEY
 
 # Legacy alias retained for existing modules that still reference JWT_SECRET_KEY.
 JWT_SECRET_KEY = JWT_SIGNING_KEY

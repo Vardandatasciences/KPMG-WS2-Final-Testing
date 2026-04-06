@@ -1,7 +1,8 @@
 from django.shortcuts import get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework import status
-from rest_framework.decorators import api_view, permission_classes, parser_classes, authentication_classes
+from rest_framework.decorators import api_view, permission_classes, parser_classes, authentication_classes, throttle_classes
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.authentication import SessionAuthentication, BasicAuthentication
@@ -15,7 +16,7 @@ from django.db.models import Q
 import traceback
 import sys
 from datetime import datetime, date, timedelta
-from ...routes.Global.s3_fucntions import export_data
+from ...routes.Global.s3_fucntions import export_data, _sanitize_export_payload
 import re
 from django.utils import timezone
 from datetime import timedelta
@@ -4795,6 +4796,7 @@ Returns an Excel file as attachment
 """
 @api_view(['POST'])
 @permission_classes([PolicyExportPermission])
+@throttle_classes([ScopedRateThrottle])
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def export_policies_to_excel(request, framework_id):

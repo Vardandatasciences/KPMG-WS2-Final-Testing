@@ -81,6 +81,14 @@ if DEBUG:
     
     # Disable CSRF for all API endpoints
     CSRF_COOKIE_NAME = None
+else:
+    # Production: align session/CSRF cookies with HTTPS (Django defaults leave SESSION_COOKIE_SECURE False).
+    SESSION_COOKIE_SECURE = True
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = 'Lax'
+    CSRF_COOKIE_SECURE = True
+    CSRF_COOKIE_HTTPONLY = False  # SPA may read csrftoken from document.cookie; set True only if token is served elsewhere
+    CSRF_COOKIE_SAMESITE = 'Lax'
 
 ROOT_URLCONF = 'mfa_project.urls'
 

@@ -1,6 +1,7 @@
-from ...routes.Global.s3_fucntions import export_data
+from ...routes.Global.s3_fucntions import export_data, _sanitize_export_payload
 from django.views.decorators.csrf import csrf_exempt
-from rest_framework.decorators import api_view, permission_classes, authentication_classes
+from rest_framework.decorators import api_view, permission_classes, authentication_classes, throttle_classes
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.permissions import AllowAny
 from django.http import JsonResponse, HttpResponse
 from rest_framework.authentication import SessionAuthentication, BasicAuthentication
@@ -61,6 +62,7 @@ class CsrfExemptSessionAuthentication(SessionAuthentication):
 @api_view(['POST', 'OPTIONS'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([RiskViewPermission])  # RBAC: Require RiskViewPermission for exporting risk register
+@throttle_classes([ScopedRateThrottle])
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def export_risk_register_v2(request):
@@ -85,7 +87,7 @@ def export_risk_register_v2(request):
             data = data.dict()
             
         export_format = data.get('export_format', 'json')
-        risk_data = data.get('risk_data', [])
+        risk_data = _sanitize_export_payload(data.get('risk_data', []))
         user_id = data.get('user_id', 'default_user')
         file_name = data.get('file_name', 'risk_register_export')
         # Keep risk export aligned with incident export (direct S3 upload by default).
@@ -248,6 +250,7 @@ def export_risk_register_v2(request):
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([ComplianceViewPermission])  # RBAC: Require RiskViewPermission for exporting compliance management
+@throttle_classes([ScopedRateThrottle])
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def export_compliance_management(request):
@@ -257,7 +260,7 @@ def export_compliance_management(request):
     try:
         data = json.loads(request.body.decode('utf-8')) if request.body else request.data
         export_format = data.get('export_format', 'json')
-        compliance_data = data.get('compliance_data', [])
+        compliance_data = _sanitize_export_payload(data.get('compliance_data', []))
         user_id = data.get('user_id', 'default_user')
         file_name = data.get('file_name', 'compliance_management_export')
         
@@ -4127,6 +4130,7 @@ def _apply_system_log_filters_from_params(request, queryset, is_admin: bool):
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([SystemLogsPermission])
+@throttle_classes([ScopedRateThrottle])
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def export_system_logs(request):
@@ -4169,7 +4173,7 @@ def export_system_logs(request):
         drf_request = request if isinstance(request, DRFRequest) else DRFRequest(request._request)
         query_params = drf_request.query_params.copy()
 
-        filters = request.data.get('filters', {}) if hasattr(request, 'data') else {}
+        filters = _sanitize_export_payload(request.data.get('filters', {})) if hasattr(request, 'data') else {}
         for key in ['module', 'action_type', 'entity_type', 'log_level', 'user_id', 'start_date', 'end_date', 'search']:
             if key in filters and filters[key] not in [None, '']:
                 query_params[key] = filters[key]
@@ -4196,7 +4200,7 @@ def export_system_logs(request):
             date_str = now.strftime('%Y-%m-%d')
             file_name = f"system_logs_{date_str}"
 
-        export_options = request.data.get('options', {}) or {}
+        export_options = _sanitize_export_payload(request.data.get('options', {})) or {}
         export_options.setdefault('file_name', file_name)
         export_options.setdefault('module', 'system_logs')
         export_options.setdefault('record_count', len(logs_data))

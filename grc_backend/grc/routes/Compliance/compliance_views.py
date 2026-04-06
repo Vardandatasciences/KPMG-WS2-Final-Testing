@@ -59,7 +59,8 @@ from ...routes.Global.s3_fucntions import (
     export_to_csv,
     export_to_pdf,
     export_to_json,
-    export_to_xml
+    export_to_xml,
+    _sanitize_export_payload
 )
 from django.http import HttpResponse
 from reportlab.lib import colors
@@ -9624,7 +9625,7 @@ def export_compliances(request, export_format, item_type=None, item_id=None):
             # Use the export_data function from export_service1
             from ...routes.Global.s3_fucntions import export_data
             result = export_data(
-                data=compliances_data,
+                data=_sanitize_export_payload(compliances_data),
                 file_format=export_format,
                 user_id=str(user_id),
                 options={'item_type': item_type, 'item_id': item_id},
@@ -9716,7 +9717,7 @@ def export_compliances_post(request):
             export_data={
                 'file_type': file_format,
                 'user_id': str(user_id),
-                'data': compliances_data,
+                'data': _sanitize_export_payload(compliances_data),
                 'options': export_options
             },
             file_type=file_format,
@@ -9748,7 +9749,7 @@ def export_compliances_post(request):
             # Use the export_data function from export_service1
             from ...routes.Global.s3_fucntions import export_data
             result = export_data(
-                data=compliances_data,
+                data=_sanitize_export_payload(compliances_data),
                 file_format=file_format,
                 user_id=str(user_id),
                 options=export_options

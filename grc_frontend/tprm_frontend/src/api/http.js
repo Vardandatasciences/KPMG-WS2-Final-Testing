@@ -5,6 +5,7 @@ import { getTprmApiBaseUrl } from '@/utils/backendEnv'
 const http = axios.create({
   baseURL: getTprmApiBaseUrl(),
   timeout: 0, // No timeout - let requests complete naturally
+  withCredentials: true, // Crucial for HttpOnly cookies
   headers: {
     'Content-Type': 'application/json',
   },
@@ -14,6 +15,8 @@ const http = axios.create({
 http.interceptors.request.use(
   (config) => {
     // Add JWT token - read from sessionStorage (received from GRC parent via postMessage)
+    // We keep this for backward compatibility and cross-app communication, 
+    // but the browser will now also automatically send HttpOnly cookies.
     const token = sessionStorage.getItem('access_token') ||
                   sessionStorage.getItem('session_token') ||
                   localStorage.getItem('session_token')

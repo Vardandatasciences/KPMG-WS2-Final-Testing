@@ -18,6 +18,7 @@ from datetime import datetime, timedelta
 import io
 import csv
 from grc.utils.csv_security import sanitize_csv_cell
+from tprm_backend.utils.pdf_security import sanitize_for_pdf
 
 # RBAC imports
 from tprm_backend.apps.vendor_core.vendor_authentication import JWTAuthentication, SimpleAuthenticatedPermission, VendorPermission
@@ -1401,10 +1402,10 @@ class VendorDashboardExportPDFAPIView(APIView):
                 kpi_data = [['KPI Name', 'Value', 'Target', 'Category']]
                 for kpi in data['kpis']:
                     kpi_data.append([
-                        kpi.get('title', 'N/A'),
-                        kpi.get('value', 'N/A'),
-                        kpi.get('target', 'N/A'),
-                        kpi.get('category', 'N/A')
+                        sanitize_for_pdf(kpi.get('title', 'N/A')),
+                        sanitize_for_pdf(kpi.get('value', 'N/A')),
+                        sanitize_for_pdf(kpi.get('target', 'N/A')),
+                        sanitize_for_pdf(kpi.get('category', 'N/A'))
                     ])
                 
                 kpi_table = Table(kpi_data)
@@ -1448,7 +1449,8 @@ class VendorDashboardExportPDFAPIView(APIView):
                         story.append(Spacer(1, 12))
                     else:
                         # Add a simple text representation if chart fails
-                        story.append(Paragraph(f"{kpi.get('title', 'KPI')} - No chart available", styles['Normal']))
+                        sanitized_title = sanitize_for_pdf(kpi.get('title', 'KPI'))
+                        story.append(Paragraph(f"{sanitized_title} - No chart available", styles['Normal']))
                         story.append(Spacer(1, 12))
             
             # Add alerts data
@@ -1456,10 +1458,14 @@ class VendorDashboardExportPDFAPIView(APIView):
                 story.append(Paragraph("Alerts & Notifications", heading_style))
                 alert_data = [['Alert Title', 'Description', 'Severity']]
                 for alert in data['alerts']:
+                    alert_desc = alert.get('description', 'N/A')
+                    if len(alert_desc) > 50:
+                        alert_desc = alert_desc[:50] + '...'
+                    
                     alert_data.append([
-                        alert.get('title', 'N/A'),
-                        alert.get('description', 'N/A')[:50] + '...' if len(alert.get('description', '')) > 50 else alert.get('description', 'N/A'),
-                        alert.get('severity', 'N/A')
+                        sanitize_for_pdf(alert.get('title', 'N/A')),
+                        sanitize_for_pdf(alert_desc),
+                        sanitize_for_pdf(alert.get('severity', 'N/A'))
                     ])
                 
                 alert_table = Table(alert_data)

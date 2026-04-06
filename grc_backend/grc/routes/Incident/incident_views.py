@@ -4306,6 +4306,7 @@ def get_audit_findings(request):
 @api_view(['POST'])
 @authentication_classes([])
 @permission_classes([IncidentViewPermission])
+@throttle_classes([ScopedRateThrottle])
 @rbac_required(required_permission='view_all_incident')
 def export_audit_findings(request):
     debug_print(f"Exporting audit findings: entereeeeeeeeeeeedddddddddd")

@@ -41,8 +41,8 @@ class JWTService:
             'type': 'refresh'
         }
         
-        # Generate tokens
-        signing_key = getattr(settings, 'JWT_SIGNING_KEY', getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY))
+        # Generate tokens using strictly asymmetric signing
+        signing_key = settings.JWT_SIGNING_KEY
         access_token = jwt.encode(
             access_payload,
             signing_key,
@@ -66,11 +66,11 @@ class JWTService:
     def verify_token(cls, token, token_type='access'):
         """Verify and decode a JWT token"""
         try:
-            verification_key = getattr(settings, 'JWT_VERIFYING_KEY', None) or getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
+            verification_key = settings.JWT_VERIFYING_KEY
             payload = jwt.decode(
                 token,
                 verification_key,
-                algorithms=getattr(settings, 'JWT_ALLOWED_ALGORITHMS', [settings.JWT_ALGORITHM]),
+                algorithms=[settings.JWT_ALGORITHM],  # Strictly use the configured algorithm
                 issuer=getattr(settings, 'JWT_ISSUER', None),
                 audience=getattr(settings, 'JWT_AUDIENCE', None),
             )
@@ -145,7 +145,7 @@ class JWTService:
                 'type': 'access'
             }
             
-            signing_key = getattr(settings, 'JWT_SIGNING_KEY', getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY))
+            signing_key = settings.JWT_SIGNING_KEY
             new_access_token = jwt.encode(
                 access_payload,
                 signing_key,

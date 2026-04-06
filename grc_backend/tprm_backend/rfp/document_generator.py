@@ -14,6 +14,7 @@ from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from django.http import HttpResponse
 from django.conf import settings
 import os
+from tprm_backend.utils.pdf_security import sanitize_for_pdf
 
 
 class RFPDocumentGenerator:
@@ -166,8 +167,10 @@ class RFPDocumentGenerator:
         story.append(Spacer(1, 20))
         
         # RFP Number and Title
-        story.append(Paragraph(f'<b>RFP Number:</b> {self.rfp_data.get("rfp_number", "N/A")}', styles['Heading2']))
-        story.append(Paragraph(f'<b>Title:</b> {self.rfp_data.get("rfp_title", "N/A")}', styles['Heading3']))
+        rfp_number = sanitize_for_pdf(self.rfp_data.get("rfp_number", "N/A"))
+        rfp_title = sanitize_for_pdf(self.rfp_data.get("rfp_title", "N/A"))
+        story.append(Paragraph(f'<b>RFP Number:</b> {rfp_number}', styles['Heading2']))
+        story.append(Paragraph(f'<b>Title:</b> {rfp_title}', styles['Heading3']))
         story.append(Spacer(1, 20))
         
         # Basic Information
@@ -237,20 +240,22 @@ class RFPDocumentGenerator:
                     compliance_list = json.loads(compliance_text)
                     if isinstance(compliance_list, list):
                         for req in compliance_list:
-                            story.append(Paragraph(f"• {req}", styles['Normal']))
+                            sanitized_req = sanitize_for_pdf(req)
+                            story.append(Paragraph(f"• {sanitized_req}", styles['Normal']))
                     else:
-                        story.append(Paragraph(compliance_text, styles['Normal']))
+                        story.append(Paragraph(sanitize_for_pdf(compliance_text), styles['Normal']))
                 except json.JSONDecodeError:
-                    story.append(Paragraph(compliance_text, styles['Normal']))
+                    story.append(Paragraph(sanitize_for_pdf(compliance_text), styles['Normal']))
             else:
-                story.append(Paragraph(str(compliance_text), styles['Normal']))
+                story.append(Paragraph(sanitize_for_pdf(str(compliance_text)), styles['Normal']))
             story.append(Spacer(1, 20))
         
         # Document Information
         story.append(PageBreak())
         story.append(Paragraph('Document Information', heading_style))
         story.append(Paragraph(f'Generated on: {datetime.now().strftime("%B %d, %Y at %I:%M %p")}', styles['Normal']))
-        story.append(Paragraph(f'RFP Status: {self.rfp_data.get("status", "DRAFT")}', styles['Normal']))
+        rfp_status = sanitize_for_pdf(self.rfp_data.get("status", "DRAFT"))
+        story.append(Paragraph(f'RFP Status: {rfp_status}', styles['Normal']))
         
         # Build PDF
         doc.build(story)

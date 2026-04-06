@@ -98,9 +98,23 @@ export default {
       })
       
       if (response.data.success) {
-        // Cookie-first: backend should set HttpOnly cookies. Do not store tokens in JS storage.
-        clearSensitive()
-        setSensitive('current_user', JSON.stringify(response.data.user))
+        // Maintain tokens in storage for backward compatibility ("not disturb the flow").
+        // The HttpOnly cookies sent by the backend are now the primary security mechanism.
+        const token = response.data.session_token || response.data.access_token
+        localStorage.setItem('session_token', token)
+        localStorage.setItem('access_token', response.data.access_token)
+        if (response.data.refresh_token) {
+          localStorage.setItem('refresh_token', response.data.refresh_token)
+        }
+        localStorage.setItem('current_user', JSON.stringify(response.data.user))
+        
+        // Also store in sessionStorage which is prioritized by http.js
+        sessionStorage.setItem('session_token', token)
+        sessionStorage.setItem('access_token', response.data.access_token)
+        sessionStorage.setItem('current_user', JSON.stringify(response.data.user))
+        
+        // Mark as validated via backend cookie
+        sessionStorage.setItem('tprm_cookie_session_validated', 'true')
       }
       
       return {

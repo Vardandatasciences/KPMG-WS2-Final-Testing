@@ -272,31 +272,30 @@ REST_FRAMEWORK = {
     'EXCEPTION_HANDLER': 'utils.vendor_exception_handler.vendor_custom_exception_handler',
 }
 
-# JWT Configuration
+# JWT Configuration (Strictly asymmetric RS256; symmetric algorithms like HS256 are NOT allowed)
 JWT_ALGORITHM = config('JWT_ALGORITHM', default='RS256').upper().strip()
 JWT_ISSUER = config('JWT_ISSUER', default='tprm-backend')
 JWT_AUDIENCE = config('JWT_AUDIENCE', default='tprm-frontend')
+
+# Keys can be provided inline with \n in env vars.
 JWT_PRIVATE_KEY = config('JWT_PRIVATE_KEY', default='').replace('\\n', '\n')
 JWT_PUBLIC_KEY = config('JWT_PUBLIC_KEY', default='').replace('\\n', '\n')
 
 _JWT_ASYMMETRIC_ALGS = ('RS256', 'RS384', 'RS512', 'ES256', 'ES384', 'ES512')
-if not DEBUG and JWT_ALGORITHM not in _JWT_ASYMMETRIC_ALGS:
+if JWT_ALGORITHM not in _JWT_ASYMMETRIC_ALGS:
     raise ValueError(
-        'Production requires asymmetric JWT (e.g. RS256). '
-        'Set JWT_ALGORITHM=RS256 and JWT_PRIVATE_KEY / JWT_PUBLIC_KEY. '
-        'HS256 is not allowed when DEBUG=False.'
+        f"Insecure JWT_ALGORITHM ({JWT_ALGORITHM}) detected. "
+        "The system strictly requires asymmetric signing (e.g., RS256 or ES256). "
+        "Set JWT_ALGORITHM=RS256 and configure JWT_PRIVATE_KEY / JWT_PUBLIC_KEY."
     )
 
-if JWT_ALGORITHM.startswith('RS') or JWT_ALGORITHM.startswith('ES'):
-    if not JWT_PRIVATE_KEY or not JWT_PUBLIC_KEY:
-        raise ValueError(
-            "JWT_PRIVATE_KEY and JWT_PUBLIC_KEY must be configured when using asymmetric JWT algorithms."
-        )
-    JWT_SIGNING_KEY = JWT_PRIVATE_KEY
-    JWT_VERIFYING_KEY = JWT_PUBLIC_KEY
-else:
-    JWT_SIGNING_KEY = config('JWT_SECRET_KEY', default=SECRET_KEY)
-    JWT_VERIFYING_KEY = config('JWT_VERIFYING_KEY', default='')
+if not JWT_PRIVATE_KEY or not JWT_PUBLIC_KEY:
+    raise ValueError(
+        "JWT_PRIVATE_KEY and JWT_PUBLIC_KEY must be configured when using asymmetric JWT algorithms."
+    )
+
+JWT_SIGNING_KEY = JWT_PRIVATE_KEY
+JWT_VERIFYING_KEY = JWT_PUBLIC_KEY
 
 from datetime import timedelta
 SIMPLE_JWT = {
@@ -403,7 +402,7 @@ MFA_OTP_EXPIRY_MINUTES = config('MFA_OTP_EXPIRY_MINUTES', default=10, cast=int)
 MFA_MAX_ATTEMPTS = config('MFA_MAX_ATTEMPTS', default=3, cast=int)
 
 # JWT Settings for MFA (uses JWT_ALGORITHM from JWT Configuration above)
-JWT_SECRET_KEY = config('JWT_SECRET_KEY', default=SECRET_KEY)
+JWT_SECRET_KEY = JWT_SIGNING_KEY  # Strictly use asymmetric signing key
 JWT_EXPIRY_HOURS = config('JWT_EXPIRY_HOURS', default=24, cast=int)
 JWT_REFRESH_EXPIRY_DAYS = config('JWT_REFRESH_EXPIRY_DAYS', default=7, cast=int)
 

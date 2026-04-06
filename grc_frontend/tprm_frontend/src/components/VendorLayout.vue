@@ -178,32 +178,57 @@ const sanitizeIcon = (value) => {
   try {
     const parser = new DOMParser()
     const doc = parser.parseFromString(value, 'text/html')
-    const dangerousSelectors = ['script', 'style', 'iframe', 'object', 'embed', 'link', 'meta']
-    dangerousSelectors.forEach(selector => {
-      doc.querySelectorAll(selector).forEach(el => el.remove())
-    })
+    
+    // Strict allowlist for SVG icons
+    const allowedTags = new Set([
+      'svg', 'path', 'circle', 'rect', 'line', 'polyline', 'polygon', 'ellipse', 'g', 'defs', 'clippath'
+    ])
+
     const walk = (node) => {
       if (node.nodeType === Node.ELEMENT_NODE) {
+        const tag = node.tagName.toLowerCase()
+        
+        if (!allowedTags.has(tag)) {
+          node.remove()
+          return
+        }
+
         const attrs = Array.from(node.attributes)
         attrs.forEach(attr => {
           const name = attr.name.toLowerCase()
           const val = (attr.value || '').trim().toLowerCase()
+
+          // Remove all on* attributes
           if (name.startsWith('on')) {
             node.removeAttribute(attr.name)
+            return
           }
-          if ((name === 'href' || name === 'src') && val.startsWith('javascript:')) {
+
+          // Block javascript: and other dangerous URIs
+          if (val.includes('javascript:') || val.includes('vbscript:') || val.includes('data:')) {
+            node.removeAttribute(attr.name)
+            return
+          }
+
+          // Allow only safe SVG attributes
+          const safeAttrs = new Set([
+            'viewbox', 'fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin',
+            'd', 'cx', 'cy', 'r', 'x', 'y', 'width', 'height', 'points', 'transform', 
+            'class', 'style', 'xmlns'
+          ])
+          
+          if (!safeAttrs.has(name)) {
             node.removeAttribute(attr.name)
           }
         })
       }
-      node.childNodes.forEach(child => walk(child))
+      Array.from(node.childNodes).forEach(child => walk(child))
     }
+
     walk(doc.body)
     return doc.body.innerHTML
   } catch (e) {
-    const div = document.createElement('div')
-    div.textContent = String(value)
-    return div.innerHTML
+    return '' // Return empty on error for icons
   }
 }
 

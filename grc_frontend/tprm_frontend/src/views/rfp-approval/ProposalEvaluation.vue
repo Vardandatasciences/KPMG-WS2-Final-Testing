@@ -1842,9 +1842,7 @@ const formatKey = (key) => {
 }
 
 const sanitizeVendorHtml = (value) => {
-  if (!value || typeof value !== 'string') {
-    return ''
-  }
+  if (!value || typeof value !== 'string') return ''
 
   try {
     const parser = new DOMParser()
@@ -1857,81 +1855,54 @@ const sanitizeVendorHtml = (value) => {
       'a'
     ])
 
-    // Remove high-risk elements entirely
+    // Pre-emptively remove high-risk elements
     const dangerousSelectors = [
-      'script',
-      'style',
-      'iframe',
-      'object',
-      'embed',
-      'link',
-      'meta'
+      'script', 'style', 'iframe', 'object', 'embed', 'link', 'meta', 'base', 'form', 
+      'button', 'input', 'textarea', 'svg', 'math', 'audio', 'video', 'canvas', 'applet', 'frameset', 'frame'
     ]
     dangerousSelectors.forEach(selector => {
       doc.querySelectorAll(selector).forEach(el => el.remove())
     })
 
-    // Strip inline event handlers, unsafe urls and non-allowlisted tags/attributes
     const walk = (node) => {
       if (node.nodeType === Node.ELEMENT_NODE) {
         const tag = node.tagName.toLowerCase()
+        
         if (!allowedTags.has(tag)) {
-          node.replaceWith(doc.createTextNode(node.textContent || ''))
+          const textNode = doc.createTextNode(node.textContent || '')
+          node.replaceWith(textNode)
           return
         }
 
         const attrs = Array.from(node.attributes)
         attrs.forEach(attr => {
           const name = attr.name.toLowerCase()
-          const val = (attr.value || '').trim()
-          const normalizedVal = val.toLowerCase()
+          const val = (attr.value || '').trim().toLowerCase()
 
-          if (name.startsWith('on') || name === 'style') {
-            node.removeAttribute(attr.name)
-            return
-          }
-
-          if (tag !== 'a') {
-            node.removeAttribute(attr.name)
-            return
-          }
-
-          if (name !== 'href' && name !== 'target' && name !== 'rel') {
-            node.removeAttribute(attr.name)
-            return
-          }
-
-          if (name === 'href') {
-            if (
-              normalizedVal.startsWith('javascript:') ||
-              normalizedVal.startsWith('data:') ||
-              normalizedVal.startsWith('vbscript:')
-            ) {
-              node.removeAttribute(attr.name)
-              return
+          if (tag === 'a' && (name === 'href' || name === 'target' || name === 'rel')) {
+            if (name === 'href') {
+              const isSafeProtocol = val.startsWith('http://') || 
+                                     val.startsWith('https://') || 
+                                     val.startsWith('mailto:') || 
+                                     val.startsWith('tel:') || 
+                                     val.startsWith('#') ||
+                                     val.startsWith('/')
+              if (!isSafeProtocol) node.removeAttribute(attr.name)
             }
-            if (
-              normalizedVal &&
-              !normalizedVal.startsWith('http://') &&
-              !normalizedVal.startsWith('https://') &&
-              !normalizedVal.startsWith('mailto:') &&
-              !normalizedVal.startsWith('/')
-            ) {
-              node.removeAttribute(attr.name)
-              return
-            }
+            if (name === 'target') node.setAttribute('target', '_blank')
+            if (name === 'rel') node.setAttribute('rel', 'noopener noreferrer')
+            return
           }
-
-          if (name === 'target') {
-            node.setAttribute('target', '_blank')
-          }
-          if (name === 'rel') {
-            node.setAttribute('rel', 'noopener noreferrer')
-          }
+          node.removeAttribute(attr.name)
         })
+
+        if (tag === 'a' && node.hasAttribute('href')) {
+          node.setAttribute('target', '_blank')
+          node.setAttribute('rel', 'noopener noreferrer')
+        }
       }
 
-      node.childNodes.forEach(child => walk(child))
+      Array.from(node.childNodes).forEach(child => walk(child))
     }
 
     walk(doc.body)
