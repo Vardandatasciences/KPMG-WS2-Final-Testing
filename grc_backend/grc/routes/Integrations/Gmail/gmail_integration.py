@@ -6,7 +6,7 @@ import mimetypes
 from urllib.parse import quote
 from datetime import datetime, timedelta
 from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.utils import timezone
 from django.utils.html import escape

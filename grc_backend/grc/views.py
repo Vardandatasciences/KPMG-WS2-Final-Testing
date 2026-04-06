@@ -17,7 +17,7 @@ from .routes.Consent import require_consent
 from django.db.models import Count, Avg, Case, When, Value, FloatField, F
 from django.db.models.functions import Coalesce, Cast
 from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -33,6 +33,7 @@ from django.core.mail import send_mail
 from django.conf import settings
 from django.utils.html import escape
 import time
+from .mfa_service import MfaService
 
 logger = logging.getLogger(__name__)
 from .debug_utils import debug_print
@@ -5116,6 +5117,7 @@ def login_user(request):
         username = data.get('username')
         password = data.get('password')
         login_type = data.get('login_type', 'username')  # Default to username if not specified
+        otp = data.get('otp')  # Optional OTP for MFA
         
         logger.debug(f"Login attempt for {login_type}: {username}")
         
@@ -5375,7 +5377,46 @@ def login_user(request):
             
             # Note: Password logs are only saved when password is changed, not on every login
             # Login activities are logged to grc_logs instead
-            
+
+            # ========================================
+            # MFA ENFORCEMENT (same policy as JWT: enforce if MFA_ENABLED or FORCE_MFA_FOR_ALL)
+            # ========================================
+            mfa_enabled = getattr(settings, 'MFA_ENABLED', True)
+            force_mfa_all = getattr(settings, 'FORCE_MFA_FOR_ALL', True)
+            if mfa_enabled or force_mfa_all:
+                if otp:
+                    mfa_result = MfaService.verify_otp(user, otp, request)
+                    if not mfa_result.get('success'):
+                        return Response({
+                            'status': 'error',
+                            'message': mfa_result.get('error', 'MFA verification failed'),
+                            'requires_mfa': True
+                        }, status=status.HTTP_401_UNAUTHORIZED)
+                else:
+                    if not user.Email:
+                        return Response({
+                            'status': 'error',
+                            'message': 'Email address is required for MFA. Please contact your administrator.'
+                        }, status=status.HTTP_400_BAD_REQUEST)
+                    try:
+                        MfaService.create_mfa_challenge(user, request)
+                        email_parts = user.Email.split('@')
+                        masked_email = f\"{email_parts[0][:3]}***@{email_parts[1]}\" if len(email_parts) == 2 else \"***\"
+                        return Response({
+                            'status': 'mfa_required',
+                            'message': f'Please enter the verification code sent to {masked_email}',
+                            'requires_mfa': True,
+                            'email_masked': masked_email
+                        }, status=status.HTTP_200_OK)
+                    except Exception as mfa_error:
+                        logger.error(f\"Error creating MFA challenge for user {user.UserName}: {str(mfa_error)}\")
+                        return Response({
+                            'status': 'error',
+                            'message': 'Failed to send verification code. Please try again.'
+                        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            else:
+                logger.info(f\"MFA is disabled and not forced - proceeding without MFA for user {user.UserName}\")
+
             # ========================================
             # SUCCESSFUL LOGIN - CLEAR FAILED ATTEMPT COUNTERS
             # ========================================
@@ -5401,6 +5442,12 @@ def login_user(request):
             
             # Set session data
             import time
+            # Regenerate session identifier on successful authentication to prevent session fixation
+            try:
+                request.session.cycle_key()
+            except Exception:
+                # If session backend doesn't support cycling, proceed with new session data
+                pass
             request.session['user_id'] = user.UserId
             request.session['grc_user_id'] = user.UserId  # Backup key
             request.session['grc_username'] = user.UserName
@@ -5495,6 +5542,13 @@ def login_user(request):
                 )
             except Exception as sec_ex:
                 logger.warning("login security audit hook failed: %s", sec_ex, exc_info=True)
+
+            # Per-account anomaly detection and real-time alerting (geo/time heuristics)
+            try:
+                from grc.security.anomaly_service import detect_and_alert_on_login
+                detect_and_alert_on_login(request, user)
+            except Exception as anom_ex:
+                logger.debug("anomaly detector failed: %s", anom_ex, exc_info=True)
 
             return Response(response_data)
             
@@ -6604,7 +6658,8 @@ def get_user_profile(request, user_id):
         }, status=500)
 
 
-@csrf_exempt
+from django.views.decorators.csrf import csrf_protect as _csrf_protect_views_csrf
+@_csrf_protect_views_csrf
 @require_http_methods(["POST"])
 def clear_ai_cache(request):
     """Clear backend AI response cache (policy extraction etc.). Called when user clicks Clear cache in Policy Upload."""
@@ -6816,7 +6871,6 @@ def get_user_permissions(request, user_id):
             'message': str(e)
         }, status=500)
 
-@csrf_exempt
 @api_view(['PUT'])
 @permission_classes([IsAuthenticated])
 def update_user_permissions(request, user_id):

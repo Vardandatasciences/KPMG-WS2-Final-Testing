@@ -1,5 +1,5 @@
 from ...routes.Global.s3_fucntions import export_data
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.permissions import AllowAny
 from django.http import JsonResponse, HttpResponse
@@ -9,7 +9,7 @@ import logging
 import tempfile
 import os
 from pathlib import Path
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from django.views import View
 from django.utils.decorators import method_decorator
 
@@ -374,6 +374,7 @@ def send_log(module, actionType, description=None, userId=None, userName=None,
     # Create log entry in database
     try:
         # Prepare data for GRCLog model
+        from grc.utils.log_integrity import attach_integrity
         log_data = {
             'Module': module,
             'ActionType': actionType,
@@ -389,6 +390,9 @@ def send_log(module, actionType, description=None, userId=None, userName=None,
         
         # Remove None values
         log_data = {k: v for k, v in log_data.items() if v is not None}
+        
+        # Attach tamper-evident integrity metadata (stored in AdditionalInfo.integrity)
+        log_data = attach_integrity(log_data, chain_id="grc_main")
         
         # Create and save the log entry
         log_entry = GRCLog(**log_data)

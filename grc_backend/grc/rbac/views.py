@@ -5,7 +5,7 @@ This module provides views for RBAC functionality including user permissions.
 """
 
 from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from django.views.decorators.http import require_http_methods
 import logging
 from .utils import RBACUtils

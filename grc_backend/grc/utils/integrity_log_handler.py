@@ -1,3 +1,88 @@
+import json
+import logging
+import os
+import threading
+from datetime import datetime, timezone
+from hashlib import sha256
+import hmac
+from typing import Optional
+
+from django.conf import settings
+
+
+class HashChainAppendOnlyFileHandler(logging.Handler):
+	"""
+	Append-only file handler that writes structured JSON and maintains an HMAC-SHA256 hash chain.
+	- Each line contains: {"ts": "...", "level": "INFO", "msg": "<raw>", "prev_hash": "...", "hash": "..."}
+	- Chain initialization uses previous value "GENESIS".
+	- Secret: derived from DJANGO SECRET_KEY (or SECURITY_AUDIT_SECRET if provided).
+	- File is opened in append-only mode; the handler never truncates or rewrites.
+	- A sidecar state file (*.state) stores the last hash, to support multi-process continuity.
+	"""
+
+	_stream_lock = threading.Lock()
+
+	def __init__(self, filename: str):
+		super().__init__(level=logging.INFO)
+		self.filename = filename
+		self.state_path = f"{self.filename}.state"
+		self.secret = (os.environ.get("SECURITY_AUDIT_SECRET") or settings.SECRET_KEY or "insecure-secret").encode("utf-8")
+		# Ensure directory exists
+		os.makedirs(os.path.dirname(self.filename), exist_ok=True)
+		# Pre-open not strictly necessary; we open per write to reduce descriptor holding
+
+	def _read_last_hash(self) -> str:
+		try:
+			with open(self.state_path, "r", encoding="utf-8") as sf:
+				value = sf.read().strip()
+				if value:
+					return value
+		except FileNotFoundError:
+			return "GENESIS"
+		except Exception:
+			return "GENESIS"
+		return "GENESIS"
+
+	def _write_last_hash(self, value: str) -> None:
+		with open(self.state_path, "w", encoding="utf-8") as sf:
+			sf.write(value + "\n")
+			sf.flush()
+			os.fsync(sf.fileno())
+
+	def _compute_hash(self, prev_hash: str, payload: str) -> str:
+		mac = hmac.new(self.secret, digestmod=sha256)
+		mac.update(prev_hash.encode("utf-8"))
+		mac.update(b".")
+		mac.update(payload.encode("utf-8"))
+		return mac.hexdigest()
+
+	def emit(self, record: logging.LogRecord) -> None:
+		try:
+			raw_message = record.getMessage()
+			# If message is already JSON, do not double-encode; keep as-is string
+			now = datetime.now(timezone.utc).isoformat()
+			entry = {
+				"ts": now,
+				"level": record.levelname,
+				"msg": raw_message,
+			}
+			payload = json.dumps(entry, separators=(",", ":"), sort_keys=True, ensure_ascii=False)
+			with self._stream_lock:
+				prev_hash = self._read_last_hash()
+				curr_hash = self._compute_hash(prev_hash, payload)
+				entry["prev_hash"] = prev_hash
+				entry["hash"] = curr_hash
+				line = json.dumps(entry, separators=(",", ":"), sort_keys=True, ensure_ascii=False)
+				# Append-only write
+				with open(self.filename, "a", encoding="utf-8") as f:
+					f.write(line + "\n")
+					f.flush()
+					os.fsync(f.fileno())
+				# Persist last hash
+				self._write_last_hash(curr_hash)
+		except Exception:
+			self.handleError(record)
+
 """
 Append-only file handler with SHA-256 hash chain for tamper detection.
 

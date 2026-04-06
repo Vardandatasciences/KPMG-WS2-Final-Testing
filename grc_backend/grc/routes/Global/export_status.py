@@ -5,10 +5,9 @@ Provides status checking for async export tasks
 from django.http import JsonResponse
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_protect
 
 
-@csrf_exempt
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def get_export_status(request, task_id):
@@ -61,7 +60,6 @@ def get_export_status(request, task_id):
         }, status=500)
 
 
-@csrf_exempt
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def list_user_exports(request, user_id):

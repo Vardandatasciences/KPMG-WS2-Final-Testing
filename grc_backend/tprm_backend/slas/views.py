@@ -17,7 +17,7 @@ from django.utils import timezone
 from django.conf import settings
 from datetime import datetime, timedelta
 from django.utils.decorators import method_decorator
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_protect as csrf_exempt
 
 # RBAC imports
 from tprm_backend.rbac.tprm_decorators import rbac_sla_required

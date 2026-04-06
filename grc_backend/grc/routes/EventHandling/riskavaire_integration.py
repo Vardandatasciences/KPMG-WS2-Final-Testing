@@ -9,7 +9,7 @@ from rest_framework.decorators import api_view, permission_classes, authenticati
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import AllowAny
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from django.utils.decorators import method_decorator
 from django.db.models import Q
 from django.utils import timezone
@@ -747,7 +747,8 @@ def handle_riskavaire_data(data, record_type):
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
-@csrf_exempt
+from django.views.decorators.csrf import csrf_protect as _csrf_protect  # local import to avoid top refactor
+@_csrf_protect
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def riskavaire_webhook(request):
@@ -861,7 +862,7 @@ def riskavaire_webhook(request):
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
-@csrf_exempt
+@_csrf_protect
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def check_automated_triggers(request):
@@ -961,7 +962,6 @@ def check_automated_triggers(request):
 
 @api_view(['GET'])
 @permission_classes([EventViewAllPermission, EventViewModulePermission])
-@csrf_exempt
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_riskavaire_events(request):

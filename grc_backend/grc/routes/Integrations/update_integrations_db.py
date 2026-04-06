@@ -6,7 +6,7 @@ in the database, including disconnect operations.
 """
 
 from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_http_methods
 from django.utils import timezone
 from django.db import transaction
@@ -19,7 +19,7 @@ from ...models import ExternalApplication, ExternalApplicationConnection, Extern
 logger = logging.getLogger(__name__)
 
 
-@csrf_exempt
+@csrf_protect
 @require_http_methods(["POST"])
 def disconnect_integration(request):
     """
@@ -117,7 +117,7 @@ def disconnect_integration(request):
         return JsonResponse({'error': 'Internal server error'}, status=500)
 
 
-@csrf_exempt
+@csrf_protect
 @require_http_methods(["POST"])
 def connect_integration(request):
     """
@@ -202,7 +202,6 @@ def connect_integration(request):
         return JsonResponse({'error': 'Internal server error'}, status=500)
 
 
-@csrf_exempt
 @require_http_methods(["GET"])
 def get_integration_status(request):
     """
@@ -261,7 +260,7 @@ def get_integration_status(request):
         return JsonResponse({'error': 'Internal server error'}, status=500)
 
 
-@csrf_exempt
+@csrf_protect
 @require_http_methods(["POST"])
 def bulk_update_integration_status(request):
     """

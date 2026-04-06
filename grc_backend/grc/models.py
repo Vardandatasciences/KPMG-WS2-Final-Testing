@@ -1952,7 +1952,14 @@ class GRCLog(EncryptedFieldsMixin, models.Model):
     def __str__(self):
         return f"Log {self.LogId}: {self.ActionType} on {self.Module}"
 
+    # Enforce append-only semantics at the application layer (WORM-like)
+    def save(self, *args, **kwargs):
+        if self.pk:
+            raise RuntimeError("GRCLog entries are append-only and cannot be modified once created.")
+        super().save(*args, **kwargs)
 
+    def delete(self, *args, **kwargs):
+        raise RuntimeError("GRCLog entries are append-only and cannot be deleted.")
 
 
 class PasswordLog(EncryptedFieldsMixin, models.Model):

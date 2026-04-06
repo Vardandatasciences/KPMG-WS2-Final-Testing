@@ -33,7 +33,7 @@ except ImportError:
     CENTRALIZED_GAP_ANALYSIS_AVAILABLE = False
     get_centralized_gap_analysis_service = None
 import logging
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from rest_framework.permissions import AllowAny
 
 # Reuse central AI provider configuration (OpenAI vs Ollama) from risk module

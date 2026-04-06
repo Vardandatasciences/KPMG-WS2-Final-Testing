@@ -51,7 +51,7 @@ from ...tenant_utils import (
     require_tenant, tenant_filter, get_tenant_id_from_request,
     validate_tenant_access, get_tenant_aware_queryset
 )
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from ...routes.Global.s3_fucntions import (
@@ -770,6 +770,7 @@ def send_log(module, actionType, description=None, userId=None, userName=None,
         sanitized_ip = sanitize_ip_address(ipAddress)
         
         # Prepare data for GRCLog model
+        from grc.utils.log_integrity import attach_integrity
         log_data = {
             'Module': module,
             'ActionType': actionType,
@@ -785,6 +786,9 @@ def send_log(module, actionType, description=None, userId=None, userName=None,
        
         # Remove None values
         log_data = {k: v for k, v in log_data.items() if v is not None}
+       
+        # Attach tamper-evident integrity metadata (stored in AdditionalInfo.integrity)
+        log_data = attach_integrity(log_data, chain_id="grc_main")
        
         # Create and save the log entry
         log_entry = GRCLog(**log_data)

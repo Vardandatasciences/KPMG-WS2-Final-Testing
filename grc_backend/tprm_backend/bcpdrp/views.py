@@ -12,7 +12,7 @@ from django.http import HttpRequest
 from django.db.models import Q, Max
 from django.db import models, connection, transaction
 from django.utils import timezone
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from django.http import JsonResponse
 from datetime import datetime
 import requests

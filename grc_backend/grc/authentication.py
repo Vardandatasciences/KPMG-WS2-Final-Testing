@@ -21,7 +21,7 @@ from django.contrib.auth.hashers import make_password, check_password
 from .models import Users, GRCLog, RBAC, Framework
 from .models import Users, GRCLog, ProductVersion
 from .rbac.utils import RBACUtils
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from .mfa_service import MfaService
 
 logger = logging.getLogger(__name__)
@@ -965,11 +965,12 @@ def jwt_login(request):
                 }, status=status.HTTP_403_FORBIDDEN)
         
         # ========================================
-        # MFA VERIFICATION (only if MFA is enabled)
+        # MFA VERIFICATION (enforced for all users if FORCE_MFA_FOR_ALL is True)
         # ========================================
         mfa_enabled = getattr(settings, 'MFA_ENABLED', True)
+        force_mfa_all = getattr(settings, 'FORCE_MFA_FOR_ALL', True)
         
-        if mfa_enabled:
+        if mfa_enabled or force_mfa_all:
             # If OTP is provided, verify it
             if otp:
                 mfa_result = MfaService.verify_otp(user, otp, request)
@@ -1008,8 +1009,8 @@ def jwt_login(request):
                         'message': 'Failed to send verification code. Please try again.'
                     }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         else:
-            # MFA is disabled - skip MFA verification and proceed with login
-            logger.info(f"MFA is disabled - skipping MFA verification for user {user.UserName}")
+            # MFA disabled and not forced
+            logger.info(f"MFA is disabled and not forced - skipping MFA verification for user {user.UserName}")
         
         # ========================================
         # PASSWORD EXPIRY CHECK
@@ -1074,6 +1075,11 @@ def jwt_login(request):
         # Store user info in session for compatibility with consistent naming
         # Decrypt username before storing in session
         username_plain = getattr(user, 'UserName_plain', None) or getattr(user, 'UserName', None)
+        # Regenerate session identifier on successful authentication to prevent session fixation
+        try:
+            request.session.cycle_key()
+        except Exception:
+            pass
         request.session['user_id'] = user.UserId
         request.session['username'] = username_plain
         request.session['grc_user_id'] = user.UserId  # Backup key for RBAC
@@ -1110,6 +1116,13 @@ def jwt_login(request):
             )
         except Exception as sec_ex:
             logger.warning("login security audit hook failed: %s", sec_ex, exc_info=True)
+
+        # Per-account anomaly detection and alerting (geo/time heuristics)
+        try:
+            from grc.security.anomaly_service import detect_and_alert_on_login
+            detect_and_alert_on_login(request, user)
+        except Exception as anom_ex:
+            logger.debug("anomaly detector failed: %s", anom_ex, exc_info=True)
 
         # Log successful login to grc_logs - DIRECT DATABASE SAVE (fallback if send_log fails)
         log_saved = False
@@ -1834,7 +1847,6 @@ def product_version_info(request):
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
-@csrf_exempt
 def test_token_version(request):
     """
     Helper endpoint for verifying token version handling:
@@ -1926,7 +1938,8 @@ def mfa_verify_otp(request):
     """Verify MFA OTP and complete login"""
     # Check if MFA is enabled
     mfa_enabled = getattr(settings, 'MFA_ENABLED', True)
-    if not mfa_enabled:
+    force_mfa_all = getattr(settings, 'FORCE_MFA_FOR_ALL', True)
+    if not (mfa_enabled or force_mfa_all):
         return Response({
             'status': 'error',
             'message': 'MFA is currently disabled. Please use the regular login endpoint.'
@@ -2113,7 +2126,11 @@ def mfa_verify_otp(request):
         tokens = generate_jwt_tokens(user)
         _set_user_session_token(user.UserId, tokens['session_token'])
         
-        # Store user info in session
+        # Regenerate session identifier to prevent session fixation, then store user info in session
+        try:
+            request.session.cycle_key()
+        except Exception:
+            pass
         request.session['user_id'] = user.UserId
         request.session['username'] = user.UserName
         request.session['grc_user_id'] = user.UserId

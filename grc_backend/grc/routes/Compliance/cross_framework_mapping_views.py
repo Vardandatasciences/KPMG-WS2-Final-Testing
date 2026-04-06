@@ -8,7 +8,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.authentication import SessionAuthentication, BasicAuthentication
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_protect
 from ...rbac.utils import RBACUtils
 from ...rbac.decorators import compliance_view_required, compliance_audit_required
 from ...rbac.permissions import ComplianceViewPermission, ComplianceAuditPermission
@@ -23,7 +23,7 @@ from ...tenant_utils import (
 logger = logging.getLogger(__name__)
 
 
-@csrf_exempt
+@csrf_protect
 @api_view(['POST'])
 @authentication_classes([SessionAuthentication, BasicAuthentication])
 @permission_classes([ComplianceAuditPermission])

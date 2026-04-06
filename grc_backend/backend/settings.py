@@ -180,6 +180,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "grc.middleware.RequestLoggingMiddleware",  # ADDED: Log all requests FIRST
+    "grc.middleware.ApiAbuseDetectionMiddleware",  # Real-time abuse detection and alerting
     "corsheaders.middleware.CorsMiddleware",
     # "grc.middleware.CORSMiddleware",
     "django.middleware.security.SecurityMiddleware",
@@ -196,6 +197,10 @@ MIDDLEWARE = [
     "tprm_backend.middleware.error_sanitization.ErrorResponseSanitizationMiddleware",
     # Enterprise Security Headers Middleware - Adds comprehensive security headers to all responses
     "grc.middleware.EnterpriseSecurityHeadersMiddleware",
+    # Validate server-side redirects to prevent open redirect vulnerabilities
+    "grc.middleware.OutgoingRedirectValidationMiddleware",
+    # Enforce request nonce + HMAC signature verification (replay/tamper protection)
+    "grc.middleware.RequestSignatureVerificationMiddleware",
     "grc.middleware.JWTAuthenticationMiddleware",
     # Framework-level IDOR / object-level authorization (self-only unless admin)
     "grc.middleware.ObjectLevelAuthorizationMiddleware",
@@ -395,6 +400,15 @@ LOGIN_ANOMALY_MIN_BASELINE_LOGINS = int(os.environ.get("LOGIN_ANOMALY_MIN_BASELI
 LOGIN_ANOMALY_HOUR_TOLERANCE = int(os.environ.get("LOGIN_ANOMALY_HOUR_TOLERANCE", "4"))
 LOGIN_ANOMALY_REGION_WINDOW_SECONDS = int(os.environ.get("LOGIN_ANOMALY_REGION_WINDOW_SECONDS", "3600"))
 LOGIN_ANOMALY_BASELINE_TTL = int(os.environ.get("LOGIN_ANOMALY_BASELINE_TTL", str(86400 * 90)))
+
+# -----------------------------------------------------------------------------
+# API Abuse Detection & Alerting
+# -----------------------------------------------------------------------------
+API_ABUSE_DETECTION_ENABLED = _env_bool("API_ABUSE_DETECTION_ENABLED", True)
+API_ABUSE_RPS_THRESHOLD = int(os.environ.get("API_ABUSE_RPS_THRESHOLD", "300"))  # per-IP per minute
+API_ABUSE_ERROR_THRESHOLD = int(os.environ.get("API_ABUSE_ERROR_THRESHOLD", "30"))  # per-IP per minute
+API_ABUSE_WINDOW_SECONDS = int(os.environ.get("API_ABUSE_WINDOW_SECONDS", "60"))
+API_ABUSE_EXEMPT_PATH_PREFIXES = _env_csv("API_ABUSE_EXEMPT_PATH_PREFIXES", "/admin/,/static/,/media/")
 
 # Log level: DEBUG when enabled, ERROR when disabled (suppresses DEBUG/INFO/WARNING)
 _DEBUG_LOG_LEVEL = "DEBUG" if ENABLE_DEBUG_LOGGING else "ERROR"
@@ -870,6 +884,10 @@ EMAIL_HOST_USER = SMTP_EMAIL
 EMAIL_HOST_PASSWORD = SMTP_PASSWORD
 S3_MICRO_API_KEY = os.environ.get("S3_MICRO_API_KEY", "")
 
+# Security alerting configuration (used by anomaly detector)
+SECURITY_ALERT_EMAIL = os.environ.get('SECURITY_ALERT_EMAIL', '')
+ALERT_USER_ON_LOGIN_ANOMALY = os.environ.get('ALERT_USER_ON_LOGIN_ANOMALY', 'true').lower() == 'true'
+
 # Azure AD Email Configuration
 # Note: Environment variables take precedence. Defaults provided for immediate use.
 AZURE_AD_TENANT_ID = os.environ.get('AZURE_AD_TENANT_ID', 'aa7c8c45-41a3-4453-bc9a-3adfe8ff5fb6')
@@ -1043,9 +1061,39 @@ GOOGLE_SCOPES = clean_env_value(
 # WARNING: Only use this in local development! Always verify state in production
 SKIP_OAUTH_STATE_VERIFICATION = os.environ.get('SKIP_OAUTH_STATE_VERIFICATION', 'true' if DEBUG else 'false')
 
+# -----------------------------------------------------------------------------
+# Redirect Allowlist for Server-side Redirects (prevents open redirects)
+# -----------------------------------------------------------------------------
+from urllib.parse import urlparse as _urlparse  # local import to avoid top pollution
+_fe = os.environ.get('FRONTEND_URL', 'http://localhost:8080')
+try:
+    _fe_host = _urlparse(_fe).hostname
+except Exception:
+    _fe_host = None
+REDIRECT_ALLOWLIST_HOSTS = _env_csv("REDIRECT_ALLOWLIST_HOSTS", _fe_host or "")
+# Enforce on all API and OAuth paths, including versioned GRC prefix
+REDIRECT_ENFORCE_ON_PREFIXES = _env_csv("REDIRECT_ENFORCE_ON_PREFIXES", "/api/,/api/v1/,/api/v1/grc/,/oauth/")
+
+# -----------------------------------------------------------------------------
+# Request Signature / Replay Protection
+# -----------------------------------------------------------------------------
+REQUEST_SIGNATURE_ENABLED = _env_bool("REQUEST_SIGNATURE_ENABLED", True)
+REQUEST_SIGNATURE_SECRET = os.environ.get("REQUEST_SIGNATURE_SECRET", "")
+REQUEST_SIGNATURE_TOLERANCE_SECONDS = int(os.environ.get("REQUEST_SIGNATURE_TOLERANCE_SECONDS", "300"))
+# Enforce signatures for all mutating methods and GET by default (defense-in-depth)
+REQUEST_SIGNATURE_ENFORCE_METHODS = _env_csv("REQUEST_SIGNATURE_ENFORCE_METHODS", "GET,POST,PUT,PATCH,DELETE")
+REQUEST_SIGNATURE_EXEMPT_PATH_PREFIXES = _env_csv(
+    "REQUEST_SIGNATURE_EXEMPT_PATH_PREFIXES",
+    # Keep exemptions narrow: public auth bootstrap and static/admin. Do NOT exempt whole API trees.
+    "/admin/,/static/,/media/,/api/login/,/api/jwt/,/api/register/,/api/send-otp/,/api/verify-otp/,/api/reset-password/,/api/google/,/api/gmail/,/oauth/"
+)
+
 # MFA Configuration
 # Set MFA_ENABLED=true to enable Multi-Factor Authentication, false to disable
 MFA_ENABLED = os.environ.get('MFA_ENABLED', 'true').lower() == 'true'
+
+# Force MFA for all users regardless of MFA_ENABLED (used to enforce MFA for privileged/external)
+FORCE_MFA_FOR_ALL = os.environ.get('FORCE_MFA_FOR_ALL', 'true').lower() == 'true'
  
 
 

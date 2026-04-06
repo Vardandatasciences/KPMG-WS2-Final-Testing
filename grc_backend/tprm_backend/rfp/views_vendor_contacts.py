@@ -2,7 +2,7 @@
 Views for handling vendor contacts
 """
 from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from django.views.decorators.http import require_GET
 from django.db import connection
 from rest_framework.decorators import api_view, authentication_classes, permission_classes

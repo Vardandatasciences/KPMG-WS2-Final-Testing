@@ -5,7 +5,7 @@ import json
 import time
 import traceback
 from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from django.views.decorators.http import require_POST
 from django.db import transaction, connection
 from django.utils import timezone

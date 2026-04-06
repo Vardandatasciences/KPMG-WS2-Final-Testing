@@ -33,7 +33,7 @@ from ...rbac.permissions import (
     AuditReviewPermission, AuditFindingsAccessPermission
 )
 from ...rbac.utils import RBACUtils
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from ...routes.Consent import require_consent
 
 # MULTI-TENANCY: Import tenant utilities for data isolation
@@ -1642,7 +1642,6 @@ def get_framework_policy_subpolicy_from_compliance(compliance_id):
             'policy_id': None,
             'subpolicy_id': None
         }
-@csrf_exempt
 @api_view(['GET'])
 @authentication_classes([])
 @permission_classes([IncidentViewPermission])
@@ -2171,7 +2170,7 @@ def test_incident_count(request):
 
 
 from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
@@ -3790,7 +3789,7 @@ LOGIN_REDIRECT_URL = '/incidents/'  # or the URL pattern for your incident page
 import json
 import datetime
 from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from rest_framework.decorators import api_view, permission_classes, authentication_classes, throttle_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response

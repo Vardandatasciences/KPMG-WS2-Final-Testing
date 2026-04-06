@@ -55,6 +55,7 @@ def evaluate_login_anomalies(user_id: int, request, auth_method: str) -> List[Di
     min_baseline = int(getattr(settings, "LOGIN_ANOMALY_MIN_BASELINE_LOGINS", 3))
     hour_tol = int(getattr(settings, "LOGIN_ANOMALY_HOUR_TOLERANCE", 4))
     region_window = int(getattr(settings, "LOGIN_ANOMALY_REGION_WINDOW_SECONDS", 3600))
+    impossible_travel_window = int(getattr(settings, "LOGIN_ANOMALY_IMPOSSIBLE_TRAVEL_WINDOW_SECONDS", 1800))
 
     now = _now_utc()
     hour = now.hour
@@ -63,10 +64,11 @@ def evaluate_login_anomalies(user_id: int, request, auth_method: str) -> List[Di
     baseline_key = f"login_baseline_v1:{user_id}"
     regions_key = f"login_active_regions_v1:{user_id}"
 
-    baseline: Dict[str, Any] = cache.get(baseline_key) or {"hours": [], "last_region": None, "count": 0}
+    baseline: Dict[str, Any] = cache.get(baseline_key) or {"hours": [], "last_region": None, "count": 0, "last_ts": None}
     hours: List[int] = list(baseline.get("hours", []))
     last_region: Optional[str] = baseline.get("last_region")
     count: int = int(baseline.get("count", 0))
+    last_ts_raw = baseline.get("last_ts")
 
     anomalies: List[Dict[str, Any]] = []
 
@@ -98,6 +100,34 @@ def evaluate_login_anomalies(user_id: int, request, auth_method: str) -> List[Di
             }
         )
 
+    # Detect impossible travel: region changed within an unreasonably short window
+    if last_ts_raw:
+        try:
+            # last_ts_raw stored as ISO string
+            last_dt = datetime.fromisoformat(str(last_ts_raw))
+            seconds_since_last = (now - last_dt).total_seconds()
+            if (
+                last_region
+                and last_region not in ("UNKNOWN",)
+                and region not in ("UNKNOWN",)
+                and region != last_region
+                and seconds_since_last >= 0
+                and seconds_since_last <= impossible_travel_window
+            ):
+                anomalies.append(
+                    {
+                        "type": "IMPOSSIBLE_TRAVEL",
+                        "previous_region": last_region,
+                        "current_region": region,
+                        "seconds_since_last_login": int(seconds_since_last),
+                        "window_seconds": impossible_travel_window,
+                        "auth_method": auth_method,
+                    }
+                )
+        except Exception:
+            # Ignore parsing errors; continue
+            pass
+
     now_ts = now.timestamp()
     active: Dict[str, float] = cache.get(regions_key) or {}
     active = {r: exp for r, exp in active.items() if exp > now_ts}
@@ -118,6 +148,7 @@ def evaluate_login_anomalies(user_id: int, request, auth_method: str) -> List[Di
     baseline["hours"] = hours[-30:]
     baseline["last_region"] = region
     baseline["count"] = count + 1
+    baseline["last_ts"] = now.isoformat()
     cache.set(baseline_key, baseline, int(getattr(settings, "LOGIN_ANOMALY_BASELINE_TTL", 86400 * 90)))
 
     return anomalies

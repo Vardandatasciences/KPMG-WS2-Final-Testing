@@ -30,6 +30,7 @@ def send_log(module, actionType, description=None, userId=None, userName=None,
     # Create log entry in database
     try:
         # Prepare data for GRCLog model (using snake_case field names)
+        from grc.utils.log_integrity import attach_integrity
         log_data = {
             'module': module,
             'action_type': actionType,
@@ -45,6 +46,24 @@ def send_log(module, actionType, description=None, userId=None, userName=None,
         
         # Remove None values except for fields that have defaults
         log_data = {k: v for k, v in log_data.items() if v is not None}
+        
+        # Attach tamper-evident integrity metadata (stored in additional_info.integrity)
+        # Adapt keys to GRC integrity helper by mapping to expected names
+        adapted = {
+            'Module': log_data.get('module'),
+            'ActionType': log_data.get('action_type'),
+            'Description': log_data.get('description'),
+            'UserId': log_data.get('user_id'),
+            'UserName': log_data.get('user_name'),
+            'EntityType': log_data.get('entity_type'),
+            'EntityId': log_data.get('entity_id'),
+            'LogLevel': log_data.get('log_level'),
+            'IPAddress': log_data.get('ip_address'),
+            'AdditionalInfo': log_data.get('additional_info'),
+        }
+        adapted = attach_integrity(adapted, chain_id="tprm_main")
+        # write integrity back into snake_case additional_info
+        log_data['additional_info'] = adapted.get('AdditionalInfo')
         
         # Create and save the log entry
         log_entry = GRCLog.objects.create(**log_data)
