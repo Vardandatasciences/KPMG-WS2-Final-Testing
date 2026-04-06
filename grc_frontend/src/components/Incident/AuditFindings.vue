@@ -494,6 +494,7 @@ import { PopupModal, PopupService } from '@/modules/popup';
 import { SessionUtils } from '@/utils/accessUtils';
 import incidentService from '../../services/incidentService.js';
 import DynamicTable from '@/components/DynamicTable.vue';
+import { openDownloadInNewTabWithAnchorFallback } from '@/utils/safeExternalNavigation';
 
 export default {
   name: 'AuditFindings',
@@ -1669,31 +1670,14 @@ export default {
         
         // Check if we have a file URL
         if (response.data && response.data.file_url) {
-          // Try to open the file URL in a new tab, fallback to download if it fails
-          try {
-            const newWindow = window.open(response.data.file_url, '_blank');
-            if (newWindow) {
-              PopupService.success('Export completed successfully! File opened in new tab.');
-            } else {
-              // Fallback to download if popup is blocked
-              const link = document.createElement('a');
-              link.href = response.data.file_url;
-              link.setAttribute('download', response.data.file_name || `audit_findings.${exportFormat.value}`);
-              document.body.appendChild(link);
-              link.click();
-              document.body.removeChild(link);
-              PopupService.success('Export completed successfully! File downloaded.');
-            }
-          } catch (downloadErr) {
-            // Fallback to download if window.open fails
-            const link = document.createElement('a');
-            link.href = response.data.file_url;
-            link.setAttribute('download', response.data.file_name || `audit_findings.${exportFormat.value}`);
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            PopupService.success('Export completed successfully! File downloaded.');
-            console.error(downloadErr);
+          const ok = await openDownloadInNewTabWithAnchorFallback(
+            response.data.file_url,
+            response.data.file_name || `audit_findings.${exportFormat.value}`
+          );
+          if (ok) {
+            PopupService.success('Export completed successfully! File opened or downloaded.');
+          } else {
+            PopupService.warning('Export link is not from an allowed host.');
           }
         }
         

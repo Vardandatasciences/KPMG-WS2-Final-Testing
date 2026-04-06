@@ -6,6 +6,10 @@ from typing import Iterable, Optional
 from django.conf import settings
 
 
+class UnsafeRedirectError(ValueError):
+    """Raised when a redirect target is not an allowed relative application path."""
+
+
 class InvalidOutboundUrlError(ValueError):
     """
     Raised when an outbound URL fails security validation.
@@ -101,3 +105,41 @@ def validate_url(
             raise InvalidOutboundUrlError(
                 f"Domain '{hostname}' is not in the configured outbound allowlist"
             )
+
+
+def assert_safe_relative_redirect(
+    url: str,
+    *,
+    allowed_path_prefixes: Iterable[str],
+) -> str:
+    """
+    Ensure ``url`` is a same-site relative path suitable for HttpResponseRedirect.
+
+    Rejects absolute URLs, protocol-relative URLs, backslash paths, and paths
+    outside the configured prefix allowlist (open-redirect hardening).
+    """
+    if not url or not isinstance(url, str):
+        raise UnsafeRedirectError("Redirect URL must be a non-empty string")
+
+    u = url.strip()
+    lowered = u.lower()
+    if lowered.startswith(("http://", "https://", "//")):
+        raise UnsafeRedirectError("Redirect must not be an absolute or protocol-relative URL")
+    if "\\" in u or "\n" in u or "\r" in u:
+        raise UnsafeRedirectError("Redirect contains illegal characters")
+    if not u.startswith("/"):
+        raise UnsafeRedirectError("Redirect must start with /")
+
+    parsed = urllib.parse.urlparse(u)
+    path = parsed.path or ""
+    if not path.startswith("/"):
+        raise UnsafeRedirectError("Invalid redirect path")
+
+    prefixes = tuple(allowed_path_prefixes)
+    if not prefixes:
+        raise UnsafeRedirectError("No allowed path prefixes configured")
+
+    if not any(path.startswith(p) for p in prefixes):
+        raise UnsafeRedirectError("Redirect path is not in the allowed prefix list")
+
+    return u

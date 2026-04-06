@@ -755,17 +755,6 @@ S2.define('select2/utils',[
     });
   };
 
-  // Strip control characters that can break attributes or aid injection (e.g. aria-label, title).
-  Utils.stripControlChars = function (value) {
-    var s = (value == null) ? '' : String(value);
-    return s.replace(/[\x00-\x1F\x7F]/g, '');
-  };
-
-  // Plain-text / attribute-oriented escaping for option metadata (no HTML interpretation).
-  Utils.escapeForAttribute = function (value) {
-    return Utils.escapeMarkup(Utils.stripControlChars(value));
-  };
-
   // Append an array of jQuery nodes to a given element.
   Utils.appendMany = function ($element, $nodes) {
     // jQuery 1.7.x does not support $.fn.append() with an array
@@ -1378,22 +1367,8 @@ S2.define('select2/results',[
       container.style.display = 'none';
     } else if (typeof content === 'string') {
       container.innerHTML = escapeMarkup(content);
-    } else if (content != null && (content.jquery || content.nodeType ||
-        (typeof Node !== 'undefined' && content instanceof Node))) {
-      // Trusted DOM / jQuery: caller template may return elements; do not interpret strings as HTML here.
-      $(container).append(content);
-    } else if (Array.isArray(content)) {
-      for (var i = 0; i < content.length; i++) {
-        var item = content[i];
-        if (item != null && (item.jquery || item.nodeType ||
-            (typeof Node !== 'undefined' && item instanceof Node))) {
-          $(container).append(item);
-        } else {
-          container.appendChild(document.createTextNode(String(item)));
-        }
-      }
     } else {
-      container.innerHTML = escapeMarkup(String(content));
+      $(container).append(content);
     }
   };
 
@@ -3786,7 +3761,7 @@ S2.define('select2/data/tags',[
   };
 
   Tags.prototype.createTag = function (decorated, params) {
-    var term = (params.term == null ? '' : String(params.term)).trim();
+    var term = params.term == null ? '' : String(params.term).trim();
 
     if (term === '') {
       return null;
@@ -5053,7 +5028,7 @@ S2.define('select2/defaults',[
 
     function matcher (params, data) {
       // Always return the object if there is nothing to compare
-      if ((params.term == null ? '' : String(params.term)).trim() === '') {
+      if ((params.term == null ? '' : String(params.term).trim()) === '') {
         return data;
       }
 
@@ -6052,7 +6027,7 @@ S2.define('select2/compat/utils',[
   function syncCssClasses ($dest, $src, adapter) {
     var classes, replacements = [], adapted;
 
-    classes = ($dest.attr('class') || '').trim();
+    classes = ($dest.attr('class') == null ? '' : String($dest.attr('class'))).trim();
 
     if (classes) {
       classes = '' + classes; // for IE which returns object
@@ -6065,7 +6040,7 @@ S2.define('select2/compat/utils',[
       });
     }
 
-    classes = ($src.attr('class') || '').trim();
+    classes = ($src.attr('class') == null ? '' : String($src.attr('class'))).trim();
 
     if (classes) {
       classes = '' + classes; // for IE which returns object

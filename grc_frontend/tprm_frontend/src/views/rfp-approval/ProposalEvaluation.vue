@@ -275,7 +275,7 @@
                             <div class="space-y-2">
                               <div v-for="(attachment, idx) in response.attachments" :key="idx" class="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800">
                                 <span>📎</span>
-                                <a :href="attachment.url || attachment.download_url" target="_blank" class="underline">{{ attachment.fileName || attachment.originalFilename || attachment.name || `Attachment ${idx + 1}` }}</a>
+                                <a :href="attachment.url || attachment.download_url" target="_blank" rel="noopener noreferrer" class="underline">{{ attachment.fileName || attachment.originalFilename || attachment.name || `Attachment ${idx + 1}` }}</a>
                               </div>
                             </div>
                           </div>
@@ -2669,7 +2669,7 @@ const tryAlternativePDFViewer = () => {
 const openPDFInNewTab = () => {
   if (selectedDocument.value) {
     const url = selectedDocument.value.url || selectedDocument.value.download_url
-    window.open(url, '_blank')
+    window.open(url, '_blank', 'noopener,noreferrer')
   }
 }
 

@@ -53,6 +53,7 @@ from ...utils.file_compression import decompress_if_needed
 
 from ...debug_utils import debug_print
 from ...utils.log_sanitize import sanitize_for_log
+from ...utils.csv_security import sanitize_export_filename
 # MULTI-TENANCY: Import tenant utilities for data isolation
 from ...tenant_utils import (
     require_tenant, tenant_filter, get_tenant_id_from_request,
@@ -1850,7 +1851,8 @@ def export_events_to_s3(request):
         export_format = str(request.data.get('export_format', 'csv')).lower()
         events_data = request.data.get('events', [])
         user_id = request.data.get('user_id') or RBACUtils.get_user_id_from_request(request) or 'anonymous'
-        file_name = request.data.get('file_name') or f"events_export_{timezone.now().strftime('%Y%m%d_%H%M%S')}"
+        raw_file_name = request.data.get('file_name') or f"events_export_{timezone.now().strftime('%Y%m%d_%H%M%S')}"
+        file_name = sanitize_export_filename(raw_file_name, default='events_export')
 
         format_map = {
             'excel': 'xlsx',
@@ -4562,7 +4564,7 @@ def s3_upload_file(request):
             debug_print(f"DEBUG: Error creating S3 client: {str(e)}")
             return JsonResponse({
                 'success': False,
-                'message': f'Error initializing S3 client: {str(e)}'
+                'message': f'Error initializing S3 client: {_sanitize_reflected_error_detail(str(e))}'
             }, status=500)
         
         # Save file temporarily
@@ -4589,7 +4591,7 @@ def s3_upload_file(request):
             debug_print(f"DEBUG: Error creating temporary file: {str(e)}")
             return JsonResponse({
                 'success': False,
-                'message': f'Error saving file temporarily: {str(e)}'
+                'message': f'Error saving file temporarily: {_sanitize_reflected_error_detail(str(e))}'
             }, status=500)
         
         try:
@@ -4617,7 +4619,9 @@ def s3_upload_file(request):
             else:
                 return JsonResponse({
                     'success': False,
-                    'message': result.get('error', 'Upload failed')
+                    'message': _sanitize_reflected_error_detail(
+                        result.get('error', 'Upload failed')
+                    ),
                 }, status=500)
                 
         finally:
@@ -4633,7 +4637,7 @@ def s3_upload_file(request):
         debug_print(f"DEBUG: Traceback: {traceback.format_exc()}")
         return JsonResponse({
             'success': False,
-            'message': f'Error uploading file: {str(e)}'
+            'message': f'Error uploading file: {_sanitize_reflected_error_detail(str(e))}'
         }, status=500)
 
 
@@ -4754,7 +4758,7 @@ def s3_test_connection(request):
         debug_print(f"DEBUG: Error in s3_test_connection: {str(e)}")
         return JsonResponse({
             'success': False,
-            'message': f'Error testing S3 connection: {str(e)}'
+            'message': f'Error testing S3 connection: {_sanitize_reflected_error_detail(str(e))}'
         }, status=500)
 
 
@@ -4930,7 +4934,7 @@ def upload_event_evidence(request, event_id):
             debug_print(f"DEBUG: Error creating S3 client: {str(e)}")
             return JsonResponse({
                 'success': False,
-                'message': f'Error initializing S3 client: {str(e)}'
+                'message': f'Error initializing S3 client: {_sanitize_reflected_error_detail(str(e))}'
             }, status=500)
         
         # Save file temporarily
@@ -4947,7 +4951,7 @@ def upload_event_evidence(request, event_id):
             debug_print(f"DEBUG: Error creating temporary file: {str(e)}")
             return JsonResponse({
                 'success': False,
-                'message': f'Error saving file temporarily: {str(e)}'
+                'message': f'Error saving file temporarily: {_sanitize_reflected_error_detail(str(e))}'
             }, status=500)
         
         try:
@@ -5015,7 +5019,9 @@ def upload_event_evidence(request, event_id):
             else:
                 return JsonResponse({
                     'success': False,
-                    'message': result.get('error', 'Upload failed')
+                    'message': _sanitize_reflected_error_detail(
+                        result.get('error', 'Upload failed')
+                    ),
                 }, status=500)
                 
         finally:

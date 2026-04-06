@@ -4,6 +4,7 @@
  */
 
 import { getApiV1BaseUrl, getApiV1Url, getTprmApiUrl } from '@/utils/backendEnv.js'
+import { getParentPostMessageTargetOrigin } from '@/utils/parentPostMessageOrigin.js'
 
 const API_BASE_URL = getApiV1BaseUrl()
 
@@ -60,7 +61,7 @@ export function useRfpApi() {
       
       const isInIframe = window.self !== window.top
       if (isInIframe && window.parent) {
-        window.parent.postMessage({ type: 'TPRM_REDIRECT_TO_LOGIN' }, '*')
+        window.parent.postMessage({ type: 'TPRM_REDIRECT_TO_LOGIN' }, getParentPostMessageTargetOrigin())
       } else if (window.location.pathname !== '/login') {
         window.location.href = '/login'
       }

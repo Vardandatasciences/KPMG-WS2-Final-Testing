@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { getApiV1Url } from '@/utils/backendEnv'
+import { getParentPostMessageTargetOrigin } from '@/utils/parentPostMessageOrigin.js'
 
 export const useQuestionnaireStore = defineStore('questionnaire', () => {
   // State
@@ -47,10 +48,10 @@ export const useQuestionnaireStore = defineStore('questionnaire', () => {
                     localStorage.getItem('access_token')
       
       const response = await fetch(url, {
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          // Add JWT authentication header
-          ...(token && { 'Authorization': `Bearer ${token}` }),
+          ...(token && { Authorization: `Bearer ${token}` }),
           ...options.headers
         },
         ...options
@@ -67,7 +68,7 @@ export const useQuestionnaireStore = defineStore('questionnaire', () => {
         // If in iframe, request auth from GRC parent
         const isInIframe = window.self !== window.top
         if (isInIframe && window.parent) {
-          window.parent.postMessage({ type: 'TPRM_REDIRECT_TO_LOGIN' }, '*')
+          window.parent.postMessage({ type: 'TPRM_REDIRECT_TO_LOGIN' }, getParentPostMessageTargetOrigin())
         } else if (window.location.pathname !== '/login') {
           window.location.href = '/login'
         }

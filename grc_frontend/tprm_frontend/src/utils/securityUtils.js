@@ -4,6 +4,11 @@
  * Note: Client-side security is supplementary to server-side security
  */
 
+import { API_BASE_URL } from '@/config/api.js'
+import { getParentPostMessageTargetOrigin } from '@/utils/parentPostMessageOrigin.js'
+
+const stripTrailingSlash = (v) => String(v || '').replace(/\/+$/, '')
+
 // 1. Input Validation (Client-side validation for UX, server validates for security)
 export class ClientInputValidator {
   static validateEmail(email) {
@@ -102,7 +107,7 @@ export class AuthManager {
     // Redirect to login page
     const isInIframe = window.self !== window.top
     if (isInIframe && window.parent) {
-      window.parent.postMessage({ type: 'TPRM_REDIRECT_TO_LOGIN' }, '*')
+      window.parent.postMessage({ type: 'TPRM_REDIRECT_TO_LOGIN' }, getParentPostMessageTargetOrigin())
     } else {
       window.location.href = '/login';
     }
@@ -148,12 +153,7 @@ export class CSRFProtection {
 export class SecureHttpClient {
   constructor() {
     this.authManager = new AuthManager();
-    // Use backendEnv utility for base URL
-    import('@/utils/backendEnv').then(({ getTprmApiBaseUrl }) => {
-      this.baseURL = getTprmApiBaseUrl();
-    }).catch(() => {
-      this.baseURL = 'https://grc-tprm.vardaands.com/api/tprm';
-    });
+    this.baseURL = stripTrailingSlash(API_BASE_URL);
     this.timeout = 30000; // 30 seconds
   }
   
@@ -208,27 +208,40 @@ export class SecureHttpClient {
   }
   
   isValidURL(url) {
-    // Basic URL validation to prevent SSRF
     if (url.includes('://')) {
-      // Full URL - check if it's allowed
-      const allowedHosts = [
-        'localhost:8000',
-        'localhost:3000',
-        'grc-tprm.vardaands.com',
-        'test-riskavaire.vardaands.com',
-        '127.0.0.1:8000',
-        '127.0.0.1:3000'
-      ];
-      
       try {
         const urlObj = new URL(url);
-        return allowedHosts.includes(urlObj.host);
+        const host = urlObj.host;
+        if (typeof window !== 'undefined' && window.location?.host && host === window.location.host) {
+          return true;
+        }
+        try {
+          const configured = new URL(API_BASE_URL);
+          if (host === configured.host) {
+            return true;
+          }
+        } catch (_) {
+          /* API_BASE_URL may be relative in some builds */
+        }
+        const fromEnv =
+          typeof import.meta !== 'undefined' && import.meta.env?.VITE_ALLOWED_FETCH_HOSTS
+            ? String(import.meta.env.VITE_ALLOWED_FETCH_HOSTS)
+                .split(',')
+                .map((h) => h.trim())
+                .filter(Boolean)
+            : [];
+        const localDefaults = [
+          'localhost:8000',
+          'localhost:3000',
+          '127.0.0.1:8000',
+          '127.0.0.1:3000'
+        ];
+        const allowed = new Set([...localDefaults, ...fromEnv]);
+        return allowed.has(host);
       } catch (e) {
         return false;
       }
     }
-    
-    // Relative URL - should be safe
     return url.startsWith('/');
   }
   

@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { getParentPostMessageTargetOrigin } from '@/utils/parentPostMessageOrigin.js'
 
 const API_BASE_URL = process.env.VUE_APP_API_URL || 'http://localhost:3001/api'
 
@@ -47,7 +48,7 @@ apiClient.interceptors.response.use(
       // If in iframe, request auth from GRC parent
       const isInIframe = window.self !== window.top
       if (isInIframe && window.parent) {
-        window.parent.postMessage({ type: 'TPRM_REDIRECT_TO_LOGIN' }, '*')
+        window.parent.postMessage({ type: 'TPRM_REDIRECT_TO_LOGIN' }, getParentPostMessageTargetOrigin())
       } else if (window.location.pathname !== '/login' && !window.location.pathname.includes('/vendor-login')) {
         window.location.href = '/login'
       }

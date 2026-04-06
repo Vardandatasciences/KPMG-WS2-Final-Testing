@@ -198,7 +198,7 @@ defineOptions({
 // Function to open the PDF file
 const openPDF = () => {
   const pdfUrl = '/assets/help_docs/RiskaVaire Open-Source Attribution.pdf';
-  window.open(pdfUrl, '_blank')
+  window.open(pdfUrl, '_blank', 'noopener,noreferrer')
 }
 </script>
 

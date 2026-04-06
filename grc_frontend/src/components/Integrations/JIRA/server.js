@@ -1,11 +1,30 @@
 const express = require('express');
 const axios = require('axios');
 const querystring = require('querystring');
+const path = require('path');
 const cors = require('cors');
-const app = express();
-const port = 5000;
+const {
+  assertSafeAtlassianCloudId,
+  assertSafeJiraProjectId,
+  assertSafeJiraAttachmentId,
+  assertHttpsAtlassianAttachmentContentUrl,
+  cloudIdAllowedForToken,
+} = require('./atlassian_ssrf_guard');
 
-const allowedOrigins = [
+try {
+  require('dotenv').config({ path: path.join(__dirname, '..', '..', '..', '..', '.env') });
+} catch (_) {
+  /* optional */
+}
+
+const app = express();
+const isProd = process.env.NODE_ENV === 'production';
+const port = parseInt(process.env.JIRA_DEV_PORT || process.env.PORT || '5000', 10);
+const publicBase = (
+  process.env.JIRA_PUBLIC_BASE_URL || `http://127.0.0.1:${port}`
+).replace(/\/$/, '');
+
+const defaultDevOrigins = [
   'http://localhost:8080',
   'http://127.0.0.1:8080',
   'http://localhost:3000',
@@ -14,6 +33,14 @@ const allowedOrigins = [
   'https://riskavaire.vardaands.com',
   'https://test-riskavaire.vardaands.com',
 ];
+const envOrigins = (process.env.JIRA_CORS_ORIGINS || '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+const allowedOrigins = envOrigins.length ? envOrigins : defaultDevOrigins;
+if (isProd && envOrigins.length === 0) {
+  console.warn('[JIRA server] Set JIRA_CORS_ORIGINS in production for an explicit allowlist.');
+}
 
 app.use(cors({
   origin(origin, callback) {
@@ -28,12 +55,23 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Replace with your actual credentials
-const clientId = '4P9O14ygMc08yy0BrBNPcTTpNlgjD1UQ';
-const clientSecret = 'ATOAoft2lTbUeJqpcveQQxwWHehH4MUlRGzjAY58TYHXR47tGEJrMW4_kOtsQORMwOqi1CD39C08';
-const redirectUri = 'http://localhost:5000/oauth/callback';
+const clientId = (process.env.JIRA_OAUTH_CLIENT_ID || '').trim();
+const clientSecret = (process.env.JIRA_OAUTH_CLIENT_SECRET || '').trim();
+const redirectUri =
+  (process.env.JIRA_OAUTH_REDIRECT_URI || `http://127.0.0.1:${port}/oauth/callback`).trim();
+const oauthSuccessRedirect =
+  (process.env.JIRA_OAUTH_SUCCESS_REDIRECT || 'http://localhost:8080/integration/jira?success=true').trim();
 const authUrl = 'https://auth.atlassian.com/authorize';
 const tokenUrl = 'https://auth.atlassian.com/oauth/token';
+
+if (isProd && (!clientId || !clientSecret)) {
+  throw new Error(
+    'Production requires JIRA_OAUTH_CLIENT_ID and JIRA_OAUTH_CLIENT_SECRET (no embedded credentials).'
+  );
+}
+if (!isProd && (!clientId || !clientSecret)) {
+  console.warn('[JIRA server] Set JIRA_OAUTH_CLIENT_ID / JIRA_OAUTH_CLIENT_SECRET for OAuth.');
+}
 
 let accessToken = null;
 
@@ -112,7 +150,7 @@ app.get('/oauth/callback', async (req, res) => {
 
     // Store the access token server-side; never put OAuth tokens in URL query params.
     accessToken = response.data.access_token;
-    res.redirect('http://localhost:8080/integration/jira?success=true');
+    res.redirect(oauthSuccessRedirect);
   } catch (error) {
     res.status(500).send('Error during OAuth flow');
   }
@@ -192,11 +230,19 @@ app.get('/jira-projects', async (req, res) => {
     let selectedCloudId = cloudId;
     let resourceName = 'Unknown';
 
-    // If cloudId is provided, use it directly
+    // If cloudId is provided, use it directly (must match OAuth accessible resources).
     if (cloudId) {
       console.log('🔍 Using provided cloud ID:', cloudId);
+      try {
+        assertSafeAtlassianCloudId(cloudId);
+        if (!cloudIdAllowedForToken(cloudId, validation.resources)) {
+          return res.status(403).json({ error: 'Cloud ID is not authorized for this token' });
+        }
+      } catch (e) {
+        return res.status(400).json({ error: 'Invalid cloud ID', details: e.message });
+      }
       selectedCloudId = cloudId;
-      
+
       // Get resource name by fetching accessible resources
       try {
         const resourcesResponse = await axios.get('https://api.atlassian.com/oauth/token/accessible-resources', {
@@ -253,6 +299,12 @@ app.get('/jira-projects', async (req, res) => {
       return res.status(400).json({ error: 'Cloud ID not found in accessible resources' });
     }
 
+    try {
+      assertSafeAtlassianCloudId(selectedCloudId);
+    } catch (e) {
+      return res.status(400).json({ error: 'Invalid cloud ID from provider', details: e.message });
+    }
+
     // Test connection first with myself endpoint
     console.log('🔍 Testing connection with myself endpoint...');
     const myselfResponse = await axios.get(`https://api.atlassian.com/ex/jira/${selectedCloudId}/rest/api/3/myself`, {
@@ -305,7 +357,14 @@ app.get('/jira-project-details', async (req, res) => {
     return res.status(400).json({ error: 'No project ID provided' });
   }
 
-  console.log('✅ Fetching project details for project ID:', projectId);
+  let safeProjectId;
+  try {
+    safeProjectId = assertSafeJiraProjectId(projectId);
+  } catch (e) {
+    return res.status(400).json({ error: 'Invalid project id or key', details: e.message });
+  }
+
+  console.log('✅ Fetching project details for project ID:', safeProjectId);
 
   // Validate token first
   const validation = await validateToken(token);
@@ -316,7 +375,18 @@ app.get('/jira-project-details', async (req, res) => {
 
   try {
     let selectedCloudId = cloudId;
-    
+
+    if (cloudId) {
+      try {
+        assertSafeAtlassianCloudId(cloudId);
+        if (!cloudIdAllowedForToken(cloudId, validation.resources)) {
+          return res.status(403).json({ error: 'Cloud ID is not authorized for this token' });
+        }
+      } catch (e) {
+        return res.status(400).json({ error: 'Invalid cloud ID', details: e.message });
+      }
+    }
+
     // If cloudId is not provided, auto-select
     if (!cloudId) {
       console.log('🔍 Auto-selecting cloud ID for project details...');
@@ -338,26 +408,38 @@ app.get('/jira-project-details', async (req, res) => {
 
       selectedCloudId = jiraResources.length > 0 ? jiraResources[0].id : resourcesResponse.data[0].id;
     }
+
+    try {
+      assertSafeAtlassianCloudId(selectedCloudId);
+    } catch (e) {
+      return res.status(400).json({ error: 'Invalid cloud ID from provider', details: e.message });
+    }
     
     console.log('🔍 Using cloud ID for project details:', selectedCloudId);
 
     // Fetch detailed project information
-    const projectResponse = await axios.get(`https://api.atlassian.com/ex/jira/${selectedCloudId}/rest/api/3/project/${projectId}`, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Accept': 'application/json',
-      },
-    });
+    const projectResponse = await axios.get(
+      `https://api.atlassian.com/ex/jira/${selectedCloudId}/rest/api/3/project/${encodeURIComponent(safeProjectId)}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+        },
+      }
+    );
 
     // Fetch project components
     let componentsResponse;
     try {
-      componentsResponse = await axios.get(`https://api.atlassian.com/ex/jira/${selectedCloudId}/rest/api/3/project/${projectId}/components`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'application/json',
-        },
-      });
+      componentsResponse = await axios.get(
+        `https://api.atlassian.com/ex/jira/${selectedCloudId}/rest/api/3/project/${encodeURIComponent(safeProjectId)}/components`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/json',
+          },
+        }
+      );
     } catch (componentError) {
       console.log('⚠️ Failed to fetch components:', componentError.message);
       componentsResponse = { data: [] };
@@ -366,12 +448,15 @@ app.get('/jira-project-details', async (req, res) => {
     // Fetch project versions
     let versionsResponse;
     try {
-      versionsResponse = await axios.get(`https://api.atlassian.com/ex/jira/${selectedCloudId}/rest/api/3/project/${projectId}/versions`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'application/json',
-        },
-      });
+      versionsResponse = await axios.get(
+        `https://api.atlassian.com/ex/jira/${selectedCloudId}/rest/api/3/project/${encodeURIComponent(safeProjectId)}/versions`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/json',
+          },
+        }
+      );
     } catch (versionError) {
       console.log('⚠️ Failed to fetch versions:', versionError.message);
       versionsResponse = { data: [] };
@@ -380,22 +465,30 @@ app.get('/jira-project-details', async (req, res) => {
     // Fetch project issues (first 50) with attachments - try with project ID first, then project key
     let issuesResponse;
     try {
-      issuesResponse = await axios.get(`https://api.atlassian.com/ex/jira/${selectedCloudId}/rest/api/3/search?jql=project=${projectId}&expand=attachment&fields=*all&maxResults=50`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'application/json',
-        },
-      });
+      const jqlIssues = `project=${safeProjectId}`;
+      issuesResponse = await axios.get(
+        `https://api.atlassian.com/ex/jira/${selectedCloudId}/rest/api/3/search?jql=${encodeURIComponent(jqlIssues)}&expand=attachment&fields=*all&maxResults=50`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/json',
+          },
+        }
+      );
     } catch (issueError) {
       console.log('⚠️ Failed to fetch issues with project ID, trying with project key...');
       try {
-        // Try with project key instead
-        issuesResponse = await axios.get(`https://api.atlassian.com/ex/jira/${selectedCloudId}/rest/api/3/search?jql=project="${projectResponse.data.key}"&expand=attachment&fields=*all&maxResults=50`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Accept': 'application/json',
-          },
-        });
+        const key = assertSafeJiraProjectId(projectResponse.data.key);
+        const jqlKey = `project="${key}"`;
+        issuesResponse = await axios.get(
+          `https://api.atlassian.com/ex/jira/${selectedCloudId}/rest/api/3/search?jql=${encodeURIComponent(jqlKey)}&expand=attachment&fields=*all&maxResults=50`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: 'application/json',
+            },
+          }
+        );
       } catch (keyError) {
         console.log('⚠️ Failed to fetch issues with project key:', keyError.message);
         issuesResponse = { data: { issues: [], total: 0 } };
@@ -405,7 +498,7 @@ app.get('/jira-project-details', async (req, res) => {
     // Fetch issues specifically with attachments
     let issuesWithAttachmentsResponse;
     try {
-      const attachmentJQL = `project=${projectId} AND attachments IS NOT EMPTY`;
+      const attachmentJQL = `project=${safeProjectId} AND attachments IS NOT EMPTY`;
       issuesWithAttachmentsResponse = await axios.get(`https://api.atlassian.com/ex/jira/${selectedCloudId}/rest/api/3/search?jql=${encodeURIComponent(attachmentJQL)}&expand=attachment&fields=*all&maxResults=100`, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -415,8 +508,9 @@ app.get('/jira-project-details', async (req, res) => {
     } catch (attachmentError) {
       console.log('⚠️ Failed to fetch issues with attachments, trying with project key...');
       try {
-        const attachmentJQL = `project="${projectResponse.data.key}" AND attachments IS NOT EMPTY`;
-        issuesWithAttachmentsResponse = await axios.get(`https://api.atlassian.com/ex/jira/${selectedCloudId}/rest/api/3/search?jql=${encodeURIComponent(attachmentJQL)}&expand=attachment&fields=*all&maxResults=100`, {
+        const k = assertSafeJiraProjectId(projectResponse.data.key);
+        const attachmentJQLKey = `project="${k}" AND attachments IS NOT EMPTY`;
+        issuesWithAttachmentsResponse = await axios.get(`https://api.atlassian.com/ex/jira/${selectedCloudId}/rest/api/3/search?jql=${encodeURIComponent(attachmentJQLKey)}&expand=attachment&fields=*all&maxResults=100`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Accept': 'application/json',
@@ -544,7 +638,14 @@ app.get('/jira-attachments-list', async (req, res) => {
     return res.status(400).json({ error: 'No project ID provided' });
   }
 
-  console.log('🔍 Fetching attachments list for project:', projectId);
+  let safeProjectIdList;
+  try {
+    safeProjectIdList = assertSafeJiraProjectId(projectId);
+  } catch (e) {
+    return res.status(400).json({ error: 'Invalid project id or key', details: e.message });
+  }
+
+  console.log('🔍 Fetching attachments list for project:', safeProjectIdList);
 
   // Validate token first
   const validation = await validateToken(token);
@@ -555,6 +656,17 @@ app.get('/jira-attachments-list', async (req, res) => {
 
   try {
     let selectedCloudId = cloudId;
+
+    if (cloudId) {
+      try {
+        assertSafeAtlassianCloudId(cloudId);
+        if (!cloudIdAllowedForToken(cloudId, validation.resources)) {
+          return res.status(403).json({ error: 'Cloud ID is not authorized for this token' });
+        }
+      } catch (e) {
+        return res.status(400).json({ error: 'Invalid cloud ID', details: e.message });
+      }
+    }
     
     // Auto-select cloudId if not provided
     if (!cloudId) {
@@ -564,8 +676,14 @@ app.get('/jira-attachments-list', async (req, res) => {
       selectedCloudId = jiraResources.length > 0 ? jiraResources[0].id : validation.resources[0].id;
     }
 
+    try {
+      assertSafeAtlassianCloudId(selectedCloudId);
+    } catch (e) {
+      return res.status(400).json({ error: 'Invalid cloud ID from provider', details: e.message });
+    }
+
     // Search for issues with attachments
-    const attachmentJQL = `project=${projectId} AND attachments IS NOT EMPTY`;
+    const attachmentJQL = `project=${safeProjectIdList} AND attachments IS NOT EMPTY`;
     const issuesResponse = await axios.get(`https://api.atlassian.com/ex/jira/${selectedCloudId}/rest/api/3/search?jql=${encodeURIComponent(attachmentJQL)}&expand=attachment&fields=attachment,summary,key&maxResults=100`, {
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -579,8 +697,14 @@ app.get('/jira-attachments-list', async (req, res) => {
       issuesResponse.data.issues.forEach(issue => {
         if (issue.fields && issue.fields.attachment) {
           issue.fields.attachment.forEach(attachment => {
+            let aid;
+            try {
+              aid = assertSafeJiraAttachmentId(String(attachment.id));
+            } catch {
+              return;
+            }
             attachmentsList.push({
-              attachmentId: attachment.id,
+              attachmentId: aid,
               filename: attachment.filename,
               size: attachment.size,
               sizeFormatted: formatFileSize(attachment.size),
@@ -590,7 +714,7 @@ app.get('/jira-attachments-list', async (req, res) => {
               author: attachment.author?.displayName || 'Unknown',
               issueKey: issue.key,
               issueSummary: issue.fields.summary,
-              downloadUrl: `http://localhost:5000/jira-attachment/${attachment.id}?cloudId=${selectedCloudId}`,
+              downloadUrl: `${publicBase}/jira-attachment/${encodeURIComponent(aid)}?cloudId=${encodeURIComponent(selectedCloudId)}`,
               viewUrl: attachment.content,
               thumbnailUrl: attachment.thumbnail
             });
@@ -599,10 +723,10 @@ app.get('/jira-attachments-list', async (req, res) => {
       });
     }
 
-    console.log(`✅ Found ${attachmentsList.length} attachments in project ${projectId}`);
+    console.log(`✅ Found ${attachmentsList.length} attachments in project ${safeProjectIdList}`);
 
     res.json({
-      projectId: projectId,
+      projectId: safeProjectIdList,
       cloudId: selectedCloudId,
       totalAttachments: attachmentsList.length,
       attachments: attachmentsList,
@@ -669,42 +793,70 @@ app.get('/jira-attachment/:attachmentId', async (req, res) => {
     return res.status(400).json({ error: 'No attachment ID provided' });
   }
 
+  let safeAttId;
+  try {
+    safeAttId = assertSafeJiraAttachmentId(attachmentId);
+  } catch (e) {
+    return res.status(400).json({ error: 'Invalid attachment id', details: e.message });
+  }
+
+  const validation = await validateToken(token);
+  if (!validation.valid) {
+    const errorResponse = handleApiError({ response: { status: 401, data: validation.error } }, 'Token validation');
+    return res.status(errorResponse.status).json(errorResponse);
+  }
+
   try {
     let selectedCloudId = cloudId;
-    
-    // If cloudId is not provided, auto-select
-    if (!cloudId) {
-      console.log('🔍 Auto-selecting cloud ID for attachment download...');
-      const resourcesResponse = await axios.get('https://api.atlassian.com/oauth/token/accessible-resources', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'application/json',
-        },
-      });
 
-      if (!resourcesResponse.data || resourcesResponse.data.length === 0) {
-        return res.status(400).json({ error: 'No accessible Jira resources found' });
+    if (cloudId) {
+      try {
+        assertSafeAtlassianCloudId(cloudId);
+        if (!cloudIdAllowedForToken(cloudId, validation.resources)) {
+          return res.status(403).json({ error: 'Cloud ID is not authorized for this token' });
+        }
+      } catch (e) {
+        return res.status(400).json({ error: 'Invalid cloud ID', details: e.message });
       }
-
-      const jiraResources = resourcesResponse.data.filter(resource => 
+    } else {
+      console.log('🔍 Auto-selecting cloud ID for attachment download...');
+      const jiraResources = validation.resources.filter(resource => 
         resource.name && resource.name.toLowerCase().includes('jira')
       );
-
-      selectedCloudId = jiraResources.length > 0 ? jiraResources[0].id : resourcesResponse.data[0].id;
+      if (!validation.resources || validation.resources.length === 0) {
+        return res.status(400).json({ error: 'No accessible Jira resources found' });
+      }
+      selectedCloudId = jiraResources.length > 0 ? jiraResources[0].id : validation.resources[0].id;
     }
     
     console.log('🔍 Using cloud ID for attachment download:', selectedCloudId);
 
+    try {
+      assertSafeAtlassianCloudId(selectedCloudId);
+    } catch (e) {
+      return res.status(400).json({ error: 'Invalid cloud ID from provider', details: e.message });
+    }
+
     // Get attachment metadata first
-    const attachmentMetaResponse = await axios.get(`https://api.atlassian.com/ex/jira/${selectedCloudId}/rest/api/3/attachment/${attachmentId}`, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Accept': 'application/json',
-      },
-    });
+    const attachmentMetaResponse = await axios.get(
+      `https://api.atlassian.com/ex/jira/${selectedCloudId}/rest/api/3/attachment/${safeAttId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+        },
+      }
+    );
 
     const attachmentMeta = attachmentMetaResponse.data;
     console.log('✅ Attachment metadata:', attachmentMeta.filename, attachmentMeta.mimeType);
+
+    try {
+      assertHttpsAtlassianAttachmentContentUrl(attachmentMeta.content, selectedCloudId);
+    } catch (e) {
+      console.error('Blocked attachment content URL:', e.message);
+      return res.status(400).json({ error: 'Refusing to fetch attachment from disallowed URL', details: e.message });
+    }
 
     // Download the actual attachment content
     const attachmentResponse = await axios.get(attachmentMeta.content, {
@@ -752,36 +904,57 @@ app.get('/jira-attachment-meta', async (req, res) => {
     return res.status(400).json({ error: 'No attachment ID provided' });
   }
 
+  let safeAttMetaId;
+  try {
+    safeAttMetaId = assertSafeJiraAttachmentId(attachmentId);
+  } catch (e) {
+    return res.status(400).json({ error: 'Invalid attachment id', details: e.message });
+  }
+
+  const validationMeta = await validateToken(token);
+  if (!validationMeta.valid) {
+    const errorResponse = handleApiError({ response: { status: 401, data: validationMeta.error } }, 'Token validation');
+    return res.status(errorResponse.status).json(errorResponse);
+  }
+
   try {
     let selectedCloudId = cloudId;
-    
-    // If cloudId is not provided, auto-select
-    if (!cloudId) {
-      const resourcesResponse = await axios.get('https://api.atlassian.com/oauth/token/accessible-resources', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'application/json',
-        },
-      });
 
-      if (!resourcesResponse.data || resourcesResponse.data.length === 0) {
-        return res.status(400).json({ error: 'No accessible Jira resources found' });
+    if (cloudId) {
+      try {
+        assertSafeAtlassianCloudId(cloudId);
+        if (!cloudIdAllowedForToken(cloudId, validationMeta.resources)) {
+          return res.status(403).json({ error: 'Cloud ID is not authorized for this token' });
+        }
+      } catch (e) {
+        return res.status(400).json({ error: 'Invalid cloud ID', details: e.message });
       }
-
-      const jiraResources = resourcesResponse.data.filter(resource => 
+    } else {
+      const jiraResources = validationMeta.resources.filter(resource => 
         resource.name && resource.name.toLowerCase().includes('jira')
       );
+      if (!validationMeta.resources || validationMeta.resources.length === 0) {
+        return res.status(400).json({ error: 'No accessible Jira resources found' });
+      }
+      selectedCloudId = jiraResources.length > 0 ? jiraResources[0].id : validationMeta.resources[0].id;
+    }
 
-      selectedCloudId = jiraResources.length > 0 ? jiraResources[0].id : resourcesResponse.data[0].id;
+    try {
+      assertSafeAtlassianCloudId(selectedCloudId);
+    } catch (e) {
+      return res.status(400).json({ error: 'Invalid cloud ID from provider', details: e.message });
     }
 
     // Get attachment metadata
-    const attachmentResponse = await axios.get(`https://api.atlassian.com/ex/jira/${selectedCloudId}/rest/api/3/attachment/${attachmentId}`, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Accept': 'application/json',
-      },
-    });
+    const attachmentResponse = await axios.get(
+      `https://api.atlassian.com/ex/jira/${selectedCloudId}/rest/api/3/attachment/${safeAttMetaId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+        },
+      }
+    );
 
     console.log('✅ Attachment metadata fetched successfully:', attachmentResponse.data.filename);
     res.json(attachmentResponse.data);

@@ -7,7 +7,6 @@ Supports reversible pseudonymization with secure key management.
 import re
 import json
 import hashlib
-import base64
 from typing import Any, Dict, Optional, Union
 from django.conf import settings
 
@@ -156,7 +155,8 @@ class DataMaskingService:
         # Create a hash-based pseudonym
         combined = f"{self.encryption_key}:{user_id_str}"
         hash_obj = hashlib.sha256(combined.encode())
-        pseudonym = base64.urlsafe_b64encode(hash_obj.digest()[:8]).decode('utf-8').rstrip('=')
+        # Hex digest fragment (not Base64) — still a one-way pseudonym, not encryption
+        pseudonym = hash_obj.digest()[:8].hex()
         return f"UID_{pseudonym}"
     
     def unmask_user_id(self, pseudonym: str) -> Optional[str]:

@@ -248,6 +248,7 @@ import { ElMessage } from 'element-plus'
 import DynamicTable from '../DynamicTable.vue'
 import { API_ENDPOINTS } from '../../config/api.js'
 import complianceDataService from '@/services/complianceService' // NEW: Use cached compliance data
+import { openUrlInNewTabSafe } from '@/utils/safeExternalNavigation'
 
 const route = useRoute()
 const router = useRouter()
@@ -852,12 +853,12 @@ async function handleExport(format) {
 
     // Check if we have a file URL in the response
     if (response.data && response.data.file_url) {
-      // Open the file URL in a new tab
-      window.open(response.data.file_url, '_blank');
-      
+      const opened = openUrlInNewTabSafe(response.data.file_url)
       ElMessage({
-        message: 'Export completed successfully! File opened in new tab.',
-        type: 'success',
+        message: opened
+          ? 'Export completed successfully! File opened in new tab.'
+          : 'Export link is not from an allowed host or was blocked.',
+        type: opened ? 'success' : 'warning',
         duration: 3000
       })
     } else {

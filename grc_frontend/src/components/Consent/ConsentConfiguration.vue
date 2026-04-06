@@ -202,6 +202,7 @@
 <script>
 import axios from 'axios';
 import { API_BASE_URL, API_ENDPOINTS } from '../../config/api.js';
+import { getSessionFrameworkId, setSessionFrameworkId } from '@/utils/frameworkContextStorage.js';
 
 export default {
   name: 'ConsentConfiguration',
@@ -284,19 +285,12 @@ export default {
   },
   methods: {
     async initializeFramework() {
-      // Try multiple sources for framework ID
-      this.frameworkId = localStorage.getItem('framework_id') || 
-                        localStorage.getItem('selectedFrameworkId') ||
-                        sessionStorage.getItem('framework_id');
-      
-      // Convert to integer if it's a string
-      if (this.frameworkId) {
-        this.frameworkId = parseInt(this.frameworkId);
-        if (isNaN(this.frameworkId)) {
-          this.frameworkId = null;
-        }
+      const sid = getSessionFrameworkId();
+      this.frameworkId = sid ? parseInt(sid, 10) : null;
+      if (this.frameworkId != null && isNaN(this.frameworkId)) {
+        this.frameworkId = null;
       }
-      
+
       // If still no framework ID, try to get from API
       if (!this.frameworkId) {
         try {
@@ -306,7 +300,7 @@ export default {
           });
           if (response.data && response.data.frameworkId) {
             this.frameworkId = parseInt(response.data.frameworkId);
-            localStorage.setItem('framework_id', this.frameworkId);
+            setSessionFrameworkId(this.frameworkId);
           }
         } catch (error) {
           console.warn('Could not fetch selected framework from session:', error);
@@ -321,7 +315,7 @@ export default {
               );
               if (activeFrameworks.length > 0) {
                 this.frameworkId = activeFrameworks[0].FrameworkId;
-                localStorage.setItem('framework_id', this.frameworkId);
+                setSessionFrameworkId(this.frameworkId);
               }
             }
           } catch (frameworksError) {
@@ -343,7 +337,7 @@ export default {
           // If we have frameworks and no selected one, use the first one
           if (this.frameworks.length > 0 && !this.frameworkId) {
             this.frameworkId = this.frameworks[0].FrameworkId;
-            localStorage.setItem('framework_id', this.frameworkId);
+            setSessionFrameworkId(this.frameworkId);
             this.showFrameworkSelector = false;
             this.loadConfigurations();
             this.loadConsentHistory();
@@ -359,7 +353,7 @@ export default {
 
     onFrameworkChange() {
       if (this.frameworkId) {
-        localStorage.setItem('framework_id', this.frameworkId);
+        setSessionFrameworkId(this.frameworkId);
         this.showFrameworkSelector = false;
         this.loadConfigurations();
         this.loadConsentHistory();

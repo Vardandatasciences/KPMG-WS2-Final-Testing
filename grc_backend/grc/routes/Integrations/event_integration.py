@@ -91,14 +91,18 @@ def _resolve_request_user_id(request, provided_user_id):
         if user_id != auth_user.UserId:
             # Check if user is admin
             if not RBACUtils.is_system_admin(auth_user.UserId):
-                logger.warning(f"User {auth_user.UserId} unauthorized access attempt to user {provided_user_id}")
+                logger.warning(
+                    "User %s unauthorized access attempt to user %s",
+                    sanitize_for_log(auth_user.UserId, 32),
+                    sanitize_for_log(provided_user_id, 64),
+                )
                 return None, JsonResponse({'error': 'Unauthorized access to other user data'}, status=403)
         
         return user_id, None
     except (ValueError, TypeError):
         return None, JsonResponse({'error': 'Invalid user_id format'}, status=400)
-    except Exception as e:
-        logger.error(f"Error resolving user_id: {str(e)}")
+    except Exception:
+        logger.exception("Error resolving user_id")
         return None, JsonResponse({'error': 'Internal server error resolving user'}, status=500)
 
 
@@ -120,7 +124,7 @@ def get_external_applications(request):
         user_id, auth_error = _resolve_request_user_id(request, request.GET.get('user_id'))
         if auth_error:
             return auth_error
-        logger.info(f"Getting external applications for user_id: {user_id}")
+        logger.info("Getting external applications for user_id: %s", sanitize_for_log(user_id, 32))
         
         # Get all active external applications.
         # NOTE: For some apps (e.g. Jira, Gmail) the `name` field may be stored
@@ -130,7 +134,7 @@ def get_external_applications(request):
         applications_qs = ExternalApplication.objects.filter(is_active=True).order_by(
             'category', 'type', 'icon_class', '-created_at'
         )
-        logger.info(f"Found {applications_qs.count()} active external application rows")
+        logger.info("Found %s active external application rows", applications_qs.count())
 
         # Deduplicate by (category, type, icon_class) – keep the most recent record
         unique_apps = {}
@@ -140,7 +144,7 @@ def get_external_applications(request):
                 unique_apps[key] = app
 
         applications = list(unique_apps.values())
-        logger.info(f"After de-duplication: {len(applications)} unique applications by category/type/icon")
+        logger.info("After de-duplication: %s unique applications by category/type/icon", len(applications))
         
         applications_data = []
         connected_count = 0
@@ -158,11 +162,19 @@ def get_external_applications(request):
                 connection_status = 'connected'
                 last_sync = connection.last_used or connection.created_at
                 connected_count += 1
-                logger.info(f"User {user_id} has active connection to {app.name}")
+                logger.info(
+                    "User %s has active connection to %s",
+                    sanitize_for_log(user_id, 32),
+                    sanitize_for_log(app.name, 256),
+                )
             else:
                 connection_status = 'disconnected'
                 last_sync = None
-                logger.info(f"User {user_id} has no connection to {app.name}")
+                logger.info(
+                    "User %s has no connection to %s",
+                    sanitize_for_log(user_id, 32),
+                    sanitize_for_log(app.name, 256),
+                )
 
             app_data = {
                 'id': app.id,
@@ -184,7 +196,12 @@ def get_external_applications(request):
         total_apps = len(applications_data)
         disconnected_apps = total_apps - connected_count
 
-        logger.info(f"Returning {total_apps} applications: {connected_count} connected, {disconnected_apps} disconnected")
+        logger.info(
+            "Returning %s applications: %s connected, %s disconnected",
+            total_apps,
+            connected_count,
+            disconnected_apps,
+        )
 
         return JsonResponse({
             'success': True,
@@ -269,8 +286,8 @@ def connect_external_application(request):
 
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Invalid JSON data'}, status=400)
-    except Exception as e:
-        logger.error(f"Error connecting to external application: {str(e)}")
+    except Exception:
+        logger.exception("Error connecting to external application")
         return JsonResponse({'error': 'Internal server error'}, status=500)
 
 
@@ -335,8 +352,8 @@ def disconnect_external_application(request):
 
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Invalid JSON data'}, status=400)
-    except Exception as e:
-        logger.error(f"Error disconnecting from external application: {str(e)}")
+    except Exception:
+        logger.exception("Error disconnecting from external application")
         return JsonResponse({'error': 'Internal server error'}, status=500)
 
 
@@ -417,8 +434,8 @@ def get_application_details(request, application_id):
             'application': application_data
         })
 
-    except Exception as e:
-        logger.error(f"Error getting application details: {str(e)}")
+    except Exception:
+        logger.exception("Error getting application details")
         return JsonResponse({'error': 'Internal server error'}, status=500)
 
 
@@ -467,8 +484,8 @@ def refresh_application_status(request):
             'refreshed_count': refreshed_count
         })
 
-    except Exception as e:
-        logger.error(f"Error refreshing application status: {str(e)}")
+    except Exception:
+        logger.exception("Error refreshing application status")
         return JsonResponse({'error': 'Internal server error'}, status=500)
 
 
@@ -521,8 +538,8 @@ def get_sync_logs(request, application_id):
             'total_count': len(logs_data)
         })
 
-    except Exception as e:
-        logger.error(f"Error getting sync logs: {str(e)}")
+    except Exception:
+        logger.exception("Error getting sync logs")
         return JsonResponse({'error': 'Internal server error'}, status=500)
 
 
@@ -561,7 +578,10 @@ def jira_oauth_callback(request):
         )
 
         if result['success']:
-            logger.info(f"Jira OAuth callback processed successfully for user {user_id}")
+            logger.info(
+                "Jira OAuth callback processed successfully for user %s",
+                sanitize_for_log(user_id, 32),
+            )
             return JsonResponse({
                 'success': True,
                 'message': 'Jira OAuth callback processed successfully',
@@ -575,8 +595,8 @@ def jira_oauth_callback(request):
 
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Invalid JSON data'}, status=400)
-    except Exception as e:
-        logger.error(f"Error handling Jira OAuth callback: {str(e)}")
+    except Exception:
+        logger.exception("Error handling Jira OAuth callback")
         return JsonResponse({'error': 'Internal server error'}, status=500)
 
 
@@ -633,20 +653,24 @@ def get_jira_projects(request):
             )
             
             if result['success']:
-                logger.info(f"Successfully saved {result['projects_count']} Jira projects for user {user_id}")
+                logger.info(
+                    "Successfully saved %s Jira projects for user %s",
+                    result.get("projects_count"),
+                    sanitize_for_log(user_id, 32),
+                )
                 return JsonResponse({
                     'success': True,
                     'message': result['message'],
                     'projects_count': result['projects_count']
                 })
             else:
-                logger.error(f"Failed to save Jira projects: {result['error']}")
+                logger.error("Failed to save Jira projects: %s", sanitize_for_log(result.get("error"), 500))
                 return JsonResponse({'error': result['error']}, status=400)
 
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Invalid JSON data'}, status=400)
-    except Exception as e:
-        logger.error(f"Error handling Jira projects: {str(e)}")
+    except Exception:
+        logger.exception("Error handling Jira projects")
         return JsonResponse({'error': 'Internal server error'}, status=500)
 
 
@@ -682,13 +706,13 @@ def save_jira_project_details(request):
                 'project_id': result['project_id']
             })
         else:
-            logger.error(f"Failed to save Jira project details: {result['error']}")
+            logger.error("Failed to save Jira project details: %s", sanitize_for_log(result.get("error"), 500))
             return JsonResponse({'error': result['error']}, status=400)
 
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Invalid JSON data'}, status=400)
-    except Exception as e:
-        logger.error(f"Error saving Jira project details: {str(e)}")
+    except Exception:
+        logger.exception("Error saving Jira project details")
         return JsonResponse({'error': 'Internal server error'}, status=500)
 
 
@@ -714,13 +738,13 @@ def disconnect_jira(request):
                 'message': result['message']
             })
         else:
-            logger.error(f"Failed to disconnect Jira: {result['error']}")
+            logger.error("Failed to disconnect Jira: %s", sanitize_for_log(result.get("error"), 500))
             return JsonResponse({'error': result['error']}, status=400)
 
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Invalid JSON data'}, status=400)
-    except Exception as e:
-        logger.error(f"Error disconnecting Jira: {str(e)}")
+    except Exception:
+        logger.exception("Error disconnecting Jira")
         return JsonResponse({'error': 'Internal server error'}, status=500)
 
 
@@ -748,8 +772,8 @@ def get_jira_connection_status(request):
         else:
             return JsonResponse({'error': result['error']}, status=400)
 
-    except Exception as e:
-        logger.error(f"Error getting Jira connection status: {str(e)}")
+    except Exception:
+        logger.exception("Error getting Jira connection status")
         return JsonResponse({'error': 'Internal server error'}, status=500)
 
 
@@ -794,8 +818,8 @@ def get_stored_projects_data(request):
         else:
             return JsonResponse({'error': result['error']}, status=400)
             
-    except Exception as e:
-        logger.error(f"Error getting stored projects data: {str(e)}")
+    except Exception:
+        logger.exception("Error getting stored projects data")
         return JsonResponse({'error': 'Internal server error'}, status=500)
 
 
@@ -819,8 +843,8 @@ def get_jira_project_details_from_db(request):
         else:
             return JsonResponse({'error': result['error']}, status=400)
             
-    except Exception as e:
-        logger.error(f"Error getting Jira project details: {str(e)}")
+    except Exception:
+        logger.exception("Error getting Jira project details")
         return JsonResponse({'error': 'Internal server error'}, status=500)
 
 
@@ -838,8 +862,8 @@ def get_all_users(request):
         else:
             return JsonResponse({'error': result['error']}, status=400)
             
-    except Exception as e:
-        logger.error(f"Error getting users: {str(e)}")
+    except Exception:
+        logger.exception("Error getting users")
         return JsonResponse({'error': 'Internal server error'}, status=500)
 
 
@@ -903,6 +927,6 @@ def get_project_assignments(request):
         else:
             return JsonResponse({'error': result['error']}, status=400)
             
-    except Exception as e:
-        logger.error(f"Error getting project assignments: {str(e)}")
+    except Exception:
+        logger.exception("Error getting project assignments")
         return JsonResponse({'error': 'Internal server error'}, status=500)

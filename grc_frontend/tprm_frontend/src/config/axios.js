@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { getApiOrigin } from '@/utils/backendEnv.js'
+import { getParentPostMessageTargetOrigin } from '@/utils/parentPostMessageOrigin.js'
 
 const API_ORIGIN = getApiOrigin()
 // Create axios instance with base configuration
@@ -17,8 +18,6 @@ apiClient.interceptors.request.use(
   (config) => {
     console.log(`Making ${config.method?.toUpperCase()} request to: ${config.url}`)
     
-    // Cookie-first auth: rely on HttpOnly cookies when available.
-    // Fallback: use token from sessionStorage (received from GRC parent via postMessage).
     const token = sessionStorage.getItem('access_token') ||
                   sessionStorage.getItem('session_token')
     if (token && !config.headers.Authorization) {
@@ -67,7 +66,7 @@ apiClient.interceptors.response.use(
       const isInIframe = window.self !== window.top
       if (isInIframe && window.parent) {
         console.warn('[TPRM] 401 received - requesting auth from GRC parent')
-        window.parent.postMessage({ type: 'TPRM_REDIRECT_TO_LOGIN' }, '*')
+        window.parent.postMessage({ type: 'TPRM_REDIRECT_TO_LOGIN' }, getParentPostMessageTargetOrigin())
       } else if (window.location.pathname !== '/login' && !window.location.pathname.includes('/vendor-login')) {
         window.location.href = '/login'
       }

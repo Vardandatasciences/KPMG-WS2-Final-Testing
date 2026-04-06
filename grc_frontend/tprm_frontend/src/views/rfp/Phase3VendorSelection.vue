@@ -1294,11 +1294,7 @@ import rfpCard from '@/components_rfp/rfpCard.vue'
 import rfpCardHeader from '@/components_rfp/rfpCardHeader.vue'
 import rfpCardContent from '@/components_rfp/rfpCardContent.vue'
 import { useRouter } from 'vue-router'
-
-const sanitizeCSVCell = (value: unknown) => {
-  const text = String(value ?? '')
-  return /^\s*[=+\-@]/.test(text) ? `'${text}` : text
-}
+import { sanitizeExportCellValue as sanitizeCSVCell } from '@/utils/exportSanitize'
 
 const { success, error } = rfpUseToast()
 

@@ -720,7 +720,7 @@ const uploadFile = async (file, options = {}) => {
 
 const downloadAttachment = (attachment) => {
   if (!attachment || !attachment.url) return
-  window.open(attachment.url, '_blank', 'noopener')
+  window.open(attachment.url, '_blank', 'noopener,noreferrer')
 }
 
 const formatSize = (size) => {

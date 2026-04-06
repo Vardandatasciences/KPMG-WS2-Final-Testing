@@ -894,6 +894,7 @@
 import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
 import { API_BASE_URL } from '../../config/api.js'
+import { getSessionFrameworkId, setSessionFrameworkId } from '@/utils/frameworkContextStorage.js'
 import ModulePagesTree from './DataRetention/ModulePagesTree.vue'
 
 // Props
@@ -1056,10 +1057,8 @@ const initializeRetentionConfig = async () => {
   try {
     loadingRetention.value = true
     
-    // Get framework ID from storage
-    let frameworkId = localStorage.getItem('framework_id') || 
-                      localStorage.getItem('selectedFrameworkId') ||
-                      sessionStorage.getItem('framework_id')
+    // Session-scoped framework context only (no localStorage)
+    let frameworkId = getSessionFrameworkId()
     
     if (frameworkId) {
       frameworkId = parseInt(frameworkId)
@@ -1083,7 +1082,7 @@ const initializeRetentionConfig = async () => {
         
         if (response.data && response.data.frameworkId) {
           retentionFrameworkId.value = parseInt(response.data.frameworkId)
-          localStorage.setItem('framework_id', retentionFrameworkId.value)
+          setSessionFrameworkId(retentionFrameworkId.value)
           await loadRetentionFrameworkInfo(retentionFrameworkId.value)
           await loadRetentionConfigs(retentionFrameworkId.value)
         } else {
@@ -1119,7 +1118,7 @@ const loadFirstApprovedFramework = async () => {
       
       if (approvedFramework) {
         retentionFrameworkId.value = approvedFramework.FrameworkId
-        localStorage.setItem('framework_id', retentionFrameworkId.value)
+        setSessionFrameworkId(retentionFrameworkId.value)
         await loadRetentionFrameworkInfo(retentionFrameworkId.value)
         await loadRetentionConfigs(retentionFrameworkId.value)
       }

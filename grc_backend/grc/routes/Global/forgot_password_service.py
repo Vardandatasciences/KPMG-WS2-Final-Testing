@@ -1,5 +1,6 @@
 import smtplib
 import os
+from types import SimpleNamespace
 import random
 import string
 from email.mime.text import MIMEText
@@ -461,30 +462,28 @@ class ForgotPasswordService:
             
             # Update password in database
             from django.contrib.auth.hashers import make_password
-            from grc.models import Users, PasswordLog
-            from .password_expiry_utils import check_password_history, get_password_history_count
+            from grc.models import Users
+            from .password_expiry_utils import check_password_history, log_password_action
             from django.core.cache import cache
             
             try:
                 user = Users.objects.get(UserId=otp_validation['user_id'])
                 
-                # Check password history to prevent reuse
-                is_reused, checked_count = check_password_history(user, new_password)
+                # Check password history to prevent reuse (current password only)
+                is_reused, _ = check_password_history(user, new_password)
                 if is_reused:
-                    history_count = get_password_history_count()
-                    self.log_password_reset_action(user.UserId, email, 'reset_password', False, f'Password reuse detected (checked last {checked_count} passwords)', ip_address, user_agent)
+                    self.log_password_reset_action(
+                        user.UserId, email, 'reset_password', False,
+                        'Password reuse detected (matches current password)', ip_address, user_agent)
                     logger.warning(
-                        "Password reuse blocked for user id %s: new password matches one of the last %s passwords",
+                        "Password reuse blocked for user id %s: new password matches current password",
                         user.UserId,
-                        history_count,
                     )
                     return {
                         'success': False,
-                        'message': f'Password has been used recently. Please choose a different password that is not one of your last {history_count} passwords.'
+                        'message': 'Password cannot be the same as your current password. Please choose a different password.'
                     }
-                
-                # Store old password hash for logging
-                old_password_hash = user.Password
+
                 # Hash the new password properly
                 user.Password = make_password(new_password)
                 user.save(update_fields=['Password'])
@@ -525,33 +524,17 @@ class ForgotPasswordService:
                     logger.warning("Failed to clear lockout cache for user id %s: %s", user.UserId, type(cache_error).__name__)
                     # Don't fail password reset if cache clearing fails
                 
-                # Log password reset to password_logs
+                # Log password reset metadata (no hashes in password_logs)
                 try:
                     logger.info("Attempting to create password log for user id %s", user.UserId)
-                    
-                    password_log = PasswordLog.objects.create(
-                        UserId=user.UserId,
-                        UserName=user.UserName,
-                        OldPassword=old_password_hash,  # Previous hashed password
-                        # Store only the previous hash for reuse checks; avoid storing the new password hash in the log.
-                        NewPassword='',
-                        ActionType='reset',
-                        IPAddress=ip_address or '',
-                        UserAgent=user_agent or '',
-                        AdditionalInfo={'email': email, 'reset_method': 'forgot_password_service'}
+                    req = SimpleNamespace(
+                        META={
+                            'REMOTE_ADDR': ip_address or '',
+                            'HTTP_USER_AGENT': user_agent or '',
+                        }
                     )
-                    logger.info("Password log created successfully with LogId=%s for user id=%s", password_log.LogId, user.UserId)
-                    
-                    # Verify it was saved by querying it back
-                    try:
-                        verify_log = PasswordLog.objects.filter(UserId=user.UserId, ActionType='reset').order_by('-Timestamp').first()
-                        if verify_log:
-                            logger.info("Password log verified in database: LogId=%s", verify_log.LogId)
-                        else:
-                            logger.warning("Password log not found in verification query for user id=%s", user.UserId)
-                    except Exception as verify_error:
-                        logger.warning("Failed to verify password log: %s", type(verify_error).__name__)
-                        
+                    log_password_action(user, 'reset', request=req)
+                    logger.info("Password log created for user id=%s", user.UserId)
                 except Exception as log_error:
                     logger.error("Failed to create password log on reset: %s", type(log_error).__name__)
                     # Don't fail password reset if logging fails

@@ -3,7 +3,9 @@ Vendor Access Control Middleware - Centralized authorization with default-deny
 """
 
 import logging
+import os
 from typing import Dict, List, Optional
+from django.conf import settings as django_settings
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.utils.deprecation import MiddlewareMixin
 from django.contrib.auth.models import User
@@ -34,7 +36,15 @@ def _get_or_create_dev_vendor_admin_user():
                 },
             )
             if created:
-                user.set_password('admin123')
+                bootstrap_pw = os.environ.get('VENDOR_DEV_BOOTSTRAP_PASSWORD', '').strip()
+                if not bootstrap_pw:
+                    vendor_auth_logger.error(
+                        "VENDOR_DEV_BOOTSTRAP_PASSWORD must be set to create the dev vendor admin user."
+                    )
+                    raise RuntimeError(
+                        "VENDOR_DEV_BOOTSTRAP_PASSWORD is required when bootstrapping vendor dev admin."
+                    )
+                user.set_password(bootstrap_pw)
                 user.save(update_fields=['password'])
             return user
     except Exception:
@@ -93,31 +103,50 @@ class VendorAccessControlMiddleware(MiddlewareMixin):
         }
     
     def process_request(self, request: HttpRequest) -> Optional[HttpResponse]:
-        """Check access permissions for each request - BYPASSED FOR DEVELOPMENT"""
-        
-        # Skip access control for certain endpoints
+        """Enforce vendor permissions; optional dev bypass only when explicitly enabled."""
+
         if self._vendor_should_skip_access_control(request):
             return None
-        
-        # BYPASS AUTHENTICATION - Set hardcoded user for development
-        if not hasattr(request, 'user') or not request.user.is_authenticated:
-            user = _get_or_create_dev_vendor_admin_user()
-            request.user = user
-            # Note: is_authenticated is a read-only property, so we don't need to set it
-            # The user object itself being assigned makes it authenticated
-        
-        # BYPASS PERMISSION CHECKS - Allow all access for development
-        vendor_auth_logger.info(
-            f"Access granted for user {request.user.id} to {request.path}",
-            extra={
-                'user_id': request.user.id,
-                'ip_address': self._vendor_get_client_ip(request),
-                'path': request.path,
-                'permission': required_permission,
-                'action': 'access_granted'
-            }
-        )
-        
+
+        required_permission = self._vendor_get_required_permission(request)
+        dev_bypass = django_settings.DEBUG and os.environ.get(
+            'VENDOR_ACCESS_CONTROL_DEV_BYPASS', ''
+        ).strip().lower() in ('1', 'true', 'yes')
+
+        if dev_bypass:
+            if not getattr(request, 'user', None) or not request.user.is_authenticated:
+                request.user = _get_or_create_dev_vendor_admin_user()
+            vendor_auth_logger.info(
+                f"Dev bypass: access granted for user {request.user.id} to {request.path}",
+                extra={
+                    'user_id': request.user.id,
+                    'ip_address': self._vendor_get_client_ip(request),
+                    'path': request.path,
+                    'permission': required_permission,
+                    'action': 'access_granted_dev_bypass',
+                },
+            )
+            return None
+
+        user = getattr(request, 'user', None)
+        if not user or not user.is_authenticated:
+            return JsonResponse(
+                {'detail': 'Authentication credentials were not provided.'},
+                status=401,
+            )
+
+        if not self._vendor_user_has_permission(user, required_permission):
+            vendor_auth_logger.warning(
+                "Forbidden: user %s lacks %s for %s",
+                getattr(user, 'id', None),
+                required_permission,
+                request.path,
+            )
+            return JsonResponse(
+                {'detail': 'You do not have permission to perform this action.'},
+                status=403,
+            )
+
         return None
     
     def _vendor_should_skip_access_control(self, request: HttpRequest) -> bool:

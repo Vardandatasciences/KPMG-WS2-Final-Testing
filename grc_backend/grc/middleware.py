@@ -12,8 +12,13 @@ from .authentication import verify_jwt_token, _compare_versions
 from rest_framework_simplejwt.tokens import AccessToken
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from .rbac.utils import RBACUtils
+from .utils.log_sanitize import sanitize_for_log
 
 logger = logging.getLogger(__name__)
+
+
+def _safe_path_for_log(path: str) -> str:
+    return sanitize_for_log(path or "", max_len=512)
 
 class ObjectLevelAuthorizationMiddleware(MiddlewareMixin):
     """
@@ -179,7 +184,10 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
         
         # Explicitly skip data subject requests (GDPR compliance - users may not be logged in)
         if path.startswith('/api/data-subject-requests/'):
-            logger.debug(f"[JWT Middleware] Skipping authentication for data subject request endpoint: {path}")
+            logger.debug(
+                "[JWT Middleware] Skipping authentication for data subject request endpoint: %s",
+                _safe_path_for_log(path),
+            )
             return None
         
         # Skip all TPRM API paths - let DRF authentication handle them.
@@ -221,7 +229,10 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
         
         # Check for vendor invitation redirect (old URL format)
         if re.match(r'^/rfp/\d+/invitation/?$', path_without_query):
-            logger.info(f"[JWT Middleware] Skipping authentication for vendor invitation redirect: {path}")
+            logger.info(
+                "[JWT Middleware] Skipping authentication for vendor invitation redirect: %s",
+                _safe_path_for_log(path),
+            )
             return None
         
         if (path_without_query.startswith('/api/tprm/rfp/rfp-details/') or \
@@ -233,7 +244,10 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
             '/evaluation-criteria/' in path_without_query or \
             '/upload-document/' in path_without_query or \
             '/create-unmatched-vendor/' in path_without_query):
-            logger.info(f"[JWT Middleware] Skipping authentication for vendor portal path: {path}")
+            logger.info(
+                "[JWT Middleware] Skipping authentication for vendor portal path: %s",
+                _safe_path_for_log(path),
+            )
             return None
 
         # Cookie preferences: anonymous users only have session_id (query/body). If user_id is in the
@@ -250,13 +264,19 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
             except Exception:
                 uid_in_query = None
             if not uid_in_query:
-                logger.debug(f"[JWT Middleware] Skipping authentication for cookie preferences (no user_id in query): {path}")
+                logger.debug(
+                    "[JWT Middleware] Skipping authentication for cookie preferences (no user_id in query): %s",
+                    _safe_path_for_log(path),
+                )
                 return None
         
         # Check public allowlist (prefix match)
         for public_prefix in public_path_prefixes:
             if path.startswith(public_prefix):
-                logger.debug(f"[JWT Middleware] Skipping authentication for public path: {path}")
+                logger.debug(
+                    "[JWT Middleware] Skipping authentication for public path: %s",
+                    _safe_path_for_log(path),
+                )
                 return None
         
         # Try JWT authentication first.
@@ -280,13 +300,22 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
                 user_id = payload.get('user_id') if payload else None
                 
                 if payload and user_id:
-                    logger.debug(f"[JWT Middleware] Successfully decoded token with custom verification, user_id: {user_id}")
+                    logger.debug(
+                        "[JWT Middleware] Successfully decoded token with custom verification, user_id: %s",
+                        sanitize_for_log(user_id, 32),
+                    )
                 else:
                     # For TPRM paths, let DRF handle authentication if JWT verification fails
                     if path.startswith('/api/tprm/') or path.startswith('/api/v1/vendor-'):
-                        logger.debug(f"[JWT Middleware] JWT verification failed for TPRM path {path}, letting DRF handle authentication")
+                        logger.debug(
+                            "[JWT Middleware] JWT verification failed for TPRM path %s, letting DRF handle authentication",
+                            _safe_path_for_log(path),
+                        )
                         return None
-                    logger.warning(f"[JWT Middleware] No user_id in JWT payload for path: {path}")
+                    logger.warning(
+                        "[JWT Middleware] No user_id in JWT payload for path: %s",
+                        _safe_path_for_log(path),
+                    )
                     return JsonResponse({
                         'error': 'Invalid token payload or session invalidated',
                         'session_invalidated': True
@@ -314,7 +343,12 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
                         elapsed_time = current_time - login_time
                         
                         if elapsed_time >= session_timeout_seconds:
-                            logger.info(f"⏰ JWT Session timeout: User ID {user_id} logged out after {session_timeout_seconds} seconds (elapsed: {elapsed_time:.2f}s)")
+                            logger.info(
+                                "JWT Session timeout: User ID %s logged out after %s seconds (elapsed: %.2fs)",
+                                sanitize_for_log(user_id, 32),
+                                session_timeout_seconds,
+                                elapsed_time,
+                            )
                             return JsonResponse({
                                 'status': 'error',
                                 'message': 'Session expired. Please login again.',
@@ -328,7 +362,11 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
                     min_supported_version = min_supported_obj.version if min_supported_obj else None
                     if min_supported_version and token_version:
                         if _compare_versions(token_version, min_supported_version) < 0:
-                            logger.warning(f"[JWT Middleware] Token version {token_version} below min supported {min_supported_version}")
+                            logger.warning(
+                                "[JWT Middleware] Token version %s below min supported %s",
+                                sanitize_for_log(token_version, 64),
+                                sanitize_for_log(min_supported_version, 64),
+                            )
                             return JsonResponse(
                                 {
                                     'error': 'Client version not supported. Please update your application.',
@@ -356,23 +394,38 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
                         #logger.info(f"[JWT Middleware] User {user.UserName} (ID: {user.UserId}) authenticated via JWT for {request.method} {path}")
                         return None
                     else:
-                        logger.warning(f"[JWT Middleware] Inactive user {user.UserName} (ID: {user.UserId}) attempted access")
+                        logger.warning(
+                            "[JWT Middleware] Inactive user %s (ID: %s) attempted access",
+                            sanitize_for_log(user.UserName, 128),
+                            sanitize_for_log(user.UserId, 32),
+                        )
                         return JsonResponse({'error': 'User account is inactive'}, status=401)
                 else:
-                    logger.warning(f"[JWT Middleware] No user_id in JWT payload for path: {path}")
+                    logger.warning(
+                        "[JWT Middleware] No user_id in JWT payload for path: %s",
+                        _safe_path_for_log(path),
+                    )
                     return JsonResponse({'error': 'Invalid token payload'}, status=401)
             except Users.DoesNotExist:
-                logger.warning(f"[JWT Middleware] User not found in database for path: {path}")
+                logger.warning(
+                    "[JWT Middleware] User not found in database for path: %s",
+                    _safe_path_for_log(path),
+                )
                 return JsonResponse({'error': 'User not found'}, status=401)
             except Exception as e:
                 # For TPRM paths, let DRF handle authentication errors
                 if path.startswith('/api/tprm/') or path.startswith('/api/v1/vendor-'):
-                    logger.debug(f"[JWT Middleware] JWT verification failed for TPRM path {path}, letting DRF handle authentication: {str(e)}")
+                    logger.debug(
+                        "[JWT Middleware] JWT verification failed for TPRM path %s, letting DRF handle authentication: %s",
+                        _safe_path_for_log(path),
+                        sanitize_for_log(e, 300),
+                    )
                     return None
-                
-                logger.error(f"[JWT Middleware] JWT authentication error for path {path}: {str(e)}")
-                logger.error(f"[JWT Middleware] Exception type: {type(e).__name__}")
-                logger.error(f"[JWT Middleware] Exception details: {str(e)}")
+
+                logger.exception(
+                    "[JWT Middleware] JWT authentication error for path %s",
+                    _safe_path_for_log(path),
+                )
                 return JsonResponse({'error': 'Authentication error'}, status=401)
         
         # Try session authentication as fallback
@@ -401,18 +454,28 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
                     #logger.info(f"[JWT Middleware] User {user.UserName} (ID: {user.UserId}) authenticated via session for {request.method} {path}")
                     return None
                 else:
-                    logger.warning(f"[JWT Middleware] Inactive user {user.UserName} (ID: {user.UserId}) attempted access via session")
+                    logger.warning(
+                        "[JWT Middleware] Inactive user %s (ID: %s) attempted access via session",
+                        sanitize_for_log(user.UserName, 128),
+                        sanitize_for_log(user.UserId, 32),
+                    )
                     return JsonResponse({'error': 'User account is inactive'}, status=401)
                     
             except Users.DoesNotExist:
-                logger.warning(f"[JWT Middleware] Session user not found in database: {user_id}")
+                logger.warning(
+                    "[JWT Middleware] Session user not found in database: %s",
+                    sanitize_for_log(user_id, 32),
+                )
                 return JsonResponse({'error': 'User not found'}, status=401)
-            except Exception as e:
-                logger.error(f"[JWT Middleware] Session authentication error: {str(e)}")
+            except Exception:
+                logger.exception("[JWT Middleware] Session authentication error")
                 return JsonResponse({'error': 'Authentication error'}, status=401)
-        
+
         # No authentication found
-        logger.warning(f"[JWT Middleware] No authentication found for path: {path}")
+        logger.warning(
+            "[JWT Middleware] No authentication found for path: %s",
+            _safe_path_for_log(path),
+        )
         return JsonResponse({'error': 'Authentication required'}, status=401)
     
     def process_response(self, request, response):
@@ -817,17 +880,8 @@ class EnterpriseSecurityHeadersMiddleware(MiddlewareMixin):
         ]
         response['Permissions-Policy'] = ', '.join(permissions_policy)
         
-        # =====================================================================
-        # 6. Strict-Transport-Security (HSTS): Force HTTPS in production
-        # =====================================================================
-        # Forces browsers to use HTTPS for future requests (prevents MITM attacks)
-        # Only enable in production with HTTPS
-        if self.is_production:
-            # max-age=31536000 = 1 year
-            # includeSubDomains = Apply to all subdomains
-            # preload = Eligible for HSTS preload list
-            response['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains; preload'
-        # In development/debug mode, don't set this header (allows HTTP)
+        # HSTS is applied by django.middleware.security.SecurityMiddleware from
+        # SECURE_HSTS_SECONDS / SECURE_HSTS_INCLUDE_SUBDOMAINS / SECURE_HSTS_PRELOAD in settings.
         
         # =====================================================================
         # 7. Content-Security-Policy (CSP): Prevent XSS and data injection

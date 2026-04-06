@@ -25,6 +25,8 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),
+      // Shared GRC main-app utilities (e.g. safe navigation) live under ../src
+      '@grcApp': resolve(__dirname, '../src'),
       'vue': 'vue/dist/vue.esm-bundler.js'
     },
   },

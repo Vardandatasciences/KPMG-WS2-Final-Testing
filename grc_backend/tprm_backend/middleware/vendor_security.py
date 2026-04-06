@@ -28,14 +28,37 @@ class VendorSecurityMiddleware(MiddlewareMixin):
         
     def _vendor_get_security_headers(self) -> Dict[str, str]:
         """Define security headers to be added to all responses"""
+        # CSP: no unsafe-inline (use nonces/hashes in templates if inline assets are required).
+        csp = (
+            "default-src 'self'; "
+            "script-src 'self'; "
+            "style-src 'self'; "
+            "img-src 'self' data: https:; "
+            "font-src 'self' data:; "
+            "connect-src 'self'; "
+            "frame-ancestors 'none'; "
+            "object-src 'none'; "
+            "base-uri 'none'; "
+            "form-action 'self'"
+        )
+        hsts = ''
+        if not settings.DEBUG:
+            secs = int(getattr(settings, 'SECURE_HSTS_SECONDS', 0) or 0)
+            if secs > 0:
+                parts = [f'max-age={secs}']
+                if getattr(settings, 'SECURE_HSTS_INCLUDE_SUBDOMAINS', False):
+                    parts.append('includeSubDomains')
+                if getattr(settings, 'SECURE_HSTS_PRELOAD', False):
+                    parts.append('preload')
+                hsts = '; '.join(parts)
         return {
             'X-Content-Type-Options': 'nosniff',
             'X-Frame-Options': 'DENY',
             'X-XSS-Protection': '1; mode=block',
             'Referrer-Policy': 'strict-origin-when-cross-origin',
-            'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'none';",
+            'Content-Security-Policy': csp,
             'Permissions-Policy': 'geolocation=(), microphone=(), camera=(), payment=(), usb=(), magnetometer=(), gyroscope=()',
-            'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload' if not settings.DEBUG else '',
+            'Strict-Transport-Security': hsts,
         }
     
     def _vendor_get_blocked_patterns(self) -> list:

@@ -587,8 +587,8 @@ def generate_deterministic_seed(document_id, audit_id, requirement_hash=None):
     if requirement_hash:
         seed_string += f"_{requirement_hash}"
     
-    # Generate a hash and convert to integer seed
-    hash_obj = hashlib.md5(seed_string.encode())
+    # Generate a hash and convert to integer seed (SHA-256, not MD5)
+    hash_obj = hashlib.sha256(seed_string.encode())
     seed_int = int(hash_obj.hexdigest()[:8], 16)
     
     return seed_int

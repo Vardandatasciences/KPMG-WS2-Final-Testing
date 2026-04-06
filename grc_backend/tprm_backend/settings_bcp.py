@@ -19,7 +19,9 @@ except OSError:
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-change-me')
+SECRET_KEY = (os.getenv('SECRET_KEY') or '').strip()
+if not SECRET_KEY:
+    raise ValueError("SECRET_KEY environment variable is required.")
 
 
 # SECURITY WARNING: don't run with debug turned on in production!

@@ -9,12 +9,18 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-your-secret-key-here-change-in-production'
+SECRET_KEY = os.environ.get('SECRET_KEY', '').strip()
+if not SECRET_KEY:
+    raise ValueError(
+        "SECRET_KEY environment variable is required for ocr_microservice."
+    )
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
 
-ALLOWED_HOSTS = ['*']
+# Explicit hosts only (no wildcard in repo defaults). Set ALLOWED_HOSTS in production, e.g. "api.example.com,10.0.0.1"
+_raw_hosts = os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1").strip()
+ALLOWED_HOSTS = [h.strip() for h in _raw_hosts.split(",") if h.strip()] or ["localhost", "127.0.0.1"]
 
 # Application definition
 INSTALLED_APPS = [
@@ -38,6 +44,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'tprm_backend.rfp.middleware.SecurityHeadersMiddleware',
     # Framework-level safeguard: sanitize verbose error payloads.
     'tprm_backend.middleware.error_sanitization.ErrorResponseSanitizationMiddleware',
 ]
@@ -198,3 +205,10 @@ LOGGING = {
 
 # Create logs directory if it doesn't exist
 os.makedirs(BASE_DIR / 'logs', exist_ok=True)
+
+# TLS / HSTS (terminating proxy: trust X-Forwarded-Proto)
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+SECURE_SSL_REDIRECT = os.environ.get('SECURE_SSL_REDIRECT', str(not DEBUG)).lower() in ('true', '1', 'yes')
+SECURE_HSTS_SECONDS = int(os.environ.get('SECURE_HSTS_SECONDS', str(31536000 if not DEBUG else 0)))
+SECURE_HSTS_INCLUDE_SUBDOMAINS = os.environ.get('SECURE_HSTS_INCLUDE_SUBDOMAINS', str(not DEBUG)).lower() in ('true', '1', 'yes')
+SECURE_HSTS_PRELOAD = os.environ.get('SECURE_HSTS_PRELOAD', str(not DEBUG)).lower() in ('true', '1', 'yes')

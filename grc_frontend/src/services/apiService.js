@@ -6,24 +6,39 @@
 import axios from 'axios';
 import { API_BASE_URL } from '../config/api.js';
 
-const getAuthToken = () => sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
-const getRefreshToken = () => sessionStorage.getItem('refresh_token') || localStorage.getItem('refresh_token');
-const setAuthToken = (token) => {
-  if (!token) return;
-  sessionStorage.setItem('access_token', token);
-  localStorage.removeItem('access_token');
-};
-const setRefreshToken = (token) => {
-  if (!token) return;
-  sessionStorage.setItem('refresh_token', token);
-  localStorage.removeItem('refresh_token');
-};
-const clearSensitiveAuth = () => {
-  ['access_token', 'refresh_token', 'user'].forEach((k) => {
+const getAuthToken = () =>
+  sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
+const getRefreshToken = () =>
+  sessionStorage.getItem('refresh_token') || localStorage.getItem('refresh_token');
+
+/** Cookie-first: never persist JWTs in Web Storage; purge if present. */
+const purgeStoredTokens = () => {
+  ['access_token', 'refresh_token', 'session_token', 'token', 'jwt_token'].forEach((k) => {
     sessionStorage.removeItem(k);
     localStorage.removeItem(k);
   });
 };
+
+const clearSensitiveAuth = () => {
+  purgeStoredTokens();
+  ['user'].forEach((k) => {
+    sessionStorage.removeItem(k);
+    localStorage.removeItem(k);
+  });
+};
+
+const refreshAxios = axios.create({
+  baseURL: API_BASE_URL,
+  withCredentials: true,
+  headers: {
+    'Content-Type': 'application/json',
+    Accept: 'application/json'
+  },
+  xsrfCookieName: 'csrftoken',
+  xsrfHeaderName: 'X-CSRFToken'
+})
+
+purgeStoredTokens()
 
 /**
  * Create axios instance with JWT authentication
@@ -46,12 +61,8 @@ const apiClient = axios.create({
 apiClient.interceptors.request.use(
   (config) => {
     const token = getAuthToken();
-    
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
-      console.log(`🔐 [API Service] Adding JWT token to ${config.method?.toUpperCase()} ${config.url}`);
-    } else {
-      console.warn(`⚠️ [API Service] No JWT token found for ${config.method?.toUpperCase()} ${config.url}`);
     }
     
     // Add user_id to params if not already present (for RBAC fallback)
@@ -142,31 +153,15 @@ apiClient.interceptors.response.use(
       }
       
       originalRequest._retry = true;
-      
+
       try {
-        const refreshToken = getRefreshToken();
-        
-        if (refreshToken) {
-          console.log('🔄 [API Service] Attempting token refresh...');
-          
-          const response = await axios.post(`${API_BASE_URL}/api/jwt/refresh/`, {
-            refresh_token: refreshToken
-          });
-          
-          if (response.data.status === 'success') {
-            const newAccessToken = response.data.access_token;
-            const newRefreshToken = response.data.refresh_token;
-            
-            // Update tokens
-            setAuthToken(newAccessToken);
-            setRefreshToken(newRefreshToken);
-            
-            console.log('✅ [API Service] Token refreshed successfully');
-            
-            // Retry original request with new token
-            originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
-            return apiClient(originalRequest);
-          }
+        purgeStoredTokens();
+        console.log('🔄 [API Service] Attempting cookie-based token refresh...');
+        const response = await refreshAxios.post('/api/jwt/refresh/', {});
+
+        if (response.status === 200) {
+          delete originalRequest.headers.Authorization;
+          return apiClient(originalRequest);
         }
       } catch (refreshError) {
         console.error('❌ [API Service] Token refresh failed:', refreshError);
@@ -179,7 +174,7 @@ apiClient.interceptors.response.use(
         const refreshToken = getRefreshToken();
         const refreshTokenExpires = localStorage.getItem('refresh_token_expires');
         
-        // Check if refresh token is still valid
+        // Cookie-first: JWTs may be absent from storage; use expiries from login when present.
         let refreshTokenValid = false;
         if (refreshToken && refreshTokenExpires) {
           try {
@@ -188,15 +183,18 @@ apiClient.interceptors.response.use(
               refreshTokenValid = refreshExpirationTime.getTime() > Date.now();
             }
           } catch (e) {
-            // Can't parse - assume valid if token exists
             refreshTokenValid = !!refreshToken;
           }
+        } else if (refreshTokenExpires) {
+          try {
+            refreshTokenValid = new Date(refreshTokenExpires).getTime() > Date.now();
+          } catch (e) {
+            refreshTokenValid = false;
+          }
         } else if (refreshToken) {
-          // Have refresh token but no expiration - assume valid
           refreshTokenValid = true;
         }
-        
-        // Check if access token is still valid
+
         let accessTokenValid = false;
         if (accessToken && accessTokenExpires) {
           try {
@@ -205,9 +203,16 @@ apiClient.interceptors.response.use(
               accessTokenValid = accessExpirationTime.getTime() > Date.now();
             }
           } catch (e) {
-            // Can't parse - assume valid if token exists
             accessTokenValid = !!accessToken;
           }
+        } else if (accessTokenExpires) {
+          try {
+            accessTokenValid = new Date(accessTokenExpires).getTime() > Date.now();
+          } catch (e) {
+            accessTokenValid = false;
+          }
+        } else if (accessToken) {
+          accessTokenValid = true;
         }
         
         // Only log out if BOTH tokens are expired/invalid

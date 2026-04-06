@@ -103,73 +103,71 @@ def _extract_full_pdf_as_single_section(pdf_path: str, output_dir: str) -> Optio
     Returns:
         Path to the sections directory or None if failed
     """
-    doc = None
     try:
         import fitz  # PyMuPDF
         
         logger.info("Extracting entire PDF as sequential per-page sections")
         
-        # Open PDF
-        doc = fitz.open(pdf_path)
-        total_pages = len(doc)
-        
-        logger.info(f"PDF has {total_pages} pages, extracting all content page-by-page...")
-        
-        # Create sections directory structure
-        sections_dir = os.path.join(output_dir, "sections")
-        os.makedirs(sections_dir, exist_ok=True)
-        
-        aggregated_text = []
-        
-        for page_num in range(total_pages):
-            try:
-                page = doc[page_num]
-                page_text = page.get_text("text")
-                
-                # Create a folder for each page so policy extractor treats them as sections
-                page_folder = os.path.join(sections_dir, f"page_{page_num + 1:04d}")
-                os.makedirs(page_folder, exist_ok=True)
-                
-                page_data = {
-                    "name": f"Page {page_num + 1}",
-                    "level": 1,
-                    "start_page": page_num + 1,
-                    "end_page": page_num + 1,
-                    "total_pages": 1,
-                    "content": page_text,
-                    "extraction_method": "per_page_fallback"
-                }
-                
-                with open(os.path.join(page_folder, "content.json"), 'w', encoding='utf-8') as f:
-                    json.dump(page_data, f, ensure_ascii=False, indent=2)
-                
-                aggregated_text.append(f"\n\n--- Page {page_num + 1} ---\n\n{page_text}")
-                
-                if (page_num + 1) % 10 == 0:
-                    logger.info(f"Extracted {page_num + 1}/{total_pages} pages...")
-            except Exception as e:
-                logger.warning(f"Error extracting page {page_num + 1}: {str(e)}")
-                continue
-        
-        # Also save full document aggregation for completeness
-        full_doc_folder = os.path.join(sections_dir, "full_document")
-        os.makedirs(full_doc_folder, exist_ok=True)
-        
-        full_content_data = {
-            "name": Path(pdf_path).stem,
-            "level": 1,
-            "start_page": 1,
-            "end_page": total_pages,
-            "total_pages": total_pages,
-            "content": ''.join(aggregated_text),
-            "extraction_method": "full_document_sequential"
-        }
-        
-        with open(os.path.join(full_doc_folder, "content.json"), 'w', encoding='utf-8') as f:
-            json.dump(full_content_data, f, ensure_ascii=False, indent=2)
-        
-        logger.info(f"Saved per-page sections to: {sections_dir}")
-        logger.info(f"Total characters extracted: {len(''.join(aggregated_text))}")
+        with fitz.open(pdf_path) as doc:
+            total_pages = len(doc)
+            
+            logger.info(f"PDF has {total_pages} pages, extracting all content page-by-page...")
+            
+            # Create sections directory structure
+            sections_dir = os.path.join(output_dir, "sections")
+            os.makedirs(sections_dir, exist_ok=True)
+            
+            aggregated_text = []
+            
+            for page_num in range(total_pages):
+                try:
+                    page = doc[page_num]
+                    page_text = page.get_text("text")
+                    
+                    # Create a folder for each page so policy extractor treats them as sections
+                    page_folder = os.path.join(sections_dir, f"page_{page_num + 1:04d}")
+                    os.makedirs(page_folder, exist_ok=True)
+                    
+                    page_data = {
+                        "name": f"Page {page_num + 1}",
+                        "level": 1,
+                        "start_page": page_num + 1,
+                        "end_page": page_num + 1,
+                        "total_pages": 1,
+                        "content": page_text,
+                        "extraction_method": "per_page_fallback"
+                    }
+                    
+                    with open(os.path.join(page_folder, "content.json"), 'w', encoding='utf-8') as f:
+                        json.dump(page_data, f, ensure_ascii=False, indent=2)
+                    
+                    aggregated_text.append(f"\n\n--- Page {page_num + 1} ---\n\n{page_text}")
+                    
+                    if (page_num + 1) % 10 == 0:
+                        logger.info(f"Extracted {page_num + 1}/{total_pages} pages...")
+                except Exception as e:
+                    logger.warning(f"Error extracting page {page_num + 1}: {str(e)}")
+                    continue
+            
+            # Also save full document aggregation for completeness
+            full_doc_folder = os.path.join(sections_dir, "full_document")
+            os.makedirs(full_doc_folder, exist_ok=True)
+            
+            full_content_data = {
+                "name": Path(pdf_path).stem,
+                "level": 1,
+                "start_page": 1,
+                "end_page": total_pages,
+                "total_pages": total_pages,
+                "content": ''.join(aggregated_text),
+                "extraction_method": "full_document_sequential"
+            }
+            
+            with open(os.path.join(full_doc_folder, "content.json"), 'w', encoding='utf-8') as f:
+                json.dump(full_content_data, f, ensure_ascii=False, indent=2)
+            
+            logger.info(f"Saved per-page sections to: {sections_dir}")
+            logger.info(f"Total characters extracted: {len(''.join(aggregated_text))}")
         
         return output_dir
         
@@ -181,11 +179,4 @@ def _extract_full_pdf_as_single_section(pdf_path: str, output_dir: str) -> Optio
         import traceback
         logger.error(traceback.format_exc())
         return None
-    finally:
-        # Ensure document is closed
-        if doc is not None:
-            try:
-                doc.close()
-            except:
-                pass
 

@@ -96,33 +96,41 @@ class SessionTimeoutService {
    * Check if session is about to expire
    */
   checkSessionTimeout() {
-    // If disabled, don't check
     if (!this.enabled) {
       return
     }
-    
-    const accessToken = sessionStorage.getItem('access_token') || localStorage.getItem('access_token')
-    if (!accessToken) {
+
+    const loggedIn =
+      localStorage.getItem('is_logged_in') === 'true' ||
+      localStorage.getItem('isAuthenticated') === 'true'
+    if (!loggedIn) {
       this.stop()
       return
     }
 
-    try {
-      // Decode JWT token to get login_time
-      const tokenPayload = JSON.parse(atob(accessToken.split('.')[1]))
-      const loginTime = tokenPayload.login_time || tokenPayload.iat || (Date.now() / 1000)
-      
-      const currentTime = Date.now() / 1000
-      const elapsedTime = currentTime - loginTime
-      const remainingTime = this.timeoutSeconds - elapsedTime
+    const accessToken = sessionStorage.getItem('access_token') || localStorage.getItem('access_token')
 
-      // If less than warning seconds remain and warning not shown yet
+    try {
+      let remainingTime = null
+
+      if (accessToken) {
+        const tokenPayload = JSON.parse(atob(accessToken.split('.')[1]))
+        const loginTime = tokenPayload.login_time || tokenPayload.iat || Date.now() / 1000
+        const elapsedTime = Date.now() / 1000 - loginTime
+        remainingTime = this.timeoutSeconds - elapsedTime
+      } else {
+        const expiresStr = localStorage.getItem('access_token_expires')
+        if (!expiresStr) {
+          return
+        }
+        remainingTime = (new Date(expiresStr).getTime() - Date.now()) / 1000
+      }
+
       if (remainingTime <= this.warningSeconds && remainingTime > 0 && !this.isWarningShown) {
         console.log(`⏰ Session warning: ${remainingTime} seconds remaining`)
         this.showWarning(remainingTime)
       }
 
-      // If session has expired
       if (remainingTime <= 0) {
         console.log('⏰ Session expired - handling logout')
         this.handleSessionExpired()
@@ -238,16 +246,16 @@ class SessionTimeoutService {
    */
   getRemainingTime() {
     const accessToken = sessionStorage.getItem('access_token') || localStorage.getItem('access_token')
-    if (!accessToken) {
-      return 0
-    }
-
     try {
-      const tokenPayload = JSON.parse(atob(accessToken.split('.')[1]))
-      const loginTime = tokenPayload.login_time || tokenPayload.iat || (Date.now() / 1000)
-      const currentTime = Date.now() / 1000
-      const elapsedTime = currentTime - loginTime
-      return Math.max(0, this.timeoutSeconds - elapsedTime)
+      if (accessToken) {
+        const tokenPayload = JSON.parse(atob(accessToken.split('.')[1]))
+        const loginTime = tokenPayload.login_time || tokenPayload.iat || Date.now() / 1000
+        const elapsedTime = Date.now() / 1000 - loginTime
+        return Math.max(0, this.timeoutSeconds - elapsedTime)
+      }
+      const expiresStr = localStorage.getItem('access_token_expires')
+      if (!expiresStr) return 0
+      return Math.max(0, (new Date(expiresStr).getTime() - Date.now()) / 1000)
     } catch (error) {
       console.error('❌ Error getting remaining time:', error)
       return 0

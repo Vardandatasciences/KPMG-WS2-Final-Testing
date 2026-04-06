@@ -1018,7 +1018,6 @@ def jwt_login(request):
             is_password_expired,
             is_password_expiring_soon,
             send_password_expiry_email,
-            log_password_action
         )
         from django.utils import timezone
         
@@ -2091,24 +2090,8 @@ def mfa_verify_otp(request):
             logger.info(f"✅ User {user.UserName} (ID: {user.UserId}) activated on successful MFA verification (was inactive)")
             print(f"[DEBUG] ✅ User {user.UserName} (ID: {user.UserId}) activated on successful MFA verification")
         
-        # Log password usage on MFA login
-        try:
-            from ..models import PasswordLog
-            PasswordLog.objects.create(
-                UserId=user.UserId,
-                UserName=user.UserName,
-                OldPassword=None,  # No old password for login
-                NewPassword=user.Password,  # Current hashed password
-                ActionType='login',
-                IPAddress=client_ip,
-                UserAgent=request.META.get('HTTP_USER_AGENT', ''),
-                AdditionalInfo={'login_type': login_type, 'mfa_verification': True, 'activated': user.IsActive == 'Y'}
-            )
-            logger.info(f"✅ Password log created for MFA login: {user.UserName}")
-        except Exception as log_error:
-            logger.error(f"❌ Failed to create password log on MFA login: {str(log_error)}")
-            # Don't fail login if logging fails
-        
+        # Login events are not written to password_logs (no credential material in that table).
+
         # Generate JWT tokens and rotate active session token
         tokens = generate_jwt_tokens(user)
         _set_user_session_token(user.UserId, tokens['session_token'])

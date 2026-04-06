@@ -1,6 +1,7 @@
 import os
 import json
 import logging
+# Base64: required by Gmail API attachment transport (RFC 4648 / Google MIME), not a substitute for encryption.
 import base64
 import mimetypes
 from urllib.parse import quote

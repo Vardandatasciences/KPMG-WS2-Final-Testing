@@ -53,12 +53,12 @@
 <script setup>
 const downloadAdminManual = () => {
   const pdfUrl = '/assets/help_docs/RiskaVaire Admin User Manual.pdf';
-  window.open(pdfUrl, '_blank');
+  window.open(pdfUrl, '_blank', 'noopener,noreferrer');
 };
 
 const downloadNonAdminManual = () => {
   const pdfUrl = '/assets/help_docs/RiskaVaire Non-admin user manual.pdf';
-  window.open(pdfUrl, '_blank');
+  window.open(pdfUrl, '_blank', 'noopener,noreferrer');
 };
 </script>
 

@@ -2,6 +2,8 @@ import requests
 import logging
 from django.utils import timezone
 
+from ...utils.log_sanitize import sanitize_for_log
+
 logger = logging.getLogger(__name__)
 
 LOGGING_SERVICE_URL = None  # Disabled external logging service
@@ -84,10 +86,10 @@ def send_log(module, actionType, description=None, userId=None, userName=None,
         skip_masking = False
         if module == 'Authentication' and actionType in ['LOGIN', 'LOGOUT', 'LOGIN_SUCCESS', 'LOGIN_FAILED', 'LOGIN_ANOMALY', 'PASSWORD_RESET']:
             skip_masking = True
-            logger.debug(f"Skipping masking for authentication log: {actionType}")
+            logger.debug("Skipping masking for authentication log: %s", sanitize_for_log(actionType, 128))
         elif module == 'User Profile' and actionType in ['PASSWORD_UPDATE', 'PASSWORD_RESET', 'PASSWORD_CHANGE']:
             skip_masking = True
-            logger.debug(f"Skipping masking for password-related log: {actionType}")
+            logger.debug("Skipping masking for password-related log: %s", sanitize_for_log(actionType, 128))
         
         if skip_masking:
             # Don't mask security-critical logs - we need to know who performed the action
@@ -117,31 +119,57 @@ def send_log(module, actionType, description=None, userId=None, userName=None,
         # by using the first available framework or logging an error
         if framework:
             masked_log_data['FrameworkId'] = framework
-            logger.debug(f"Using framework ID: {framework.FrameworkId}, Name: {framework.FrameworkName}")
+            logger.debug(
+                "Using framework ID: %s Name: %s",
+                sanitize_for_log(framework.FrameworkId, 64),
+                sanitize_for_log(framework.FrameworkName, 256),
+            )
         else:
             # Last resort: Try to get ANY framework, even if inactive
             try:
                 framework = Framework.objects.all().first()
                 if framework:
                     masked_log_data['FrameworkId'] = framework
-                    logger.warning(f"Using fallback framework {framework.FrameworkId} for log entry. Module: {module}, ActionType: {actionType}")
+                    logger.warning(
+                        "Using fallback framework %s for log entry. Module: %s ActionType: %s",
+                        sanitize_for_log(framework.FrameworkId, 64),
+                        sanitize_for_log(module, 128),
+                        sanitize_for_log(actionType, 128),
+                    )
                 else:
                     # If absolutely no framework exists, we cannot save the log
-                    logger.error(f"ERROR: No framework exists in database. Cannot save log entry. Module: {module}, ActionType: {actionType}")
+                    logger.error(
+                        "ERROR: No framework exists in database. Cannot save log entry. Module: %s ActionType: %s",
+                        sanitize_for_log(module, 128),
+                        sanitize_for_log(actionType, 128),
+                    )
                     return None
             except Exception as e:
-                logger.error(f"ERROR: Failed to get framework for log entry: {str(e)}. Module: {module}, ActionType: {actionType}")
-                import traceback
-                logger.error(traceback.format_exc())
+                logger.exception(
+                    "ERROR: Failed to get framework for log entry. Module: %s ActionType: %s",
+                    sanitize_for_log(module, 128),
+                    sanitize_for_log(actionType, 128),
+                )
                 return None
         
         # Create and save the log entry
-        logger.info(f"Creating GRCLog entry: module={module}, actionType={actionType}, userId={numeric_user_id}, frameworkId={framework.FrameworkId if framework else None}")
-        logger.debug(f"Creating GRCLog entry with data: {masked_log_data}")
+        logger.info(
+            "Creating GRCLog entry: module=%s actionType=%s userId=%s frameworkId=%s",
+            sanitize_for_log(module, 128),
+            sanitize_for_log(actionType, 128),
+            sanitize_for_log(numeric_user_id, 64),
+            sanitize_for_log(framework.FrameworkId if framework else None, 64),
+        )
+        logger.debug("Creating GRCLog entry with data: %s", sanitize_for_log(str(masked_log_data), max_len=1500))
         # print(f"[SEND_LOG] Creating GRCLog: module={module}, actionType={actionType}, userId={numeric_user_id}, frameworkId={framework.FrameworkId if framework else None}")
         log_entry = GRCLog(**masked_log_data)
         log_entry.save()
-        logger.info(f"✅ Successfully saved log entry with ID: {log_entry.LogId} for {actionType} on {module}")
+        logger.info(
+            "Successfully saved log entry with ID: %s for %s on %s",
+            sanitize_for_log(log_entry.LogId, 32),
+            sanitize_for_log(actionType, 128),
+            sanitize_for_log(module, 128),
+        )
         # print(f"[SEND_LOG] ✅ SUCCESS - Saved log entry with ID: {log_entry.LogId} for {actionType} on {module}")
         
         # Optionally still send to logging service if needed
@@ -164,15 +192,13 @@ def send_log(module, actionType, description=None, userId=None, userName=None,
                 api_log_data = {k: v for k, v in api_log_data.items() if v is not None}
                 response = requests.post(LOGGING_SERVICE_URL, json=api_log_data)
                 if response.status_code != 200:
-                    logger.warning(f"Failed to send log to service: {response.text}")
+                    logger.warning("Failed to send log to service: %s", sanitize_for_log(response.text, 500))
         except Exception as e:
-            logger.warning(f"Error sending log to service: {str(e)}")
+            logger.warning("Error sending log to service: %s", sanitize_for_log(e, 500))
         
         return log_entry.LogId  # Return the ID of the created log
     except Exception as e:
-        logger.error(f"❌ Error saving log to database: {str(e)}")
-        import traceback
-        logger.error(f"Traceback: {traceback.format_exc()}")
+        logger.exception("Error saving log to database")
         # Do not try to save error to GRCLog here - the table may be missing ValueBefore/ValueAfter
         # and would cause a cascade of the same error.
         return None 

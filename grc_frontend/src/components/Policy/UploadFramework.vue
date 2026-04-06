@@ -1359,8 +1359,12 @@ export default {
     // SECURITY: prevent prototype pollution via externally-controlled object keys.
     const unsafeObjectKeys = new Set(['__proto__', 'prototype', 'constructor'])
     const sanitizeObjectKey = (key) => {
-      const k = String(key ?? '')
-      return unsafeObjectKeys.has(k) ? `_${k}_` : k
+      const k = String(key ?? '').trim()
+      if (!k) return '_empty_key'
+      if (unsafeObjectKeys.has(k) || k.startsWith('__')) {
+        return `safe_${k.replace(/[^\w.-]/g, '_')}`
+      }
+      return k
     }
     
     // Compliance data
@@ -3483,10 +3487,11 @@ export default {
 
     // Form management
     const initializePolicyFormData = () => {
-      const newFormData = {}
-      uniqueSectionNames.value.forEach(sectionName => {
-        if (!policyFormData.value[sectionName]) {
-          newFormData[sectionName] = {
+      const newFormData = Object.create(null)
+      uniqueSectionNames.value.forEach((sectionName) => {
+        const safeSection = sanitizeObjectKey(sectionName)
+        if (!policyFormData.value[safeSection]) {
+          newFormData[safeSection] = {
             documentUrl: '',
             identifier: '',
             createdBy: '',
@@ -3499,17 +3504,18 @@ export default {
             coverageRate: 0
           }
         } else {
-          newFormData[sectionName] = policyFormData.value[sectionName]
+          newFormData[safeSection] = policyFormData.value[safeSection]
         }
       })
       policyFormData.value = newFormData
     }
 
     const initializeDynamicForms = () => {
-      policyFormData.value = {}
-      
-      uniqueSectionNames.value.forEach(sectionName => {
-        policyFormData.value[sectionName] = {
+      policyFormData.value = Object.create(null)
+
+      uniqueSectionNames.value.forEach((sectionName) => {
+        const safeSection = sanitizeObjectKey(sectionName)
+        policyFormData.value[safeSection] = {
           documentUrl: '',
           identifier: '',
           createdBy: '',

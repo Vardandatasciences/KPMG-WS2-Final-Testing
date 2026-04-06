@@ -10,7 +10,7 @@ from decouple import config
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = config('SECRET_KEY', default='django-insecure-your-secret-key-here')
+SECRET_KEY = config('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DEBUG', default=False, cast=bool)
@@ -322,9 +322,18 @@ SIMPLE_JWT = {
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = 'DENY'
-SECURE_HSTS_SECONDS = 31536000 if not DEBUG else 0
-SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-SECURE_HSTS_PRELOAD = True
+
+
+def _hsts_env_bool(key, default):
+    v = os.environ.get(key)
+    if v is None:
+        return default
+    return str(v).lower() in ("true", "1", "yes", "on")
+
+
+SECURE_HSTS_SECONDS = int(os.environ.get("SECURE_HSTS_SECONDS", str(31536000 if not DEBUG else 0)))
+SECURE_HSTS_INCLUDE_SUBDOMAINS = _hsts_env_bool("SECURE_HSTS_INCLUDE_SUBDOMAINS", not DEBUG)
+SECURE_HSTS_PRELOAD = _hsts_env_bool("SECURE_HSTS_PRELOAD", not DEBUG)
 SECURE_SSL_REDIRECT = not DEBUG
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
@@ -621,11 +630,11 @@ OCR_TESSERACT_CMD = config('TESSERACT_CMD', default='tesseract')  # Path to tess
 
 # Email configuration for RFP
 EMAIL_BACKEND_RFP = 'rfp.azure_email_backend.AzureADEmailBackend'
-AZURE_AD_TENANT_ID = config('AZURE_AD_TENANT_ID', default='aa7c8c45-41a3-4453-bc9a-3adfe8ff5fb6')
-AZURE_AD_CLIENT_ID = config('AZURE_AD_CLIENT_ID', default='127107b0-7144-4246-b2f4-160263ceb3c9')
-AZURE_AD_CLIENT_SECRET = config('AZURE_AD_CLIENT_SECRET', default='sVr8Q~3b0OS~L5NFIaWGomhiGwSwFuNMnW7RPamR')
+AZURE_AD_TENANT_ID = config('AZURE_AD_TENANT_ID', default='')
+AZURE_AD_CLIENT_ID = config('AZURE_AD_CLIENT_ID', default='')
+AZURE_AD_CLIENT_SECRET = config('AZURE_AD_CLIENT_SECRET', default='')
 AZURE_AD_SCOPE = 'https://graph.microsoft.com/.default'
-DEFAULT_FROM_EMAIL_RFP = config('DEFAULT_FROM_EMAIL_RFP', default='noreply@vardaanglobal.com')
+DEFAULT_FROM_EMAIL_RFP = config('DEFAULT_FROM_EMAIL_RFP', default='')
 
 # Create logs directory
 os.makedirs(BASE_DIR / 'logs', exist_ok=True)

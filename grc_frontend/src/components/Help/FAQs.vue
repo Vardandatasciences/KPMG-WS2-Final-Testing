@@ -28,7 +28,7 @@
 <script setup>
 const downloadPDF = () => {
   const pdfUrl = '/assets/help_docs/RiskaVaire FAQs.pdf';
-  window.open(pdfUrl, '_blank');
+  window.open(pdfUrl, '_blank', 'noopener,noreferrer');
 };
 </script>
 

@@ -135,7 +135,7 @@
                 <p class="text-xs text-muted-foreground">ID: {{ extractedData.document_id }}</p>
               </div>
             </div>
-            <a :href="extractedData.document_url" target="_blank" class="text-primary hover:underline text-sm">
+            <a :href="extractedData.document_url" target="_blank" rel="noopener noreferrer" class="text-primary hover:underline text-sm">
               View Document
             </a>
           </div>
@@ -1451,7 +1451,7 @@
                 </div>
                 <div v-if="selectedFramework.DocURL" class="col-span-2">
                   <span class="font-medium">Documentation:</span>
-                  <a :href="selectedFramework.DocURL" target="_blank" class="ml-2 text-primary hover:underline">
+                  <a :href="selectedFramework.DocURL" target="_blank" rel="noopener noreferrer" class="ml-2 text-primary hover:underline">
                     View Documentation
                   </a>
                 </div>

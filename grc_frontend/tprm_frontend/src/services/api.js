@@ -3,6 +3,7 @@
  */
 import { getTprmApiBaseUrl, getApiOrigin } from '@/utils/backendEnv'
 import axios from 'axios'
+import { getParentPostMessageTargetOrigin } from '@/utils/parentPostMessageOrigin.js'
 
 // Cookie-first auth: tokens live in HttpOnly cookies (not readable by JS).
 // Keep migration cleanup for any legacy stored tokens.
@@ -91,7 +92,7 @@ class APIService {
           const isInIframe = window.self !== window.top
           if (isInIframe && window.parent) {
             console.warn('[APIService] 401 Unauthorized - requesting redirect via parent shell');
-            window.parent.postMessage({ type: 'TPRM_REDIRECT_TO_LOGIN' }, '*')
+            window.parent.postMessage({ type: 'TPRM_REDIRECT_TO_LOGIN' }, getParentPostMessageTargetOrigin())
           } else if (window.location.pathname !== '/login') {
             window.location.href = '/login'
           }
@@ -158,7 +159,7 @@ class APIService {
           const isInIframe = window.self !== window.top
           if (isInIframe && window.parent) {
             console.warn('[APIService] 401 Unauthorized in SLA - requesting redirect via parent shell');
-            window.parent.postMessage({ type: 'TPRM_REDIRECT_TO_LOGIN' }, '*')
+            window.parent.postMessage({ type: 'TPRM_REDIRECT_TO_LOGIN' }, getParentPostMessageTargetOrigin())
           } else if (window.location.pathname !== '/login') {
             window.location.href = '/login'
           }
@@ -229,7 +230,7 @@ class APIService {
           const isInIframe = window.self !== window.top
           if (isInIframe && window.parent) {
             console.warn('[APIService] 401 Unauthorized - requesting redirect via parent shell');
-            window.parent.postMessage({ type: 'TPRM_REDIRECT_TO_LOGIN' }, '*')
+            window.parent.postMessage({ type: 'TPRM_REDIRECT_TO_LOGIN' }, getParentPostMessageTargetOrigin())
           } else if (window.location.pathname !== '/login') {
             window.location.href = '/login'
           }
@@ -300,7 +301,7 @@ class APIService {
           const isInIframe = window.self !== window.top
           if (isInIframe && window.parent) {
             console.warn('[APIService] 401 Unauthorized - requesting redirect via parent shell');
-            window.parent.postMessage({ type: 'TPRM_REDIRECT_TO_LOGIN' }, '*')
+            window.parent.postMessage({ type: 'TPRM_REDIRECT_TO_LOGIN' }, getParentPostMessageTargetOrigin())
           } else if (window.location.pathname !== '/login') {
             window.location.href = '/login'
           }
@@ -1712,7 +1713,7 @@ api.interceptors.response.use(
         const isInIframe = window.self !== window.top
         if (isInIframe && window.parent) {
           console.warn('[Axios Interceptor] 401 Unauthorized - requesting redirect via parent shell')
-          window.parent.postMessage({ type: 'TPRM_REDIRECT_TO_LOGIN' }, '*')
+          window.parent.postMessage({ type: 'TPRM_REDIRECT_TO_LOGIN' }, getParentPostMessageTargetOrigin())
         } else if (window.location.pathname !== '/login') {
           window.location.href = '/login'
         }

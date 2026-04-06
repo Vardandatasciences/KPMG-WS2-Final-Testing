@@ -7280,7 +7280,7 @@ const previewDocument = async () => {
     const url = window.URL.createObjectURL(blob)
     
     // Open in new window
-    const previewWindow = window.open(url, '_blank')
+    const previewWindow = window.open(url, '_blank', 'noopener,noreferrer')
     if (previewWindow) {
       previewWindow.document.title = `RFP Preview - ${formData.value.rfpNumber || 'RFP'}`
     } else {

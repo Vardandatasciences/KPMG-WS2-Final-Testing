@@ -6,6 +6,7 @@ Based on the original test.py but modified for production integration
 """
 
 import os
+import re
 import secrets
 import urllib.parse as up
 import requests
@@ -22,6 +23,22 @@ except ImportError:
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", secrets.token_hex(32))
+
+
+def _sanitize_bamboohr_subdomain(subdomain):
+    """Allowlist tenant label for *.bamboohr.com (avoids host injection in redirects/requests)."""
+    s = (subdomain or "").strip().lower()
+    if len(s) > 63:
+        s = s[:63]
+    if not s or not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]*[a-z0-9])?", s):
+        return ""
+    return s
+
+
+def _sanitize_oauth_error_code(value):
+    raw = "" if value is None else str(value)
+    s = re.sub(r"[^\w.\-]", "", raw).strip() or "oauth_error"
+    return s[:128]
 
 
 def _safe_get(url, **kwargs):
@@ -41,6 +58,25 @@ def _safe_post(url, **kwargs):
         raise requests.RequestException(str(exc)) from exc
     return requests.post(url, **kwargs)
 
+
+def _request_is_https():
+    if request.is_secure:
+        return True
+    return (request.headers.get("X-Forwarded-Proto") or "").lower() == "https"
+
+
+def _hsts_header_value():
+    max_age = (os.environ.get("HSTS_MAX_AGE") or "31536000").strip() or "31536000"
+    include = os.environ.get("HSTS_INCLUDE_SUBDOMAINS", "true").lower() != "false"
+    preload = os.environ.get("HSTS_PRELOAD", "true").lower() != "false"
+    parts = [f"max-age={max_age}"]
+    if include:
+        parts.append("includeSubDomains")
+    if preload:
+        parts.append("preload")
+    return "; ".join(parts)
+
+
 # SECURITY: Apply missing/permissive HTTP security headers to all responses.
 @app.after_request
 def apply_security_headers(response):
@@ -58,10 +94,10 @@ def apply_security_headers(response):
         "frame-ancestors 'none'",
     ])
 
-    # Enable HSTS only when HTTPS is expected (avoid breaking local HTTP dev).
+    # HSTS only when the request is actually HTTPS (align with reverse-proxy reality).
     try:
-        if request.is_secure or not USE_LOCAL:
-            response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains; preload'
+        if _request_is_https():
+            response.headers["Strict-Transport-Security"] = _hsts_header_value()
     except Exception:
         # Never fail the request if header computation errors.
         pass
@@ -75,19 +111,22 @@ CLIENT_SECRET = os.environ.get("BAMBOOHR_CLIENT_SECRET", "").strip()
 # Get environment configuration
 USE_LOCAL = os.environ.get("USE_LOCAL_DEVELOPMENT", "True").lower() == "true"
 
-# Set URLs based on environment
+# Set URLs based on environment (non-local: no hardcoded tenant domains — require env).
 if USE_LOCAL:
-    REDIRECT_URI = "http://127.0.0.1:8000/api/bamboohr/oauth-callback/"
-    DJANGO_BACKEND_URL = os.environ.get("DJANGO_BACKEND_URL", "http://127.0.0.1:8000")
-    FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:8080")
+    _default_redirect = "http://127.0.0.1:8000/api/bamboohr/oauth-callback/"
+    DJANGO_BACKEND_URL = os.environ.get("DJANGO_BACKEND_URL", "http://127.0.0.1:8000").strip()
+    FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:8080").strip()
+    REDIRECT_URI = os.environ.get("BAMBOOHR_REDIRECT_URI", _default_redirect).strip()
     debug_print("🌍 Running in LOCAL development mode")
 else:
-    REDIRECT_URI = "https://grc-backend.vardaands.com/api/bamboohr/oauth-callback/"
-    DJANGO_BACKEND_URL = os.environ.get("DJANGO_BACKEND_URL", "https://grc-backend.vardaands.com")
-    FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:8080")
+    DJANGO_BACKEND_URL = os.environ.get("DJANGO_BACKEND_URL", "").strip()
+    FRONTEND_URL = os.environ.get("FRONTEND_URL", "").strip()
+    REDIRECT_URI = os.environ.get("BAMBOOHR_REDIRECT_URI", "").strip()
+    if not REDIRECT_URI or not DJANGO_BACKEND_URL or not FRONTEND_URL:
+        raise RuntimeError(
+            "Non-local BambooHR OAuth requires BAMBOOHR_REDIRECT_URI, DJANGO_BACKEND_URL, and FRONTEND_URL."
+        )
     debug_print("🌍 Running in PRODUCTION mode")
-
-REDIRECT_URI = os.environ.get("BAMBOOHR_REDIRECT_URI", REDIRECT_URI).strip()
 SCOPES = os.environ.get("BAMBOOHR_SCOPES", "email openid employee company:info employee:contact employee:job employee:name employee:photo employee_directory").split()
 
 def form_headers():
@@ -117,11 +156,13 @@ def health_check():
 @app.route("/set-subdomain-and-login")
 def set_subdomain_and_login():
     """Handle subdomain setting and initiate OAuth flow"""
-    subdomain = request.args.get("subdomain", "").strip()
-    user_id = request.args.get("user_id", "1")
-    
-    if not subdomain:
+    raw_sub = request.args.get("subdomain", "").strip()
+    if not raw_sub:
         return redirect(f"{FRONTEND_URL}/integration/bamboohr?error=missing_subdomain")
+    subdomain = _sanitize_bamboohr_subdomain(raw_sub)
+    if not subdomain:
+        return redirect(f"{FRONTEND_URL}/integration/bamboohr?error=invalid_subdomain")
+    user_id = request.args.get("user_id", "1")
     
     if not CLIENT_ID or not CLIENT_SECRET:
         return redirect(f"{FRONTEND_URL}/integration/bamboohr?error=oauth_not_configured")
@@ -137,14 +178,14 @@ def set_subdomain_and_login():
 def login():
     """Initiate OAuth flow with BambooHR"""
     # Check if subdomain is set
-    if "subdomain" not in session:
+    subdomain = _sanitize_bamboohr_subdomain(session.get("subdomain", ""))
+    if not subdomain:
         return redirect(f"{FRONTEND_URL}/integration/bamboohr?error=session_expired")
     
     state = secrets.token_urlsafe(24)
     session["oauth_state"] = state
     
-    # Use dynamic subdomain from session
-    subdomain = session["subdomain"]
+    session["subdomain"] = subdomain
     auth_base = f"https://{subdomain}.bamboohr.com/authorize.php"
     
     params = {
@@ -172,14 +213,17 @@ def oauth_callback():
 
         code = request.args.get("code")
         if not code:
+            oauth_error = _sanitize_oauth_error_code(request.args.get("error"))
             error_description = request.args.get("error_description", "Missing authorization code")
-            # SECURITY: Encode attacker-controlled redirect parameters to avoid reflected injection.
-            error_description = str(error_description).replace("\r", "").replace("\n", "").strip()
-            debug_print(f"❌ OAuth error: {error_description}")
-            return redirect(f"{FRONTEND_URL}/integration/bamboohr?{up.urlencode({'error': error_description})}")
+            error_description = str(error_description).replace("\r", "").replace("\n", "").strip()[:500]
+            debug_print(f"❌ OAuth error: {oauth_error} — {error_description}")
+            return redirect(
+                f"{FRONTEND_URL}/integration/bamboohr?"
+                f"{up.urlencode({'error': oauth_error, 'error_description': error_description})}"
+            )
 
         # Check if subdomain and user_id are in session
-        subdomain = session.get("subdomain")
+        subdomain = _sanitize_bamboohr_subdomain(session.get("subdomain"))
         user_id = session.get("user_id", "1")
         
         if not subdomain:

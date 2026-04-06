@@ -6,7 +6,7 @@ The Admin Access Control System provides a comprehensive, functionality-based ac
 
 ## Key Features
 
-✅ **No RBAC/MFA Dependency**: Accessible by default for admin configuration
+✅ **Authenticated + object-level rules**: `IsAuthenticated` plus `admin_access.authz` — only user administrators may list all users or change arbitrary RBAC; others may read only their own permission payload
 ✅ **Functionality-Based Permissions**: 170+ granular permission controls
 ✅ **Module-Organized**: Permissions grouped by RFP, Contract, Vendor, Risk, BCP/DRP, SLA, Compliance, and System modules
 ✅ **Real-time Updates**: Changes reflect immediately in user frontend experience
@@ -29,7 +29,10 @@ The Admin Access Control System provides a comprehensive, functionality-based ac
 - **PermissionFieldSerializer**: Permission field metadata
 
 #### 3. Views (`backend/admin_access/views.py`)
-All endpoints use `@permission_classes([AllowAny])` for admin configuration access:
+Endpoints use `@permission_classes([IsAuthenticated])` plus **object-level checks** in `admin_access.authz`:
+
+- **Privileged** (user administration rights: `create_update_user_roles`, admin-like `rbac_tprm.Role`, Django `user_type=admin`, or `is_superuser`): list all users, update/bulk-update permissions, permission field metadata.
+- **Self-service**: any authenticated user may `GET` **only** `/users/<user_id>/permissions/` when `<user_id>` matches their JWT user id.
 
 - `GET /api/admin-access/users/` - List all active users
 - `GET /api/admin-access/users/<user_id>/permissions/` - Get user permissions
@@ -230,7 +233,7 @@ await adminAccessService.bulkUpdatePermissions({
 
 ### Backend Security
 - Models use `managed = False` to prevent accidental schema changes
-- All endpoints use `AllowAny` permission for admin configuration access
+- Endpoints require `IsAuthenticated` and **BOLA checks** (`admin_access.authz`) so only privileged roles can enumerate users or mutate arbitrary RBAC rows; others may read only their own permission payload
 - Input validation through serializers
 - Transaction-wrapped updates for data integrity
 - Comprehensive error logging

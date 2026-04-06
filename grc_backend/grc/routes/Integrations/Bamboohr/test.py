@@ -1,4 +1,5 @@
 import os
+import re
 import secrets
 import urllib.parse as up
 
@@ -20,6 +21,16 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", secrets.token_hex(32))
 
 
+def _sanitize_bamboohr_subdomain(subdomain):
+    """Allowlist tenant label for *.bamboohr.com (demo app; same rules as production OAuth server)."""
+    s = (subdomain or "").strip().lower()
+    if len(s) > 63:
+        s = s[:63]
+    if not s or not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]*[a-z0-9])?", s):
+        return ""
+    return s
+
+
 def _safe_get(url, **kwargs):
     # SECURITY: guard against SSRF-style outbound URL abuse.
     try:
@@ -37,6 +48,25 @@ def _safe_post(url, **kwargs):
         raise requests.RequestException(str(exc)) from exc
     return requests.post(url, **kwargs)
 
+
+def _request_is_https():
+    if request.is_secure:
+        return True
+    return (request.headers.get("X-Forwarded-Proto") or "").lower() == "https"
+
+
+def _hsts_header_value():
+    max_age = (os.environ.get("HSTS_MAX_AGE") or "31536000").strip() or "31536000"
+    include = os.environ.get("HSTS_INCLUDE_SUBDOMAINS", "true").lower() != "false"
+    preload = os.environ.get("HSTS_PRELOAD", "true").lower() != "false"
+    parts = [f"max-age={max_age}"]
+    if include:
+        parts.append("includeSubDomains")
+    if preload:
+        parts.append("preload")
+    return "; ".join(parts)
+
+
 # SECURITY: ensure this Flask service sends CSP + HSTS for browser responses.
 @app.after_request
 def apply_security_headers(response):
@@ -53,10 +83,9 @@ def apply_security_headers(response):
         "frame-ancestors 'none'",
     ])
 
-    # Avoid forcing HSTS during local HTTP development.
     try:
-        if request.is_secure:
-            response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains; preload'
+        if _request_is_https():
+            response.headers["Strict-Transport-Security"] = _hsts_header_value()
     except Exception:
         pass
 
@@ -97,25 +126,26 @@ def home():
 
 @app.route("/set-subdomain", methods=["POST"])
 def set_subdomain():
-    subdomain = request.form.get("subdomain", "").strip()
-    if not subdomain:
+    raw = request.form.get("subdomain", "").strip()
+    if not raw:
         return "Subdomain is required", 400
-    
-    # Store subdomain in session
+    subdomain = _sanitize_bamboohr_subdomain(raw)
+    if not subdomain:
+        return "Invalid subdomain (use letters, numbers, and hyphens only).", 400
+
     session["subdomain"] = subdomain
     return redirect(url_for("login"))
 
 @app.route("/login")
 def login():
-    # Check if subdomain is set
-    if "subdomain" not in session:
+    subdomain = _sanitize_bamboohr_subdomain(session.get("subdomain", ""))
+    if not subdomain:
+        session.pop("subdomain", None)
         return redirect(url_for("home"))
-    
+
+    session["subdomain"] = subdomain
     state = secrets.token_urlsafe(24)
     session["oauth_state"] = state
-    
-    # Use dynamic subdomain from session
-    subdomain = session["subdomain"]
     auth_base = f"https://{subdomain}.bamboohr.com/authorize.php"
     
     params = {
@@ -137,12 +167,11 @@ def oauth_callback():
     if not code:
         return "Missing ?code", 400
 
-    # Check if subdomain is set
-    if "subdomain" not in session:
-        return "Subdomain not set", 400
+    subdomain = _sanitize_bamboohr_subdomain(session.get("subdomain", ""))
+    if not subdomain:
+        return "Subdomain not set or invalid", 400
 
-    # Use dynamic subdomain from session
-    subdomain = session["subdomain"]
+    session["subdomain"] = subdomain
     token_base = f"https://{subdomain}.bamboohr.com/token.php"
 
     data = {
@@ -166,11 +195,10 @@ def me():
     if "access_token" not in session:
         return redirect(url_for("login"))
     
-    if "subdomain" not in session:
+    subdomain = _sanitize_bamboohr_subdomain(session.get("subdomain", ""))
+    if not subdomain:
+        session.pop("subdomain", None)
         return redirect(url_for("home"))
-
-    # Use dynamic subdomain from session
-    subdomain = session["subdomain"]
     api_base = f"https://{subdomain}.bamboohr.com/api/v1"
     
     headers = auth_headers()
@@ -192,7 +220,7 @@ def me():
 
             if current_user:
                 employee_id = current_user["employeeId"]
-                debug_print(f"Current user employee ID: {employee_id}")
+                debug_print("Current user employee ID resolved (value not logged)")
                 fields = [
                     "id","displayName","firstName","lastName","jobTitle","department",
                     "division","location","workEmail","mobilePhone","workPhone","hireDate",
@@ -208,16 +236,20 @@ def me():
                 if emp_resp.status_code == 200:
                     profile = emp_resp.json()
                     data_collected["current_user_profile"] = profile
-                    debug_print("=== Logged-in User Profile ===")
-                    debug_print(profile)
+                    _prof_info = (
+                        f"{len(profile)} top-level keys"
+                        if isinstance(profile, dict)
+                        else "non-dict body"
+                    )
+                    debug_print(f"Logged-in user profile received ({_prof_info})")
                 else:
-                    debug_print(f"Employee API error: {emp_resp.text}")
+                    debug_print(f"Employee API error: HTTP {emp_resp.status_code}")
         elif users_resp.status_code == 401:
             debug_print(f"Users API error: {users_resp.status_code} - Unauthorized")
         else:
-            debug_print(f"Users API error: {users_resp.text}")
-    except Exception as e:
-        debug_print(f"Exception in users API call: {e}")
+            debug_print(f"Users API error: HTTP {users_resp.status_code}")
+    except Exception:
+        debug_print("Exception in users API call (details not logged)")
 
     # Step 2: Try to get company information
     try:
@@ -240,8 +272,8 @@ def me():
             debug_print("✓ Employee directory retrieved")
         else:
             debug_print(f"Directory API error: {directory_resp.status_code}")
-    except Exception as e:
-        debug_print(f"Exception in directory API call: {e}")
+    except Exception:
+        debug_print("Exception in directory API call (details not logged)")
 
     # Step 4: Try to get reports list
     try:
@@ -252,8 +284,8 @@ def me():
             debug_print("✓ Reports retrieved")
         else:
             debug_print(f"Reports API error: {reports_resp.status_code}")
-    except Exception as e:
-        debug_print(f"Exception in reports API call: {e}")
+    except Exception:
+        debug_print("Exception in reports API call (details not logged)")
 
     # If we got any data, display it
     if data_collected:

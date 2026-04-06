@@ -5,32 +5,19 @@
 
 import axios from 'axios';
 import { API_BASE_URL } from '../config/api.js';
+import { getFrameworkIdForClient, getSessionFrameworkId } from './frameworkContextStorage.js';
 
 /**
- * Check if consent is required for a specific action
- * @param {string} actionType - The type of action (e.g., 'create_policy', 'upload_policy')
- * @returns {Promise<{required: boolean, config: object|null}>}
- */
-/**
- * Get framework ID from various sources
- * @returns {string|null} Framework ID or null
+ * Framework id for consent APIs: session-scoped only + env default (no localStorage).
  */
 function getFrameworkId() {
-  // Try multiple sources
-  let frameworkId = localStorage.getItem('framework_id') || 
-                    localStorage.getItem('selectedFrameworkId') ||
-                    localStorage.getItem('frameworkId') ||
-                    sessionStorage.getItem('framework_id') ||
-                    sessionStorage.getItem('selectedFrameworkId');
-  
-  // If still not found, default to 1 (most common case)
-  if (!frameworkId) {
-    console.warn('⚠️ [Consent] Framework ID not found in storage, defaulting to 1');
-    frameworkId = '1';
-    localStorage.setItem('framework_id', '1');
+  const id = getFrameworkIdForClient();
+  if (!getSessionFrameworkId()) {
+    console.warn(
+      '⚠️ [Consent] No session framework_id; using default for this request only (set sessionStorage.framework_id when user selects a framework)'
+    );
   }
-  
-  return frameworkId;
+  return id;
 }
 
 export async function checkConsentRequired(actionType) {
@@ -119,7 +106,7 @@ export async function checkConsentRequired(actionType) {
 
 export async function recordConsentAcceptance(userId, configId, actionType, ipAddress = null) {
   try {
-    const frameworkId = localStorage.getItem('framework_id');
+    const frameworkId = getFrameworkId();
     const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
 
     // If IP address not provided, let backend extract it from request

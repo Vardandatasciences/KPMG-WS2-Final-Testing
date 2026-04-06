@@ -71,43 +71,43 @@ def to_int_if_numeric(page_label: str) -> int | None:
 def load_pages_with_positions_pymupdf(pdf_path: str):
     """Return list of pages; each page is list of (text_line, x0_left)."""
     import fitz  # PyMuPDF
-    doc = fitz.open(pdf_path)
     pages = []
-    for pno in range(len(doc)):
-        page = doc[pno]
-        d = page.get_text("dict")
-        lines = []
-        for block in d.get("blocks", []):
-            for line in block.get("lines", []):
-                parts = []
-                x0s = []
-                for span in line.get("spans", []):
-                    parts.append(span.get("text", ""))
-                    bbox = span.get("bbox", None)
-                    if bbox:
-                        x0s.append(bbox[0])
-                text = norm_ws(norm_dashes("".join(parts)))
-                if text and len(text.strip()) > 0:
-                    x0 = min(x0s) if x0s else 0.0
-                    lines.append((text, x0))
-        pages.append(lines)
+    with fitz.open(pdf_path) as doc:
+        for pno in range(len(doc)):
+            page = doc[pno]
+            d = page.get_text("dict")
+            lines = []
+            for block in d.get("blocks", []):
+                for line in block.get("lines", []):
+                    parts = []
+                    x0s = []
+                    for span in line.get("spans", []):
+                        parts.append(span.get("text", ""))
+                        bbox = span.get("bbox", None)
+                        if bbox:
+                            x0s.append(bbox[0])
+                    text = norm_ws(norm_dashes("".join(parts)))
+                    if text and len(text.strip()) > 0:
+                        x0 = min(x0s) if x0s else 0.0
+                        lines.append((text, x0))
+            pages.append(lines)
     return pages
 
 def extract_outline_pymupdf(pdf_path: str):
     """Return outline items from the PDF's internal bookmarks, if any."""
     import fitz
-    doc = fitz.open(pdf_path)
-    toc = doc.get_toc(simple=True)  # list of [level, title, page]
     items = []
-    for lvl, title, page in toc:
-        title = norm_ws(norm_dashes(title))
-        items.append({
-            "level": int(lvl),
-            "title": title,
-            "page_label": str(page),  # bookmark page is 1-based pdf page index
-            "page_number": page if isinstance(page, int) else None,
-            "source_page": int(page) if isinstance(page, int) else None
-        })
+    with fitz.open(pdf_path) as doc:
+        toc = doc.get_toc(simple=True)  # list of [level, title, page]
+        for lvl, title, page in toc:
+            title = norm_ws(norm_dashes(title))
+            items.append({
+                "level": int(lvl),
+                "title": title,
+                "page_label": str(page),  # bookmark page is 1-based pdf page index
+                "page_number": page if isinstance(page, int) else None,
+                "source_page": int(page) if isinstance(page, int) else None
+            })
     return items
 
 # ---------------- Fallback via pdfminer (text only) ----------------
@@ -117,13 +117,13 @@ def load_pages_text_pdfminer(pdf_path: str):
     from pdfminer.high_level import extract_text
     try:
         import fitz
-        doc = fitz.open(pdf_path)
-        pages = []
-        for pno in range(len(doc)):
-            txt = norm_ws(norm_dashes(doc[pno].get_text("text")))
-            lines = [(ln, None) for ln in txt.split("\n") if ln.strip()]
-            pages.append(lines)
-        return pages
+        with fitz.open(pdf_path) as doc:
+            pages = []
+            for pno in range(len(doc)):
+                txt = norm_ws(norm_dashes(doc[pno].get_text("text")))
+                lines = [(ln, None) for ln in txt.split("\n") if ln.strip()]
+                pages.append(lines)
+            return pages
     except Exception:
         text = extract_text(pdf_path)
         text = norm_ws(norm_dashes(text))

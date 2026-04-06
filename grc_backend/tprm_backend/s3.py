@@ -70,21 +70,32 @@ class RenderS3Client:
             self._setup_default_mysql()
     
     def _setup_default_mysql(self):
-        """Setup MySQL with default/environment configuration"""
+        """Setup MySQL from environment only (no hardcoded host or passwords)."""
         try:
+            host = os.environ.get('DB_HOST', '').strip()
+            user = os.environ.get('DB_USER', '').strip()
+            password = os.environ.get('DB_PASSWORD', '').strip()
+            database = os.environ.get('DB_NAME', '').strip()
+            if not all([host, user, password, database]):
+                print(
+                    "MySQL: DB_HOST, DB_USER, DB_PASSWORD, and DB_NAME must be set; skipping pool."
+                )
+                self.db_pool = None
+                return
+
             mysql_config = {
-                'host': os.environ.get('DB_HOST', 'tprmintegration.c1womgmu83di.ap-south-1.rds.amazonaws.com'),
-                'user': os.environ.get('DB_USER', 'admin'),
-                'password': os.environ.get('DB_PASSWORD', 'rootroot'),
-                'database': os.environ.get('DB_NAME', 'tprm_integration'),
+                'host': host,
+                'user': user,
+                'password': password,
+                'database': database,
                 'port': int(os.environ.get('DB_PORT', 3306)),
                 'autocommit': True,
                 'charset': 'utf8mb4',
                 'collation': 'utf8mb4_unicode_ci'
             }
-            
+
             self._setup_mysql_database(mysql_config)
-            
+
         except Exception as e:
             print(f"MySQL setup with defaults failed: {str(e)}")
             self.db_pool = None
@@ -768,18 +779,15 @@ class RenderS3Client:
                 # For other formats, send the full data structure
                 payload = {'data': data}
             
-            # Include AWS credentials in payload (required by the microservice)
-            aws_credentials = {
-                'awsAccessKey': 'AKIAW76SP14WHQGXV47T',
-                'awsSecretKey': 'wJLUGFOQtXYOqzhyvmM2ljZPVbW+LTLJo2ft3A',
-                'awsRegion': 'ap-south-1',
-                'bucketName': 'vardaanwebsites'
-            }
+            # Include AWS credentials in payload (required by the microservice) — from environment only
+            from .microservice_aws_payload import aws_credentials_for_microservice_export
+
+            aws_credentials = aws_credentials_for_microservice_export()
             payload.update(aws_credentials)
-            
+
             print(f"🔗 Export URL: {url}")
             print(f"📦 Payload size: {len(str(payload))} characters")
-            print(f"🔑 Using AWS credentials: {aws_credentials['awsAccessKey'][:10]}...")
+            print("🔑 Using AWS credentials from environment for microservice export")
             
             response = requests.post(url, json=payload, timeout=300)
             print(f"📊 Response status: {response.status_code}")

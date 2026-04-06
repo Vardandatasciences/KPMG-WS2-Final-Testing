@@ -1,3 +1,6 @@
+from django.conf import settings
+
+
 class SecurityHeadersMiddleware:
     """
     Middleware to add security headers to all responses
@@ -26,12 +29,22 @@ class SecurityHeadersMiddleware:
             "style-src 'self'",
             "script-src 'self'",
             "connect-src 'self'",
-            "font-src 'self'",
+            "font-src 'self' data:",
             "object-src 'none'",
             "base-uri 'none'",
             "form-action 'self'",
             "frame-ancestors 'none'",
         ]
         response['Content-Security-Policy'] = '; '.join(csp_directives)
+
+        if not settings.DEBUG:
+            secs = int(getattr(settings, 'SECURE_HSTS_SECONDS', 0) or 0)
+            if secs > 0:
+                h = [f'max-age={secs}']
+                if getattr(settings, 'SECURE_HSTS_INCLUDE_SUBDOMAINS', False):
+                    h.append('includeSubDomains')
+                if getattr(settings, 'SECURE_HSTS_PRELOAD', False):
+                    h.append('preload')
+                response['Strict-Transport-Security'] = '; '.join(h)
         
         return response

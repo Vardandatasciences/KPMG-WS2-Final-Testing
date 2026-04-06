@@ -1750,6 +1750,7 @@ import AccessUtils from '../../utils/accessUtils'
 import { PopupService } from '../../modules/popus/popupService'
 import PopupModal from '../../modules/popus/PopupModal.vue'
 import { checkConsentRequired, CONSENT_ACTIONS } from '@/utils/consentManager.js'
+import { getFrameworkIdForClient } from '@/utils/frameworkContextStorage.js'
 import axios from 'axios'
 import { API_ENDPOINTS } from '../../config/api.js'
 
@@ -2425,7 +2426,7 @@ export default {
             // Add consent data to eventData
             eventData.consent_accepted = true
             eventData.consent_config_id = consentCheck.config.config_id
-            eventData.framework_id = eventData.framework_id || localStorage.getItem('framework_id')
+            eventData.framework_id = eventData.framework_id || getFrameworkIdForClient()
           }
           
           // Create new event
@@ -3128,7 +3129,7 @@ export default {
     const previewFile = (file) => {
       if (isPdfFile(file.type) && file.s3Url) {
         // Open PDF in new tab for preview
-        window.open(file.s3Url, '_blank')
+        window.open(file.s3Url, '_blank', 'noopener,noreferrer')
       } else {
         PopupService.info('Preview not available for this file type', 'Preview')
       }

@@ -127,11 +127,9 @@
                         </div>
                       </div>
                       <div class="file-actions">
-                        <a 
-                          v-if="file.s3_url" 
+                        <a v-if="file.s3_url" 
                           :href="file.s3_url" 
-                          target="_blank" 
-                          class="file-download-btn"
+                          target="_blank" rel="noopener noreferrer" class="file-download-btn"
                           title="Open file"
                         >
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">

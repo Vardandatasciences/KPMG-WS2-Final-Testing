@@ -10,6 +10,7 @@ from ...tenant_utils import (
     require_tenant, tenant_filter, get_tenant_id_from_request,
     validate_tenant_access, get_tenant_aware_queryset
 )
+from ...utils.log_sanitize import sanitize_for_log
 
 
 logger = logging.getLogger(__name__)
@@ -52,8 +53,12 @@ def get_framework_policy_counts(request, framework_id):
             'total_policies': active_policies + inactive_policies
         })
         
-    except Exception as e:
-        logger.error(f"Error getting policy counts for framework {framework_id}: {str(e)}")
-        return Response({
-            'error': f'Failed to get policy counts: {str(e)}'
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR) 
+    except Exception:
+        logger.exception(
+            "Error getting policy counts for framework %s",
+            sanitize_for_log(framework_id, 64),
+        )
+        return Response(
+            {'error': 'Failed to get policy counts'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )

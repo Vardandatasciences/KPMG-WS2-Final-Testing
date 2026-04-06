@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { getApiOrigin } from '@/utils/backendEnv'
+import { getParentPostMessageTargetOrigin } from '@/utils/parentPostMessageOrigin.js'
 
 // Get API base URL - use origin so we can pass full paths like /api/v1/...
 const API_BASE_URL = getApiOrigin()
@@ -76,7 +77,7 @@ api.interceptors.response.use(
         // Use message-based redirect for iframe context
         const isInIframe = window.self !== window.top
         if (isInIframe && window.parent) {
-          window.parent.postMessage({ type: 'TPRM_REDIRECT_TO_LOGIN' }, '*')
+          window.parent.postMessage({ type: 'TPRM_REDIRECT_TO_LOGIN' }, getParentPostMessageTargetOrigin())
         } else if (window.location.pathname !== '/login') {
           // Fallback if not in iframe (unlikely in this architecture)
           window.location.href = '/login'

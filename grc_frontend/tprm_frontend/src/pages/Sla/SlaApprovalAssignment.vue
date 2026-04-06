@@ -708,7 +708,7 @@ const assignApproval = (sla) => {
 
 const viewSLA = (sla) => {
   // Navigate to SLA detail page
-  window.open(`/slas/${sla.sla_id}`, '_blank')
+  window.open(`/slas/${sla.sla_id}`, '_blank', 'noopener,noreferrer')
 }
 
 const formatCurrency = (value) => {

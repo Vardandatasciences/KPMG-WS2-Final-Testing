@@ -21,13 +21,35 @@ function safeFetch(url, options) {
 
 // ==================== SERVICE CLASSES ====================
 
+function _loadSentinelMicrosoftOAuthConfig() {
+  const clientId = process.env.MICROSOFT_CLIENT_ID || '';
+  const clientSecret = process.env.MICROSOFT_CLIENT_SECRET || '';
+  const tenantId = process.env.MICROSOFT_TENANT_ID || '';
+  const port = process.env.PORT || '3000';
+  const redirectUri =
+    process.env.REDIRECT_URI || `http://127.0.0.1:${port}/auth/sentinel/callback`;
+  const isProd = process.env.NODE_ENV === 'production';
+  if (isProd && (!clientId || !tenantId || !clientSecret)) {
+    throw new Error(
+      'Sentinel: set MICROSOFT_CLIENT_ID, MICROSOFT_TENANT_ID, MICROSOFT_CLIENT_SECRET, and REDIRECT_URI in production.'
+    );
+  }
+  if (!isProd && (!clientId || !tenantId)) {
+    console.warn(
+      '[Sentinel] MICROSOFT_CLIENT_ID / MICROSOFT_TENANT_ID not set; OAuth flows will fail until configured.'
+    );
+  }
+  return { clientId, clientSecret, tenantId, redirectUri };
+}
+
 // OAuth Service
 class SentinelOAuthService {
   constructor() {
-    this.clientId = process.env.MICROSOFT_CLIENT_ID || '1d9fdf2e-ebc8-47e0-8e7d-4c4c41b6a616';
-    this.clientSecret = process.env.MICROSOFT_CLIENT_SECRET;
-    this.tenantId = process.env.MICROSOFT_TENANT_ID || 'aa7c8c45-41a3-4453-bc9a-3adfe8ff5fb6';
-    this.redirectUri = process.env.REDIRECT_URI || 'http://localhost:3000/auth/sentinel/callback';
+    const cfg = _loadSentinelMicrosoftOAuthConfig();
+    this.clientId = cfg.clientId;
+    this.clientSecret = cfg.clientSecret;
+    this.tenantId = cfg.tenantId;
+    this.redirectUri = cfg.redirectUri;
     this.scope = 'https://graph.microsoft.com/.default';
   }
 
@@ -102,9 +124,10 @@ class SentinelOAuthService {
 // Sentinel Auth Service
 class SentinelAuthService {
   constructor() {
-    this.clientId = process.env.MICROSOFT_CLIENT_ID || '1d9fdf2e-ebc8-47e0-8e7d-4c4c41b6a616';
-    this.clientSecret = process.env.MICROSOFT_CLIENT_SECRET;
-    this.tenantId = process.env.MICROSOFT_TENANT_ID || 'aa7c8c45-41a3-4453-bc9a-3adfe8ff5fb6';
+    const cfg = _loadSentinelMicrosoftOAuthConfig();
+    this.clientId = cfg.clientId;
+    this.clientSecret = cfg.clientSecret;
+    this.tenantId = cfg.tenantId;
     this.scope = 'https://graph.microsoft.com/.default';
   }
 
@@ -783,22 +806,26 @@ app.use(session({
   })(),
   resave: false,
   saveUninitialized: false,
-  cookie: { secure: false }
+  cookie: {
+    secure: process.env.NODE_ENV === 'production' || process.env.SESSION_COOKIE_SECURE === 'true',
+    httpOnly: true,
+    sameSite: 'lax',
+  }
 }));
 
 // SECURITY: ensure client-side protections on all rendered HTML responses.
 app.use((req, res, next) => {
-  // Use HTTPS-only HSTS when running behind HTTPS (or in non-development).
-  const isSecure =
-    req.secure ||
-    (req.headers['x-forwarded-proto'] || '').toString().toLowerCase() === 'https' ||
-    process.env.NODE_ENV !== 'development';
+  const forwarded = (req.headers['x-forwarded-proto'] || '').toString().toLowerCase();
+  const isSecure = req.secure || forwarded === 'https';
 
   if (isSecure) {
-    res.setHeader(
-      'Strict-Transport-Security',
-      'max-age=31536000; includeSubDomains; preload'
-    );
+    const maxAge = process.env.HSTS_MAX_AGE || '31536000';
+    const include = process.env.HSTS_INCLUDE_SUBDOMAINS !== 'false';
+    const preload = process.env.HSTS_PRELOAD !== 'false';
+    const parts = [`max-age=${maxAge}`];
+    if (include) parts.push('includeSubDomains');
+    if (preload) parts.push('preload');
+    res.setHeader('Strict-Transport-Security', parts.join('; '));
   }
 
   res.setHeader(

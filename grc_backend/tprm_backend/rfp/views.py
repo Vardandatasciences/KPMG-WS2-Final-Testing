@@ -3666,8 +3666,8 @@ def get_invitation_stats(request, rfp_id):
 
 
 def generate_unique_token():
-    """Generate a unique token for vendor invitations"""
-    return hashlib.md5(str(uuid.uuid4()).encode()).hexdigest()
+    """Generate a unique token for vendor invitations (cryptographically strong, URL-safe hex)."""
+    return secrets.token_hex(16)
 
 
 def generate_invitation_urls(token, rfp_id):

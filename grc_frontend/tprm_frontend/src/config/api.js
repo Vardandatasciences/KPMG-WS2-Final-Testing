@@ -1,3 +1,4 @@
+import { getParentPostMessageTargetOrigin } from '@/utils/parentPostMessageOrigin.js'
 // API Configuration - Centralized URL Management
 // Change this variable to switch between different environments
 
@@ -116,7 +117,7 @@ const apiCall = async (url, options = {}) => {
         // If in iframe, request auth from GRC parent
         const isInIframe = window.self !== window.top
         if (isInIframe && window.parent) {
-          window.parent.postMessage({ type: 'TPRM_REDIRECT_TO_LOGIN' }, '*')
+          window.parent.postMessage({ type: 'TPRM_REDIRECT_TO_LOGIN' }, getParentPostMessageTargetOrigin())
         } else if (window.location.pathname !== '/login') {
           window.location.href = '/login'
           // Return a pending promise that never resolves to prevent further execution

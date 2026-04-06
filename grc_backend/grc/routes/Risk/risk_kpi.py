@@ -1,3 +1,4 @@
+import logging
 import random
 import json
 import tempfile
@@ -38,6 +39,43 @@ from ...tenant_utils import (
 # Import models
 from ...models import RiskInstance, Risk, Incident, Compliance, BusinessUnit, Users, Department
 from ...debug_utils import debug_print
+
+logger = logging.getLogger(__name__)
+
+# Strict server-side allow-list for risk/incident KPI category filters (finding 17 — no raw client strings in SQL/ORM).
+RISK_KPI_CATEGORY_SLUG_TO_DB = {
+    'operational': 'Operational',
+    'financial': 'Financial',
+    'strategic': 'Strategic',
+    'compliance': 'Compliance',
+    'it-security': 'IT Security',
+}
+RISK_KPI_CATEGORY_SLUGS = frozenset(RISK_KPI_CATEGORY_SLUG_TO_DB.keys())
+
+AVG_INCIDENT_TIME_RANGES = frozenset({'all', '7days', '30days', '90days', '1year'})
+
+
+def _resolve_risk_kpi_category_param(category_raw):
+    """
+    Returns (db_category_value_or_None, JsonResponse_error_or_None).
+    None for db value means no category filter.
+    """
+    if category_raw is None:
+        return None, None
+    s = str(category_raw).strip()
+    if not s or s.lower() == 'all':
+        return None, None
+    slug = s.lower()
+    if slug not in RISK_KPI_CATEGORY_SLUGS:
+        return None, JsonResponse(
+            {
+                'error': 'Invalid category parameter',
+                'allowed': sorted(RISK_KPI_CATEGORY_SLUGS),
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    return RISK_KPI_CATEGORY_SLUG_TO_DB[slug], None
+
 
 # Helper function for JSON serialization of Decimal values
 def decimal_to_float(obj):
@@ -607,6 +645,9 @@ def risk_identification_rate(request):
         # Get optional filter parameters
         time_range = request.GET.get('timeRange', '6months')  # Default to last 6 months
         category = request.GET.get('category', 'all')
+        db_category, cat_err = _resolve_risk_kpi_category_param(category)
+        if cat_err:
+            return cat_err
         
         # Define the time period to analyze
         today = timezone.now().date()
@@ -632,16 +673,7 @@ def risk_identification_rate(request):
         # Base queryset - risks created in the specified period
         queryset = RiskInstance.objects.filter(tenant_id=tenant_id, CreatedAt__gte=start_date, CreatedAt__lte=today)
         
-        # Apply category filter if specified
-        if category and category.lower() != 'all':
-            category_map = {
-                'operational': 'Operational',
-                'financial': 'Financial',
-                'strategic': 'Strategic', 
-                'compliance': 'Compliance',
-                'it-security': 'IT Security'
-            }
-            db_category = category_map.get(category.lower(), category)
+        if db_category:
             queryset = queryset.filter(Category__iexact=db_category)
             #printf"Applied category filter: {db_category}, records: {queryset.count()}")
         
@@ -755,6 +787,9 @@ def due_mitigation(request):
         # Get optional filters
         time_range = request.GET.get('timeRange', 'all')
         category = request.GET.get('category', 'all')
+        db_category, cat_err = _resolve_risk_kpi_category_param(category)
+        if cat_err:
+            return cat_err
         
         # Base queryset - only include risks with mitigation data
         queryset = RiskInstance.objects.filter(
@@ -779,16 +814,7 @@ def due_mitigation(request):
             queryset = queryset.filter(CreatedAt__gte=start_date)
             #printf"Applied time filter: {time_range}, records: {queryset.count()}")
         
-        # Apply category filter if specified
-        if category and category.lower() != 'all':
-            category_map = {
-                'operational': 'Operational',
-                'financial': 'Financial',
-                'strategic': 'Strategic', 
-                'compliance': 'Compliance',
-                'it-security': 'IT Security'
-            }
-            db_category = category_map.get(category.lower(), category)
+        if db_category:
             queryset = queryset.filter(Category__iexact=db_category)
             #printf"Applied category filter: {db_category}, records: {queryset.count()}")
         
@@ -849,7 +875,7 @@ def due_mitigation(request):
             CreatedAt__lte=prev_period_end
         )
         
-        if category and category.lower() != 'all':
+        if db_category:
             prev_queryset = prev_queryset.filter(Category__iexact=db_category)
         
         prev_total = prev_queryset.count()
@@ -1319,6 +1345,9 @@ def risk_severity(request):
         # Get optional filters
         time_range = request.GET.get('timeRange', 'all')
         category = request.GET.get('category', 'all')
+        db_category, cat_err = _resolve_risk_kpi_category_param(category)
+        if cat_err:
+            return cat_err
         
         # Check if database has any data
         risk_count = RiskInstance.objects.count()
@@ -1344,16 +1373,7 @@ def risk_severity(request):
             queryset = queryset.filter(CreatedAt__gte=start_date)
             #printf"Applied time filter: {time_range}, records: {queryset.count()}")
         
-        # Apply category filter if specified
-        if category and category.lower() != 'all':
-            category_map = {
-                'operational': 'Operational',
-                'financial': 'Financial',
-                'strategic': 'Strategic', 
-                'compliance': 'Compliance',
-                'it-security': 'IT Security'
-            }
-            db_category = category_map.get(category.lower(), category)
+        if db_category:
             queryset = queryset.filter(Category__iexact=db_category)
             #printf"Applied category filter: {db_category}, records: {queryset.count()}")
         
@@ -2534,6 +2554,9 @@ def recurrence_rate(request):
         # Get optional filters
         time_range = request.GET.get('timeRange', 'all')
         category = request.GET.get('category', 'all')
+        db_category, cat_err = _resolve_risk_kpi_category_param(category)
+        if cat_err:
+            return cat_err
         
         # Base queryset
         queryset = RiskInstance.objects.filter(tenant_id=tenant_id, 
@@ -2558,16 +2581,7 @@ def recurrence_rate(request):
                 queryset = queryset.filter(CreatedAt__gte=start_date)
                 #printf"Applied time filter: {time_range}, records: {queryset.count()}")
         
-        # Apply category filter
-        if category and category.lower() != 'all':
-            category_map = {
-                'operational': 'Operational',
-                'financial': 'Financial',
-                'strategic': 'Strategic', 
-                'compliance': 'Compliance',
-                'it-security': 'IT Security'
-            }
-            db_category = category_map.get(category.lower(), category)
+        if db_category:
             queryset = queryset.filter(Category__iexact=db_category)
             #printf"Applied category filter: {db_category}, records: {queryset.count()}")
         
@@ -2700,10 +2714,15 @@ def avg_incident_response_time(request):
 #print"==== AVG INCIDENT RESPONSE TIME ENDPOINT CALLED ====")
     
     try:
-        # Get optional filters
-        time_range = request.GET.get('timeRange', 'all')
+        time_range = request.GET.get('timeRange', 'all') or 'all'
+        if time_range not in AVG_INCIDENT_TIME_RANGES:
+            time_range = 'all'
+
         category = request.GET.get('category', 'all')
-        
+        db_category, cat_err = _resolve_risk_kpi_category_param(category)
+        if cat_err:
+            return cat_err
+
         # Use direct SQL query to calculate average response time
         with connection.cursor() as cursor:
             query = """
@@ -2732,16 +2751,7 @@ def avg_incident_response_time(request):
                     # Use ISO format string to match original behavior while keeping parameterized SQL
                     query_params.append(start_date.isoformat())
             
-            # Add category filter if specified
-            if category and category.lower() != 'all':
-                category_map = {
-                    'operational': 'Operational',
-                    'financial': 'Financial',
-                    'strategic': 'Strategic', 
-                    'compliance': 'Compliance',
-                    'it-security': 'IT Security'
-                }
-                db_category = category_map.get(category.lower(), category)
+            if db_category:
                 query += " AND RiskCategory = %s"
                 query_params.append(db_category)
             
@@ -2770,24 +2780,32 @@ def avg_incident_response_time(request):
         target_hours = 4  # Target response time (4 hours)
         sla_hours = 8     # SLA threshold (8 hours)
         
-        # Query for delayed incidents
-        with connection.cursor() as cursor:
-            cursor.execute("""
+        # Query for delayed incidents (same category scope as main average)
+        delayed_sql = """
                 SELECT COUNT(*) FROM incidents
                 WHERE IdentifiedAt IS NOT NULL 
                 AND CreatedAt IS NOT NULL
                 AND ABS(TIMESTAMPDIFF(SECOND, IdentifiedAt, CreatedAt)) / 3600 > %s
-            """, [sla_hours])
-            
-            delayed_incidents = cursor.fetchone()[0]
-            
-            # Get total incidents count
-            cursor.execute("""
+            """
+        delayed_params = [sla_hours]
+        if db_category:
+            delayed_sql += " AND RiskCategory = %s"
+            delayed_params.append(db_category)
+
+        total_sql = """
                 SELECT COUNT(*) FROM incidents
                 WHERE IdentifiedAt IS NOT NULL 
                 AND CreatedAt IS NOT NULL
-            """)
-            
+            """
+        total_params = []
+        if db_category:
+            total_sql += " AND RiskCategory = %s"
+            total_params.append(db_category)
+
+        with connection.cursor() as cursor:
+            cursor.execute(delayed_sql, delayed_params)
+            delayed_incidents = cursor.fetchone()[0]
+            cursor.execute(total_sql, total_params)
             total_incidents = cursor.fetchone()[0]
         
         # Calculate percentage of delayed incidents
@@ -2814,16 +2832,21 @@ def avg_incident_response_time(request):
             month_name = month_start.strftime('%b')
             months.append(month_name)
             
-            # Query for average response time in this month
-            with connection.cursor() as cursor:
-                cursor.execute("""
+            # Query for average response time in this month (same category scope)
+            trend_sql = """
                     SELECT AVG(ABS(TIMESTAMPDIFF(SECOND, IdentifiedAt, CreatedAt))) / 3600 AS avg_response_time_hours
                     FROM incidents
                     WHERE IdentifiedAt IS NOT NULL 
                     AND CreatedAt IS NOT NULL
                     AND Date BETWEEN %s AND %s
-                """, [month_start, month_end])
-                
+                """
+            trend_params = [month_start, month_end]
+            if db_category:
+                trend_sql += " AND RiskCategory = %s"
+                trend_params.append(db_category)
+
+            with connection.cursor() as cursor:
+                cursor.execute(trend_sql, trend_params)
                 result = cursor.fetchone()
                 month_avg = float(result[0]) if result and result[0] is not None else 0
                 month_avg = round(month_avg, 1)
@@ -2856,23 +2879,12 @@ def avg_incident_response_time(request):
         #printf"Returning avg incident response time data: {json.dumps(response_data)}")
         return JsonResponse(response_data, status=status.HTTP_200_OK)
     
-    except Exception as e:
-        # Do not leak exception details to the client.
-        #printf"ERROR in avg_incident_response_time: {str(e)}")
-        
-        # Return fallback data in case of error
-        return JsonResponse({
-            'error': 'Internal server error',
-            'current': 457.4,
-            'target': 4,
-            'sla': 8,
-            'months': ['Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May'],
-            'trendData': [400, 410, 405, 420, 430, 457.4],
-            'percentageChange': 6.4,
-            'delayedCount': 18,
-            'delayedPercentage': 95,
-            'totalIncidents': 19
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    except Exception:
+        logger.exception("avg_incident_response_time failed (tenant_id=%s)", tenant_id)
+        return JsonResponse(
+            {'error': 'Unable to compute incident response metrics'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
 
 @api_view(['GET'])
 @rbac_required(required_permission='risk_performance_analytics')
@@ -2889,6 +2901,9 @@ def mitigation_cost(request):
         # Get optional filters
         time_range = request.GET.get('timeRange', 'all')
         category = request.GET.get('category', 'all')
+        db_category, cat_err = _resolve_risk_kpi_category_param(category)
+        if cat_err:
+            return cat_err
         
         # Define time period
         today = timezone.now().date()
@@ -2918,16 +2933,7 @@ def mitigation_cost(request):
             )
             #printf"Applied time filter: {time_range}, records: {queryset.count()}")
         
-        # Apply category filter if specified
-        if category and category.lower() != 'all':
-            category_map = {
-                'operational': 'Operational',
-                'financial': 'Financial',
-                'strategic': 'Strategic', 
-                'compliance': 'Compliance',
-                'it-security': 'IT Security'
-            }
-            db_category = category_map.get(category.lower(), category)
+        if db_category:
             queryset = queryset.filter(Category__iexact=db_category)
             #printf"Applied category filter: {db_category}, records: {queryset.count()}")
         
@@ -2965,14 +2971,16 @@ def mitigation_cost(request):
             month_name = month_start.strftime('%b')
             months.append(month_name)
             
-            # Get total exposure for risks mitigated in this month
-            month_exposure = RiskInstance.objects.filter(tenant_id=tenant_id, 
+            # Get total exposure for risks mitigated in this month (same category scope as main queryset)
+            month_qs = RiskInstance.objects.filter(
+                tenant_id=tenant_id,
                 MitigationStatus='Completed',
                 MitigationCompletedDate__gte=month_start,
-                MitigationCompletedDate__lte=month_end
-            ).aggregate(
-                total=Sum('RiskExposureRating')
-            )['total'] or 0
+                MitigationCompletedDate__lte=month_end,
+            )
+            if db_category:
+                month_qs = month_qs.filter(Category__iexact=db_category)
+            month_exposure = month_qs.aggregate(total=Sum('RiskExposureRating'))['total'] or 0
             
             month_cost = round(float(month_exposure) * cost_factor / 1000)  # Convert to K
             monthly_data.append({
@@ -2982,10 +2990,16 @@ def mitigation_cost(request):
             
             #printf"Month: {month_name}, Exposure: {month_exposure}, Cost: {month_cost}K")
         
-        # Calculate highest cost category
+        # Calculate highest cost category (scoped to selected category filter when present)
         highest_category = {'category': 'None', 'cost': 0}
-        
-        for cat in RiskInstance.objects.values_list('Category', flat=True).distinct():
+        if db_category:
+            category_iter = [db_category]
+        else:
+            category_iter = RiskInstance.objects.filter(tenant_id=tenant_id).values_list(
+                'Category', flat=True
+            ).distinct()
+
+        for cat in category_iter:
             if not cat:
                 continue
                 
@@ -3037,7 +3051,7 @@ def mitigation_cost(request):
             MitigationCompletedDate__lte=prev_period_end
         )
         
-        if category and category.lower() != 'all':
+        if db_category:
             prev_exposure = prev_exposure.filter(Category__iexact=db_category)
             
         prev_exposure_sum = prev_exposure.aggregate(

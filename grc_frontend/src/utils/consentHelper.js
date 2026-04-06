@@ -4,6 +4,7 @@
  */
 
 import { checkConsentRequired } from './consentManager.js';
+import { getFrameworkIdForClient } from './frameworkContextStorage.js';
 
 /**
  * Check consent and return consent data to include in request
@@ -42,7 +43,7 @@ export async function checkAndGetConsentData(actionType, showModalCallback) {
           return {
             consent_accepted: true,
             consent_config_id: config.config_id,
-            framework_id: localStorage.getItem('framework_id'),
+            framework_id: getFrameworkIdForClient(),
             userDeclined: false
           };
         } catch (error) {
@@ -98,7 +99,7 @@ export function addConsentToPayload(payload, consentData) {
       ...payload,
       consent_accepted: true,
       consent_config_id: consentData.consent_config_id,
-      framework_id: consentData.framework_id || localStorage.getItem('framework_id')
+      framework_id: consentData.framework_id || getFrameworkIdForClient()
     };
   }
   return payload;

@@ -1,6 +1,9 @@
 """
-Views for Admin Access Control
-No RBAC or MFA dependency - accessible by default for admin configuration
+Views for Admin Access Control.
+
+Privileged operations require user administration rights (see admin_access.authz):
+Django superuser, user_type=admin, rbac_tprm.create_update_user_roles, or admin-like role.
+Users without those rights may only GET their own permissions payload.
 """
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
@@ -11,6 +14,7 @@ from django.db.models import Q
 from django.db import transaction
 import logging
 
+from .authz import forbid_manage_permissions, forbid_view_user_permissions
 from .models import User, RBACTPRM
 from .serializers import (
     UserSerializer, 
@@ -32,9 +36,12 @@ class StandardResultsSetPagination(PageNumberPagination):
 @permission_classes([IsAuthenticated])
 def get_all_users(request):
     """
-    Get list of all active users with their permission count
-    No RBAC check - accessible for admin configuration
+    Get list of all active users with their permission count.
+    Requires user administration rights (BOLA).
     """
+    denied = forbid_manage_permissions(request)
+    if denied is not None:
+        return denied
     try:
         # Filter parameters
         search = request.GET.get('search', '')
@@ -70,9 +77,9 @@ def get_all_users(request):
         return Response(serializer.data, status=status.HTTP_200_OK)
         
     except Exception as e:
-        logger.error(f"Error fetching users: {str(e)}")
+        logger.exception("Error fetching users (get_all_users)")
         return Response(
-            {'error': f'Failed to fetch users: {str(e)}'}, 
+            {'error': 'Unable to load users. Please try again later.'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
@@ -81,9 +88,12 @@ def get_all_users(request):
 @permission_classes([IsAuthenticated])
 def get_user_permissions(request, user_id):
     """
-    Get permissions for a specific user
-    No RBAC check - accessible for admin configuration
+    Get permissions for a specific user.
+    Admins: any user_id. Others: only their own user_id (BOLA).
     """
+    denied = forbid_view_user_permissions(request, user_id)
+    if denied is not None:
+        return denied
     try:
         # Check if user exists
         user = User.objects.filter(userid=user_id, isactive='Y').first()
@@ -130,9 +140,11 @@ def get_user_permissions(request, user_id):
 @permission_classes([IsAuthenticated])
 def update_user_permissions(request):
     """
-    Update permissions for a user
-    No RBAC check - accessible for admin configuration
+    Update permissions for a user. Requires user administration rights (BOLA).
     """
+    denied = forbid_manage_permissions(request)
+    if denied is not None:
+        return denied
     try:
         serializer = PermissionUpdateSerializer(data=request.data)
         if not serializer.is_valid():
@@ -192,9 +204,12 @@ def update_user_permissions(request):
 @permission_classes([IsAuthenticated])
 def get_all_permission_fields(request):
     """
-    Get metadata about all available permission fields
-    No RBAC check - accessible for admin configuration
+    Get metadata about all available permission fields.
+    Requires user administration rights (BOLA).
     """
+    denied = forbid_manage_permissions(request)
+    if denied is not None:
+        return denied
     try:
         # Define permission field metadata organized by module
         # Using the same module names as tprm_utils.py for consistency
@@ -432,9 +447,12 @@ def get_all_permission_fields(request):
 @permission_classes([IsAuthenticated])
 def bulk_update_permissions(request):
     """
-    Bulk update permissions for multiple users or apply a permission template
-    No RBAC check - accessible for admin configuration
+    Bulk update permissions for multiple users or apply a permission template.
+    Requires user administration rights (BOLA).
     """
+    denied = forbid_manage_permissions(request)
+    if denied is not None:
+        return denied
     try:
         user_ids = request.data.get('user_ids', [])
         permissions = request.data.get('permissions', {})

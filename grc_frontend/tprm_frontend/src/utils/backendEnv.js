@@ -6,18 +6,24 @@ const stripTrailingSlash = (value = '') => value.replace(/\/+$/, '')
 // Use the centralized API configuration
 const API_BASE_URL = stripTrailingSlash(CONFIG_API_BASE_URL)
 
-// Extract origin from base URL
+const _browserOrigin = () => {
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    return window.location.origin
+  }
+  return ''
+}
+
+// Extract origin from base URL (no hardcoded tenant domains)
 const API_ORIGIN = (() => {
   try {
     const url = new URL(API_BASE_URL)
     return url.origin
   } catch {
-    // Fallback: extract origin manually
     if (API_BASE_URL.startsWith('http://') || API_BASE_URL.startsWith('https://')) {
       const match = API_BASE_URL.match(/^(https?:\/\/[^/]+)/)
-      return match ? match[1] : 'https://grc-tprm.vardaands.com'
+      return match ? match[1] : _browserOrigin()
     }
-    return 'https://grc-tprm.vardaands.com'
+    return _browserOrigin()
   }
 })()
 

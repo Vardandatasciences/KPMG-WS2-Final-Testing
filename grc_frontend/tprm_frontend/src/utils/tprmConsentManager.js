@@ -65,7 +65,6 @@ export function getTPRMActionLabel(actionType) {
  */
 export async function checkTPRMConsentRequired(actionType, userId = null, frameworkId = 1) {
   try {
-    const token = localStorage.getItem('access_token');
     const checkUserId = userId || localStorage.getItem('user_id');
     
     console.log('[TPRM Consent] Checking consent requirement:', {
@@ -84,9 +83,9 @@ export async function checkTPRMConsentRequired(actionType, userId = null, framew
       },
       {
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
-        }
+        },
+        withCredentials: true
       }
     );
 
@@ -139,7 +138,6 @@ export async function checkTPRMConsentRequired(actionType, userId = null, framew
  */
 export async function recordTPRMConsentAcceptance(userId, configId, actionType, frameworkId = 1) {
   try {
-    const token = localStorage.getItem('access_token');
     const response = await axios.post(
       `${API_BASE_URL}/api/tprm/consent/accept/`,
       {
@@ -150,9 +148,9 @@ export async function recordTPRMConsentAcceptance(userId, configId, actionType, 
       },
       {
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
-        }
+        },
+        withCredentials: true
       }
     );
 

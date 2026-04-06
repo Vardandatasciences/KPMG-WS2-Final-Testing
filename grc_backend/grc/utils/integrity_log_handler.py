@@ -17,6 +17,8 @@ import threading
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from .log_sanitize import sanitize_for_log
+
 
 GENESIS_PREV_HASH = "0" * 64
 
@@ -136,12 +138,12 @@ class HashChainAppendOnlyFileHandler(logging.Handler):
         try:
             payload: Dict[str, Any] = {
                 "level": record.levelname,
-                "logger": record.name,
+                "logger": sanitize_for_log(record.name, max_len=256),
                 "time_iso": logging.Formatter().formatTime(record, "%Y-%m-%dT%H:%M:%S"),
-                "message": record.getMessage(),
+                "message": sanitize_for_log(record.getMessage(), max_len=4000),
             }
             if record.exc_info and record.exc_text:
-                payload["exc_text"] = (record.exc_text or "")[:2000]
+                payload["exc_text"] = sanitize_for_log((record.exc_text or "")[:2000], max_len=2000)
 
             canonical = _canonical_payload_bytes(payload)
             with self._lock:

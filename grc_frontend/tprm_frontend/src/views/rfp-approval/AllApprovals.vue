@@ -327,11 +327,7 @@ import PopupModal from '@/popup/PopupModal.vue'
 import { PopupService } from '@/popup/popupService'
 import { useNotifications } from '@/composables/useNotifications'
 import loggingService from '@/services/loggingService'
-
-const sanitizeCSVCell = (value: unknown) => {
-  const text = String(value ?? '')
-  return /^\s*[=+\-@]/.test(text) ? `'${text}` : text
-}
+import { sanitizeExportCellValue as sanitizeCSVCell } from '@/utils/exportSanitize'
 
 // Router
 const router = useRouter()

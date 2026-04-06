@@ -90,7 +90,7 @@
         <h2>Report Details</h2>
         <div v-if="isS3Url(reportData.Report)" class="s3-download-section">
           <p class="s3-info">Report is stored in cloud storage. Click below to download:</p>
-          <a :href="reportData.Report" target="_blank" class="s3-download-link">
+          <a :href="reportData.Report" target="_blank" rel="noopener noreferrer" class="s3-download-link">
             <i class="fas fa-cloud-download-alt"></i>
             Download Report Document
           </a>
