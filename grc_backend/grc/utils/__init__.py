@@ -60,9 +60,11 @@ def get_client_ip(request):
     """Lazy wrapper for get_client_ip from utils.py"""
     return _get_utils_module().get_client_ip(request)
 
-# For LOGGING_SERVICE_URL, we'll use a module-level __getattr__ for lazy loading
+from . import integrity_log_handler
+
+# For LOGGING_SERVICE_URL and other submodules, use module-level __getattr__ for lazy loading
 def __getattr__(name):
-    """Lazy load attributes from original utils.py"""
+    """Lazy load attributes from original utils.py or submodules"""
     if name == 'LOGGING_SERVICE_URL':
         return _get_utils_module().LOGGING_SERVICE_URL
     raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
@@ -164,5 +166,6 @@ __all__ = [
     'get_risk_extraction_prompt',
     'RISK_EXTRACTION_EXAMPLES',
     'FIELD_EXTRACTION_EXAMPLES',
+    'integrity_log_handler',
 ]
 

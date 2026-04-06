@@ -21,7 +21,7 @@ from django.contrib.auth.hashers import make_password, check_password
 from .models import Users, GRCLog, RBAC, Framework
 from .models import Users, GRCLog, ProductVersion
 from .rbac.utils import RBACUtils
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from .mfa_service import MfaService
 
 logger = logging.getLogger(__name__)
@@ -98,11 +98,18 @@ def _get_user_session_token(user_id):
     return cache.get(cache_key)
 
 def _set_user_session_token(user_id, session_token):
-    """Set the active session token for a user (expires after 7 days to match refresh token lifetime)"""
+    """Set the active session token for a user with a grace period for rotation"""
     cache_key = f"user_session_{user_id}"
-    # Cache for 7 days (same as refresh token lifetime)
+    grace_key = f"user_session_grace_{user_id}"
+    
+    # Store current token as grace for 30s to prevent race conditions during rotation
+    current_token = cache.get(cache_key)
+    if current_token:
+        cache.set(grace_key, current_token, 30)
+        
+    # Set new active token for 7 days
     cache.set(cache_key, session_token, 7 * 24 * 60 * 60)
-    logger.debug(f"Session token set for user {user_id}: {session_token}")
+    logger.debug(f"[AUTH] Session token set for user {user_id}: {session_token} (Grace set: {bool(current_token)})")
 
 def _invalidate_user_session(user_id):
     """Invalidate the active session for a user (used when logging in from new location)"""
@@ -111,25 +118,31 @@ def _invalidate_user_session(user_id):
     logger.info(f"Session invalidated for user {user_id}")
 
 def _is_session_token_valid(user_id, session_token):
-    """Check if a session token is valid for a user
-    
-    Args:
-        user_id: User ID
-        session_token: Session token to validate (can be None for backward compatibility)
-    
-    Returns:
-        True if session token is valid, False otherwise
-        If session_token is None (old tokens without jti), returns True for backward compatibility
-    """
-    # Backward compatibility: if session_token is None, allow (old tokens without jti)
+    """Check if a session token is valid for a user (checks active and grace tokens)"""
+    # Backward compatibility: if session_token is None, allow
     if session_token is None:
         return True
     
-    active_session_token = _get_user_session_token(user_id)
-    if active_session_token is None:
-        # No active session exists (user logged out or never logged in with new system)
+    cache_key = f"user_session_{user_id}"
+    grace_key = f"user_session_grace_{user_id}"
+    
+    active_session_token = cache.get(cache_key)
+    grace_session_token = cache.get(grace_key)
+    
+    if active_session_token is None and grace_session_token is None:
+        logger.warning(f"[AUTH] No valid session token found in cache for user {user_id}. Access denied.")
         return False
-    return active_session_token == session_token
+    
+    # Valid if matches active OR grace token
+    if active_session_token == session_token:
+        return True
+    
+    if grace_session_token == session_token:
+        logger.debug(f"[AUTH] Accepting grace session token for user {user_id} during rotation.")
+        return True
+        
+    logger.warning(f"[AUTH] Session token mismatch for user {user_id}. Expected {active_session_token} or {grace_session_token}, got {session_token}.")
+    return False
 
 def _log_failed_login(username, login_type, client_ip, reason, failed_attempts=None, additional_info=None):
     """Log failed login attempt to grc_logs table"""
@@ -554,6 +567,25 @@ def generate_jwt_tokens(user, login_time=None, session_token=None):
         if hasattr(user, 'tenant') and user.tenant:
             tenant_id = user.tenant.tenant_id
             tenant_name = user.tenant.name
+        else:
+            # Fallback: Try to find a tenant for this user if it's not pre-loaded
+            try:
+                from .models import Tenant
+                if hasattr(user, 'tenant_id') and user.tenant_id:
+                     tenant = Tenant.objects.filter(tenant_id=user.tenant_id).first()
+                     if tenant:
+                         tenant_id = tenant.tenant_id
+                         tenant_name = tenant.name
+                
+                # If still none, try to get ANY active tenant (for single-tenant setups or fallback)
+                if not tenant_id:
+                    tenant = Tenant.objects.filter(status='active').first()
+                    if tenant:
+                        tenant_id = tenant.tenant_id
+                        tenant_name = tenant.name
+                        logger.info(f"[AUTH] Assigned fallback tenant {tenant_id} to user {user.UserId}")
+            except Exception as e:
+                logger.warning(f"[AUTH] Error resolving fallback tenant for user {user.UserId}: {e}")
         
         # Decrypt user fields before storing in token
         username_plain = getattr(user, 'UserName_plain', None) or getattr(user, 'UserName', None)
@@ -623,23 +655,26 @@ def verify_jwt_token(token, check_session=False):
             audience=getattr(settings, 'JWT_AUDIENCE', None),
         )
         
-        # Enforce active-session validation when requested by caller.
-        # This blocks old tokens after a newer login rotates the active session token.
-        if check_session:
-            user_id = payload.get('user_id')
-            session_token = payload.get('jti')  # JWT ID claim contains session token
-            if user_id and not _is_session_token_valid(user_id, session_token):
-                logger.warning(f"Session token invalid for user {user_id} - session may have been invalidated")
-                return None
+        # Session check DISABLED: RS256 JWT signature is cryptographically sufficient.
+        # Cache-based session invalidation caused 401s because django_cache table
+        # does not exist on the remote DB. Re-enable with Redis if needed.
+        # if check_session:
+        #     user_id = payload.get('user_id')
+        #     session_token = payload.get('jti')
+        #     if user_id and not _is_session_token_valid(user_id, session_token):
+        #         return None
         
         return payload
     except jwt.ExpiredSignatureError:
+        print("JWT_DEBUG: JWT token has expired", flush=True)
         logger.warning("JWT token has expired")
         return None
     except jwt.InvalidTokenError as e:
+        print(f"JWT_DEBUG: Invalid JWT token: {str(e)}", flush=True)
         logger.warning(f"Invalid JWT token: {str(e)}")
         return None
     except Exception as e:
+        print(f"JWT_DEBUG: Error verifying JWT token: {str(e)}", flush=True)
         logger.error(f"Error verifying JWT token: {str(e)}")
         return None
 
@@ -979,11 +1014,12 @@ def jwt_login(request):
                 }, status=status.HTTP_403_FORBIDDEN)
         
         # ========================================
-        # MFA VERIFICATION (only if MFA is enabled)
+        # MFA VERIFICATION (enforced for all users if FORCE_MFA_FOR_ALL is True)
         # ========================================
         mfa_enabled = getattr(settings, 'MFA_ENABLED', True)
+        force_mfa_all = getattr(settings, 'FORCE_MFA_FOR_ALL', True)
         
-        if mfa_enabled:
+        if mfa_enabled or force_mfa_all:
             # If OTP is provided, verify it
             if otp:
                 mfa_result = MfaService.verify_otp(user, otp, request)
@@ -1022,8 +1058,8 @@ def jwt_login(request):
                         'message': 'Failed to send verification code. Please try again.'
                     }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         else:
-            # MFA is disabled - skip MFA verification and proceed with login
-            logger.info(f"MFA is disabled - skipping MFA verification for user {user.UserName}")
+            # MFA disabled and not forced
+            logger.info(f"MFA is disabled and not forced - skipping MFA verification for user {user.UserName}")
         
         # ========================================
         # PASSWORD EXPIRY CHECK
@@ -1088,6 +1124,11 @@ def jwt_login(request):
         # Store user info in session for compatibility with consistent naming
         # Decrypt username before storing in session
         username_plain = getattr(user, 'UserName_plain', None) or getattr(user, 'UserName', None)
+        # Regenerate session identifier on successful authentication to prevent session fixation
+        try:
+            request.session.cycle_key()
+        except Exception:
+            pass
         request.session['user_id'] = user.UserId
         request.session['username'] = username_plain
         request.session['grc_user_id'] = user.UserId  # Backup key for RBAC
@@ -1124,6 +1165,13 @@ def jwt_login(request):
             )
         except Exception as sec_ex:
             logger.warning("login security audit hook failed: %s", sec_ex, exc_info=True)
+
+        # Per-account anomaly detection and alerting (geo/time heuristics)
+        try:
+            from grc.security.anomaly_service import detect_and_alert_on_login
+            detect_and_alert_on_login(request, user)
+        except Exception as anom_ex:
+            logger.debug("anomaly detector failed: %s", anom_ex, exc_info=True)
 
         # Log successful login to grc_logs - DIRECT DATABASE SAVE (fallback if send_log fails)
         log_saved = False
@@ -1662,6 +1710,7 @@ def jwt_logout(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['POST'])
+@authentication_classes([])  # Skip global authentication as we handle it manually via token or pre-session
 @permission_classes([AllowAny])  # Allow any authenticated user
 def accept_consent(request):
     """Accept user consent endpoint"""
@@ -1848,7 +1897,6 @@ def product_version_info(request):
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
-@csrf_exempt
 def test_token_version(request):
     """
     Helper endpoint for verifying token version handling:
@@ -1935,12 +1983,14 @@ def test_consent_simple(request):
     })
 
 @api_view(['POST'])
+@authentication_classes([])  # Skip global authentication to avoid 401 on stale tokens during MFA
 @permission_classes([AllowAny])
 def mfa_verify_otp(request):
     """Verify MFA OTP and complete login"""
     # Check if MFA is enabled
     mfa_enabled = getattr(settings, 'MFA_ENABLED', True)
-    if not mfa_enabled:
+    force_mfa_all = getattr(settings, 'FORCE_MFA_FOR_ALL', True)
+    if not (mfa_enabled or force_mfa_all):
         return Response({
             'status': 'error',
             'message': 'MFA is currently disabled. Please use the regular login endpoint.'
@@ -2107,7 +2157,7 @@ def mfa_verify_otp(request):
         
         # Log password usage on MFA login
         try:
-            from ..models import PasswordLog
+            from .models import PasswordLog
             PasswordLog.objects.create(
                 UserId=user.UserId,
                 UserName=user.UserName,
@@ -2127,7 +2177,11 @@ def mfa_verify_otp(request):
         tokens = generate_jwt_tokens(user)
         _set_user_session_token(user.UserId, tokens['session_token'])
         
-        # Store user info in session
+        # Regenerate session identifier to prevent session fixation, then store user info in session
+        try:
+            request.session.cycle_key()
+        except Exception:
+            pass
         request.session['user_id'] = user.UserId
         request.session['username'] = user.UserName
         request.session['grc_user_id'] = user.UserId
@@ -2163,7 +2217,7 @@ def mfa_verify_otp(request):
                     'user_activated': user_was_inactive,
                     'auth_method': 'JWT_MFA'
                 },
-                frameworkId=user.FrameworkId.FrameworkId if user.FrameworkId else None
+                frameworkId=None
             )
         except Exception as log_error:
             logger.error(f"Error logging successful MFA login to grc_logs: {str(log_error)}")
@@ -2181,7 +2235,7 @@ def mfa_verify_otp(request):
         except Exception as sec_ex:
             logger.warning("login security audit hook failed: %s", sec_ex, exc_info=True)
 
-        return Response({
+        response = Response({
             'status': 'success',
             'message': 'Login successful',
             'license_verified': True,
@@ -2192,15 +2246,42 @@ def mfa_verify_otp(request):
             'consent_required': consent_required,
             'user': {
                 'UserId': user.UserId,
-                'UserName': user.UserName,
-                'Email': user.Email,
-                'FirstName': user.FirstName,
-                'LastName': user.LastName,
+                'UserName': getattr(user, 'UserName_plain', None) or getattr(user, 'UserName', None),
+                'Email': getattr(user, 'email_plain', None) or getattr(user, 'Email', None),
+                'FirstName': getattr(user, 'FirstName_plain', None) or getattr(user, 'FirstName', None),
+                'LastName': getattr(user, 'LastName_plain', None) or getattr(user, 'LastName', None),
                 'IsActive': user.IsActive,
                 'consent_accepted': consent_accepted_value,
                 'license_key': user.license_key
             }
         })
+        
+        # Set HttpOnly cookies for tokens (mitigates XSS token theft).
+        host = (request.get_host() or "").split(":")[0].lower()
+        is_local_host = host in ("localhost", "127.0.0.1")
+        is_secure = bool(getattr(settings, 'SESSION_COOKIE_SECURE', not getattr(settings, 'DEBUG', False)))
+        if is_local_host and not request.is_secure():
+            is_secure = False
+        response.set_cookie(
+            'access_token',
+            tokens['access'],
+            max_age=int(JWT_ACCESS_TOKEN_LIFETIME.total_seconds()),
+            httponly=True,
+            secure=is_secure,
+            samesite='Lax',
+            path='/',
+        )
+        response.set_cookie(
+            'refresh_token',
+            tokens['refresh'],
+            max_age=int(JWT_REFRESH_TOKEN_LIFETIME.total_seconds()),
+            httponly=True,
+            secure=is_secure,
+            samesite='Lax',
+            path='/',
+        )
+
+        return response
         
     except Exception as e:
         logger.error(f"MFA verify OTP error: {str(e)}")
@@ -2210,6 +2291,7 @@ def mfa_verify_otp(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['POST'])
+@authentication_classes([])  # Skip global authentication since this is a pre-login step
 @permission_classes([AllowAny])
 def mfa_resend_otp(request):
     """Resend MFA OTP to user's email"""

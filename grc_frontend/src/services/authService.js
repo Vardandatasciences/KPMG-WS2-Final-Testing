@@ -76,17 +76,21 @@ authApi.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       const data = error.response?.data || {}
-      // Token expired or invalid
-      removeSensitive('session_token')
-      removeSensitive('access_token')
-      removeSensitive('refresh_token')
-      removeSensitive('current_user')
-      if (data.session_invalidated === true) {
-        localStorage.setItem('auth_logout_reason', 'session_invalidated')
+      // ONLY clear tokens and redirect on true session expiry.
+      // Do NOT clear tokens on every 401 - a transient 401 should not wipe
+      // valid sessionStorage tokens and kill all subsequent requests.
+      if (data.session_expired === true) {
+        removeSensitive('session_token')
+        removeSensitive('access_token')
+        removeSensitive('refresh_token')
+        removeSensitive('current_user')
+        localStorage.setItem('auth_logout_reason', 'session_expired')
+        if (window.location.pathname !== '/login' && window.location.pathname !== '/Login') {
+          window.location.href = '/login'
+        }
       }
-      if (window.location.pathname !== '/login' && window.location.pathname !== '/Login') {
-        window.location.href = '/login'
-      }
+      // Note: session_invalidated is no longer used since we disabled the session
+      // token cache check. Don't treat it as a reason to wipe tokens.
     }
     return Promise.reject(error)
   }

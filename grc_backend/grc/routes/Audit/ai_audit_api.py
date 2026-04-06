@@ -18,7 +18,7 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.shared import OxmlElement, qn
 
 from django.http import JsonResponse, FileResponse, HttpResponse, HttpResponseRedirect
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from django.utils.decorators import method_decorator
 from django.utils import timezone
 from django.views import View

@@ -8,7 +8,7 @@ from datetime import timedelta, datetime
 from dateutil.relativedelta import relativedelta
 from django.conf import settings
 from django.utils import timezone
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from django.db import connection
 from django.db.models import Q
 from rest_framework import status

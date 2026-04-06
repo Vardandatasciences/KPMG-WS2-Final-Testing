@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Dict, List, Any, Optional, Union
 from django.conf import settings
 from django.http import HttpRequest, JsonResponse, HttpResponse, FileResponse
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 

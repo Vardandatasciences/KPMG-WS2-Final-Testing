@@ -8,7 +8,7 @@ import json
 import logging
 import requests
 from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from django.views.decorators.http import require_http_methods
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.permissions import IsAuthenticated

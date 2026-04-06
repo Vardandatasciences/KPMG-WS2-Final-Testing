@@ -4,7 +4,7 @@ Provides endpoints for fetching and displaying KPIs from the database
 """
 
 from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from django.views.decorators.http import require_http_methods
 from grc.models import Kpi, Framework
 from django.db.models import Q

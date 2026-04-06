@@ -27,7 +27,7 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.pagination import PageNumberPagination
 from django.views.decorators.cache import cache_page
 from django.views.decorators.vary import vary_on_headers
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from django.utils.decorators import method_decorator
 from django.core.cache import cache
 import jwt
@@ -256,6 +256,11 @@ def simple_login(request):
                 signing_key = settings.JWT_SIGNING_KEY
                 session_token = jwt.encode(payload, signing_key, algorithm=settings.JWT_ALGORITHM)
                 
+                # Regenerate session identifier on successful authentication to prevent session fixation
+                try:
+                    request.session.cycle_key()
+                except Exception:
+                    pass
                 logger.info(f"Login successful for user: {username}")
                 return Response({
                     'success': True,

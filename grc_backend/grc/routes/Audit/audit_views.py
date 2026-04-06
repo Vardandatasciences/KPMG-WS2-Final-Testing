@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.authentication import SessionAuthentication, BasicAuthentication
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from django.conf import settings
 from ...models import Audit, Framework, Policy, Users, SubPolicy, Compliance, AuditFinding
 

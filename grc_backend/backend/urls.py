@@ -3,7 +3,7 @@ from django.urls import path, include, re_path
 from django.conf import settings
 from django.conf.urls.static import static
 from django.http import HttpResponse
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from django.views.decorators.cache import cache_control
 from django.views.generic import TemplateView
 
@@ -79,11 +79,13 @@ urlpatterns = [
     path('rfp/<int:rfp_id>/invitation', rfp_views.vendor_invitation_redirect, name='public_vendor_invitation_redirect'),
     
     path('api/', include('grc.urls')),  # Use the correct app name for API routes
+    # Versioned prefix for core GRC APIs (adds /api/v1/grc/* without breaking existing paths)
+    path('api/v1/grc/', include('grc.urls')),
     path('api/', include('backend.api.urls')),  # Include API module URLs
     # POST to /policies/... (no /api/) used to hit SPA catch-all → 403 CSRF, not this view. Alias for Postman/legacy clients.
     path(
         'policies/<int:policy_id>/request-status-change/',
-        csrf_exempt(request_policy_status_change),
+        request_policy_status_change,
         name='request-policy-status-change-no-api-prefix',
     ),
     

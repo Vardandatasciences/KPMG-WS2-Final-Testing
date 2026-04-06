@@ -7,7 +7,7 @@ Endpoints for creating, updating, and managing tenants.
 import logging
 from datetime import datetime, timedelta
 from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from django.db import connection
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny

@@ -7,7 +7,7 @@ from ...models import Framework, Policy, SubPolicy, Users, Audit, AuditFinding, 
 from django.http import JsonResponse
 from django.utils import timezone
 from django.db import connection
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from django.http import JsonResponse
 from .audit_views import create_audit_version, get_audit_findings_json
 

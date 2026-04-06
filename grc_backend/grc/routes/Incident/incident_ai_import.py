@@ -14,7 +14,7 @@ from datetime import date, datetime
 from typing import Any, Optional
 
 from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from rest_framework.decorators import api_view, permission_classes, parser_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.parsers import MultiPartParser, FormParser

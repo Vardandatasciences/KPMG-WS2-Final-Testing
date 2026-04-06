@@ -7,7 +7,7 @@ Handles creation, retrieval, and approval/rejection of access requests
 import logging
 import json
 from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.db import connection, connections
 from django.utils import timezone

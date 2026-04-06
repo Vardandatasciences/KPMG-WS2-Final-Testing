@@ -47,6 +47,11 @@ class LoginView(APIView):
         if serializer.is_valid():
             user = serializer.validated_data['user']
             login(request, user)
+            # Regenerate session identifier on successful authentication to prevent session fixation
+            try:
+                request.session.cycle_key()
+            except Exception:
+                pass
             refresh = RefreshToken.for_user(user)
             
             # Track session

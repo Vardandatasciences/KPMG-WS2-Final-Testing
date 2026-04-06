@@ -6,7 +6,7 @@ from django.http import JsonResponse
 from django.utils import timezone
 from django.db.models import Avg, Count, Min, Max, F, ExpressionWrapper, DurationField, Value, Case, When
 from django.db.models.functions import TruncMonth, Cast, Extract
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from django.utils.dateparse import parse_date
 from django.utils.timezone import now, is_aware, make_aware
 

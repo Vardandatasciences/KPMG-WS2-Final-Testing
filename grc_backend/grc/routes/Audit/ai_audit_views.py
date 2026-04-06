@@ -10,7 +10,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.authentication import SessionAuthentication, BasicAuthentication
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from django.utils import timezone
 from django.db import transaction, connection
 import os

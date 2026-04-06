@@ -4,7 +4,7 @@ from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.authentication import SessionAuthentication
 from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.utils.decorators import method_decorator
 from django.db.models import Q

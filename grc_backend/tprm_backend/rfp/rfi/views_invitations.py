@@ -10,7 +10,7 @@ import re
 from django.http import JsonResponse
 from django.db import transaction
 from django.utils import timezone
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.core.mail import EmailMessage
 from django.conf import settings

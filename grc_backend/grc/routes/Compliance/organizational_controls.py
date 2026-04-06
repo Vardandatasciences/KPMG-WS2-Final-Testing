@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Dict, List, Optional
 
 from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from django.utils import timezone
 from django.db import connection, transaction
 from django.conf import settings

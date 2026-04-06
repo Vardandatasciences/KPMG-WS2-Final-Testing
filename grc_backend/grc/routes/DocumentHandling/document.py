@@ -23,7 +23,7 @@ import os
 import tempfile
 from grc.routes.Global.s3_fucntions import create_direct_mysql_client, RenderS3Client
 from rest_framework.parsers import MultiPartParser, FormParser
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from grc.utils.auto_decrypt_helper import decrypt_any_encrypted_value
 from grc.utils.data_encryption import GCM_ENVELOPE_PREFIX
 import re

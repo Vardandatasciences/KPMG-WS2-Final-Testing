@@ -8,7 +8,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from django.http import JsonResponse, FileResponse
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from django.utils.decorators import method_decorator
 from django.views import View
 import json

@@ -1,12 +1,3 @@
-"""
-Append-only file handler with SHA-256 hash chain for tamper detection.
-
-Each line is a JSON object: seq, prev_hash, payload, line_hash.
-line_hash = SHA256(prev_hash || canonical_json(payload)) using UTF-8 bytes.
-
-Verification replays the file and detects any insert, delete, reorder, or edit.
-"""
-
 from __future__ import annotations
 
 import hashlib
@@ -22,12 +13,21 @@ GENESIS_PREV_HASH = "0" * 64
 
 
 def _canonical_payload_bytes(payload: Dict[str, Any]) -> bytes:
+    """
+    Returns the canonical JSON representation of the payload as UTF-8 bytes.
+    Ensures consistent hashing across different platforms/JSON encoders.
+    """
     return json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
 
 
 def verify_hash_chain_file(path: str, max_errors: int = 50) -> Dict[str, Any]:
     """
     Verify an append-only hash-chain log file. Returns a result dict suitable for JSON APIs.
+    
+    Checks:
+    1. JSON validity per line
+    2. Sequence continuity (prev_hash matches previous line's hash)
+    3. Hash integrity (line_hash matches computed hash of prev_hash + payload)
     """
     p = Path(path)
     if not p.is_file():
@@ -97,31 +97,44 @@ def verify_hash_chain_file(path: str, max_errors: int = 50) -> Dict[str, Any]:
 
 class HashChainAppendOnlyFileHandler(logging.Handler):
     """
-    Opens the target file in append mode only (no rotation = no overwrite of prior records).
+    Logging handler that opens the target file in append mode only and maintains a SHA-256 hash chain.
+    Each log entry is protected against tampering, deletion, or reordering by including the 
+    hash of the previous record.
     """
 
     def __init__(self, filename: str, encoding: str = "utf-8"):
         super().__init__()
         self.baseFilename = os.path.abspath(filename)
+        # Ensure the directory exists
         Path(self.baseFilename).parent.mkdir(parents=True, exist_ok=True)
         self.encoding = encoding
         self._lock = threading.RLock()
+        # Initialize the chain by loading the last record's hash and sequence number
         self._prev_hash, self._seq = self._load_chain_tip()
 
     def _load_chain_tip(self) -> tuple[str, int]:
+        """
+        Reads the last line of the file to resume the hash chain.
+        Returns (last_hash, next_sequence_number).
+        """
         if not os.path.exists(self.baseFilename) or os.path.getsize(self.baseFilename) == 0:
             return GENESIS_PREV_HASH, 0
+        
         last_line = ""
         try:
             with open(self.baseFilename, "r", encoding=self.encoding, errors="replace") as f:
+                # We iterate to find the last non-empty line. 
+                # For very large files, a seek-from-end approach would be more efficient.
                 for line in f:
                     s = line.strip()
                     if s:
                         last_line = s
         except OSError:
             return GENESIS_PREV_HASH, 0
+            
         if not last_line:
             return GENESIS_PREV_HASH, 0
+            
         try:
             rec = json.loads(last_line)
             lh = rec.get("line_hash")
@@ -133,6 +146,9 @@ class HashChainAppendOnlyFileHandler(logging.Handler):
         return GENESIS_PREV_HASH, 0
 
     def emit(self, record: logging.LogRecord) -> None:
+        """
+        Writes a new log record with its hash and the previous record's hash.
+        """
         try:
             payload: Dict[str, Any] = {
                 "level": record.levelname,
@@ -140,6 +156,7 @@ class HashChainAppendOnlyFileHandler(logging.Handler):
                 "time_iso": logging.Formatter().formatTime(record, "%Y-%m-%dT%H:%M:%S"),
                 "message": record.getMessage(),
             }
+            # Include exception text if present, but truncate to avoid massive log entries
             if record.exc_info and record.exc_text:
                 payload["exc_text"] = (record.exc_text or "")[:2000]
 
@@ -153,6 +170,8 @@ class HashChainAppendOnlyFileHandler(logging.Handler):
                     "line_hash": line_hash,
                 }
                 line = json.dumps(envelope, separators=(",", ":")) + "\n"
+                
+                # Use 'a' mode for append-only behavior
                 with open(self.baseFilename, "a", encoding=self.encoding) as af:
                     af.write(line)
                     af.flush()
@@ -160,6 +179,8 @@ class HashChainAppendOnlyFileHandler(logging.Handler):
                         os.fsync(af.fileno())
                     except OSError:
                         pass
+                
+                # Update state for next record
                 self._prev_hash = line_hash
                 self._seq += 1
         except Exception:

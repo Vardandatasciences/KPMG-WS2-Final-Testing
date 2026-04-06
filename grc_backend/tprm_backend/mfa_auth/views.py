@@ -2,7 +2,7 @@ from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_protect
 from django.utils.decorators import method_decorator
 from django.http import JsonResponse
 import json
@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 @api_view(['POST'])
+@csrf_protect
 @permission_classes([AllowAny])
 def login_step1(request):
     """
@@ -121,6 +122,7 @@ def login_step1(request):
 
 
 @api_view(['POST'])
+@csrf_protect
 @permission_classes([AllowAny])
 def verify_otp(request):
     """
@@ -195,6 +197,7 @@ def verify_otp(request):
 
 
 @api_view(['POST'])
+@csrf_protect
 @permission_classes([AllowAny])
 def resend_otp(request):
     """
@@ -325,6 +328,7 @@ def validate_session(request):
 
 
 @api_view(['POST'])
+@csrf_protect
 @permission_classes([AllowAny])
 def refresh_token(request):
     """

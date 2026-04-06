@@ -10,7 +10,7 @@ from rest_framework.permissions import AllowAny
 from django.shortcuts import get_object_or_404
 from django.db.models import Q, Count
 from django.utils import timezone
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from datetime import datetime, date
 import secrets
 import os

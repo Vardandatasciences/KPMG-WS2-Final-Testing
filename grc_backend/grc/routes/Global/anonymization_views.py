@@ -11,7 +11,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 from django.db import connection
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from ...models import GRCLog, Framework
 from .data_masking import get_masking_service, mask_dict, mask_email, mask_phone, mask_address, mask_name, mask_user_id
 from ...rbac.utils import RBACUtils

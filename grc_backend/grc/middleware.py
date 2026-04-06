@@ -12,6 +12,11 @@ from .authentication import verify_jwt_token, _compare_versions
 from rest_framework_simplejwt.tokens import AccessToken
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from .rbac.utils import RBACUtils
+from django.core.cache import cache
+import hmac
+import hashlib
+import json
+from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
 
@@ -353,6 +358,17 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
                         # Also store on a custom attribute so DRF views can read it
                         # even after DRF's _not_authenticated() overwrites request.user
                         request._grc_user = user
+                        
+                        # MULTI-TENANCY: Attach tenant context from JWT to request
+                        tenant_id = payload.get('tenant_id')
+                        tenant_name = payload.get('tenant_name')
+                        if tenant_id:
+                            request.tenant_id = tenant_id
+                            request.tenant = getattr(user, 'tenant', None)
+                            # Set thread-local context for safety
+                            from .utils.tenant_context import set_current_tenant_id
+                            set_current_tenant_id(tenant_id)
+                        
                         #logger.info(f"[JWT Middleware] User {user.UserName} (ID: {user.UserId}) authenticated via JWT for {request.method} {path}")
                         return None
                     else:
@@ -975,3 +991,267 @@ class EnterpriseSecurityHeadersMiddleware(MiddlewareMixin):
                 return True
         
         return False
+
+class RequestSignatureVerificationMiddleware(MiddlewareMixin):
+    """
+    Enforce nonce + HMAC request signature verification to prevent replay and tampering.
+
+    Required headers when enabled:
+    - X-Request-Nonce: random, unique per request (server will reject re-use)
+    - X-Request-Timestamp: UNIX epoch seconds (within tolerance window)
+    - X-Request-Signature: hex HMAC-SHA256(method|path|timestamp|nonce|body) using shared secret
+
+    Configuration (settings.py):
+    - REQUEST_SIGNATURE_ENABLED: bool
+    - REQUEST_SIGNATURE_SECRET: str
+    - REQUEST_SIGNATURE_TOLERANCE_SECONDS: int (recommended: 300)
+    - REQUEST_SIGNATURE_EXEMPT_PATH_PREFIXES: list[str]
+    - REQUEST_SIGNATURE_ENFORCE_METHODS: list[str] (default: ['POST','PUT','PATCH','DELETE'])
+    """
+
+    def __init__(self, get_response):
+        super().__init__(get_response)
+        self.enabled = getattr(settings, "REQUEST_SIGNATURE_ENABLED", False)
+        self.secret = getattr(settings, "REQUEST_SIGNATURE_SECRET", None)
+        self.tolerance = int(getattr(settings, "REQUEST_SIGNATURE_TOLERANCE_SECONDS", 300))
+        self.exempt_prefixes = getattr(settings, "REQUEST_SIGNATURE_EXEMPT_PATH_PREFIXES", [
+            "/admin/", "/static/", "/media/",
+            "/api/login/", "/api/jwt/", "/api/register/",
+            "/api/send-otp/", "/api/verify-otp/", "/api/reset-password/",
+            "/api/google/", "/api/gmail/", "/oauth/",
+            "/api/tprm/", "/api/v1/vendor-",
+        ])
+        self.methods = set(getattr(settings, "REQUEST_SIGNATURE_ENFORCE_METHODS", ["POST", "PUT", "PATCH", "DELETE"]))
+
+    def _is_exempt(self, path: str) -> bool:
+        try:
+            for prefix in self.exempt_prefixes:
+                if path.startswith(prefix):
+                    return True
+        except Exception:
+            pass
+        return False
+
+    def _cache_nonce_key(self, nonce: str) -> str:
+        return f"reqsig:nonce:{nonce}"
+
+    def _body_bytes(self, request) -> bytes:
+        try:
+            # DRF may have parsed; fallback to raw body
+            body = request.body
+            if isinstance(body, bytes):
+                return body
+            if body is None:
+                return b""
+            return bytes(str(body), "utf-8")
+        except Exception:
+            return b""
+
+    def _compute_signature(self, secret: str, method: str, path: str, ts: str, nonce: str, body: bytes) -> str:
+        msg = "|".join([method.upper(), path, ts, nonce]).encode("utf-8") + b"|" + (body or b"")
+        mac = hmac.new(secret.encode("utf-8"), msg, hashlib.sha256).hexdigest()
+        return mac
+
+    def process_request(self, request):
+        if not self.enabled:
+            return None
+
+        if request.method not in self.methods:
+            return None
+
+        path = request.path_info or ""
+        if self._is_exempt(path):
+            return None
+
+        # Extract headers
+        nonce = request.headers.get("X-Request-Nonce")
+        ts = request.headers.get("X-Request-Timestamp")
+        signature = request.headers.get("X-Request-Signature")
+
+        if not nonce or not ts or not signature:
+            return JsonResponse({"error": "Missing required request signature headers"}, status=400)
+
+        # Timestamp freshness
+        try:
+            ts_int = int(ts)
+        except Exception:
+            return JsonResponse({"error": "Invalid X-Request-Timestamp"}, status=400)
+
+        now = int(time.time())
+        if abs(now - ts_int) > self.tolerance:
+            return JsonResponse({"error": "Request timestamp outside allowed window"}, status=401)
+
+        # Nonce replay check
+        nonce_key = self._cache_nonce_key(nonce)
+        if cache.get(nonce_key):
+            return JsonResponse({"error": "Replay detected (nonce already used)"}, status=401)
+
+        # Signature verification
+        if not self.secret:
+            return JsonResponse({"error": "Server signature secret not configured"}, status=500)
+
+        body = self._body_bytes(request)
+        expected = self._compute_signature(self.secret, request.method, path, ts, nonce, body)
+        # Constant-time compare
+        if not hmac.compare_digest(expected, signature):
+            return JsonResponse({"error": "Invalid request signature"}, status=401)
+
+        # Record nonce to prevent re-use
+        # Use tolerance as TTL to cover window; add small buffer
+        cache.set(nonce_key, True, timeout=self.tolerance + 30)
+        return None
+
+
+class ApiAbuseDetectionMiddleware(MiddlewareMixin):
+    """
+    Lightweight API abuse detector with real-time alerting.
+
+    Features:
+    - Per-IP request rate windowing; alert on excessive RPS
+    - Error spike detection per-IP and per-path
+
+    Configuration:
+    - API_ABUSE_DETECTION_ENABLED: bool
+    - API_ABUSE_RPS_THRESHOLD: int (requests per minute per IP)
+    - API_ABUSE_ERROR_THRESHOLD: int (errors per minute per IP)
+    - SECURITY_ALERT_EMAIL: email to notify
+    - SECURITY_ALERT_WEBHOOK_URL: optional webhook (Slack/Teams) URL
+    """
+
+    def __init__(self, get_response):
+        super().__init__(get_response)
+        self.enabled = getattr(settings, "API_ABUSE_DETECTION_ENABLED", True)
+        self.rps_threshold = int(getattr(settings, "API_ABUSE_RPS_THRESHOLD", 300))
+        self.err_threshold = int(getattr(settings, "API_ABUSE_ERROR_THRESHOLD", 30))
+        self.window_seconds = int(getattr(settings, "API_ABUSE_WINDOW_SECONDS", 60))
+        self.skip_prefixes = getattr(settings, "API_ABUSE_EXEMPT_PATH_PREFIXES", ["/admin/", "/static/", "/media/"])
+        self.alert_email = getattr(settings, "SECURITY_ALERT_EMAIL", None)
+        self.webhook = getattr(settings, "SECURITY_ALERT_WEBHOOK_URL", None)
+
+    def _client_ip(self, request) -> str:
+        try:
+            xfwd = request.META.get("HTTP_X_FORWARDED_FOR")
+            if xfwd:
+                return xfwd.split(",")[0].strip()
+            return request.META.get("REMOTE_ADDR", "") or ""
+        except Exception:
+            return ""
+
+    def _k(self, kind: str, ip: str) -> str:
+        return f"abuse:{kind}:{ip}"
+
+    def _incr(self, key: str, ttl: int):
+        try:
+            val = cache.get(key) or 0
+            val = int(val) + 1
+            cache.set(key, val, timeout=ttl)
+            return val
+        except Exception:
+            return 0
+
+    def _send_alert(self, subject: str, body: str):
+        try:
+            if self.alert_email:
+                from django.core.mail import send_mail
+                send_mail(subject, body, getattr(settings, "DEFAULT_FROM_EMAIL", None), [self.alert_email], fail_silently=True)
+        except Exception:
+            logger.warning("Failed to send abuse alert email")
+        try:
+            if self.webhook:
+                import urllib.request
+                import urllib.error
+                data = json.dumps({"text": f"{subject}\n{body}"}).encode("utf-8")
+                req = urllib.request.Request(self.webhook, data=data, headers={"Content-Type": "application/json"})
+                urllib.request.urlopen(req, timeout=5)
+        except Exception:
+            logger.warning("Failed to send abuse webhook alert")
+
+    def process_request(self, request):
+        if not self.enabled:
+            return None
+        path = request.path_info or ""
+        for p in self.skip_prefixes:
+            if path.startswith(p):
+                return None
+        ip = self._client_ip(request) or "unknown"
+
+        rps_key = self._k("rps", ip)
+        rps = self._incr(rps_key, self.window_seconds)
+        if rps == self.rps_threshold + 1:
+            self._send_alert(
+                "API abuse: high request rate detected",
+                f"IP={ip} exceeded {self.rps_threshold}/min (path example: {path})"
+            )
+        return None
+
+    def process_response(self, request, response):
+        if not self.enabled:
+            return response
+        try:
+            status = response.status_code
+            if status >= 400:
+                ip = self._client_ip(request) or "unknown"
+                err_key = self._k("err", ip)
+                errs = self._incr(err_key, self.window_seconds)
+                if errs == self.err_threshold + 1:
+                    self._send_alert(
+                        "API abuse: error spike detected",
+                        f"IP={ip} observed {self.err_threshold}+ errors/min (latest path: {request.path})"
+                    )
+        except Exception:
+            pass
+        return response
+
+
+class OutgoingRedirectValidationMiddleware(MiddlewareMixin):
+    """
+    Validate any HttpResponseRedirect targets against a strict allowlist to prevent open redirects.
+
+    Configuration:
+    - REDIRECT_ALLOWLIST_HOSTS: list[str] (default: FRONTEND_URL host)
+    - REDIRECT_ENFORCE_ON_PREFIXES: list[str] (default: ['/api/', '/oauth/'])
+    - In production, only https scheme is allowed.
+    """
+
+    def __init__(self, get_response):
+        super().__init__(get_response)
+        self.prefixes = getattr(settings, "REDIRECT_ENFORCE_ON_PREFIXES", ["/api/", "/oauth/"])
+        frontend = getattr(settings, "FRONTEND_URL", "http://localhost:8080")
+        parsed = urlparse(frontend)
+        default_host = parsed.hostname
+        self.allow_hosts = set(getattr(settings, "REDIRECT_ALLOWLIST_HOSTS", [h for h in [default_host] if h]))
+        self.is_production = not getattr(settings, "DEBUG", False)
+
+    def _should_check(self, path: str) -> bool:
+        for p in self.prefixes:
+            if path.startswith(p):
+                return True
+        return False
+
+    def process_response(self, request, response):
+        try:
+            status = int(getattr(response, "status_code", 200))
+            location = response.get("Location")
+            if not location or status not in (301, 302, 303, 307, 308):
+                return response
+
+            path = request.path_info or ""
+            if not self._should_check(path):
+                return response
+
+            parsed = urlparse(location)
+            host = parsed.hostname
+            scheme = parsed.scheme or "http"
+
+            if host and host not in self.allow_hosts:
+                logger.warning(f"Blocked redirect to unapproved host: {location}")
+                return JsonResponse({"error": "Unapproved redirect host"}, status=400)
+
+            if self.is_production and scheme != "https":
+                logger.warning(f"Blocked non-HTTPS redirect in production: {location}")
+                return JsonResponse({"error": "Insecure redirect blocked"}, status=400)
+
+            return response
+        except Exception as ex:
+            logger.warning(f"Redirect validation failed: {ex}")
+            return response
