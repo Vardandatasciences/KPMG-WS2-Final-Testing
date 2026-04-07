@@ -540,7 +540,7 @@ def create_ai_audit_schedule(request, audit_id):
         except ImportError as e:
             return Response({'success': False, 'error': 'Server missing croniter package. Install with: pip install croniter'}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            return Response({'success': False, 'error': f'Invalid cron expression: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'success': False, 'error': f'Invalid cron expression: An internal server error occurred'}, status=status.HTTP_400_BAD_REQUEST)
 
     elif schedule_type == 'quarterly':
         # Quarterly from start_date: every 3 months from start_date at same day and time. start_date required.

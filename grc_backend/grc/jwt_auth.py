@@ -7,8 +7,6 @@ import logging
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from rest_framework.authentication import BaseAuthentication
-from rest_framework.exceptions import AuthenticationFailed
-from .authentication import _is_session_token_valid
 from .utils.log_sanitize import sanitize_for_log
 
 logger = logging.getLogger(__name__)
@@ -23,17 +21,31 @@ class UnifiedJWTAuthentication(BaseAuthentication):
     def authenticate(self, request):
         """
         Authenticate the request and return a two-tuple of (user, token).
+        Checks for JWT token in:
+        1. Authorization header (Bearer <token>)
+        2. 'access_token' cookie
+        3. 'session_token' cookie
         """
+        from rest_framework.exceptions import AuthenticationFailed
+        from .authentication import _is_session_token_valid
+        
+        token = None
         auth_header = request.headers.get('Authorization')
         
-        if not auth_header:
-            return None
+        if auth_header and auth_header.startswith('Bearer '):
+            raw_token = auth_header.split(' ')[1]
+            # Filter out degenerate tokens from stale frontend storage (e.g. "null", "undefined")
+            if raw_token and raw_token.lower() not in ('null', 'undefined', '', 'none', '[object object]'):
+                token = raw_token
         
-        if not auth_header.startswith('Bearer '):
-            logger.warning("[Unified JWT Auth] Invalid authentication header format. Expected: Bearer <token>")
-            return None
+        # Fallback to cookies if no valid token in header (prioritize secure HttpOnly cookies)
+        if not token:
+            token = request.COOKIES.get('access_token') or request.COOKIES.get('session_token')
+            if token:
+                logger.info("[Unified JWT Auth] Using token from secure cookies")
         
-        token = auth_header.split(' ')[1]
+        if not token:
+            return None
         
         try:
             # Decode JWT token with centralized algorithm/key configuration.
@@ -74,9 +86,11 @@ class UnifiedJWTAuthentication(BaseAuthentication):
                 if not hasattr(user, 'is_authenticated'):
                     user.is_authenticated = True
                 
-                # Add userid for TPRM compatibility
+                # Add userid and UserId for compatibility across all GRC/TPRM modules
                 if not hasattr(user, 'userid'):
                     user.userid = user.pk
+                if not hasattr(user, 'UserId'):
+                    user.UserId = user.pk
                 
                 logger.info(
                     "[Unified JWT Auth] GRC User authenticated: %s",

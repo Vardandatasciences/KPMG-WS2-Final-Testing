@@ -152,7 +152,7 @@
 <script>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import axios from 'axios'
+import apiService from '../../services/apiService'
 import { API_ENDPOINTS } from '../../config/api'
 import { PopupService } from '@/modules/popus/popupService'
 
@@ -188,8 +188,8 @@ export default {
         loading.value = true
         error.value = null
         
-        const response = await axios.get(API_ENDPOINTS.GET_ACKNOWLEDGEMENT_REPORT(requestId))
-        reportData.value = response.data
+        const response = await apiService.get(API_ENDPOINTS.GET_ACKNOWLEDGEMENT_REPORT(requestId))
+        reportData.value = response
       } catch (err) {
         console.error('Error fetching report:', err)
         error.value = err.response?.data?.error || 'Failed to load report'

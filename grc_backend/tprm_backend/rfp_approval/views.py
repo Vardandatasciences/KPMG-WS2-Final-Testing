@@ -1389,7 +1389,7 @@ def workflows(request):
             
         except Exception as e:
             return Response({
-                'error': f'Failed to create workflow: {str(e)}'
+                'error': f'Failed to create workflow: An internal server error occurred'
             }, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -1495,7 +1495,7 @@ def workflow_detail(request, workflow_id):
         import traceback
         traceback.print_exc()
         return Response({
-            'error': f'Failed to process workflow operation: {str(e)}'
+            'error': f'Failed to process workflow operation: An internal server error occurred'
         }, status=500)
 
 
@@ -1770,7 +1770,7 @@ def approval_requests(request):
             
         except Exception as e:
             return Response({
-                'error': f'Failed to create approval request: {str(e)}'
+                'error': f'Failed to create approval request: An internal server error occurred'
             }, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -1865,7 +1865,7 @@ def stages(request):
             
         except Exception as e:
             return Response({
-                'error': f'Failed to create stage: {str(e)}'
+                'error': f'Failed to create stage: An internal server error occurred'
             }, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -1943,7 +1943,7 @@ def comments(request):
             
         except Exception as e:
             return Response({
-                'error': f'Failed to create comment: {str(e)}'
+                'error': f'Failed to create comment: An internal server error occurred'
             }, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -1990,7 +1990,7 @@ def get_proposal_id_from_approval(request, approval_id):
                 request_data = json.loads(request_data)
             except json.JSONDecodeError as e:
                 print(f"[get_proposal_id_from_approval] JSON decode error: {e}")
-                return Response({'error': f'Invalid request_data format: {str(e)}'}, status=400)
+                return Response({'error': f'Invalid request_data format: An internal server error occurred'}, status=400)
         
         print(f"[get_proposal_id_from_approval] Processing approval_id: {approval_id}, request_data type: {type(request_data)}")
         
@@ -2903,7 +2903,7 @@ def user_approvals(request):
         
     except Exception as e:
         return Response({
-            'error': f'Failed to fetch user approvals: {str(e)}'
+            'error': f'Failed to fetch user approvals: An internal server error occurred'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -2948,7 +2948,7 @@ def debug_approval_requests(request):
         
     except Exception as e:
         return Response({
-            'error': f'Failed to debug approval requests: {str(e)}'
+            'error': f'Failed to debug approval requests: An internal server error occurred'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -2993,7 +2993,7 @@ def debug_approval_stages(request):
         
     except Exception as e:
         return Response({
-            'error': f'Failed to debug approval stages: {str(e)}'
+            'error': f'Failed to debug approval stages: An internal server error occurred'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -3075,7 +3075,7 @@ def start_stage_review(request):
         }, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
         return Response({
-            'error': f'Failed to start stage review: {str(e)}'
+            'error': f'Failed to start stage review: An internal server error occurred'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -3190,7 +3190,7 @@ def create_sample_approval_request(request):
         
     except Exception as e:
         return Response({
-            'error': f'Failed to create sample approval request: {str(e)}'
+            'error': f'Failed to create sample approval request: An internal server error occurred'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -3219,7 +3219,7 @@ def test_rfp_status_update(request):
         
     except Exception as e:
         return Response({
-            'error': f'Failed to update RFP status: {str(e)}'
+            'error': f'Failed to update RFP status: An internal server error occurred'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -3895,7 +3895,7 @@ def get_document_url(request, file_id):
         import traceback
         traceback.print_exc()
         return Response({
-            'error': f'Failed to fetch document URL: {str(e)}'
+            'error': f'Failed to fetch document URL: An internal server error occurred'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -4805,7 +4805,7 @@ def get_rfp_details(request, rfp_id):
         import traceback
         traceback.print_exc()
         return Response({
-            'error': f'Failed to fetch RFP details: {str(e)}'
+            'error': f'Failed to fetch RFP details: An internal server error occurred'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -4908,7 +4908,7 @@ def approval_request_versions(request):
         traceback.print_exc()
         return Response({
             'success': False,
-            'error': f'Failed to create version: {str(e)}'
+            'error': f'Failed to create version: An internal server error occurred'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -4974,7 +4974,7 @@ def get_approval_request_versions(request, approval_id):
         traceback.print_exc()
         return Response({
             'success': False,
-            'error': f'Failed to get versions: {str(e)}'
+            'error': f'Failed to get versions: An internal server error occurred'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -5038,7 +5038,7 @@ def approve_version(request, version_id):
         traceback.print_exc()
         return Response({
             'success': False,
-            'error': f'Failed to approve version: {str(e)}'
+            'error': f'Failed to approve version: An internal server error occurred'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -5258,7 +5258,7 @@ def change_requests(request):
         return JsonResponse({
             'success': False,
             'error': 'Failed to process change request',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -5418,7 +5418,7 @@ def respond_to_change_request(request):
         return JsonResponse({
             'success': False,
             'error': 'Failed to respond to change request',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -5550,5 +5550,5 @@ def get_workflow_changes(request, workflow_id):
         import traceback
         traceback.print_exc()
         return Response({
-            'error': f'Failed to get workflow changes: {str(e)}'
+            'error': f'Failed to get workflow changes: An internal server error occurred'
         }, status=500)

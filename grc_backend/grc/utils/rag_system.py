@@ -377,6 +377,6 @@ def get_rag_stats() -> Dict[str, Any]:
     except Exception as e:
         return {
             "status": "error",
-            "message": str(e)
+            "message": 'An internal server error occurred.'
         }
 

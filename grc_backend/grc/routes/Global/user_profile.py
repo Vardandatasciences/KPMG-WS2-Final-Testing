@@ -99,7 +99,7 @@ def get_user_business_info(request, user_id):
     except Exception as e:
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 @require_http_methods(["GET"])
@@ -298,7 +298,7 @@ def get_current_user(request):
         
     except Exception as e:
         return Response(
-            {'error': f'Failed to fetch user details: {str(e)}'}, 
+            {'error': f'Failed to fetch user details: An internal server error occurred'}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 

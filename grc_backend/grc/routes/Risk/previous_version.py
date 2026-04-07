@@ -211,7 +211,7 @@ def get_previous_version(request, risk_id, version):
         traceback.print_exc()
         return JsonResponse({
             'success': False,
-            'message': str(e),
+            'message': 'An internal server error occurred.',
             'version_data': None
         }, status=500)
 

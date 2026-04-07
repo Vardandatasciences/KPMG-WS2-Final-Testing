@@ -385,8 +385,7 @@
 </template>
 
 <script>
-import axios from 'axios';
-import { API_ENDPOINTS } from '../../../config/api.js';
+import { API_ENDPOINTS, createAxiosInstance } from '../../../config/api.js';
 
 export default {
   name: 'SentinelIntegration',
@@ -417,15 +416,9 @@ export default {
   
   created() {
     // Configure axios instance for session-based authentication (no JWT tokens)
-    // Use API_BASE_URL from config instead of hardcoded localhost
+    // Use centralized axios instance configuration (includes withCredentials: true)
     const apiBaseUrl = API_ENDPOINTS.SENTINEL_STATUS.replace('/api/sentinel/status/', '');
-    this.axiosInstance = axios.create({
-      baseURL: apiBaseUrl,
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      withCredentials: true, // Important for session-based authentication
-    });
+    this.axiosInstance = createAxiosInstance(apiBaseUrl);
   },
 
   computed: {

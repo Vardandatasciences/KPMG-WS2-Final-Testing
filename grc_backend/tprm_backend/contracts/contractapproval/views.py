@@ -1374,6 +1374,6 @@ def contract_comprehensive_detail(request, contract_id):
         return Response({
             'success': False,
             'error': 'Failed to retrieve contract details',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 

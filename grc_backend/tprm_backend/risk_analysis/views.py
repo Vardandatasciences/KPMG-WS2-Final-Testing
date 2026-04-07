@@ -151,7 +151,7 @@ class RiskViewSet(viewsets.ModelViewSet):
             return Response({'message': 'Owner assigned successfully'})
         except Exception as e:
             return Response(
-                {'error': f'Failed to assign owner: {str(e)}'}, 
+                {'error': f'Failed to assign owner: An internal server error occurred'}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
     

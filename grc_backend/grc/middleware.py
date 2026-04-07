@@ -17,7 +17,7 @@ import hmac
 import hashlib
 import json
 from urllib.parse import urlparse
-from .utils.log_sanitize import sanitize_for_log
+from .utils.log_sanitize import sanitize_for_log, mask_sensitive_data
 
 logger = logging.getLogger(__name__)
 
@@ -806,10 +806,12 @@ class AuditLoggingMiddleware(MiddlewareMixin):
                     logLevel='INFO' if response.status_code < 400 else 'WARNING',
                     ipAddress=client_ip,
                     additionalInfo={
-                        'path': path,
+                        'path': sanitize_for_log(path, max_len=512),
                         'method': request.method,
                         'status_code': response.status_code,
-                        'response_time_ms': int((time.time() - request._audit_log_info['start_time']) * 1000) if hasattr(request, '_audit_log_info') else None
+                        'response_time_ms': int((time.time() - request._audit_log_info['start_time']) * 1000) if hasattr(request, '_audit_log_info') else None,
+                        # Recursively mask any sensitive data in query params or headers that might have been captured
+                        'query_params': mask_sensitive_data(dict(request.GET.items())),
                     },
                     frameworkId=framework.FrameworkId
                 )
@@ -1013,6 +1015,10 @@ class EnterpriseSecurityHeadersMiddleware(MiddlewareMixin):
         # upgrade-insecure-requests: Automatically upgrade HTTP to HTTPS
         if self.is_production:
             directives.append("upgrade-insecure-requests")
+        
+        # block-all-mixed-content: Prevent loading resources via HTTP
+        if self.is_production:
+            directives.append("block-all-mixed-content")
         
         return '; '.join(directives)
     

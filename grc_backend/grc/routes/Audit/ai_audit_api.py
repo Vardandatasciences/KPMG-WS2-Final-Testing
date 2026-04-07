@@ -398,7 +398,7 @@ def trigger_database_analysis(request, audit_id):
         logger.error(f"❌ Error triggering database analysis: {str(e)}", exc_info=True)
         return JsonResponse({
             'success': False,
-            'error': f'Failed to trigger database analysis: {str(e)}'
+            'error': f'Failed to trigger database analysis: An internal server error occurred'
         }, status=500)
 
 
@@ -1014,7 +1014,7 @@ class AIAuditDocumentUploadView(APIView):
                     logger.error(f"❌ Error fetching file_operation {file_operation_id}: {e}")
                     return JsonResponse({
                         'success': False,
-                        'error': f'Error fetching file from file_operations: {str(e)}'
+                        'error': f'Error fetching file from file_operations: An internal server error occurred'
                     }, status=500)
             
             elif already_uploaded:
@@ -5887,7 +5887,7 @@ def _check_document_compliance_internal(audit_id, document_id, user_id=None, sel
                     temp_file_created = True
             except Exception as e:
                 logger.error(f"❌ Error handling S3 file: {e}")
-                return {'success': False, 'error': f'S3 file handling error: {str(e)}'}
+                return {'success': False, 'error': f'S3 file handling error: An internal server error occurred'}
         else:
             # Handle local file
             full_path = doc_path if os.path.isabs(doc_path) else os.path.join(settings.MEDIA_ROOT, doc_path)
@@ -6232,7 +6232,7 @@ def _check_document_compliance_internal(audit_id, document_id, user_id=None, sel
                     logger.warning(f"⚠️ Could not save to lastchecklistitemverified: {e}")
         except Exception as e:
             logger.warning(f"ℹ️ Could not persist compliance results: {e}")
-            return {'success': False, 'error': f'Failed to persist results: {str(e)}'}
+            return {'success': False, 'error': f'Failed to persist results: An internal server error occurred'}
 
         # Clean up temporary file
         if temp_file_created and 'full_path' in locals():
@@ -6690,7 +6690,7 @@ def check_document_compliance(request, audit_id, document_id):
                 logger.error(f"❌ Error handling S3 file: {e}")
                 import traceback
                 traceback.print_exc()
-                return Response({'success': False, 'error': f'S3 file handling error: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                return Response({'success': False, 'error': f'S3 file handling error: An internal server error occurred'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         else:
             # Handle local file
             full_path = doc_path if os.path.isabs(doc_path) else os.path.join(settings.MEDIA_ROOT, doc_path)
@@ -8863,7 +8863,7 @@ def delete_audit_document_api(request, audit_id, document_id):
         logger.error(f"❌ Error deleting document: {e}")
         return Response({
             'success': False,
-            'error': f'Failed to delete document: {str(e)}'
+            'error': f'Failed to delete document: An internal server error occurred'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 

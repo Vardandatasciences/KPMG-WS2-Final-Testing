@@ -289,7 +289,7 @@ def get_cache_stats() -> dict:
             
             return stats
         except Exception as e:
-            return {"status": "error", "message": str(e)}
+            return {"status": "error", "message": 'An internal server error occurred.'}
     else:
         # Return in-memory cache stats
         # Clean expired entries first

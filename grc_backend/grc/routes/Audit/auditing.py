@@ -80,7 +80,7 @@ def get_audit_task_details(request, audit_id):
             validated_audit_id = validate_int(audit_id, min_value=1, field_name="Audit ID")
         except ValidationError as e:
             return JsonResponse({
-                'error': f'Invalid audit ID: {str(e)}'
+                'error': f'Invalid audit ID: An internal server error occurred'
             }, status=400)
         
         debug_print(f"Fetching audit details for audit_id: {validated_audit_id}")
@@ -727,7 +727,7 @@ def save_audit_version(request, audit_id):
             validated_audit_id = validate_int(audit_id, min_value=1, field_name="Audit ID")
         except ValidationError as e:
             return JsonResponse({
-                'error': f'Invalid audit ID: {str(e)}'
+                'error': f'Invalid audit ID: An internal server error occurred'
             }, status=400)
         
         # Parse request body - use request.data (DRF already parsed it)
@@ -740,7 +740,7 @@ def save_audit_version(request, audit_id):
                 }, status=400)
         except Exception as e:
             return JsonResponse({
-                'error': f'Could not parse request body: {str(e)}'
+                'error': f'Could not parse request body: An internal server error occurred'
             }, status=400)
         
         # Validate the audit version data
@@ -748,7 +748,7 @@ def save_audit_version(request, audit_id):
             validated_data = validate_audit_version_data(raw_data)
         except ValidationError as e:
             return JsonResponse({
-                'error': f'Validation error: {str(e)}'
+                'error': f'Validation error: An internal server error occurred'
             }, status=400)
         
         # Get user ID from session or use validated user ID
@@ -1113,7 +1113,7 @@ def send_audit_for_review(request, audit_id):
             validated_audit_id = validate_int(audit_id, min_value=1, field_name="Audit ID")
         except ValidationError as e:
             return JsonResponse({
-                'error': f'Invalid audit ID: {str(e)}'
+                'error': f'Invalid audit ID: An internal server error occurred'
             }, status=400)
         
         # Parse request body - use request.data (DRF already parsed it)
@@ -1122,7 +1122,7 @@ def send_audit_for_review(request, audit_id):
             data = request.data if isinstance(request.data, dict) else {}
         except Exception as e:
             return JsonResponse({
-                'error': f'Could not parse request body: {str(e)}'
+                'error': f'Could not parse request body: An internal server error occurred'
             }, status=400)
         
         # Validate version parameter if provided
@@ -1392,7 +1392,7 @@ def upload_evidence_to_s3(request):
         traceback.print_exc()
         response = JsonResponse({
             'success': False,
-            'error': f'Upload failed: {str(e)}'
+            'error': f'Upload failed: An internal server error occurred'
         }, status=500)
         
         return response

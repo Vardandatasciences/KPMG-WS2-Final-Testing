@@ -429,5 +429,5 @@ def test_connection(request):
         print(f"Database connection test failed: {e}")
         return Response({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

@@ -272,7 +272,7 @@ def train_ai_models(request):
         logger.error(f"AI Model Training Error: {str(e)}")
         return JsonResponse({
             'success': False,
-            'error': f'Failed to train AI models: {str(e)}'
+            'error': f'Failed to train AI models: An internal server error occurred'
         }, status=500)
 
 @api_view(['GET'])

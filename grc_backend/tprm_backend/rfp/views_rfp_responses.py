@@ -1855,7 +1855,7 @@ def upload_response_asset(request):
         print(error_traceback)
         return JsonResponse({
             'success': False,
-            'error': f'Failed to upload attachment: {str(e)}'
+            'error': f'Failed to upload attachment: An internal server error occurred'
         }, status=500)
  
  
@@ -1956,7 +1956,7 @@ def check_submission_status(request):
     except Exception as e:
         return JsonResponse({
             'success': False,
-            'error': f'Failed to check submission status: {str(e)}'
+            'error': f'Failed to check submission status: An internal server error occurred'
         }, status=500)
 
 
@@ -2041,7 +2041,7 @@ def get_invitation_details(request, invitation_id):
     except Exception as e:
         return JsonResponse({
             'success': False,
-            'error': f'Failed to fetch invitation details: {str(e)}'
+            'error': f'Failed to fetch invitation details: An internal server error occurred'
         }, status=500)
 
 
@@ -2308,7 +2308,7 @@ def get_rfp_details(request):
     except Exception as e:
         return JsonResponse({
             'success': False,
-            'error': f'Failed to fetch RFP details: {str(e)}'
+            'error': f'Failed to fetch RFP details: An internal server error occurred'
         }, status=500)
 
 
@@ -2411,7 +2411,7 @@ def get_open_rfp_details(request, rfp_number):
         logger.error(f'[get_open_rfp_details] Exception occurred: {str(e)}', exc_info=True)
         return JsonResponse({
             'success': False,
-            'error': f'Failed to fetch RFP details: {str(e)}'
+            'error': f'Failed to fetch RFP details: An internal server error occurred'
         }, status=500)
 
 
@@ -2508,7 +2508,7 @@ def get_open_rfp_by_id(request, rfp_id):
         logger.error(f'[get_open_rfp_by_id] Exception occurred: {str(e)}', exc_info=True)
         return JsonResponse({
             'success': False,
-            'error': f'Failed to fetch RFP details: {str(e)}'
+            'error': f'Failed to fetch RFP details: An internal server error occurred'
         }, status=500)
 
 
@@ -2571,7 +2571,7 @@ def create_open_invitation(request, rfp_number):
     except Exception as e:
         return JsonResponse({
             'success': False,
-            'error': f'Failed to create open invitation: {str(e)}'
+            'error': f'Failed to create open invitation: An internal server error occurred'
         }, status=500)
 
 
@@ -2769,7 +2769,7 @@ def get_rfp_evaluation_criteria(request, rfp_number):
         logger.error(f"Failed to fetch evaluation criteria: {str(e)}", exc_info=True)
         return JsonResponse({
             'success': False,
-            'error': f'Failed to fetch evaluation criteria: {str(e)}'
+            'error': f'Failed to fetch evaluation criteria: An internal server error occurred'
         }, status=500)
 
 
@@ -3190,7 +3190,7 @@ def save_draft_response(request):
     except Exception as e:
         return JsonResponse({
             'success': False,
-            'error': f'Failed to save draft: {str(e)}'
+            'error': f'Failed to save draft: An internal server error occurred'
         }, status=500)
 
 
@@ -3280,7 +3280,7 @@ def get_draft_response(request, rfp_id):
     except Exception as e:
         return JsonResponse({
             'success': False,
-            'error': f'Failed to fetch draft: {str(e)}'
+            'error': f'Failed to fetch draft: An internal server error occurred'
         }, status=500)
 
 
@@ -3523,7 +3523,7 @@ def upload_document(request):
         logger.error(f"Failed to upload document: {str(e)}", exc_info=True)
         return JsonResponse({
             'success': False,
-            'error': f'Failed to upload document: {str(e)}'
+            'error': f'Failed to upload document: An internal server error occurred'
         }, status=500)
 
 
@@ -3665,7 +3665,7 @@ def list_documents(request, rfp_id):
     except Exception as e:
         return JsonResponse({
             'success': False,
-            'error': f'Failed to list documents: {str(e)}'
+            'error': f'Failed to list documents: An internal server error occurred'
         }, status=500)
 
 
@@ -3848,7 +3848,7 @@ def get_rfp_responses(request):
         print(f"DEBUG: Error in get_rfp_responses: {str(e)}")
         return JsonResponse({
             'success': False,
-            'error': f'Failed to fetch RFP responses: {str(e)}'
+            'error': f'Failed to fetch RFP responses: An internal server error occurred'
         }, status=500)
 
 
@@ -3917,7 +3917,7 @@ def get_rfp_response_by_id(request, response_id):
     except Exception as e:
         return JsonResponse({
             'success': False,
-            'error': f'Failed to fetch RFP response: {str(e)}'
+            'error': f'Failed to fetch RFP response: An internal server error occurred'
         }, status=500)
 
 
@@ -3997,7 +3997,7 @@ def download_document(request, rfp_id):
     except Exception as e:
         return JsonResponse({
             'success': False,
-            'error': f'Failed to download document: {str(e)}'
+            'error': f'Failed to download document: An internal server error occurred'
         }, status=500)
 
 
@@ -4075,5 +4075,5 @@ def delete_document(request, rfp_id):
     except Exception as e:
         return JsonResponse({
             'success': False,
-            'error': f'Failed to delete document: {str(e)}'
+            'error': f'Failed to delete document: An internal server error occurred'
         }, status=500)

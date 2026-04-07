@@ -188,7 +188,7 @@ def analyze_document_relevance(request, audit_id):
         logger.error(f"❌ Error in document relevance analysis: {str(e)}")
         return Response({
             'success': False,
-            'error': f'Analysis failed: {str(e)}'
+            'error': f'Analysis failed: An internal server error occurred'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -333,5 +333,5 @@ Focus on content relevance, not just keyword matching. Score based on how well t
         logger.error(f"❌ AI relevance analysis failed: {str(e)}")
         return {
             'success': False,
-            'error': f'AI analysis failed: {str(e)}'
+            'error': f'AI analysis failed: An internal server error occurred'
         }

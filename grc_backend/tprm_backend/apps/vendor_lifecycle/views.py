@@ -82,7 +82,7 @@ def lifecycle_tracker_data(request):
         
     except Exception as e:
         return Response(
-            {'error': f'Failed to fetch lifecycle data: {str(e)}'}, 
+            {'error': f'Failed to fetch lifecycle data: An internal server error occurred'}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
@@ -339,7 +339,7 @@ def vendor_lifecycle_stages(request):
         
     except Exception as e:
         return Response(
-            {'error': f'Failed to fetch lifecycle stages: {str(e)}'}, 
+            {'error': f'Failed to fetch lifecycle stages: An internal server error occurred'}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
@@ -387,7 +387,7 @@ def vendor_timeline(request, vendor_id):
         )
     except Exception as e:
         return Response(
-            {'error': f'Failed to fetch vendor timeline: {str(e)}'}, 
+            {'error': f'Failed to fetch vendor timeline: An internal server error occurred'}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
@@ -416,7 +416,7 @@ def temp_vendor_stages(request):
         
     except Exception as e:
         return Response(
-            {'error': f'Failed to fetch vendor stages: {str(e)}'}, 
+            {'error': f'Failed to fetch vendor stages: An internal server error occurred'}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
@@ -480,7 +480,7 @@ def update_vendor_stage(request):
         )
     except Exception as e:
         return Response(
-            {'error': f'Failed to update vendor stage: {str(e)}'}, 
+            {'error': f'Failed to update vendor stage: An internal server error occurred'}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
@@ -522,7 +522,7 @@ def get_vendors_list(request):
         
     except Exception as e:
         return Response(
-            {'error': f'Failed to fetch vendors list: {str(e)}'}, 
+            {'error': f'Failed to fetch vendors list: An internal server error occurred'}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
@@ -630,7 +630,7 @@ def get_vendor_lifecycle_timeline(request, vendor_id):
         )
     except Exception as e:
         return Response(
-            {'error': f'Failed to fetch vendor lifecycle timeline: {str(e)}'}, 
+            {'error': f'Failed to fetch vendor lifecycle timeline: An internal server error occurred'}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
@@ -721,7 +721,7 @@ def get_lifecycle_analytics(request):
         
     except Exception as e:
         return Response(
-            {'error': f'Failed to fetch lifecycle analytics: {str(e)}'}, 
+            {'error': f'Failed to fetch lifecycle analytics: An internal server error occurred'}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
@@ -811,5 +811,5 @@ def update_lifecycle_stage_completion(vendor_id, stage_code, completion_status='
     except Exception as e:
         return {
             'success': False,
-            'error': f'Error updating lifecycle stage: {str(e)}'
+            'error': f'Error updating lifecycle stage: An internal server error occurred'
         }

@@ -131,7 +131,7 @@ class GlobalSearchViewSet(viewsets.ViewSet):
             print(f"Direct database search error: {str(e)}")
             print(traceback.format_exc())
             return Response(
-                {'error': f'Direct database search failed: {str(e)}'},
+                {'error': f'Direct database search failed: An internal server error occurred'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
@@ -672,7 +672,7 @@ class GlobalSearchViewSet(viewsets.ViewSet):
             
         except Exception as e:
             return Response(
-                {'error': f'Failed to update index: {str(e)}'},
+                {'error': f'Failed to update index: An internal server error occurred'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
@@ -708,7 +708,7 @@ class GlobalSearchViewSet(viewsets.ViewSet):
             
         except Exception as e:
             return Response(
-                {'error': f'Failed to bulk update index: {str(e)}'},
+                {'error': f'Failed to bulk update index: An internal server error occurred'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
@@ -745,7 +745,7 @@ class GlobalSearchViewSet(viewsets.ViewSet):
                 
         except Exception as e:
             return Response(
-                {'error': f'Failed to delete index entry: {str(e)}'},
+                {'error': f'Failed to delete index entry: An internal server error occurred'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
@@ -780,7 +780,7 @@ class GlobalSearchViewSet(viewsets.ViewSet):
             
         except Exception as e:
             return Response({
-                'error': f'Failed to get search stats: {str(e)}'
+                'error': f'Failed to get search stats: An internal server error occurred'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     @method_decorator(cache_page(60 * 5))  # Cache for 5 minutes
@@ -912,7 +912,7 @@ class GlobalSearchViewSet(viewsets.ViewSet):
             
         except Exception as e:
             return Response(
-                {'error': f'Failed to get dashboard analytics: {str(e)}'},
+                {'error': f'Failed to get dashboard analytics: An internal server error occurred'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
@@ -960,7 +960,7 @@ class GlobalSearchViewSet(viewsets.ViewSet):
             
         except Exception as e:
             return Response(
-                {'error': f'Failed to get live updates: {str(e)}'},
+                {'error': f'Failed to get live updates: An internal server error occurred'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
@@ -1035,7 +1035,7 @@ class GlobalSearchViewSet(viewsets.ViewSet):
             logger = logging.getLogger(__name__)
             logger.error(f"Failed to get filter options: {str(e)}", exc_info=True)
             return Response(
-                {'error': f'Failed to get filter options: {str(e)}'},
+                {'error': f'Failed to get filter options: An internal server error occurred'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
@@ -1089,7 +1089,7 @@ class GlobalSearchViewSet(viewsets.ViewSet):
             
         except Exception as e:
             return Response({
-                'error': f'Failed to load search history: {str(e)}'
+                'error': f'Failed to load search history: An internal server error occurred'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=False, methods=['delete'])
@@ -1106,7 +1106,7 @@ class GlobalSearchViewSet(viewsets.ViewSet):
             
         except Exception as e:
             return Response({
-                'error': f'Failed to clear search history: {str(e)}'
+                'error': f'Failed to clear search history: An internal server error occurred'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def _track_search_analytics(self, query, results_count, response_time, filters_used):

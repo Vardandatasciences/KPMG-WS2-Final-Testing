@@ -60,7 +60,7 @@ class BambooHRIntegration:
             logger.error(f"Request failed for URL {url}: {str(e)}")
             return {
                 'success': False,
-                'error': f"Request failed: {str(e)}"
+                'error': f"Request failed: An internal server error occurred"
             }
 
     def get_current_user(self):
@@ -111,7 +111,7 @@ class BambooHRIntegration:
         except requests.RequestException as e:
             return {
                 'success': False,
-                'error': f"Request failed: {str(e)}"
+                'error': f"Request failed: An internal server error occurred"
             }
 
     def get_all_employees(self):
@@ -186,7 +186,7 @@ class BambooHRIntegration:
         except Exception as e:
             return {
                 'success': False,
-                'error': f"Error processing employee data: {str(e)}"
+                'error': f"Error processing employee data: An internal server error occurred"
             }
 
 @csrf_exempt
@@ -282,7 +282,7 @@ def bamboohr_employees(request):
                 logger.error(f"Invalid subdomain '{subdomain}': {str(e)}")
                 return JsonResponse({
                     'success': False,
-                    'error': f'Invalid subdomain: {str(e)}'
+                    'error': f'Invalid subdomain: An internal server error occurred'
                 })
             
             if action == 'fetch_employees':
@@ -328,7 +328,7 @@ def bamboohr_employees(request):
         logger.error(f"BambooHR employees endpoint error: {str(e)}")
         return JsonResponse({
             'success': False,
-            'error': f'Server error: {str(e)}'
+            'error': f'Server error: An internal server error occurred'
         })
 
 @csrf_exempt
@@ -478,7 +478,7 @@ def bamboohr_stored_data(request):
         logger.error(f"BambooHR stored data endpoint error: {str(e)}")
         return JsonResponse({
             'success': False,
-            'error': f'Server error: {str(e)}'
+            'error': f'Server error: An internal server error occurred'
         })
 
 @csrf_exempt
@@ -538,7 +538,7 @@ def bamboohr_sync_data(request):
         except (Users.DoesNotExist, ExternalApplication.DoesNotExist, ExternalApplicationConnection.DoesNotExist) as e:
             return JsonResponse({
                 'success': False,
-                'error': f'Database error: {str(e)}'
+                'error': f'Database error: An internal server error occurred'
             })
     
     except json.JSONDecodeError:
@@ -550,7 +550,7 @@ def bamboohr_sync_data(request):
         logger.error(f"BambooHR sync data endpoint error: {str(e)}")
         return JsonResponse({
             'success': False,
-            'error': f'Server error: {str(e)}'
+            'error': f'Server error: An internal server error occurred'
         })
 
 @csrf_exempt
@@ -594,7 +594,7 @@ def bamboohr_departments(request):
         logger.error(f"BambooHR departments endpoint error: {str(e)}")
         return JsonResponse({
             'success': False,
-            'error': f'Server error: {str(e)}'
+            'error': f'Server error: An internal server error occurred'
         })
 
 @csrf_exempt
@@ -716,7 +716,7 @@ def bamboohr_oauth(request):
         logger.error(f"BambooHR OAuth initiation error: {str(e)}")
         return JsonResponse({
             'success': False,
-            'error': f'OAuth initiation failed: {str(e)}'
+            'error': f'OAuth initiation failed: An internal server error occurred'
         })
 
 @csrf_exempt
@@ -1051,7 +1051,7 @@ def bamboohr_oauth_callback(request):
                 if is_local and '/oauth/callback' in request.path:
                     return JsonResponse({
                         'success': False,
-                        'error': f"Request error during token exchange: {str(e)}",
+                        'error': f"Request error during token exchange: An internal server error occurred",
                         'redirect_url': error_url
                     })
                 else:
@@ -1148,7 +1148,7 @@ def bamboohr_oauth_callback(request):
         logger.error(f"BambooHR OAuth callback error: {str(e)}")
         return JsonResponse({
             'success': False,
-            'error': f'OAuth callback failed: {str(e)}'
+            'error': f'OAuth callback failed: An internal server error occurred'
         })
 
 @csrf_exempt
@@ -1329,7 +1329,7 @@ def bamboohr_add_user(request):
             logger.error(f"Error adding user to database: {str(e)}")
             return JsonResponse({
                 'success': False,
-                'error': f'Failed to add user: {str(e)}'
+                'error': f'Failed to add user: An internal server error occurred'
             })
     
     except json.JSONDecodeError:
@@ -1341,7 +1341,7 @@ def bamboohr_add_user(request):
         logger.error(f"BambooHR add user endpoint error: {str(e)}")
         return JsonResponse({
             'success': False,
-            'error': f'Server error: {str(e)}'
+            'error': f'Server error: An internal server error occurred'
         })
 
 @csrf_exempt
@@ -1410,7 +1410,7 @@ def bamboohr_reports(request):
         logger.error(f"BambooHR reports endpoint error: {str(e)}")
         return JsonResponse({
             'success': False,
-            'error': f'Server error: {str(e)}'
+            'error': f'Server error: An internal server error occurred'
         })
 
 @csrf_exempt
@@ -1455,12 +1455,12 @@ def bamboohr_debug(request):
         except (Users.DoesNotExist, ExternalApplication.DoesNotExist, ExternalApplicationConnection.DoesNotExist) as e:
             return JsonResponse({
                 'success': False,
-                'error': f'Connection not found: {str(e)}'
+                'error': f'Connection not found: An internal server error occurred'
             })
     
     except Exception as e:
         logger.error(f"BambooHR debug endpoint error: {str(e)}")
         return JsonResponse({
             'success': False,
-            'error': f'Debug error: {str(e)}'
+            'error': f'Debug error: An internal server error occurred'
         })

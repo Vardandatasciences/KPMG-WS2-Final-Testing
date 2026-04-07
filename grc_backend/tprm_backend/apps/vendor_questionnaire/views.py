@@ -634,7 +634,7 @@ class QuestionnaireViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
             return Response(screening_data)
         except Exception as e:
             return Response(
-                {'error': f'Failed to fetch screening data: {str(e)}'},
+                {'error': f'Failed to fetch screening data: An internal server error occurred'},
                 status=status.HTTP_200_OK
             )
     
@@ -830,7 +830,7 @@ class QuestionnaireViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
             print(f"Error getting questionnaire template: {str(e)}")
             print(traceback.format_exc())
             return Response(
-                {'error': f'Failed to get questionnaire template: {str(e)}'}, 
+                {'error': f'Failed to get questionnaire template: An internal server error occurred'}, 
                 status=status.HTTP_200_OK
             )
 
@@ -1380,7 +1380,7 @@ class QuestionnaireResponseViewSet(VendorAuthenticationMixin, viewsets.ModelView
             import traceback
             traceback.print_exc()
             return Response(
-                {'error': f'Failed to fetch vendor assignments: {str(e)}'},
+                {'error': f'Failed to fetch vendor assignments: An internal server error occurred'},
                 status=status.HTTP_200_OK
             )
     
@@ -1884,7 +1884,7 @@ class QuestionnaireResponseViewSet(VendorAuthenticationMixin, viewsets.ModelView
             )
         except Exception as e:
             return Response(
-                {'error': f'Failed to remove file: {str(e)}'}, 
+                {'error': f'Failed to remove file: An internal server error occurred'}, 
                 status=status.HTTP_200_OK
             )
 

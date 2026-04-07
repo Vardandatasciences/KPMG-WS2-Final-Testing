@@ -40,9 +40,28 @@ def mask_email_for_log(email: Any) -> str:
     local, domain = email_text.split("@", 1)
     if len(local) <= 2:
         local_masked = local[:1] + "*"
-    else:
-        local_masked = local[:2] + "*" * max(1, len(local) - 2)
-    return f"{local_masked}@{domain}"
+def mask_sensitive_data(data: Any) -> Any:
+    """
+    Recursively mask common sensitive fields in dicts or lists.
+    """
+    sensitive_keys = {
+        "password", "token", "access_token", "refresh_token", 
+        "secret", "key", "authorization", "cookie", "otp"
+    }
+    
+    if isinstance(data, dict):
+        masked_dict = {}
+        for k, v in data.items():
+            k_lower = k.lower()
+            if any(sk in k_lower for sk in sensitive_keys):
+                masked_dict[k] = "********"
+            else:
+                masked_dict[k] = mask_sensitive_data(v)
+        return masked_dict
+    elif isinstance(data, list):
+        return [mask_sensitive_data(item) for item in data]
+    
+    return data
 
 
 class LogForgingFilter(logging.Filter):

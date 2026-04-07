@@ -1961,7 +1961,7 @@
 <script>
 
 import { ref, watch, onMounted, onActivated, nextTick, computed, reactive } from 'vue'
-import axios from 'axios'
+import apiService from '@/services/apiService'
 import { useRouter, useRoute } from 'vue-router'
 import { PopupService, PopupModal } from '@/modules/popus'
 import CustomDropdown from '@/components/CustomDropdown.vue'
@@ -2131,12 +2131,12 @@ export default {
       try {
         // Use include_all_for_identifiers parameter to get ALL frameworks regardless of status
         // This ensures truly unique identifier generation
-        const response = await axios.get(`${API_ENDPOINTS.FRAMEWORK_EXPLORER}`, {
+        const data = await apiService.get(API_ENDPOINTS.FRAMEWORK_EXPLORER, {
           params: { include_all_for_identifiers: 'true' }
         })
         
-        // Check if response.data is an array (direct response) or has frameworks property (wrapped response)
-        const frameworksData = Array.isArray(response.data) ? response.data : response.data.frameworks || []
+        // Check if data is an array (direct response) or has frameworks property (wrapped response)
+        const frameworksData = Array.isArray(data) ? data : data.frameworks || []
         
         existingFrameworkIdentifiers.value = frameworksData.map(fw => fw.Identifier || fw.identifier).filter(id => id)
         existingFrameworkNames.value = frameworksData.map(fw => fw.FrameworkName || fw.name).filter(name => name)
@@ -2271,10 +2271,12 @@ export default {
         console.log('🔍 DEBUG: Fetching frameworks for CreatePolicy...')
         
         // Add active_only=true parameter to only fetch active frameworks
-        const response = await axios.get(`${API_ENDPOINTS.FRAMEWORK_EXPLORER}?active_only=true`)
+        const data = await apiService.get(API_ENDPOINTS.FRAMEWORK_EXPLORER, {
+          params: { active_only: 'true' }
+        })
         
-        // Check if response.data is an array (direct response) or has frameworks property (wrapped response)
-        const frameworksData = Array.isArray(response.data) ? response.data : response.data.frameworks || []
+        // Check if data is an array (direct response) or has frameworks property (wrapped response)
+        const frameworksData = Array.isArray(data) ? data : data.frameworks || []
         
         frameworks.value = frameworksData.map(fw => ({
           id: fw.FrameworkId || fw.id,
@@ -2311,13 +2313,13 @@ export default {
         // Set flag to prevent watcher from saving during load
         isLoadingFramework.value = true
         
-        const response = await axios.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED)
-        console.log('📊 DEBUG: Selected framework response:', response.data)
+        const data = await apiService.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED)
+        console.log('📊 DEBUG: Selected framework response:', data)
         
-        if (response.data && response.data.success) {
+        if (data && data.success) {
           // Check if a framework is selected (not null)
-          if (response.data.frameworkId) {
-          const sessionFrameworkId = response.data.frameworkId
+          if (data.frameworkId) {
+          const sessionFrameworkId = data.frameworkId
           console.log('✅ DEBUG: Found selected framework in session:', sessionFrameworkId)
           
           // Check if this framework exists in our loaded frameworks
@@ -2385,12 +2387,12 @@ export default {
             const userId = currentUser.value.UserId || localStorage.getItem('user_id') || 'default_user'
             console.log('💾 DEBUG: User changed framework, saving to backend:', newValue)
             
-            const response = await axios.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, {
+            const data = await apiService.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, {
               frameworkId: newValue,
               userId: userId
             })
             
-            if (response.data && response.data.success) {
+            if (data && data.success) {
               console.log('✅ DEBUG: Framework saved to session successfully')
             } else {
               console.error('❌ DEBUG: Failed to save framework to session')
@@ -2639,12 +2641,12 @@ export default {
     // Fetch current logged-in user information
     async function fetchCurrentUser() {
       try {
-        const response = await axios.get(API_ENDPOINTS.USER_ROLE)
-        if (response.data.success) {
+        const data = await apiService.get(API_ENDPOINTS.USER_ROLE)
+        if (data.success) {
           currentUser.value = {
-            UserId: response.data.user_id,
-            UserName: response.data.username || response.data.user_name || localStorage.getItem('username') || '',
-            Role: response.data.role
+            UserId: data.user_id,
+            UserName: data.username || data.user_name || localStorage.getItem('username') || '',
+            Role: data.role
           }
           // Update approval form with current user name
           approvalForm.value.createdByName = currentUser.value.UserName
@@ -2669,13 +2671,13 @@ export default {
         loading.value = true
         // Fetch reviewers filtered by RBAC permissions (ApprovePolicy) and exclude current user
         const currentUserId = currentUser.value?.UserId || ''
-        const response = await axios.get(`${API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION}`, {
+        const data = await apiService.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
           params: {
             module: 'policy',
             current_user_id: currentUserId
           }
         })        
-        users.value = response.data || []
+        users.value = data || []
       } catch (err) {
         console.error('Error fetching users:', err)
         PopupService.error('Failed to fetch users', 'Loading Error')
@@ -2695,8 +2697,8 @@ export default {
     async function fetchPolicyCategories() {
       try {
         loading.value = true
-        const response = await axios.get(`${API_ENDPOINTS.POLICY_CATEGORIES}`)
-        policyCategories.value = response.data
+        const data = await apiService.get(API_ENDPOINTS.POLICY_CATEGORIES)
+        policyCategories.value = data || []
         // Extract unique policy types
         policyTypes.value = [...new Set(policyCategories.value.map(cat => cat.PolicyType).filter(Boolean))]
       } catch (err) {
@@ -2717,8 +2719,8 @@ export default {
     // Fetch entities
     async function fetchEntities() {
       try {
-        const response = await axios.get(`${API_ENDPOINTS.ENTITIES}`)
-        entities.value = response.data.entities || []
+        const data = await apiService.get(API_ENDPOINTS.ENTITIES)
+        entities.value = data.entities || []
       } catch (err) {
         console.error('Error fetching entities:', err)
         PopupService.error('Failed to fetch entities', 'Loading Error')
@@ -2736,9 +2738,9 @@ export default {
     async function fetchDepartments() {
       try {
         console.log('Fetching departments from:', `${API_ENDPOINTS.DEPARTMENTS}`)
-        const response = await axios.get(`${API_ENDPOINTS.DEPARTMENTS}`)
-        console.log('Departments API response:', response.data)
-        const departmentsData = response.data.departments || []
+        const data = await apiService.get(API_ENDPOINTS.DEPARTMENTS)
+        console.log('Departments API response:', data)
+        const departmentsData = data.departments || []
         console.log('Departments data:', departmentsData)
         
         // Add "All Departments" option at the beginning
@@ -3137,13 +3139,13 @@ export default {
             console.log('🔍 DEBUG: Saving new policy subcategory combination to database immediately')
             console.log('🔍 DEBUG: Data:', { policyType, policyCategory, newSubCategory, framework: selectedFramework.value })
             try {
-              const response = await axios.post(API_ENDPOINTS.POLICY_CATEGORIES_SAVE, {
+              const data = await apiService.post(API_ENDPOINTS.POLICY_CATEGORIES_SAVE, {
                 PolicyType: policyType,
                 PolicyCategory: policyCategory,
                 PolicySubCategory: newSubCategory,
                 frameworkId: selectedFramework.value
               })
-              console.log('✅ DEBUG: Policy category combination saved to database:', response.data)
+              console.log('✅ DEBUG: Policy category combination saved to database:', data)
               
               // Refresh policy categories after saving
               await fetchPolicyCategories()
@@ -3313,7 +3315,7 @@ export default {
               frameworkId: selectedFramework.value
             };
             console.log('Saving policy category with framework:', combinationWithFramework);
-            await axios.post(`${API_ENDPOINTS.POLICY_CATEGORIES}save/`, combinationWithFramework);
+            await apiService.post(`${API_ENDPOINTS.POLICY_CATEGORIES}save/`, combinationWithFramework);
           }
           
           // Refresh policy categories after saving
@@ -3330,18 +3332,8 @@ export default {
     // Add push notification method
     const sendPushNotification = async (notificationData) => {
       try {
-        const response = await fetch(API_ENDPOINTS.PUSH_NOTIFICATION, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(notificationData)
-        });
-        if (response.ok) {
-          console.log('Push notification sent successfully');
-        } else {
-          console.error('Failed to send push notification');
-        }
+        await apiService.post(API_ENDPOINTS.PUSH_NOTIFICATION, notificationData);
+        console.log('Push notification sent successfully');
       } catch (error) {
         console.error('Error sending push notification:', error);
       }
@@ -3557,23 +3549,21 @@ export default {
             formData.append('frameworkName', frameworkFormData.value.FrameworkName)
 
             try {
-             const uploadResponse = await axios.post(API_ENDPOINTS.UPLOAD_POLICY_DOCUMENT, formData, {
-                headers: {
-                  'Content-Type': 'multipart/form-data'
-                },
+             const uploadResponse = await apiService.post(API_ENDPOINTS.UPLOAD_POLICY_DOCUMENT, formData, {
+                isMultipart: true,
                 timeout: 1000000 // Increase timeout for large files
               })
-              if (uploadResponse.data.success) {
-                frameworkFormData.value.DocURL = uploadResponse.data.file.url
+              if (uploadResponse.success) {
+                frameworkFormData.value.DocURL = uploadResponse.file.url
               } else {
-                throw new Error(uploadResponse.data.error || 'Upload failed')
+                throw new Error(uploadResponse.error || 'Upload failed')
               }
             } catch (uploadError) {
               console.error('Error uploading framework document:', uploadError)
-              PopupService.error('Failed to upload framework document: ' + (uploadError.response?.data?.error || uploadError.message), 'Upload Error')
+              PopupService.error('Failed to upload framework document: ' + (uploadError.message || 'Unknown error'), 'Upload Error')
               sendPushNotification({
                 title: 'Framework Document Upload Failed',
-                message: `Failed to upload framework document: ${uploadError.response?.data?.error || uploadError.message}`,
+                message: `Failed to upload framework document: ${uploadError.message || 'Unknown error'}`,
                 category: 'framework',
                 priority: 'high',
                 user_id: creatorUser?.UserId || 'default_user'
@@ -3594,20 +3584,18 @@ export default {
               formData.append('policyName', policy.PolicyName)
 
               try {
-                const uploadResponse = await axios.post(API_ENDPOINTS.UPLOAD_POLICY_DOCUMENT, formData, {
-                  headers: {
-                    'Content-Type': 'multipart/form-data'
-                  },
-                timeout: 1000000
+                const uploadResponse = await apiService.post(API_ENDPOINTS.UPLOAD_POLICY_DOCUMENT, formData, {
+                  isMultipart: true,
+                  timeout: 1000000
                 })
-                if (uploadResponse.data.success) {
-                  policy.DocURL = uploadResponse.data.file.url
+                if (uploadResponse.success) {
+                  policy.DocURL = uploadResponse.file.url
                 } else {
-                  throw new Error(uploadResponse.data.error || 'Upload failed')
+                  throw new Error(uploadResponse.error || 'Upload failed')
                 }
               } catch (uploadError) {
                 console.error('Error uploading policy document:', uploadError)
-                PopupService.error('Failed to upload policy document: ' + (uploadError.response?.data?.error || uploadError.message), 'Upload Error')
+                PopupService.error('Failed to upload policy document: ' + (uploadError.message || 'Unknown error'), 'Upload Error')
                 sendPushNotification({
                   title: 'Policy Document Upload Failed',
                   message: `Failed to upload policy document: ${uploadError.response?.data?.error || uploadError.message}`,
@@ -3725,9 +3713,9 @@ export default {
           console.log('Final payload being sent:', JSON.stringify(payload, null, 2))
 
           // Send a single API call to create the framework with policies and subpolicies
-          const response = await axios.post(API_ENDPOINTS.FRAMEWORKS, payload)
-          if (response.data.error) {
-            throw new Error(response.data.error)
+          const data = await apiService.post(API_ENDPOINTS.FRAMEWORKS, payload)
+          if (data.error) {
+            throw new Error(data.error)
           }
           PopupService.success(
             'Successfully created new framework and policies! Redirecting to Framework Explorer...',
@@ -3755,20 +3743,18 @@ export default {
               formData.append('policyName', policy.PolicyName)
 
               try {
-                const uploadResponse = await axios.post(API_ENDPOINTS.UPLOAD_POLICY_DOCUMENT, formData, {
-                  headers: {
-                    'Content-Type': 'multipart/form-data'
-                  },
-                timeout: 1000000
+                const uploadResponse = await apiService.post(API_ENDPOINTS.UPLOAD_POLICY_DOCUMENT, formData, {
+                  isMultipart: true,
+                  timeout: 1000000
                 })
-                if (uploadResponse.data.success) {
-                  policy.DocURL = uploadResponse.data.file.url
+                if (uploadResponse.success) {
+                  policy.DocURL = uploadResponse.file.url
                 } else {
-                  throw new Error(uploadResponse.data.error || 'Upload failed')
+                  throw new Error(uploadResponse.error || 'Upload failed')
                 }
               } catch (uploadError) {
                 console.error('Error uploading policy document:', uploadError)
-                PopupService.error('Failed to upload policy document: ' + (uploadError.response?.data?.error || uploadError.message), 'Upload Error')
+                PopupService.error('Failed to upload policy document: ' + (uploadError.message || 'Unknown error'), 'Upload Error')
                 sendPushNotification({
                   title: 'Policy Document Upload Failed',
                   message: `Failed to upload policy document: ${uploadError.response?.data?.error || uploadError.message}`,
@@ -3847,9 +3833,9 @@ export default {
           });
 
           try {
-            const response = await axios.post(API_ENDPOINTS.FRAMEWORK_ADD_POLICIES(frameworkId), { policies: policiesPayload });
-            if (response.data.error) {
-              throw new Error(response.data.error)
+            const data = await apiService.post(API_ENDPOINTS.FRAMEWORK_ADD_POLICIES(frameworkId), { policies: policiesPayload });
+            if (data.error) {
+              throw new Error(data.error)
             }
             PopupService.success(
               'Successfully added policies! Redirecting to Framework Explorer...',

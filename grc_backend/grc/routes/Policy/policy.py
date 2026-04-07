@@ -1,11 +1,12 @@
 from django.shortcuts import get_object_or_404
-from django.views.decorators.csrf import csrf_protect as csrf_exempt
+from django.views.decorators.csrf import csrf_exempt
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes, parser_classes, authentication_classes, throttle_classes
 from rest_framework.throttling import ScopedRateThrottle
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.authentication import SessionAuthentication, BasicAuthentication
+from ...jwt_auth import UnifiedJWTAuthentication
 from rest_framework.parsers import MultiPartParser, FormParser
 from ...models import Framework, Policy, SubPolicy, FrameworkVersion, PolicyVersion, PolicyApproval, Users, FrameworkApproval, ExportTask, PolicyCategory, Entity, LastChecklistItemVerified
 from ...serializers import FrameworkSerializer, PolicySerializer, SubPolicySerializer, PolicyApprovalSerializer, UserSerializer, EntitySerializer   
@@ -176,7 +177,8 @@ def test_auth(request):
 
 # Test endpoint for RBAC debugging
 @api_view(['GET'])
-@permission_classes([])  # No permission classes - allow all requests
+@authentication_classes([UnifiedJWTAuthentication])
+@permission_classes([IsAuthenticated])
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def test_rbac_debug(request):
@@ -223,7 +225,8 @@ def test_rbac_debug(request):
 
 # Test endpoint for submit-review debugging
 @api_view(['POST'])
-@permission_classes([])  # No permission classes - allow all requests
+@authentication_classes([UnifiedJWTAuthentication])
+@permission_classes([IsAuthenticated])
 @csrf_exempt
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
@@ -249,9 +252,10 @@ def test_submit_review(request, policy_id):
         'data_received': request.data
     })
 
-# Simple test endpoint with no authentication requirements
+# Simple test endpoint for developer verification
 @api_view(['POST'])
-@permission_classes([])
+@authentication_classes([UnifiedJWTAuthentication])
+@permission_classes([IsAuthenticated])
 @csrf_exempt
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
@@ -362,14 +366,36 @@ def framework_list(request):
             # Import validators
             from ..validators.framework_validator import validate_framework_query_params, ValidationError
             
+            # SECURITY: Resolve current user ID from authenticated request
+            current_user_id = getattr(request.user, 'id', None) or getattr(request.user, 'UserId', None)
+            if not current_user_id:
+                current_user_id = request.session.get('user_id')
+                
+            # SECURITY: Check if current user is GRC Administrator (System Admin)
+            is_grc_admin = False
+            if current_user_id:
+                try:
+                    from ...models import RBAC
+                    rbac_record = RBAC.objects.filter(user_id=current_user_id, is_active='Y').first()
+                    if rbac_record and rbac_record.is_grc_administrator():
+                        is_grc_admin = True
+                        logger.info(f"User {current_user_id} confirmed as GRC Administrator")
+                except Exception as rbac_error:
+                    logger.warning(f"Error checking GRC Administrator status: {rbac_error}")
+
             # Security: Validate and sanitize query parameters
             try:
                 validated_params = validate_framework_query_params(request.GET)
                 include_all_status = validated_params['include_all_status']
                 include_all_for_identifiers = validated_params.get('include_all_for_identifiers', False)
                 
-                # NEW: Get user_id parameter for GRC Administrator filtering
+                # SECURITY: Apply IDOR protection to user_id parameter
                 filter_user_id = request.GET.get('user_id')
+                if filter_user_id:
+                    # If not admin, force filter to own ID to prevent viewing others' frameworks
+                    if not is_grc_admin and str(filter_user_id) != str(current_user_id):
+                        logger.warning(f"[SECURITY] IDOR Attempt: User {current_user_id} tried to filter frameworks for user {filter_user_id}")
+                        filter_user_id = current_user_id
                 
             except ValidationError as e:
                 # Security: Log sanitized error message to prevent log injection
@@ -381,7 +407,7 @@ def framework_list(request):
                     module="Framework",
                     actionType="VIEW_FAILED",
                     description=f"Framework query validation failed: {safe_error}",
-                    userId=getattr(request.user, 'id', None),
+                    userId=current_user_id,
                     userName=getattr(request.user, 'username', 'Anonymous'),
                     entityType="Framework",
                     logLevel="WARNING",
@@ -389,20 +415,6 @@ def framework_list(request):
                 )
                 
                 return Response({"error": "Invalid query parameters"}, status=status.HTTP_400_BAD_REQUEST)
-            
-            # NEW: Check if current user is GRC Administrator
-            is_grc_admin = False
-            current_user_id = getattr(request.user, 'id', None)
-            
-            if current_user_id:
-                try:
-                    from ...models import RBAC
-                    rbac_record = RBAC.objects.filter(user_id=current_user_id, is_active='Y').first()
-                    if rbac_record and rbac_record.is_grc_administrator():
-                        is_grc_admin = True
-                        logger.info(f"User {current_user_id} confirmed as GRC Administrator")
-                except Exception as rbac_error:
-                    logger.warning(f"Error checking GRC Administrator status: {rbac_error}")
             
             # Security: Use Django ORM with parameterized queries (SQL injection protection)
             try:
@@ -4741,15 +4753,35 @@ def list_rejected_policy_approvals_for_user(request, user_id):
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
 
+    # SECURITY: Prevent IDOR by enforcing that users can only view their own rejections
+    current_user_id = getattr(request.user, 'id', None) or getattr(request.user, 'UserId', None)
+    if not current_user_id:
+        current_user_id = request.session.get('user_id')
+        
+    # Check if user is admin
+    is_admin = False
+    if current_user_id:
+        try:
+            from ...models import RBAC
+            rbac_record = RBAC.objects.filter(user_id=current_user_id, is_active='Y').first()
+            if rbac_record and rbac_record.is_grc_administrator():
+                is_admin = True
+        except: pass
+
+    # If not admin, user_id MUST match current_user_id
+    if not is_admin and str(user_id) != str(current_user_id):
+        logger.warning(f"[SECURITY] IDOR Attempt: User {current_user_id} tried to access rejections for user {user_id}")
+        return Response({'error': 'Unauthorized access to user data'}, status=status.HTTP_403_FORBIDDEN)
+
     send_log(
         module="Policy",
         actionType="LIST_REJECTED_POLICY_APPROVALS_FOR_USER",
         description=f"Listing rejected policy approvals for user {user_id}",
-        userId=getattr(request.user, 'id', None),
+        userId=current_user_id,
         userName=getattr(request.user, 'username', 'Anonymous'),
         entityType="PolicyApproval",
         ipAddress=get_client_ip(request),
-        additionalInfo={"user_id": user_id}
+        additionalInfo={"user_id": user_id, "requested_by": current_user_id}
     )
     
     # Filter policies where the user is either the creator (UserId) or the reviewer (ReviewerId)
@@ -5106,7 +5138,8 @@ def list_users(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
 @api_view(['GET'])
-@permission_classes([])  # No permission required - public endpoint (also skipped in middleware)
+@authentication_classes([UnifiedJWTAuthentication])
+@permission_classes([IsAuthenticated])
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_framework_explorer_data(request):
@@ -5565,7 +5598,7 @@ def toggle_policy_status(request, policy_id):
                 debug_print(f"ERROR in policy status change: {str(e)}")
                 import traceback
                 traceback.print_exc()
-                return Response({"error": f"Policy status change failed: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                return Response({"error": f"Policy status change failed: An internal server error occurred"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         else:
             # For activation (Inactive -> Active), use direct toggle
             new_status = 'Active'
@@ -5647,7 +5680,7 @@ def toggle_policy_status(request, policy_id):
         import traceback
         traceback.print_exc()
         return Response({
-            'error': f"Toggle policy status error: {str(e)}"
+            'error': f"Toggle policy status error: An internal server error occurred"
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
  
 @api_view(['GET'])
@@ -7505,7 +7538,7 @@ def get_framework_status_distribution(request):
         import traceback
         traceback.print_exc()
         return Response({
-            'error': f'Failed to get framework status distribution: {str(e)}'
+            'error': f'Failed to get framework status distribution: An internal server error occurred'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
@@ -8461,8 +8494,8 @@ def get_policy_kpis(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
 @api_view(['POST'])
-@permission_classes([AllowAny]) # Allow any authenticated user to acknowledge policies
-@authentication_classes([CsrfExemptSessionAuthentication])
+@authentication_classes([UnifiedJWTAuthentication])
+@permission_classes([IsAuthenticated])
 @csrf_exempt
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
@@ -8471,32 +8504,18 @@ def acknowledge_policy(request, policy_id):
     tenant_id = get_tenant_id_from_request(request)
 
     try:
-        # Extract user_id from JWT token or request.user
-        user_id = None
-        
-        # Try to get user_id from JWT token first
-        auth_header = request.headers.get('Authorization')
-        if auth_header and auth_header.startswith('Bearer '):
-            token = auth_header.split(' ')[1]
-            try:
-                from ...authentication import verify_jwt_token
-                payload = verify_jwt_token(token)
-                if payload and 'user_id' in payload:
-                    user_id = payload['user_id']
-                    debug_print(f"DEBUG: acknowledge_policy - Extracted user_id from JWT: {user_id}")
-            except Exception as e:
-                debug_print(f"DEBUG: acknowledge_policy - Error extracting user_id from JWT: {e}")
-        
-        # Fallback to request.user if JWT extraction failed
-        if not user_id:
-            user_id = getattr(request.user, 'UserId', None)
-            if not user_id:
-                user_id = getattr(request.user, 'id', None)
+        # SECURITY: Identify user from authenticated session (server-side identification)
+        user_id = getattr(request.user, 'UserId', None) or getattr(request.user, 'id', None)
         
         if not user_id:
-            return Response({
-                'error': 'User not authenticated. Please login again.'
-            }, status=status.HTTP_401_UNAUTHORIZED)
+            logger.error("User identification failed in acknowledge_policy")
+            return Response({"error": "Authentication required"}, status=status.HTTP_401_UNAUTHORIZED)
+        
+        # Ensure user_id is an integer for consistent comparison
+        try:
+            user_id = int(user_id)
+        except (ValueError, TypeError):
+            return Response({'error': 'Invalid user identification'}, status=status.HTTP_400_BAD_REQUEST)
         
         policy = Policy.objects.get(PolicyId=policy_id, tenant_id=tenant_id)
         
@@ -9140,7 +9159,7 @@ def create_tailored_framework(request):
         )
         
         return Response({
-            "error": f"Failed to create tailored framework: {str(e)}"
+            "error": f"Failed to create tailored framework: An internal server error occurred"
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['POST'])
@@ -9392,7 +9411,7 @@ def create_tailored_policy(request):
                     )
                 except Exception as e:
                     return Response({
-                        'error': f'Failed to insert policy category combination: {str(e)}'
+                        'error': f'Failed to insert policy category combination: An internal server error occurred'
                     }, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -9757,7 +9776,7 @@ def create_tailored_policy(request):
         )
         
         return Response({
-            'error': f'Failed to create tailored policy: {str(e)}'
+            'error': f'Failed to create tailored policy: An internal server error occurred'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['PUT'])
@@ -10249,7 +10268,8 @@ def deactivate_previous_version_policies(policy_id):
         return 0
 
 @api_view(['GET'])
-@permission_classes([])  # No permission required - public endpoint (also skipped in middleware)
+@authentication_classes([UnifiedJWTAuthentication])
+@permission_classes([IsAuthenticated])
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_policy_categories(request):
@@ -10813,7 +10833,7 @@ def request_policy_status_change(request, policy_id):
         debug_print(f"ERROR in request_policy_status_change: {str(e)}")
         import traceback
         traceback.print_exc()
-        return Response({"error": f"Internal server error: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({"error": f"Internal server error: An internal server error occurred"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['POST', 'GET'])
@@ -11238,16 +11258,40 @@ def get_policy_status_change_requests_by_user(request, user_id=None):
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
 
+    # SECURITY: Prevent IDOR by enforcing that users can only view their own requests
+    # Non-admins are forced to use their own UserId from the session/token
+    current_user_id = getattr(request.user, 'id', None) or getattr(request.user, 'UserId', None)
+    if not current_user_id:
+        current_user_id = request.session.get('user_id')
+        
+    # Check if user is admin
+    is_admin = False
+    if current_user_id:
+        try:
+            from ...models import RBAC
+            rbac_record = RBAC.objects.filter(user_id=current_user_id, is_active='Y').first()
+            if rbac_record and rbac_record.is_grc_administrator():
+                is_admin = True
+        except: pass
+
+    # If not admin and user_id is provided, it MUST match current_user_id
+    if user_id and not is_admin and str(user_id) != str(current_user_id):
+        logger.warning(f"[SECURITY] IDOR Attempt: User {current_user_id} tried to access status changes for user {user_id}")
+        return Response({'error': 'Unauthorized access to user requests'}, status=status.HTTP_403_FORBIDDEN)
+    
+    # Use current_user_id if user_id is not provided
+    effective_user_id = user_id or current_user_id
+
     try:
-        debug_print(f"DEBUG: get_policy_status_change_requests_by_user called with user_id: {user_id}")
+        debug_print(f"DEBUG: get_policy_status_change_requests_by_user called with user_id: {effective_user_id}")
         
         # Base query for policy status change requests
         approvals = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, ).order_by('-ApprovalId')
         
-        if user_id:
+        if effective_user_id:
             # Filter by specific user (creator/owner)
-            approvals = approvals.filter(UserId=user_id)
-            debug_print(f"DEBUG: Found {approvals.count()} policy approvals for user {user_id}")
+            approvals = approvals.filter(UserId=effective_user_id)
+            debug_print(f"DEBUG: Found {approvals.count()} policy approvals for user {effective_user_id}")
         else:
             debug_print(f"DEBUG: Found {approvals.count()} total policy approvals")
         
@@ -11359,8 +11403,31 @@ def get_policy_status_change_requests_by_reviewer(request, reviewer_id=None):
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
 
+    # SECURITY: Prevent IDOR by enforcing that users can only view their own reviewer tasks
+    current_user_id = getattr(request.user, 'id', None) or getattr(request.user, 'UserId', None)
+    if not current_user_id:
+        current_user_id = request.session.get('user_id')
+        
+    # Check if user is admin
+    is_admin = False
+    if current_user_id:
+        try:
+            from ...models import RBAC
+            rbac_record = RBAC.objects.filter(user_id=current_user_id, is_active='Y').first()
+            if rbac_record and rbac_record.is_grc_administrator():
+                is_admin = True
+        except: pass
+
+    # If not admin and reviewer_id is provided, it MUST match current_user_id
+    if reviewer_id and not is_admin and str(reviewer_id) != str(current_user_id):
+        logger.warning(f"[SECURITY] IDOR Attempt: User {current_user_id} tried to access reviewer tasks for reviewer {reviewer_id}")
+        return Response({'error': 'Unauthorized access to reviewer tasks'}, status=status.HTTP_403_FORBIDDEN)
+    
+    # Use current_user_id if reviewer_id is not provided
+    effective_reviewer_id = reviewer_id or current_user_id
+
     try:
-        debug_print(f"DEBUG: get_policy_status_change_requests_by_reviewer called with reviewer_id: {reviewer_id}")
+        debug_print(f"DEBUG: get_policy_status_change_requests_by_reviewer called with reviewer_id: {effective_reviewer_id}")
         
         # Base query for policy status change requests
         # Filter out records with invalid ReviewerId (non-integer values)
@@ -11370,10 +11437,10 @@ def get_policy_status_change_requests_by_reviewer(request, reviewer_id=None):
             ReviewerId__regex=r'^[a-zA-Z]'  # Exclude records where ReviewerId starts with letters
         ).order_by('-ApprovalId')
         
-        if reviewer_id:
+        if effective_reviewer_id:
             # Filter by specific reviewer
-            approvals = approvals.filter(ReviewerId=reviewer_id)
-            debug_print(f"DEBUG: Found {approvals.count()} policy approvals for reviewer {reviewer_id}")
+            approvals = approvals.filter(ReviewerId=effective_reviewer_id)
+            debug_print(f"DEBUG: Found {approvals.count()} policy approvals for reviewer {effective_reviewer_id}")
         else:
             debug_print(f"DEBUG: Found {approvals.count()} total policy approvals")
         
@@ -11495,7 +11562,7 @@ def test_policy_status_debug(request, policy_id):
             debug_print(f"DEBUG TEST: Policy found: {policy.PolicyName}")
         except Exception as e:
             debug_print(f"DEBUG TEST: Policy fetch failed: {str(e)}")
-            return Response({"error": f"Policy fetch failed: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"error": f"Policy fetch failed: An internal server error occurred"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         # Test 2: Can we access policy fields?
         try:
@@ -11507,7 +11574,7 @@ def test_policy_status_debug(request, policy_id):
             debug_print(f"  - ActiveInactive: {policy.ActiveInactive}")
         except Exception as e:
             debug_print(f"DEBUG TEST: Policy fields access failed: {str(e)}")
-            return Response({"error": f"Policy fields access failed: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"error": f"Policy fields access failed: An internal server error occurred"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         # Test 3: Can we create basic extracted_data?
         try:
@@ -11520,7 +11587,7 @@ def test_policy_status_debug(request, policy_id):
             debug_print("DEBUG TEST: Basic extracted_data created successfully")
         except Exception as e:
             debug_print(f"DEBUG TEST: Basic extracted_data failed: {str(e)}")
-            return Response({"error": f"Basic extracted_data failed: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"error": f"Basic extracted_data failed: An internal server error occurred"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         return Response({
             "message": "Debug test completed successfully",
@@ -11532,7 +11599,7 @@ def test_policy_status_debug(request, policy_id):
         debug_print(f"DEBUG TEST: General error: {str(e)}")
         import traceback
         traceback.print_exc()
-        return Response({"error": f"General error: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({"error": f"General error: An internal server error occurred"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 
@@ -11659,7 +11726,7 @@ def get_policy_counts_by_status(request):
         )
         
         return Response(
-            {"error": f"Error retrieving policy counts: {str(e)}"}, 
+            {"error": f"Error retrieving policy counts: An internal server error occurred"}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
@@ -11754,7 +11821,7 @@ def get_policies_paginated_by_status(request):
         traceback.print_exc()
         
         return Response(
-            {"error": f"Error retrieving policies: {str(e)}", "success": False}, 
+            {"error": f"Error retrieving policies: An internal server error occurred", "success": False}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
@@ -11766,7 +11833,7 @@ from ...routes.Global.s3_fucntions import RenderS3Client, create_direct_mysql_cl
 from ...utils import send_log, get_client_ip
 # New file upload endpoint for policy documents
 @api_view(['POST'])
-@authentication_classes([CsrfExemptSessionAuthentication])
+@authentication_classes([UnifiedJWTAuthentication])
 @permission_classes([PolicyCreatePermission])
 @parser_classes([MultiPartParser, FormParser])
 @csrf_exempt
@@ -11825,7 +11892,11 @@ def upload_policy_document(request):
         logger.info(f"Processing file: {file.name} (size: {file.size} bytes)")
         
         # Get other parameters
-        user_id = request.data.get('userId', getattr(request.user, 'id', 'default-user'))
+        # SECURITY: Identify user from authenticated session (server-side identification)
+        # Replacing client-provided userId with request.user.UserId to prevent IDOR
+        user_id = getattr(request.user, 'UserId', None) or getattr(request.user, 'id', None)
+        if not user_id:
+            user_id = request.data.get('userId', 'default-user') # Fallback if auth missing (though permission_classes should catch)
         file_name = request.data.get('fileName', file.name)
         doc_type = request.data.get('type', 'policy')
         policy_name = request.data.get('policyName', 'Unnamed Policy')
@@ -11971,7 +12042,7 @@ def upload_policy_document(request):
         
         return Response({
             "success": False,
-            "error": f"An unexpected error occurred: {str(e)}"
+            "error": f"An unexpected error occurred: An internal server error occurred"
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
@@ -11986,20 +12057,38 @@ def list_policy_approvals_for_user(request, user_id):
     tenant_id = get_tenant_id_from_request(request)
 
     try:
+        # SECURITY: Prevent IDOR by enforcing that users can only view their own tasks
+        current_user_id = getattr(request.user, 'id', None) or getattr(request.user, 'UserId', None)
+        if not current_user_id:
+            current_user_id = request.session.get('user_id')
+            
+        # Check if user is admin
+        is_admin = False
+        if current_user_id:
+            try:
+                from ...models import RBAC
+                rbac_record = RBAC.objects.filter(user_id=current_user_id, is_active='Y').first()
+                if rbac_record and rbac_record.is_grc_administrator():
+                    is_admin = True
+            except: pass
+
+        # If not admin, user_id MUST match current_user_id
+        if not is_admin and str(user_id) != str(current_user_id):
+            logger.warning(f"[SECURITY] IDOR Attempt: User {current_user_id} tried to access tasks for user {user_id}")
+            return Response({'error': 'Unauthorized access to user tasks'}, status=status.HTTP_403_FORBIDDEN)
+
         framework_id = request.GET.get('framework_id', None)
         debug_print(f"🔍 DEBUG: list_policy_approvals_for_user called with framework_id: {framework_id}")
-        debug_print(f"🔍 DEBUG: framework_id type: {type(framework_id)}")
-        debug_print(f"🔍 DEBUG: All request GET params: {dict(request.GET)}")
         
         send_log(
             module="Policy",
             actionType="LIST_POLICY_APPROVALS_FOR_USER",
             description=f"Fetching policy approvals for user {user_id}",
-            userId=user_id,
-            userName=f"User{user_id}",
+            userId=current_user_id,
+            userName=getattr(request.user, 'username', 'Anonymous'),
             entityType="PolicyApproval",
             ipAddress=get_client_ip(request),
-            additionalInfo={"user_id": user_id}
+            additionalInfo={"user_id": user_id, "requested_by": current_user_id}
         )
         
         # Filter policy approvals by UserId (creator)
@@ -12105,20 +12194,39 @@ def list_policy_approvals_for_reviewer_by_id(request, user_id):
     tenant_id = get_tenant_id_from_request(request)
 
     try:
+        # SECURITY: Prevent IDOR by enforcing that users can only view their own tasks
+        # Non-admins are forced to use their own UserId from the session/token
+        current_user_id = getattr(request.user, 'id', None) or getattr(request.user, 'UserId', None)
+        if not current_user_id:
+            current_user_id = request.session.get('user_id')
+            
+        # Check if user is admin
+        is_admin = False
+        if current_user_id:
+            try:
+                from ...models import RBAC
+                rbac_record = RBAC.objects.filter(user_id=current_user_id, is_active='Y').first()
+                if rbac_record and rbac_record.is_grc_administrator():
+                    is_admin = True
+            except: pass
+
+        # If not admin, user_id MUST match current_user_id
+        if not is_admin and str(user_id) != str(current_user_id):
+            logger.warning(f"[SECURITY] IDOR Attempt: User {current_user_id} tried to access tasks for user {user_id}")
+            return Response({'error': 'Unauthorized access to user tasks'}, status=status.HTTP_403_FORBIDDEN)
+
         framework_id = request.GET.get('framework_id', None)
         debug_print(f"🔍 DEBUG: list_policy_approvals_for_reviewer_by_id called with framework_id: {framework_id}")
-        debug_print(f"🔍 DEBUG: framework_id type: {type(framework_id)}")
-        debug_print(f"🔍 DEBUG: All request GET params: {dict(request.GET)}")
         
         send_log(
             module="Policy",
             actionType="LIST_POLICY_APPROVALS_FOR_REVIEWER",
             description=f"Fetching policy approvals for reviewer {user_id}",
-            userId=user_id,
-            userName=f"User{user_id}",
+            userId=current_user_id,
+            userName=getattr(request.user, 'username', 'Anonymous'),
             entityType="PolicyApproval",
             ipAddress=get_client_ip(request),
-            additionalInfo={"reviewer_id": user_id}
+            additionalInfo={"reviewer_id": user_id, "requested_by": current_user_id}
         )
         
         # Filter policy approvals by ReviewerId
@@ -12515,7 +12623,8 @@ def reject_subpolicy(request, pk):
 
 
 @api_view(['GET'])
-@permission_classes([AllowAny])  # No RBAC required for departments
+@authentication_classes([UnifiedJWTAuthentication])
+@permission_classes([IsAuthenticated])
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_departments(request):
@@ -12555,12 +12664,13 @@ def get_departments(request):
         logger.error(f"Error fetching departments: {str(e)}")
         return Response({
             'success': False,
-            'error': f'Failed to fetch departments: {str(e)}'
+            'error': f'Failed to fetch departments: An internal server error occurred'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['POST'])
-@permission_classes([AllowAny])  # No RBAC required for saving departments
+@authentication_classes([UnifiedJWTAuthentication])
+@permission_classes([IsAuthenticated])
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def save_department(request):
@@ -12629,7 +12739,7 @@ def save_department(request):
         logger.error(f"Error saving department: {str(e)}")
         return Response({
             'success': False,
-            'error': f'Failed to save department: {str(e)}'
+            'error': f'Failed to save department: An internal server error occurred'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 

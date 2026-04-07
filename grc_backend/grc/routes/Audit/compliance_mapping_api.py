@@ -126,7 +126,7 @@ def map_document_to_compliance(request):
         logger.error(f"❌ Error mapping document to compliance: {e}")
         return Response({
             'success': False,
-            'error': f'Error mapping document: {str(e)}'
+            'error': f'Error mapping document: An internal server error occurred'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @csrf_exempt
@@ -168,7 +168,7 @@ def get_policy_compliance_summary(request, policy_id):
         logger.error(f"❌ Error getting compliance summary: {e}")
         return Response({
             'success': False,
-            'error': f'Error getting summary: {str(e)}'
+            'error': f'Error getting summary: An internal server error occurred'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @csrf_exempt
@@ -250,7 +250,7 @@ def map_audit_documents_to_compliance(request, audit_id):
         logger.error(f"❌ Error mapping audit documents: {e}")
         return Response({
             'success': False,
-            'error': f'Error mapping documents: {str(e)}'
+            'error': f'Error mapping documents: An internal server error occurred'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @csrf_exempt
@@ -308,14 +308,14 @@ def get_compliance_requirements(request, policy_id):
             logger.error(f"❌ Error getting compliance requirements: {e}")
             return Response({
                 'success': False,
-                'error': f'Error getting requirements: {str(e)}'
+                'error': f'Error getting requirements: An internal server error occurred'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
     except Exception as e:
         logger.error(f"❌ Error getting compliance requirements: {e}")
         return Response({
             'success': False,
-            'error': f'Error getting requirements: {str(e)}'
+            'error': f'Error getting requirements: An internal server error occurred'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 def get_rule_based_compliance_mapping(document_text: str, document_type: str, 

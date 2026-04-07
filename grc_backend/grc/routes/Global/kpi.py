@@ -64,7 +64,7 @@ def get_all_kpis(request):
     except Exception as e:
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -107,7 +107,7 @@ def get_kpi_by_id(request, kpi_id):
     except Exception as e:
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -150,7 +150,7 @@ def get_kpis_by_module(request, module):
     except Exception as e:
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -171,7 +171,7 @@ def get_frameworks_for_kpi(request):
     except Exception as e:
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -193,6 +193,6 @@ def get_kpi_modules(request):
     except Exception as e:
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 

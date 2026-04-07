@@ -368,7 +368,7 @@ def generate_open_rfp_invitation(request):
     except Exception as e:
         return JsonResponse({
             'success': False,
-            'error': f'Failed to generate open RFP invitation: {str(e)}'
+            'error': f'Failed to generate open RFP invitation: An internal server error occurred'
         }, status=500)
 
 
@@ -429,7 +429,7 @@ def get_invitations_by_rfp(request, rfp_id):
     except Exception as e:
         return JsonResponse({
             'success': False,
-            'error': f'Failed to fetch invitations: {str(e)}'
+            'error': f'Failed to fetch invitations: An internal server error occurred'
         }, status=500)
 
 

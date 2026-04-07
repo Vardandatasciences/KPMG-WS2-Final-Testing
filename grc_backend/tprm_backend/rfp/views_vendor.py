@@ -575,7 +575,7 @@ def create_unmatched_vendor(request, rfp_id):
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Invalid JSON data'}, status=400)
     except Exception as e:
-        return JsonResponse({'error': f'Failed to create unmatched vendor: {str(e)}'}, status=500)
+        return JsonResponse({'error': f'Failed to create unmatched vendor: An internal server error occurred'}, status=500)
 
 
 @csrf_exempt
@@ -691,7 +691,7 @@ def get_approved_vendors(request, rfp_id):
         return JsonResponse(vendor_data, safe=False)
         
     except Exception as e:
-        return JsonResponse({'error': f'Failed to fetch approved vendors: {str(e)}'}, status=500)
+        return JsonResponse({'error': f'Failed to fetch approved vendors: An internal server error occurred'}, status=500)
 
 @api_view(['GET'])
 @authentication_classes([JWTAuthentication])
@@ -790,5 +790,5 @@ def get_all_approved_vendors(request):
     except Exception as e:
         return JsonResponse({
             'success': False,
-            'error': f'Failed to fetch approved vendors: {str(e)}'
+            'error': f'Failed to fetch approved vendors: An internal server error occurred'
         }, status=500)

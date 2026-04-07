@@ -1888,7 +1888,7 @@ class VendorScreeningViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
         except Exception as e:
             vendor_logger.error(f"Screening failed for vendor {vendor_id}: {str(e)}")
             return Response({
-                'error': f'Screening failed: {str(e)}'
+                'error': f'Screening failed: An internal server error occurred'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=True, methods=['post'])

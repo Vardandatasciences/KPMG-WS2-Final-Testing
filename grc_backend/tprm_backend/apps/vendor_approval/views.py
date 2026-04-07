@@ -508,7 +508,7 @@ def migrate_vendor_from_temp_to_main(temp_vendor_id, user_id=None):
 
             'success': False,
 
-            'error': f'Failed to migrate vendor: {str(e)}'
+            'error': f'Failed to migrate vendor: An internal server error occurred'
 
         }
 
@@ -3337,7 +3337,7 @@ def requester_final_decision(request, approval_id: str):
 
                             'success': False,
 
-                            'error': f'Migration failed: {str(e)}'
+                            'error': f'Migration failed: An internal server error occurred'
 
                         }
 

@@ -1,38 +1,14 @@
-import axios from 'axios';
-import { API_BASE_URL } from '../config/api.js';
-
-const API_BASE = `${API_BASE_URL}/api`; // Use centralized API configuration
-
-// Configure axios to include JWT token in requests
-const api = axios.create({
-  baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json'
-  }
-});
-
-// Add request interceptor to include JWT token
-api.interceptors.request.use((config) => {
-  const token = sessionStorage.getItem('access_token') ||
-                sessionStorage.getItem('token') ||
-                localStorage.getItem('access_token') ||
-                localStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
+import apiService from './apiService.js'
 
 export default {
     async getDashboardSummary(params = {}) {
         try {
-            const queryString = new URLSearchParams(params).toString();
-            const url = queryString ? `${API_BASE}/policy-dashboard/?${queryString}` : `${API_BASE}/policy-dashboard/`;
-            const summaryRes = await api.get(url);
+            // apiService handles query params automatically
+            const response = await apiService.get('/policy-dashboard/', params);
             return {
                 data: {
-                    ...summaryRes.data,
-                    policies: Array.isArray(summaryRes.data.policies) ? summaryRes.data.policies : []
+                    ...response,
+                    policies: Array.isArray(response.policies) ? response.policies : []
                 }
             };
         } catch (error) {
@@ -51,50 +27,37 @@ export default {
         }
     },
     getPolicyAnalytics(params) {
-        return api.get(`${API_BASE}/policy-analytics/`, {
-            params: params
-        });
+        return apiService.get('/policy-analytics/', params);
     },
     getPolicyStatusDistribution(params = {}) {
-      const queryString = new URLSearchParams(params).toString();
-      const url = queryString ? `${API_BASE}/policy-status-distribution/?${queryString}` : `${API_BASE}/policy-status-distribution/`;
-      return api.get(url);
+      return apiService.get('/policy-status-distribution/', params);
     },
     getReviewerWorkload(params = {}) {
-      const queryString = new URLSearchParams(params).toString();
-      const url = queryString ? `${API_BASE}/reviewer-workload/?${queryString}` : `${API_BASE}/reviewer-workload/`;
-      return api.get(url);
+      return apiService.get('/reviewer-workload/', params);
     },
     getRecentPolicyActivity(params = {}) {
-      const queryString = new URLSearchParams(params).toString();
-      const url = queryString ? `${API_BASE}/recent-policy-activity/?${queryString}` : `${API_BASE}/recent-policy-activity/`;
-      return api.get(url);
+      return apiService.get('/recent-policy-activity/', params);
     },
     getAvgApprovalTime(params = {}) {
-      const queryString = new URLSearchParams(params).toString();
-      const url = queryString ? `${API_BASE}/avg-policy-approval-time/?${queryString}` : `${API_BASE}/avg-policy-approval-time/`;
-      return api.get(url);
+      return apiService.get('/avg-policy-approval-time/', params);
     },
     getAllPolicies() {
-        return api.get(`${API_BASE}/policies/`);
+        return apiService.get('/policies/');
     },
     // Get all frameworks
     getAllFrameworks() {
-        return api.get(`${API_BASE}/frameworks/?include_all_status=true`);
+        return apiService.get('/frameworks/', { include_all_status: true });
     },
     // New: Get policies by framework
     getPoliciesByFramework(frameworkId) {
-        return api.get(`${API_BASE}/frameworks/${frameworkId}/policies/list/`);
+        return apiService.get(`/frameworks/${frameworkId}/policies/list/`);
     },
     // New: Get framework status distribution
     getFrameworkStatusDistribution(params = {}) {
-        const queryString = new URLSearchParams(params).toString();
-        const url = queryString ? `${API_BASE}/framework-status-distribution/?${queryString}` : `${API_BASE}/framework-status-distribution/`;
-        return api.get(url);
+        return apiService.get('/framework-status-distribution/', params);
     },
     // Get recent policies (last 5 created)
     getRecentPolicies() {
-        return api.get(`${API_BASE}/policies/?limit=5&ordering=-CreatedByDate`);
+        return apiService.get('/policies/', { limit: 5, ordering: '-CreatedByDate' });
     }
-  };
-  
+};

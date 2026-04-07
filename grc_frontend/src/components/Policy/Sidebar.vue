@@ -1154,7 +1154,7 @@
 
 <script>
 import {  API_ENDPOINTS } from '../../config/api.js'
-import axios from 'axios'
+import apiService from '@/services/apiService.js'
 import authService from '../../services/authService.js'
 
 import { ref, onMounted, onUnmounted, computed } from 'vue'
@@ -1292,13 +1292,8 @@ export default {
         const hasUpdateThemeApi = API_ENDPOINTS && typeof API_ENDPOINTS.UPDATE_USER_THEME === 'function'
         if (userId && hasUpdateThemeApi) {
           // Save to backend
-          await axios.put(API_ENDPOINTS.UPDATE_USER_THEME(userId), {
+          await apiService.put(API_ENDPOINTS.UPDATE_USER_THEME(userId), {
             theme: theme
-          }, {
-            headers: {
-              'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-              'Content-Type': 'application/json'
-            }
           })
         } else if (userId && !hasUpdateThemeApi) {
           console.log('Theme API endpoint not configured; applying theme locally only')
@@ -1365,14 +1360,9 @@ export default {
         const hasUpdateThemeApi = API_ENDPOINTS && typeof API_ENDPOINTS.UPDATE_USER_THEME === 'function'
         if (userId && hasUpdateThemeApi) {
           try {
-            await axios.put(API_ENDPOINTS.UPDATE_USER_THEME(userId), {
+            await apiService.put(API_ENDPOINTS.UPDATE_USER_THEME(userId), {
               theme: currentTheme.value,
               colorblind: mode || null
-            }, {
-              headers: {
-                'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-                'Content-Type': 'application/json'
-              }
             })
           } catch (backendError) {
             console.log('Could not save color-blindness preference to backend:', backendError)

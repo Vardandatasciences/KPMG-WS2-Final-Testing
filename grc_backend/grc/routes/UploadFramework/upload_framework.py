@@ -429,7 +429,7 @@ def upload_framework_file(request):
         try:
             user_folder = create_user_folder(userid)
         except Exception as e:
-            return JsonResponse({'error': f'Failed to create user folder: {str(e)}'}, status=500)
+            return JsonResponse({'error': f'Failed to create user folder: An internal server error occurred'}, status=500)
         
         # Save file in user-specific directory
         # Prevent traversal via user-controlled upload file name.
@@ -1168,7 +1168,7 @@ def save_single_policy(request):
                 else:
                     cached_policies = []
             except Exception as e:
-                return JsonResponse({'error': f'Failed to load policies: {str(e)}'}, status=500)
+                return JsonResponse({'error': f'Failed to load policies: An internal server error occurred'}, status=500)
         
         # Find and update the policy
         policy_updated = False

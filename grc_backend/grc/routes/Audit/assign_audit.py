@@ -861,7 +861,7 @@ def create_audit(request):
             logLevel="ERROR"
         )
         return Response({
-            'error': f'Invalid data format: {str(e)}. Please check all fields are in the correct format.'
+            'error': f'Invalid data format: An internal server error occurred. Please check all fields are in the correct format.'
         }, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
         debug_print(f"Unexpected error: {str(e)}")
@@ -877,7 +877,7 @@ def create_audit(request):
             additionalInfo={"traceback": traceback.format_exc()}
         )
         return Response({
-            'error': f'Error creating audit: {str(e)}'
+            'error': f'Error creating audit: An internal server error occurred'
         }, status=status.HTTP_400_BAD_REQUEST)
 
 @csrf_exempt
@@ -973,7 +973,7 @@ def get_audit_compliances(request, audit_id):
             logLevel="ERROR"
         )
         return Response({
-            'error': f'Error fetching compliance data: {str(e)}'
+            'error': f'Error fetching compliance data: An internal server error occurred'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @csrf_exempt
@@ -1001,7 +1001,7 @@ def add_compliance_to_audit(request, audit_id):
             validated_audit_id = validate_int(audit_id, min_value=1, field_name="Audit ID")
         except ValidationError as e:
             return Response({
-                'error': f'Invalid audit ID: {str(e)}'
+                'error': f'Invalid audit ID: An internal server error occurred'
             }, status=status.HTTP_400_BAD_REQUEST)
         
         # Parse and validate request data
@@ -1020,7 +1020,7 @@ def add_compliance_to_audit(request, audit_id):
             validated_data = validate_new_compliance_data(raw_data)
         except ValidationError as e:
             return Response({
-                'error': f'Validation error: {str(e)}'
+                'error': f'Validation error: An internal server error occurred'
             }, status=status.HTTP_400_BAD_REQUEST)
         
         # Get the audit to extract SubPolicyId
@@ -1080,7 +1080,7 @@ def add_compliance_to_audit(request, audit_id):
             except Exception as e:
                 debug_print(f"Error finding SubPolicy: {str(e)}")
                 return Response({
-                    'error': f'Error finding SubPolicy: {str(e)}'
+                    'error': f'Error finding SubPolicy: An internal server error occurred'
                 }, status=status.HTTP_400_BAD_REQUEST)
         else:
             # If audit has no PolicyId or SubPolicyId, get the first SubPolicy in the system
@@ -1095,7 +1095,7 @@ def add_compliance_to_audit(request, audit_id):
             except Exception as e:
                 debug_print(f"Error finding SubPolicy: {str(e)}")
                 return Response({
-                    'error': f'Error finding SubPolicy: {str(e)}'
+                    'error': f'Error finding SubPolicy: An internal server error occurred'
                 }, status=status.HTTP_400_BAD_REQUEST)
         
         # Print debug info
@@ -1311,7 +1311,7 @@ def add_compliance_to_audit(request, audit_id):
         debug_print(f"Traceback: {error_traceback}")
         
         response = JsonResponse({
-            'error': f'Error adding compliance: {str(e)}',
+            'error': f'Error adding compliance: An internal server error occurred',
             'traceback': error_traceback
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
@@ -1495,7 +1495,7 @@ def bulk_update_findings(request):
             additionalInfo={"error": str(e)}
         )
         return Response({
-            'error': f'Error updating findings: {str(e)}'
+            'error': f'Error updating findings: An internal server error occurred'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @csrf_exempt
@@ -1742,5 +1742,5 @@ def get_report_details(request):
     except Exception as e:
         debug_print(f"Error fetching report details: {str(e)}")
         return Response({
-            'error': f'Error fetching report details: {str(e)}'
+            'error': f'Error fetching report details: An internal server error occurred'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

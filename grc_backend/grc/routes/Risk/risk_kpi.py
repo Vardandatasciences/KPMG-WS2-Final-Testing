@@ -3567,7 +3567,7 @@ def upload_risk_evidence(request):
         
         response = JsonResponse({
             'success': False,
-            'error': f'Upload failed: {str(e)}'
+            'error': f'Upload failed: An internal server error occurred'
         }, status=500)
         return response
 
@@ -3613,7 +3613,7 @@ def delete_risk_evidence(request, file_id):
     except Exception as e:
         return Response({
             'success': False,
-            'error': f'Delete failed: {str(e)}'
+            'error': f'Delete failed: An internal server error occurred'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
@@ -3652,7 +3652,7 @@ def get_incident_names_for_risk_scoring(request):
         #printf"Error fetching incident names: {str(e)}")
         return Response({
             'success': False,
-            'error': f'Failed to fetch incident names: {str(e)}'
+            'error': f'Failed to fetch incident names: An internal server error occurred'
         }, status=500)
 
 @api_view(['GET'])
@@ -3691,7 +3691,7 @@ def get_compliance_names_for_risk_scoring(request):
         #printf"Error fetching compliance names: {str(e)}")
         return Response({
             'success': False,
-            'error': f'Failed to fetch compliance names: {str(e)}'
+            'error': f'Failed to fetch compliance names: An internal server error occurred'
         }, status=500)
 
 @api_view(['GET'])
@@ -3734,7 +3734,7 @@ def get_business_units_for_risk_scoring(request):
         #printf"Error fetching business units: {str(e)}")
         return Response({
             'success': False,
-            'error': f'Failed to fetch business units: {str(e)}'
+            'error': f'Failed to fetch business units: An internal server error occurred'
         }, status=500)
 
 @api_view(['GET'])
@@ -3827,7 +3827,7 @@ def get_risk_instances_with_names(request):
         #printf"Error fetching risk instances with names: {str(e)}")
         return Response({
             'success': False,
-            'error': f'Failed to fetch risk instances: {str(e)}'
+            'error': f'Failed to fetch risk instances: An internal server error occurred'
         }, status=500)
 
 

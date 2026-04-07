@@ -235,7 +235,7 @@ def generate_document_from_data(request):
         
     except Exception as e:
         return Response(
-            {'error': f'Failed to generate document: {str(e)}'},
+            {'error': f'Failed to generate document: An internal server error occurred'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
@@ -306,6 +306,6 @@ def preview_rfp_document(request, rfp_id):
         
     except Exception as e:
         return Response(
-            {'error': f'Failed to generate preview: {str(e)}'},
+            {'error': f'Failed to generate preview: An internal server error occurred'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )

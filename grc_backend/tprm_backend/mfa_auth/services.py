@@ -144,7 +144,7 @@ class MfaService:
                 }
                 
         except Exception as e:
-            return {'success': False, 'error': f'Verification failed: {str(e)}'}
+            return {'success': False, 'error': f'Verification failed: An internal server error occurred'}
     
     @classmethod
     def expire_pending_challenges(cls, user):

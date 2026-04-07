@@ -131,5 +131,5 @@ def review_ai_audit_findings(request, audit_id):
     except Exception as e:
         return Response({
             'success': False,
-            'error': f'Error reviewing AI finding: {str(e)}'
+            'error': f'Error reviewing AI finding: An internal server error occurred'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

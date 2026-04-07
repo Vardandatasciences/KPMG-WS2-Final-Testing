@@ -1399,7 +1399,7 @@ def analyze_incident(request):
         traceback.print_exc()
         
         return Response({
-            "error": f"An error occurred during analysis: {str(e)}. Please try again or use manual mode."
+            "error": f"An error occurred during analysis: An internal server error occurred. Please try again or use manual mode."
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
@@ -3779,7 +3779,7 @@ def get_assigned_reviewer(request, risk_id):
         # Return error info instead of empty object
         return Response({
             'error': 'Database error',
-            'message': str(e),
+            'message': 'An internal server error occurred.',
             'risk_id': risk_id
         }, status=200)
 
@@ -4644,7 +4644,7 @@ def get_business_impacts(request):
     except Exception as e:
         return Response({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 @csrf_exempt
@@ -4681,7 +4681,7 @@ def add_business_impact(request):
     except Exception as e:
         return Response({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 @api_view(['GET'])
@@ -4721,7 +4721,7 @@ def get_risk_departments(request):
         debug_print(f"Error fetching departments: {str(e)}")
         return Response({
             'success': False,
-            'error': f'Failed to fetch departments: {str(e)}'
+            'error': f'Failed to fetch departments: An internal server error occurred'
         }, status=500)
 
 
@@ -4763,7 +4763,7 @@ def get_risk_business_units(request):
         debug_print(f"Error fetching business units: {str(e)}")
         return Response({
             'success': False,
-            'error': f'Failed to fetch business units: {str(e)}'
+            'error': f'Failed to fetch business units: An internal server error occurred'
         }, status=500)
 
 
@@ -4837,7 +4837,7 @@ def add_risk_category(request):
     except Exception as e:
         return Response({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -5992,7 +5992,7 @@ def get_risk_categories_for_dropdown(request):
     except Exception as e:
         return Response({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
  
 @csrf_exempt
@@ -6163,7 +6163,7 @@ def upload_risk_evidence_file(request):
                     debug_print(f"DEBUG: Error creating temporary file: {str(e)}")
                     return JsonResponse({
                         'success': False,
-                        'error': f'Error saving file temporarily: {str(e)}'
+                        'error': f'Error saving file temporarily: An internal server error occurred'
                     }, status=500)
                 
                 try:
@@ -6248,7 +6248,7 @@ def upload_risk_evidence_file(request):
                 debug_print(f"Error processing file {file.name}: {str(e)}")
                 return JsonResponse({
                     'success': False,
-                    'error': f'Error processing file {file.name}: {str(e)}'
+                    'error': f'Error processing file {file.name}: An internal server error occurred'
                 }, status=500)
         
         return JsonResponse({
@@ -6261,7 +6261,7 @@ def upload_risk_evidence_file(request):
         debug_print(f"Error in upload_risk_evidence_file: {str(e)}")
         return JsonResponse({
             'success': False,
-            'error': f'Upload failed: {str(e)}'
+            'error': f'Upload failed: An internal server error occurred'
         }, status=500)
 
 
@@ -6460,7 +6460,7 @@ def link_evidence_to_risk(request):
         
         return JsonResponse({
             'success': False,
-            'error': f'Failed to link evidence: {str(e)}',
+            'error': f'Failed to link evidence: An internal server error occurred',
             'error_type': str(type(e)),
             'debug_info': {
                 'request_method': request.method,

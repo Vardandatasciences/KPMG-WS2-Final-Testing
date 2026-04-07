@@ -2127,7 +2127,7 @@ class ExternalScreeningView(APIView):
             logger.error(f"[ExternalScreeningView] Error performing external screening for vendor_code {vendor_code}: {str(e)}", exc_info=True)
             return Response({
                 'success': False,
-                'error': f'Failed to perform external screening: {str(e)}',
+                'error': f'Failed to perform external screening: An internal server error occurred',
                 'vendor_code': vendor_code
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -2281,7 +2281,7 @@ class VendorScreeningResultsView(APIView):
             logger.error(f"[VendorScreeningResultsView] Error getting screening results for vendor_code {vendor_code}: {str(e)}", exc_info=True)
             return Response({
                 'success': False,
-                'error': f'Failed to get screening results: {str(e)}',
+                'error': f'Failed to get screening results: An internal server error occurred',
                 'vendor_code': vendor_code
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 

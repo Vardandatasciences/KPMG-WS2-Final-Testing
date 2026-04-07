@@ -44,7 +44,7 @@ def get_all_frameworks(request):
     except Exception as e:
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -90,7 +90,7 @@ def get_policies_by_framework(request, framework_id):
     except Exception as e:
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -145,7 +145,7 @@ def get_subpolicies_by_policy(request, policy_id):
     except Exception as e:
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -198,7 +198,7 @@ def get_compliances_by_subpolicy(request, subpolicy_id):
     except Exception as e:
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -274,7 +274,7 @@ def get_risks_by_compliance(request, compliance_id):
     except Exception as e:
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -388,7 +388,7 @@ def get_tree_hierarchy(request):
     except Exception as e:
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -436,7 +436,7 @@ def get_framework_metadata(request, framework_id):
     except Exception as e:
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -489,7 +489,7 @@ def get_policy_metadata(request, policy_id):
     except Exception as e:
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -532,7 +532,7 @@ def get_subpolicy_metadata(request, subpolicy_id):
     except Exception as e:
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -589,7 +589,7 @@ def get_compliance_metadata(request, compliance_id):
     except Exception as e:
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -651,5 +651,5 @@ def get_risk_metadata(request, risk_id):
     except Exception as e:
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)

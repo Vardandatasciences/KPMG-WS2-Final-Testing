@@ -92,7 +92,7 @@ def get_user_permissions(request):
         logger.error(f"[RBAC TPRM VIEWS] Error in get_user_permissions: {e}")
         return JsonResponse({
             'error': 'Internal server error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 @csrf_exempt
@@ -135,7 +135,7 @@ def check_rfp_permission(request):
         logger.error(f"[RBAC TPRM VIEWS] Error in check_rfp_permission: {e}")
         return JsonResponse({
             'error': 'Internal server error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 @csrf_exempt
@@ -178,7 +178,7 @@ def check_contract_permission(request):
         logger.error(f"[RBAC TPRM VIEWS] Error in check_contract_permission: {e}")
         return JsonResponse({
             'error': 'Internal server error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 @csrf_exempt
@@ -221,7 +221,7 @@ def check_vendor_permission(request):
         logger.error(f"[RBAC TPRM VIEWS] Error in check_vendor_permission: {e}")
         return JsonResponse({
             'error': 'Internal server error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 @csrf_exempt
@@ -264,7 +264,7 @@ def check_risk_permission(request):
         logger.error(f"[RBAC TPRM VIEWS] Error in check_risk_permission: {e}")
         return JsonResponse({
             'error': 'Internal server error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 @csrf_exempt
@@ -307,7 +307,7 @@ def check_compliance_permission(request):
         logger.error(f"[RBAC TPRM VIEWS] Error in check_compliance_permission: {e}")
         return JsonResponse({
             'error': 'Internal server error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 @csrf_exempt
@@ -350,7 +350,7 @@ def check_bcp_drp_permission(request):
         logger.error(f"[RBAC TPRM VIEWS] Error in check_bcp_drp_permission: {e}")
         return JsonResponse({
             'error': 'Internal server error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 @csrf_exempt
@@ -415,7 +415,7 @@ def check_sla_permission(request):
         logger.error(f"[RBAC TPRM VIEWS] Error in check_sla_permission: {e}", exc_info=True)
         return JsonResponse({
             'error': 'Internal server error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 @csrf_exempt
@@ -458,7 +458,7 @@ def check_module_access(request):
         logger.error(f"[RBAC TPRM VIEWS] Error in check_module_access: {e}")
         return JsonResponse({
             'error': 'Internal server error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 @csrf_exempt
@@ -498,7 +498,7 @@ def get_user_role(request):
         logger.error(f"[RBAC TPRM VIEWS] Error in get_user_role: {e}")
         return JsonResponse({
             'error': 'Internal server error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 @csrf_exempt
@@ -584,5 +584,5 @@ def bulk_check_permissions(request):
         logger.error(f"[RBAC TPRM VIEWS] Error in bulk_check_permissions: {e}")
         return JsonResponse({
             'error': 'Internal server error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)

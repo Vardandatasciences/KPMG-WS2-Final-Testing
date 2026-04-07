@@ -2379,7 +2379,7 @@ def create_reviewer_version(framework, extracted_data, latest_approval, approved
             }, status=status.HTTP_200_OK)
             
     except Exception as e:
-        return Response({"error": f"Error creating reviewer version: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({"error": f"Error creating reviewer version: An internal server error occurred"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
 @permission_classes([PolicyViewPermission])  # RBAC: Require PolicyViewPermission for viewing rejected frameworks
@@ -3853,7 +3853,7 @@ def fix_framework_versions(request):
     except Exception as e:
         debug_print(f"DEBUG: Error in fix_framework_versions API: {str(e)}")
         return Response({
-            "error": f"Error fixing framework versions: {str(e)}"
+            "error": f"Error fixing framework versions: An internal server error occurred"
         }, status=500)
 
 @api_view(['GET'])
@@ -3991,7 +3991,7 @@ def get_approved_active_frameworks(request):
         return Response(
             {
                 "success": False,
-                "error": f"Failed to fetch approved frameworks: {str(e)}"
+                "error": f"Failed to fetch approved frameworks: An internal server error occurred"
             },
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )

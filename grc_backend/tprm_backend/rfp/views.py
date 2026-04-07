@@ -668,7 +668,7 @@ class RFPViewSet(RFPAuthenticationMixin, viewsets.ModelViewSet):
             import traceback
             print(traceback.format_exc())
             return Response({
-                'error': f'Failed to update documents: {str(e)}'
+                'error': f'Failed to update documents: An internal server error occurred'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=True, methods=['post'])
@@ -711,7 +711,7 @@ class RFPViewSet(RFPAuthenticationMixin, viewsets.ModelViewSet):
                 print(f"[ERROR] Failed to create S3 client: {str(e)}")
                 return Response({
                     'success': False,
-                    'error': f'Failed to initialize S3 client: {str(e)}'
+                    'error': f'Failed to initialize S3 client: An internal server error occurred'
                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
            
             # Download and merge PDFs
@@ -912,7 +912,7 @@ class RFPViewSet(RFPAuthenticationMixin, viewsets.ModelViewSet):
             print(traceback.format_exc())
             return Response({
                 'success': False,
-                'error': f'Document merge failed: {str(e)}'
+                'error': f'Document merge failed: An internal server error occurred'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=True, methods=['get'])
@@ -992,7 +992,7 @@ class RFPViewSet(RFPAuthenticationMixin, viewsets.ModelViewSet):
             import traceback
             print(traceback.format_exc())
             return Response({
-                'error': f'Failed to get RFP details: {str(e)}'
+                'error': f'Failed to get RFP details: An internal server error occurred'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -1218,7 +1218,7 @@ class RFPTypeCustomFieldsViewSet(RFPAuthenticationMixin, viewsets.ReadOnlyModelV
             logger.error(f'Error fetching custom fields for rfp_type {rfp_type}: {str(e)}')
             return Response({
                 'success': False,
-                'error': f'Error fetching custom fields: {str(e)}'
+                'error': f'Error fetching custom fields: An internal server error occurred'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -1295,7 +1295,7 @@ class DocumentUploadView(APIView):
                 print(f"[ERROR] Failed to create S3 client: {str(e)}")
                 return Response({
                     'success': False,
-                    'error': f'Failed to initialize S3 client: {str(e)}'
+                    'error': f'Failed to initialize S3 client: An internal server error occurred'
                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
             # Save file temporarily
@@ -1394,7 +1394,7 @@ class DocumentUploadView(APIView):
             print(traceback.format_exc())
             return Response({
                 'success': False,
-                'error': f'Document upload failed: {str(e)}'
+                'error': f'Document upload failed: An internal server error occurred'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 def convert_to_pdf(file_path, file_extension):
@@ -1821,7 +1821,7 @@ class MergeDocumentsView(APIView):
                 print(f"[ERROR] Failed to create S3 client: {str(e)}")
                 return Response({
                     'success': False,
-                    'error': f'Failed to initialize S3 client: {str(e)}'
+                    'error': f'Failed to initialize S3 client: An internal server error occurred'
                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
            
             # Try to import PyPDF2 or pypdf
@@ -2248,7 +2248,7 @@ class MergeDocumentsView(APIView):
             print(traceback.format_exc())
             return Response({
                 'success': False,
-                'error': f'Failed to merge documents: {str(e)}'
+                'error': f'Failed to merge documents: An internal server error occurred'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class AwardNotificationView(APIView):
@@ -2470,7 +2470,7 @@ If you have questions, please contact the RFP team directly.
             print(traceback.format_exc())
             return Response({
                 'success': False,
-                'error': f'Failed to send award notification: {str(e)}'
+                'error': f'Failed to send award notification: An internal server error occurred'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     def get(self, request, rfp_id):
@@ -2568,7 +2568,7 @@ If you have questions, please contact the RFP team directly.
             print(f"Error getting award notifications: {str(e)}")
             return Response({
                 'success': False,
-                'error': f'Failed to get award notifications: {str(e)}'
+                'error': f'Failed to get award notifications: An internal server error occurred'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -2693,7 +2693,7 @@ class AwardResponseView(APIView):
             print(f"Error processing award response: {str(e)}")
             return Response({
                 'success': False,
-                'error': f'Failed to process award response: {str(e)}'
+                'error': f'Failed to process award response: An internal server error occurred'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     def get(self, request, token):
@@ -2745,7 +2745,7 @@ class AwardResponseView(APIView):
             print(f"Error getting award notification: {str(e)}")
             return Response({
                 'success': False,
-                'error': f'Failed to get award notification: {str(e)}'
+                'error': f'Failed to get award notification: An internal server error occurred'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def _create_vendor_credentials(self, notification):
@@ -3413,7 +3413,7 @@ class VendorCredentialsView(APIView):
             traceback.print_exc()
             return Response({
                 'success': False,
-                'error': f'Failed to create vendor credentials: {str(e)}'
+                'error': f'Failed to create vendor credentials: An internal server error occurred'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
  
 # ============================================================================
@@ -3531,7 +3531,7 @@ def get_primary_contacts(request):
     except Exception as e:
         return JsonResponse({
             'success': False,
-            'error': f'Failed to fetch primary contacts: {str(e)}'
+            'error': f'Failed to fetch primary contacts: An internal server error occurred'
         }, status=500)
 
 
@@ -3588,7 +3588,7 @@ def get_invitations_by_rfp(request, rfp_id):
     except Exception as e:
         return JsonResponse({
             'success': False,
-            'error': f'Failed to fetch invitations: {str(e)}'
+            'error': f'Failed to fetch invitations: An internal server error occurred'
         }, status=500)
 
 
@@ -3841,7 +3841,7 @@ def create_vendor_invitations(request, rfp_id):
     except Exception as e:
         return JsonResponse({
             'success': False,
-            'error': f'Failed to create invitations: {str(e)}'
+            'error': f'Failed to create invitations: An internal server error occurred'
         }, status=500)
 
 
@@ -4049,7 +4049,7 @@ Procurement Team
     except Exception as e:
         return JsonResponse({
             'success': False,
-            'error': f'Failed to send invitations: {str(e)}'
+            'error': f'Failed to send invitations: An internal server error occurred'
         }, status=500)
 
 
@@ -5094,7 +5094,7 @@ def create_unmatched_vendor(request, rfp_id):
         traceback.print_exc()
         return Response({
             'success': False,
-            'error': f'Failed to create unmatched vendor: {str(e)}'
+            'error': f'Failed to create unmatched vendor: An internal server error occurred'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -5210,7 +5210,7 @@ def get_approved_vendors(request, rfp_id):
         return JsonResponse(vendor_data, safe=False)
         
     except Exception as e:
-        return JsonResponse({'error': f'Failed to fetch approved vendors: {str(e)}'}, status=500)
+        return JsonResponse({'error': f'Failed to fetch approved vendors: An internal server error occurred'}, status=500)
 
 
 @api_view(['GET'])
@@ -5230,7 +5230,7 @@ def get_sample_csv(request):
         return response
         
     except Exception as e:
-        return JsonResponse({'error': f'Failed to generate sample CSV: {str(e)}'}, status=500)
+        return JsonResponse({'error': f'Failed to generate sample CSV: An internal server error occurred'}, status=500)
 
 
 @api_view(['POST'])
@@ -5354,7 +5354,7 @@ def vendor_manual_entry(request, rfp_id):
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Invalid JSON data'}, status=400)
     except Exception as e:
-        return JsonResponse({'error': f'Failed to create vendor: {str(e)}'}, status=500)
+        return JsonResponse({'error': f'Failed to create vendor: An internal server error occurred'}, status=500)
 
 
 @api_view(['POST'])
@@ -5515,7 +5515,7 @@ def vendor_bulk_upload(request, rfp_id):
         })
         
     except Exception as e:
-        return JsonResponse({'error': f'Failed to process bulk upload: {str(e)}'}, status=500)
+        return JsonResponse({'error': f'Failed to process bulk upload: An internal server error occurred'}, status=500)
 
 
 @api_view(['POST'])
@@ -5651,7 +5651,7 @@ def unmatched_vendor_bulk_upload(request, rfp_id):
         })
         
     except Exception as e:
-        return JsonResponse({'error': f'Failed to process bulk upload: {str(e)}'}, status=500)
+        return JsonResponse({'error': f'Failed to process bulk upload: An internal server error occurred'}, status=500)
 
 
 @api_view(['GET'])
@@ -5751,7 +5751,7 @@ def get_all_approved_vendors(request):
     except Exception as e:
         return JsonResponse({
             'success': False,
-            'error': f'Failed to fetch approved vendors: {str(e)}'
+            'error': f'Failed to fetch approved vendors: An internal server error occurred'
         }, status=500)
 
 

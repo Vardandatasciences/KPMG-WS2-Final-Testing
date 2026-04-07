@@ -10,6 +10,10 @@ from django.utils import timezone
 from django.conf import settings
 import logging
 import urllib.parse as up
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework import status
 
 from grc.models import Users, ExternalApplication, ExternalApplicationConnection, ExternalApplicationSyncLog
 from grc.utils.data_encryption import decrypt_data, is_encrypted_data
@@ -182,7 +186,7 @@ class JiraIntegration:
         except requests.RequestException as e:
             return {
                 'success': False,
-                'error': f"Request failed: {str(e)}"
+                'error': f"Request failed: An internal server error occurred"
             }
 
     def get_current_user(self, cloud_id):
@@ -204,7 +208,7 @@ class JiraIntegration:
         except requests.RequestException as e:
             return {
                 'success': False,
-                'error': f"Request failed: {str(e)}"
+                'error': f"Request failed: An internal server error occurred"
             }
 
     def get_projects(self, cloud_id):
@@ -226,7 +230,7 @@ class JiraIntegration:
         except requests.RequestException as e:
             return {
                 'success': False,
-                'error': f"Request failed: {str(e)}"
+                'error': f"Request failed: An internal server error occurred"
             }
 
     def get_project_details(self, cloud_id, project_id=None, project_key=None):
@@ -401,7 +405,7 @@ class JiraIntegration:
         except requests.RequestException as e:
             return {
                 'success': False,
-                'error': f"Request failed: {str(e)}"
+                'error': f"Request failed: An internal server error occurred"
             }
 
     def get_project_issues(self, cloud_id, project_key=None, project_id=None, max_results=50):
@@ -482,15 +486,19 @@ class JiraIntegration:
         except requests.RequestException as e:
             return {
                 'success': False,
-                'error': f"Request failed: {str(e)}"
+                'error': f"Request failed: An internal server error occurred"
             }
 
-@csrf_exempt
-@require_http_methods(["GET"])
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def jira_oauth(request):
     """Handle Jira OAuth initiation - redirects directly to Atlassian"""
     try:
-        user_id = request.GET.get('user_id', 1)
+        # SECURE: Use authenticated user ID instead of client-provided one
+        auth_user = getattr(request, 'user', None)
+        if not auth_user or not hasattr(auth_user, 'UserId'):
+            return Response({'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
+        user_id = auth_user.UserId
         
         # Get OAuth configuration from Django settings
         client_id = getattr(settings, 'JIRA_CLIENT_ID', '')
@@ -630,14 +638,20 @@ def jira_oauth(request):
         logger.error(f"Jira OAuth initiation error: {str(e)}")
         return JsonResponse({
             'success': False,
-            'error': f'OAuth initiation failed: {str(e)}'
+            'error': f'OAuth initiation failed: An internal server error occurred'
         })
 
-@csrf_exempt
-@require_http_methods(["GET", "POST"])
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
 def jira_oauth_callback(request):
     """Handle Jira OAuth callback directly from Atlassian"""
     try:
+        # SECURE: Get user_id from authenticated session
+        auth_user = getattr(request, 'user', None)
+        if not auth_user or not hasattr(auth_user, 'UserId'):
+            return Response({'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
+        user_id_from_auth = auth_user.UserId
+        
         if request.method == 'GET':
             # Handle OAuth callback from Atlassian
             code = request.GET.get('code')
@@ -939,17 +953,22 @@ def jira_oauth_callback(request):
         logger.error(f"Jira OAuth callback error: {str(e)}")
         return JsonResponse({
             'success': False,
-            'error': f'OAuth callback failed: {str(e)}'
+            'error': f'OAuth callback failed: An internal server error occurred'
         })
 
-@csrf_exempt
-@require_http_methods(["GET", "POST"])
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
 def jira_projects(request):
     """Handle Jira projects requests"""
     try:
+        # SECURE: Use authenticated user ID
+        auth_user = getattr(request, 'user', None)
+        if not auth_user or not hasattr(auth_user, 'UserId'):
+            return Response({'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
+        user_id = auth_user.UserId
+        
         if request.method == 'GET':
             # Get stored projects data
-            user_id = request.GET.get('user_id', 1)
             
             try:
                 user = Users.objects.get(UserId=user_id)
@@ -1247,17 +1266,22 @@ def jira_projects(request):
         logger.error(f"Jira projects endpoint error: {str(e)}")
         return JsonResponse({
             'success': False,
-            'error': f'Server error: {str(e)}'
+            'error': f'Server error: An internal server error occurred'
         })
 
-@csrf_exempt
-@require_http_methods(["GET", "POST"])
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
 def jira_project_details(request):
     """Handle Jira project details requests"""
     try:
+        # SECURE: Use authenticated user ID
+        auth_user = getattr(request, 'user', None)
+        if not auth_user or not hasattr(auth_user, 'UserId'):
+            return Response({'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
+        user_id = auth_user.UserId
+        
         if request.method == 'GET':
             # Get stored project details from database
-            user_id = request.GET.get('user_id', 1)
             project_id = request.GET.get('project_id')
             
             if not project_id:
@@ -1484,11 +1508,11 @@ def jira_project_details(request):
         logger.error(f"Jira project details endpoint error: {str(e)}")
         return JsonResponse({
             'success': False,
-            'error': f'Server error: {str(e)}'
+            'error': f'Server error: An internal server error occurred'
         })
 
-@csrf_exempt
-@require_http_methods(["POST"])
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def jira_project_issues(request):
     """Get issues/tasks for a specific Jira project
     
@@ -1496,8 +1520,13 @@ def jira_project_issues(request):
     then falls back to API call if not found or if refresh is needed.
     """
     try:
+        # SECURE: Use authenticated user ID
+        auth_user = getattr(request, 'user', None)
+        if not auth_user or not hasattr(auth_user, 'UserId'):
+            return Response({'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
+        user_id = auth_user.UserId
+        
         data = json.loads(request.body)
-        user_id = data.get('user_id', 1)
         project_key = data.get('project_key')
         project_id = data.get('project_id')
         max_results = data.get('max_results', 50)
@@ -1839,7 +1868,7 @@ def jira_project_issues(request):
             logger.error(traceback.format_exc())
             return JsonResponse({
                 'success': False,
-                'error': f'Server error: {str(e)}'
+                'error': f'Server error: An internal server error occurred'
             }, status=500)
             
     except json.JSONDecodeError:
@@ -1851,7 +1880,7 @@ def jira_project_issues(request):
         logger.error(f"Jira project issues endpoint error: {str(e)}")
         return JsonResponse({
             'success': False,
-            'error': f'Server error: {str(e)}'
+            'error': f'Server error: An internal server error occurred'
         }, status=500)
 
 @csrf_exempt
@@ -2003,7 +2032,7 @@ def jira_resources(request):
         logger.error(f"Jira resources endpoint error: {str(e)}")
         return JsonResponse({
             'success': False,
-            'error': f'Server error: {str(e)}'
+            'error': f'Server error: An internal server error occurred'
         })
 
 @csrf_exempt
@@ -2164,5 +2193,5 @@ def jira_stored_data(request):
         logger.error(f"Jira stored data endpoint error: {str(e)}")
         return JsonResponse({
             'success': False,
-            'error': f'Server error: {str(e)}'
+            'error': f'Server error: An internal server error occurred'
         })

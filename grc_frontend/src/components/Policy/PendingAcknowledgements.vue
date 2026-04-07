@@ -96,9 +96,9 @@
 
 <script>
 import { ref, onMounted } from 'vue'
-import axios from 'axios'
+import apiService from '@/services/apiService.js'
 import { useRouter } from 'vue-router'
-import { API_ENDPOINTS, API_BASE_URL } from '../../config/api'
+import { API_ENDPOINTS } from '../../config/api'
 import { PopupService } from '@/modules/popus/popupService'
 import AcknowledgeModal from './AcknowledgeModal.vue'
 
@@ -117,10 +117,10 @@ export default {
     const fetchPendingAcknowledgements = async () => {
       try {
         loading.value = true
-        const response = await axios.get(API_ENDPOINTS.GET_USER_PENDING_ACKNOWLEDGEMENTS)
+        const response = await apiService.get(API_ENDPOINTS.GET_USER_PENDING_ACKNOWLEDGEMENTS)
         
-        pendingAcknowledgements.value = response.data.pending_acknowledgements || []
-        pendingCount.value = response.data.pending_count || 0
+        pendingAcknowledgements.value = response.pending_acknowledgements || []
+        pendingCount.value = response.pending_count || 0
       } catch (error) {
         console.error('Error fetching pending acknowledgements:', error)
         if (error.response?.status !== 404) {
@@ -158,16 +158,11 @@ export default {
         
         if (policyId && policyName) {
           // Fetch all notifications
-          const notificationsResponse = await fetch(`${API_BASE_URL}/api/get-notifications/?user_id=${userId}`, {
-            headers: {
-              'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-              'Content-Type': 'application/json'
-            }
-          })
+          const response = await apiService.get(`/get-notifications/?user_id=${userId}`, {}, { background: true })
           
-          if (notificationsResponse.ok) {
-            const data = await notificationsResponse.json()
-            if (data.status === 'success' && data.notifications) {
+          if (response && response.status === 'success' && response.notifications) {
+            const data = response
+            if (data.notifications) {
               // Find ONLY the notification for this specific policy
               // Match by policy name in the message (notification format: "Acknowledgement request created for "policy". X users assigned.")
               const matchingNotification = data.notifications.find(n => 
@@ -206,14 +201,7 @@ export default {
               
               // Mark ONLY this specific notification as read
               if (finalNotification) {
-                await fetch(`${API_BASE_URL}/api/mark-as-read/`, {
-                  method: 'POST',
-                  headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-                    'Content-Type': 'application/json',
-                  },
-                  body: JSON.stringify({ notification_id: finalNotification.id })
-                })
+                await apiService.post('/mark-as-read/', { notification_id: finalNotification.id }, { background: true })
                 console.log(`✅ Marked notification ${finalNotification.id} as read for policy "${policyName}"`)
               } else {
                 console.log(`⚠️ No matching notification found for policy "${policyName}" - notification will remain visible`)

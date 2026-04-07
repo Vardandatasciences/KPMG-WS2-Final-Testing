@@ -114,7 +114,7 @@ def save_committee_evaluation(request, rfp_id):
 
     except Exception as e:
         return Response({
-            'error': f'Failed to save committee rankings: {str(e)}'
+            'error': f'Failed to save committee rankings: An internal server error occurred'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['POST'])

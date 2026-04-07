@@ -1,5 +1,9 @@
 from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_protect as csrf_exempt
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework import status
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 import json
 from django.db import connection
@@ -138,6 +142,8 @@ def create_ai_audit_evidence_reminder_notification(audit_id, user_id, framework_
 
 @csrf_exempt
 @require_http_methods(["POST"])
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def push_notification(request):
     """
     Simple push notification function that can be called from any frontend operation
@@ -151,18 +157,11 @@ def push_notification(request):
         category = data.get('category', 'common')
         priority = data.get('priority', 'medium')
         
-        # Get user_id from JWT authentication or request data
-        user_id = None
-        
-        # First try to get from authenticated user
-        if hasattr(request, 'user') and request.user and hasattr(request.user, 'UserId'):
-            user_id = str(request.user.UserId)
-        elif hasattr(request, 'user') and request.user and hasattr(request.user, 'id'):
-            user_id = str(request.user.id)
-        
-        # Fallback to request data
-        if not user_id:
-            user_id = data.get('user_id', 'default_user')
+        # SECURE: Always use authenticated user ID
+        auth_user = getattr(request, 'user', None)
+        if not auth_user or not hasattr(auth_user, 'UserId'):
+            return Response({'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
+        user_id = str(auth_user.UserId)
         
         # Create notification object
         notification = {
@@ -200,10 +199,11 @@ def push_notification(request):
     except Exception as e:
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
-@require_http_methods(["GET"])
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def get_notifications(request):
     """
     Get all notifications for a user
@@ -341,11 +341,13 @@ def get_notifications(request):
     except Exception as e:
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 @csrf_exempt
 @require_http_methods(["POST"])
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def mark_as_read(request):
     """
     Mark a notification as read
@@ -354,9 +356,16 @@ def mark_as_read(request):
         data = json.loads(request.body)
         notification_id = data.get('notification_id')
         
+        # SECURE: Get auth user
+        auth_user = getattr(request, 'user', None)
+        if not auth_user or not hasattr(auth_user, 'UserId'):
+            return Response({'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
+        user_id = str(auth_user.UserId)
+
         # Find and update notification (in production, update database)
         for notification in notifications_storage:
-            if notification['id'] == notification_id:
+            # SECURE: Check both notification ID and ownership
+            if notification['id'] == notification_id and notification['user_id'] == user_id:
                 notification['status']['isRead'] = True
                 notification['status']['readAt'] = datetime.now().isoformat()
                 break
@@ -374,19 +383,24 @@ def mark_as_read(request):
     except Exception as e:
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
-@csrf_exempt
-@require_http_methods(["POST"])
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def mark_all_as_read(request):
     """
     Mark all notifications as read for a user
     EXCEPT acknowledgement notifications - they must be acknowledged first
     """
     try:
+        # SECURE: Get auth user
+        auth_user = getattr(request, 'user', None)
+        if not auth_user or not hasattr(auth_user, 'UserId'):
+            return Response({'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
+        user_id = str(auth_user.UserId)
+
         data = json.loads(request.body)
-        user_id = data.get('user_id', 'default_user')
         exclude_acknowledgements = data.get('exclude_acknowledgements', False)
         
         # Mark all user notifications as read (in production, update database)
@@ -427,5 +441,5 @@ def mark_all_as_read(request):
     except Exception as e:
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500) 

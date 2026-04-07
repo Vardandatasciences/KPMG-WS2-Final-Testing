@@ -240,7 +240,7 @@ def get_consent_configurations(request):
         logger.error(f"Error fetching consent configurations: {str(e)}")
         return Response({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -326,7 +326,7 @@ def update_consent_configuration(request, config_id):
         logger.error(f"Error updating consent configuration: {str(e)}")
         return Response({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -453,7 +453,7 @@ def bulk_update_consent_configurations(request):
         logger.error(f"Error bulk updating consent configurations: {str(e)}")
         return Response({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -553,7 +553,7 @@ def check_consent_required(request):
         logger.error(f"Error checking consent requirement: {str(e)}")
         return Response({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -691,7 +691,7 @@ def record_consent_acceptance(request):
         logger.error(f"Error recording consent acceptance: {str(e)}")
         return Response({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -725,7 +725,7 @@ def get_user_consent_history(request, user_id):
         logger.error(f"Error fetching user consent history: {str(e)}")
         return Response({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -760,7 +760,7 @@ def get_all_consent_acceptances(request):
         logger.error(f"Error fetching consent acceptances: {str(e)}")
         return Response({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -898,7 +898,7 @@ def withdraw_consent(request):
         logger.error(f"Error withdrawing consent: {str(e)}")
         return Response({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -1045,7 +1045,7 @@ def withdraw_all_consents(request):
         logger.error(f"Error withdrawing all consents: {str(e)}")
         return Response({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -1080,7 +1080,7 @@ def get_user_consent_withdrawals(request, user_id):
         logger.error(f"Error fetching user consent withdrawals: {str(e)}")
         return Response({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -1175,6 +1175,6 @@ def check_consent_status(request, user_id):
         logger.error(f"Error checking consent status: {str(e)}")
         return Response({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 

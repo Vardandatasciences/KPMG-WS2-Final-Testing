@@ -1,298 +1,269 @@
 /**
- * Centralized API Service
- * All API calls should use this service to ensure JWT tokens are attached
+ * Unified API Service Layer
+ * 
+ * This is the SINGLE SOURCE OF TRUTH for all API communications in the product.
+ * It provides:
+ * 1. Intelligent Request Deduplication (prevents redundant GETs)
+ * 2. Time-to-Live (TTL) Caching for GET requests
+ * 3. Automated Multi-Tenancy (X-Tenant-Id / tenant_id injection)
+ * 4. Secure Cookie-First Authentication (automatic token purging)
+ * 5. Reactive Progress & Global Loading States
  */
 
-import axios from 'axios';
-import { API_BASE_URL } from '../config/api.js';
+import { ref } from 'vue';
+import { API_BASE_URL, createAxiosInstance } from '../config/api.js';
 
-const getAuthToken = () =>
-  sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
-const getRefreshToken = () =>
-  sessionStorage.getItem('refresh_token') || localStorage.getItem('refresh_token');
+// --- Global State ---
+export const globalLoading = ref(false);
+const pendingRequests = new Map(); // For deduplication: url -> promise
+const responseCache = new Map();   // For caching: url -> { data, timestamp }
 
-/** Cookie-first: never persist JWTs in Web Storage; purge if present. */
-const purgeStoredTokens = () => {
-  ['access_token', 'refresh_token', 'session_token', 'token', 'jwt_token'].forEach((k) => {
-    sessionStorage.removeItem(k);
+const CACHE_TTL = 30000; // 30 seconds default TTL
+
+// --- Helpers ---
+const getTenantId = () => localStorage.getItem('tenant_id') || sessionStorage.getItem('tenant_id');
+
+const purgeTokens = () => {
+  ['access_token', 'refresh_token', 'session_token', 'token', 'jwt_token'].forEach(k => {
     localStorage.removeItem(k);
+    sessionStorage.removeItem(k);
   });
 };
 
-const clearSensitiveAuth = () => {
-  purgeStoredTokens();
-  ['user'].forEach((k) => {
-    sessionStorage.removeItem(k);
-    localStorage.removeItem(k);
+// --- Core Axios Instance ---
+const apiClient = createAxiosInstance(API_BASE_URL);
+apiClient.defaults.timeout = 120000; // 2 minutes
+
+// --- Interceptors ---
+
+let isRefreshing = false;
+let failedQueue = [];
+
+const processQueue = (error) => {
+  failedQueue.forEach(prom => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve();
+    }
   });
+  failedQueue = [];
 };
 
-const refreshAxios = axios.create({
-  baseURL: API_BASE_URL,
-  withCredentials: true,
-  headers: {
-    'Content-Type': 'application/json',
-    Accept: 'application/json'
-  },
-  xsrfCookieName: 'csrftoken',
-  xsrfHeaderName: 'X-CSRFToken'
-})
+/** Request: Multi-Tenancy & Security Hardening */
+apiClient.interceptors.request.use((config) => {
+  if (!config.background) {
+    globalLoading.value = true;
+  }
 
-purgeStoredTokens()
+  // 1. Multi-Tenancy & Identity: Inject context
+  const tenantId = getTenantId();
+  const userId = localStorage.getItem('user_id');
 
-/**
- * Create axios instance with JWT authentication
- */
-const apiClient = axios.create({
-  baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-    'Accept': 'application/json'
-  },
-  timeout: 120000, // 2 minutes timeout (increased for long-running operations)
-  withCredentials: true,  // Send cookies for CSRF protection
-  xsrfCookieName: 'csrftoken',
-  xsrfHeaderName: 'X-CSRFToken'
+  if (tenantId) {
+    config.headers['X-Tenant-Id'] = tenantId;
+    if (config.method === 'get') {
+      config.params = { ...config.params, tenant_id: tenantId };
+    }
+    if (['post', 'put', 'patch'].includes(config.method) && config.data && typeof config.data === 'object' && !(config.data instanceof FormData)) {
+      if (!config.data.tenant_id) config.data.tenant_id = tenantId;
+    }
+  }
+
+  if (userId) {
+    if (config.method === 'get' && !config.params?.user_id) {
+      config.params = { ...config.params, user_id: userId };
+    }
+    if (['post', 'put', 'patch'].includes(config.method)) {
+      if (config.data instanceof FormData) {
+        if (!config.data.has('userid')) config.data.append('userid', userId);
+        if (!config.data.has('user_id')) config.data.append('user_id', userId);
+      } else if (config.data && typeof config.data === 'object') {
+        if (!config.data.userid) config.data.userid = userId;
+        if (!config.data.user_id) config.data.user_id = userId;
+      }
+    }
+  }
+
+  // 2. Security: Ensure cookie-first by suppressing/purging local tokens
+  const legacyToken = localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
+  if (legacyToken) {
+    purgeTokens();
+  }
+
+  return config;
+}, (error) => {
+  if (!error.config?.background) {
+    globalLoading.value = false;
+  }
+  return Promise.reject(error);
+});
+
+/** Response: Progress & Error Normalization */
+apiClient.interceptors.response.use((response) => {
+  if (!response.config?.background) {
+    globalLoading.value = false;
+  }
+  return response;
+}, async (error) => {
+  const originalRequest = error.config;
+  
+  if (!originalRequest?.background) {
+    globalLoading.value = false;
+  }
+  
+  // Standardize Session Expiry (401) with automatic token refresh attempt
+  const isRefreshRequest = originalRequest.url?.includes('/api/refresh/');
+  if (error.response?.status === 401 && originalRequest && !originalRequest._retry && !isRefreshRequest) {
+    const detail = error.response.data?.detail || '';
+    
+    // Explicit hard-expiry (do not attempt refresh)
+    if (detail.toLowerCase().includes('expired') || error.response.data?.session_expired) {
+      console.warn('⏰ [API] Session expired explicitly - purging and redirecting');
+      purgeTokens();
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
+      return Promise.reject(error);
+    }
+
+    if (isRefreshing) {
+      return new Promise(function(resolve, reject) {
+        failedQueue.push({ resolve, reject });
+      }).then(() => {
+        return apiClient(originalRequest);
+      }).catch(err => {
+        return Promise.reject(err);
+      });
+    }
+
+    originalRequest._retry = true;
+    isRefreshing = true;
+
+    try {
+      // Send refresh request. Relies on HttpOnly refresh token cookie sent implicitly.
+      await apiClient.post('/api/refresh/', {}, { background: true });
+      processQueue(null);
+      return apiClient(originalRequest); // Retry the original request implicitly triggering withCredentials
+    } catch (refreshError) {
+      processQueue(refreshError);
+      console.warn('⏰ [API] Token refresh failed - purging and redirecting');
+      purgeTokens();
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
+      return Promise.reject(refreshError);
+    } finally {
+      isRefreshing = false;
+    }
+  }
+
+  return Promise.reject(error);
 });
 
 /**
- * Request Interceptor - Add JWT token to all requests
+ * Intelligent Proxy Wrapper
  */
-apiClient.interceptors.request.use(
-  (config) => {
-    const token = getAuthToken();
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    
-    // Add user_id to params if not already present (for RBAC fallback)
-    const userId = localStorage.getItem('user_id');
-    if (userId && !config.params?.user_id) {
-      config.params = {
-        ...config.params,
-        user_id: userId
-      };
-    }
-    
-    return config;
-  },
-  (error) => {
-    console.error('❌ [API Service] Request error:', error);
-    return Promise.reject(error);
+const request = async (method, url, data = null, config = {}) => {
+  const cacheKey = `${method}:${url}:${JSON.stringify(config.params || {})}`;
+
+  // 1. Deduplication: If an identical GET is already pending, return it
+  if (method === 'get' && pendingRequests.has(cacheKey)) {
+    console.log(`🌀 [API] Deduplicating request: ${url}`);
+    return pendingRequests.get(cacheKey);
   }
-);
 
-/**
- * Response Interceptor - Handle token refresh and errors
- */
-apiClient.interceptors.response.use(
-  (response) => {
-    return response;
-  },
-  async (error) => {
-    const originalRequest = error.config;
-    
-    // Handle timeout errors gracefully
-    if (error.code === 'ECONNABORTED' || error.message?.includes('timeout') || error.message?.includes('Timeout')) {
-      console.error('⏱️ [API Service] Request timeout:', {
-        url: error.config?.url,
-        method: error.config?.method,
-        timeout: error.config?.timeout
-      });
-      
-      // Don't show webpack overlay for timeout errors - return a user-friendly error
-      const timeoutError = new Error(`Request timed out after ${(error.config?.timeout || 120000) / 1000} seconds. The server may be slow or overloaded. Please try again.`);
-      timeoutError.isTimeout = true;
-      return Promise.reject(timeoutError);
+  // 2. Caching: Return fresh cached data if available
+  if (method === 'get' && !config.skipCache && responseCache.has(cacheKey)) {
+    const cached = responseCache.get(cacheKey);
+    if (Date.now() - cached.timestamp < (config.ttl || CACHE_TTL)) {
+      console.log(`🎯 [API] Serving from cache: ${url}`);
+      return cached.data;
     }
-    
-    // Handle network errors gracefully
-    if (error.code === 'ERR_NETWORK' || error.message?.includes('Network Error')) {
-      console.error('🌐 [API Service] Network error:', {
-        url: error.config?.url,
-        method: error.config?.method,
-        message: error.message
-      });
-      
-      const networkError = new Error('Network error: Unable to connect to the server. Please check your connection and ensure the backend server is running.');
-      networkError.isNetworkError = true;
-      return Promise.reject(networkError);
-    }
-    
-    // If 401 and we haven't retried yet, check for session expiration first
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      // Check if this is a session expiration (5-minute timeout)
-      const errorData = error.response.data || {}
-      if (errorData.session_expired === true || errorData.logout_reason === 'Session timeout after 5 minutes') {
-        console.log('⏰ [API Service] Session expired after 5 minutes - redirecting to login')
-        // Clear all auth data
-        clearSensitiveAuth()
-        localStorage.removeItem('user_id')
-        localStorage.removeItem('user_email')
-        localStorage.removeItem('user_name')
-        localStorage.removeItem('is_logged_in')
-        // Redirect to login immediately
-        if (window.location.pathname !== '/login') {
-          window.location.href = '/login'
-        }
-        return Promise.reject(error)
-      }
-
-      // Newer login detected in another browser/device.
-      if (errorData.session_invalidated === true) {
-        console.log('🔒 [API Service] Session invalidated due to newer login - redirecting to login')
-        clearSensitiveAuth()
-        localStorage.removeItem('user_id')
-        localStorage.removeItem('user_email')
-        localStorage.removeItem('user_name')
-        localStorage.removeItem('is_logged_in')
-        if (window.location.pathname !== '/login') {
-          window.location.href = '/login'
-        }
-        return Promise.reject(error)
-      }
-      
-      originalRequest._retry = true;
-
-      try {
-        purgeStoredTokens();
-        console.log('🔄 [API Service] Attempting cookie-based token refresh...');
-        const response = await refreshAxios.post('/api/jwt/refresh/', {});
-
-        if (response.status === 200) {
-          delete originalRequest.headers.Authorization;
-          return apiClient(originalRequest);
-        }
-      } catch (refreshError) {
-        console.error('❌ [API Service] Token refresh failed:', refreshError);
-        
-        // IMPORTANT: Same behavior as authService - don't log out immediately
-        // Check if tokens are still valid before clearing and redirecting
-        
-        const accessToken = getAuthToken();
-        const accessTokenExpires = localStorage.getItem('access_token_expires');
-        const refreshToken = getRefreshToken();
-        const refreshTokenExpires = localStorage.getItem('refresh_token_expires');
-        
-        // Cookie-first: JWTs may be absent from storage; use expiries from login when present.
-        let refreshTokenValid = false;
-        if (refreshToken && refreshTokenExpires) {
-          try {
-            const refreshExpirationTime = new Date(refreshTokenExpires);
-            if (!isNaN(refreshExpirationTime.getTime())) {
-              refreshTokenValid = refreshExpirationTime.getTime() > Date.now();
-            }
-          } catch (e) {
-            refreshTokenValid = !!refreshToken;
-          }
-        } else if (refreshTokenExpires) {
-          try {
-            refreshTokenValid = new Date(refreshTokenExpires).getTime() > Date.now();
-          } catch (e) {
-            refreshTokenValid = false;
-          }
-        } else if (refreshToken) {
-          refreshTokenValid = true;
-        }
-
-        let accessTokenValid = false;
-        if (accessToken && accessTokenExpires) {
-          try {
-            const accessExpirationTime = new Date(accessTokenExpires);
-            if (!isNaN(accessExpirationTime.getTime())) {
-              accessTokenValid = accessExpirationTime.getTime() > Date.now();
-            }
-          } catch (e) {
-            accessTokenValid = !!accessToken;
-          }
-        } else if (accessTokenExpires) {
-          try {
-            accessTokenValid = new Date(accessTokenExpires).getTime() > Date.now();
-          } catch (e) {
-            accessTokenValid = false;
-          }
-        } else if (accessToken) {
-          accessTokenValid = true;
-        }
-        
-        // Only log out if BOTH tokens are expired/invalid
-        if (!refreshTokenValid && !accessTokenValid) {
-          console.error('❌ [API Service] Both tokens expired - logging out');
-          // Clear tokens and redirect to login
-          clearSensitiveAuth();
-          localStorage.removeItem('user_id');
-          localStorage.removeItem('user_name');
-          
-          // Redirect to login
-          window.location.href = '/login';
-        } else {
-          console.warn('⚠️ [API Service] Refresh failed but tokens still valid - keeping user logged in (same as normal login)');
-          // Don't redirect - let user continue with current token
-        }
-        
-        return Promise.reject(refreshError);
-      }
-    }
-    
-    // Log 401/403 errors
-    if (error.response?.status === 401 || error.response?.status === 403) {
-      console.error(`❌ [API Service] ${error.response.status} error:`, {
-        url: error.config?.url,
-        method: error.config?.method,
-        message: error.response?.data?.message || error.message
-      });
-    }
-    
-    return Promise.reject(error);
   }
-);
 
-/**
- * API Service Methods
- */
+  // Define the actual request execution
+  const executeRequest = async () => {
+    try {
+      const response = await apiClient({
+        method,
+        url,
+        data,
+        ...config
+      });
+
+      const result = response.data;
+
+      // Cache successful GET results
+      if (method === 'get' && !config.skipCache) {
+        responseCache.set(cacheKey, { data: result, timestamp: Date.now() });
+      }
+
+      return result;
+    } finally {
+      if (method === 'get') pendingRequests.delete(cacheKey);
+    }
+  };
+
+  if (method === 'get') {
+    const requestPromise = executeRequest();
+    pendingRequests.set(cacheKey, requestPromise);
+    return requestPromise;
+  }
+
+  return executeRequest();
+};
+
+// --- Exported Unified Service ---
 export const apiService = {
-  /**
-   * GET request
-   */
-  get(url, config = {}) {
-    return apiClient.get(url, config);
-  },
+  get: (url, params = {}, config = {}) => request('get', url, null, { ...config, params }),
+  post: (url, data, config = {}) => request('post', url, data, config),
+  put: (url, data, config = {}) => request('put', url, data, config),
+  patch: (url, data, config = {}) => request('patch', url, data, config),
+  delete: (url, config = {}) => request('delete', url, null, config),
   
-  /**
-   * POST request
-   */
-  post(url, data, config = {}) {
-    return apiClient.post(url, data, config);
+  // Custom: Buffered/Batch upload helper
+  upload: (url, formData, onProgress, allowedTypes = null) => {
+    // Add client-side validation for files inside formData if allowedTypes is passed
+    if (allowedTypes && allowedTypes.length > 0) {
+      for (let value of formData.values()) {
+        if (value instanceof File) {
+          const extension = value.name.split('.').pop().toLowerCase();
+          const mimeType = value.type.toLowerCase();
+          
+          // Check if either the extension or the exact mimeType is in the allowed whitelist
+          if (!allowedTypes.map(t => t.toLowerCase()).includes(extension) && 
+              !allowedTypes.map(t => t.toLowerCase()).includes(mimeType)) {
+             console.error(`[API] Upload blocked: Invalid file type detected '${extension}' / '${mimeType}'`);
+             return Promise.reject(new Error(`Invalid file type: ${value.name}. Allowed types are: ${allowedTypes.join(', ')}`));
+          }
+        }
+      }
+    }
+
+    return apiClient.post(url, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      background: true, // Bypass global loading for uploads if you only want progress bar
+      onUploadProgress: (progressEvent) => {
+        if (onProgress) {
+          const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          onProgress(percentCompleted);
+        }
+      }
+    }).then(r => r.data);
   },
-  
-  /**
-   * PUT request
-   */
-  put(url, data, config = {}) {
-    return apiClient.put(url, data, config);
+
+  // Cache Utilities
+  clearCache: () => {
+    responseCache.clear();
+    console.log('🧹 [API] Global cache cleared');
   },
-  
-  /**
-   * PATCH request
-   */
-  patch(url, data, config = {}) {
-    return apiClient.patch(url, data, config);
-  },
-  
-  /**
-   * DELETE request
-   */
-  delete(url, config = {}) {
-    return apiClient.delete(url, config);
-  },
-  
-  /**
-   * Get the axios instance for advanced usage
-   */
-  getInstance() {
-    return apiClient;
+
+  invalidate: (urlPart) => {
+    for (const key of responseCache.keys()) {
+      if (key.includes(urlPart)) responseCache.delete(key);
+    }
   }
 };
 
 export default apiService;
-

@@ -359,7 +359,7 @@ def framework_list(request):
             return Response({
                 'error': 'Error creating framework',
                 'details': {
-                    'message': str(e),
+                    'message': 'An internal server error occurred.',
                     'traceback': traceback.format_exc()
                 }
             }, status=status.HTTP_400_BAD_REQUEST)
@@ -6659,7 +6659,7 @@ def get_user_profile(request, user_id):
         logger.error(traceback.format_exc())
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -6680,7 +6680,7 @@ def clear_ai_cache(request):
         logger.error(f"Error clearing AI cache: {e}")
         return JsonResponse({
             'success': False,
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -6768,7 +6768,7 @@ def get_user_business_info(request, user_id):
         logger.error(f"Error fetching business info: {str(e)}")
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 @require_http_methods(["GET"])
@@ -6873,7 +6873,7 @@ def get_user_permissions(request, user_id):
         logger.error(f"Error fetching user permissions: {str(e)}")
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 @api_view(['PUT'])
@@ -7147,7 +7147,7 @@ def update_user_permissions(request, user_id):
         traceback.print_exc()
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 @csrf_exempt

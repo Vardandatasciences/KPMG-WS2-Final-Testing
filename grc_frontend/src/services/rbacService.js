@@ -3,8 +3,7 @@
  * Handles permission checks and user role management using JWT tokens
  */
 
-import axios from 'axios';
-import { API_BASE_URL } from '../config/api.js';
+import { API_BASE_URL, createAxiosInstance } from '../config/api.js';
 
 class RBACService {
     constructor() {
@@ -20,26 +19,27 @@ class RBACService {
     async initialize() {
         try {
             const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
-            if (!token) {
-                console.log('[RBAC_SERVICE] No access token found');
-                return false;
-            }
-
-            // Decode JWT to get user info
-            const payload = this.decodeJWT(token);
-            if (!payload) {
-                console.log('[RBAC_SERVICE] Invalid JWT token');
-                return false;
-            }
-
-            this.userId = payload.user_id || payload.UserId;
-            this.userRole = payload.role || 'user';
-
-            // Fetch user permissions from backend
-            await this.fetchUserPermissions();
             
-            console.log('[RBAC_SERVICE] RBAC service initialized for user:', this.userId);
-            return true;
+            if (!token) {
+                console.log('[RBAC_SERVICE] No access token found in storage; proceeding with cookie-based auth');
+            } else {
+                // Decode JWT to get initial user info (might be stale, will be updated by fetchUserPermissions)
+                const payload = this.decodeJWT(token);
+                if (payload) {
+                    this.userId = payload.user_id || payload.UserId;
+                    this.userRole = payload.role || 'user';
+                }
+            }
+
+            // Always try to fetch fresh user permissions from backend
+            const success = await this.fetchUserPermissions();
+            
+            if (this.userId) {
+                console.log('[RBAC_SERVICE] RBAC service initialized for user:', this.userId);
+                return true;
+            }
+            
+            return success;
         } catch (error) {
             console.error('[RBAC_SERVICE] Error initializing RBAC service:', error);
             return false;
@@ -68,29 +68,19 @@ class RBACService {
      */
     async fetchUserPermissions() {
         try {
-            // Create axios instance with JWT token
-            const api = axios.create({
-                baseURL: this.baseURL,
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            });
+            // Use centralized axios instance configuration (includes withCredentials: true)
+            const api = createAxiosInstance(this.baseURL);
             
-            // Add request interceptor to include JWT token
-            api.interceptors.request.use((config) => {
-                const token = sessionStorage.getItem('access_token') ||
-                              sessionStorage.getItem('token') ||
-                              localStorage.getItem('access_token') ||
-                              localStorage.getItem('token');
-                if (token) {
-                    config.headers.Authorization = `Bearer ${token}`;
-                }
-                return config;
-            });
-            
-            const response = await api.get(`${this.baseURL}/api/rbac/user-permissions/`);
+            console.log('[RBAC_SERVICE] Fetching user permissions from:', `${this.baseURL}/api/rbac/user-permissions/`);
+            const response = await api.get('/api/rbac/user-permissions/');
             this.userPermissions = response.data.permissions || {};
-            console.log('[RBAC_SERVICE] User permissions fetched:', this.userPermissions);
+            
+            // Update user identification from backend (authoritative source)
+            this.userId = response.data.user_id || this.userId;
+            this.userRole = response.data.role || this.userRole;
+            
+            console.log('[RBAC_SERVICE] User permissions successfully fetched for user:', this.userId);
+            return true;
         } catch (error) {
             console.error('[RBAC_SERVICE] Error fetching user permissions:', error);
             // Provide fallback permissions for better user experience

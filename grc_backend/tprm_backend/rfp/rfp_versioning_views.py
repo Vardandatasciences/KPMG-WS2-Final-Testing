@@ -192,7 +192,7 @@ def edit_rfp_with_versioning(request):
         print(traceback.format_exc())
         return Response({
             'success': False,
-            'error': f'Failed to edit RFP: {str(e)}'
+            'error': f'Failed to edit RFP: An internal server error occurred'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -249,7 +249,7 @@ def get_rfp_version_history(request, rfp_id):
         print(f"Error getting RFP version history: {str(e)}")
         return Response({
             'success': False,
-            'error': f'Failed to get version history: {str(e)}'
+            'error': f'Failed to get version history: An internal server error occurred'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -298,7 +298,7 @@ def get_rfp_version(request, version_id):
         print(f"Error getting RFP version: {str(e)}")
         return Response({
             'success': False,
-            'error': f'Failed to get version: {str(e)}'
+            'error': f'Failed to get version: An internal server error occurred'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -458,7 +458,7 @@ def rollback_rfp_version(request):
         print(traceback.format_exc())
         return Response({
             'success': False,
-            'error': f'Failed to rollback RFP: {str(e)}'
+            'error': f'Failed to rollback RFP: An internal server error occurred'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -509,6 +509,6 @@ def get_rfp_change_requests(request, rfp_id):
         print(f"Error getting RFP change requests: {str(e)}")
         return Response({
             'success': False,
-            'error': f'Failed to get change requests: {str(e)}'
+            'error': f'Failed to get change requests: An internal server error occurred'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 

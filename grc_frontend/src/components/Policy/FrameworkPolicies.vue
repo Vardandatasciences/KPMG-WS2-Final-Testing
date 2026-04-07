@@ -234,7 +234,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import axios from 'axios'
+import apiService from '@/services/apiService.js'
 import { PopupService } from '@/modules/popus/popupService'
 import PopupModal from '@/modules/popus/PopupModal.vue'
 import CustomDropdown from '@/components/CustomDropdown.vue'
@@ -325,10 +325,10 @@ const exportPolicies = async () => {
     return;
   }
   try {
-    const res = await axios.post(`/api/frameworks/${frameworkId}/policies/export/`, {
+    const res = await apiService.post(`/frameworks/${frameworkId}/policies/export/`, {
       format: selectedExportFormat.value
     });
-    const { file_url, file_name } = res.data;
+    const { file_url, file_name } = res;
     if (!file_url || !file_name) {
       PopupService.error('Export failed: No file URL or name returned.', 'Export Error');
       sendPushNotification({
@@ -372,13 +372,13 @@ const checkSelectedFrameworkFromSession = async () => {
   try {
     console.log('🔍 DEBUG: Checking for selected framework from session in FrameworkPolicies...')
     console.log('🔍 DEBUG: Current route frameworkId:', frameworkId)
-    const response = await axios.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED)
-    console.log('📊 DEBUG: Selected framework response:', response.data)
+    const response = await apiService.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED)
+    console.log('📊 DEBUG: Selected framework response:', response)
     
-    if (response.data && response.data.success) {
+    if (response && response.success) {
       // Check if a framework is selected (not null)
-      if (response.data.frameworkId) {
-        const sessionFrameworkId = response.data.frameworkId
+      if (response.frameworkId) {
+        const sessionFrameworkId = response.frameworkId
         console.log('✅ DEBUG: Found selected framework in session:', sessionFrameworkId)
         
         // Update the frameworkId from route params to use session framework
@@ -421,18 +421,18 @@ const fetchPolicies = async () => {
     const currentFrameworkId = route.params.frameworkId
     console.log('🔍 DEBUG: Fetching policies for framework:', currentFrameworkId)
     
-    const response = await axios.get(API_ENDPOINTS.FRAMEWORK_GET_POLICIES_LIST(currentFrameworkId))
-    allPolicies.value = response.data.policies
-    frameworkName.value = response.data.framework.name
-    frameworkStatus.value = response.data.framework.status || 'Unknown'
+    const response = await apiService.get(API_ENDPOINTS.FRAMEWORK_GET_POLICIES_LIST(currentFrameworkId))
+    allPolicies.value = response.policies
+    frameworkName.value = response.framework.name
+    frameworkStatus.value = response.framework.status || 'Unknown'
     
     // Calculate policy counts from the policies data
     const activeCount = allPolicies.value.filter(policy => policy.status === 'Active').length
     const inactiveCount = allPolicies.value.filter(policy => policy.status === 'Inactive').length
     
     policyCounts.value = {
-      active: response.data.policy_counts?.active || activeCount,
-      inactive: response.data.policy_counts?.inactive || inactiveCount
+      active: response.policy_counts?.active || activeCount,
+      inactive: response.policy_counts?.inactive || inactiveCount
     }
   } catch (error) {
     console.error('Error fetching policies:', error)
@@ -451,8 +451,8 @@ const fetchPolicies = async () => {
 // Fetch entities from API
 const fetchEntities = async () => {
   try {
-    const response = await axios.get(API_ENDPOINTS.ENTITIES)
-    entities.value = response.data.entities || []
+    const response = await apiService.get(API_ENDPOINTS.ENTITIES)
+    entities.value = response.entities || []
   } catch (error) {
     console.error('Error fetching entities:', error)
     sendPushNotification({
@@ -573,8 +573,8 @@ const toggleStatus = async (policy) => {
     if (policy.status === 'Active') {
       // First: Show reviewer selection popup
       try {
-        const response = await axios.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION);
-        const reviewers = response.data;
+        const response = await apiService.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION);
+        const reviewers = response;
         
         if (reviewers.length === 0) {
           PopupService.warning('No reviewers available. Please contact administrator.', 'No Reviewers');
@@ -620,7 +620,7 @@ const toggleStatus = async (policy) => {
                 
                 try {
                   // Call the API to request status change approval with reviewer ID
-                  await axios.post(`/api/policies/${policy.id}/toggle-status/`, {
+                  await apiService.post(`/policies/${policy.id}/toggle-status/`, {
                     reason: reason.trim(),
                     ReviewerId: selectedReviewerId,
                     cascadeSubpolicies: true
@@ -702,22 +702,22 @@ const toggleStatus = async (policy) => {
       }
     } else {
       // For activation (Inactive -> Active), use the direct toggle endpoint
-      const response = await axios.post(`/api/policies/${policy.id}/toggle-status/`, {
+      const response = await apiService.post(`/policies/${policy.id}/toggle-status/`, {
         cascadeSubpolicies: true
       });
      
       // Update local state
-      policy.status = response.data.status || 'Active';
+      policy.status = response.status || 'Active';
      
       // Show feedback to the user
       let message = `Policy status change request submitted.`;
      
-      if (response.data.other_versions_deactivated > 0) {
-        message += ` ${response.data.other_versions_deactivated} previous version(s) of this policy were automatically deactivated.`;
+      if (response.other_versions_deactivated > 0) {
+        message += ` ${response.other_versions_deactivated} previous version(s) of this policy were automatically deactivated.`;
       }
      
-      if (response.data.subpolicies_affected > 0) {
-        message += ` ${response.data.subpolicies_affected} subpolicies were also activated.`;
+      if (response.subpolicies_affected > 0) {
+        message += ` ${response.subpolicies_affected} subpolicies were also activated.`;
       }
      
       PopupService.success(message, 'Status Update');
@@ -835,11 +835,11 @@ const closeAcknowledgementModal = () => {
 const viewPolicyAcknowledgements = async (policy) => {
   try {
     // Fetch all acknowledgement requests for this policy
-    const response = await axios.get(API_ENDPOINTS.GET_POLICY_ACKNOWLEDGEMENT_REQUESTS(policy.id))
+    const response = await apiService.get(API_ENDPOINTS.GET_POLICY_ACKNOWLEDGEMENT_REQUESTS(policy.id))
     
-    if (response.data.success && response.data.acknowledgement_requests && response.data.acknowledgement_requests.length > 0) {
+    if (response && response.success && response.acknowledgement_requests && response.acknowledgement_requests.length > 0) {
       // If there are multiple requests, show the most recent one
-      const latestRequest = response.data.acknowledgement_requests[0]
+      const latestRequest = response.acknowledgement_requests[0]
       
       // Navigate to the report page
       router.push({

@@ -8,7 +8,8 @@
  * 4. Integrate with moduleAiAnalysisService for cross-component caching
  */
 
-import { axiosInstance, API_ENDPOINTS } from '@/config/api.js';
+import apiService from '@/services/apiService.js';
+import { API_ENDPOINTS } from '@/config/api.js';
 
 class PolicyFrameworkCacheService {
   constructor() {
@@ -307,24 +308,21 @@ class PolicyFrameworkCacheService {
       return { data: cached.data, timestamp: cached.timestamp, taskId: cached.taskId };
     }
 
-    // Execute with deduplication
-    const key = this.generateDocumentKey(file);
-    return this.executeWithDeduplication('upload', key, async () => {
-      const response = await axiosInstance.post(API_ENDPOINTS.FRAMEWORK_UPLOAD, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-        timeout: 300000
-      });
-      const payload = response && response.data;
-      const result = {
-        data: payload,
-        timestamp: Date.now()
-      };
-      const taskId = (payload && typeof payload === 'object' && (payload.task_id ?? payload.data?.task_id)) || null;
-      if (taskId) {
-        this.cacheDocumentResult(file, taskId, result);
-      }
-      return { data: payload, timestamp: result.timestamp, taskId: taskId || undefined };
+    const payload = await apiService.post(API_ENDPOINTS.FRAMEWORK_UPLOAD, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 300000
     });
+
+    const result = {
+      data: payload,
+      timestamp: Date.now()
+    };
+    
+    const taskId = (payload && typeof payload === 'object' && (payload.task_id ?? payload.data?.task_id)) || null;
+    if (taskId) {
+      this.cacheDocumentResult(file, taskId, result);
+    }
+    return { data: payload, timestamp: result.timestamp, taskId: taskId || undefined };
   }
 
   /**
@@ -336,22 +334,17 @@ class PolicyFrameworkCacheService {
   async getSections(userId, taskId) {
     // Check cache first
     const cached = this.getCachedSections(userId, taskId);
-    if (cached) {
-      return cached;
+    if (cached) return cached;
+    
+    // Leverage apiService deduplication
+    const data = await apiService.get(API_ENDPOINTS.FRAMEWORK_GET_SECTIONS_BY_USER(userId));
+    
+    if (data && data.success) {
+      this.cacheSections(userId, taskId, data);
+      return data;
     }
     
-    // Execute with deduplication
-    const key = `${userId}_${taskId}`;
-    return this.executeWithDeduplication('sections', key, async () => {
-      const response = await axiosInstance.get(API_ENDPOINTS.FRAMEWORK_GET_SECTIONS_BY_USER(userId));
-      
-      if (response.data.success) {
-        this.cacheSections(userId, taskId, response.data);
-        return response.data;
-      }
-      
-      throw new Error(response.data.error || 'Failed to fetch sections');
-    });
+    throw new Error(data?.error || 'Failed to fetch sections');
   }
 
   /**
@@ -363,31 +356,26 @@ class PolicyFrameworkCacheService {
   async generateCompliances(taskId, userId) {
     // Check cache first
     const cached = this.getCachedCompliances(taskId);
-    if (cached) {
-      return cached;
+    if (cached) return cached;
+    
+    const data = await apiService.post(API_ENDPOINTS.GENERATE_COMPLIANCES_FOR_CHECKED_SECTIONS, {
+      task_id: taskId,
+      user_id: userId
+    });
+    
+    if (data && data.success) {
+      const stats = {
+        total_compliances: data.total_compliances,
+        total_subpolicies: data.total_subpolicies,
+        total_policies: data.total_policies,
+        total_sections: data.total_sections
+      };
+      
+      this.cacheCompliances(taskId, data, stats);
+      return { data, stats };
     }
     
-    // Execute with deduplication
-    return this.executeWithDeduplication('compliances', taskId, async () => {
-      const response = await axiosInstance.post(API_ENDPOINTS.GENERATE_COMPLIANCES_FOR_CHECKED_SECTIONS, {
-        task_id: taskId,
-        user_id: userId
-      });
-      
-      if (response.data.success) {
-        const stats = {
-          total_compliances: response.data.total_compliances,
-          total_subpolicies: response.data.total_subpolicies,
-          total_policies: response.data.total_policies,
-          total_sections: response.data.total_sections
-        };
-        
-        this.cacheCompliances(taskId, response.data, stats);
-        return { data: response.data, stats };
-      }
-      
-      throw new Error(response.data.error || 'Failed to generate compliances');
-    });
+    throw new Error(data?.error || 'Failed to generate compliances');
   }
 
   /**
@@ -398,23 +386,18 @@ class PolicyFrameworkCacheService {
   async loadDefaultData(framework) {
     // Check cache first
     const cached = this.getCachedDefaultData(framework);
-    if (cached) {
-      return cached;
+    if (cached) return cached;
+    
+    const data = await apiService.post(API_ENDPOINTS.AI_LOAD_DEFAULT_DATA, {
+      framework: framework
+    });
+    
+    if (data && data.success) {
+      this.cacheDefaultData(framework, data);
+      return data;
     }
     
-    // Execute with deduplication
-    return this.executeWithDeduplication('defaultData', framework, async () => {
-      const response = await axiosInstance.post(API_ENDPOINTS.AI_LOAD_DEFAULT_DATA, {
-        framework: framework
-      });
-      
-      if (response.data.success) {
-        this.cacheDefaultData(framework, response.data);
-        return response.data;
-      }
-      
-      throw new Error(response.data.error || 'Failed to load default data');
-    });
+    throw new Error(data?.error || 'Failed to load default data');
   }
 
   // ================================

@@ -3132,7 +3132,7 @@ def perform_ai_gap_analysis(request, framework_id):
     except Exception as e:
         logger.error(f"Error in AI gap analysis: {e}")
         return Response({
-            'error': f'AI gap analysis failed: {str(e)}'
+            'error': f'AI gap analysis failed: An internal server error occurred'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -3228,5 +3228,5 @@ def assess_ai_compliance_impact(request, framework_id):
     except Exception as e:
         logger.error(f"Error in AI compliance impact assessment: {e}")
         return Response({
-            'error': f'AI compliance impact assessment failed: {str(e)}'
+            'error': f'AI compliance impact assessment failed: An internal server error occurred'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

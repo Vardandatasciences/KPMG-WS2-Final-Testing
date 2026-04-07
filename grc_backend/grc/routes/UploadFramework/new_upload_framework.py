@@ -345,14 +345,14 @@ def upload_framework_file(request):
         except UnsafePathError as e:
             return JsonResponse({'error': str(e)}, status=400)
         except Exception as e:
-            return JsonResponse({'error': f'Failed to create user folder: {str(e)}'}, status=500)
+            return JsonResponse({'error': f'Failed to create user folder: An internal server error occurred'}, status=500)
         
         try:
             file_path = save_uploaded_file(uploaded_file, user_folder)
         except UnsafePathError as e:
             return JsonResponse({'error': str(e)}, status=400)
         except Exception as e:
-            return JsonResponse({'error': f'Failed to save uploaded file: {str(e)}'}, status=500)
+            return JsonResponse({'error': f'Failed to save uploaded file: An internal server error occurred'}, status=500)
         
         # Step 2.5: Decompress if needed (client-side compression)
         compression_metadata = None

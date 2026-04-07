@@ -303,7 +303,7 @@ class DocumentProcessingService:
             logger.error(f"[ERROR] Word document text extraction error: {e}")
             return {
                 'success': False,
-                'error': f'Word document extraction failed: {str(e)}'
+                'error': f'Word document extraction failed: An internal server error occurred'
             }
     
     def perform_ocr(self, file_path: str) -> Dict:
@@ -653,7 +653,7 @@ class DocumentProcessingService:
                 # Return error instead of fallback data to avoid data mismapping
                 return {
                     'success': False,
-                    'error': f'Failed to parse AI response: {str(e)}',
+                    'error': f'Failed to parse AI response: An internal server error occurred',
                     'raw_response': extracted_json[:500]  # First 500 chars for debugging
                 }
         except Exception as e:
@@ -1444,7 +1444,7 @@ class DocumentProcessingService:
                 logger.error(f"[ERROR] Failed to get document content: {e}")
                 return {
                     'success': False,
-                    'error': f'Failed to get document content: {str(e)}'
+                    'error': f'Failed to get document content: An internal server error occurred'
                 }
             
             # Step 2: Run OCR on document
@@ -1504,7 +1504,7 @@ class DocumentProcessingService:
                 logger.error(f"[ERROR] OCR processing error: {e}")
                 return {
                     'success': False,
-                    'error': f'OCR processing failed: {str(e)}'
+                    'error': f'OCR processing failed: An internal server error occurred'
                 }
             
             # Step 3: AI extraction based on plan type
@@ -1538,7 +1538,7 @@ class DocumentProcessingService:
                 logger.error(f"[ERROR] AI extraction error: {e}")
                 return {
                     'success': False,
-                    'error': f'AI extraction failed: {str(e)}'
+                    'error': f'AI extraction failed: An internal server error occurred'
                 }
             
             # Step 4: Return results

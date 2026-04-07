@@ -131,7 +131,7 @@ def get_user_permissions(request, user_id):
     except Exception as e:
         logger.error(f"Error fetching user permissions: {str(e)}")
         return Response(
-            {'error': f'Failed to fetch permissions: {str(e)}'}, 
+            {'error': f'Failed to fetch permissions: An internal server error occurred'}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
@@ -195,7 +195,7 @@ def update_user_permissions(request):
     except Exception as e:
         logger.error(f"Error updating permissions: {str(e)}")
         return Response(
-            {'error': f'Failed to update permissions: {str(e)}'}, 
+            {'error': f'Failed to update permissions: An internal server error occurred'}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
@@ -438,7 +438,7 @@ def get_all_permission_fields(request):
     except Exception as e:
         logger.error(f"Error fetching permission fields: {str(e)}")
         return Response(
-            {'error': f'Failed to fetch permission fields: {str(e)}'}, 
+            {'error': f'Failed to fetch permission fields: An internal server error occurred'}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
@@ -505,7 +505,7 @@ def bulk_update_permissions(request):
     except Exception as e:
         logger.error(f"Error in bulk update: {str(e)}")
         return Response(
-            {'error': f'Bulk update failed: {str(e)}'}, 
+            {'error': f'Bulk update failed: An internal server error occurred'}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 

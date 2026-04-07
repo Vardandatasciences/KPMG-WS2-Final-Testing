@@ -101,7 +101,32 @@ def require_tenant(view_func):
     """
     @wraps(view_func)
     def wrapper(request, *args, **kwargs):
-        # Extra debugging for tenant resolution, especially for AI upload endpoints
+        # SECURE: Prioritize authenticated user from current session (Cookie/JWT)
+        # This ensures compatibility with our hardened cookie-based authentication
+        if hasattr(request, 'user') and request.user and request.user.is_authenticated:
+            user_id = getattr(request.user, 'UserId', getattr(request.user, 'id', None))
+            if user_id:
+                try:
+                    from .models import Users, Tenant
+                    # Optimized lookup: trust the user's tenant_id if already present on object
+                    tid = getattr(request.user, 'tenant_id', None)
+                    if not tid:
+                        user_obj = Users.objects.get(UserId=user_id)
+                        tid = getattr(user_obj, 'tenant_id', None)
+                    
+                    if tid:
+                        request.tenant_id = tid
+                        # Only hydrate Tenant object if explicitly needed, otherwise use tenant_id
+                        if not hasattr(request, 'tenant') or request.tenant is None:
+                            try:
+                                request.tenant = Tenant.objects.get(tenant_id=tid, status='active')
+                            except Tenant.DoesNotExist:
+                                pass
+                        return view_func(request, *args, **kwargs)
+                except Exception as e:
+                    logger.debug(f"[Tenant Utils] Failed resolving tenant from authenticated user: {e}")
+
+        # Extra debugging for tenant resolution...
         try:
             logger.debug(
                 "[Tenant Utils] require_tenant called: method=%s path=%s content_type=%s",

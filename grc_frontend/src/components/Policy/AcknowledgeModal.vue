@@ -85,7 +85,7 @@
 
 <script>
 import { ref, onMounted } from 'vue'
-import axios from 'axios'
+import apiService from '../../services/apiService'
 import { API_ENDPOINTS } from '../../config/api'
 import { PopupService } from '@/modules/popus/popupService'
 
@@ -110,8 +110,9 @@ export default {
     const getClientIP = async () => {
       try {
         // Try to get IP from ipify service
-        const response = await axios.get('https://api.ipify.org?format=json')
-        clientInfo.value.ip = response.data.ip
+        const response = await fetch('https://api.ipify.org?format=json')
+        const data = await response.json()
+        clientInfo.value.ip = data.ip
       } catch (error) {
         // Fallback - will be captured on backend
         clientInfo.value.ip = 'Unknown'
@@ -131,7 +132,7 @@ export default {
           comments: comments.value.trim() || null
         }
 
-        const response = await axios.post(
+        const response = await apiService.post(
           API_ENDPOINTS.ACKNOWLEDGE_POLICY_NEW(props.acknowledgement.acknowledgement_user_id),
           requestData
         )
@@ -143,7 +144,7 @@ export default {
 
         // Emit with acknowledgement data including policy info
         emit('acknowledged', {
-          ...response.data,
+          ...response,
           policy_id: props.acknowledgement.policy_id,
           policy_name: props.acknowledgement.policy_name,
           acknowledgement_user_id: props.acknowledgement.acknowledgement_user_id

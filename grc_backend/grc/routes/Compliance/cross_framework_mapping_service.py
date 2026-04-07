@@ -230,7 +230,7 @@ class CrossFrameworkMappingService:
             except Exception as e:
                 return {
                     'success': False,
-                    'error': f'Error extracting document text: {str(e)}'
+                    'error': f'Error extracting document text: An internal server error occurred'
                 }
             
             # Determine which frameworks to check

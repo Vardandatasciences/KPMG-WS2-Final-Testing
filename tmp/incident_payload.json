@@ -1,0 +1,14 @@
+{
+  "mitigations": {
+    "step_1": {
+      "description": "Test mitigation",
+      "aws-file_link": "https://orcashoimages.s3.us-east-1.amazonaws.com/test.pdf",
+      "files": [
+        {
+          "fileName": "test.pdf",
+          "aws-file_link": "https://orcashoimages.s3.us-east-1.amazonaws.com/test.pdf"
+        }
+      ]
+    }
+  }
+}

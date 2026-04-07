@@ -4004,7 +4004,7 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
             
         except Exception as e:
             debug_print(f"ERROR Failed to check processing status: {str(e)}")
-            return {'status': 'error', 'message': str(e)}
+            return {'status': 'error', 'message': 'An internal server error occurred.'}
         finally:
             cursor.close()
             conn.close()
@@ -5443,7 +5443,7 @@ def local_export_fallback(data, file_format, user_id, options):
         traceback.print_exc()
         return {
             'success': False,
-            'error': f'Local export failed: {str(e)}'
+            'error': f'Local export failed: An internal server error occurred'
         }
 
 def create_direct_mysql_client(mysql_config: Optional[Dict] = None) -> RenderS3Client:

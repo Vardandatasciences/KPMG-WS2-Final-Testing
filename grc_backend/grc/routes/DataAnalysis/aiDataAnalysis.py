@@ -498,7 +498,7 @@ For miscategorizations, be thorough and identify:
     except Exception as e:
         logger.error(f"Error generating AI insights: {str(e)}")
         return {
-            'error': f"Failed to generate AI insights: {str(e)}",
+            'error': f"Failed to generate AI insights: An internal server error occurred",
             'executive_summary': 'AI analysis temporarily unavailable',
             'recommendations': [],
             'miscategorizations': []
@@ -564,7 +564,7 @@ def get_ai_privacy_analysis(request):
         logger.error(f"Error in AI privacy analysis: {str(e)}")
         return Response({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -636,7 +636,7 @@ def get_privacy_dashboard_metrics(request):
         logger.error(f"Error in privacy dashboard metrics: {str(e)}")
         return Response({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -706,7 +706,7 @@ def get_privacy_compliance_report(request):
         logger.error(f"Error generating privacy compliance report: {str(e)}")
         return Response({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -1059,7 +1059,7 @@ Focus on:
     except Exception as e:
         logger.error(f"Error generating module AI analysis: {str(e)}")
         return {
-            'error': f"Failed to generate AI analysis: {str(e)}",
+            'error': f"Failed to generate AI analysis: An internal server error occurred",
             'recommendations': [],
             'miscategorizations': [],
             'score_analysis': {
@@ -1260,7 +1260,7 @@ def get_module_ai_analysis(request):
         logger.error(f"Error in module AI analysis: {str(e)}")
         return Response({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -1474,6 +1474,6 @@ def export_privacy_report(request):
         logger.error(f"Error exporting privacy report: {str(e)}")
         return Response({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 

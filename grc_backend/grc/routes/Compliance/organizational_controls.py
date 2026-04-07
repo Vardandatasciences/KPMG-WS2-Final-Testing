@@ -780,7 +780,7 @@ Respond in this exact JSON format:
                 results.append({
                     'org_control_id': org_control.OrgControlId,
                     'status': 'error',
-                    'message': str(e)
+                    'message': 'An internal server error occurred.'
                 })
         
         # Calculate summary

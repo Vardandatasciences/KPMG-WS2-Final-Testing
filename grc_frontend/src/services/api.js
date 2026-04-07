@@ -1,15 +1,7 @@
-import axios from 'axios';
-import { API_BASE_URL, API_ENDPOINTS } from '../config/api.js';
+import { API_BASE_URL, API_ENDPOINTS, createAxiosInstance } from '../config/api.js';
  
-const api = axios.create({
-  baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json'
-  },
-  timeout: 300000, // 5 minutes timeout (increased for long-running operations like AI analysis)
-  withCredentials: true // Include cookies in requests for session handling
-  // Note: transformRequest removed - using interceptor instead for better FormData handling
-});
+// Use centralized axios instance configuration (includes withCredentials: true)
+const api = createAxiosInstance(API_BASE_URL);
  
 // Add response interceptor for error handling
 api.interceptors.response.use(
@@ -154,24 +146,33 @@ api.interceptors.request.use((config) => {
                 sessionStorage.getItem('access_token') ||
                 sessionStorage.getItem('token');
   
+  // Validate JWT token before adding to header
+  // Ensure token is not a degenerate string from stale storage (null, undefined, etc.)
+  const isValidToken = token && 
+                      typeof token === 'string' && 
+                      token.length > 20 && 
+                      !['null', 'undefined', '[object object]'].includes(token.toLowerCase());
+
   // ALWAYS send JWT token if available, even for cookie preferences endpoints
-  // This allows the backend to extract user_id from the token for logged-in users
-  // The endpoint still allows anonymous access, but can link preferences to users when token is present
-  if (token) {
+  // Prioritize secure HttpOnly cookies: if no valid token in storage, 
+  // the browser will automatically send cookies via withCredentials.
+  if (isValidToken) {
     config.headers.Authorization = `Bearer ${token}`;
     if (isCookiePreferencesEndpoint) {
-      console.log(`🍪 [API] Cookie preferences endpoint - including JWT token to enable user_id extraction: ${config.method?.toUpperCase()} ${config.url}`);
-      console.log(`🍪 [API] Token preview: ${token.substring(0, 20)}...`);
+      console.log(`🍪 [API] Cookie preferences endpoint - including JWT token: ${config.method?.toUpperCase()} ${config.url}`);
     } else {
-      console.log(`🔐 [API] Adding JWT token to request: ${config.method?.toUpperCase()} ${config.url}`);
+      console.log(`🔐 [API] Adding valid JWT token to request: ${config.method?.toUpperCase()} ${config.url}`);
     }
   } else {
+    // If token is malformed, we log it but don't send it, letting backend fall back to cookies
+    if (token) {
+        console.warn(`⚠️ [API] Degenerate token detected and suppressed: "${token}" for ${config.method?.toUpperCase()} ${config.url}`);
+    }
+    
     if (isCookiePreferencesEndpoint) {
-      console.log(`🍪 [API] Cookie preferences endpoint - no JWT token found in localStorage/sessionStorage`);
-      console.log(`🍪 [API] Checked: access_token, token, session_token in localStorage and sessionStorage`);
-      console.log(`🍪 [API] This will be an anonymous request: ${config.method?.toUpperCase()} ${config.url}`);
+      console.log(`🍪 [API] Cookie preferences endpoint - relying on cookies for user identification`);
     } else {
-      console.log(`⚠️ [API] No JWT token found for request: ${config.method?.toUpperCase()} ${config.url}`);
+      console.log(`🔗 [API] No valid token in storage; relying on secure cookies for: ${config.method?.toUpperCase()} ${config.url}`);
     }
   }
  

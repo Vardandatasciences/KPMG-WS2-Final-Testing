@@ -177,7 +177,7 @@ def get_audit_completion_metrics(request):
         logger.error(f"Error in get_audit_completion_metrics: {str(e)}")
         return Response({
             'success': False,
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
@@ -236,7 +236,7 @@ def get_non_compliance_count(request):
         logger.error(f"Error in get_non_compliance_count: {str(e)}")
         return Response({
             'success': False,
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
@@ -436,7 +436,7 @@ def get_audit_cycle_time(request):
         logger.error(f"Error in get_audit_cycle_time: {str(e)}")
         return Response({
             'success': False,
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
@@ -587,7 +587,7 @@ def get_finding_rate(request):
         logger.error(f"Error in get_finding_rate: {str(e)}")
         return Response({
             'success': False,
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
@@ -758,7 +758,7 @@ def get_time_to_close_findings(request):
         logger.error(f"Error in get_time_to_close_findings: {str(e)}")
         return Response({
             'success': False,
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
@@ -1013,7 +1013,7 @@ def get_non_compliance_issues(request):
         logger.error(f"Error in get_non_compliance_issues: {str(e)}")
         return Response({
             'success': False,
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
@@ -1247,7 +1247,7 @@ def get_severity_distribution(request):
         logger.error(f"Error in get_severity_distribution: {str(e)}")
         return Response({
             'success': False,
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
@@ -1463,7 +1463,7 @@ def get_findings_closure_rate(request):
         logger.error(f"Error in get_findings_closure_rate: {str(e)}")
         return Response({
             'success': False,
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
@@ -1635,7 +1635,7 @@ def get_evidence_completion(request):
         logger.error(f"Error in get_evidence_completion: {str(e)}")
         return Response({
             'success': False,
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
@@ -1872,7 +1872,7 @@ def get_report_timeliness(request):
         logger.error(f"Error in get_report_timeliness: {str(e)}")
         return Response({
             'success': False,
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
@@ -2126,7 +2126,7 @@ def get_compliance_readiness(request):
         logger.error(f"Error in get_compliance_readiness: {str(e)}")
         return Response({
             'success': False,
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
@@ -2400,5 +2400,5 @@ def generate_sample_audit_data(request):
         logger.error(f"Error generating sample audit data: {str(e)}")
         return Response({
             'success': False,
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

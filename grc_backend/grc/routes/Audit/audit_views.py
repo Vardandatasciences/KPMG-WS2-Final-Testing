@@ -1138,7 +1138,7 @@ def update_audit_status(request, audit_id):
         debug_print(f"ERROR in update_audit_status: {str(e)}")
         import traceback
         traceback.print_exc()
-        return Response({"status": "error", "message": str(e)}, status=500)
+        return Response({"status": "error", "message": 'An internal server error occurred.'}, status=500)
  
 
 @csrf_exempt
@@ -2993,7 +2993,7 @@ def allocate_policy(request):
                     # If there's an error with audit findings, delete the audit to maintain consistency
                     audit.delete()
                     return Response({
-                        'error': f'Failed to create audit finding: {str(e)}'
+                        'error': f'Failed to create audit finding: An internal server error occurred'
                     }, status=status.HTTP_400_BAD_REQUEST)
 
             debug_print(f"DEBUG: Created {len(audit_findings)} audit findings")
@@ -4887,7 +4887,7 @@ def save_review_json(request, audit_id):
                     debug_print(f"DEBUG: Created new review version {existing_version} for audit {audit_id}")
             except Exception as e:
                 debug_print(f"ERROR saving to audit_version table: {str(e)}")
-                return Response({'error': f'Database error: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                return Response({'error': f'Database error: An internal server error occurred'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         # Update audit review status if needed
         try:
@@ -4970,7 +4970,7 @@ def save_review_json(request, audit_id):
         debug_print(f"ERROR in save_review_json: {str(e)}")
         import traceback
         traceback.print_exc()
-        return Response({'error': f'Error saving review data: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'error': f'Error saving review data: An internal server error occurred'}, status=status.HTTP_400_BAD_REQUEST)
 
 @csrf_exempt
 @api_view(['GET'])
@@ -5099,7 +5099,7 @@ def update_audit_version_table(request):
                 import traceback
                 traceback.print_exc()
                 return Response({
-                    'error': f'Error updating audit_version table: {str(e)}'
+                    'error': f'Error updating audit_version table: An internal server error occurred'
                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     except Exception as e:
@@ -5230,7 +5230,7 @@ def load_latest_review_version(request, audit_id):
                 debug_print(f"ERROR querying audit_version: {str(e)}")
                 import traceback
                 traceback.print_exc()
-                return Response({'error': f'Database error: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                return Response({'error': f'Database error: An internal server error occurred'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         if not latest_review_data:
             # If we still don't have data, return an error
@@ -6205,7 +6205,7 @@ def debug_audit_status_transition(request, audit_id):
         return Response({"status": "error", "message": "Audit not found"}, status=404)
     except Exception as e:
         debug_print(f"ERROR: {str(e)}")
-        return Response({"status": "error", "message": str(e)}, status=500)
+        return Response({"status": "error", "message": 'An internal server error occurred.'}, status=500)
         
 @csrf_exempt
 @api_view(['GET'])
@@ -6224,7 +6224,7 @@ def debug_audit_version_schema(request):
             })
     except Exception as e:
         debug_print(f"ERROR: {str(e)}")
-        return Response({"status": "error", "message": str(e)}, status=500)
+        return Response({"status": "error", "message": 'An internal server error occurred.'}, status=500)
         
 @csrf_exempt
 @api_view(['GET'])
@@ -6455,7 +6455,7 @@ def save_audit_json_version(request, audit_id):
                 debug_print(f"ERROR creating version: {str(e)}")
                 import traceback
                 traceback.print_exc()
-                return Response({'error': f'Database error: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                return Response({'error': f'Database error: An internal server error occurred'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         debug_print(f"==== DEBUG: save_audit_json_version completed successfully with version {next_version} ====\n")
         
@@ -6732,7 +6732,7 @@ def generate_audit_report(request, audit_id):
         
     except ImportError as e:
         return Response({
-            "error": f"Required package not installed: {str(e)}. Please install docxtpl and docxcompose packages."
+            "error": f"Required package not installed: An internal server error occurred. Please install docxtpl and docxcompose packages."
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     except Audit.DoesNotExist:
         return Response({"error": "Audit not found"}, status=status.HTTP_404_NOT_FOUND)

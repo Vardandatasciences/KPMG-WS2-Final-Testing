@@ -432,13 +432,13 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import axios from 'axios'
+import apiService from '@/services/apiService.js'
 import policyDataService from '@/services/policyService'
 import { PopupService } from '@/modules/popus/popupService'
 import PopupModal from '@/modules/popus/PopupModal.vue'
 import CustomDropdown from '@/components/CustomDropdown.vue'
 import CreateAcknowledgementModal from './CreateAcknowledgementModal.vue'
-import { API_ENDPOINTS, API_BASE_URL, axiosInstance } from '@/config/api.js'
+import { API_ENDPOINTS } from '@/config/api.js'
 import { openDownloadInNewTabWithAnchorFallback } from '@/utils/safeExternalNavigation'
 
 // Add view state
@@ -512,27 +512,8 @@ const selectExportFormatOption = (opt) => {
 // Add push notification function
 const sendPushNotification = async (notificationData) => {
   try {
-    // Get JWT token from browser storage (session-first)
-    const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
-    const headers = {
-      'Content-Type': 'application/json',
-    };
-    
-    // Add Authorization header if token exists
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-    
-    const response = await fetch(API_ENDPOINTS.PUSH_NOTIFICATION, {
-      method: 'POST',
-      headers: headers,
-      body: JSON.stringify(notificationData)
-    });
-    if (response.ok) {
-      console.log('Push notification sent successfully');
-    } else {
-      console.error('Failed to send push notification');
-    }
+    await apiService.post(API_ENDPOINTS.PUSH_NOTIFICATION, notificationData);
+    console.log('Push notification sent successfully');
   } catch (error) {
     console.error('Error sending push notification:', error);
   }
@@ -545,10 +526,10 @@ const exportFrameworkPolicies = async () => {
   }
   try {
     // Call the new export-all endpoint
-    const res = await axios.post(API_ENDPOINTS.FRAMEWORKS_EXPORT_ALL, {
+    const data = await apiService.post(API_ENDPOINTS.FRAMEWORKS_EXPORT_ALL, {
       format: selectedExportFormat.value
     });
-    const { file_url, file_name } = res.data;
+    const { file_url, file_name } = data;
     if (!file_url || !file_name) {
       PopupService.error('Export failed: No file URL or name returned.', 'Export Error');
       sendPushNotification({
@@ -578,7 +559,7 @@ const exportFrameworkPolicies = async () => {
     PopupService.error('Export failed. Please try again.', 'Export Error');
     sendPushNotification({
       title: 'Framework Export Failed',
-      message: `Failed to export frameworks: ${err.response?.data?.error || err.message}`,
+      message: `Failed to export frameworks: ${err.message}`,
       category: 'framework',
       priority: 'high',
       user_id: 'default_user'
@@ -601,41 +582,26 @@ const formatDate = (dateString) => {
 // Check for selected framework from session and set it as default
 const checkSelectedFrameworkFromSession = async () => {
   try {
-    console.log('🔍 DEBUG: Checking for selected framework from session in FrameworkExplorer...')
-    const response = await axios.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED)
-    console.log('📊 DEBUG: Selected framework response:', response.data)
+    console.log('🔍 [FrameworkExplorer] Checking session framework...');
+    const data = await apiService.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED);
     
-    if (response.data && response.data.success) {
-      // Check if a framework is selected (not null)
-      if (response.data.frameworkId) {
-        const sessionFrameworkId = response.data.frameworkId
-        console.log('✅ DEBUG: Found selected framework in session:', sessionFrameworkId)
-        
-        // Check if this framework exists in our loaded frameworks
-        const frameworkExists = frameworks.value.find(f => f.id.toString() === sessionFrameworkId.toString())
+    if (data && data.success) {
+      if (data.frameworkId) {
+        const sessionFrameworkId = data.frameworkId;
+        const frameworkExists = frameworks.value.find(f => f.id.toString() === sessionFrameworkId.toString());
         
         if (frameworkExists) {
-          // Set the selected framework ID to the session framework
-          selectedFrameworkId.value = sessionFrameworkId.toString()
-          console.log('✅ DEBUG: Set selectedFrameworkId from session:', selectedFrameworkId.value)
-          console.log('✅ DEBUG: Framework exists in loaded frameworks:', frameworkExists.name)
-        } else {
-          console.log('⚠️ DEBUG: Framework from session not found in loaded frameworks')
-          console.log('📋 DEBUG: Available frameworks:', frameworks.value.map(f => ({ id: f.id, name: f.name })))
+          selectedFrameworkId.value = sessionFrameworkId.toString();
         }
       } else {
-        // "All Frameworks" is selected (frameworkId is null)
-        console.log('ℹ️ DEBUG: No framework selected in session (All Frameworks selected)')
-        console.log('🌐 DEBUG: Clearing framework selection to show all frameworks')
-        selectedFrameworkId.value = null
+        selectedFrameworkId.value = null;
       }
     } else {
-      console.log('ℹ️ DEBUG: No framework found in session')
-      selectedFrameworkId.value = null
+      selectedFrameworkId.value = null;
     }
   } catch (error) {
-    console.error('❌ DEBUG: Error checking selected framework from session:', error)
-    selectedFrameworkId.value = null
+    console.error('Error checking selected framework from session:', error);
+    selectedFrameworkId.value = null;
   }
 }
 
@@ -699,15 +665,15 @@ const fetchFrameworks = async () => {
       params.entity = selectedEntity.value
     }
 
-    const response = await axios.get(API_ENDPOINTS.FRAMEWORK_EXPLORER, { params })
-    frameworks.value = response.data.frameworks || []
-    summary.value = response.data.summary || {
+    const data = await apiService.get(API_ENDPOINTS.FRAMEWORK_EXPLORER, { params })
+    frameworks.value = data.frameworks || []
+    summary.value = data.summary || {
       active_frameworks: 0,
       inactive_frameworks: 0,
       active_policies: 0,
       inactive_policies: 0
     }
-    allFrameworksSummary.value = response.data.summary || {
+    allFrameworksSummary.value = data.summary || {
       active_frameworks: 0,
       inactive_frameworks: 0,
       active_policies: 0,
@@ -738,8 +704,8 @@ const fetchFrameworks = async () => {
 // Fetch entities from API
 const fetchEntities = async () => {
   try {
-    const response = await axiosInstance.get(API_ENDPOINTS.ENTITIES.replace(API_ENDPOINTS.API_BASE_URL || '', ''))
-    entities.value = response.data.entities || []
+    const data = await apiService.get('/api/entities/')
+    entities.value = data.entities || []
   } catch (error) {
     console.error('Error fetching entities:', error)
   }
@@ -752,8 +718,8 @@ const showFrameworkDetails = async (frameworkId) => {
   isLoadingDetails.value = true
  
   try {
-    const response = await axios.get(API_ENDPOINTS.FRAMEWORK_DETAILS(frameworkId))
-    frameworkDetails.value = response.data
+    const data = await apiService.get(API_ENDPOINTS.FRAMEWORK_DETAILS(frameworkId))
+    frameworkDetails.value = data
   } catch (error) {
     console.error('Error fetching framework details:', error)
   } finally {
@@ -818,14 +784,12 @@ const fetchFrameworkVersions = async (frameworkId) => {
   
   try {
     console.log(`Fetching framework versions for framework ID: ${frameworkId}`)
-    const response = await axios.get(API_ENDPOINTS.POLICY_FRAMEWORK_VERSIONS(frameworkId))
-    
-    console.log('Framework versions response:', response.data)
+    const data = await apiService.get(API_ENDPOINTS.POLICY_FRAMEWORK_VERSIONS(frameworkId))
     
     // Update the framework with versions data
     const framework = frameworks.value.find(fw => fw.id === frameworkId)
     if (framework) {
-      framework.versions = response.data || []
+      framework.versions = data || []
     }
   } catch (err) {
     console.error('Error fetching framework versions:', err)
@@ -868,16 +832,14 @@ const fetchFrameworkVersionPolicies = async (versionId, frameworkId) => {
   
   try {
     console.log(`Fetching policies for framework version: ${versionId}`)
-    const response = await axios.get(API_ENDPOINTS.POLICY_FRAMEWORK_VERSION_POLICIES(versionId))
-    
-    console.log(`Received ${response.data.length} policies for framework version ${versionId}`)
+    const data = await apiService.get(API_ENDPOINTS.POLICY_FRAMEWORK_VERSION_POLICIES(versionId))
     
     // Update the version with policies data
     const framework = frameworks.value.find(fw => fw.id === frameworkId)
     if (framework && framework.versions) {
       const version = framework.versions.find(v => v.id === versionId)
       if (version) {
-        version.policies = response.data || []
+        version.policies = data || []
       }
     }
   } catch (err) {
@@ -941,16 +903,10 @@ const togglePolicyStatus = async (policy, versionId, frameworkId) => {
     const currentlyActive = isPolicyActive(policy)
     if (currentlyActive) {
       try {
-        // Get current user ID to exclude from reviewer list
-        const currentUserId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || ''
-        // Fetch reviewers filtered by RBAC permissions (ApprovePolicy) for policy module
-        const response = await axiosInstance.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION.replace(API_ENDPOINTS.API_BASE_URL || '', ''), {
-          params: {
-            module: 'policy',
-            current_user_id: currentUserId
-          }
+        // Fetch reviewers filtered by RBAC permissions (ApprovePolicy)
+        const reviewers = await apiService.get('/api/users-for-reviewer-selection/', {
+          params: { module: 'policy' }
         })
-        const reviewers = response.data
         
         if (reviewers.length === 0) {
           PopupService.warning('No reviewers available. Please contact administrator.', 'No Reviewers')
@@ -977,7 +933,7 @@ const togglePolicyStatus = async (policy, versionId, frameworkId) => {
                 }
                 
                 try {
-                  await axios.post(`/api/policies/${policy.id}/toggle-status/`, {
+                  await apiService.post(`/api/policies/${policy.id}/toggle-status/`, {
                     reason: reason.trim(),
                     ReviewerId: selectedReviewerId,
                     cascadeSubpolicies: true
@@ -1003,11 +959,11 @@ const togglePolicyStatus = async (policy, versionId, frameworkId) => {
         policy.isProcessing = false
       }
     } else {
-      const response = await axios.post(`/api/policies/${policy.id}/toggle-status/`, {
+      const data = await apiService.post(`/api/policies/${policy.id}/toggle-status/`, {
         cascadeSubpolicies: true
       })
       
-      policy.status = response.data.status || 'Active'
+      policy.status = data.status || 'Active'
       PopupService.success('Policy status change request submitted.', 'Status Update')
       
       // Refresh policies for this version
@@ -1072,10 +1028,10 @@ const closeAcknowledgementModal = () => {
 // View policy acknowledgement reports
 const viewPolicyAcknowledgements = async (policy) => {
   try {
-    const response = await axios.get(API_ENDPOINTS.GET_POLICY_ACKNOWLEDGEMENT_REQUESTS(policy.id))
+    const data = await apiService.get(API_ENDPOINTS.GET_POLICY_ACKNOWLEDGEMENT_REQUESTS(policy.id))
     
-    if (response.data.success && response.data.acknowledgement_requests && response.data.acknowledgement_requests.length > 0) {
-      const latestRequest = response.data.acknowledgement_requests[0]
+    if (data.success && data.acknowledgement_requests && data.acknowledgement_requests.length > 0) {
+      const latestRequest = data.acknowledgement_requests[0]
       router.push({
         name: 'AcknowledgementReport',
         params: { requestId: latestRequest.acknowledgement_request_id }
@@ -1109,16 +1065,10 @@ const toggleStatus = async (fw) => {
     if (fw.status === 'Active') {
       // First fetch the list of available reviewers
       try {
-        // Get current user ID to exclude from reviewer list
-        const currentUserId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || ''
-        // Fetch reviewers filtered by RBAC permissions (ApproveFramework) for framework module
-        const reviewersResponse = await axiosInstance.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION.replace(API_BASE_URL || '', ''), {
-          params: {
-            module: 'framework',
-            current_user_id: currentUserId
-          }
+        // Fetch reviewers filtered by RBAC permissions (ApproveFramework)
+        const reviewers = await apiService.get('/api/users-for-reviewer-selection/', {
+          params: { module: 'framework' }
         });
-        const reviewers = reviewersResponse.data;
         
         if (reviewers.length === 0) {
           PopupService.warning('No reviewers available. Please contact an administrator.', 'No Reviewers');
@@ -1190,14 +1140,13 @@ const toggleStatus = async (fw) => {
                   });
                   
                   // Call the API to request status change approval
-                  const response = await axios.post(API_ENDPOINTS.FRAMEWORK_REQUEST_STATUS_CHANGE(fw.id), {
+                  const data = await apiService.post(API_ENDPOINTS.FRAMEWORK_REQUEST_STATUS_CHANGE(fw.id), {
                     reason: reason.trim(),
                     cascadeToApproved: true,
-                    ReviewerId: selectedReviewerId,
-                    UserId: currentUserId // Use actual logged-in user ID
+                    ReviewerId: selectedReviewerId
                   });
                   
-                  console.log('DEBUG: API response:', response.data);
+                  console.log('DEBUG: API response:', data);
                   
                   // Show success message
                   PopupService.success('Framework deactivation request submitted. Awaiting approval.', 'Request Submitted');
@@ -1248,13 +1197,13 @@ const toggleStatus = async (fw) => {
       }
     } else {
       // For activation (Inactive -> Active), use the direct toggle endpoint
-      const response = await axios.post(API_ENDPOINTS.FRAMEWORK_TOGGLE_STATUS(fw.id), {
+      const data = await apiService.post(API_ENDPOINTS.FRAMEWORK_TOGGLE_STATUS(fw.id), {
         reason: 'Reactivating framework',
         cascadeToApproved: true
       });
      
       // Update local state
-      fw.status = response.data.status || 'Active';
+      fw.status = data.status || 'Active';
      
       // Show feedback to the user
       let message = `Framework status change request submitted.`;
@@ -1352,19 +1301,14 @@ watch(selectedFrameworkId, async (newVal) => {
   if (newVal) {
     // Save the selected framework to session
     try {
-      const userId = localStorage.getItem('user_id') || 'default_user'
-      console.log('🔍 DEBUG: Saving framework to session in FrameworkExplorer:', newVal)
-      
-      const response = await axios.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, {
-        frameworkId: newVal,
-        userId: userId
+      const data = await apiService.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, {
+        frameworkId: newVal
       })
       
-      if (response.data && response.data.success) {
-        console.log('✅ DEBUG: Framework saved to session successfully in FrameworkExplorer')
-        console.log('🔑 DEBUG: Session key:', response.data.sessionKey)
+      if (data && data.success) {
+        console.log('✅ [FrameworkExplorer] Framework saved to session successfully')
       } else {
-        console.error('❌ DEBUG: Failed to save framework to session in FrameworkExplorer')
+        console.error('❌ [FrameworkExplorer] Failed to save framework to session')
       }
     } catch (error) {
       console.error('❌ DEBUG: Error saving framework to session in FrameworkExplorer:', error)

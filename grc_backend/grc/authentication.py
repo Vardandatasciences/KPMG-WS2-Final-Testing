@@ -1266,9 +1266,7 @@ def jwt_login(request):
         response = Response({
             'status': 'success',
             'message': 'Login successful',
-            'license_verified': True,  # This indicates license validation was successful
-            'access_token': tokens['access'],
-            'refresh_token': tokens['refresh'],
+            'license_verified': True,
             'access_token_expires': tokens['access_token_expires'].isoformat(),
             'refresh_token_expires': tokens['refresh_token_expires'].isoformat(),
              'consent_required': consent_required,
@@ -1399,8 +1397,6 @@ def jwt_refresh(request):
             response = Response({
                 'status': 'success',
                 'message': 'Token refreshed successfully',
-                'access_token': tokens['access'],
-                'refresh_token': tokens['refresh'],
                 'access_token_expires': tokens['access_token_expires'].isoformat(),
                 'refresh_token_expires': tokens['refresh_token_expires'].isoformat(),
                 'product_version': {
@@ -1685,6 +1681,23 @@ def jwt_logout(request):
             print("=" * 80)
         
         print("[DEBUG] About to clear session data...")
+        # ========================================
+        # JWT REFRESH TOKEN BLACKLISTING
+        # ========================================
+        # Extract refresh token from request data or cookies to explicitly invalidate it
+        refresh_token = request.data.get('refresh_token') or request.COOKIES.get('refresh_token')
+        if refresh_token:
+            try:
+                from rest_framework_simplejwt.tokens import RefreshToken
+                token = RefreshToken(refresh_token)
+                token.blacklist()
+                logger.info(f"✅ Refresh token explicitly blacklisted for user {username} (ID: {user_id or 'Unknown'})")
+                print(f"[DEBUG] ✅ Refresh token explicitly blacklisted")
+            except Exception as blacklist_error:
+                # Silently handle errors (e.g. token already expired or blacklisted)
+                logger.debug(f"Refresh token blacklisting skipped/failed: {str(blacklist_error)}")
+                print(f"[DEBUG] Refresh token blacklisting skipped/failed: {str(blacklist_error)}")
+
         # Clear session data
         request.session.flush()
         

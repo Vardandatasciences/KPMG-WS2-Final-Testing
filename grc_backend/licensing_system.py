@@ -108,7 +108,7 @@ class VardaanLicensingSystem:
         except Exception as e:
             return {
                 "success": False,
-                "error": f"Unexpected error: {str(e)}",
+                "error": f"Unexpected error: An internal server error occurred",
                 "status_code": None,
                 "data": None
             }
@@ -147,7 +147,7 @@ class VardaanLicensingSystem:
         except Exception as e:
             return {
                 "success": False,
-                "error": f"Unexpected error: {str(e)}",
+                "error": f"Unexpected error: An internal server error occurred",
                 "status_code": None,
                 "data": None
             }

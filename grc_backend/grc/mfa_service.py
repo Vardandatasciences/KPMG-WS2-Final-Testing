@@ -145,7 +145,7 @@ class MfaService:
                 "Error verifying OTP for user_id=%s",
                 user.UserId,
             )
-            return {'success': False, 'error': f'Verification failed: {str(e)}'}
+            return {'success': False, 'error': f'Verification failed: An internal server error occurred'}
    
     @classmethod
     def expire_pending_challenges(cls, user):

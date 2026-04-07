@@ -1287,7 +1287,7 @@ def upload_and_process_risk_instance_document_streaming(request):
         except Exception as e:
             events.append({
                 'type': 'error',
-                'message': str(e),
+                'message': 'An internal server error occurred.',
                 'timestamp': datetime.now().isoformat()
             })
 

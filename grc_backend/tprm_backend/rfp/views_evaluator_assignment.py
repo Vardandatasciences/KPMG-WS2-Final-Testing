@@ -102,7 +102,7 @@ def bulk_assign_evaluators(request):
         
     except Exception as e:
         return Response({
-            'error': f'Failed to create bulk assignments: {str(e)}'
+            'error': f'Failed to create bulk assignments: An internal server error occurred'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -152,7 +152,7 @@ def get_evaluator_assignments(request, evaluator_id):
         
     except Exception as e:
         return Response({
-            'error': f'Failed to get evaluator assignments: {str(e)}'
+            'error': f'Failed to get evaluator assignments: An internal server error occurred'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -204,7 +204,7 @@ def get_proposal_assignments(request, proposal_id):
         
     except Exception as e:
         return Response({
-            'error': f'Failed to get proposal assignments: {str(e)}'
+            'error': f'Failed to get proposal assignments: An internal server error occurred'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -264,7 +264,7 @@ def update_assignment_status(request, assignment_id):
         
     except Exception as e:
         return Response({
-            'error': f'Failed to update assignment status: {str(e)}'
+            'error': f'Failed to update assignment status: An internal server error occurred'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -301,7 +301,7 @@ def remove_assignment(request, assignment_id):
         
     except Exception as e:
         return Response({
-            'error': f'Failed to remove assignment: {str(e)}'
+            'error': f'Failed to remove assignment: An internal server error occurred'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -381,5 +381,5 @@ def get_available_evaluators(request):
         import traceback
         traceback.print_exc()
         return Response({
-            'error': f'Failed to get available evaluators: {str(e)}'
+            'error': f'Failed to get available evaluators: An internal server error occurred'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

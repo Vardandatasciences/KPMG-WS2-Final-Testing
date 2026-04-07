@@ -229,7 +229,7 @@
 
 <script>
 import { ref, computed, onMounted, watch } from 'vue'
-import axios from 'axios'
+import apiService from '@/services/apiService.js'
 import { API_ENDPOINTS } from '../../config/api'
 import { PopupService } from '@/modules/popus/popupService'
 
@@ -281,22 +281,22 @@ export default {
     const fetchUsers = async () => {
       try {
         loadingUsers.value = true
-        const response = await axios.get(API_ENDPOINTS.GET_USERS_FOR_ACKNOWLEDGEMENT)
+        const response = await apiService.get(API_ENDPOINTS.GET_USERS_FOR_ACKNOWLEDGEMENT)
         
         console.log('📦 Full API response:', response.data)
         
         // Handle response structure: { success: true, users: [...], total_count: ... }
         let usersList = []
-        if (response.data) {
-          if (response.data.users && Array.isArray(response.data.users)) {
-            usersList = response.data.users
-            console.log('✅ Found users in response.data.users:', usersList.length)
-          } else if (Array.isArray(response.data)) {
+        if (response) {
+          if (response.users && Array.isArray(response.users)) {
+            usersList = response.users
+            console.log('✅ Found users in response.users:', usersList.length)
+          } else if (Array.isArray(response)) {
+            usersList = response
+            console.log('✅ Found users in response (array):', usersList.length)
+          } else if (response.data && Array.isArray(response.data)) {
             usersList = response.data
-            console.log('✅ Found users in response.data (array):', usersList.length)
-          } else if (response.data.data && Array.isArray(response.data.data)) {
-            usersList = response.data.data
-            console.log('✅ Found users in response.data.data:', usersList.length)
+            console.log('✅ Found users in response.data:', usersList.length)
           }
         }
         
@@ -539,14 +539,14 @@ export default {
           send_email: formData.value.sendEmail
         }
 
-        const response = await axios.post(API_ENDPOINTS.CREATE_ACKNOWLEDGEMENT_REQUEST, requestData)
+        const response = await apiService.post(API_ENDPOINTS.CREATE_ACKNOWLEDGEMENT_REQUEST, requestData)
 
         // Don't show popup here - parent will handle it
-        console.log('Acknowledgement request created:', response.data)
+        console.log('Acknowledgement request created:', response)
         
         emit('created', {
-          ...response.data,
-          acknowledgement_request_id: response.data.acknowledgement_request_id
+          ...response,
+          acknowledgement_request_id: response.acknowledgement_request_id
         })
         closeModal()
       } catch (error) {

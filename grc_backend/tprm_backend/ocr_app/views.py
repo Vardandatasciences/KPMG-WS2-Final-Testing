@@ -613,7 +613,7 @@ class BcpDrpOcrRunView(APIView):
                 logger.error(f"[ERROR] Traceback: {traceback.format_exc()}")
                 return Response({
                     'success': False,
-                    'error': f'OCR processing failed: {str(e)}'
+                    'error': f'OCR processing failed: An internal server error occurred'
                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
                 
         except Exception as e:
@@ -795,7 +795,7 @@ class BcpDrpExtractDataView(APIView):
                 logger.error(f"[ERROR] Failed to save extracted data: {e}")
                 return Response({
                     'success': False,
-                    'error': f'Failed to save extracted data: {str(e)}'
+                    'error': f'Failed to save extracted data: An internal server error occurred'
                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
                 
         except Exception as e:
@@ -852,7 +852,7 @@ class BcpDrpExtractedDataView(APIView):
                 logger.error(f"[ERROR] Failed to retrieve extracted data: {e}")
                 return Response({
                     'success': False,
-                    'error': f'Failed to retrieve extracted data: {str(e)}'
+                    'error': f'Failed to retrieve extracted data: An internal server error occurred'
                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
                 
         except Exception as e:

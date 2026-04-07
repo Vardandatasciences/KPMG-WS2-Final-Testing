@@ -2015,5 +2015,5 @@ def load_latest_review_data(request, audit_id):
         traceback.print_exc()
         send_log(module="Reviewing", actionType="LOAD_LATEST_REVIEW_DATA", description="Error in load_latest_review_data", userId=request.session.get('user_id'), entityType="Audit", entityId=audit_id)
         return Response({
-            'error': f'Error loading latest review data: {str(e)}'
+            'error': f'Error loading latest review data: An internal server error occurred'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

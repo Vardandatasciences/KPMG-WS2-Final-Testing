@@ -218,6 +218,6 @@ def get_data_analysis(request):
     except Exception as e:
         return Response({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 

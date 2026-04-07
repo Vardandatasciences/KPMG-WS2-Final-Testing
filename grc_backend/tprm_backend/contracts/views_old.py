@@ -449,7 +449,7 @@ def contract_list(request):
         return Response({
             'success': False,
             'error': 'Failed to retrieve contracts',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -483,7 +483,7 @@ def contract_detail(request, contract_id):
         return Response({
             'success': False,
             'error': 'Failed to retrieve contract',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -586,7 +586,7 @@ def contract_comprehensive_detail(request, contract_id):
         return Response({
             'success': False,
             'error': 'Failed to retrieve contract details',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -749,14 +749,14 @@ def contract_create(request):
         return Response({
             'success': False,
             'error': 'Validation error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=400)
     except Exception as e:
         logger.error(f"Contract creation error: {str(e)}")
         return Response({
             'success': False,
             'error': 'Failed to create contract',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -824,14 +824,14 @@ def contract_update(request, contract_id):
         return Response({
             'success': False,
             'error': 'Validation error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=400)
     except Exception as e:
         logger.error(f"Contract update error: {str(e)}")
         return Response({
             'success': False,
             'error': 'Failed to update contract',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -889,7 +889,7 @@ def contract_delete(request, contract_id):
         return Response({
             'success': False,
             'error': 'Failed to delete contract',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -980,7 +980,7 @@ def contract_archive(request, contract_id):
         return Response({
             'success': False,
             'error': 'Failed to archive contract',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -1047,7 +1047,7 @@ def contract_restore(request, contract_id):
         return Response({
             'success': False,
             'error': 'Failed to restore contract',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -1183,7 +1183,7 @@ def contract_stats(request):
         return Response({
             'success': False,
             'error': 'Failed to retrieve statistics',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -1319,7 +1319,7 @@ def contract_analytics(request):
         return Response({
             'success': False,
             'error': 'Failed to retrieve analytics data',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -1405,7 +1405,7 @@ def vendor_list(request):
         return Response({
             'success': False,
             'error': 'Failed to retrieve vendors',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -1473,7 +1473,7 @@ def vendor_detail(request, vendor_id):
         return Response({
             'success': False,
             'error': 'Failed to retrieve vendor',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -1542,7 +1542,7 @@ def vendor_stats(request):
         return Response({
             'success': False,
             'error': 'Failed to retrieve vendor statistics',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -1597,7 +1597,7 @@ def vendor_contacts_list(request, vendor_id):
         return Response({
             'success': False,
             'error': 'Failed to retrieve vendor contacts',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -1665,14 +1665,14 @@ def vendor_contact_create(request, vendor_id):
         return Response({
             'success': False,
             'error': 'Validation error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=400)
     except Exception as e:
         logger.error(f"Vendor contact creation error: {str(e)}")
         return Response({
             'success': False,
             'error': 'Failed to create vendor contact',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -1696,7 +1696,7 @@ def check_contract_create_permission(request):
             'success': False,
             'has_permission': False,
             'error': 'Failed to check permissions',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -1797,7 +1797,7 @@ def contract_renewals_list(request):
         return Response({
             'success': False,
             'error': 'Failed to retrieve contract renewals',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -1913,7 +1913,7 @@ def contract_renewal_create(request):
         return Response({
             'success': False,
             'error': 'Failed to create contract renewal',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -1954,7 +1954,7 @@ def contract_renewal_detail(request, renewal_id):
         return Response({
             'success': False,
             'error': 'Failed to retrieve contract renewal',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -2014,7 +2014,7 @@ def contract_renewal_update(request, renewal_id):
         return Response({
             'success': False,
             'error': 'Failed to update contract renewal',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -2059,7 +2059,7 @@ def contract_renewal_delete(request, renewal_id):
         return Response({
             'success': False,
             'error': 'Failed to delete contract renewal',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -2169,14 +2169,14 @@ def contract_terms_create(request, contract_id):
         return Response({
             'success': False,
             'error': 'Validation error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=400)
     except Exception as e:
         logger.error(f"Contract term creation error: {str(e)}")
         return Response({
             'success': False,
             'error': 'Failed to create contract term',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -2293,14 +2293,14 @@ def contract_clauses_create(request, contract_id):
         return Response({
             'success': False,
             'error': 'Validation error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=400)
     except Exception as e:
         logger.error(f"Contract clause creation error: {str(e)}")
         return Response({
             'success': False,
             'error': 'Failed to create contract clause',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -2404,7 +2404,7 @@ def contract_search(request):
         return Response({
             'success': False,
             'error': 'Failed to search contracts',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -2455,7 +2455,7 @@ def users_list(request):
         return Response({
             'success': False,
             'error': 'Failed to retrieve users',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -2506,7 +2506,7 @@ def legal_reviewers_list(request):
         return Response({
             'success': False,
             'error': 'Failed to retrieve legal reviewers',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -2577,7 +2577,7 @@ def subcontracts_list(request, parent_contract_id):
         return Response({
             'success': False,
             'error': 'Failed to fetch subcontracts',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -2658,7 +2658,7 @@ def contract_amendments_as_contracts_list(request, parent_contract_id):
         return Response({
             'success': False,
             'error': 'Failed to fetch contract amendments',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -2792,14 +2792,14 @@ def subcontract_create(request, parent_contract_id):
         return Response({
             'success': False,
             'error': 'Validation error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=400)
     except Exception as e:
         logger.error(f"Subcontract creation error: {str(e)}")
         return Response({
             'success': False,
             'error': 'Failed to create subcontract',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 @api_view(['GET'])
@@ -2861,7 +2861,7 @@ def test_amendment_creation(request, contract_id):
         return Response({
             'success': False,
             'error': 'Test amendment creation failed',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 @api_view(['POST'])
@@ -3105,14 +3105,14 @@ def contract_with_subcontract_create(request):
         return Response({
             'success': False,
             'error': 'Validation error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
         logger.error(f"Contract with subcontract creation error: {str(e)}")
         return Response({
             'success': False,
             'error': 'Failed to create contract with subcontract',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -3210,7 +3210,7 @@ def contract_amendments_list(request, contract_id):
         return Response({
             'success': False,
             'error': 'Failed to fetch contract amendments',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -3265,14 +3265,14 @@ def contract_amendments_create(request, contract_id):
         return Response({
             'success': False,
             'error': 'Validation error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
         logger.error(f"Contract amendment creation error: {str(e)}")
         return Response({
             'success': False,
             'error': 'Failed to create amendment',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -3306,7 +3306,7 @@ def contract_amendment_detail(request, contract_id, amendment_id):
         return Response({
             'success': False,
             'error': 'Failed to fetch amendment',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -3355,14 +3355,14 @@ def contract_amendment_update(request, contract_id, amendment_id):
         return Response({
             'success': False,
             'error': 'Validation error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
         logger.error(f"Contract amendment update error: {str(e)}")
         return Response({
             'success': False,
             'error': 'Failed to update amendment',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -3403,7 +3403,7 @@ def contract_amendment_delete(request, contract_id, amendment_id):
         return Response({
             'success': False,
             'error': 'Failed to delete amendment',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -3438,7 +3438,7 @@ def contract_term_detail(request, contract_id, term_id):
         return Response({
             'success': False,
             'error': 'Failed to fetch term',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -3487,14 +3487,14 @@ def contract_term_update(request, contract_id, term_id):
         return Response({
             'success': False,
             'error': 'Validation error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
         logger.error(f"Contract term update error: {str(e)}")
         return Response({
             'success': False,
             'error': 'Failed to update term',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -3535,7 +3535,7 @@ def contract_term_delete(request, contract_id, term_id):
         return Response({
             'success': False,
             'error': 'Failed to delete term',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -3570,7 +3570,7 @@ def contract_clause_detail(request, contract_id, clause_id):
         return Response({
             'success': False,
             'error': 'Failed to fetch clause',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -3619,14 +3619,14 @@ def contract_clause_update(request, contract_id, clause_id):
         return Response({
             'success': False,
             'error': 'Validation error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
         logger.error(f"Contract clause update error: {str(e)}")
         return Response({
             'success': False,
             'error': 'Failed to update clause',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -3667,7 +3667,7 @@ def contract_clause_delete(request, contract_id, clause_id):
         return Response({
             'success': False,
             'error': 'Failed to delete clause',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -3771,14 +3771,14 @@ def create_contract_version(request, contract_id):
         return Response({
             'success': False,
             'error': 'Validation error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
         logger.error(f"Contract version creation error: {str(e)}")
         return Response({
             'success': False,
             'error': 'Failed to create contract version',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -4142,14 +4142,14 @@ def create_contract_amendment(request, contract_id):
         return Response({
             'success': False,
             'error': 'Validation error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
         logger.error(f"Contract amendment creation error: {str(e)}")
         return Response({
             'success': False,
             'error': 'Failed to create contract amendment',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -4239,14 +4239,14 @@ def create_subcontract(request, contract_id):
         return Response({
             'success': False,
             'error': 'Validation error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
         logger.error(f"Subcontract creation error: {str(e)}")
         return Response({
             'success': False,
             'error': 'Failed to create subcontract',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -4355,7 +4355,7 @@ def upload_contract_ocr(request, contract_id):
         return Response({
             'success': False,
             'error': 'Validation error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
         logger.error(f"OCR upload error: {str(e)}")
@@ -4364,7 +4364,7 @@ def upload_contract_ocr(request, contract_id):
         return Response({
             'success': False,
             'error': 'Failed to process OCR upload',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     finally:
         # Clean up temporary file
@@ -4530,7 +4530,7 @@ def contract_risk_status(request, contract_id):
         return Response({
             'success': False,
             'error': 'Failed to get risk status',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -4615,7 +4615,7 @@ def trigger_contract_risk_analysis(request, contract_id):
             return Response({
                 'success': False,
                 'error': 'Failed to start risk analysis',
-                'message': str(e)
+                'message': 'An internal server error occurred.'
             }, status=500)
         
     except Exception as e:
@@ -4623,7 +4623,7 @@ def trigger_contract_risk_analysis(request, contract_id):
         return Response({
             'success': False,
             'error': 'Failed to trigger risk analysis',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -4677,7 +4677,7 @@ def contract_risk_analysis(request, contract_id):
         return Response({
             'success': False,
             'error': 'Failed to start risk analysis',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -4724,7 +4724,7 @@ def contract_risk_summary(request, contract_id):
         return Response({
             'success': False,
             'error': 'Failed to get risk summary',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -4817,7 +4817,7 @@ def contract_risks_list(request, contract_id):
         return Response({
             'success': False,
             'error': 'Failed to get contract risks',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -4986,14 +4986,14 @@ def create_contract_version(request, contract_id):
         return Response({
             'success': False,
             'error': 'Validation error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
         logger.error(f"Contract version creation error: {str(e)}")
         return Response({
             'success': False,
             'error': 'Failed to create contract version',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -5268,14 +5268,14 @@ def create_subcontract_with_versioning(request, parent_contract_id):
         return Response({
             'success': False,
             'error': 'Validation error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
         logger.error(f"Subcontract creation with versioning error: {str(e)}")
         return Response({
             'success': False,
             'error': 'Failed to create subcontract with versioning',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 

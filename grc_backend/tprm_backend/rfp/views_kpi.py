@@ -391,7 +391,7 @@ def get_rfp_kpi_summary(request):
         print(traceback.format_exc())
         return JsonResponse({
             'success': False,
-            'error': f'Failed to calculate KPI summary: {str(e)}'
+            'error': f'Failed to calculate KPI summary: An internal server error occurred'
         }, status=500)
 
 
@@ -533,7 +533,7 @@ def get_rfp_creation_rate(request):
         print(traceback.format_exc())
         return JsonResponse({
             'success': False,
-            'error': f'Failed to calculate creation rate: {str(e)}'
+            'error': f'Failed to calculate creation rate: An internal server error occurred'
         }, status=500)
 
 
@@ -779,7 +779,7 @@ def get_first_time_approval_rate(request):
         print(traceback.format_exc())
         return JsonResponse({
             'success': False,
-            'error': f'Failed to calculate first-time approval rate: {str(e)}'
+            'error': f'Failed to calculate first-time approval rate: An internal server error occurred'
         }, status=500)
 
 
@@ -995,7 +995,7 @@ def get_rfp_approval_time(request):
         print(traceback.format_exc())
         return JsonResponse({
             'success': False,
-            'error': f'Failed to calculate approval time: {str(e)}'
+            'error': f'Failed to calculate approval time: An internal server error occurred'
         }, status=500)
 
 
@@ -1126,7 +1126,7 @@ def get_approval_stage_performance(request):
         print(traceback.format_exc())
         return JsonResponse({
             'success': False,
-            'error': f'Failed to calculate approval stage performance: {str(e)}'
+            'error': f'Failed to calculate approval stage performance: An internal server error occurred'
         }, status=500)
 
 
@@ -1319,7 +1319,7 @@ def get_vendor_response_rate(request):
         traceback.print_exc()
         return JsonResponse({
             'success': False,
-            'error': f'Failed to calculate vendor response rate: {str(e)}'
+            'error': f'Failed to calculate vendor response rate: An internal server error occurred'
         }, status=500)
 
 
@@ -1496,7 +1496,7 @@ def get_new_vs_existing_vendors(request):
         print(traceback.format_exc())
         return JsonResponse({
             'success': False,
-            'error': f'Failed to calculate New vs Existing Vendors KPI: {str(e)}'
+            'error': f'Failed to calculate New vs Existing Vendors KPI: An internal server error occurred'
         }, status=500)
 
 
@@ -1563,7 +1563,7 @@ def get_category_performance(request):
         print(traceback.format_exc())
         return JsonResponse({
             'success': False,
-            'error': f'Failed to calculate Category Performance KPI: {str(e)}'
+            'error': f'Failed to calculate Category Performance KPI: An internal server error occurred'
         }, status=500)
 
 
@@ -1734,7 +1734,7 @@ def get_award_acceptance_rate(request):
         print(traceback.format_exc())
         return JsonResponse({
             'success': False,
-            'error': f'Failed to calculate Award Acceptance Rate KPI: {str(e)}'
+            'error': f'Failed to calculate Award Acceptance Rate KPI: An internal server error occurred'
         }, status=500)
 
 
@@ -2003,7 +2003,7 @@ def get_reviewer_workload(request):
         print(traceback.format_exc())
         return JsonResponse({
             'success': False,
-            'error': f'Failed to calculate Reviewer Workload KPI: {str(e)}'
+            'error': f'Failed to calculate Reviewer Workload KPI: An internal server error occurred'
         }, status=500)
 
 
@@ -2199,7 +2199,7 @@ def get_vendor_conversion_funnel(request):
         print(traceback.format_exc())
         return JsonResponse({
             'success': False,
-            'error': f'Failed to calculate Vendor Conversion Funnel KPI: {str(e)}'
+            'error': f'Failed to calculate Vendor Conversion Funnel KPI: An internal server error occurred'
         }, status=500)
 
 
@@ -2640,7 +2640,7 @@ def get_evaluator_consistency(request):
         print(f"[KPI] Full traceback:\n{error_trace}")
         return JsonResponse({
             'success': False,
-            'error': f'Failed to calculate evaluator consistency: {str(e)}',
+            'error': f'Failed to calculate evaluator consistency: An internal server error occurred',
             'error_type': type(e).__name__,
             'error_details': str(e)
         }, status=500)
@@ -2874,7 +2874,7 @@ def get_evaluator_completion_time(request):
         print(traceback.format_exc())
         return JsonResponse({
             'success': False,
-            'error': f'Failed to calculate Evaluator Completion Time KPI: {str(e)}'
+            'error': f'Failed to calculate Evaluator Completion Time KPI: An internal server error occurred'
         }, status=500)
 
 
@@ -3122,7 +3122,7 @@ def get_consensus_quality(request):
         print(f"[KPI] Traceback: {error_trace}")
         return JsonResponse({
             'success': False,
-            'error': f'Error calculating consensus quality: {str(e)}',
+            'error': f'Error calculating consensus quality: An internal server error occurred',
             'error_details': str(e)
         }, status=500)
 
@@ -3410,7 +3410,7 @@ def get_criteria_effectiveness(request):
         print(f"[KPI] Traceback: {error_trace}")
         return JsonResponse({
             'success': False,
-            'error': f'Error calculating criteria effectiveness: {str(e)}',
+            'error': f'Error calculating criteria effectiveness: An internal server error occurred',
             'error_details': str(e)
         }, status=500)
 
@@ -3492,7 +3492,7 @@ def get_budget_variance(request):
         logger.error(f"Error in get_budget_variance: {str(e)}")
         return JsonResponse({
             'success': False,
-            'error': f'Error calculating budget variance: {str(e)}'
+            'error': f'Error calculating budget variance: An internal server error occurred'
         }, status=500)
 
 
@@ -3718,7 +3718,7 @@ def get_price_spread(request):
         print(traceback.format_exc())
         return JsonResponse({
             'success': False,
-            'error': f'Error calculating price spread: {str(e)}'
+            'error': f'Error calculating price spread: An internal server error occurred'
         }, status=500)
 
 
@@ -3932,7 +3932,7 @@ def get_process_funnel(request):
         print(traceback.format_exc())
         return JsonResponse({
             'success': False,
-            'error': f'Error calculating process funnel: {str(e)}'
+            'error': f'Error calculating process funnel: An internal server error occurred'
         }, status=500)
 
 
@@ -4198,7 +4198,7 @@ def get_rfp_lifecycle_time(request):
         print(traceback.format_exc())
         return JsonResponse({
             'success': False,
-            'error': f'Failed to calculate lifecycle time: {str(e)}'
+            'error': f'Failed to calculate lifecycle time: An internal server error occurred'
         }, status=500)
 
 

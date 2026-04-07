@@ -540,7 +540,7 @@
 
 <script setup>
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
-import axios from 'axios'
+import apiService from '@/services/apiService.js'
 import CustomDropdown from '../CustomDropdown.vue'
 import policyDataService from '@/services/policyService'
 // Remove RBAC import
@@ -617,8 +617,8 @@ const fetchFrameworks = async () => {
     }
 
     console.log('⚠️ [AllPolicies] No cached data found, fetching from API...')
-    const response = await axios.get(`${API_BASE_URL_FULL}/all-policies/frameworks/`)
-    frameworks.value = response.data || []
+    const response = await apiService.get('/all-policies/frameworks/')
+    frameworks.value = response || []
 
     // Update cache for subsequent loads
     policyDataService.setAllPoliciesFrameworks(frameworks.value)
@@ -637,13 +637,13 @@ const fetchFrameworks = async () => {
 const checkSelectedFrameworkFromSession = async () => {
   try {
     console.log('🔍 DEBUG: Checking for selected framework from session in AllPolicies...')
-    const response = await axios.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED)
-    console.log('📊 DEBUG: Selected framework response:', response.data)
+    const response = await apiService.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED)
+    console.log('📊 DEBUG: Selected framework response:', response)
     
-    if (response.data && response.data.success) {
+    if (response && response.success) {
       // Check if a framework is selected (not null)
-      if (response.data.frameworkId) {
-      const sessionFrameworkId = response.data.frameworkId
+      if (response.frameworkId) {
+      const sessionFrameworkId = response.frameworkId
       console.log('✅ DEBUG: Found selected framework in session:', sessionFrameworkId)
       
       // Check if this framework exists in our loaded frameworks
@@ -696,9 +696,9 @@ const fetchFrameworkVersions = async (frameworkId) => {
   
   try {
     console.log(`Fetching framework versions for framework ID: ${frameworkId}`)
-    const response = await axios.get(`${API_BASE_URL_FULL}/all-policies/frameworks/${frameworkId}/versions/`)
+    const response = await apiService.get(`/all-policies/frameworks/${frameworkId}/versions/`)
     
-    console.log('Framework versions response:', response.data)
+    console.log('Framework versions response:', response)
     
     // Initialize versions array if not present
     if (!selectedFramework.value.versions) {
@@ -706,7 +706,7 @@ const fetchFrameworkVersions = async (frameworkId) => {
     }
     
     // Update the selected framework with the versions data
-    selectedFramework.value.versions = response.data
+    selectedFramework.value.versions = response
     
     loading.value = false
   } catch (err) {
@@ -728,15 +728,15 @@ const fetchFrameworkVersionPolicies = async (versionId) => {
   
   try {
     console.log(`Fetching policies for framework version: ${versionId}`)
-    const response = await axios.get(`${API_BASE_URL_FULL}/all-policies/framework-versions/${versionId}/policies/`)
-    console.log(`Received ${response.data.length} policies for framework version ${versionId}`)
+    const response = await apiService.get(`/all-policies/framework-versions/${versionId}/policies/`)
+    console.log(`Received ${response.length} policies for framework version ${versionId}`)
     
     // Update the policies in the framework's version object for hierarchical view
     frameworks.value.forEach(framework => {
       if (framework.versions) {
         const version = framework.versions.find(v => v.id === versionId)
         if (version) {
-          version.policies = response.data
+          version.policies = response
           console.log(`Updated policies for version ${version.name} in framework ${framework.name}`)
         }
       }
@@ -744,7 +744,7 @@ const fetchFrameworkVersionPolicies = async (versionId) => {
     
     // Also update the selected framework version with the policies data (for backward compatibility)
     if (selectedFrameworkVersion.value && selectedFrameworkVersion.value.id === versionId) {
-      selectedFrameworkVersion.value.policies = response.data
+      selectedFrameworkVersion.value.policies = response
     }
     
     loading.value = false
@@ -787,10 +787,10 @@ const fetchAllPolicies = async () => {
   
   try {
     console.log("Fetching all policies...")
-    const response = await axios.get(url)
+    const response = await apiService.get(url)
     
     // Show initial data immediately for better user experience
-    const initialPolicies = response.data
+    const initialPolicies = response
     policies.value = initialPolicies.map(policy => ({
       ...policy,
       // Initialize with null version_count to show loading indicator
@@ -830,13 +830,13 @@ const fetchAllPolicies = async () => {
     
     // Prepare all version fetch promises
     const versionFetchPromises = initialPolicies.map(policy => {
-      return axios.get(`${API_BASE_URL_FULL}/all-policies/policies/${policy.id}/versions/`)
+      return apiService.get(`/all-policies/policies/${policy.id}/versions/`)
         .then(versionsResponse => {
-          if (versionsResponse.data && Array.isArray(versionsResponse.data)) {
+          if (versionsResponse && Array.isArray(versionsResponse)) {
             return {
               ...policy,
-              versions: versionsResponse.data,
-              version_count: versionsResponse.data.length
+              versions: versionsResponse,
+              version_count: versionsResponse.length
             }
           }
           return policy
@@ -877,9 +877,9 @@ const fetchPolicyVersions = async (policyId) => {
     console.log(`Fetching policy versions for policy ID: ${policyId}`)
     
     // This is the most reliable endpoint to get ALL versions
-    const response = await axios.get(`${API_BASE_URL_FULL}/all-policies/policies/${policyId}/versions/`)
+    const response = await apiService.get(`/all-policies/policies/${policyId}/versions/`)
     
-    console.log('Policy versions response:', response.data)
+    console.log('Policy versions response:', response)
     
     // Update policy versions in the hierarchical structure
     frameworks.value.forEach(framework => {
@@ -888,8 +888,8 @@ const fetchPolicyVersions = async (policyId) => {
           if (version.policies) {
             const policy = version.policies.find(p => p.id === policyId)
             if (policy) {
-              policy.versions = response.data
-              policy.version_count = response.data.length
+              policy.versions = response
+              policy.version_count = response.length
               console.log(`Updated versions for policy ${policy.name} in version ${version.name}`)
             }
           }
@@ -903,12 +903,12 @@ const fetchPolicyVersions = async (policyId) => {
     }
     
     // Update the selected policy with the versions data
-    selectedPolicy.value.versions = response.data
+    selectedPolicy.value.versions = response
     
     // Also update the versions count in the display
-    if (selectedPolicy.value && response.data.length > 0) {
+    if (selectedPolicy.value && response.length > 0) {
       // Update the versions count property to match actual number of versions
-      selectedPolicy.value.version_count = response.data.length
+      selectedPolicy.value.version_count = response.length
     }
     
     loading.value = false
@@ -957,15 +957,15 @@ const fetchAllSubpolicies = async () => {
   
   try {
     console.log(`Fetching subpolicies from: ${url}`)
-    const response = await axios.get(url)
-    console.log(`Received ${response.data.length} subpolicies`)
+    const response = await apiService.get(url)
+    console.log(`Received ${response.length} subpolicies`)
     
     // For debugging
-    if (response.data.length > 0) {
-      console.log('Sample subpolicy:', response.data[0])
+    if (response.length > 0) {
+      console.log('Sample subpolicy:', response[0])
     }
     
-    const subpolicyData = response.data
+    const subpolicyData = response
     
     // Update the subpolicies with the data
     subpolicies.value = subpolicyData
@@ -994,9 +994,9 @@ const fetchPolicyVersionSubpolicies = async (versionId) => {
   
   try {
     console.log(`Fetching subpolicies for policy version ID: ${versionId}`)
-    const response = await axios.get(`${API_BASE_URL_FULL}/all-policies/policy-versions/${versionId}/subpolicies/`)
+    const response = await apiService.get(`/all-policies/policy-versions/${versionId}/subpolicies/`)
     
-    console.log('Subpolicies response:', response.data)
+    console.log('Subpolicies response:', response)
     
     // Update subpolicies in the hierarchical structure
     frameworks.value.forEach(framework => {
@@ -1007,8 +1007,8 @@ const fetchPolicyVersionSubpolicies = async (versionId) => {
               if (policy.versions) {
                 const policyVersion = policy.versions.find(pv => pv.id === versionId)
                 if (policyVersion) {
-                  policyVersion.subpolicies = response.data
-                  policyVersion.subpolicy_count = response.data.length
+                  policyVersion.subpolicies = response
+                  policyVersion.subpolicy_count = response.length
                   console.log(`Updated subpolicies for policy version ${policyVersion.name}`)
                 }
               }
@@ -1025,7 +1025,7 @@ const fetchPolicyVersionSubpolicies = async (versionId) => {
     
     // Update the selected policy version with the subpolicies data
     if (selectedPolicyVersion.value) {
-      selectedPolicyVersion.value.subpolicies = response.data
+      selectedPolicyVersion.value.subpolicies = response
     }
     
     loading.value = false
@@ -1241,10 +1241,10 @@ const navigateToTab = async (tabName) => {
   
   // Check if we have a stored framework in session
   try {
-    const response = await axios.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED)
+    const response = await apiService.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED)
     
-    if (response.data && response.data.success && response.data.frameworkId) {
-      const sessionFrameworkId = response.data.frameworkId
+    if (response && response.success && response.frameworkId) {
+      const sessionFrameworkId = response.frameworkId
       console.log(`✅ DEBUG: Found stored framework ${sessionFrameworkId} for ${tabName} tab`)
       
       // Set the framework dropdown values based on the stored framework
@@ -1311,12 +1311,12 @@ const handlePolicyFrameworkChange = async () => {
       const userId = localStorage.getItem('user_id') || 'default_user'
       console.log('🔍 DEBUG: Saving policy framework to session in AllPolicies:', selectedPolicyFramework.value)
       
-      const response = await axios.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, {
+      const response = await apiService.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, {
         frameworkId: selectedPolicyFramework.value,
         userId: userId
       })
       
-      if (response.data && response.data.success) {
+      if (response && response.success) {
         console.log('✅ DEBUG: Policy framework saved to session successfully')
       } else {
         console.error('❌ DEBUG: Failed to save policy framework to session')
@@ -1337,12 +1337,12 @@ const handleSubpolicyFrameworkChange = async () => {
       const userId = localStorage.getItem('user_id') || 'default_user'
       console.log('🔍 DEBUG: Saving subpolicy framework to session in AllPolicies:', selectedSubpolicyFramework.value)
       
-      const response = await axios.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, {
+      const response = await apiService.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, {
         frameworkId: selectedSubpolicyFramework.value,
         userId: userId
       })
       
-      if (response.data && response.data.success) {
+      if (response && response.success) {
         console.log('✅ DEBUG: Subpolicy framework saved to session successfully')
       } else {
         console.error('❌ DEBUG: Failed to save subpolicy framework to session')
@@ -1380,14 +1380,14 @@ const handleFrameworkSelection = async () => {
         const userId = localStorage.getItem('user_id') || 'default_user'
         console.log('🔍 DEBUG: Saving framework to session in AllPolicies:', fwId)
         
-        const response = await axios.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, {
+        const response = await apiService.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, {
           frameworkId: fwId,
           userId: userId
         })
         
-        if (response.data && response.data.success) {
+        if (response && response.success) {
           console.log('✅ DEBUG: Framework saved to session successfully in AllPolicies')
-          console.log('🔑 DEBUG: Session key:', response.data.sessionKey)
+          console.log('🔑 DEBUG: Session key:', response.sessionKey)
         } else {
           console.error('❌ DEBUG: Failed to save framework to session in AllPolicies')
         }
@@ -1424,15 +1424,15 @@ const fetchPolicySubpolicies = async (policyId) => {
   
   try {
     console.log(`Fetching subpolicies for policy ID: ${policyId}`)
-    const response = await axios.get(`${API_BASE_URL_FULL}/all-policies/subpolicies/?policy_id=${policyId}`)
+    const response = await apiService.get(`/all-policies/subpolicies/?policy_id=${policyId}`)
     
-    console.log('Policy subpolicies response:', response.data)
+    console.log('Policy subpolicies response:', response)
     
     // Update subpolicies in the policies list
     const policyIndex = policies.value.findIndex(p => p.id === policyId)
     if (policyIndex !== -1) {
-      policies.value[policyIndex].subpolicies = response.data
-      policies.value[policyIndex].subpolicy_count = response.data.length
+      policies.value[policyIndex].subpolicies = response
+      policies.value[policyIndex].subpolicy_count = response.length
       console.log(`Updated subpolicies for policy ${policies.value[policyIndex].name}`)
     }
     

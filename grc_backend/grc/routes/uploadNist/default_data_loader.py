@@ -220,7 +220,7 @@ def load_default_data(request):
                     logger.error(f"Error searching for RBI folder: {e}")
                     return JsonResponse({
                         "success": False, 
-                        "error": f"Error accessing TEMP_MEDIA_ROOT: {str(e)}"
+                        "error": f"Error accessing TEMP_MEDIA_ROOT: An internal server error occurred"
                     }, status=500)
             
             # Find the sections and policies folders inside RBI folder
@@ -245,7 +245,7 @@ def load_default_data(request):
                 logger.error(f"Error listing RBI folder contents: {e}")
                 return JsonResponse({
                     "success": False, 
-                    "error": f"Error accessing RBI framework folder: {str(e)}"
+                    "error": f"Error accessing RBI framework folder: An internal server error occurred"
                 }, status=500)
             
             if not sections_dir:
@@ -888,7 +888,7 @@ def get_default_pdf_content(request, section_folder, control_id):
             return response
         except Exception as e:
             logger.exception(f"Error opening PDF file: {str(e)}")
-            return JsonResponse({"success": False, "error": f"Error opening PDF file: {str(e)}"}, status=500)
+            return JsonResponse({"success": False, "error": f"Error opening PDF file: An internal server error occurred"}, status=500)
         
     except Exception as e:
         logger.exception(f"Error getting default PDF content: {str(e)}")

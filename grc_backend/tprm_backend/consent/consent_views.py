@@ -201,7 +201,7 @@ def get_consent_configurations(request):
         logger.error(f"[TPRM Consent] Traceback: {traceback.format_exc()}")
         return Response({
             'status': 'error',
-            'message': str(e),
+            'message': 'An internal server error occurred.',
             'data': [],
             'error_details': "Table might not exist. Please run: python manage.py setup_tprm_consent_tables"
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -291,7 +291,7 @@ def update_consent_configuration(request, config_id):
         logger.error(f"[TPRM Consent] Error updating consent configuration: {str(e)}")
         return Response({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -416,7 +416,7 @@ def bulk_update_consent_configurations(request):
         logger.error(f"[TPRM Consent] Error bulk updating consent configurations: {str(e)}")
         return Response({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -545,7 +545,7 @@ def check_consent_required(request):
         logger.error(f"[TPRM Consent] Error checking consent requirement: {str(e)}")
         return Response({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -635,7 +635,7 @@ def record_consent_acceptance(request):
         logger.error(f"[TPRM Consent] Error recording consent acceptance: {str(e)}")
         return Response({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -722,6 +722,6 @@ def get_consent_acceptances(request):
         logger.error(f"[TPRM Consent] Error getting consent acceptances: {str(e)}")
         return Response({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 

@@ -1588,7 +1588,7 @@ def get_gmail_messages(request):
         logger.error(f"Gmail API error: {str(e)}")
         return JsonResponse({
             'success': False,
-            'error': f'Gmail API error: {str(e)}'
+            'error': f'Gmail API error: An internal server error occurred'
         }, status=500)
     except Exception as e:
         logger.error(f"Error fetching Gmail messages: {str(e)}")
@@ -1766,7 +1766,7 @@ def get_calendar_events(request):
         logger.error(f"Error fetching calendar events: {str(e)}", exc_info=True)
         return JsonResponse({
             'success': False,
-            'error': f'Failed to fetch calendar events: {str(e)}',
+            'error': f'Failed to fetch calendar events: An internal server error occurred',
             'error_type': 'general_error'
         }, status=500)
 
@@ -1907,7 +1907,7 @@ def download_attachment(request):
         logger.error(f"Gmail API error: {str(e)}")
         return JsonResponse({
             'success': False,
-            'error': f'Gmail API error: {str(e)}'
+            'error': f'Gmail API error: An internal server error occurred'
         }, status=500)
     except Exception as e:
         logger.error(f"Error downloading attachment: {str(e)}")

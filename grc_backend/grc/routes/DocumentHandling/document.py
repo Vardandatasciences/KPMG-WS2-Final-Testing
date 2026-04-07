@@ -486,6 +486,7 @@ def delete_document(request, doc_id: int):
 
 
 @api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def get_document_download_url(request, doc_id: int):
     """
     Return a short-lived, read-only download URL for a document.

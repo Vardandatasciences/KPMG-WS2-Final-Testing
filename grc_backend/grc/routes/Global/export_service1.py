@@ -535,7 +535,7 @@ def local_export_fallback(data, file_format, user_id, options):
         traceback.print_exc()
         return {
             'success': False,
-            'error': f'Local export failed: {str(e)}'
+            'error': f'Local export failed: An internal server error occurred'
         }
 
 def export_data(data=None, file_format='xlsx', user_id='user123', options=None):
@@ -787,7 +787,7 @@ def export_data(data=None, file_format='xlsx', user_id='user123', options=None):
             update_export_status(export_id, 'failed', str(e))
             update_export_metadata(export_id, {
                 'error': {
-                    'message': str(e),
+                    'message': 'An internal server error occurred.',
                     'timestamp': datetime.datetime.now().isoformat(),
                 }
             })

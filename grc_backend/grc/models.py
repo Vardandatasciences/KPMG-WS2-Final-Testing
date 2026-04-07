@@ -1934,7 +1934,7 @@ class GRCLog(EncryptedFieldsMixin, models.Model):
     UserId = models.CharField(max_length=50, null=True)
     UserName = models.CharField(max_length=500, null=True)
     Module = models.CharField(max_length=100, null=True)
-    ActionType = models.CharField(max_length=50, null=True)
+    ActionType = models.CharField(max_length=500, null=True)
     EntityId = models.CharField(max_length=50, null=True)
     EntityType = models.CharField(max_length=50, null=True)
     LogLevel = models.CharField(max_length=20, default='INFO')

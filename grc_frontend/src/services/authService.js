@@ -1,5 +1,4 @@
-import axios from 'axios'
-import { API_BASE_URL } from '../config/api.js'
+import { API_BASE_URL, createAxiosInstance } from '../config/api.js'
 import { navigateTopLevelToGoogleOAuth } from '../utils/safeExternalNavigation'
  
 const TOKEN_STORAGE_KEYS = [
@@ -48,24 +47,8 @@ const getStoredToken = () => {
   return value
 }
  
-// Create axios instance with default config
-const authApi = axios.create({
-  baseURL: `${API_BASE_URL}/api`,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  withCredentials: true
-})
- 
-// Request interceptor to add token
-authApi.interceptors.request.use(
-  (config) => {
-    return config
-  },
-  (error) => {
-    return Promise.reject(error)
-  }
-)
+// Create axios instance with default config (includes withCredentials: true)
+const authApi = createAxiosInstance(`${API_BASE_URL}/api`)
  
 // Response interceptor to handle errors
 authApi.interceptors.response.use(

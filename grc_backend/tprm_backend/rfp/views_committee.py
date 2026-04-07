@@ -109,7 +109,7 @@ def create_committee(request, rfp_id):
 
     except Exception as e:
         return Response({
-            'error': f'Failed to create committee: {str(e)}'
+            'error': f'Failed to create committee: An internal server error occurred'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -159,7 +159,7 @@ def get_committee(request, rfp_id):
 
     except Exception as e:
         return Response({
-            'error': f'Failed to get committee: {str(e)}'
+            'error': f'Failed to get committee: An internal server error occurred'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -270,7 +270,7 @@ def save_final_evaluation(request, rfp_id):
 
     except Exception as e:
         return Response({
-            'error': f'Failed to save final evaluation: {str(e)}'
+            'error': f'Failed to save final evaluation: An internal server error occurred'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -325,7 +325,7 @@ def get_final_evaluations(request, rfp_id):
 
     except Exception as e:
         return Response({
-            'error': f'Failed to get final evaluations: {str(e)}'
+            'error': f'Failed to get final evaluations: An internal server error occurred'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -415,7 +415,7 @@ def get_consensus_ranking(request, rfp_id):
 
     except Exception as e:
         return Response({
-            'error': f'Failed to calculate consensus ranking: {str(e)}'
+            'error': f'Failed to calculate consensus ranking: An internal server error occurred'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -481,5 +481,5 @@ def declare_award(request, rfp_id):
 
     except Exception as e:
         return Response({
-            'error': f'Failed to declare award: {str(e)}'
+            'error': f'Failed to declare award: An internal server error occurred'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

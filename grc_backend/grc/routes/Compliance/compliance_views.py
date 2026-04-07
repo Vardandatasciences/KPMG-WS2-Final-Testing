@@ -1378,7 +1378,7 @@ def create_compliance(request):
         debug_print(f"Traceback: {traceback.format_exc()}")
         return Response({
             'success': False,
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 @csrf_exempt
 @api_view(['GET'])
@@ -1517,7 +1517,7 @@ def get_compliance_dashboard(request):
         traceback.print_exc()
         return Response({
             'success': False,
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
@@ -2589,7 +2589,7 @@ def submit_compliance_review(request, approval_id):
         traceback.print_exc()
         return Response({
             'success': False,
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
  
 @csrf_exempt
@@ -2733,7 +2733,7 @@ def resubmit_compliance_approval(request, approval_id):
             framework_id = int(framework_id)
         except (ValueError, TypeError) as e:
             return Response({
-                'error': f'Invalid FrameworkId in original approval: {str(e)}. FrameworkId must be a valid integer.'
+                'error': f'Invalid FrameworkId in original approval: An internal server error occurred. FrameworkId must be a valid integer.'
             }, status=status.HTTP_400_BAD_REQUEST)
         
         # Normalize reviewer_id and user_id to integers
@@ -2742,7 +2742,7 @@ def resubmit_compliance_approval(request, approval_id):
             original_user_id = int(original_user_id) if original_user_id else None
         except (ValueError, TypeError) as e:
             return Response({
-                'error': f'Invalid ReviewerId or UserId: {str(e)}. Both must be valid integers.'
+                'error': f'Invalid ReviewerId or UserId: An internal server error occurred. Both must be valid integers.'
             }, status=status.HTTP_400_BAD_REQUEST)
         
         if not original_reviewer_id:
@@ -2825,7 +2825,7 @@ def get_compliance_versioning(request):
     except Exception as e:
         return Response({
             'success': False,
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
  
 @api_view(['GET'])
@@ -3544,7 +3544,7 @@ def get_policy_approvals_by_reviewer(request):
         traceback.print_exc()
         return Response({
             'success': False,
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_400_BAD_REQUEST)
  
 @api_view(['GET'])
@@ -4162,7 +4162,7 @@ def deactivate_compliance(request, compliance_id):
         debug_print(f"Error in deactivate_compliance: {str(e)}")
         return Response({
             'success': False,
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @csrf_exempt
@@ -4281,7 +4281,7 @@ def approve_compliance_deactivation(request, approval_id):
         traceback.print_exc()
         return Response({
             'success': False,
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @csrf_exempt
@@ -4414,7 +4414,7 @@ def reject_compliance_deactivation(request, approval_id):
         traceback.print_exc()
         return Response({
             'success': False,
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
  
 @api_view(['GET'])
@@ -4633,7 +4633,7 @@ def get_compliance_analytics(request):
         traceback.print_exc()
         return Response({
             'success': False,
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
  
@@ -4729,7 +4729,7 @@ def get_compliance_kpi(request):
         traceback.print_exc()
         return Response({
             'success': False,
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
@@ -4787,7 +4787,7 @@ def get_maturity_level_kpi(request):
         traceback.print_exc()
         return Response({
             'success': False,
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
@@ -4878,7 +4878,7 @@ def get_non_compliance_count(request):
         debug_print(f"Error in get_non_compliance_count: {str(e)}")
         return Response({
             'success': False,
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
@@ -4908,7 +4908,7 @@ def get_mitigated_risks_count(request):
         debug_print(f"Error in get_mitigated_risks_count: {str(e)}")
         return Response({
             'success': False,
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
@@ -4967,7 +4967,7 @@ def get_automated_controls_count(request):
         traceback.print_exc()
         return Response({
             'success': False,
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
@@ -5028,7 +5028,7 @@ def get_non_compliance_repetitions(request):
         debug_print(f"Error in get_non_compliance_repetitions: {str(e)}")
         return Response({
             'success': False,
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     
@@ -5712,7 +5712,7 @@ def all_policies_get_subpolicy_compliances(request, subpolicy_id):
     except Exception as e:
         return Response({
             'success': False,
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 @api_view(['GET'])
@@ -5914,7 +5914,7 @@ def cross_framework_get_compliances(request, framework_id):
         logging.error(f"❌ [api_get_framework_compliances] Traceback:\n{traceback.format_exc()}")
         return Response({
             'success': False,
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -5979,7 +5979,7 @@ def get_framework_compliances(request, framework_id):
         logging.error(f"❌ [get_framework_compliances] Traceback:\n{traceback.format_exc()}")
         return Response({
             'success': False,
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -6132,7 +6132,7 @@ def get_subpolicy_compliances(request, subpolicy_id):
     except Exception as e:
         return Response({
             'success': False,
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 @api_view(['GET'])
@@ -6195,7 +6195,7 @@ def get_ontime_mitigation_percentage(request):
         debug_print(f"Error in get_ontime_mitigation_percentage: {str(e)}")
         return Response({
             'success': False,
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
@@ -6254,7 +6254,7 @@ def get_compliance_status_overview(request):
         traceback.print_exc()
         return Response({
             'success': False,
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
@@ -6335,7 +6335,7 @@ def get_reputational_impact_assessment(request):
         traceback.print_exc()
         return Response({
             'success': False,
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
@@ -6496,7 +6496,7 @@ def get_compliance_audit_info(request, compliance_id):
         traceback.print_exc()
         return Response({
             'success': False,
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 @api_view(['GET'])
@@ -6743,7 +6743,7 @@ def get_compliance_details(request, compliance_id):
         traceback.print_exc()
         return Response({
             'success': False,
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 @api_view(['GET'])
@@ -6872,7 +6872,7 @@ def get_remediation_cost_kpi(request):
         traceback.print_exc()
         return Response({
             'success': False,
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
@@ -7069,7 +7069,7 @@ def get_non_compliant_incidents_by_time(request):
         traceback.print_exc()
         return Response({
             'success': False,
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
@@ -7254,7 +7254,7 @@ def get_compliance_framework_info(request, compliance_id):
     except Exception as e:
         return Response({
             'success': False,
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
@@ -8179,7 +8179,7 @@ def clone_compliance(request, compliance_id):
         debug_print(f"Traceback: {traceback.format_exc()}")
         return Response({
             'success': False,
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -8658,7 +8658,7 @@ def get_compliance_approvals_by_reviewer(request, user_id):
             if not reviewer_id:
                 return Response({'error': 'Invalid reviewer_id. Must be a valid integer.'}, status=400)
         except (ValueError, TypeError) as e:
-            return Response({'error': f'Invalid reviewer_id: {str(e)}. Must be a valid integer.'}, status=400)
+            return Response({'error': f'Invalid reviewer_id: An internal server error occurred. Must be a valid integer.'}, status=400)
         
         debug_print(f"🔍 DEBUG: Filtering compliance approvals by ReviewerId: {reviewer_id}")
         
@@ -9495,7 +9495,7 @@ def get_framework_compliances(request, framework_id):
         logging.error(f"❌ [get_framework_compliances] Traceback:\n{traceback.format_exc()}")
         return Response({
             'success': False,
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -9538,7 +9538,7 @@ def get_policy_compliances(request, policy_id):
     except Exception as e:
         return Response({
             'success': False,
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 @api_view(['GET'])
@@ -9677,7 +9677,7 @@ def export_compliances(request, export_format, item_type=None, item_id=None):
         debug_print(f"Error in export_compliances: {str(e)}")
         return Response({
             'success': False,
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -9801,7 +9801,7 @@ def export_compliances_post(request):
         debug_print(f"Error in export_compliances_post: {str(e)}")
         return Response({
             'success': False,
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -9963,7 +9963,7 @@ def get_compliance_categories_and_business_units(request):
         debug_print(f"ERROR: {str(e)}")
         return Response({
             'success': False,
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -10080,7 +10080,7 @@ def get_all_compliances_for_audit_management_public(request):
     except Exception as e:
         return Response({
             'success': False,
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
@@ -10147,7 +10147,7 @@ def get_categories_for_audit_management(request):
         traceback.print_exc()
         return Response({
             'success': False,
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
@@ -10214,7 +10214,7 @@ def get_business_units_for_audit_management(request):
         traceback.print_exc()
         return Response({
             'success': False,
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 def initialize_default_categories_data():
@@ -10308,7 +10308,7 @@ def debug_categories_and_business_units(request):
         traceback.print_exc()
         return Response({
             'success': False,
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET', 'POST'])
@@ -10520,7 +10520,7 @@ def get_iso_framework_compliance_status(request):
         traceback.print_exc()
         return Response({
             'success': False,
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
@@ -10661,7 +10661,7 @@ def get_policy_compliance_status(request):
         traceback.print_exc()
         return Response({
             'success': False,
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -10768,7 +10768,7 @@ def export_audit_management_compliances(request, format):
         debug_print(f"Error in export_audit_management_compliances: {str(e)}")
         return Response({
             'success': False,
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 # Import the export compliance functions

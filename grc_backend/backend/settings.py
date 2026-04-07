@@ -738,8 +738,8 @@ SIMPLE_JWT = {
 # Rest Framework settings
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        # Use SimpleJWT's JWTAuthentication globally (JWT-only, no SessionAuthentication/CSRF)
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        # Use our UnifiedJWTAuthentication globally to support both headers and secure cookies.
+        'grc.jwt_auth.UnifiedJWTAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         # Secure-by-default: endpoints must be authenticated unless explicitly marked public.

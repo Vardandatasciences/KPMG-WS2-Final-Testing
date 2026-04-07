@@ -140,6 +140,6 @@ def test_lifecycle_data(request):
         
     except Exception as e:
         return Response(
-            {'error': f'Failed to fetch lifecycle data: {str(e)}'}, 
+            {'error': f'Failed to fetch lifecycle data: An internal server error occurred'}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )

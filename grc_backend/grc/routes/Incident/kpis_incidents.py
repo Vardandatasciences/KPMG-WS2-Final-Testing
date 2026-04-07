@@ -1275,7 +1275,7 @@ def incident_root_causes(request):
         debug_print(f"Error in incident_root_causes: {str(e)}")
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -1327,7 +1327,7 @@ def incident_types(request):
         debug_print(f"Error in incident_types: {str(e)}")
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 
@@ -1407,7 +1407,7 @@ def incident_origins(request):
         debug_print(f"Error in incident_origins: {str(e)}")
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=500)
 
 

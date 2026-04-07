@@ -1,4 +1,8 @@
 from django.http import JsonResponse
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework import status
 from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.utils import timezone
@@ -29,8 +33,8 @@ def _safe_request_meta(request):
     return method, path, headers
 
 
-@csrf_exempt
-@require_http_methods(["GET"])
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def test_integration_auth(request):
     """
     Test endpoint to verify authentication is working for integrations
@@ -44,14 +48,14 @@ def test_integration_auth(request):
         user = getattr(request, 'user', None)
         logger.info("User from middleware present: %s", bool(user))
         
-        if not user:
+        if not user or not hasattr(user, 'UserId'):
             logger.warning("No user found in request - authentication required")
-            return JsonResponse({
+            return Response({
                 'status': 'error',
                 'message': 'Authentication required',
-            }, status=401)
+            }, status=status.HTTP_401_UNAUTHORIZED)
         
-        return JsonResponse({
+        return Response({
             'status': 'success',
             'message': 'Authentication working',
             'user': {
@@ -106,8 +110,8 @@ def _resolve_request_user_id(request, provided_user_id):
         return None, JsonResponse({'error': 'Internal server error resolving user'}, status=500)
 
 
-@csrf_exempt
-@require_http_methods(["GET"])
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def get_external_applications(request):
     """
     Get all external applications with their connection status for the current user
@@ -218,8 +222,8 @@ def get_external_applications(request):
         return JsonResponse({'error': 'Internal server error'}, status=500)
 
 
-@csrf_exempt
-@require_http_methods(["POST"])
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def connect_external_application(request):
     """
     Connect to an external application
@@ -291,8 +295,8 @@ def connect_external_application(request):
         return JsonResponse({'error': 'Internal server error'}, status=500)
 
 
-@csrf_exempt
-@require_http_methods(["POST"])
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def disconnect_external_application(request):
     """
     Disconnect from an external application
@@ -439,8 +443,8 @@ def get_application_details(request, application_id):
         return JsonResponse({'error': 'Internal server error'}, status=500)
 
 
-@csrf_exempt
-@require_http_methods(["POST"])
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def refresh_application_status(request):
     """
     Refresh the status of all external applications for the current user
@@ -489,8 +493,8 @@ def refresh_application_status(request):
         return JsonResponse({'error': 'Internal server error'}, status=500)
 
 
-@csrf_exempt
-@require_http_methods(["GET"])
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def get_sync_logs(request, application_id):
     """
     Get sync logs for a specific external application
@@ -544,8 +548,8 @@ def get_sync_logs(request, application_id):
 
 
 # Jira-specific endpoints
-@csrf_exempt
-@require_http_methods(["POST"])
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def jira_oauth_callback(request):
     """
     Handle Jira OAuth callback and create connection
@@ -600,8 +604,8 @@ def jira_oauth_callback(request):
         return JsonResponse({'error': 'Internal server error'}, status=500)
 
 
-@csrf_exempt
-@require_http_methods(["GET", "POST"])
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
 def get_jira_projects(request):
     """
     Get Jira projects and optionally save them to database
@@ -674,8 +678,8 @@ def get_jira_projects(request):
         return JsonResponse({'error': 'Internal server error'}, status=500)
 
 
-@csrf_exempt
-@require_http_methods(["POST"])
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def save_jira_project_details(request):
     """
     Save detailed Jira project information
@@ -716,8 +720,8 @@ def save_jira_project_details(request):
         return JsonResponse({'error': 'Internal server error'}, status=500)
 
 
-@csrf_exempt
-@require_http_methods(["POST"])
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def disconnect_jira(request):
     """
     Disconnect Jira for a user
@@ -748,8 +752,8 @@ def disconnect_jira(request):
         return JsonResponse({'error': 'Internal server error'}, status=500)
 
 
-@csrf_exempt
-@require_http_methods(["GET"])
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def get_jira_connection_status(request):
     """
     Get Jira connection status for a user
@@ -777,8 +781,8 @@ def get_jira_connection_status(request):
         return JsonResponse({'error': 'Internal server error'}, status=500)
 
 
-@csrf_exempt
-@require_http_methods(["GET"])
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def get_jira_data(request):
     """
     Get all Jira data for a user (projects, configuration, etc.)

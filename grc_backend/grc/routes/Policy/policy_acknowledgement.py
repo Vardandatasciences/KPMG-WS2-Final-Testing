@@ -6,11 +6,11 @@ Handles all operations related to policy acknowledgements
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.shortcuts import get_object_or_404
 from django.db.models import Q, Count
 from django.utils import timezone
-from django.views.decorators.csrf import csrf_protect as csrf_exempt
+from django.views.decorators.csrf import csrf_exempt
 from datetime import datetime, date
 import secrets
 import os
@@ -81,7 +81,7 @@ def mark_acknowledgement_notification_as_read(user_id, policy_name, acknowledgem
 
 
 @api_view(['POST'])
-@permission_classes([])  # Empty list = no permission check
+@permission_classes([IsAuthenticated])
 @csrf_exempt
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
@@ -115,35 +115,21 @@ def create_acknowledgement_request(request):
         # Validate policy exists
         policy = get_object_or_404(Policy, PolicyId=policy_id, tenant_id=tenant_id)
         
-        # Get current user - handle multiple ways user might be set
-        user_id = None
-        if hasattr(request, 'user') and request.user:
-            user_id = getattr(request.user, 'UserId', None) or getattr(request.user, 'id', None)
-        
-        # If no user_id from request.user, try to get from JWT or session
-        if not user_id:
-            # Try to get from JWT token in header
-            auth_header = request.headers.get('Authorization', '')
-            if auth_header and auth_header.startswith('Bearer '):
-                try:
-                    token = auth_header.split(' ')[1]
-                    from ...authentication import verify_jwt_token
-                    payload = verify_jwt_token(token)
-                    if payload and 'user_id' in payload:
-                        user_id = payload['user_id']
-                except:
-                    pass
-        
-        # If still no user_id, try session
-        if not user_id and hasattr(request, 'session'):
-            user_id = request.session.get('user_id') or request.session.get('grc_user_id')
+        # Get current user - DRF's IsAuthenticated ensures request.user is set
+        user = request.user
+        user_id = getattr(user, 'UserId', None) or getattr(user, 'id', None)
         
         if not user_id:
             return Response({
-                'error': 'User not authenticated. Please login again.'
+                'error': 'User authentication failed. Could not resolve UserId.'
             }, status=status.HTTP_401_UNAUTHORIZED)
         
-        user = get_object_or_404(Users, UserId=user_id, tenant_id=tenant_id)
+        # Ensure we have the full Users model instance for the database operations
+        if not hasattr(user, 'tenant_id'):
+             user = get_object_or_404(Users, UserId=user_id, tenant_id=tenant_id)
+        else:
+             # If request.user is already a Users instance with tenant_id, we're good
+             pass
         
         # Get policy version (use current if not provided)
         policy_version = data.get('policy_version', policy.CurrentVersion)
@@ -222,7 +208,7 @@ def create_acknowledgement_request(request):
                     except Exception as e:
                         debug_print(f"Error creating user for email {manual_email}: {str(e)}")
                         return Response({
-                            'error': f'Error creating user for email {manual_email}: {str(e)}'
+                            'error': f'Error creating user for email {manual_email}: An internal server error occurred'
                         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         # Parse due date if provided
@@ -234,7 +220,7 @@ def create_acknowledgement_request(request):
                 due_date = parsed_datetime.date()
             except (ValueError, TypeError) as e:
                 return Response({
-                    'error': f'Invalid due_date format. Use YYYY-MM-DD. Error: {str(e)}'
+                    'error': f'Invalid due_date format. Use YYYY-MM-DD. Error: An internal server error occurred'
                 }, status=status.HTTP_400_BAD_REQUEST)
         
         # Calculate total users (database users + manual email users if provided)
@@ -420,7 +406,7 @@ def create_acknowledgement_request(request):
 
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_policy_acknowledgement_requests(request, policy_id):
@@ -471,7 +457,7 @@ def get_policy_acknowledgement_requests(request, policy_id):
 
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_user_pending_acknowledgements(request):
@@ -579,7 +565,7 @@ def get_user_pending_acknowledgements(request):
 
 
 @api_view(['POST'])
-@permission_classes([])  # Empty list = no permission check
+@permission_classes([IsAuthenticated])
 @csrf_exempt
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
@@ -739,7 +725,7 @@ def acknowledge_policy(request, acknowledgement_user_id):
 
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_acknowledgement_report(request, acknowledgement_request_id):

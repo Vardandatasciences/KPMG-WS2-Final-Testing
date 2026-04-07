@@ -480,7 +480,7 @@ def submit_compliance_review(request, approval_id):
         }, status=status.HTTP_200_OK)
     except Exception as e:
         return Response({
-            'error': f'Error submitting compliance review: {str(e)}',
+            'error': f'Error submitting compliance review: An internal server error occurred',
             'traceback': traceback.format_exc()
         }, status=status.HTTP_400_BAD_REQUEST)
 
@@ -555,7 +555,7 @@ def resubmit_compliance_approval(request, approval_id):
         }, status=status.HTTP_200_OK)
     except Exception as e:
         return Response({
-            'error': f'Error resubmitting compliance: {str(e)}',
+            'error': f'Error resubmitting compliance: An internal server error occurred',
             'traceback': traceback.format_exc()
         }, status=status.HTTP_400_BAD_REQUEST)
 

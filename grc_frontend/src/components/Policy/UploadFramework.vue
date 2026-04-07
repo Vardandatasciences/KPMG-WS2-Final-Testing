@@ -1218,9 +1218,9 @@
 <script>
 import { ref, computed, onUnmounted, watch, onMounted, getCurrentInstance } from 'vue'
 import { useRouter } from 'vue-router'
-import axios from 'axios'
+import apiService from '@/services/apiService.js'
 import eventBus, { LOGOUT_EVENT } from '../../utils/eventBus.js'
-import { API_ENDPOINTS, API_BASE_URL, axiosInstance } from '@/config/api.js'
+import { API_ENDPOINTS, API_BASE_URL } from '@/config/api.js'
 import { compressFile, shouldCompressFile } from '@/utils/fileCompression.js'
 import CustomDropdown from '../CustomDropdown.vue'
 // AI Centralized Module Optimizations
@@ -1918,22 +1918,22 @@ export default {
             return
           }
           
-          const response = await axios.get(API_ENDPOINTS.FRAMEWORK_PROCESSING_STATUS(id))
+          const data = await apiService.get(API_ENDPOINTS.FRAMEWORK_PROCESSING_STATUS(id))
           
-          if (response.data.progress !== undefined) {
+          if (data.progress !== undefined) {
             // Use backend progress if available
             processingStatus.value = {
-              ...response.data,
-              message: getStatusMessage(response.data.progress),
-              currentSection: getCurrentSection(response.data.progress)
+              ...data,
+              message: getStatusMessage(data.progress),
+              currentSection: getCurrentSection(data.progress)
             }
 
             // Track idle polls (no progress change)
-            if (response.data.progress === lastProgress) {
+            if (data.progress === lastProgress) {
               idlePolls += 1
             } else {
               idlePolls = 0
-              lastProgress = response.data.progress
+              lastProgress = data.progress
             }
           } else {
             // Use time-based progress calculation
@@ -1958,7 +1958,7 @@ export default {
             clearInterval(progressInterval)
             isProcessing.value = false
             processingComplete.value = true
-            const result = response.data?.result
+            const result = data?.result
             const isSuccess = result && result.status === 'success'
             const hasNoResult = !result || (!result.status && processingStatus.value.progress >= 100)
             
@@ -2454,13 +2454,13 @@ export default {
       // Get checked sections information
       const getCheckedSectionsInfo = async (userId) => {
         try {
-          const response = await axios.get(`${API_ENDPOINTS.CHECKED_SECTIONS_GET(userId)}?task_id=${taskId.value}`)
+          const data = await apiService.get(`${API_ENDPOINTS.CHECKED_SECTIONS_GET(userId)}?task_id=${taskId.value}`)
           
-          if (response.data.success) {
-            console.log('Checked sections info:', response.data.data)
-            return response.data.data
+          if (data && data.success) {
+            console.log('Checked sections info:', data.data)
+            return data.data
           } else {
-            console.error('Failed to get checked sections info:', response.data.error)
+            console.error('Failed to get checked sections info:', data.error)
             return null
           }
         } catch (error) {
@@ -2472,13 +2472,13 @@ export default {
       // Delete checked sections
       const deleteCheckedSections = async (userId) => {
         try {
-          const response = await axios.delete(`${API_ENDPOINTS.CHECKED_SECTIONS_DELETE(userId)}?task_id=${taskId.value}`)
+          const data = await apiService.delete(`${API_ENDPOINTS.CHECKED_SECTIONS_DELETE(userId)}?task_id=${taskId.value}`)
           
-          if (response.data.success) {
+          if (data && data.success) {
             console.log('Successfully deleted checked sections')
             return true
           } else {
-            console.error('Failed to delete checked sections:', response.data.error)
+            console.error('Failed to delete checked sections:', data.error)
             return false
           }
         } catch (error) {
@@ -2854,14 +2854,14 @@ export default {
         policyFrameworkCacheService.clearTaskCache(taskId.value)
 
         // Call the new backend API to save selected items
-        const response = await axios.post(API_ENDPOINTS.SAVE_CHECKED_SECTIONS_JSON, requestData)
+        const data = await apiService.post(API_ENDPOINTS.SAVE_CHECKED_SECTIONS_JSON, requestData)
 
-        if (response.data) {
-          console.log('Successfully saved selected items:', response.data)
+        if (data) {
+          console.log('Successfully saved selected items:', data)
           
           uploadStatus.value = {
             type: 'success',
-            message: `Successfully saved ${response.data.total_sections} sections, ${response.data.total_policies} policies, and ${response.data.total_subpolicies} subpolicies to checked_section.json!`
+            message: `Successfully saved ${data.total_sections} sections, ${data.total_policies} policies, and ${data.total_subpolicies} subpolicies to checked_section.json!`
           }
           
           // Close content viewer and proceed to next step
@@ -2876,13 +2876,12 @@ export default {
           // Start Step 4: Generate compliances for checked sections
           await generateCompliancesForCheckedSections()
           
-          // Clear success message after 5 seconds
           setTimeout(() => {
             uploadStatus.value = null
           }, 5000)
           
         } else {
-          throw new Error(response.data.error || 'Failed to save selected sections')
+          throw new Error(data.error || 'Failed to save selected sections')
         }
         
       } catch (error) {
@@ -3018,19 +3017,10 @@ export default {
         const apiUrl = API_ENDPOINTS.GET_CHECKED_SECTIONS_WITH_COMPLIANCE || `${API_BASE_URL}/api/get-checked-sections-with-compliance/`
         console.log('Final API URL being called:', apiUrl)
         
-        const response = await axios.get(apiUrl, {
-          headers: {
-            'Authorization': `Bearer ${sessionStorage.getItem('access_token') || localStorage.getItem('access_token')}`,
-            'Content-Type': 'application/json'
-          },
-          params: {
-            user_id: sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || '1'
-          },
-          timeout: 30000 // 30 second timeout
-        })
+        const data = await apiService.get(apiUrl, { timeout: 30000 })
         
-        if (response.data.success) {
-          checkedSectionsData.value = response.data.data
+        if (data && data.success) {
+          checkedSectionsData.value = data.data
           console.log('Loaded data:', checkedSectionsData.value)
           
           // Pre-populate framework form
@@ -3119,13 +3109,13 @@ export default {
         
         console.log('Saving to database:', payload)
         
-        const response = await axios.post(API_ENDPOINTS.SAVE_EDITED_FRAMEWORK_TO_DATABASE, payload)
+        const data = await apiService.post(API_ENDPOINTS.SAVE_EDITED_FRAMEWORK_TO_DATABASE, payload)
         
-        if (response.data.success) {
-          const frameworkId = response.data.framework_id
-          const totalCompliances = response.data.total_compliances || 0
-          const totalPolicies = response.data.total_policies || 0
-          const totalSubpolicies = response.data.total_subpolicies || 0
+        if (data && data.success) {
+          const frameworkId = data.framework_id
+          const totalCompliances = data.total_compliances || 0
+          const totalPolicies = data.total_policies || 0
+          const totalSubpolicies = data.total_subpolicies || 0
           
           uploadStatus.value = {
             type: 'success',
@@ -3170,15 +3160,15 @@ export default {
         const userId = localStorage.getItem('user_id') || '1'
         
         // Call the backend API to process PDFs
-        const response = await axios.post(API_ENDPOINTS.CHECKED_SECTIONS_PROCESS_PDFS, {
+        const data = await apiService.post(API_ENDPOINTS.CHECKED_SECTIONS_PROCESS_PDFS, {
           user_id: userId,
           task_id: taskId.value
         })
         
-        if (response.data.success) {
-          console.log('Successfully processed PDFs:', response.data)
+        if (data && data.success) {
+          console.log('Successfully processed PDFs:', data)
           
-          const summary = response.data.data.summary
+          const summary = data.data.summary
           policyExtractionMessage.value = `Successfully processed ${summary.successful_extractions} PDFs`
           policyExtractionProgress.value = 100
           
@@ -3192,7 +3182,7 @@ export default {
           }, 2000)
           
         } else {
-          throw new Error(response.data.error || 'Failed to process PDFs')
+          throw new Error(data.error || 'Failed to process PDFs')
         }
         
       } catch (error) {
@@ -3219,10 +3209,10 @@ export default {
         const userId = localStorage.getItem('user_id') || '1'
         
         // Use the new endpoint to get extracted policies form data
-        const response = await axios.get(`${API_ENDPOINTS.CHECKED_SECTIONS_GET_FORM_DATA}${userId}/?task_id=${taskId.value}`)
+        const data = await apiService.get(`${API_ENDPOINTS.CHECKED_SECTIONS_GET_FORM_DATA}${userId}/?task_id=${taskId.value}`)
         
-        if (response.data.success && response.data.data.policies) {
-          const policiesData = response.data.data.policies
+        if (data && data.success && data.data && data.data.policies) {
+          const policiesData = data.data.policies
           
           // Transform the data for the form
           const transformedPolicies = policiesData.map(policy => ({
@@ -3265,14 +3255,14 @@ export default {
           }
           
           policies.value = validTransformedPolicies
-          extractedPoliciesCount.value = response.data.data.total_policies || policies.value.length
+          extractedPoliciesCount.value = data.data.total_policies || policies.value.length
           
           // Populate the form with the extracted data
           populatePolicyForm(validTransformedPolicies)
           
           goToStep(6)
         } else {
-          throw new Error(response.data.error || 'No policies found')
+          throw new Error(data.error || 'No policies found')
         }
       } catch (error) {
         console.error('Error loading extracted policies:', error)
@@ -3719,58 +3709,51 @@ export default {
         
         // Save to files first
         console.log('📦 Making API call to save files...')
-        const fileResponse = await axios.post(API_ENDPOINTS.SAVE_COMPLETE_POLICY_PACKAGE, completePackage)
+        const fileResponse = await apiService.post(API_ENDPOINTS.SAVE_COMPLETE_POLICY_PACKAGE, completePackage)
         console.log('📦 File save response:', fileResponse)
         
-        if (fileResponse.status === 200) {
-          console.log('✅ Files saved successfully')
+        console.log('✅ Files saved successfully')
+        
+        // Now save to database
+        try {
+          console.log('🗄️ Saving to database...')
+          console.log('🗄️ API endpoint for database:', API_ENDPOINTS.SAVE_FRAMEWORK_TO_DATABASE)
           
-          // Now save to database
-          try {
-            console.log('🗄️ Saving to database...')
-            console.log('🗄️ API endpoint for database:', API_ENDPOINTS.SAVE_FRAMEWORK_TO_DATABASE)
+          console.log('🗄️ Making API call to save to database...')
+          const result = await apiService.post(API_ENDPOINTS.SAVE_FRAMEWORK_TO_DATABASE, {
+            task_id: taskId.value || 'default_task'
+          })
+          console.log('🗄️ Database save response:', result)
+          
+          if (result && result.framework_id) {
+            console.log('✅ Database save successful:', result)
             
-            console.log('🗄️ Making API call to save to database...')
-            const dbResponse = await axios.post(API_ENDPOINTS.SAVE_FRAMEWORK_TO_DATABASE, {
-              task_id: taskId.value || 'default_task'
-            })
-            console.log('🗄️ Database save response:', dbResponse)
-            
-            if (dbResponse.status === 200) {
-              const result = dbResponse.data
-              console.log('✅ Database save successful:', result)
-              
-              uploadStatus.value = {
-                type: 'success',
-                message: `Framework "${policyDetails.value.title || 'Untitled'}" has been created successfully! 
-                         Framework ID: ${result.framework_id}, 
-                         Policies: ${result.total_policies}, 
-                         Sub-policies: ${result.total_sub_policies}, 
-                         Compliance items: ${result.total_compliance_items}`
-              }
-              
-              showCongratulationsModal.value = true
-              
-              // Clear persistent state only when entire process is complete
-              clearProcessingState()
-              
-              setTimeout(() => {
-                uploadStatus.value = null
-              }, 10000)
-            }
-          } catch (dbError) {
-            console.error('❌ Error saving to database:', dbError)
             uploadStatus.value = {
-              type: 'warning',
-              message: `Files saved successfully, but database save failed: ${dbError.response?.data?.error || dbError.message}`
+              type: 'success',
+              message: `Framework "${policyDetails.value.title || 'Untitled'}" has been created successfully!\nFramework ID: ${result.framework_id}\nPolicies: ${result.total_policies}\nSub-policies: ${result.total_sub_policies}\nCompliance items: ${result.total_compliance_items}`
             }
+            
+            showCongratulationsModal.value = true
+            
+            // Clear persistent state only when entire process is complete
+            clearProcessingState()
+            
+            setTimeout(() => {
+              uploadStatus.value = null
+            }, 10000)
+          }
+        } catch (dbError) {
+          console.error('❌ Error saving to database:', dbError)
+          uploadStatus.value = {
+            type: 'warning',
+            message: `Files saved successfully, but database save failed: ${dbError.message}`
           }
         }
       } catch (error) {
         console.error('❌ Error saving complete package:', error)
         uploadStatus.value = {
           type: 'error',
-          message: error.response?.data?.error || 'Failed to save package. Please try again.'
+          message: error.message || 'Failed to save package. Please try again.'
         }
       }
     }
@@ -3835,7 +3818,7 @@ export default {
       policyFrameworkCacheService.clearAllCache()
       moduleAiAnalysisService.clearCache()
       try {
-        await axiosInstance.post(API_ENDPOINTS.AI_CACHE_CLEAR)
+        await apiService.post(API_ENDPOINTS.AI_CACHE_CLEAR)
       } catch (e) {
         console.warn('Backend AI cache clear failed (continuing):', e)
       }

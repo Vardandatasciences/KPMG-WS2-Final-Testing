@@ -311,7 +311,7 @@ def get_module_configs(request):
         logger.error(f"Error getting module configs: {str(e)}")
         return Response({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -409,7 +409,7 @@ def bulk_update_module_configs(request):
         logger.error(f"Error bulk updating module configs: {str(e)}")
         return Response({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -497,7 +497,7 @@ def get_page_configs(request):
         logger.error(f"Error getting page configs: {str(e)}")
         return Response({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -648,7 +648,7 @@ def bulk_update_page_configs(request):
         logger.error(f"Error bulk updating page configs: {str(e)}")
         return Response({
             'status': 'error',
-            'message': str(e)
+            'message': 'An internal server error occurred.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -734,7 +734,7 @@ def archive_retention_record(request):
 
     except Exception as e:
         logger.error(f"Error archiving retention record: {str(e)}")
-        return Response({'status': 'error', 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'status': 'error', 'message': 'An internal server error occurred.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @csrf_exempt
@@ -784,7 +784,7 @@ def unarchive_retention_record(request):
 
     except Exception as e:
         logger.error(f"Error unarchiving retention record: {str(e)}")
-        return Response({'status': 'error', 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'status': 'error', 'message': 'An internal server error occurred.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 # =====================================================
@@ -870,7 +870,7 @@ def pause_deletion(request):
 
     except Exception as e:
         logger.error(f"Error pausing deletion: {str(e)}")
-        return Response({'status': 'error', 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'status': 'error', 'message': 'An internal server error occurred.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @csrf_exempt
@@ -939,7 +939,7 @@ def resume_deletion(request):
 
     except Exception as e:
         logger.error(f"Error resuming deletion: {str(e)}")
-        return Response({'status': 'error', 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'status': 'error', 'message': 'An internal server error occurred.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 # =====================================================
@@ -1026,7 +1026,7 @@ def extend_retention(request):
 
     except Exception as e:
         logger.error(f"Error extending retention: {str(e)}")
-        return Response({'status': 'error', 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'status': 'error', 'message': 'An internal server error occurred.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 # =====================================================
@@ -1133,7 +1133,7 @@ def delete_now(request):
 
     except Exception as e:
         logger.error(f"Error deleting retention record now: {str(e)}")
-        return Response({'status': 'error', 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'status': 'error', 'message': 'An internal server error occurred.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 # =====================================================
@@ -1217,7 +1217,7 @@ def retention_dashboard_overview(request):
         }, status=status.HTTP_200_OK)
     except Exception as e:
         logger.error(f"Error getting retention dashboard overview: {str(e)}")
-        return Response({'status': 'error', 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'status': 'error', 'message': 'An internal server error occurred.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @csrf_exempt
@@ -1299,7 +1299,7 @@ def retention_dashboard_expiring(request):
         return Response({'status': 'success', 'data': data}, status=status.HTTP_200_OK)
     except Exception as e:
         logger.error(f"Error getting expiring records: {str(e)}")
-        return Response({'status': 'error', 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'status': 'error', 'message': 'An internal server error occurred.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @csrf_exempt
@@ -1370,7 +1370,7 @@ def retention_dashboard_archived(request):
         return Response({'status': 'success', 'data': data}, status=status.HTTP_200_OK)
     except Exception as e:
         logger.error(f"Error getting archived records: {str(e)}")
-        return Response({'status': 'error', 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'status': 'error', 'message': 'An internal server error occurred.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @csrf_exempt
@@ -1442,7 +1442,7 @@ def retention_dashboard_paused(request):
         return Response({'status': 'success', 'data': data}, status=status.HTTP_200_OK)
     except Exception as e:
         logger.error(f"Error getting paused records: {str(e)}")
-        return Response({'status': 'error', 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'status': 'error', 'message': 'An internal server error occurred.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @csrf_exempt
@@ -1528,4 +1528,4 @@ def retention_dashboard_audit_trail(request):
         return Response({'status': 'success', 'data': data}, status=status.HTTP_200_OK)
     except Exception as e:
         logger.error(f"Error getting audit trail: {str(e)}")
-        return Response({'status': 'error', 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'status': 'error', 'message': 'An internal server error occurred.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

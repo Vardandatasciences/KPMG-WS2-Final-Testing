@@ -4,6 +4,7 @@ from rest_framework.decorators import api_view, permission_classes, authenticati
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.authentication import SessionAuthentication, BasicAuthentication
+from rest_framework.views import APIView
 from django.contrib.auth import authenticate, login as auth_login
 from rest_framework_simplejwt.tokens import RefreshToken
 from ...serializers import (
@@ -1109,7 +1110,7 @@ def debug_user_permissions_endpoint(request):
         logger.error(f"[RBAC ENDPOINT DEBUG] Error: {str(e)}")
         import traceback
         logger.error(f"[RBAC ENDPOINT DEBUG] Traceback: {traceback.format_exc()}")
-        return Response({'error': f'Debug failed: {str(e)}'}, status=500)
+        return Response({'error': f'Debug failed: An internal server error occurred'}, status=500)
 
 
 @api_view(['GET'])  
@@ -1218,7 +1219,7 @@ def test_user_permissions_comprehensive(request):
         logger.error(f"[RBAC COMPREHENSIVE TEST] Error: {str(e)}")
         import traceback
         logger.error(f"[RBAC COMPREHENSIVE TEST] Traceback: {traceback.format_exc()}")
-        return Response({'error': f'Comprehensive test failed: {str(e)}'}, status=500)
+        return Response({'error': f'Comprehensive test failed: An internal server error occurred'}, status=500)
 
 # Add GET parameter validation helper
 def validate_get_parameters(request, allowed_params):
@@ -1400,7 +1401,7 @@ def incident_by_id(request, incident_id):
                 logLevel="WARN",
                 ipAddress=get_client_ip(request)
             )
-            return Response({'success': False, 'message': str(e)}, status=400)
+            return Response({'success': False, 'message': 'An internal server error occurred.'}, status=400)
         
         # MULTI-TENANCY: Get the incident filtered by tenant
         incident = Incident.objects.get(IncidentId=validated_incident_id, tenant_id=tenant_id)
@@ -1558,7 +1559,7 @@ def update_incident_by_id(request, incident_id):
         try:
             validated_incident_id = validate_path_parameter(incident_id, 'incident_id', 'integer')
         except ValidationError as e:
-            return Response({'success': False, 'message': str(e)}, status=400)
+            return Response({'success': False, 'message': 'An internal server error occurred.'}, status=400)
         
         # RBAC Debug - Log user access attempt
         debug_info = debug_user_permissions(request, "EDIT_INCIDENT", "incident", validated_incident_id)
@@ -2445,7 +2446,7 @@ def update_incident_status(request, incident_id):
         debug_print(f"Error updating incident status: {str(e)}")
         return Response({
             'success': False,
-            'message': str(e),
+            'message': 'An internal server error occurred.',
             'IncidentId': incident_id
         }, status=500)
 
@@ -4808,7 +4809,7 @@ def audit_finding_detail(request, compliance_id):
         try:
             validated_compliance_id = validate_path_parameter(compliance_id, 'compliance_id', 'integer')
         except ValidationError as e:
-            return Response({'success': False, 'message': str(e)}, status=400)
+            return Response({'success': False, 'message': 'An internal server error occurred.'}, status=400)
         
         debug_print(f"Fetching audit finding detail for compliance ID: {validated_compliance_id}")
         
@@ -4948,7 +4949,7 @@ def audit_finding_incident_detail(request, incident_id):
         try:
             validated_incident_id = validate_path_parameter(incident_id, 'incident_id', 'integer')
         except ValidationError as e:
-            return Response({'success': False, 'message': str(e)}, status=400)
+            return Response({'success': False, 'message': 'An internal server error occurred.'}, status=400)
         
         # Get the specific incident (audit finding or compliance gap)
         incident = Incident.objects.get(IncidentId=validated_incident_id, Origin__in=['Audit Finding', 'AuditFinding', 'Compliance Gap'])
@@ -7264,7 +7265,7 @@ def generate_analysis(request):
         import traceback
         debug_print(f"Error generating analysis: {str(e)}")
         debug_print(traceback.format_exc())
-        return Response({"success": False, "error": f"Error generating analysis: {str(e)}"}, status=500)
+        return Response({"success": False, "error": f"Error generating analysis: An internal server error occurred"}, status=500)
 
 
 
@@ -7818,18 +7819,8 @@ def process_mitigation_s3_urls(assessment_data):
         return assessment_data
 
 @method_decorator(csrf_exempt, name='dispatch')
-class FileUploadView(View):
-    def dispatch(self, request, *args, **kwargs):
-        """Override dispatch to add authentication check"""
-        # 1. AUTHENTICATION AND AUTHORIZATION
-        # Temporarily disabled authentication for file upload
-        # if not request.user.is_authenticated:
-        #     return JsonResponse({
-        #         'success': False, 
-        #         'error': 'Authentication required for file upload'
-        #     }, status=401)
-        
-        return super().dispatch(request, *args, **kwargs)
+class FileUploadView(APIView):
+    permission_classes = [IsAuthenticated]
     
     def post(self, request):
         handler = SecureFileUploadHandler()
@@ -8249,7 +8240,7 @@ def upload_evidence_file(request):
                     debug_print(f"DEBUG: Error creating temporary file: {str(e)}")
                     return JsonResponse({
                         'success': False,
-                        'error': f'Error saving file temporarily: {str(e)}'
+                        'error': f'Error saving file temporarily: An internal server error occurred'
                     }, status=500)
                 
                 try:
@@ -8415,7 +8406,7 @@ def upload_evidence_file(request):
         
         return JsonResponse({
             'success': False,
-            'error': f'Upload failed: {str(e)}'
+            'error': f'Upload failed: An internal server error occurred'
         }, status=500)
 
 @api_view(['GET'])
@@ -8889,7 +8880,7 @@ def generate_analysis(request):
         import traceback
         debug_print(f"Error generating analysis: {str(e)}")
         debug_print(traceback.format_exc())
-        return Response({"success": False, "error": f"Error generating analysis: {str(e)}"}, status=500)
+        return Response({"success": False, "error": f"Error generating analysis: An internal server error occurred"}, status=500)
 
 
 class SecureDatabaseManager:

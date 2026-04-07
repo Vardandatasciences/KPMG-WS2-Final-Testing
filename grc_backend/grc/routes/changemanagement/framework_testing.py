@@ -272,7 +272,7 @@ def check_framework_update(framework_name: str, last_updated_date: str, api_key:
             "has_update": False,
             "latest_update_date": None,
             "document_url": None,
-            "error": f"JSON parse error: {str(e)}"
+            "error": f"JSON parse error: An internal server error occurred"
         }
     except Exception as e:
         debug_print(f"❌ Unexpected Error: {str(e)}")
