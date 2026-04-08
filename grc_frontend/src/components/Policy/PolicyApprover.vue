@@ -1003,7 +1003,7 @@ export default {
         const response = await apiService.get(API_ENDPOINTS.USER_ROLE);
         console.log('User role API response:', response);
         
-        if (response.success) {
+        if (response && response.success) {
           this.currentUserId = response.user_id;
           this.currentUserName = response.username || response.user_name || '';
           
@@ -1278,7 +1278,6 @@ export default {
         this.selectedFrameworkId = ''
         this.sessionFrameworkId = null
         
-        // Clear from session storage
         await apiService.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, {
           frameworkId: null
         })
@@ -1674,7 +1673,6 @@ export default {
             task.dbStatus = policyStatus.status;
           }
         });
-      }
     },
 
     // Update the method to fetch policies and policy approvals
@@ -3582,7 +3580,6 @@ export default {
       }
       
       console.log('Resubmitting subpolicy with ID:', subpolicy.SubPolicyId);
-      console.log('Changes detected in inline edit form');
       
       // Store original values before resubmitting
       const previousVersion = {
@@ -3593,17 +3590,20 @@ export default {
       // Mark as resubmitted
       subpolicy.resubmitted = true;
       
-      // Prepare data to send to the backend
-      const updateData = {
+      // Prepare data
+      const finalResubmitData = {
         Control: subpolicy.Control,
         Description: subpolicy.Description,
-        previousVersion: previousVersion,
+        previousVersion: {
+          Description: subpolicy.originalDescription,
+          Control: subpolicy.originalControl
+        },
         SubPolicyId: subpolicy.SubPolicyId
       };
       
-      // Send the updated subpolicy data to the resubmit endpoint
-      apiService.put(API_ENDPOINTS.SUBPOLICY_RESUBMIT(subpolicy.SubPolicyId), updateData)
-      .then(response => {
+      // Submit
+      apiService.put(API_ENDPOINTS.SUBPOLICY_RESUBMIT(subpolicy.SubPolicyId), finalResubmitData)
+        .then(response => {
           console.log('Subpolicy resubmitted successfully:', response);
           
           // Update the UI to show resubmitted status
@@ -3619,26 +3619,26 @@ export default {
           }
           
           // Show success message
-                  PopupService.success(`Subpolicy "${subpolicy.SubPolicyName}" resubmitted successfully!`, 'Subpolicy Resubmitted');
-        this.sendPushNotification({
-          title: 'Subpolicy Resubmitted',
-          message: `Subpolicy "${subpolicy.SubPolicyName}" resubmitted successfully!`,
+          PopupService.success(`Subpolicy "${subpolicy.SubPolicyName}" resubmitted successfully!`, 'Subpolicy Resubmitted');
+          this.sendPushNotification({
+            title: 'Subpolicy Resubmitted',
+            message: `Subpolicy "${subpolicy.SubPolicyName}" resubmitted successfully!`,
             category: 'policy',
             priority: 'medium',
             user_id: this.currentUserId || 'default_user'
           });
           
           // Hide the edit form
-        this.hideEditFormInline(subpolicy);
-        
+          this.hideEditFormInline(subpolicy);
+          
           // Close the modal after successful resubmission
           this.closeSubpoliciesModal();
           
           // Refresh the data
           this.fetchRejectedSubpolicies();
           this.fetchPolicies();
-      })
-      .catch(error => {
+        })
+        .catch(error => {
           console.error('Error resubmitting subpolicy:', error.response || error);
           PopupService.error(`Error resubmitting subpolicy: ${error.response?.data?.error || error.message}`, 'Resubmission Error');
           this.sendPushNotification({
@@ -3648,7 +3648,7 @@ export default {
             priority: 'high',
             user_id: this.currentUserId || 'default_user'
           });
-      });
+        });
     },
     getSubpolicyVersion(subpolicy) {
       if (subpolicy.version) {

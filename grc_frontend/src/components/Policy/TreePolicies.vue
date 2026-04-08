@@ -141,7 +141,6 @@
   
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
-import axios from 'axios'
 import apiService from '@/services/apiService'
 import CustomDropdown from '../CustomDropdown.vue'
 import { API_ENDPOINTS, API_BASE_URL } from '@/config/api.js'

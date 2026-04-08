@@ -21,7 +21,6 @@ const responseCache = new Map();   // For caching: url -> { data, timestamp }
 const CACHE_TTL = 30000; // 30 seconds default TTL
 
 // --- Helpers ---
-const getTenantId = () => localStorage.getItem('tenant_id') || sessionStorage.getItem('tenant_id');
 
 const purgeTokens = () => {
   ['access_token', 'refresh_token', 'session_token', 'token', 'jwt_token'].forEach(k => {
@@ -56,19 +55,10 @@ apiClient.interceptors.request.use((config) => {
     globalLoading.value = true;
   }
 
-  // 1. Multi-Tenancy & Identity: Inject context
-  const tenantId = getTenantId();
+  // 1. Identity: Inject context
   const userId = localStorage.getItem('user_id');
 
-  if (tenantId) {
-    config.headers['X-Tenant-Id'] = tenantId;
-    if (config.method === 'get') {
-      config.params = { ...config.params, tenant_id: tenantId };
-    }
-    if (['post', 'put', 'patch'].includes(config.method) && config.data && typeof config.data === 'object' && !(config.data instanceof FormData)) {
-      if (!config.data.tenant_id) config.data.tenant_id = tenantId;
-    }
-  }
+
 
   if (userId) {
     if (config.method === 'get' && !config.params?.user_id) {

@@ -2527,10 +2527,11 @@
   <script>
 import './TT.css'
 import CustomDropdown from '../CustomDropdown.vue'
-import { apiService } from '@/services/apiService'
+import apiService from '@/services/apiService'
 import policyDataService from '@/services/policyService'
 import { PopupService, PopupModal } from '@/modules/popup'  // Fix the import path
 import {  API_ENDPOINTS } from '../../config/api.js'
+
 
   export default {
   name: 'TT',
@@ -2958,7 +2959,7 @@ import {  API_ENDPOINTS } from '../../config/api.js'
     },
     async sendPushNotification(notificationData) {
       try {
-        const response = await apiService.post(API_ENDPOINTS.PUSH_NOTIFICATION, notificationData);
+        await apiService.post(API_ENDPOINTS.PUSH_NOTIFICATION, notificationData);
         console.log('Push notification sent successfully');
       } catch (error) {
         console.error('Error sending push notification:', error);
@@ -3390,12 +3391,6 @@ import {  API_ENDPOINTS } from '../../config/api.js'
           })
         };
 
-        console.log('Submitting framework data:', frameworkData);
-        console.log('API_BASE_URL:', API_BASE_URL);
-        console.log('API_BASE_URL_FULL:', API_BASE_URL_FULL);
-        console.log('Full URL:', `${API_BASE_URL_FULL}/tailoring/create-framework/`);
-
-        // Send as JSON
         const response = await apiService.post(
           `/api/tailoring/create-framework/`,
           frameworkData

@@ -2632,10 +2632,11 @@
   <script>
 import './VV.css'
 import CustomDropdown from '../CustomDropdown.vue'
-import { apiService } from '@/services/apiService'
+import apiService from '@/services/apiService'
 import { PopupService } from '@/modules/popup'  // Fix the import path
 
 import { API_ENDPOINTS } from '../../config/api.js'
+
 
   export default {
 name: 'VV',

@@ -27,37 +27,51 @@ def get_tenant_from_request(request):
 def get_tenant_id_from_request(request):
     """
     Get tenant_id from request object.
-
-    Primary sources (for backwards compatibility with existing code):
-    1. ``request.tenant_id`` (set by middleware/decorators)
-    2. ``request.tenant.tenant_id``
-
-    If those are not available (common in local/dev environments where the
-    subdomain-based tenant middleware is not active), we fall back to the
-    more robust resolver from ``grc.utils.tenant_context`` which can infer
-    the tenant from the JWT, the authenticated user, or the session.
+    
+    PRIMARY SOURCE OF TRUTH: request.user (resolved by UnifiedJWTAuthentication)
     """
-    # Existing behaviour first
-    if hasattr(request, "tenant_id"):
+    # 1. Prioritize pre-resolved tenant on request (set by middleware or previous decorators)
+    if hasattr(request, "tenant_id") and request.tenant_id:
         return request.tenant_id
+    
     if hasattr(request, "tenant") and request.tenant:
-        # ``tenant`` may be either a model instance or a raw ID
         if hasattr(request.tenant, "tenant_id"):
             return request.tenant.tenant_id
         return request.tenant
 
-    # Fallback: try the advanced resolver so that endpoints which rely
-    # on tenant_id (like audit task-details) still work when middleware
-    # hasn't attached a tenant (e.g. 127.0.0.1 / localhost access).
+    # 2. Extract from Authenticated User
+    if hasattr(request, 'user') and request.user and request.user.is_authenticated:
+        # Check for tenant_id attribute on User object
+        tid = getattr(request.user, 'tenant_id', None)
+        if tid:
+            request.tenant_id = tid # Cache it for subsequent calls
+            return tid
+        
+        # Fallback: Query Users model if not on request.user
+        try:
+            from .models import Users
+            user_id = getattr(request.user, 'UserId', getattr(request.user, 'id', None))
+            if user_id:
+                user_obj = Users.objects.filter(UserId=user_id).first()
+                if user_obj and user_obj.tenant_id:
+                    request.tenant_id = user_obj.tenant_id
+                    return user_obj.tenant_id
+        except Exception:
+            pass
+
+    # 3. Fallback: try the advanced resolver from tenant_context (JWT/Subdomain resolution)
     try:
         from .utils.tenant_context import (
             get_tenant_id_from_request as resolve_tenant_from_context,
         )
-
-        return resolve_tenant_from_context(request)
+        resolved_tid = resolve_tenant_from_context(request)
+        if resolved_tid:
+            request.tenant_id = resolved_tid
+            return resolved_tid
     except Exception:
-        # If anything goes wrong, keep the old semantics and return None.
-        return None
+        pass
+
+    return None
 
 
 def filter_queryset_by_tenant(queryset, tenant_id):
@@ -86,235 +100,101 @@ def filter_queryset_by_tenant(queryset, tenant_id):
 
 def require_tenant(view_func):
     """
-    Decorator to ensure request has tenant context
-    Returns 403 error if tenant is not found
+    SECURE decorator to ensure request has valid tenant context.
     
-    For file uploads, tries to get tenant from user_id in POST data
-    For GET requests, tries to get tenant from authenticated user
-    
-    Usage:
-        @require_tenant
-        @api_view(['GET'])
-        def my_view(request):
-            tenant = request.tenant
-            ...
+    ENFORCEMENT RULES:
+    1. ALWAYS resolve tenant from authenticated session (JWT/Cookies) first.
+    2. If a tenant_id is passed by client (body/params), VALIDATE it matches session.
+    3. REJECT request if tenant context is missing or mismatched (BOLA protection).
     """
     @wraps(view_func)
     def wrapper(request, *args, **kwargs):
-        # SECURE: Prioritize authenticated user from current session (Cookie/JWT)
-        # This ensures compatibility with our hardened cookie-based authentication
-        if hasattr(request, 'user') and request.user and request.user.is_authenticated:
-            user_id = getattr(request.user, 'UserId', getattr(request.user, 'id', None))
-            if user_id:
-                try:
-                    from .models import Users, Tenant
-                    # Optimized lookup: trust the user's tenant_id if already present on object
-                    tid = getattr(request.user, 'tenant_id', None)
-                    if not tid:
-                        user_obj = Users.objects.get(UserId=user_id)
-                        tid = getattr(user_obj, 'tenant_id', None)
-                    
-                    if tid:
-                        request.tenant_id = tid
-                        # Only hydrate Tenant object if explicitly needed, otherwise use tenant_id
-                        if not hasattr(request, 'tenant') or request.tenant is None:
-                            try:
-                                request.tenant = Tenant.objects.get(tenant_id=tid, status='active')
-                            except Tenant.DoesNotExist:
-                                pass
-                        return view_func(request, *args, **kwargs)
-                except Exception as e:
-                    logger.debug(f"[Tenant Utils] Failed resolving tenant from authenticated user: {e}")
-
-        # Extra debugging for tenant resolution...
-        try:
-            logger.debug(
-                "[Tenant Utils] require_tenant called: method=%s path=%s content_type=%s",
-                request.method,
-                getattr(request, "path", ""),
-                request.META.get("CONTENT_TYPE", ""),
-            )
-            if request.method == "POST" and hasattr(request, "POST"):
-                debug_user_id = request.POST.get("user_id")
-                logger.debug(
-                    "[Tenant Utils] POST user_id=%s for path=%s",
-                    debug_user_id,
-                    getattr(request, "path", ""),
-                )
-        except Exception as e:
-            logger.warning(f"[Tenant Utils] Debug logging error in require_tenant: {e}")
-
-        # Check if tenant is already set
-        if hasattr(request, 'tenant') and request.tenant is not None:
-            return view_func(request, *args, **kwargs)
-        # Some middleware/view code may set tenant_id without hydrating Tenant object.
-        # In that case, allow the request through and let views use tenant_id directly.
-        if hasattr(request, 'tenant_id') and request.tenant_id is not None:
-            return view_func(request, *args, **kwargs)
+        from .models import Users, Tenant
         
-        # For file uploads (multipart/form-data), try to get tenant from user_id in POST data
-        if request.method == 'POST' and hasattr(request, 'POST'):
-            user_id = request.POST.get('user_id')
-            if user_id:
+        # 1. Resolve Secure Tenant Context (Server-Side)
+        session_tenant_id = None
+        
+        # Check authenticated user
+        if hasattr(request, 'user') and request.user and request.user.is_authenticated:
+            session_tenant_id = getattr(request.user, 'tenant_id', None)
+            if not session_tenant_id:
                 try:
-                    # Import models using relative import (same package level)
-                    from .models import Users, Tenant
-                    user = Users.objects.get(UserId=user_id)
-                    if hasattr(user, 'tenant_id') and user.tenant_id:
-                        # Set tenant on request for downstream use
-                        try:
-                            tenant = Tenant.objects.get(tenant_id=user.tenant_id)
-                            request.tenant = tenant
-                            request.tenant_id = user.tenant_id
-                            logger.info(f"[Tenant Utils] Got tenant {user.tenant_id} from user_id {user_id} in POST data")
-                            return view_func(request, *args, **kwargs)
-                        except Tenant.DoesNotExist:
-                            logger.warning(f"[Tenant Utils] Tenant {user.tenant_id} not found for user {user_id}")
-                except Exception as e:
-                    logger.warning(f"[Tenant Utils] Error getting tenant from user_id {user_id}: {e}")
+                    user_id = getattr(request.user, 'UserId', getattr(request.user, 'id', None))
+                    user_obj = Users.objects.filter(UserId=user_id).first()
+                    if user_obj:
+                        session_tenant_id = user_obj.tenant_id
+                except Exception:
+                    pass
+        
+        # Try JWT fallback if no user object (early auth stage)
+        if not session_tenant_id:
+            auth_header = request.headers.get('Authorization', '') or request.META.get('HTTP_AUTHORIZATION', '')
+            if auth_header.startswith('Bearer '):
+                try:
+                    from .authentication import verify_jwt_token
+                    token = auth_header.split(' ', 1)[1]
+                    payload = verify_jwt_token(token)
+                    if payload:
+                        session_tenant_id = payload.get('tenant_id') or payload.get('tenantId')
+                except Exception:
+                    pass
 
-        # For POST (e.g. ai-incident-save): get user_id from JSON body (request.data) or JWT, then resolve tenant
-        if request.method == 'POST':
-            user_id = None
-            tenant_id_from_jwt = None
-
-            # Parse JSON body when DRF hasn't wrapped the request yet.
-            body_data = None
-            if request.content_type and 'application/json' in request.content_type:
+        # 2. Extract Client-Supplied Tenant (for validation purposes)
+        client_tenant_id = None
+        if request.method == 'GET':
+            client_tenant_id = request.GET.get('tenant_id') or request.GET.get('tenantId')
+        elif request.method in ['POST', 'PUT', 'PATCH']:
+            if getattr(request, 'data', None) and isinstance(request.data, dict):
+                client_tenant_id = request.data.get('tenant_id') or request.data.get('tenantId')
+            elif request.content_type and 'application/json' in request.content_type:
                 try:
                     raw_body = getattr(request, 'body', None)
                     if raw_body:
-                        parsed = json.loads(raw_body) if isinstance(raw_body, (bytes, str)) else raw_body
-                        if isinstance(parsed, dict):
-                            body_data = parsed
-                except Exception as e:
-                    logger.debug(f"[Tenant Utils] Failed parsing POST JSON body: {e}")
-
-            # If tenant_id is explicitly provided in the request body, trust it and
-            # skip any DB lookups (helps prevent failures when DB connections are under pressure).
-            tenant_id_from_body = None
-            if body_data is not None:
-                tenant_id_from_body = body_data.get('tenant_id') or body_data.get('tenantId')
-            elif getattr(request, 'data', None) and isinstance(request.data, dict):
-                tenant_id_from_body = request.data.get('tenant_id') or request.data.get('tenantId')
-
-            if tenant_id_from_body is not None and tenant_id_from_body != '':
-                try:
-                    request.tenant_id = int(tenant_id_from_body)
+                        data = json.loads(raw_body)
+                        client_tenant_id = data.get('tenant_id') or data.get('tenantId')
                 except Exception:
-                    request.tenant_id = tenant_id_from_body
-                return view_func(request, *args, **kwargs)
-            # Prefer DRF parsed body so we don't consume request.body
-            if getattr(request, 'data', None) and isinstance(request.data, dict):
-                user_id = request.data.get('user_id') or request.data.get('userId')
-            if not user_id and request.content_type and 'application/json' in request.content_type:
+                    pass
+            elif hasattr(request, 'POST'):
+                client_tenant_id = request.POST.get('tenant_id') or request.POST.get('tenantId')
+
+        # 3. Security Validation (Cross-Check)
+        if session_tenant_id:
+            # Normalize to integer if possible
+            try: session_tenant_id = int(session_tenant_id)
+            except: pass
+            
+            if client_tenant_id:
+                try: client_tenant_id = int(client_tenant_id)
+                except: pass
+                
+                # BOLA PROTECTION: Client-supplied ID MUST match session ID
+                if str(client_tenant_id) != str(session_tenant_id):
+                    logger.warning(f"[SECURITY BOLA] Tenant mismatch for user {getattr(request.user, 'UserId', 'Unknown')}. Session: {session_tenant_id}, Client: {client_tenant_id}")
+                    return JsonResponse({
+                        'error': 'Access Denied',
+                        'detail': 'Tenant context mismatch'
+                    }, status=403)
+            
+            # Context is valid
+            request.tenant_id = session_tenant_id
+            
+            # Optional: Hydrate request.tenant object if not already present
+            if not hasattr(request, 'tenant') or request.tenant is None:
                 try:
-                    if body_data is not None:
-                        user_id = body_data.get('user_id') or body_data.get('userId')
-                    else:
-                        import json as _json
-                        body = getattr(request, 'body', None)
-                        if body:
-                            data = _json.loads(body) if isinstance(body, (bytes, str)) else body
-                            if isinstance(data, dict):
-                                user_id = data.get('user_id') or data.get('userId')
-                except Exception as e:
-                    logger.debug(f"[Tenant Utils] JSON body parse for user_id: {e}")
-            if not user_id:
-                auth_header = request.headers.get('Authorization', '') or request.META.get('HTTP_AUTHORIZATION', '')
-                if auth_header.startswith('Bearer '):
-                    try:
-                        from ..authentication import verify_jwt_token
-                        token = auth_header.split(' ', 1)[1]
-                        payload = verify_jwt_token(token)
-                        if payload:
-                            user_id = payload.get('user_id') or payload.get('userId')
-                            tenant_id_from_jwt = payload.get('tenant_id') or payload.get('tenantId')
-                    except Exception as e:
-                        logger.debug(f"[Tenant Utils] JWT extraction for POST: {e}")
-            # If we can resolve tenant_id from JWT payload, avoid DB lookups (prevents "Too many connections")
-            # and allow views to filter with tenant_id directly.
-            if tenant_id_from_jwt is not None:
-                request.tenant_id = tenant_id_from_jwt
-                return view_func(request, *args, **kwargs)
-            if user_id is not None:
-                try:
-                    from .models import Users, Tenant
-                    uid = int(user_id) if user_id not in (None, '') else None
-                    if uid is not None:
-                        user = Users.objects.get(UserId=uid)
-                        tid = getattr(user, 'tenant_id', None)
-                        if tid is not None:
-                            tenant = Tenant.objects.get(tenant_id=tid, status='active')
-                            request.tenant = tenant
-                            request.tenant_id = tid
-                            logger.info(f"[Tenant Utils] Got tenant {tid} from user_id {user_id} (JSON/JWT)")
-                            return view_func(request, *args, **kwargs)
-                        logger.warning(f"[Tenant Utils] User {user_id} has no tenant_id")
-                except Users.DoesNotExist:
-                    logger.warning(f"[Tenant Utils] User not found for user_id={user_id!r}")
-                except (ValueError, TypeError):
-                    logger.warning(f"[Tenant Utils] Invalid user_id={user_id!r}")
+                    request.tenant = Tenant.objects.get(tenant_id=session_tenant_id, status='active')
                 except Tenant.DoesNotExist:
-                    logger.warning(f"[Tenant Utils] Tenant not found or inactive for user {user_id}")
-                except Exception as e:
-                    logger.warning(f"[Tenant Utils] Error resolving tenant for user_id {user_id}: {e}")
+                    # If tenant record missing/inactive, still allow through if we have the ID, 
+                    # but let views handle "No tenant found" if needed.
+                    pass
+            
+            return view_func(request, *args, **kwargs)
         
-        # For GET requests, try to get tenant from authenticated user or JWT token
-        if request.method == 'GET':
-            try:
-                from .models import Users, Tenant
-                user_id = None
-                tenant_id_from_jwt = None
-                
-                # Try to get user_id from request.user
-                if hasattr(request, 'user') and request.user:
-                    if hasattr(request.user, 'UserId'):
-                        user_id = request.user.UserId
-                    elif hasattr(request.user, 'id'):
-                        user_id = request.user.id
-                
-                # Try to get user_id from JWT token if not found
-                if not user_id:
-                    auth_header = request.headers.get('Authorization', '')
-                    if auth_header.startswith('Bearer '):
-                        try:
-                            from ..authentication import verify_jwt_token
-                            token = auth_header.split(' ')[1]
-                            payload = verify_jwt_token(token)
-                            if payload and 'user_id' in payload:
-                                user_id = payload['user_id']
-                                tenant_id_from_jwt = payload.get('tenant_id') or payload.get('tenantId')
-                        except Exception as e:
-                            logger.debug(f"[Tenant Utils] JWT extraction failed: {e}")
-                # If tenant_id exists in JWT payload, avoid DB lookups and allow the request.
-                if tenant_id_from_jwt is not None:
-                    request.tenant_id = tenant_id_from_jwt
-                    return view_func(request, *args, **kwargs)
-                
-                # Try to get user_id from session if still not found
-                if not user_id and hasattr(request, 'session'):
-                    user_id = request.session.get('user_id') or request.session.get('grc_user_id')
-                
-                # If we have a user_id, try to get tenant from user
-                if user_id:
-                    try:
-                        user = Users.objects.get(UserId=user_id)
-                        if hasattr(user, 'tenant_id') and user.tenant_id:
-                            try:
-                                tenant = Tenant.objects.get(tenant_id=user.tenant_id, status='active')
-                                request.tenant = tenant
-                                request.tenant_id = user.tenant_id
-                                logger.debug(f"[Tenant Utils] Got tenant {user.tenant_id} from user_id {user_id} for GET request")
-                                return view_func(request, *args, **kwargs)
-                            except Tenant.DoesNotExist:
-                                logger.warning(f"[Tenant Utils] Tenant {user.tenant_id} not found or inactive for user {user_id}")
-                    except Users.DoesNotExist:
-                        logger.warning(f"[Tenant Utils] User {user_id} not found")
-                    except Exception as e:
-                        logger.warning(f"[Tenant Utils] Error getting tenant from user_id {user_id}: {e}")
-            except Exception as e:
-                logger.warning(f"[Tenant Utils] Error in tenant extraction for GET request: {e}")
+        # 4. Fail-Safe: No valid tenant context found
+        logger.warning(f"[Tenant Utils] Tenant required but missing for {request.method} {request.path}")
+        return JsonResponse({
+            'error': 'Tenant context not found',
+            'detail': 'This endpoint requires tenant authentication'
+        }, status=403)
         
         # If tenant still not found, return error
         try:
