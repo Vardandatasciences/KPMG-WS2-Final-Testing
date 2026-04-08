@@ -2632,11 +2632,10 @@
   <script>
 import './VV.css'
 import CustomDropdown from '../CustomDropdown.vue'
-import axios from 'axios'
+import { apiService } from '@/services/apiService'
 import { PopupService } from '@/modules/popup'  // Fix the import path
 
-import {  API_BASE_URL, API_ENDPOINTS, axiosInstance } from '../../config/api.js'
-const API_BASE_URL_FULL = `${API_BASE_URL}/api`
+import { API_ENDPOINTS } from '../../config/api.js'
 
   export default {
 name: 'VV',
@@ -2773,14 +2772,14 @@ name: 'VV',
           const userId = this.currentUser.UserId || localStorage.getItem('user_id') || 'default_user'
           console.log('🔍 DEBUG: Saving framework to session in VV:', newVal)
           
-          const response = await axios.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, {
+          const response = await apiService.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, {
             frameworkId: newVal,
             userId: userId
           })
           
-          if (response.data && response.data.success) {
+          if (response.success) {
             console.log('✅ DEBUG: Framework saved to session successfully in VV')
-            console.log('🔑 DEBUG: Session key:', response.data.sessionKey)
+            console.log('🔑 DEBUG: Session key:', response.sessionKey)
           } else {
             console.error('❌ DEBUG: Failed to save framework to session in VV')
           }
@@ -2915,14 +2914,14 @@ name: 'VV',
     async fetchCurrentUser() {
       try {
         console.log('=== DEBUG fetchCurrentUser ===');
-      const response = await axiosInstance.get('/api/user-role/')
-      console.log('API response:', response.data);
+      const response = await apiService.get(API_ENDPOINTS.USER_ROLE)
+      console.log('API response:', response);
       
-      if (response.data.success) {
+      if (response.success) {
         this.currentUser = {
-          UserId: response.data.user_id,
-          UserName: response.data.username || response.data.user_name || localStorage.getItem('username') || '',
-          Role: response.data.role
+          UserId: response.user_id,
+          UserName: response.username || response.user_name || localStorage.getItem('username') || '',
+          Role: response.role
         }
         // Update loggedInUsername and frameworkForm.createdByName with current user name
         this.loggedInUsername = this.currentUser.UserName
@@ -2952,10 +2951,10 @@ name: 'VV',
   // Add new identifier generation functions
   async fetchExistingFrameworkIdentifiers() {
     try {
-      const response = await axios.get(`${API_BASE_URL_FULL}/frameworks/`, {
+      const response = await apiService.get(API_ENDPOINTS.FRAMEWORKS, {
         params: { include_all_for_identifiers: 'true' }
       });
-      this.existingFrameworkIdentifiers = response.data
+      this.existingFrameworkIdentifiers = response
         .map(fw => fw.Identifier)
         .filter(id => id);
       console.log('Fetched existing framework identifiers:', this.existingFrameworkIdentifiers);
@@ -3176,11 +3175,11 @@ name: 'VV',
       this.error = null // Clear any previous errors
       
       console.log('=== Fetching frameworks...')
-      const response = await axios.get(`${API_BASE_URL_FULL}/frameworks/`)
-      console.log('Raw framework response:', response.data)
+      const response = await apiService.get(API_ENDPOINTS.FRAMEWORKS)
+      console.log('Raw framework response:', response)
       
       // Map frameworks
-      this.frameworks = response.data.map(fw => ({ 
+      this.frameworks = response.map(fw => ({ 
         id: fw.FrameworkId, 
         name: fw.FrameworkName,
         description: fw.FrameworkDescription,
@@ -3218,13 +3217,13 @@ name: 'VV',
   async checkSelectedFrameworkFromSession() {
     try {
       console.log('🔍 DEBUG: Checking for selected framework from session in VV...')
-      const response = await axios.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED)
-      console.log('📊 DEBUG: Selected framework response:', response.data)
+      const response = await apiService.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED)
+      console.log('📊 DEBUG: Selected framework response:', response)
       
-      if (response.data && response.data.success) {
+      if (response && response.success) {
         // Check if a framework is selected (not null)
-        if (response.data.frameworkId) {
-        const sessionFrameworkId = response.data.frameworkId
+        if (response.frameworkId) {
+        const sessionFrameworkId = response.frameworkId
         console.log('✅ DEBUG: Found selected framework in session:', sessionFrameworkId)
         
         // Check if this framework exists in our loaded frameworks
@@ -3265,8 +3264,8 @@ name: 'VV',
   // Add new methods for policy type/category handling
   async fetchPolicyData() {
     try {
-      const response = await axiosInstance.get('/api/policy-categories/')
-      this.policyData = response.data
+      const response = await apiService.get(API_ENDPOINTS.POLICY_CATEGORIES)
+      this.policyData = response
       
       // Extract unique policy types
       this.policyTypes = [...new Set(this.policyData.map(item => item.PolicyType))]
@@ -3569,13 +3568,13 @@ name: 'VV',
             console.log('🔍 DEBUG: Saving new policy subcategory combination to database immediately');
             console.log('🔍 DEBUG: Data:', { policyType, policyCategory, newSubCategory, framework: this.selectedFramework });
             try {
-              const response = await axios.post(API_ENDPOINTS.POLICY_CATEGORIES_SAVE, {
+              const response = await apiService.post(API_ENDPOINTS.POLICY_CATEGORIES_SAVE, {
                 PolicyType: policyType,
                 PolicyCategory: policyCategory,
                 PolicySubCategory: newSubCategory,
                 frameworkId: this.selectedFramework
               });
-              console.log('✅ DEBUG: Policy category combination saved to database:', response.data);
+              console.log('✅ DEBUG: Policy category combination saved to database:', response);
               
               // Refresh policy categories after saving
               await this.fetchPolicyCategories();
@@ -3627,12 +3626,12 @@ name: 'VV',
     async fetchEntities() {
       try {
         this.loading = true
-        const response = await axiosInstance.get('/api/entities/')
-        console.log('Raw entities response:', response.data)
+        const response = await apiService.get(API_ENDPOINTS.ENTITIES)
+        console.log('Raw entities response:', response)
         
-        if (response.data.entities) {
+        if (response.entities) {
           // Map entities directly from the backend response
-          this.entities = response.data.entities.map(entity => ({
+          this.entities = response.entities.map(entity => ({
             id: entity.id,
             label: entity.label
           }))
@@ -3763,11 +3762,9 @@ name: 'VV',
         console.log('=== Starting framework selection for ID:', newVal)
         
         // Fetch framework details first
-        const frameworkResponse = await axios.get(`${API_BASE_URL_FULL}/frameworks/${newVal}/`)
-        console.log('Raw framework details:', frameworkResponse.data)
+        const framework = await apiService.get(API_ENDPOINTS.FRAMEWORK_DETAILS(newVal))
+        console.log('Raw framework details:', framework)
 
-        const framework = frameworkResponse.data
-        
         // Store the previous framework data for version comparison
         this.previousFrameworkData = framework
         
@@ -3812,11 +3809,11 @@ name: 'VV',
 
         // Now fetch policies for this framework
         console.log('=== Fetching policies for framework:', newVal)
-        const policiesResponse = await axios.get(`${API_BASE_URL_FULL}/frameworks/${newVal}/get-policies/`)
-        console.log('Raw framework policies:', policiesResponse.data)
+        const policiesResponse = await apiService.get(API_ENDPOINTS.FRAMEWORK_GET_POLICIES(newVal))
+        console.log('Raw framework policies:', policiesResponse)
 
         // Filter for Approved and Active policies only
-        const approvedActivePolicies = policiesResponse.data.filter(p => 
+        const approvedActivePolicies = policiesResponse.filter(p => 
           p.Status === 'Approved' && p.ActiveInactive === 'Active'
         )
         
@@ -3836,8 +3833,8 @@ name: 'VV',
         for (const p of approvedActivePolicies) {
           try {
             console.log('=== Fetching subpolicies for policy:', p.PolicyId)
-            const subpoliciesResponse = await axios.get(`${API_BASE_URL_FULL}/policies/${p.PolicyId}/get-subpolicies/`)
-            console.log('Subpolicies for policy', p.PolicyId, ':', subpoliciesResponse.data)
+            const subpoliciesResponse = await apiService.get(API_ENDPOINTS.POLICY_GET_SUBPOLICIES(p.PolicyId))
+            console.log('Subpolicies for policy', p.PolicyId, ':', subpoliciesResponse)
             
             // In framework mode, use framework's reviewer for all policies and subpolicies
             const policyReviewer = this.selectedTab === 'framework' ? frameworkReviewer : (p.ReviewerName || p.Reviewer || '')
@@ -3874,7 +3871,7 @@ name: 'VV',
               })(), // Convert user name to user ID for dropdown
               exclude: false, // Initialize exclude as false
               activeSubPolicyTab: 0,
-              subPolicies: subpoliciesResponse.data.map(sp => ({
+              subPolicies: subpoliciesResponse.map(sp => ({
                 id: sp.SubPolicyId.toString(), // Ensure ID is a string
                 name: sp.SubPolicyName,
                 identifier: sp.Identifier,
@@ -4003,11 +4000,11 @@ name: 'VV',
       
       try {
         console.log('=== Loading policies for framework in policy tab:', frameworkId);
-        const response = await axios.get(`${API_BASE_URL_FULL}/frameworks/${frameworkId}/get-policies/`);
-        console.log('Policies response for framework:', response.data);
+        const response = await apiService.get(API_ENDPOINTS.FRAMEWORK_GET_POLICIES(frameworkId))
+        console.log('Policies response for framework:', response);
         
         // Filter for Approved and Active policies only
-        const approvedActivePolicies = response.data.filter(p => 
+        const approvedActivePolicies = response.filter(p => 
           p.Status === 'Approved' && p.ActiveInactive === 'Active'
         );
         
@@ -4206,17 +4203,12 @@ name: 'VV',
 
         console.log('Submitting version data:', versionData);
         
-        const response = await axios.post(
-          `${API_BASE_URL}/api/frameworks/${this.selectedFramework}/create-version/`,
-          versionData,
-          {
-            headers: {
-              'Content-Type': 'application/json'
-            }
-          }
+        const response = await apiService.post(
+          `/api/frameworks/${this.selectedFramework}/create-version/`,
+          versionData
         );
 
-        console.log('Framework version creation response:', response.data);
+        console.log('Framework version creation response:', response);
         
         // Show success message with popup
         PopupService.success('Framework version created successfully!', 'Success');
@@ -4477,12 +4469,12 @@ name: 'VV',
         console.log('Submitting version data:', versionData);
 
         // Make API call to create policy version
-        const response = await axios.post(
-          `${API_BASE_URL}/api/policies/${this.selectedPolicy}/create-version/`,
+        const response = await apiService.post(
+          `/api/policies/${this.selectedPolicy}/create-version/`,
           versionData
         );
 
-        console.log('Policy version created:', response.data);
+        console.log('Policy version created:', response);
         
         // Show success message with popup
         PopupService.success('Policy version created successfully!', 'Success');
@@ -4555,20 +4547,20 @@ name: 'VV',
       try {
         if (!this.selectedFramework) return;
         
-        const response = await axios.get(`${API_BASE_URL_FULL}/frameworks/${this.selectedFramework}/`);
-        console.log('Previous framework data:', response.data);
+        const response = await apiService.get(API_ENDPOINTS.FRAMEWORK_DETAILS(this.selectedFramework))
+        console.log('Previous framework data:', response);
         
         // Get framework details
-        this.previousFrameworkData = response.data;
+        this.previousFrameworkData = response;
         
         // Get policies for this framework
-        const policiesResponse = await axios.get(`${API_BASE_URL_FULL}/frameworks/${this.selectedFramework}/get-policies/`);
-        this.previousFrameworkData.policies = policiesResponse.data;
+        const policiesResponse = await apiService.get(API_ENDPOINTS.FRAMEWORK_GET_POLICIES(this.selectedFramework))
+        this.previousFrameworkData.policies = policiesResponse;
         
         // Get subpolicies for each policy
         for (const policy of this.previousFrameworkData.policies) {
-        const subpoliciesResponse = await axios.get(`${API_BASE_URL_FULL}/policies/${policy.PolicyId}/get-subpolicies/`);
-          policy.subpolicies = subpoliciesResponse.data;
+          const subpoliciesResponse = await apiService.get(API_ENDPOINTS.POLICY_GET_SUBPOLICIES(policy.PolicyId))
+          policy.subpolicies = subpoliciesResponse;
         }
         
         console.log('Complete previous framework data with policies and subpolicies:', this.previousFrameworkData);
@@ -4582,15 +4574,15 @@ name: 'VV',
       try {
         if (!this.selectedPolicy) return;
         
-      const response = await axios.get(`${API_BASE_URL_FULL}/policies/${this.selectedPolicy}/`);
-        console.log('Previous policy data:', response.data);
+        const response = await apiService.get(API_ENDPOINTS.POLICY_DETAILS(this.selectedPolicy))
+        console.log('Previous policy data:', response);
         
         // Get policy details
-        this.previousPolicyData = response.data;
+        this.previousPolicyData = response;
         
         // Get subpolicies for this policy
-      const subpoliciesResponse = await axios.get(`${API_BASE_URL_FULL}/policies/${this.selectedPolicy}/get-subpolicies/`);
-        this.previousPolicyData.subpolicies = subpoliciesResponse.data;
+        const subpoliciesResponse = await apiService.get(API_ENDPOINTS.POLICY_GET_SUBPOLICIES(this.selectedPolicy))
+        this.previousPolicyData.subpolicies = subpoliciesResponse;
         
         console.log('Complete previous policy data with subpolicies:', this.previousPolicyData);
       } catch (error) {
@@ -4606,18 +4598,18 @@ name: 'VV',
         // For framework tab: use 'framework', for policy tab: use 'policy'
         const module = this.selectedTab === 'framework' ? 'framework' : 'policy'
         const currentUserId = this.currentUser?.UserId || ''
-        const response = await axiosInstance.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
+        const response = await apiService.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
           params: {
             module: module,
             current_user_id: currentUserId
           }
         })
-        console.log('Raw users response:', response.data)
+        console.log('Raw users response:', response)
         
         // Handle response format: should be an array
         let usersData = []
-        if (Array.isArray(response.data)) {
-          usersData = response.data
+        if (Array.isArray(response)) {
+          usersData = response
         } else {
           console.error('Unexpected response format:', response.data)
           this.error = 'Invalid response format from users API'
@@ -4639,8 +4631,8 @@ name: 'VV',
     // Department related methods
     async fetchDepartments() {
       try {
-        const response = await axios.get(`${API_ENDPOINTS.DEPARTMENTS}`);
-        this.departments = response.data.departments || [];
+        const response = await apiService.get(API_ENDPOINTS.DEPARTMENTS);
+        this.departments = response.departments || [];
         console.log('Available departments:', this.departments);
       } catch (error) {
         console.error('Error fetching departments:', error);
@@ -4662,18 +4654,18 @@ name: 'VV',
 
     async saveDepartment(departmentName) {
       try {
-        const response = await axios.post(`${API_ENDPOINTS.DEPARTMENTS_SAVE}`, {
+        const response = await apiService.post(API_ENDPOINTS.DEPARTMENTS_SAVE, {
           DepartmentName: departmentName,
           EntityId: 1, // Default entity
           DepartmentHead: 1, // Default head
           BusinessUnitId: 1 // Default business unit
         });
         
-        if (response.data.success) {
-          console.log('Department saved:', response.data.department);
+        if (response.success) {
+          console.log('Department saved:', response.department);
           // Refresh departments list
           await this.fetchDepartments();
-          return response.data.department;
+          return response.department;
         }
       } catch (error) {
         console.error('Error saving department:', error);
@@ -4782,7 +4774,7 @@ name: 'VV',
               frameworkId: this.selectedFramework
             };
             console.log('Saving policy category with framework:', combinationWithFramework);
-            await axiosInstance.post('/api/policy-categories/save/', combinationWithFramework);
+            await apiService.post(API_ENDPOINTS.POLICY_CATEGORIES_SAVE, combinationWithFramework);
           }
           
           // Refresh policy categories after saving
@@ -4800,19 +4792,17 @@ name: 'VV',
       
       try {
         this.loading = true;
-        const [policyResponse, subpoliciesResponse] = await Promise.all([
-        axios.get(`${API_BASE_URL_FULL}/policies/${policyId}/`),
-        axios.get(`${API_BASE_URL_FULL}/policies/${policyId}/get-subpolicies/`)
+        const [policy, subpolicies] = await Promise.all([
+          apiService.get(API_ENDPOINTS.POLICY_DETAILS(policyId)),
+          apiService.get(API_ENDPOINTS.POLICY_GET_SUBPOLICIES(policyId))
         ]);
 
-        console.log('Raw policy details:', policyResponse.data);
-        console.log('Raw subpolicies:', subpoliciesResponse.data);
+        console.log('Raw policy details:', policy);
+        console.log('Raw subpolicies:', subpolicies);
 
-        const policy = policyResponse.data;
-        
         // Store the previous policy data for version comparison
         this.previousPolicyData = policy;
-        this.previousPolicyData.subpolicies = subpoliciesResponse.data;
+        this.previousPolicyData.subpolicies = subpolicies;
         
         const currentUsername = this.currentUser.UserName || this.loggedInUsername || '';
         
@@ -4838,7 +4828,7 @@ name: 'VV',
           createdByName: currentUsername, // Use current username instead of policy.CreatedByName
           reviewer: '', // Initialize as empty, will be set by user selection
           activeSubPolicyTab: 0,
-          subPolicies: subpoliciesResponse.data.map(sp => ({
+          subPolicies: subpolicies.map(sp => ({
             id: sp.SubPolicyId,
             name: sp.SubPolicyName,
             identifier: sp.Identifier,

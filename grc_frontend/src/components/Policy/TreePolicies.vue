@@ -142,6 +142,7 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
 import axios from 'axios'
+import apiService from '@/services/apiService'
 import CustomDropdown from '../CustomDropdown.vue'
 import { API_ENDPOINTS, API_BASE_URL } from '@/config/api.js'
 import policyDataService from '@/services/policyService'
@@ -201,13 +202,13 @@ const fetchFrameworks = async () => {
     }
 
     console.log('⚠️ [TreePolicies] No cached data found, fetching frameworks from API...')
-    const response = await axios.get(API_ENDPOINTS.FRAMEWORKS)
-    frameworks.value = response.data.map(fw => ({
+    const response = await apiService.get(API_ENDPOINTS.FRAMEWORKS)
+    frameworks.value = response.map(fw => ({
       id: fw.FrameworkId,
       title: fw.FrameworkName
     }))
 
-    policyDataService.setFrameworksList(response.data)
+    policyDataService.setFrameworksList(response)
 
     await checkSelectedFrameworkFromSession()
   } catch (err) {
@@ -220,13 +221,13 @@ const fetchFrameworks = async () => {
       const checkSelectedFrameworkFromSession = async () => {
         try {
           console.log('🔍 DEBUG: Checking for selected framework from session in TreePolicies...')
-          const response = await axios.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED)
-          console.log('📊 DEBUG: Selected framework response:', response.data)
+          const response = await apiService.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED)
+          console.log('📊 DEBUG: Selected framework response:', response)
           
-          if (response.data && response.data.success) {
+          if (response && response.success) {
             // Check if a framework is selected (not null)
-            if (response.data.frameworkId) {
-              const sessionFrameworkId = response.data.frameworkId
+            if (response.frameworkId) {
+              const sessionFrameworkId = response.frameworkId
               console.log('✅ DEBUG: Found selected framework in session:', sessionFrameworkId)
               
               // Check if this framework exists in our loaded frameworks
@@ -263,45 +264,45 @@ const fetchFrameworks = async () => {
         try {
           const url = API_ENDPOINTS.FRAMEWORK_GET_POLICIES_LIST(frameworkId)
           console.log('Calling API endpoint:', url)
-          const response = await axios.get(url)
-          console.log('Framework policies response:', response.data)
+          const response = await apiService.get(url)
+          console.log('Framework policies response:', response)
           console.log('Response structure:', {
-            hasData: !!response.data,
-            hasFramework: !!response.data?.framework,
-            hasPolicies: !!response.data?.policies,
-            policiesType: typeof response.data?.policies,
-            policiesLength: response.data?.policies?.length
+            hasData: !!response,
+            hasFramework: !!response?.framework,
+            hasPolicies: !!response?.policies,
+            policiesType: typeof response?.policies,
+            policiesLength: response?.policies?.length
           })
           
           // Check if response has the expected structure
-          if (!response.data) {
+          if (!response) {
             throw new Error('No data received from API')
           }
           
-          if (!response.data.framework) {
-            console.error('Missing framework data in response:', response.data)
+          if (!response.framework) {
+            console.error('Missing framework data in response:', response)
             throw new Error('Framework data not found in API response')
           }
           
-          if (!response.data.policies) {
-            console.error('Missing policies data in response:', response.data)
+          if (!response.policies) {
+            console.error('Missing policies data in response:', response)
             // If no policies, create empty array instead of throwing error
-            response.data.policies = []
+            response.policies = []
           }
           
           // Ensure policies is an array
-          if (!Array.isArray(response.data.policies)) {
-            console.error('Policies is not an array:', response.data.policies)
-            response.data.policies = []
+          if (!Array.isArray(response.policies)) {
+            console.error('Policies is not an array:', response.policies)
+            response.policies = []
           }
           
           // Transform the response to match expected structure
-          const policies = await Promise.all((response.data.policies || []).map(async (policy) => {
+          const policies = await Promise.all((response.policies || []).map(async (policy) => {
             // Fetch subpolicies for each policy
             let subpolicies = []
             try {
-              const subpoliciesResponse = await axios.get(`${API_BASE_URL}/api/policies/${policy.id}/get-subpolicies/`)
-              subpolicies = subpoliciesResponse.data.map(subpolicy => ({
+              const subpoliciesResponse = await apiService.get(`${API_BASE_URL}/api/policies/${policy.id}/get-subpolicies/`)
+              subpolicies = subpoliciesResponse.map(subpolicy => ({
                 SubPolicyId: subpolicy.SubPolicyId,
                 SubPolicyName: subpolicy.SubPolicyName,
                 Description: subpolicy.Description,
@@ -328,10 +329,10 @@ const fetchFrameworks = async () => {
           }))
           
           selectedFrameworkData.value = {
-            FrameworkId: response.data.framework.id,
-            FrameworkName: response.data.framework.name,
-            FrameworkDescription: response.data.framework.description,
-            Category: response.data.framework.category,
+            FrameworkId: response.framework.id,
+            FrameworkName: response.framework.name,
+            FrameworkDescription: response.framework.description,
+            Category: response.framework.category,
             policies: policies
           }
         } catch (err) {
@@ -355,14 +356,14 @@ onMounted(async () => {
               const userId = localStorage.getItem('user_id') || 'default_user'
               console.log('🔍 DEBUG: Saving framework to session in TreePolicies:', framework.id)
               
-              const response = await axios.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, {
+              const response = await apiService.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, {
                 frameworkId: framework.id,
                 userId: userId
               })
               
-              if (response.data && response.data.success) {
+              if (response && response.success) {
                 console.log('✅ DEBUG: Framework saved to session successfully in TreePolicies')
-                console.log('🔑 DEBUG: Session key:', response.data.sessionKey)
+                console.log('🔑 DEBUG: Session key:', response.sessionKey)
               } else {
                 console.error('❌ DEBUG: Failed to save framework to session in TreePolicies')
               }

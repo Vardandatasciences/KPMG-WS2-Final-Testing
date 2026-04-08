@@ -254,7 +254,7 @@
 import '../../assets/css/main.css'
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import axios from 'axios'
+import apiService from '@/services/apiService'
 import { API_ENDPOINTS } from '../../config/api.js'
 import { PopupService } from '@/modules/popus/popupService'
 import PopupModal from '@/modules/popus/PopupModal.vue'
@@ -308,17 +308,10 @@ const formatDate = (dateString) => {
   }
 }
 
-// Send push notification
 const sendPushNotification = async (notificationData) => {
   try {
-    const response = await fetch(API_ENDPOINTS.PUSH_NOTIFICATION, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(notificationData)
-    });
-    if (response.ok) {
+    const response = await apiService.post(API_ENDPOINTS.PUSH_NOTIFICATION, notificationData);
+    if (response) {
       console.log('Push notification sent successfully');
     } else {
       console.error('Failed to send push notification');
@@ -351,7 +344,7 @@ const approveRequest = async (request) => {
               ? `/api/policy-approvals/${request.ApprovalId}/approve-status-change/`
               : `/api/framework-approvals/${request.ApprovalId}/approve-status-change/`
             
-            await axios.post(endpoint, {
+            await apiService.post(endpoint, {
               approved: true,
               remarks: remarks || 'Status change approved'
             })
@@ -435,7 +428,7 @@ const rejectRequest = async (request) => {
               ? `/api/policy-approvals/${request.ApprovalId}/approve-status-change/`
               : `/api/framework-approvals/${request.ApprovalId}/approve-status-change/`
             
-            await axios.post(endpoint, {
+            await apiService.post(endpoint, {
               approved: false,
               remarks: remarks || 'Status change rejected'
             })

@@ -635,7 +635,7 @@
 
 <script>
 import { API_ENDPOINTS } from '../../config/api.js'
-import axios from 'axios'
+import apiService from '@/services/apiService'
 import policyDataService from '@/services/policyService'
 import { ref, onMounted, computed, watch, nextTick, onUnmounted, shallowRef } from 'vue'
 import CustomDropdown from '../CustomDropdown.vue'
@@ -1291,42 +1291,37 @@ export default {
     const checkSelectedFrameworkFromSession = async () => {
       try {
         console.log('🔍 DEBUG: Checking for selected framework from session...')
-        const response = await axios.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED, {
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-          }
-        })
+        const response = await apiService.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED)
         
-        console.log('🔍 DEBUG: Framework response:', response.data)
+        console.log('🔍 DEBUG: Framework response:', response)
         
-        if (response.data && response.data.success) {
+        if (response && response.success) {
           // Check if a framework is selected (not null)
-          if (response.data.frameworkId) {
-          const frameworkIdFromSession = response.data.frameworkId.toString()
-          console.log('✅ DEBUG: Found selected framework in session:', frameworkIdFromSession)
-          sessionFrameworkId.value = frameworkIdFromSession
-          
-          // Check if this framework exists in our loaded frameworks
-          const frameworkExists = availableFrameworks.value.find(f => f.id.toString() === frameworkIdFromSession.toString())
-          
-          if (frameworkExists) {
-            console.log('✅ DEBUG: Framework exists in loaded frameworks:', frameworkExists.name)
-            // Automatically select the framework from session
-            selectedFrameworkId.value = frameworkExists.id.toString()
-            selectedFrameworkName.value = frameworkExists.name
-            console.log('✅ DEBUG: Auto-selected framework from session:', selectedFrameworkId.value)
-            // Fetch policies for the selected framework
-            await fetchAvailablePolicies(selectedFrameworkId.value)
-            // Fetch compliance data for the selected framework
-            await fetchFrameworkComplianceData()
-            // Refresh KPI data with framework filter
-            await fetchKPIData()
-          } else {
-            console.log('⚠️ DEBUG: Framework from session (ID:', frameworkIdFromSession, ') not found in loaded frameworks')
-            console.log('📋 DEBUG: Available frameworks:', availableFrameworks.value.map(f => ({ id: f.id, name: f.name })))
-            // Clear the session framework ID since it doesn't exist
-            sessionFrameworkId.value = null
+          if (response.frameworkId) {
+            const frameworkIdFromSession = response.frameworkId.toString()
+            console.log('✅ DEBUG: Found selected framework in session:', frameworkIdFromSession)
+            sessionFrameworkId.value = frameworkIdFromSession
+            
+            // Check if this framework exists in our loaded frameworks
+            const frameworkExists = availableFrameworks.value.find(f => f.id.toString() === frameworkIdFromSession.toString())
+            
+            if (frameworkExists) {
+              console.log('✅ DEBUG: Framework exists in loaded frameworks:', frameworkExists.name)
+              // Automatically select the framework from session
+              selectedFrameworkId.value = frameworkExists.id.toString()
+              selectedFrameworkName.value = frameworkExists.name
+              console.log('✅ DEBUG: Auto-selected framework from session:', selectedFrameworkId.value)
+              // Fetch policies for the selected framework
+              await fetchAvailablePolicies(selectedFrameworkId.value)
+              // Fetch compliance data for the selected framework
+              await fetchFrameworkComplianceData()
+              // Refresh KPI data with framework filter
+              await fetchKPIData()
+            } else {
+              console.log('⚠️ DEBUG: Framework from session (ID:', frameworkIdFromSession, ') not found in loaded frameworks')
+              console.log('📋 DEBUG: Available frameworks:', availableFrameworks.value.map(f => ({ id: f.id, name: f.name })))
+              // Clear the session framework ID since it doesn't exist
+              sessionFrameworkId.value = null
             }
           } else {
             // "All Frameworks" is selected (frameworkId is null)
@@ -1354,14 +1349,9 @@ export default {
       try {
         console.log('🔍 DEBUG: Saving framework to session:', frameworkId)
         const userId = localStorage.getItem('user_id') || 'default_user'
-        await axios.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, {
+        await apiService.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, {
           frameworkId: frameworkId,
           userId: userId
-        }, {
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-          }
         })
         console.log('✅ DEBUG: Framework saved to session successfully')
       } catch (error) {
@@ -1430,17 +1420,12 @@ export default {
         }
 
         console.log('⚠️ [PolicyKPI] No cached frameworks, fetching via API...')
-        const response = await axios.get(API_ENDPOINTS.FRAMEWORKS, {
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-          }
-        })
+        const response = await apiService.get(API_ENDPOINTS.FRAMEWORKS)
         
-        console.log('Raw frameworks response:', response.data)
+        console.log('Raw frameworks response:', response)
         
-        if (response.data && Array.isArray(response.data)) {
-          availableFrameworks.value = response.data.map(framework => ({
+        if (response && Array.isArray(response)) {
+          availableFrameworks.value = response.map(framework => ({
             id: framework.FrameworkId,
             name: framework.FrameworkName,
             category: framework.Category || '',
@@ -1449,7 +1434,7 @@ export default {
           }))
           console.log('Mapped frameworks:', availableFrameworks.value)
 
-          policyDataService.setFrameworksList(response.data)
+          policyDataService.setFrameworksList(response)
           
           if (availableFrameworks.value.length > 0 && !selectedFrameworkId.value) {
             selectedFrameworkId.value = availableFrameworks.value[0].id
@@ -1474,21 +1459,17 @@ export default {
             // Try framework-specific endpoint first
             const frameworkEndpoint = API_ENDPOINTS.FRAMEWORK_GET_POLICIES_LIST || API_ENDPOINTS.FRAMEWORK_GET_POLICIES
             if (frameworkEndpoint) {
-              response = await axios.get(typeof frameworkEndpoint === 'function' ? frameworkEndpoint(frameworkId) : `${frameworkEndpoint}${frameworkId}/`, {
-                headers: {
-                  'Accept': 'application/json',
-                  'Content-Type': 'application/json'
-                }
-              })
+              const endpoint = typeof frameworkEndpoint === 'function' ? frameworkEndpoint(frameworkId) : `${frameworkEndpoint}${frameworkId}/`
+              response = await apiService.get(endpoint)
               
               // Handle framework-specific response
-              if (response.data) {
-                if (Array.isArray(response.data)) {
+              if (response) {
+                if (Array.isArray(response)) {
+                  policiesData = response
+                } else if (response.policies && Array.isArray(response.policies)) {
+                  policiesData = response.policies
+                } else if (response.data && Array.isArray(response.data)) {
                   policiesData = response.data
-                } else if (response.data.policies && Array.isArray(response.data.policies)) {
-                  policiesData = response.data.policies
-                } else if (response.data.data && Array.isArray(response.data.data)) {
-                  policiesData = response.data.data
                 }
               }
               
@@ -1511,23 +1492,18 @@ export default {
         
         // If no framework-specific data or "All Frameworks" selected, fetch all policies
         if (policiesData.length === 0 || !frameworkId || frameworkId === 'all') {
-          response = await axios.get(API_ENDPOINTS.POLICIES, {
-            headers: {
-              'Accept': 'application/json',
-              'Content-Type': 'application/json'
-            }
-          })
+          response = await apiService.get(API_ENDPOINTS.POLICIES)
           
-          console.log('Raw policies response:', response.data)
+          console.log('Raw policies response:', response)
           
           // Handle different response structures
-          if (response.data) {
-            if (Array.isArray(response.data)) {
+          if (response) {
+            if (Array.isArray(response)) {
+              policiesData = response
+            } else if (response.policies && Array.isArray(response.policies)) {
+              policiesData = response.policies
+            } else if (response.data && Array.isArray(response.data)) {
               policiesData = response.data
-            } else if (response.data.policies && Array.isArray(response.data.policies)) {
-              policiesData = response.data.policies
-            } else if (response.data.data && Array.isArray(response.data.data)) {
-              policiesData = response.data.data
             }
           }
           
@@ -1737,17 +1713,12 @@ export default {
       complianceError.value = null
 
       try {
-        const response = await axios.get(API_ENDPOINTS.POLICY_COMPLIANCE_STATS(selectedPolicyId.value), {
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-          }
-        })
+        const response = await apiService.get(API_ENDPOINTS.POLICY_COMPLIANCE_STATS(selectedPolicyId.value))
         
-        complianceData.value = response.data
+        complianceData.value = response
       } catch (err) {
         console.error('Error fetching compliance data:', err)
-        complianceError.value = err.response?.data?.error || 'Failed to load compliance data'
+        complianceError.value = err.message || 'Failed to load compliance data'
       } finally {
         complianceLoading.value = false
       }
@@ -1778,19 +1749,14 @@ export default {
           selectedFrameworkName.value = selectedFramework.name
         }
         
-        const response = await axios.get(API_ENDPOINTS.FRAMEWORK_COMPLIANCE_STATS(selectedFrameworkId.value), {
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-          }
-        })
+        const response = await apiService.get(API_ENDPOINTS.FRAMEWORK_COMPLIANCE_STATS(selectedFrameworkId.value))
         
-        frameworkComplianceData.value = response.data
-        console.log('Framework compliance data:', response.data)
+        frameworkComplianceData.value = response
+        console.log('Framework compliance data:', response)
       } catch (err) {
         console.error('Error fetching framework compliance data:', err)
         // If the API endpoint doesn't exist yet, create mock data for testing
-        if (err.response?.status === 404) {
+        if (err.status === 404) {
           console.log('Framework compliance endpoint not found, using mock data')
           // Create mock framework compliance data based on filtered policies
           const mockData = {
@@ -1813,7 +1779,7 @@ export default {
           }
           frameworkComplianceData.value = mockData
         } else {
-          complianceError.value = err.response?.data?.error || 'Failed to load framework compliance data'
+          complianceError.value = err.message || 'Failed to load framework compliance data'
         }
       } finally {
         complianceLoading.value = false
@@ -1843,29 +1809,23 @@ export default {
           console.log('🔍 DEBUG: No framework filter applied to KPI data')
         }
         
-        const response = await axios.get(API_ENDPOINTS.POLICY_KPIS, {
-          params: params,
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-          }
-        })
+        const response = await apiService.get(API_ENDPOINTS.POLICY_KPIS, params)
         
-        console.log('KPI data received:', response.data)
+        console.log('KPI data received:', response)
         
-        if (!response.data || typeof response.data !== 'object') {
+        if (!response || typeof response !== 'object') {
           throw new Error('Invalid response format')
         }
         
-        kpiData.value = response.data
+        kpiData.value = response
         
         console.log('🔍 DEBUG: KPI data loaded with framework filter:', selectedFrameworkId.value)
-        console.log('🔍 DEBUG: Raw KPI response data:', response.data)
+        console.log('🔍 DEBUG: Raw KPI response data:', response)
         
         // Charts will be updated automatically by the watcher
       } catch (err) {
-        console.error('Detailed error:', err.response?.data || err.message)
-        error.value = `Failed to load KPI data: ${err.response?.data?.error || err.message}`
+        console.error('Detailed error:', err)
+        error.value = `Failed to load KPI data: ${err.message}`
         
         // Set fallback values based on realistic policy numbers (6-8 policies, 12-14 sub-policies)
         kpiData.value = {

@@ -862,7 +862,7 @@
 
 <script>
 import { API_ENDPOINTS } from '../../config/api.js'
-import axios from 'axios'
+import apiService from '@/services/apiService'
 import { PopupService } from '@/modules/popus/popupService'
 import PopupModal from '@/modules/popus/PopupModal.vue'
 import CollapsibleTable from '@/components/CollapsibleTable.vue'
@@ -984,18 +984,8 @@ export default {
     // Push notification method
     async sendPushNotification(notificationData) {
       try {
-        const response = await fetch(API_ENDPOINTS.PUSH_NOTIFICATION, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(notificationData)
-        });
-        if (response.ok) {
-          console.log('Push notification sent successfully');
-        } else {
-          console.error('Failed to send push notification');
-        }
+        const response = await apiService.post(API_ENDPOINTS.PUSH_NOTIFICATION, notificationData);
+        console.log('Push notification sent successfully:', response);
       } catch (error) {
         console.error('Error sending push notification:', error);
       }
@@ -1010,18 +1000,18 @@ export default {
         await this.loadUserFromStorage();
         
         // Get current user role
-        const response = await axios.get(API_ENDPOINTS.USER_ROLE);
-        console.log('User role API response:', response.data);
+        const response = await apiService.get(API_ENDPOINTS.USER_ROLE);
+        console.log('User role API response:', response);
         
-        if (response.data.success) {
-          this.currentUserId = response.data.user_id;
-          this.currentUserName = response.data.username || response.data.user_name || '';
+        if (response.success) {
+          this.currentUserId = response.user_id;
+          this.currentUserName = response.username || response.user_name || '';
           
           // Store user info for fallback
-          this.storeUserInfo(response.data);
+          this.storeUserInfo(response);
           
           // Check specifically for "GRC Administrator" role
-          const userRole = response.data.role;
+          const userRole = response.role;
           console.log('User role received:', userRole);
           
           // Only GRC Administrator should see the user dropdown
@@ -1056,7 +1046,7 @@ export default {
           this.fetchRejectedPolicies();
           this.fetchPolicyTypes();
         } else {
-          console.error('User role API did not return success:', response.data);
+          console.error('User role API did not return success:', response);
           // Use fallback user data if available
           if (this.currentUserId && this.currentUserName) {
             console.log('Using fallback user data due to API error');
@@ -1116,15 +1106,15 @@ export default {
     async fetchUsers() {
       try {
         console.log('Fetching users for dropdown from RBAC...');
-        const response = await axios.get(API_ENDPOINTS.USERS_FOR_DROPDOWN);
-        console.log('Users API response:', response.data);
+        const response = await apiService.get(API_ENDPOINTS.USERS_FOR_DROPDOWN);
+        console.log('Users API response:', response);
         
-        if (Array.isArray(response.data)) {
+        if (Array.isArray(response)) {
+          this.availableUsers = response;
+        } else if (response && response.success && Array.isArray(response.data)) {
           this.availableUsers = response.data;
-        } else if (response.data && response.data.success && Array.isArray(response.data.data)) {
-          this.availableUsers = response.data.data;
         } else {
-          this.availableUsers = response.data || [];
+          this.availableUsers = response || [];
         }
         
         console.log('Available users loaded:', this.availableUsers.length, 'users');
@@ -1264,14 +1254,14 @@ export default {
         }
 
         console.log('⚠️ DEBUG: No cached frameworks, fetching via API in PolicyApprover...')
-        const response = await axios.get(API_ENDPOINTS.FRAMEWORKS)
-        this.frameworks = response.data.map(fw => ({
+        const response = await apiService.get(API_ENDPOINTS.FRAMEWORKS)
+        this.frameworks = response.map(fw => ({
           id: fw.FrameworkId,
           name: fw.FrameworkName
         }))
 
         // Update cache for future loads
-        policyDataService.setFrameworksList(response.data)
+        policyDataService.setFrameworksList(response)
         
         console.log('✅ DEBUG: Frameworks loaded:', this.frameworks)
         // Framework selection is cleared on mount, so we don't restore it here
@@ -1289,7 +1279,7 @@ export default {
         this.sessionFrameworkId = null
         
         // Clear from session storage
-        await axios.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, {
+        await apiService.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, {
           frameworkId: null
         })
         console.log('✅ DEBUG: Framework selection cleared from session successfully')
@@ -1307,13 +1297,13 @@ export default {
     async checkSelectedFrameworkFromSession() {
       try {
         console.log('🔍 DEBUG: Checking for selected framework from session in PolicyApprover...')
-        const response = await axios.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED)
-        console.log('📊 DEBUG: Selected framework response:', response.data)
+        const response = await apiService.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED)
+        console.log('📊 DEBUG: Selected framework response:', response)
         
-        if (response.data && response.data.success) {
+        if (response && response.success) {
           // Check if a framework is selected (not null)
-          if (response.data.frameworkId) {
-          const sessionFrameworkId = response.data.frameworkId
+          if (response.frameworkId) {
+          const sessionFrameworkId = response.frameworkId
           console.log('✅ DEBUG: Found selected framework in session:', sessionFrameworkId)
           
           // Check if this framework exists in our loaded frameworks
@@ -1357,14 +1347,14 @@ export default {
           const userId = localStorage.getItem('user_id') || 'default_user'
           console.log('🔍 DEBUG: Saving framework to session in PolicyApprover:', this.selectedFrameworkId)
           
-          const response = await axios.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, {
+          const response = await apiService.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, {
             frameworkId: this.selectedFrameworkId,
             userId: userId
           })
           
-          if (response.data && response.data.success) {
+          if (response && response.success) {
             console.log('✅ DEBUG: Framework saved to session successfully in PolicyApprover')
-            console.log('🔑 DEBUG: Session key:', response.data.sessionKey)
+            console.log('🔑 DEBUG: Session key:', response.sessionKey)
           } else {
             console.error('❌ DEBUG: Failed to save framework to session in PolicyApprover')
           }
@@ -1396,7 +1386,7 @@ export default {
       
       // Clear from session storage as well
       try {
-        await axios.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, {
+        await apiService.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, {
           frameworkId: null
         })
         console.log('✅ Cleared framework from session successfully')
@@ -1498,20 +1488,20 @@ export default {
         }
         
         // Fetch policy approvals where user is the creator
-        const response = await axios.get(API_ENDPOINTS.POLICY_APPROVALS_USER(userId), { params });
+        const response = await apiService.get(API_ENDPOINTS.POLICY_APPROVALS_USER(userId), { params });
         
         let approvalsData;
-        if (response.data.success && response.data.data) {
-          approvalsData = response.data.data;
-        } else if (Array.isArray(response.data)) {
+        if (response.success && response.data) {
           approvalsData = response.data;
+        } else if (Array.isArray(response)) {
+          approvalsData = response;
         } else {
           approvalsData = [];
         }
         
         console.log('🔍 DEBUG: My Tasks API Response:', {
           frameworkToFilter,
-          responseData: response.data,
+          responseData: response,
           approvalsDataLength: approvalsData.length,
           firstFewApprovals: approvalsData.slice(0, 3),
           url: API_ENDPOINTS.POLICY_APPROVALS_USER(userId),
@@ -1589,20 +1579,20 @@ export default {
         }
         
         // Fetch policy approvals where user is the reviewer
-        const response = await axios.get(API_ENDPOINTS.POLICY_APPROVALS_REVIEWER(userId), { params });
+        const response = await apiService.get(API_ENDPOINTS.POLICY_APPROVALS_REVIEWER(userId), { params });
         
         let approvalsData;
-        if (response.data.success && response.data.data) {
-          approvalsData = response.data.data;
-        } else if (Array.isArray(response.data)) {
+        if (response.success && response.data) {
           approvalsData = response.data;
+        } else if (Array.isArray(response)) {
+          approvalsData = response;
         } else {
           approvalsData = [];
         }
         
         console.log('🔍 DEBUG: Reviewer Tasks API Response:', {
           frameworkToFilter,
-          responseData: response.data,
+          responseData: response,
           approvalsDataLength: approvalsData.length,
           firstFewApprovals: approvalsData.slice(0, 3)
         });
@@ -1657,13 +1647,12 @@ export default {
         .filter(task => task.PolicyId)
         .map(task => typeof task.PolicyId === 'object' ? task.PolicyId.PolicyId : task.PolicyId);
       
-      if (policyIds.length > 0) {
                     const fetchPromises = policyIds.map(policyId => 
-              axios.get(API_ENDPOINTS.POLICY(policyId))
+              apiService.get(API_ENDPOINTS.POLICY(policyId))
                 .then(policyResponse => {
               return {
                 policyId: policyId,
-                status: policyResponse.data.Status
+                status: policyResponse.Status
               };
             })
             .catch(error => {
@@ -1691,18 +1680,18 @@ export default {
     // Update the method to fetch policies and policy approvals
     fetchPolicies() {
       console.log('Fetching policy approvals for reviewer...');
-      axios.get(API_ENDPOINTS.POLICY_APPROVALS_REVIEWER())
+      apiService.get(API_ENDPOINTS.POLICY_APPROVALS_REVIEWER())
         .then(response => {
-          console.log('Policy approvals response:', response.data);
+          console.log('Policy approvals response:', response);
           
           // Handle both response formats: direct array or success wrapper
           let approvalsData;
-          if (response.data.success && response.data.data) {
-            approvalsData = response.data.data;
-          } else if (Array.isArray(response.data)) {
+          if (response.success && response.data) {
             approvalsData = response.data;
+          } else if (Array.isArray(response)) {
+            approvalsData = response;
           } else {
-            console.error('Unexpected response format:', response.data);
+            console.error('Unexpected response format:', response);
             return;
           }
           
@@ -1750,11 +1739,11 @@ export default {
           if (policyIds.length > 0) {
             // Fetch the actual policy status from the database table for all policies
             const fetchPromises = policyIds.map(policyId => 
-              axios.get(API_ENDPOINTS.POLICY(policyId))
+              apiService.get(API_ENDPOINTS.POLICY(policyId))
                 .then(policyResponse => {
                   return {
                     policyId: policyId,
-                    status: policyResponse.data.Status
+                    status: policyResponse.Status
                   };
                 })
                 .catch(error => {
@@ -1804,9 +1793,9 @@ export default {
       const policyId = this.getPolicyId(approval);
 
       // First, fetch the policy's current database status to determine which version to fetch
-          axios.get(API_ENDPOINTS.POLICY(policyId))
+          apiService.get(API_ENDPOINTS.POLICY(policyId))
             .then(policyResponse => {
-              const dbStatus = policyResponse.data.Status;
+              const dbStatus = policyResponse.Status;
               console.log(`Policy database status: ${dbStatus}`);
           
           // Determine which version to fetch based on policy status
@@ -1822,19 +1811,19 @@ export default {
           }
           
           // Fetch the appropriate version
-          axios.get(versionEndpoint)
+          apiService.get(versionEndpoint)
             .then(versionResponse => {
-              const policyVersion = versionResponse.data.version || 'u1';
+              const policyVersion = versionResponse.version || 'u1';
               console.log(`Fetched policy version: ${policyVersion} for status: ${dbStatus}`);
               
               // Now fetch the latest policy approval with this version
-              axios.get(API_ENDPOINTS.POLICY_APPROVALS_LATEST(policyId))
+              apiService.get(API_ENDPOINTS.POLICY_APPROVALS_LATEST(policyId))
                 .then(approvalResponse => {
-                  console.log('Latest policy approval:', approvalResponse.data);
+                  console.log('Latest policy approval:', approvalResponse);
                   
                   // If we got data and it has ExtractedData, use it
-                  if (approvalResponse.data && approvalResponse.data.ExtractedData) {
-                    const latestApproval = approvalResponse.data;
+                  if (approvalResponse && approvalResponse.ExtractedData) {
+                    const latestApproval = approvalResponse;
                     
                     // Create a complete approval object with the latest data
                     const updatedApproval = {
@@ -1857,9 +1846,9 @@ export default {
                       const promises = updatedApproval.ExtractedData.subpolicies.map(sub => {
                         if (sub.SubPolicyId) {
                           // First fetch subpolicy status to determine which version endpoint to use
-                          return axios.get(API_ENDPOINTS.SUBPOLICIES(sub.SubPolicyId))
+                          return apiService.get(API_ENDPOINTS.SUBPOLICIES(sub.SubPolicyId))
                             .then(subpolicyResponse => {
-                              const subStatus = subpolicyResponse.data.Status;
+                              const subStatus = subpolicyResponse.Status;
                               sub.Status = subStatus;
                               
                               // Determine which version endpoint to use based on subpolicy status
@@ -1875,9 +1864,9 @@ export default {
                               }
                               
                               // Fetch the appropriate version
-                              return axios.get(subVersionEndpoint)
+                              return apiService.get(subVersionEndpoint)
                             .then(subVersionResponse => {
-                                  const subVersion = subVersionResponse.data.version || 'u1';
+                                  const subVersion = subVersionResponse.version || 'u1';
                                   console.log(`Subpolicy ${sub.SubPolicyId} version: ${subVersion} for status: ${subStatus}`);
                                   sub.version = subVersion;
                               return sub;
@@ -1969,9 +1958,9 @@ export default {
         const promises = approval.ExtractedData.subpolicies.map(sub => {
           if (sub.SubPolicyId) {
             // First fetch subpolicy status to determine which version endpoint to use
-                return axios.get(API_ENDPOINTS.SUBPOLICIES(sub.SubPolicyId))
+                return apiService.get(API_ENDPOINTS.SUBPOLICIES(sub.SubPolicyId))
                   .then(subpolicyResponse => {
-                const subStatus = subpolicyResponse.data.Status;
+                const subStatus = subpolicyResponse.Status;
                 sub.Status = subStatus;
                 
                 // Determine which version endpoint to use based on subpolicy status
@@ -1987,9 +1976,9 @@ export default {
                 }
                 
                 // Fetch the appropriate version
-                return axios.get(subVersionEndpoint)
+                return apiService.get(subVersionEndpoint)
                   .then(subVersionResponse => {
-                    const subVersion = subVersionResponse.data.version || 'u1';
+                    const subVersion = subVersionResponse.version || 'u1';
                     console.log(`Subpolicy ${sub.SubPolicyId} version: ${subVersion} for status: ${subStatus}`);
                     sub.version = subVersion;
                     return sub;
@@ -2091,13 +2080,13 @@ export default {
         const policyId = this.selectedPolicyForSubpolicies.PolicyId;
         
         // Fetch latest data for this policy
-        axios.get(API_ENDPOINTS.POLICY(policyId))
+        apiService.get(API_ENDPOINTS.POLICY(policyId))
           .then(response => {
-            if (response.data) {
+            if (response) {
               // Get the version for policy and subpolicies
-              axios.get(API_ENDPOINTS.POLICY_VERSION(policyId))
+              apiService.get(API_ENDPOINTS.POLICY_VERSION(policyId))
                 .then(versionResponse => {
-                  const policyVersion = versionResponse.data.version || 'u1';
+                  const policyVersion = versionResponse.version || 'u1';
                   
                   // Create a new object with the policy data
                   const policyData = {
@@ -2106,13 +2095,13 @@ export default {
                   };
                   
                   // If this policy has subpolicies, fetch their version information
-                  if (response.data.ExtractedData && response.data.ExtractedData.subpolicies) {
-                    const subpolicyPromises = response.data.ExtractedData.subpolicies.map(subpolicy => {
-                      return axios.get(API_ENDPOINTS.SUBPOLICY_VERSION(subpolicy.SubPolicyId))
+                  if (response.ExtractedData && response.ExtractedData.subpolicies) {
+                    const subpolicyPromises = response.ExtractedData.subpolicies.map(subpolicy => {
+                      return apiService.get(API_ENDPOINTS.SUBPOLICY_VERSION(subpolicy.SubPolicyId))
                         .then(subVersionResponse => {
                           return {
                             subpolicyId: subpolicy.SubPolicyId,
-                            version: subVersionResponse.data.version || 'u1'
+                            version: subVersionResponse.version || 'u1'
                           };
                         })
                         .catch(() => {
@@ -2177,13 +2166,13 @@ export default {
       }
       
       // Fetch rejected policy approvals for the selected user or current user
-      return axios.get(API_ENDPOINTS.POLICY_APPROVALS_REJECTED(userIdForAPI))
+      return apiService.get(API_ENDPOINTS.POLICY_APPROVALS_REJECTED(userIdForAPI))
         .then(response => {
-          console.log('Rejected policy approvals response:', response.data);
+          console.log('Rejected policy approvals response:', response);
           
-          if (response.data && Array.isArray(response.data) && response.data.length > 0) {
+          if (response && Array.isArray(response) && response.length > 0) {
             // Process each rejected policy approval
-            const processedPolicies = response.data.map(approval => {
+            const processedPolicies = response.map(approval => {
               console.log('Processing rejected approval:', approval);
               
               // Use the comprehensive getPolicyRejectionReason method to extract rejection reason
@@ -2267,13 +2256,13 @@ export default {
     // Fallback method for fetching rejected policies
     fetchRejectedPoliciesFallback() {
       console.log('Using fallback method to fetch rejected policies...');
-      axios.get(API_ENDPOINTS.POLICIES)
+      apiService.get(API_ENDPOINTS.POLICIES)
         .then(response => {
-          console.log('All policies response:', response.data);
+          console.log('All policies response:', response);
           
-          let policiesData = response.data;
-          if (response.data.success && response.data.data) {
-            policiesData = response.data.data;
+          let policiesData = response;
+          if (response.success && response.data) {
+            policiesData = response.data;
           }
           
           if (Array.isArray(policiesData)) {
@@ -2315,18 +2304,18 @@ export default {
     // Add a method to fetch policies that have rejected subpolicies
     fetchPoliciesWithRejectedSubpolicies() {
       console.log('Fetching policies with rejected subpolicies...');
-      axios.get(API_ENDPOINTS.POLICIES)
+      apiService.get(API_ENDPOINTS.POLICIES)
         .then(response => {
-          console.log('All policies response:', response.data);
+          console.log('All policies response:', response);
           
           // Handle both response formats: direct array or success wrapper
           let policiesData;
-          if (response.data.success && response.data.data) {
-            policiesData = response.data.data;
-          } else if (Array.isArray(response.data)) {
+          if (response.success && response.data) {
             policiesData = response.data;
+          } else if (Array.isArray(response)) {
+            policiesData = response;
           } else {
-            console.error('Unexpected response format:', response.data);
+            console.error('Unexpected response format:', response);
             return;
           }
           
@@ -2431,18 +2420,18 @@ export default {
         ApprovedNot: this.selectedApproval.ApprovedNot
       };
       
-      axios.put(
+      apiService.put(
         API_ENDPOINTS.COMPLIANCE_APPROVALS(this.selectedApproval.ApprovalId),
         reviewData
       )
       .then(response => {
-        console.log('Response:', response.data);
-        if (response.data.ApprovalId) {
-          this.selectedApproval.ApprovalId = response.data.ApprovalId;
-          this.selectedApproval.Version = response.data.Version;
+        console.log('Response:', response);
+        if (response.ApprovalId) {
+          this.selectedApproval.ApprovalId = response.ApprovalId;
+          this.selectedApproval.Version = response.Version;
           // Update approved date if provided
-          if (response.data.ApprovedDate) {
-            this.selectedApproval.ApprovedDate = response.data.ApprovedDate;
+          if (response.ApprovedDate) {
+            this.selectedApproval.ApprovedDate = response.ApprovedDate;
           }
           // Show different messages based on whether it's an approval or rejection
           const isApproved = this.selectedApproval.ApprovedNot === true;
@@ -2529,9 +2518,9 @@ export default {
       };
       
       // First get the current version
-      axios.get(API_ENDPOINTS.POLICY_VERSION(policyId))
+      apiService.get(API_ENDPOINTS.POLICY_VERSION(policyId))
         .then(versionResponse => {
-          const currentVersion = versionResponse.data.version;
+          const currentVersion = versionResponse.version;
           console.log('Current version before submission:', currentVersion);
           
           // Add logic to check if any subpolicies are rejected
@@ -2589,18 +2578,18 @@ export default {
       this.isSubmittingReview = true;
       
       // Submit policy review with current version info
-      axios.post(API_ENDPOINTS.POLICY_SUBMIT_REVIEW(policyId), {
+      apiService.post(API_ENDPOINTS.POLICY_SUBMIT_REVIEW(policyId), {
         ...reviewData,
         currentVersion: currentVersion,
         approved: this.reviewDecision === 'approve'
       })
       .then(response => {
-        console.log('Policy review submitted successfully:', response.data);
+        console.log('Policy review submitted successfully:', response);
         
         // Update the local approval with the returned data
-        this.selectedApproval.Version = response.data.Version;
+        this.selectedApproval.Version = response.Version;
         
-        if (response.data.ApprovedDate) {
+        if (response.ApprovedDate) {
           this.selectedApproval.ApprovedDate = response.data.ApprovedDate;
         }
         
@@ -2670,9 +2659,9 @@ export default {
       
       // First, check the policy status via debug endpoint
       console.log('Checking policy status before resubmission...');
-      axios.get(API_ENDPOINTS.POLICY_DEBUG_STATUS(actualPolicyId))
+      apiService.get(API_ENDPOINTS.POLICY_DEBUG_STATUS(actualPolicyId))
         .then(debugResponse => {
-          console.log('Policy debug status:', debugResponse.data);
+          console.log('Policy debug status:', debugResponse);
       
       // Validate policy data
           const validationErrors = this.validatePolicyData(actualPolicy);
@@ -2768,17 +2757,17 @@ export default {
         };
         
         console.log(`Making request to: /api/policies/${actualPolicyId}/resubmit-approval/`);
-        return axios.put(API_ENDPOINTS.POLICY_RESUBMIT_APPROVAL(actualPolicyId), wrappedData)
+        return apiService.put(API_ENDPOINTS.POLICY_RESUBMIT_APPROVAL(actualPolicyId), wrappedData)
         .then(response => {
-          console.log('Policy resubmitted successfully:', response.data);
+          console.log('Policy resubmitted successfully:', response);
           
           // Show version information in the alert
           let successMessage = 'Policy resubmitted for review!';
-          if (response.data.UserId) {
-            successMessage += ` (UserId: ${response.data.UserId})`;
+          if (response.UserId) {
+            successMessage += ` (UserId: ${response.UserId})`;
           }
-          if (response.data.reviewer_assigned) {
-            successMessage += ` (Assigned to ReviewerId: ${response.data.ReviewerId})`;
+          if (response.reviewer_assigned) {
+            successMessage += ` (Assigned to ReviewerId: ${response.ReviewerId})`;
           }
           
           PopupService.success(successMessage, 'Policy Resubmitted');
@@ -2993,25 +2982,25 @@ export default {
       this.reviewDecision = 'approve';
       
       // Submit subpolicy review directly (this handles both status update and approval)
-      axios.put(API_ENDPOINTS.SUBPOLICY_REVIEW(subpolicy.SubPolicyId), {
+      apiService.put(API_ENDPOINTS.SUBPOLICY_REVIEW(subpolicy.SubPolicyId), {
         Status: 'Approved'
       })
       .then(response => {
-        console.log('Subpolicy approval submitted successfully:', response.data);
+        console.log('Subpolicy approval submitted successfully:', response);
         
         // Update the subpolicy status in the UI
         subpolicy.Status = 'Approved';
         
         // Check if parent policy status was updated (all subpolicies approved)
-        if (response.data.PolicyUpdated) {
-          console.log(`Policy status updated to: ${response.data.PolicyStatus}`);
+        if (response.PolicyUpdated) {
+          console.log(`Policy status updated to: ${response.PolicyStatus}`);
           
           // If parent policy was updated, refresh the policies list
           this.fetchPolicies();
           
           // Also update the UI to show policy is now approved
           if (this.selectedApproval && this.selectedApproval.ExtractedData) {
-            this.selectedApproval.ExtractedData.Status = response.data.PolicyStatus;
+            this.selectedApproval.ExtractedData.Status = response.PolicyStatus;
           }
         }
         
@@ -3246,7 +3235,7 @@ export default {
         compliance.ExtractedData.compliance_approval.remarks = '';
       }
       
-      axios.put(API_ENDPOINTS.COMPLIANCE_APPROVALS_RESUBMIT(compliance.ApprovalId), {
+      apiService.put(API_ENDPOINTS.COMPLIANCE_APPROVALS_RESUBMIT(compliance.ApprovalId), {
         ExtractedData: compliance.ExtractedData
       })
       .then(() => {
@@ -3291,18 +3280,18 @@ export default {
       
       // If this is a rejected subpolicy, fetch the latest reviewer version
       if (subpolicy.Status === 'Rejected' || (subpolicy.approval && subpolicy.approval.approved === false)) {
-        axios.get(API_ENDPOINTS.SUBPOLICY_REVIEWER_VERSION(subpolicy.SubPolicyId))
+        apiService.get(API_ENDPOINTS.SUBPOLICY_REVIEWER_VERSION(subpolicy.SubPolicyId))
           .then(versionResponse => {
-            const rVersion = versionResponse.data.version || 'R1';
+            const rVersion = versionResponse.version || 'R1';
             console.log(`Using reviewer version ${rVersion} for rejected subpolicy ${subpolicy.SubPolicyId}`);
             subpolicy.reviewerVersion = rVersion;
             
             // If we have approval data with this subpolicy, use it
-            if (versionResponse.data.approval_data && 
-                versionResponse.data.approval_data.ExtractedData && 
-                versionResponse.data.approval_data.ExtractedData.subpolicies) {
+            if (versionResponse.approval_data && 
+                versionResponse.approval_data.ExtractedData && 
+                versionResponse.approval_data.ExtractedData.subpolicies) {
               
-              const approvalData = versionResponse.data.approval_data;
+              const approvalData = versionResponse.approval_data;
               
               // Find this subpolicy in the ExtractedData
               const subpolicyData = approvalData.ExtractedData.subpolicies.find(
@@ -3376,12 +3365,12 @@ export default {
       };
       
       // Send the resubmit request
-      axios.put(API_ENDPOINTS.SUBPOLICY_RESUBMIT(this.editingSubpolicy.SubPolicyId), updateData)
+      apiService.put(API_ENDPOINTS.SUBPOLICY_RESUBMIT(this.editingSubpolicy.SubPolicyId), updateData)
           .then(response => {
-              console.log('Subpolicy resubmitted successfully:', response.data);
+              console.log('Subpolicy resubmitted successfully:', response);
               
               // Update the UI with new version
-              const newVersion = response.data.version;
+              const newVersion = response.version;
               this.editingSubpolicy.Status = 'Under Review';
               this.editingSubpolicy.version = newVersion;
               
@@ -3613,9 +3602,9 @@ export default {
       };
       
       // Send the updated subpolicy data to the resubmit endpoint
-      axios.put(API_ENDPOINTS.SUBPOLICY_RESUBMIT(subpolicy.SubPolicyId), updateData)
+      apiService.put(API_ENDPOINTS.SUBPOLICY_RESUBMIT(subpolicy.SubPolicyId), updateData)
       .then(response => {
-          console.log('Subpolicy resubmitted successfully:', response.data);
+          console.log('Subpolicy resubmitted successfully:', response);
           
           // Update the UI to show resubmitted status
           subpolicy.Status = 'Under Review';
@@ -3625,8 +3614,8 @@ export default {
           subpolicy.approval.approved = null;
           subpolicy.previousVersion = previousVersion;
           
-          if (response.data.Version) {
-            subpolicy.version = response.data.Version;
+          if (response.Version) {
+            subpolicy.version = response.Version;
           }
           
           // Show success message
@@ -3702,14 +3691,14 @@ export default {
         const policyId = this.getPolicyId(policy);
         
         // Fetch the latest R version for the policy with its approval data
-        axios.get(API_ENDPOINTS.POLICY_REVIEWER_VERSION(policyId))
+        apiService.get(API_ENDPOINTS.POLICY_REVIEWER_VERSION(policyId))
           .then(versionResponse => {
-            const rVersion = versionResponse.data.version || 'R1';
+            const rVersion = versionResponse.version || 'R1';
             console.log(`Using reviewer version: ${rVersion} for policy ${policyId}`);
             
             // If we have approval data, use it to replace the current data
-            if (versionResponse.data.approval_data) {
-              const approvalData = versionResponse.data.approval_data;
+            if (versionResponse.approval_data) {
+              const approvalData = versionResponse.approval_data;
               console.log('Found R version approval data:', approvalData);
               
               // Use the ExtractedData from the R version instead of the current data
@@ -3773,20 +3762,20 @@ export default {
         
         const promises = this.selectedPolicyForSubpolicies.ExtractedData.subpolicies.map(sub => {
           if (sub.SubPolicyId) {
-            return axios.get(API_ENDPOINTS.SUBPOLICY_REVIEWER_VERSION(sub.SubPolicyId))
+            return apiService.get(API_ENDPOINTS.SUBPOLICY_REVIEWER_VERSION(sub.SubPolicyId))
               .then(subVersionResponse => {
-                const subRVersion = subVersionResponse.data.version || 'R1';
+                const subRVersion = subVersionResponse.version || 'R1';
                 console.log(`Subpolicy ${sub.SubPolicyId} reviewer version: ${subRVersion}`);
                 
                 // Store reviewer version
                 sub.reviewerVersion = subRVersion;
                 
                 // If we have approval data for this subpolicy, update its data
-                if (subVersionResponse.data.approval_data && 
-                    subVersionResponse.data.approval_data.ExtractedData && 
-                    subVersionResponse.data.approval_data.ExtractedData.subpolicies) {
+                if (subVersionResponse.approval_data && 
+                    subVersionResponse.approval_data.ExtractedData && 
+                    subVersionResponse.approval_data.ExtractedData.subpolicies) {
                   
-                  const approvalData = subVersionResponse.data.approval_data;
+                  const approvalData = subVersionResponse.approval_data;
                   
                   // Find this subpolicy in the ExtractedData
                   const subpolicyData = approvalData.ExtractedData.subpolicies.find(
@@ -3834,11 +3823,11 @@ export default {
       this.reviewDecision = 'approve';
       
       // Submit subpolicy review directly (this handles both status update and approval)
-      axios.put(API_ENDPOINTS.SUBPOLICY_REVIEW(subpolicy.SubPolicyId), {
+      apiService.put(API_ENDPOINTS.SUBPOLICY_REVIEW(subpolicy.SubPolicyId), {
         Status: 'Approved'
       })
       .then(response => {
-        console.log('Subpolicy approval submitted successfully:', response.data);
+        console.log('Subpolicy approval submitted successfully:', response);
         
         // Update the subpolicy status in the UI
         subpolicy.Status = 'Approved';
@@ -3853,7 +3842,7 @@ export default {
           // Update the UI to show the policy is now approved
           if (this.selectedPolicyForSubpolicies && 
               this.selectedPolicyForSubpolicies.ExtractedData) {
-            this.selectedPolicyForSubpolicies.ExtractedData.Status = response.data.PolicyStatus;
+            this.selectedPolicyForSubpolicies.ExtractedData.Status = response.PolicyStatus;
           }
         }
         
@@ -3949,18 +3938,18 @@ export default {
       
       // Fetch the latest reviewer version for this rejected subpolicy with complete data
       if (subpolicy.SubPolicyId) {
-        axios.get(API_ENDPOINTS.SUBPOLICY_REVIEWER_VERSION(subpolicy.SubPolicyId))
+        apiService.get(API_ENDPOINTS.SUBPOLICY_REVIEWER_VERSION(subpolicy.SubPolicyId))
           .then(versionResponse => {
-            const rVersion = versionResponse.data.version || 'R1';
+            const rVersion = versionResponse.version || 'R1';
             console.log(`Fetched reviewer version for edit modal: ${rVersion}`);
             this.editingSubpolicy.reviewerVersion = rVersion;
             
             // If we have approval data with this subpolicy, use it
-            if (versionResponse.data.approval_data && 
-                versionResponse.data.approval_data.ExtractedData && 
-                versionResponse.data.approval_data.ExtractedData.subpolicies) {
+            if (versionResponse.approval_data && 
+                versionResponse.approval_data.ExtractedData && 
+                versionResponse.approval_data.ExtractedData.subpolicies) {
               
-              const approvalData = versionResponse.data.approval_data;
+              const approvalData = versionResponse.approval_data;
               
               // Find this subpolicy in the ExtractedData
               const subpolicyData = approvalData.ExtractedData.subpolicies.find(
@@ -4015,10 +4004,10 @@ export default {
     fetchRejectedSubpolicies() {
       console.log('Fetching rejected subpolicies...');
       // For now, we'll fetch all policies and filter for rejected subpolicies
-      axios.get(API_ENDPOINTS.POLICIES)
+      apiService.get(API_ENDPOINTS.POLICIES)
         .then(response => {
-          console.log('Received policies for subpolicy check:', response.data.length);
-          const allPolicies = response.data;
+          console.log('Received policies for subpolicy check:', response.length);
+          const allPolicies = response;
           let rejectedSubs = [];
           
           // Go through each policy and collect rejected subpolicies
@@ -4077,15 +4066,15 @@ export default {
     },
     // Add a method to fetch policy categories
     fetchPolicyCategories() {
-      axios.get(API_ENDPOINTS.POLICY_CATEGORIES)
+      apiService.get(API_ENDPOINTS.POLICY_CATEGORIES)
         .then(response => {
           // Handle both response formats: direct array or success wrapper
-          if (response.data.success && response.data.data) {
-            this.policyCategories = response.data.data;
-          } else if (Array.isArray(response.data)) {
+          if (response.success && response.data) {
             this.policyCategories = response.data;
+          } else if (Array.isArray(response)) {
+            this.policyCategories = response;
           } else {
-            console.error('Unexpected response format:', response.data);
+            console.error('Unexpected response format:', response);
           }
         })
         .catch(error => {
@@ -4094,18 +4083,18 @@ export default {
     },
     fetchPolicyTypes() {
       console.log('Fetching policy categories...');
-      axios.get(API_ENDPOINTS.POLICY_CATEGORIES)
+      apiService.get(API_ENDPOINTS.POLICY_CATEGORIES)
         .then(response => {
-          console.log('Policy categories response:', response.data);
+          console.log('Policy categories response:', response);
           
           // Handle both response formats: direct array or success wrapper
           let categoriesData;
-          if (response.data.success && response.data.data) {
-            categoriesData = response.data.data;
-          } else if (Array.isArray(response.data)) {
+          if (response.success && response.data) {
             categoriesData = response.data;
+          } else if (Array.isArray(response)) {
+            categoriesData = response;
           } else {
-            console.error('Unexpected response format:', response.data);
+            console.error('Unexpected response format:', response);
             return;
           }
           

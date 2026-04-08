@@ -515,9 +515,8 @@
 import '../../assets/css/main.css'
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import axios from 'axios'
-import policyDataService from '@/services/policyService'
 import { API_ENDPOINTS } from '../../config/api.js'
+import apiService from '@/services/apiService'
 import { PopupService } from '@/modules/popus/popupService'
 import PopupModal from '@/modules/popus/PopupModal.vue'
 import CollapsibleTable from '@/components/CollapsibleTable.vue'
@@ -617,14 +616,14 @@ const fetchFrameworks = async () => {
     }
 
     console.log('⚠️ DEBUG: No cached frameworks, fetching via API in StatusChangeRequests...')
-    const response = await axios.get(API_ENDPOINTS.FRAMEWORKS)
-    frameworks.value = response.data.map(fw => ({
+    const response = await apiService.get(API_ENDPOINTS.FRAMEWORKS)
+    frameworks.value = response.map(fw => ({
       id: fw.FrameworkId,
       name: fw.FrameworkName
     }))
     console.log('✅ DEBUG: Frameworks loaded:', frameworks.value)
 
-    policyDataService.setFrameworksList(response.data)
+    policyDataService.setFrameworksList(response)
     
     await checkSelectedFrameworkFromSession()
   } catch (error) {
@@ -636,13 +635,13 @@ const fetchFrameworks = async () => {
 const checkSelectedFrameworkFromSession = async () => {
   try {
     console.log('🔍 DEBUG: Checking for selected framework from session in StatusChangeRequests...')
-    const response = await axios.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED)
-    console.log('📊 DEBUG: Selected framework response:', response.data)
+    const response = await apiService.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED)
+    console.log('📊 DEBUG: Selected framework response:', response)
     
-    if (response.data && response.data.success) {
+    if (response && response.success) {
       // Check if a framework is selected (not null)
-      if (response.data.frameworkId) {
-      const sessionFrameworkId = response.data.frameworkId
+      if (response.frameworkId) {
+      const sessionFrameworkId = response.frameworkId
       console.log('✅ DEBUG: Found selected framework in session:', sessionFrameworkId)
       
       // Check if this framework exists in our loaded frameworks
@@ -680,14 +679,14 @@ const onFrameworkChange = async () => {
       const userId = localStorage.getItem('user_id') || 'default_user'
       console.log('🔍 DEBUG: Saving framework to session in StatusChangeRequests:', selectedFrameworkId.value)
       
-      const response = await axios.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, {
+      const response = await apiService.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, {
         frameworkId: selectedFrameworkId.value,
         userId: userId
       })
       
-      if (response.data && response.data.success) {
+      if (response && response.success) {
         console.log('✅ DEBUG: Framework saved to session successfully in StatusChangeRequests')
-        console.log('🔑 DEBUG: Session key:', response.data.sessionKey)
+        console.log('🔑 DEBUG: Session key:', response.sessionKey)
       } else {
         console.error('❌ DEBUG: Failed to save framework to session in StatusChangeRequests')
       }
@@ -846,25 +845,25 @@ const fetchMyTasks = async (userId) => {
     console.log(`Fetching my tasks for user ID: ${userId}`)
     
     // Fetch framework status change requests where user is the creator
-    const frameworkResponse = await axios.get(API_ENDPOINTS.FRAMEWORK_STATUS_CHANGE_REQUESTS_USER(userId))
-    console.log('Framework response:', frameworkResponse.data)
+    const frameworkResponse = await apiService.get(API_ENDPOINTS.FRAMEWORK_STATUS_CHANGE_REQUESTS_USER(userId))
+    console.log('Framework response:', frameworkResponse)
     
     // Fetch policy status change requests where user is the creator
-    const policyResponse = await axios.get(API_ENDPOINTS.POLICY_STATUS_CHANGE_REQUESTS_USER(userId))
-    console.log('Policy response:', policyResponse.data)
+    const policyResponse = await apiService.get(API_ENDPOINTS.POLICY_STATUS_CHANGE_REQUESTS_USER(userId))
+    console.log('Policy response:', policyResponse)
     
     let frameworkRequests = []
     let policyRequests = []
     
     // Process framework requests
-    if (frameworkResponse.data && Array.isArray(frameworkResponse.data)) {
-      frameworkRequests = processFrameworks(frameworkResponse.data)
+    if (frameworkResponse && Array.isArray(frameworkResponse)) {
+      frameworkRequests = processFrameworks(frameworkResponse)
       console.log('Processed framework requests:', frameworkRequests.length)
     }
     
     // Process policy requests
-    if (policyResponse.data && Array.isArray(policyResponse.data)) {
-      policyRequests = processPolicies(policyResponse.data.map(request => ({
+    if (policyResponse && Array.isArray(policyResponse)) {
+      policyRequests = processPolicies(policyResponse.map(request => ({
         ...request,
         RequestType: 'Policy Status Change',
         ItemType: 'policy'
@@ -923,25 +922,25 @@ const fetchReviewerTasks = async (userId) => {
     console.log(`Fetching reviewer tasks for user ID: ${userId}`)
     
     // Fetch framework status change requests where user is the reviewer
-    const frameworkResponse = await axios.get(API_ENDPOINTS.FRAMEWORK_STATUS_CHANGE_REQUESTS_REVIEWER(userId))
-    console.log('Framework reviewer response:', frameworkResponse.data)
+    const frameworkResponse = await apiService.get(API_ENDPOINTS.FRAMEWORK_STATUS_CHANGE_REQUESTS_REVIEWER(userId))
+    console.log('Framework reviewer response:', frameworkResponse)
     
     // Fetch policy status change requests where user is the reviewer
-    const policyResponse = await axios.get(API_ENDPOINTS.POLICY_STATUS_CHANGE_REQUESTS_REVIEWER(userId))
-    console.log('Policy reviewer response:', policyResponse.data)
+    const policyResponse = await apiService.get(API_ENDPOINTS.POLICY_STATUS_CHANGE_REQUESTS_REVIEWER(userId))
+    console.log('Policy reviewer response:', policyResponse)
     
     let frameworkRequests = []
     let policyRequests = []
     
     // Process framework requests
-    if (frameworkResponse.data && Array.isArray(frameworkResponse.data)) {
-      frameworkRequests = processFrameworks(frameworkResponse.data)
+    if (frameworkResponse && Array.isArray(frameworkResponse)) {
+      frameworkRequests = processFrameworks(frameworkResponse)
       console.log('Processed framework reviewer requests:', frameworkRequests.length)
     }
     
     // Process policy requests
-    if (policyResponse.data && Array.isArray(policyResponse.data)) {
-      policyRequests = processPolicies(policyResponse.data.map(request => ({
+    if (policyResponse && Array.isArray(policyResponse)) {
+      policyRequests = processPolicies(policyResponse.map(request => ({
         ...request,
         RequestType: 'Policy Status Change',
         ItemType: 'policy'
@@ -1164,15 +1163,15 @@ const fetchRequests = async () => {
   isLoading.value = true
   try {
     const [frameworkResponse, policyResponse] = await Promise.all([
-      axios.get(API_ENDPOINTS.FRAMEWORK_STATUS_CHANGE_REQUESTS),
-      axios.get(API_ENDPOINTS.POLICY_STATUS_CHANGE_REQUESTS)
+      apiService.get(API_ENDPOINTS.FRAMEWORK_STATUS_CHANGE_REQUESTS),
+      apiService.get(API_ENDPOINTS.POLICY_STATUS_CHANGE_REQUESTS)
     ])
     
     // Process all frameworks to ensure consistent status
-    const frameworkRequests = processFrameworks(frameworkResponse.data)
+    const frameworkRequests = processFrameworks(frameworkResponse)
     
     // Process policy requests and add type indicator
-    const policyRequests = processPolicies(policyResponse.data.map(request => ({
+    const policyRequests = processPolicies(policyResponse.map(request => ({
       ...request,
       RequestType: 'Policy Status Change',
       ItemType: 'policy'
@@ -1220,17 +1219,10 @@ const closeRequestDetails = () => {
   showDetails.value = false
 }
 
-// Send push notification
 const sendPushNotification = async (notificationData) => {
   try {
-    const response = await fetch(API_ENDPOINTS.PUSH_NOTIFICATION, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(notificationData)
-    });
-    if (response.ok) {
+    const response = await apiService.post(API_ENDPOINTS.PUSH_NOTIFICATION, notificationData);
+    if (response) {
       console.log('Push notification sent successfully');
     } else {
       console.error('Failed to send push notification');
@@ -1263,7 +1255,7 @@ const approveRequest = async (request) => {
               ? `/api/policy-approvals/${request.ApprovalId}/approve-status-change/`
               : `/api/framework-approvals/${request.ApprovalId}/approve-status-change/`
             
-            await axios.post(endpoint, {
+            await apiService.post(endpoint, {
               approved: true,
               remarks: remarks || 'Status change approved'
             })
@@ -1360,7 +1352,7 @@ const rejectRequest = async (request) => {
               ? `/api/policy-approvals/${request.ApprovalId}/approve-status-change/`
               : `/api/framework-approvals/${request.ApprovalId}/approve-status-change/`
             
-            await axios.post(endpoint, {
+            await apiService.post(endpoint, {
               approved: false,
               remarks: remarks || 'Status change rejected'
             })
@@ -1470,12 +1462,12 @@ const initializeUserData = async () => {
     console.log('Current user ID:', currentUserId.value)
     
     // Fetch user role from backend to determine administrator status
-    const roleResponse = await axios.get(API_ENDPOINTS.USER_ROLE)
-    console.log('User role response:', roleResponse.data)
+    const roleResponse = await apiService.get(API_ENDPOINTS.USER_ROLE)
+    console.log('User role response:', roleResponse)
     
-    if (roleResponse.data.success) {
-      const userRole = roleResponse.data.role
-      const currentUserName = roleResponse.data.username || roleResponse.data.user_name || ''
+    if (roleResponse && roleResponse.success) {
+      const userRole = roleResponse.role
+      const currentUserName = roleResponse.username || roleResponse.user_name || ''
       console.log('User role:', userRole)
       console.log('Current user name:', currentUserName)
       
@@ -1486,13 +1478,11 @@ const initializeUserData = async () => {
       if (isAdministrator.value) {
         // Fetch available users for administrator dropdown
         // Don't exclude current user for administrators - they should see all users including themselves
-        const response = await axios.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
-          params: {
+        const response = await apiService.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
             module: 'policy' // Status change requests are for policies/frameworks
             // Note: Not excluding current_user_id so administrators can see themselves
-          }
         })
-        let fetchedUsers = response.data || []
+        let fetchedUsers = response || []
         
         // Add current user to the list if not already present (for administrators)
         const currentUserInList = fetchedUsers.find(u => u.UserId === currentUserId.value)
@@ -1545,13 +1535,11 @@ const fetchReviewers = async () => {
   try {
     // Get current user ID to exclude from list
     const currentUserIdStr = currentUserId.value ? String(currentUserId.value) : ''
-    const response = await axios.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
-      params: {
+    const response = await apiService.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
         module: 'policy', // Status change requests are for policies/frameworks
         current_user_id: currentUserIdStr
-      }
     })
-    reviewers.value = response.data || []
+    reviewers.value = response || []
   } catch (error) {
     console.error('Error fetching reviewers:', error)
     reviewers.value = []

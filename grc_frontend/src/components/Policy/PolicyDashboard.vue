@@ -630,15 +630,15 @@ export default {
           return
         }
         
-        const response = await axios.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED, {
-          params: { userId: userId }
+        const response = await apiService.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED, {
+            userId: userId
         })
-        console.log('📊 DEBUG: Selected framework response:', response.data)
+        console.log('📊 DEBUG: Selected framework response:', response)
         
-        if (response.data && response.data.success) {
+        if (response && response.success) {
           // Check if a framework is selected (not null)
-          if (response.data.frameworkId) {
-          const frameworkIdFromSession = response.data.frameworkId
+          if (response.frameworkId) {
+          const frameworkIdFromSession = response.frameworkId
           console.log('✅ DEBUG: Found selected framework in session:', frameworkIdFromSession)
           
           // Store the session framework ID for filtering
@@ -701,7 +701,7 @@ export default {
           userId: userId
         }
         
-        await axios.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, payload)
+        await apiService.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, payload)
         console.log('✅ DEBUG: Framework saved to session successfully')
       } catch (error) {
         console.error('❌ DEBUG: Error saving framework to session:', error)

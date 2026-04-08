@@ -125,7 +125,7 @@
 
 <script>
 import { ref, computed, onMounted } from 'vue'
-import axios from 'axios'  // Use regular axios with global configuration from main.js
+import apiService from '@/services/apiService'
 
 export default {
   name: 'PerformancePage',
@@ -185,37 +185,27 @@ export default {
       try {
         console.log('[RBAC DEBUG] Attempting to load Policy KPIs...')
         
-        // Make API call to RBAC-protected endpoint using global axios configuration
-        const response = await axios.get('/policy-kpis/')
+        // Make API call to RBAC-protected endpoint using apiService
+        const response = await apiService.get('/policy-kpis/')
 
-        console.log('[RBAC DEBUG] Policy KPIs loaded successfully:', response.data)
-        kpiData.value = response.data
+        console.log('[RBAC DEBUG] Policy KPIs loaded successfully:', response)
+        kpiData.value = response
 
       } catch (err) {
         console.error('[RBAC DEBUG] Error loading Policy KPIs:', err)
         
-        if (err.response) {
-          const status = err.response.status
-          console.log('[RBAC DEBUG] Response status:', status)
-          console.log('[RBAC DEBUG] Response data:', err.response.data)
-          
-          if (status === 403) {
-            // Permission denied
-            accessDenied.value = true
-            error.value = 'Access denied: You do not have permission to view Policy KPIs'
-            console.log('[RBAC DEBUG] Access denied - user lacks policy_view permission')
-          } else if (status === 401) {
-            // Not authenticated
-            accessDenied.value = true
-            error.value = 'Authentication required: Please log in to access this page'
-            console.log('[RBAC DEBUG] Authentication required')
-          } else {
-            error.value = `Server error (${status}): ${err.response.data?.error || 'Unknown error'}`
-          }
-        } else if (err.request) {
-          error.value = 'Network error: Unable to connect to the server'
+        // apiService handles errors and returns them in a standard format
+        // If it reaches here, it might be a 403 or 401 that wasn't handled by the interceptor
+        // or a network error
+        
+        if (err.status === 403) {
+          accessDenied.value = true
+          error.value = 'Access denied: You do not have permission to view Policy KPIs'
+        } else if (err.status === 401) {
+          accessDenied.value = true
+          error.value = 'Authentication required: Please log in to access this page'
         } else {
-          error.value = `Request error: ${err.message}`
+          error.value = err.message || 'Failed to load Performance Data'
         }
       } finally {
         loading.value = false

@@ -120,7 +120,7 @@
 
 <script>
 import { API_ENDPOINTS } from '../../config/api.js'
-import axios from 'axios'
+import apiService from '@/services/apiService'
 
 export default {
   name: 'ReviewHistoryModal',
@@ -152,14 +152,8 @@ export default {
   methods: {
     async sendPushNotification(notificationData) {
       try {
-        const response = await fetch(API_ENDPOINTS.PUSH_NOTIFICATION, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(notificationData)
-        });
-        if (response.ok) {
+        const response = await apiService.post(API_ENDPOINTS.PUSH_NOTIFICATION, notificationData);
+        if (response) {
           console.log('Push notification sent successfully');
         } else {
           console.error('Failed to send push notification');
@@ -171,10 +165,10 @@ export default {
     async fetchReviewHistory() {
       try {
         this.loading = true
-        const response = await axios.get(API_ENDPOINTS.POLICY_REVIEW_HISTORY(this.policyId))
+        const response = await apiService.get(API_ENDPOINTS.POLICY_REVIEW_HISTORY(this.policyId))
         
-        if (response.data.success) {
-          this.reviewHistory = response.data.review_history
+        if (response && response.success) {
+          this.reviewHistory = response.review_history
           // Send success push notification
           this.sendPushNotification({
             title: 'Review History Loaded Successfully',
@@ -184,7 +178,7 @@ export default {
             user_id: 'default_user'
           });
         } else {
-          this.error = response.data.error || 'Failed to load review history'
+          this.error = (response && response.error) || 'Failed to load review history'
           // Send error push notification
           this.sendPushNotification({
             title: 'Review History Load Failed',
