@@ -22,7 +22,10 @@ def handle_risk_instance_changes(sender, instance, created, **kwargs):
         
         if created:
             # New risk instance created
-            event = RiskAvaireEventTrigger.create_risk_event(instance, "risk_detected")
+            tid = getattr(instance, "tenant_id", None)
+            event = RiskAvaireEventTrigger.create_risk_event(
+                instance, "risk_detected", tenant_id=tid
+            )
             if event:
                 logger.info(f"Auto-created event for new risk instance {instance.RiskInstanceId}")
         
@@ -36,14 +39,20 @@ def handle_risk_instance_changes(sender, instance, created, **kwargs):
                     # Check if risk status changed to approved
                     if (old_instance.RiskStatus != instance.RiskStatus and 
                         instance.RiskStatus == 'Approved'):
-                        event = RiskAvaireEventTrigger.create_risk_event(instance, "risk_approved")
+                        tid = getattr(instance, "tenant_id", None)
+                        event = RiskAvaireEventTrigger.create_risk_event(
+                            instance, "risk_approved", tenant_id=tid
+                        )
                         if event:
                             logger.info(f"Auto-created event for approved risk {instance.RiskInstanceId}")
                     
                     # Check if risk status changed to rejected
                     elif (old_instance.RiskStatus != instance.RiskStatus and 
                           instance.RiskStatus == 'Rejected'):
-                        event = RiskAvaireEventTrigger.create_risk_event(instance, "risk_rejected")
+                        tid = getattr(instance, "tenant_id", None)
+                        event = RiskAvaireEventTrigger.create_risk_event(
+                            instance, "risk_rejected", tenant_id=tid
+                        )
                         if event:
                             logger.info(f"Auto-created event for rejected risk {instance.RiskInstanceId}")
                     
@@ -51,6 +60,7 @@ def handle_risk_instance_changes(sender, instance, created, **kwargs):
                     elif (old_instance.MitigationStatus != instance.MitigationStatus and 
                           instance.MitigationStatus == 'Completed'):
                         # Create a completion event
+                        tid = getattr(instance, "tenant_id", None)
                         event_data = {
                             'EventTitle': f"Risk Mitigation Completed: {instance.RiskTitle}",
                             'Description': f"Risk mitigation has been completed for: {instance.RiskDescription}",
@@ -63,11 +73,19 @@ def handle_risk_instance_changes(sender, instance, created, **kwargs):
                             'StartDate': timezone.now().date(),
                             'EndDate': timezone.now().date(),
                             'RecurrenceType': 'Non-Recurring',
-                            'CreatedBy': Users.objects.filter(UserId=instance.UserId).first() if instance.UserId else None,
-                            'Owner': Users.objects.filter(UserId=instance.UserId).first() if instance.UserId else None,
-                            'Reviewer': Users.objects.filter(UserId=instance.ReviewerId).first() if instance.ReviewerId else None,
+                            'CreatedBy': Users.objects.filter(
+                                tenant_id=tid, UserId=instance.UserId
+                            ).first() if (tid and instance.UserId) else None,
+                            'Owner': Users.objects.filter(
+                                tenant_id=tid, UserId=instance.UserId
+                            ).first() if (tid and instance.UserId) else None,
+                            'Reviewer': Users.objects.filter(
+                                tenant_id=tid, UserId=instance.ReviewerId
+                            ).first() if (tid and instance.ReviewerId) else None,
                             'IsTemplate': False
                         }
+                        if tid is not None:
+                            event_data['tenant_id'] = tid
                         event = Event.objects.create(**event_data)
                         logger.info(f"Auto-created completion event for risk {instance.RiskInstanceId}")
                 
@@ -381,7 +399,9 @@ def check_overdue_items():
             ).first()
             
             if not existing_event:
-                event = RiskAvaireEventTrigger.create_risk_event(risk, "mitigation_overdue")
+                event = RiskAvaireEventTrigger.create_risk_event(
+                    risk, "mitigation_overdue", tenant_id=getattr(risk, "tenant_id", None)
+                )
                 if event:
                     created_events.append(event)
                     logger.info(f"Created overdue mitigation event for risk {risk.RiskInstanceId}")
@@ -402,7 +422,9 @@ def check_overdue_items():
             ).first()
             
             if not existing_event:
-                event = RiskAvaireEventTrigger.create_risk_event(risk, "risk_escalated")
+                event = RiskAvaireEventTrigger.create_risk_event(
+                    risk, "risk_escalated", tenant_id=getattr(risk, "tenant_id", None)
+                )
                 if event:
                     created_events.append(event)
                     logger.info(f"Created escalation event for risk {risk.RiskInstanceId}")

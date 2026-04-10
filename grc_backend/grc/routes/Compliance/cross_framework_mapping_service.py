@@ -186,7 +186,7 @@ class CrossFrameworkMappingService:
             logger.error(traceback.format_exc())
             return {
                 'success': False,
-                'error': str(e),
+                'error': 'Failed to check document against framework requirements',
                 'framework_id': framework_id
             }
     
@@ -360,6 +360,6 @@ class CrossFrameworkMappingService:
             logger.error(traceback.format_exc())
             return {
                 'success': False,
-                'error': str(e)
+                'error': 'Failed to complete cross-framework mapping'
             }
 

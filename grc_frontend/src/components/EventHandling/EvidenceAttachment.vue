@@ -358,6 +358,7 @@
 import { ref, computed } from 'vue'
 import { eventService } from '../../services/api'
 import { getFrameworkIdForClient } from '@/utils/frameworkContextStorage.js'
+import apiService from '@/services/apiService.js'
 
 export default {
   name: 'EvidenceAttachment',
@@ -548,10 +549,8 @@ export default {
           
           if (isRiskContext) {
             formData.append('risk_instance_id', props.riskInstanceId || props.incidentId || 'temp')
-            formData.append('user_id', props.userId || 'temp')
           } else {
             formData.append('incident_id', props.incidentId || 'temp')
-            formData.append('user_id', props.userId || 'temp')
           }
           
           // Include consent data if consent was required and accepted
@@ -569,43 +568,30 @@ export default {
           try {
             // Make API call to upload file - use appropriate endpoint
             const uploadUrl = isRiskContext ? '/api/upload-risk-evidence-file/' : '/api/upload-evidence-file/'
-            const response = await fetch(uploadUrl, {
-              method: 'POST',
-              body: formData,
-              headers: {
-                // Don't set Content-Type header for FormData, let browser set it with boundary
-              }
-            })
+            const result = await apiService.upload(uploadUrl, formData)
+            console.log('Upload response for', file.name, ':', result)
             
-            if (response.ok) {
-              const result = await response.json()
-              console.log('Upload response for', file.name, ':', result)
-              
-              if (result.success && result.files && result.files.length > 0) {
-                // Handle the actual backend response structure
-                const uploadedFileData = result.files.find(f => f.fileName === file.name) || result.files[0]
-                uploadedFiles.push({
-                  fileName: file.name,
-                  'aws-file_link': uploadedFileData['aws-file_link'],
-                  's3_key': uploadedFileData['s3_key'],
-                  'stored_name': uploadedFileData['stored_name'],
-                  'file_id': uploadedFileData['file_id'],
-                  'upload_type': uploadedFileData['upload_type'],
-                  size: file.size,
-                  uploadedAt: uploadedFileData.uploadedAt || new Date().toISOString()
-                })
-              } else {
-                // Fallback for legacy response format
-                uploadedFiles.push({
-                  fileName: file.name,
-                  'aws-file_link': result.file_url || result.url,
-                  size: file.size,
-                  uploadedAt: new Date().toISOString()
-                })
-              }
+            if (result.success && result.files && result.files.length > 0) {
+              // Handle the actual backend response structure
+              const uploadedFileData = result.files.find(f => f.fileName === file.name) || result.files[0]
+              uploadedFiles.push({
+                fileName: file.name,
+                'aws-file_link': uploadedFileData['aws-file_link'],
+                's3_key': uploadedFileData['s3_key'],
+                'stored_name': uploadedFileData['stored_name'],
+                'file_id': uploadedFileData['file_id'],
+                'upload_type': uploadedFileData['upload_type'],
+                size: file.size,
+                uploadedAt: uploadedFileData.uploadedAt || new Date().toISOString()
+              })
             } else {
-              const errorResult = await response.json()
-              throw new Error(errorResult.error || `Failed to upload ${file.name}`)
+              // Fallback for legacy response format
+              uploadedFiles.push({
+                fileName: file.name,
+                'aws-file_link': result.file_url || result.url,
+                size: file.size,
+                uploadedAt: new Date().toISOString()
+              })
             }
           } catch (fileError) {
             console.error(`Error uploading ${file.name}:`, fileError)
@@ -870,11 +856,9 @@ export default {
           const isRiskContext = props.riskInstanceId !== null && props.riskInstanceId !== undefined && props.riskInstanceId !== ''
           const linkData = isRiskContext ? {
             risk_instance_id: props.riskInstanceId,
-            user_id: props.userId,
             linked_events: selectedEvents.value
           } : {
             incident_id: props.incidentId,
-            user_id: props.userId,
             linked_events: selectedEvents.value
           }
           
@@ -900,52 +884,35 @@ export default {
             return
           }
           
-          // Get JWT token from browser storage (session-first)
-          const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token')
-          
           // Make API call to link evidence - use appropriate endpoint
           const linkUrl = isRiskContext ? '/api/risks/link-evidence/' : '/api/incidents/link-evidence/'
-          const response = await fetch(linkUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': token ? `Bearer ${token}` : '',
-            },
-            body: JSON.stringify(linkData)
-          })
+          const result = await apiService.post(linkUrl, linkData)
+          console.log('Link response:', result)
           
-          if (response.ok) {
-            const result = await response.json()
-            console.log('Link response:', result)
+          if (result.success) {
+            // Transform linked events to match the uploaded files format for parent component
+            const linkedEventsAsFiles = selectedEvents.value.map(event => ({
+              fileName: `${event.title} (${event.source})`,
+              'aws-file_link': `#linked-event-${event.id}`, // Use a placeholder URL for linked events
+              size: 0, // Linked events don't have file size
+              uploadedAt: new Date().toISOString(),
+              type: 'linked_evidence',
+              linkedEvent: event // Store the full event data
+            }))
             
-            if (result.success) {
-              // Transform linked events to match the uploaded files format for parent component
-              const linkedEventsAsFiles = selectedEvents.value.map(event => ({
-                fileName: `${event.title} (${event.source})`,
-                'aws-file_link': `#linked-event-${event.id}`, // Use a placeholder URL for linked events
-                size: 0, // Linked events don't have file size
-                uploadedAt: new Date().toISOString(),
-                type: 'linked_evidence',
-                linkedEvent: event // Store the full event data
-              }))
-              
-              // Emit the linked events as "uploaded files" to the parent component
-              emit('filesUploaded', linkedEventsAsFiles)
-              
-              uploadSuccess.value = true
-              selectedEvents.value = []
-              uploadProgress.value = 100
-              
-              setTimeout(() => {
-                uploadSuccess.value = false
-                goBack()
-              }, 2000)
-            } else {
-              uploadError.value = result.message || 'Failed to link selected events'
-            }
+            // Emit the linked events as "uploaded files" to the parent component
+            emit('filesUploaded', linkedEventsAsFiles)
+            
+            uploadSuccess.value = true
+            selectedEvents.value = []
+            uploadProgress.value = 100
+            
+            setTimeout(() => {
+              uploadSuccess.value = false
+              goBack()
+            }, 2000)
           } else {
-            const errorResult = await response.json().catch(() => ({ message: 'Unknown error' }))
-            uploadError.value = errorResult.message || 'Failed to link selected events'
+            uploadError.value = result.message || 'Failed to link selected events'
           }
         } catch (error) {
           console.error('Error linking events:', error)

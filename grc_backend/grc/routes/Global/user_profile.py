@@ -406,7 +406,7 @@ def get_data_subject_requests(request, user_id):
                         u.LastName,
                         approver.FirstName as ApproverFirstName,
                         approver.LastName as ApproverLastName
-                    FROM `DataSubjectRequest` dsr
+                    FROM `datasubjectrequest` dsr
                     LEFT JOIN `users` u ON dsr.user_id = u.UserId
                     LEFT JOIN `users` approver ON dsr.approved_by = approver.UserId
                     ORDER BY dsr.created_at DESC
@@ -427,7 +427,7 @@ def get_data_subject_requests(request, user_id):
                         dsr.approved_by,
                         approver.FirstName as ApproverFirstName,
                         approver.LastName as ApproverLastName
-                    FROM `DataSubjectRequest` dsr
+                    FROM `datasubjectrequest` dsr
                     LEFT JOIN `users` approver ON dsr.approved_by = approver.UserId
                     WHERE dsr.user_id = %s
                     ORDER BY dsr.created_at DESC
@@ -757,7 +757,7 @@ def create_data_subject_request(request):
                 SELECT COLUMN_NAME 
                 FROM INFORMATION_SCHEMA.COLUMNS 
                 WHERE TABLE_SCHEMA = DATABASE() 
-                AND TABLE_NAME = 'DataSubjectRequest' 
+                AND TABLE_NAME = 'datasubjectrequest' 
                 AND COLUMN_NAME = 'FrameworkId'
             """)
             has_framework_id = cursor.fetchone() is not None
@@ -765,7 +765,7 @@ def create_data_subject_request(request):
             if has_framework_id and framework_id_value:
                 # Include FrameworkId in the INSERT
                 cursor.execute("""
-                    INSERT INTO `DataSubjectRequest` 
+                    INSERT INTO `datasubjectrequest` 
                     (request_type, user_id, status, verification_status, audit_trail, approved_by, FrameworkId, created_at, updated_at)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """, [
@@ -782,7 +782,7 @@ def create_data_subject_request(request):
             else:
                 # FrameworkId column doesn't exist, create without it
                 cursor.execute("""
-                    INSERT INTO `DataSubjectRequest` 
+                    INSERT INTO `datasubjectrequest` 
                     (request_type, user_id, status, verification_status, audit_trail, approved_by, created_at, updated_at)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 """, [
@@ -1444,7 +1444,7 @@ def export_user_data_portability(request):
                         SELECT COLUMN_NAME 
                         FROM INFORMATION_SCHEMA.COLUMNS 
                         WHERE TABLE_SCHEMA = DATABASE() 
-                        AND TABLE_NAME = 'DataSubjectRequest' 
+                        AND TABLE_NAME = 'datasubjectrequest' 
                         AND COLUMN_NAME = 'FrameworkId'
                     """)
                     has_framework_id = cursor.fetchone() is not None
@@ -1461,7 +1461,7 @@ def export_user_data_portability(request):
                     
                     if has_framework_id and framework_id_value:
                         cursor.execute("""
-                            INSERT INTO `DataSubjectRequest` 
+                            INSERT INTO `datasubjectrequest` 
                             (request_type, user_id, status, verification_status, audit_trail, approved_by, FrameworkId, created_at, updated_at)
                             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                         """, [
@@ -1477,7 +1477,7 @@ def export_user_data_portability(request):
                         ])
                     else:
                         cursor.execute("""
-                            INSERT INTO `DataSubjectRequest` 
+                            INSERT INTO `datasubjectrequest` 
                             (request_type, user_id, status, verification_status, audit_trail, approved_by, created_at, updated_at)
                             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                         """, [
@@ -1534,7 +1534,7 @@ def update_data_subject_request_status(request, request_id):
         with connection.cursor() as cursor:
             cursor.execute("""
                 SELECT id, user_id, status
-                FROM `DataSubjectRequest`
+                FROM `datasubjectrequest`
                 WHERE id = %s
             """, [request_id])
             
@@ -1612,7 +1612,7 @@ def update_data_subject_request_status(request, request_id):
             # Get current audit trail, request type, and request details
             cursor.execute("""
                 SELECT audit_trail, user_id, request_type
-                FROM `DataSubjectRequest`
+                FROM `datasubjectrequest`
                 WHERE id = %s
             """, [request_id])
             

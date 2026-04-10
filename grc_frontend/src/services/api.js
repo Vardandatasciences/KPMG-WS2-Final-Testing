@@ -176,6 +176,11 @@ api.interceptors.request.use((config) => {
     }
   }
  
+  // CRITICAL: Add user_id to request if available (legacy compatibility).
+  // SECURITY: Never inject client user identifiers for compliance APIs.
+  const requestUrl = String(config.url || '');
+  const isComplianceApi = requestUrl.includes('/api/compliance') || requestUrl.includes('api/compliance');
+
   // CRITICAL: Add user_id to request if available (for backward compatibility)
   // Try multiple sources for user_id
   let userId = localStorage.getItem('user_id') || 
@@ -203,7 +208,7 @@ api.interceptors.request.use((config) => {
   
   // CRITICAL: For cookie preferences endpoint, ALWAYS add user_id if available
   // This ensures user_id is sent even if it was null/undefined in the original data
-  if (userId && !isNaN(userId) && !config.url.includes('api/incidents/recent/')) {
+  if (userId && !isNaN(userId) && !config.url.includes('api/incidents/recent/') && !isComplianceApi) {
     // Add user_id to query params for GET requests
     if (config.method === 'get') {
       config.params = config.params || {};
@@ -655,9 +660,9 @@ export const eventService = {
   // Get modules for event creation
   getModules: () => api.get('api/events/modules/'),
   
-  // Get event types by framework
-  getEventTypesByFramework: (frameworkName) => api.get('api/events/event-types-by-framework/', {
-    params: { framework_name: frameworkName }
+  // Get event types by framework (prefer framework_id, fallback to name)
+  getEventTypesByFramework: (frameworkName, frameworkId = null) => api.get('api/events/event-types-by-framework/', {
+    params: { framework_name: frameworkName, framework_id: frameworkId }
   }),
   
   // Get dynamic fields for event creation based on framework and event type
@@ -709,18 +714,14 @@ export const eventService = {
   // Get event details
   getEventDetails: (eventId) => api.get(API_ENDPOINTS.EVENT_DETAILS(eventId)),
   
-  // Get current user information
-  getCurrentUser: (userId) => api.get('api/events/current-user/', {
-    params: { user_id: userId }
-  }),
+  // Get current user information (identity from session; no client user_id)
+  getCurrentUser: () => api.get('api/events/current-user/'),
   
   // Get users for reviewer selection (all users except current user)
-  getUsersForReviewer: (userId) => api.get('api/events/users-for-reviewer/', {
-    params: { user_id: userId }
-  }),
+  getUsersForReviewer: () => api.get('api/events/users-for-reviewer/'),
   
-  // Get all users from database
-  getUsers: () => api.get('api/users/'),
+  // Get users for owner/reviewer dropdowns in event module
+  getUsers: () => api.get('api/events/users-for-reviewer/'),
   
   // Get events for calendar (recurring events only)
   getEventsForCalendar: () => api.get(API_ENDPOINTS.EVENTS_CALENDAR),
@@ -786,11 +787,11 @@ export const eventService = {
 
 // S3 Upload Service
 export const s3Service = {
-  // Upload file to S3 via microservice
-  uploadFile: (file, userId, customFileName = null) => {
+  // Upload file to S3 via microservice (session-authenticated)
+  uploadFile: (file, customFileName = null) => {
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('user_id', userId);
+    // User identity comes from the session; do not trust client-supplied user_id.
     if (customFileName) {
       formData.append('custom_file_name', customFileName);
     }
@@ -804,9 +805,8 @@ export const s3Service = {
   },
   
   // Download file from S3
-  downloadFile: (s3Key, fileName, userId) => {
+  downloadFile: (s3Key, fileName) => {
     return api.get(`/api/s3/download/${s3Key}/${fileName}/`, {
-      params: { user_id: userId },
       responseType: 'blob'
     });
   },

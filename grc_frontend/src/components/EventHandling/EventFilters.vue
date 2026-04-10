@@ -129,7 +129,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { MODULES, CATEGORIES } from '../../utils/constants'
 import { eventService } from '../../services/api'
 import CustomDropdown from '@/components/CustomDropdown.vue'
-import axios from 'axios'
+import apiService from '@/services/apiService.js'
 import './EventFilters.css'
 import '@fortawesome/fontawesome-free/css/all.min.css'
 import '@/assets/css/main.css'
@@ -219,15 +219,15 @@ export default {
         console.log('🚀 DEBUG: EventFilters fetchFrameworks called - using /api/frameworks/ endpoint')
         
         // Use the same framework endpoint as Policy components to ensure consistency
-        const response = await axios.get('/api/frameworks/', {
+        const response = await apiService.get('/api/frameworks/', {
           params: {
             _t: Date.now() // Cache busting parameter
           }
         })
-        console.log('🔍 DEBUG: Frameworks response in EventFilters:', response.data)
+        console.log('🔍 DEBUG: Frameworks response in EventFilters:', response)
         
         // Map the response to match the expected format
-        frameworks.value = response.data.map(fw => ({
+        frameworks.value = response.map(fw => ({
           FrameworkId: fw.FrameworkId,
           FrameworkName: fw.FrameworkName
         }))
@@ -312,16 +312,22 @@ export default {
         
         if (response.data.success) {
           console.log('✅ DEBUG: Users fetched successfully:', response.data.users)
-          
-          // Format users as "FirstName LastName" for display
-          const formattedUsers = response.data.users.map(user => {
-            const fullName = `${user.FirstName || ''} ${user.LastName || ''}`.trim()
+
+          // Support multiple backend user shapes safely.
+          const formattedUsers = (response.data.users || []).map(user => {
+            const fullName = (
+              user.name ||
+              `${user.first_name || user.FirstName || ''} ${user.last_name || user.LastName || ''}`
+            ).trim()
             console.log('👤 DEBUG: Formatting user:', user, '-> Full name:', fullName)
             return fullName
           }).filter(Boolean)
+
+          // Deduplicate and sort for stable dropdown UX.
+          const uniqueUsers = [...new Set(formattedUsers)].sort((a, b) => a.localeCompare(b))
           
-          console.log('📝 DEBUG: Formatted users for dropdown:', formattedUsers)
-          owners.value = formattedUsers
+          console.log('📝 DEBUG: Formatted users for dropdown:', uniqueUsers)
+          owners.value = uniqueUsers
         } else {
           console.error('❌ DEBUG: API returned success: false:', response.data)
           ownersError.value = response.data.error || 'Failed to fetch users'

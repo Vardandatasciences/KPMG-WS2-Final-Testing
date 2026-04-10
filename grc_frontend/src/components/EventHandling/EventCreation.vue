@@ -1751,8 +1751,7 @@ import { PopupService } from '../../modules/popus/popupService'
 import PopupModal from '../../modules/popus/PopupModal.vue'
 import { checkConsentRequired, CONSENT_ACTIONS } from '@/utils/consentManager.js'
 import { getFrameworkIdForClient } from '@/utils/frameworkContextStorage.js'
-import axios from 'axios'
-import { API_ENDPOINTS } from '../../config/api.js'
+import apiService from '@/services/apiService.js'
 
 export default {
   name: 'EventCreation',
@@ -1905,17 +1904,12 @@ export default {
     const checkSelectedFrameworkFromSession = async () => {
       try {
         console.log('🔍 DEBUG: Checking for selected framework from session in EventCreation...')
-        const response = await axios.get('/api/frameworks/get-selected/', {
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-          }
-        })
+        const response = await apiService.get('/api/frameworks/get-selected/')
         
-        console.log('🔍 DEBUG: Framework response in EventCreation:', response.data)
+        console.log('🔍 DEBUG: Framework response in EventCreation:', response)
         
-        if (response.data && response.data.frameworkId) {
-          const frameworkIdFromSession = response.data.frameworkId.toString()
+        if (response && response.frameworkId) {
+          const frameworkIdFromSession = response.frameworkId.toString()
           console.log('✅ DEBUG: Found selected framework in session for EventCreation:', frameworkIdFromSession)
           
           // Pre-select the framework in the form
@@ -1993,7 +1987,7 @@ export default {
       }
     }
 
-    const fetchEventTypes = async (frameworkName) => {
+    const fetchEventTypes = async (frameworkName, frameworkId = null) => {
       if (!frameworkName) {
         eventTypes.value = []
         eventTypesError.value = null
@@ -2007,7 +2001,7 @@ export default {
         // Trim the framework name to remove any extra whitespace
         const trimmedFrameworkName = frameworkName.trim()
         console.log('Fetching event types for framework:', `"${trimmedFrameworkName}"`)
-        const response = await eventService.getEventTypesByFramework(trimmedFrameworkName)
+        const response = await eventService.getEventTypesByFramework(trimmedFrameworkName, frameworkId)
         
         console.log('Event types response:', response.data)
         
@@ -2118,13 +2112,7 @@ export default {
       loadingCurrentUser.value = true
       
       try {
-        const userId = localStorage.getItem('user_id')
-        if (!userId) {
-          console.error('No user ID found in localStorage')
-          return
-        }
-        
-        const response = await eventService.getCurrentUser(userId)
+        const response = await eventService.getCurrentUser()
         if (response.data.success) {
           currentUser.value = response.data.user
           formData.value.owner = response.data.user.name
@@ -2132,18 +2120,13 @@ export default {
         }
       } catch (error) {
         console.error('Error fetching current user:', error)
-        // Fallback: try to get user name from localStorage
         const storedUserName = localStorage.getItem('user_name')
-        const storedUserId = localStorage.getItem('user_id')
         if (storedUserName) {
           formData.value.owner = storedUserName
-          formData.value.ownerId = storedUserId || null
-          console.log('Using stored user name from localStorage:', storedUserName)
+          formData.value.ownerId = null
         } else {
-          // Last resort: use user_id to construct a default
-          const fallbackUserId = localStorage.getItem('user_id')
-          formData.value.owner = fallbackUserId ? `User ${fallbackUserId}` : 'Unknown User'
-          formData.value.ownerId = fallbackUserId || null
+          formData.value.owner = 'Unknown User'
+          formData.value.ownerId = null
         }
       } finally {
         loadingCurrentUser.value = false
@@ -2155,24 +2138,12 @@ export default {
       loadingReviewers.value = true
       
       try {
-        const userId = localStorage.getItem('user_id') || sessionStorage.getItem('user_id') || ''
-        if (!userId) {
-          console.error('No user ID found in localStorage')
-          return
-        }
-        
-        // Fetch reviewers filtered by RBAC permissions (ApproveEvent) for event module
-        const response = await axios.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
-          params: {
-            module: 'event',
-            current_user_id: userId
-          }
-        })
-        
-        if (Array.isArray(response.data)) {
-          reviewers.value = response.data.map(user => ({
-            id: user.UserId || user.id,
-            name: user.UserName || user.name
+        // Use event-module reviewer endpoint (session + tenant + module permissions)
+        const response = await eventService.getUsersForReviewer()
+        if (response.data?.success && Array.isArray(response.data.users)) {
+          reviewers.value = response.data.users.map(user => ({
+            id: user.id ?? user.UserId,
+            name: user.name ?? user.UserName
           }))
         } else {
           reviewers.value = []
@@ -2308,8 +2279,6 @@ export default {
           }
         }
         
-        const userId = localStorage.getItem('user_id')
-        
         // Prepare evidence data for backend
         console.log('DEBUG: All evidence files:', formData.value.evidence)
         console.log('DEBUG: Evidence files with uploaded status:', formData.value.evidence.filter(file => file.status === 'uploaded'))
@@ -2374,8 +2343,6 @@ export default {
           priority: 'Medium',
           owner_id: formData.value.ownerId,
           reviewer_id: formData.value.reviewerId,
-          created_by_id: formData.value.ownerId,
-          user_id: userId,  // Add user_id for backend authentication
           is_template: formData.value.isTemplate,  // Add template selection
           evidence: evidenceJsonString,  // Include evidence files as JSON string
           dynamic_fields: formData.value.dynamicFields,  // Include dynamic fields
@@ -2684,7 +2651,7 @@ export default {
         records.value = []
         subEventTypes.value = []
         // Fetch event types for the selected framework
-        fetchEventTypes(formData.value.framework)
+        fetchEventTypes(formData.value.framework, formData.value.frameworkId)
       }
     }
 
@@ -2740,7 +2707,7 @@ export default {
         // Fetch records for the selected framework and module
         fetchRecords(selectedFramework.FrameworkId, template.module)
         // Fetch event types for the framework and find matching event type
-        fetchEventTypes(template.framework).then(() => {
+        fetchEventTypes(template.framework, formData.value.frameworkId).then(() => {
           // Find matching event type based on template category
           if (template.category) {
             const matchingEventType = eventTypes.value.find(et => et.eventtype === template.category)
@@ -2981,12 +2948,6 @@ export default {
         // Continue with upload if consent check fails
       }
 
-      const userId = localStorage.getItem('user_id')
-      if (!userId) {
-        PopupService.error('User ID not found. Please log in again.', 'Authentication Error')
-        return
-      }
-
       uploadingFiles.value = true
       const uploadPromises = []
 
@@ -3018,7 +2979,7 @@ export default {
         uploadProgress.value[fileId] = 0
 
         // Upload file
-        const uploadPromise = uploadSingleFile(file, userId, fileId)
+        const uploadPromise = uploadSingleFile(file, fileId)
         uploadPromises.push(uploadPromise)
       }
 
@@ -3033,9 +2994,9 @@ export default {
       }
     }
 
-    const uploadSingleFile = async (file, userId, fileId) => {
+    const uploadSingleFile = async (file, fileId) => {
       try {
-        const response = await s3Service.uploadFile(file, userId)
+        const response = await s3Service.uploadFile(file)
         
         if (response.data.success) {
           // Update file data with S3 information
@@ -3226,11 +3187,10 @@ export default {
           // Create form data for file upload
           const formData = new FormData()
           formData.append('file', file)
-          formData.append('user_id', localStorage.getItem('user_id') || 'temp')
           
           try {
             // Make API call to upload file
-            const response = await s3Service.uploadFile(file, localStorage.getItem('user_id'))
+            const response = await s3Service.uploadFile(file)
             
             if (response.data.success) {
               uploadedFiles.push({

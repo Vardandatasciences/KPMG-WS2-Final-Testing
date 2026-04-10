@@ -296,12 +296,20 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import axios from 'axios'
+import apiService from '@/services/apiService.js'
 import { ElMessage } from 'element-plus'
 import DynamicTable from '../DynamicTable.vue'
 import CustomDropdown from '../CustomDropdown.vue'
 import { API_ENDPOINTS } from '../../config/api.js'
 import { openDownloadInNewTabWithAnchorFallback } from '@/utils/safeExternalNavigation'
+
+const axios = {
+  get: async (url, config = {}) => ({ data: await apiService.get(url, config.params || {}, { ...config, params: undefined }) }),
+  post: async (url, data, config = {}) => ({ data: await apiService.post(url, data, config) }),
+  put: async (url, data, config = {}) => ({ data: await apiService.put(url, data, config) }),
+  patch: async (url, data, config = {}) => ({ data: await apiService.patch(url, data, config) }),
+  delete: async (url, config = {}) => ({ data: await apiService.delete(url, config) })
+}
 
 const router = useRouter()
 

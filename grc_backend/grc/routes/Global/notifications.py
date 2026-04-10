@@ -10,9 +10,170 @@ from django.db import connection
 from ...debug_utils import debug_print
 from datetime import datetime
 import uuid
+import time
+from threading import Lock
+from collections import defaultdict
 
 # Simple in-memory storage for notifications (in production, use database)
 notifications_storage = []
+
+# --- Event notification anti-spam (in-process; shared across workers only within one process) ---
+_EVENT_NOTIF_LOCK = Lock()
+_EVENT_NOTIF_DEDUP = {}
+_EVENT_NOTIF_EMAIL_TIMESTAMPS = defaultdict(list)
+_EVENT_NOTIF_INAPP_TIMESTAMPS = defaultdict(list)
+
+EVENT_NOTIF_DEDUP_SECONDS = 120
+EVENT_NOTIF_MAX_EMAIL_PER_RECIPIENT_PER_MIN = 20
+EVENT_NOTIF_MAX_INAPP_PER_USER_PER_MIN = 40
+_EVENT_NOTIF_DEDUP_PRUNE_AT = 8000
+
+
+def _norm_event_notif_email(email):
+    return str(email or "").strip().lower()
+
+
+def _event_notif_recipient_key(channel, email, user_id):
+    if channel == "email":
+        return _norm_event_notif_email(email)
+    if channel == "whatsapp":
+        return str(user_id or email or "").strip()
+    return str(user_id or "").strip() or _norm_event_notif_email(email)
+
+
+def _event_notif_dedup_key(channel, recipient_key, notification_type, event_id, dedup_extra=""):
+    return (
+        channel,
+        recipient_key,
+        str(notification_type or ""),
+        str(event_id if event_id is not None else ""),
+        str(dedup_extra or ""),
+    )
+
+
+def _prune_event_notif_dedup():
+    if len(_EVENT_NOTIF_DEDUP) <= _EVENT_NOTIF_DEDUP_PRUNE_AT:
+        return
+    now = time.time()
+    cutoff = now - (EVENT_NOTIF_DEDUP_SECONDS * 3)
+    stale = [k for k, v in _EVENT_NOTIF_DEDUP.items() if v < cutoff]
+    for k in stale[:4000]:
+        del _EVENT_NOTIF_DEDUP[k]
+
+
+def event_notification_allow(email, user_id, notification_type, event_id, channel, dedup_extra=""):
+    """
+    Returns (True, None) to send, or (False, reason) to skip (dedup / rate limit).
+    channel: 'email' | 'in_app' | 'whatsapp'
+    """
+    now = time.time()
+    recipient_key = _event_notif_recipient_key(channel, email, user_id)
+    if not recipient_key:
+        return True, None
+
+    dk = _event_notif_dedup_key(channel, recipient_key, notification_type, event_id, dedup_extra)
+    with _EVENT_NOTIF_LOCK:
+        last = _EVENT_NOTIF_DEDUP.get(dk)
+        if last is not None and (now - last) < EVENT_NOTIF_DEDUP_SECONDS:
+            return False, "dedup"
+
+        if channel == "email":
+            arr = _EVENT_NOTIF_EMAIL_TIMESTAMPS[recipient_key]
+            cutoff = now - 60.0
+            arr[:] = [t for t in arr if t > cutoff]
+            if len(arr) >= EVENT_NOTIF_MAX_EMAIL_PER_RECIPIENT_PER_MIN:
+                return False, "email_rate_limit"
+
+        if channel == "in_app":
+            arr = _EVENT_NOTIF_INAPP_TIMESTAMPS[recipient_key]
+            cutoff = now - 60.0
+            arr[:] = [t for t in arr if t > cutoff]
+            if len(arr) >= EVENT_NOTIF_MAX_INAPP_PER_USER_PER_MIN:
+                return False, "in_app_rate_limit"
+
+        if channel == "whatsapp":
+            wa_key = "wa:" + recipient_key
+            arr = _EVENT_NOTIF_EMAIL_TIMESTAMPS[wa_key]
+            cutoff = now - 60.0
+            arr[:] = [t for t in arr if t > cutoff]
+            if len(arr) >= EVENT_NOTIF_MAX_EMAIL_PER_RECIPIENT_PER_MIN:
+                return False, "whatsapp_rate_limit"
+
+    return True, None
+
+
+def event_notification_record_sent(email, user_id, notification_type, event_id, channel, dedup_extra=""):
+    now = time.time()
+    recipient_key = _event_notif_recipient_key(channel, email, user_id)
+    if not recipient_key:
+        return
+    dk = _event_notif_dedup_key(channel, recipient_key, notification_type, event_id, dedup_extra)
+    with _EVENT_NOTIF_LOCK:
+        _EVENT_NOTIF_DEDUP[dk] = now
+        _prune_event_notif_dedup()
+        if channel == "email":
+            _EVENT_NOTIF_EMAIL_TIMESTAMPS[_norm_event_notif_email(email)].append(now)
+        elif channel == "in_app":
+            _EVENT_NOTIF_INAPP_TIMESTAMPS[recipient_key].append(now)
+        elif channel == "whatsapp":
+            _EVENT_NOTIF_EMAIL_TIMESTAMPS["wa:" + recipient_key].append(now)
+
+
+def send_event_aware_multi_channel(notification_service, notification_data, event_id, recipient_user_id=None, dedup_extra=""):
+    """
+    Wraps NotificationService.send_multi_channel_notification with event-specific dedup and rate limits.
+    Mutates a copy of notification_data only; does not record sends unless a channel actually succeeds.
+    """
+    ntype = notification_data.get("notification_type")
+    nd = dict(notification_data)
+    email = nd.get("email")
+    wa = nd.get("whatsapp_number")
+
+    if email and nd.get("email_type"):
+        ok, reason = event_notification_allow(email, recipient_user_id, ntype, event_id, "email", dedup_extra=dedup_extra)
+        if not ok:
+            debug_print(
+                f"Event notification email suppressed ({reason}): {email} type={ntype} event={event_id}"
+            )
+            nd["email"] = None
+            nd["email_type"] = None
+
+    if wa:
+        ok, reason = event_notification_allow(wa, wa, ntype, event_id, "whatsapp", dedup_extra=dedup_extra)
+        if not ok:
+            debug_print(f"Event notification whatsapp suppressed ({reason}): {wa} type={ntype} event={event_id}")
+            nd["whatsapp_number"] = None
+
+    result = notification_service.send_multi_channel_notification(nd)
+    if not result.get("success"):
+        return result
+
+    det = result.get("details")
+    if isinstance(det, dict):
+        if det.get("email") and email:
+            event_notification_record_sent(email, recipient_user_id, ntype, event_id, "email", dedup_extra=dedup_extra)
+        if det.get("whatsapp") and wa:
+            event_notification_record_sent(wa, wa, ntype, event_id, "whatsapp", dedup_extra=dedup_extra)
+
+    return result
+
+
+def append_event_notification_in_app(notification, event_id, notification_type, dedup_extra=""):
+    """
+    Append to notifications_storage with the same anti-spam rules as outbound event emails.
+    """
+    uid = notification.get("user_id")
+    ok, reason = event_notification_allow(None, uid, notification_type, event_id, "in_app", dedup_extra=dedup_extra)
+    if not ok:
+        debug_print(
+            f"Event in-app notification suppressed ({reason}): user={uid} type={notification_type} event={event_id}"
+        )
+        return False
+    notifications_storage.append(notification)
+    if len(notifications_storage) > 1000:
+        notifications_storage.pop(0)
+    event_notification_record_sent(None, uid, notification_type, event_id, "in_app", dedup_extra=dedup_extra)
+    return True
 
 def get_user_email_from_id(user_id):
     """Get user email from user_id"""

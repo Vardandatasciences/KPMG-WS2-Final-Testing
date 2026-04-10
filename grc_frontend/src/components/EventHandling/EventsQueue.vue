@@ -721,9 +721,7 @@ export default {
       
       try {
         loading.value = true
-        const response = await eventService.rejectEvent(selectedItem.value.id, {
-          user_id: localStorage.getItem('user_id') || '2'
-        })
+        const response = await eventService.rejectEvent(selectedItem.value.id, {})
         
         if (response.data.success) {
           // Update the event status in the local data
@@ -771,7 +769,6 @@ export default {
           const integrationItemId = selectedItem.value.id.replace('integration_', '')
           
           const response = await eventService.createEventFromIntegration({
-            user_id: localStorage.getItem('user_id') || '2',
             integration_item_id: integrationItemId,
             integration_type: selectedItem.value.source.toLowerCase().replace(' ', '_'),
             action: 'archive' // Add action parameter to indicate archiving
@@ -801,9 +798,7 @@ export default {
           }
         } else {
           // RiskaVaire event archiving
-          const response = await eventService.archiveEvent(selectedItem.value.id, {
-            user_id: localStorage.getItem('user_id') || '2'
-          })
+          const response = await eventService.archiveEvent(selectedItem.value.id, {})
           
           if (response.data.success) {
             // Remove the event from the local data
@@ -834,7 +829,6 @@ export default {
       try {
         loading.value = true
         const response = await eventService.updateEvent(selectedItem.value.id, {
-          user_id: localStorage.getItem('user_id') || '2',
           title: editForm.value.title,
           description: editForm.value.description,
           priority: editForm.value.priority,
@@ -875,7 +869,6 @@ export default {
         loading.value = true
         const formData = new FormData()
         formData.append('file', attachForm.value.file)
-        formData.append('user_id', localStorage.getItem('user_id') || '2')
         
         const response = await eventService.attachEvidence(selectedItem.value.id, formData)
         

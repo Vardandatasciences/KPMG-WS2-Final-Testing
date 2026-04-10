@@ -28,6 +28,7 @@ from ...models import (
     OrganizationalControl, OrganizationalControlDocument, Framework, Policy, SubPolicy, Compliance, Users
 )
 from ...rbac.utils import RBACUtils
+from ...rbac.permissions import ComplianceViewPermission, ComplianceEditPermission
 
 # MULTI-TENANCY: Import tenant utilities for data isolation
 from ...tenant_utils import (
@@ -41,6 +42,8 @@ logger = logging.getLogger(__name__)
 
 # Task name for org control mapping audit (registered in grc/ai prompts + config)
 CONTROL_MAPPING_AUDIT_TASK = "compliance.control_mapping_audit"
+MAX_UPLOAD_SIZE_BYTES = 20 * 1024 * 1024  # 20 MB per file
+ALLOWED_UPLOAD_EXTENSIONS = {'.txt', '.pdf', '.docx'}
 
 
 class CsrfExemptSessionAuthentication(SessionAuthentication):
@@ -101,6 +104,7 @@ def table_exists(cursor, table_name):
 @csrf_exempt
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@permission_classes([ComplianceViewPermission])
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_framework_controls(request, framework_id):
@@ -120,9 +124,9 @@ def get_framework_controls(request, framework_id):
             cursor.execute("""
                 SELECT PolicyId, PolicyName, Identifier 
                 FROM policies 
-                WHERE FrameworkId = %s
+                WHERE FrameworkId = %s AND TenantId = %s
                 ORDER BY Identifier, PolicyName
-            """, [framework_id])
+            """, [framework_id, tenant_id])
             policies = cursor.fetchall()
             
             result = []
@@ -134,9 +138,9 @@ def get_framework_controls(request, framework_id):
                 cursor.execute("""
                     SELECT SubPolicyId, SubPolicyName, Identifier, Description
                     FROM subpolicies 
-                    WHERE PolicyId = %s
+                    WHERE PolicyId = %s AND TenantId = %s
                     ORDER BY Identifier, SubPolicyName
-                """, [policy_id])
+                """, [policy_id, tenant_id])
                 subpolicies = cursor.fetchall()
                 
                 subpolicy_list = []
@@ -153,9 +157,9 @@ def get_framework_controls(request, framework_id):
                                    oc.AIAnalysis, oc.ConfidenceScore
                             FROM compliance c
                             LEFT JOIN organizational_controls oc ON c.ComplianceId = oc.ComplianceId
-                            WHERE c.SubPolicyId = %s
+                            WHERE c.SubPolicyId = %s AND c.TenantId = %s
                             ORDER BY c.Identifier, c.ComplianceTitle
-                        """, [sp_id])
+                        """, [sp_id, tenant_id])
                         compliances = cursor.fetchall()
                         
                         compliance_list = []
@@ -199,9 +203,9 @@ def get_framework_controls(request, framework_id):
                             SELECT ComplianceId, ComplianceTitle, ComplianceItemDescription, 
                                    Identifier, MandatoryOptional, Criticality
                             FROM compliance 
-                            WHERE SubPolicyId = %s
+                            WHERE SubPolicyId = %s AND TenantId = %s
                             ORDER BY Identifier, ComplianceTitle
-                        """, [sp_id])
+                        """, [sp_id, tenant_id])
                         compliances = cursor.fetchall()
                         
                         compliance_list = []
@@ -249,7 +253,7 @@ def get_framework_controls(request, framework_id):
         logger.error(f"Error getting framework controls: {e}")
         return Response({
             'success': False,
-            'error': str(e)
+            'error': 'Failed to load framework controls'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -257,6 +261,7 @@ def get_framework_controls(request, framework_id):
 @csrf_exempt
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@permission_classes([ComplianceViewPermission])
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_organizational_control(request, compliance_id):
@@ -275,8 +280,8 @@ def get_organizational_control(request, compliance_id):
                        c.ComplianceTitle, c.ComplianceItemDescription, c.Identifier
                 FROM organizational_controls oc
                 JOIN compliance c ON oc.ComplianceId = c.ComplianceId
-                WHERE oc.ComplianceId = %s
-            """, [compliance_id])
+                WHERE oc.ComplianceId = %s AND c.TenantId = %s
+            """, [compliance_id, tenant_id])
             
             row = cursor.fetchone()
             
@@ -337,7 +342,7 @@ def get_organizational_control(request, compliance_id):
         logger.error(f"Error getting organizational control: {e}")
         return Response({
             'success': False,
-            'error': str(e)
+            'error': 'Failed to load organizational control'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -345,6 +350,7 @@ def get_organizational_control(request, compliance_id):
 @csrf_exempt
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@permission_classes([ComplianceEditPermission])
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def save_organizational_control(request):
@@ -407,7 +413,7 @@ def save_organizational_control(request):
         logger.error(f"Error saving organizational control: {e}")
         return Response({
             'success': False,
-            'error': str(e)
+            'error': 'Failed to save organizational control'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -416,6 +422,7 @@ def save_organizational_control(request):
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @parser_classes([MultiPartParser, FormParser])
+@permission_classes([ComplianceEditPermission])
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def upload_organizational_document(request):
@@ -520,9 +527,20 @@ def upload_organizational_document(request):
         
         # Process each file
         for file in files:
+            file_extension = os.path.splitext(file.name)[1].lower()
+            if file_extension not in ALLOWED_UPLOAD_EXTENSIONS:
+                return Response({
+                    'success': False,
+                    'error': f'Unsupported file type: {file_extension}. Allowed: .txt, .pdf, .docx'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            if file.size > MAX_UPLOAD_SIZE_BYTES:
+                return Response({
+                    'success': False,
+                    'error': f'File {file.name} exceeds maximum allowed size (20 MB)'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
             # Generate unique file ID
             file_id = str(uuid.uuid4())
-            file_extension = os.path.splitext(file.name)[1].lower()
             unique_filename = f"{file_id}{file_extension}"
             
             # Save file
@@ -608,7 +626,7 @@ def upload_organizational_document(request):
         logger.error(f"Error uploading organizational document: {e}")
         return Response({
             'success': False,
-            'error': str(e)
+            'error': 'Failed to upload organizational document'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -616,6 +634,7 @@ def upload_organizational_document(request):
 @csrf_exempt
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@permission_classes([ComplianceEditPermission])
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def run_control_mapping_audit(request):
@@ -806,7 +825,7 @@ Respond in this exact JSON format:
         logger.error(f"Error running control mapping audit: {e}")
         return Response({
             'success': False,
-            'error': str(e)
+            'error': 'Failed to run control mapping audit'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -814,6 +833,7 @@ Respond in this exact JSON format:
 @csrf_exempt
 @api_view(['DELETE'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@permission_classes([ComplianceEditPermission])
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def delete_organizational_control(request, org_control_id):
@@ -824,7 +844,10 @@ def delete_organizational_control(request, org_control_id):
     tenant_id = get_tenant_id_from_request(request)
 
     try:
-        org_control = OrganizationalControl.objects.get(OrgControlId=org_control_id)
+        org_control = OrganizationalControl.objects.get(
+            OrgControlId=org_control_id,
+            FrameworkId__tenant_id=tenant_id
+        )
         
         # Delete associated documents and files
         documents = OrganizationalControlDocument.objects.filter(OrgControlId_id=org_control_id)
@@ -854,7 +877,7 @@ def delete_organizational_control(request, org_control_id):
         logger.error(f"Error deleting organizational control: {e}")
         return Response({
             'success': False,
-            'error': str(e)
+            'error': 'Failed to delete organizational control'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -862,6 +885,7 @@ def delete_organizational_control(request, org_control_id):
 @csrf_exempt
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@permission_classes([ComplianceViewPermission])
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_mapping_statistics(request, framework_id):
@@ -882,8 +906,8 @@ def get_mapping_statistics(request, framework_id):
                 FROM compliance c
                 JOIN subpolicies sp ON c.SubPolicyId = sp.SubPolicyId
                 JOIN policies p ON sp.PolicyId = p.PolicyId
-                WHERE p.FrameworkId = %s
-            """, [framework_id])
+                WHERE p.FrameworkId = %s AND p.TenantId = %s AND sp.TenantId = %s AND c.TenantId = %s
+            """, [framework_id, tenant_id, tenant_id, tenant_id])
             total_compliances = cursor.fetchone()[0]
             
             if org_controls_exists:
@@ -896,9 +920,9 @@ def get_mapping_statistics(request, framework_id):
                     JOIN compliance c ON oc.ComplianceId = c.ComplianceId
                     JOIN subpolicies sp ON c.SubPolicyId = sp.SubPolicyId
                     JOIN policies p ON sp.PolicyId = p.PolicyId
-                    WHERE p.FrameworkId = %s
+                    WHERE p.FrameworkId = %s AND p.TenantId = %s AND sp.TenantId = %s AND c.TenantId = %s
                     GROUP BY oc.MappingStatus
-                """, [framework_id])
+                """, [framework_id, tenant_id, tenant_id, tenant_id])
                 
                 stats = {}
                 for row in cursor.fetchall():
@@ -911,8 +935,8 @@ def get_mapping_statistics(request, framework_id):
                     JOIN compliance c ON oc.ComplianceId = c.ComplianceId
                     JOIN subpolicies sp ON c.SubPolicyId = sp.SubPolicyId
                     JOIN policies p ON sp.PolicyId = p.PolicyId
-                    WHERE p.FrameworkId = %s
-                """, [framework_id])
+                    WHERE p.FrameworkId = %s AND p.TenantId = %s AND sp.TenantId = %s AND c.TenantId = %s
+                """, [framework_id, tenant_id, tenant_id, tenant_id])
                 with_org_controls = cursor.fetchone()[0]
             else:
                 # No organizational_controls table - all controls are not audited
@@ -941,7 +965,7 @@ def get_mapping_statistics(request, framework_id):
         logger.error(f"Error getting mapping statistics: {e}")
         return Response({
             'success': False,
-            'error': str(e)
+            'error': 'Failed to load mapping statistics'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -949,6 +973,7 @@ def get_mapping_statistics(request, framework_id):
 @csrf_exempt
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@permission_classes([ComplianceViewPermission])
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_frameworks_with_org_stats(request):
@@ -973,9 +998,10 @@ def get_frameworks_with_org_stats(request):
                 FROM frameworks f
                 LEFT JOIN compliance c ON f.FrameworkId = c.FrameworkId
                 LEFT JOIN organizational_controls oc ON c.ComplianceId = oc.ComplianceId
+                WHERE f.TenantId = %s
                 GROUP BY f.FrameworkId, f.FrameworkName, f.Identifier
                 ORDER BY f.FrameworkName
-            """)
+            """, [tenant_id])
             
             frameworks = []
             for row in cursor.fetchall():
@@ -1006,6 +1032,6 @@ def get_frameworks_with_org_stats(request):
         logger.error(f"Error getting frameworks with org stats: {e}")
         return Response({
             'success': False,
-            'error': str(e)
+            'error': 'Failed to load framework organizational statistics'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 

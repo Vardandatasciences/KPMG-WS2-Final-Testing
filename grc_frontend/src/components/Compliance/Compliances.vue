@@ -427,13 +427,21 @@
 
 <script>
 import { ref, computed, onMounted } from 'vue'
-import axios from 'axios'
+import apiService from '@/services/apiService.js'
 import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
 import DynamicTable from '../DynamicTable.vue'
 import { API_ENDPOINTS } from '../../config/api.js'
 import complianceDataService from '@/services/complianceService' // NEW: Use cached compliance data
 import { openDownloadInNewTabWithAnchorFallback } from '@/utils/safeExternalNavigation'
+
+const axios = {
+  get: async (url, config = {}) => ({ data: await apiService.get(url, config.params || {}, { ...config, params: undefined }) }),
+  post: async (url, data, config = {}) => ({ data: await apiService.post(url, data, config) }),
+  put: async (url, data, config = {}) => ({ data: await apiService.put(url, data, config) }),
+  patch: async (url, data, config = {}) => ({ data: await apiService.patch(url, data, config) }),
+  delete: async (url, config = {}) => ({ data: await apiService.delete(url, config) })
+}
 
 export default {
   name: 'ComplianceManagement',

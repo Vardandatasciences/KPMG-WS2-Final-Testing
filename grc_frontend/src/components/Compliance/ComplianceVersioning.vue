@@ -164,11 +164,19 @@
 <script>
 import { complianceService } from '@/services/api';
 import complianceDataService from '@/services/complianceService'; // NEW: Use cached compliance data
-import axios from 'axios';
 import CustomDropdown from '@/components/CustomDropdown.vue';
 import DynamicTable from '@/components/DynamicTable.vue';
 import AccessUtils from '@/utils/accessUtils';
 import { API_ENDPOINTS } from '../../config/api.js';
+import apiService from '@/services/apiService.js';
+
+const axios = {
+  get: async (url, config = {}) => ({ data: await apiService.get(url, config.params || {}, { ...config, params: undefined }) }),
+  post: async (url, data, config = {}) => ({ data: await apiService.post(url, data, config) }),
+  put: async (url, data, config = {}) => ({ data: await apiService.put(url, data, config) }),
+  patch: async (url, data, config = {}) => ({ data: await apiService.patch(url, data, config) }),
+  delete: async (url, config = {}) => ({ data: await apiService.delete(url, config) })
+};
 
 export default {
   name: 'ComplianceVersionList',
@@ -860,14 +868,12 @@ export default {
         // Get current user ID to exclude from reviewer list
         const currentUserId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || ''
         // Fetch reviewers filtered by RBAC permissions (ApproveCompliance) for compliance module
-        const response = await axios.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
-          params: {
-            module: 'compliance',
-            current_user_id: currentUserId
-          }
+        const responseData = await apiService.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
+          module: 'compliance',
+          current_user_id: currentUserId
         });
-        if (Array.isArray(response.data)) {
-          this.users = response.data;
+        if (Array.isArray(responseData)) {
+          this.users = responseData;
           this.reviewerDropdownConfig.values = this.users.map(u => ({
             value: u.UserId,
             label: u.UserName

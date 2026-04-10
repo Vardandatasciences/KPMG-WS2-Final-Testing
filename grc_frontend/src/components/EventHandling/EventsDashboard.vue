@@ -295,7 +295,7 @@ import EventFilters from './EventFilters.vue'
 import { Chart, registerables } from 'chart.js'
 import PopupModal from '../../modules/popus/PopupModal.vue'
 import AccessUtils from '../../utils/accessUtils'
-import axios from 'axios'
+import apiService from '@/services/apiService.js'
 import eventDataService from '../../services/eventService' // NEW: Centralized event data service
 import { convertColorForColorblind, getColorblindMode } from '../../utils/colorblindness'
 
@@ -564,17 +564,12 @@ export default {
     const checkSelectedFrameworkFromSession = async () => {
       try {
         console.log('🔍 DEBUG: Checking for selected framework from session in EventsDashboard...')
-        const response = await axios.get('/api/frameworks/get-selected/', {
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-          }
-        })
+        const response = await apiService.get('/api/frameworks/get-selected/')
         
-        console.log('🔍 DEBUG: Framework response in EventsDashboard:', response.data)
+        console.log('🔍 DEBUG: Framework response in EventsDashboard:', response)
         
-        if (response.data && response.data.frameworkId) {
-          const frameworkIdFromSession = response.data.frameworkId.toString()
+        if (response && response.frameworkId) {
+          const frameworkIdFromSession = response.frameworkId.toString()
           console.log('✅ DEBUG: Found selected framework in session for EventsDashboard:', frameworkIdFromSession)
           
           // Set the selected framework from session

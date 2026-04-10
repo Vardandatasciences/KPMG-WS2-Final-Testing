@@ -110,8 +110,16 @@ import { complianceService } from '@/services/api';
 import complianceDataService from '@/services/complianceService'; // NEW: Use cached compliance data
 import CustomDropdown from '../CustomDropdown.vue';
 import DynamicTable from '../DynamicTable.vue';
-import axios from 'axios';
 import { API_ENDPOINTS } from '../../config/api.js';
+import apiService from '@/services/apiService.js';
+
+const axios = {
+  get: async (url, config = {}) => ({ data: await apiService.get(url, config.params || {}, { ...config, params: undefined }) }),
+  post: async (url, data, config = {}) => ({ data: await apiService.post(url, data, config) }),
+  put: async (url, data, config = {}) => ({ data: await apiService.put(url, data, config) }),
+  patch: async (url, data, config = {}) => ({ data: await apiService.patch(url, data, config) }),
+  delete: async (url, config = {}) => ({ data: await apiService.delete(url, config) })
+};
 export default {
   name: 'ComplianceTailoring',
   components: {
@@ -483,19 +491,17 @@ export default {
         // Get current user ID to exclude from reviewer list
         const currentUserId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || ''
         // Fetch reviewers filtered by RBAC permissions (ApproveCompliance) for compliance module
-        const response = await axios.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
-          params: {
-            module: 'compliance',
-            current_user_id: currentUserId
-          }
+        const responseData = await apiService.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
+          module: 'compliance',
+          current_user_id: currentUserId
         });
-        console.log('Users API response:', response);
+        console.log('Users API response:', responseData);
         
-        if (Array.isArray(response.data)) {
-          this.users = response.data;
+        if (Array.isArray(responseData)) {
+          this.users = responseData;
           console.log('Loaded users:', this.users);
         } else {
-          console.error('Invalid users data received:', response.data);
+          console.error('Invalid users data received:', responseData);
           this.error = 'Failed to load approvers';
           this.users = [];
         }

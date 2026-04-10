@@ -1025,8 +1025,13 @@ class EventArchivePermission(BaseEventPermission):
             #logger.info(f"[RBAC EVENT] Admin role detected - granting archive access")
             return True
         
-        # Check specific archive_event permission
-        return self.check_event_permission(request, 'archive')
+        # Primary check: dedicated archive permission
+        if self.check_event_permission(request, 'archive'):
+            return True
+
+        # Backward compatibility: older RBAC setups may grant edit without archive.
+        # Archiving is treated as an event state update in those environments.
+        return self.check_event_permission(request, 'edit')
 
 class EventAnalyticsPermission(BaseEventPermission):
     """Permission to view event analytics and performance metrics"""

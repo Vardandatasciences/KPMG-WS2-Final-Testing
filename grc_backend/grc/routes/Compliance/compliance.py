@@ -5,7 +5,6 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 import datetime
-import traceback
 
 from ...serializers import ComplianceSerializer, ComplianceApprovalSerializer
 from ...models import SubPolicy, ComplianceApproval, Compliance, Framework, Policy, Users
@@ -149,11 +148,7 @@ def add_compliance(request, subpolicy_id):
                 'ApprovalVersion': 'u1'
             }, status=status.HTTP_201_CREATED)
     except Exception as e:
-        error_info = {
-            'error': str(e),
-            'traceback': traceback.format_exc()
-        }
-        return Response({'error': 'Error adding compliance to subpolicy', 'details': error_info}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'error': 'Error adding compliance to subpolicy'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
 @permission_classes([ComplianceViewPermission])
@@ -172,7 +167,8 @@ def get_compliance_version(request, compliance_id):
         
         # Find the latest approval version from the database
         latest_approval = ComplianceApproval.objects.filter(
-            ExtractedData__ComplianceId=compliance_id
+            ExtractedData__ComplianceId=compliance_id,
+            FrameworkId__tenant_id=tenant_id
         ).order_by('-Version').first()
         
         # Extract the latest version from policy approvals
@@ -184,6 +180,7 @@ def get_compliance_version(request, compliance_id):
                 # Check if there are any user versions (u1, u2, etc.)
                 user_approvals = ComplianceApproval.objects.filter(
                     ExtractedData__ComplianceId=compliance_id,
+                    FrameworkId__tenant_id=tenant_id,
                     Version__startswith='u'
                 ).order_by('-Version')
                 
@@ -201,8 +198,8 @@ def get_compliance_version(request, compliance_id):
         }, status=status.HTTP_200_OK)
     except Exception as e:
         return Response({
-            'error': str(e)
-        }, status=status.HTTP_400_BAD_REQUEST)
+            'error': 'Failed to fetch compliance version'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
 @permission_classes([ComplianceViewPermission])
@@ -227,7 +224,8 @@ def get_latest_reviewer_version(request, compliance_id):
         # Use Python filtering to find R versions
         r_approvals = []
         all_approvals = ComplianceApproval.objects.filter(
-            ExtractedData__ComplianceId=compliance_id
+            ExtractedData__ComplianceId=compliance_id,
+            FrameworkId__tenant_id=tenant_id
         ).order_by('-Version')
         
         for approval in all_approvals:
@@ -251,8 +249,8 @@ def get_latest_reviewer_version(request, compliance_id):
         }, status=status.HTTP_200_OK)
     except Exception as e:
         return Response({
-            'error': str(e)
-        }, status=status.HTTP_400_BAD_REQUEST)
+            'error': 'Failed to fetch reviewer version'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
 @permission_classes([ComplianceViewPermission])
@@ -393,12 +391,8 @@ def get_pending_compliance_approvals(request):
         
         return Response(serialized_approvals, status=status.HTTP_200_OK)
     except Exception as e:
-        error_info = {
-            'error': str(e),
-            'traceback': traceback.format_exc()
-        }
-        return Response({'error': 'Error retrieving pending compliance approvals', 'details': error_info}, 
-                      status=status.HTTP_400_BAD_REQUEST)
+        return Response({'error': 'Error retrieving pending compliance approvals'}, 
+                      status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['PUT'])
 @permission_classes([ComplianceApprovePermission])
@@ -415,6 +409,34 @@ def submit_compliance_review(request, approval_id):
     try:
         # Get the compliance approval
         approval = get_object_or_404(ComplianceApproval, pk=approval_id)
+
+        extracted_data = approval.ExtractedData if isinstance(approval.ExtractedData, dict) else {}
+        compliance_id = extracted_data.get('ComplianceId') or extracted_data.get('compliance_id')
+        if not compliance_id:
+            return Response({
+                'error': 'Approval record is missing compliance reference.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        compliance = get_object_or_404(Compliance, ComplianceId=compliance_id, tenant_id=tenant_id)
+
+        current_user_id = RBACUtils.get_user_id_from_request(request) or getattr(request.user, 'id', None)
+        try:
+            current_user_id = int(current_user_id) if current_user_id is not None else None
+            reviewer_id = int(approval.ReviewerId) if approval.ReviewerId is not None else None
+            creator_id = int(approval.UserId) if approval.UserId is not None else None
+        except (TypeError, ValueError):
+            return Response({
+                'error': 'Invalid reviewer/creator data on approval record.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        if not current_user_id or not reviewer_id or current_user_id != reviewer_id:
+            return Response({
+                'error': 'You are not the assigned reviewer for this request.'
+            }, status=status.HTTP_403_FORBIDDEN)
+        if creator_id is not None and reviewer_id == creator_id:
+            return Response({
+                'error': 'Self-approval is not allowed. Please assign a different reviewer.'
+            }, status=status.HTTP_403_FORBIDDEN)
         
         # Update the approval data
         if 'ExtractedData' in request.data:
@@ -426,52 +448,26 @@ def submit_compliance_review(request, approval_id):
             # Update version based on whether it's a reviewer or user
             current_version = approval.Version or ''
             
-            # If this is a reviewer submitting a review
-            if approval.ReviewerId and str(approval.ReviewerId) == str(request.data.get('reviewer_id')):
-                # If current version is a reviewer version, increment it
-                if current_version.startswith('r'):
-                    try:
-                        version_num = int(current_version[1:])
-                        approval.Version = f'r{version_num + 1}'
-                    except ValueError:
-                        approval.Version = 'r1'
-                else:
-                    # Start with r1 if no reviewer version exists
+            # Reviewer flow only: derive role from server-side identity, never client body
+            if current_version.startswith('r'):
+                try:
+                    version_num = int(current_version[1:])
+                    approval.Version = f'r{version_num + 1}'
+                except ValueError:
                     approval.Version = 'r1'
             else:
-                # This is a user resubmitting
-                if current_version.startswith('u'):
-                    try:
-                        version_num = int(current_version[1:])
-                        approval.Version = f'u{version_num + 1}'
-                    except ValueError:
-                        approval.Version = 'u1'
-                else:
-                    # Start with u1 if no user version exists
-                    approval.Version = 'u1'
+                approval.Version = 'r1'
         
         # Save the updated approval
         approval.save()
         
         # Also update the corresponding compliance record if it exists
-        compliance_id = None
-        if 'ComplianceId' in approval.ExtractedData:
-            compliance_id = approval.ExtractedData['ComplianceId']
-        elif 'compliance_id' in approval.ExtractedData:
-            compliance_id = approval.ExtractedData['compliance_id']
-        
-        if compliance_id:
-            try:
-                compliance = Compliance.objects.get(ComplianceId=compliance_id, tenant_id=tenant_id)
-                # Update compliance status to match approval
-                if approval.ApprovedNot is True:
-                    compliance.Status = 'Approved'
-                elif approval.ApprovedNot is False:
-                    compliance.Status = 'Rejected'
-                compliance.save()
-            except Compliance.DoesNotExist:
-                # Compliance record doesn't exist or ID is invalid, just continue
-                pass
+        # Update compliance status to match approval
+        if approval.ApprovedNot is True:
+            compliance.Status = 'Approved'
+        elif approval.ApprovedNot is False:
+            compliance.Status = 'Rejected'
+        compliance.save()
         
         return Response({
             'message': 'Compliance review submitted successfully',
@@ -480,9 +476,8 @@ def submit_compliance_review(request, approval_id):
         }, status=status.HTTP_200_OK)
     except Exception as e:
         return Response({
-            'error': f'Error submitting compliance review: An internal server error occurred',
-            'traceback': traceback.format_exc()
-        }, status=status.HTTP_400_BAD_REQUEST)
+            'error': 'Error submitting compliance review: An internal server error occurred'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['PUT'])
 @permission_classes([ComplianceApprovePermission])
@@ -499,6 +494,13 @@ def resubmit_compliance_approval(request, approval_id):
     try:
         # Get the compliance approval
         approval = get_object_or_404(ComplianceApproval, pk=approval_id)
+        extracted_data = approval.ExtractedData if isinstance(approval.ExtractedData, dict) else {}
+        compliance_id = extracted_data.get('ComplianceId') or extracted_data.get('compliance_id')
+        if not compliance_id:
+            return Response({
+                'error': 'Approval record is missing compliance reference.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        compliance = get_object_or_404(Compliance, ComplianceId=compliance_id, tenant_id=tenant_id)
         
         # Update the extracted data
         if 'ExtractedData' in request.data:
@@ -526,27 +528,14 @@ def resubmit_compliance_approval(request, approval_id):
         # Save the updated approval
         approval.save()
         
-        # Also update the compliance if it exists
-        compliance_id = None
-        if 'ComplianceId' in approval.ExtractedData:
-            compliance_id = approval.ExtractedData['ComplianceId']
-        elif 'compliance_id' in approval.ExtractedData:
-            compliance_id = approval.ExtractedData['compliance_id']
-        
-        if compliance_id:
-            try:
-                compliance = Compliance.objects.get(ComplianceId=compliance_id, tenant_id=tenant_id)
-                # Update compliance data from ExtractedData
-                compliance.ComplianceItemDescription = approval.ExtractedData.get('ComplianceItemDescription', compliance.ComplianceItemDescription)
-                compliance.Criticality = approval.ExtractedData.get('Criticality', compliance.Criticality)
-                compliance.Impact = approval.ExtractedData.get('Impact', compliance.Impact)
-                compliance.Probability = approval.ExtractedData.get('Probability', compliance.Probability)
-                compliance.mitigation = approval.ExtractedData.get('mitigation', compliance.mitigation)
-                compliance.Status = 'Under Review'
-                compliance.save()
-            except Compliance.DoesNotExist:
-                # Compliance doesn't exist, just continue
-                pass
+        # Update compliance data from ExtractedData
+        compliance.ComplianceItemDescription = approval.ExtractedData.get('ComplianceItemDescription', compliance.ComplianceItemDescription)
+        compliance.Criticality = approval.ExtractedData.get('Criticality', compliance.Criticality)
+        compliance.Impact = approval.ExtractedData.get('Impact', compliance.Impact)
+        compliance.Probability = approval.ExtractedData.get('Probability', compliance.Probability)
+        compliance.mitigation = approval.ExtractedData.get('mitigation', compliance.mitigation)
+        compliance.Status = 'Under Review'
+        compliance.save()
         
         return Response({
             'message': 'Compliance resubmitted successfully',
@@ -555,9 +544,8 @@ def resubmit_compliance_approval(request, approval_id):
         }, status=status.HTTP_200_OK)
     except Exception as e:
         return Response({
-            'error': f'Error resubmitting compliance: An internal server error occurred',
-            'traceback': traceback.format_exc()
-        }, status=status.HTTP_400_BAD_REQUEST)
+            'error': 'Error resubmitting compliance: An internal server error occurred'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
 @permission_classes([ComplianceViewPermission])
@@ -580,8 +568,8 @@ def get_compliance_status(request, compliance_id):
         }, status=status.HTTP_200_OK)
     except Exception as e:
         return Response({
-            'error': str(e)
-        }, status=status.HTTP_400_BAD_REQUEST)
+            'error': 'Failed to fetch compliance status'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
 @permission_classes([ComplianceViewPermission])

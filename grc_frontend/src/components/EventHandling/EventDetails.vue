@@ -273,6 +273,7 @@ import ApprovalModal from './ApprovalModal.vue'
 import { PopupService } from '../../modules/popus/popupService'
 import PopupModal from '../../modules/popus/PopupModal.vue'
 import { eventService } from '../../services/api'
+import apiService from '@/services/apiService.js'
 
 export default {
   name: 'EventDetails',
@@ -423,8 +424,7 @@ export default {
         return null
       }
       
-       const userId = localStorage.getItem('user_id') || '1'
-       const downloadUrl = `/api/s3/download/${encodeURIComponent(s3Key)}/${encodeURIComponent(filename)}/?user_id=${userId}`
+       const downloadUrl = `/api/s3/download/${encodeURIComponent(s3Key)}/${encodeURIComponent(filename)}/`
        console.log('DEBUG: Generated download URL:', downloadUrl)
        return downloadUrl
     }
@@ -567,16 +567,14 @@ export default {
 
     const handleModalSubmit = async (comment) => {
       try {
-        const userId = localStorage.getItem('user_id')
         const eventId = eventData.value?.id
         
-        if (!userId || !eventId) {
-          console.error('Missing user ID or event ID')
+        if (!eventId) {
+          console.error('Missing event ID')
           return
         }
         
         const data = {
-          user_id: userId,
           comments: comment || ''
         }
         
@@ -659,22 +657,11 @@ export default {
     const loadEvidenceDetails = async (eventId) => {
       try {
         console.log('Loading evidence details for event:', eventId)
-        const response = await fetch(`/api/events/${eventId}/evidence/details/`, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        })
-
-        if (response.ok) {
-          const data = await response.json()
-          if (data.success && data.evidence) {
-            console.log('Evidence details loaded:', data.evidence)
-            // Update the event data with detailed evidence information
-            eventData.value.evidence = data.evidence
-          }
-        } else {
-          console.error('Failed to load evidence details:', response.status)
+        const data = await apiService.get(`/api/events/${eventId}/evidence/details/`)
+        if (data.success && data.evidence) {
+          console.log('Evidence details loaded:', data.evidence)
+          // Update the event data with detailed evidence information
+          eventData.value.evidence = data.evidence
         }
       } catch (error) {
         console.error('Error loading evidence details:', error)

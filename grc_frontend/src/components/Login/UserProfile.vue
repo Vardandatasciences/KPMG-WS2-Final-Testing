@@ -2150,7 +2150,7 @@ export default {
         
         const response = await axios.get(
           `${API_BASE_URL}/api/profile-edit-otp/check/`,
-          { headers: this.getConsentAuthHeaders() }
+          this.getConsentRequestConfig()
         );
         
         return response.data.verified === true;
@@ -2172,7 +2172,7 @@ export default {
         const response = await axios.post(
           `${API_BASE_URL}/api/profile-edit-otp/send/`,
           {},
-          { headers: this.getConsentAuthHeaders() }
+          this.getConsentRequestConfig()
         );
         
         if (response.data.success) {
@@ -2214,7 +2214,7 @@ export default {
         const response = await axios.post(
           `${API_BASE_URL}/api/profile-edit-otp/verify/`,
           { otp: otp },
-          { headers: this.getConsentAuthHeaders() }
+          this.getConsentRequestConfig()
         );
         
         if (response.data.success) {
@@ -2341,7 +2341,7 @@ export default {
         const response = await axios.post(
           `${API_BASE_URL}/api/portability-otp/send/`,
           {},
-          { headers: this.getConsentAuthHeaders() }
+          this.getConsentRequestConfig()
         );
         
         if (response.data.success) {
@@ -2383,7 +2383,7 @@ export default {
         const response = await axios.post(
           `${API_BASE_URL}/api/portability-otp/verify/`,
           { otp: otp },
-          { headers: this.getConsentAuthHeaders() }
+          this.getConsentRequestConfig()
         );
         
         if (response.data.success) {
@@ -2501,7 +2501,7 @@ export default {
         const response = await axios.post(
           `${API_BASE_URL}/api/export-user-data-portability/`,
           { export_format: this.selectedExportFormat },
-          { headers: this.getConsentAuthHeaders() }
+          this.getConsentRequestConfig()
         );
         
         if (response.data.status === 'success') {
@@ -3756,6 +3756,7 @@ export default {
           const axios = (await import('axios')).default;
           
           const response = await axios.get(`${API_BASE_URL}/api/frameworks/`, {
+            withCredentials: true,
             headers: this.getConsentAuthHeaders()
           });
           
@@ -3801,6 +3802,7 @@ export default {
               console.log('[UserProfile] 🔵 Loading TPRM consent configurations...');
               
               const tprmResponse = await axios.get(`${API_BASE_URL}/api/tprm/consent/configurations/`, {
+                withCredentials: true,
                 params: { framework_id: this.consentFrameworkId || parseInt(getDefaultFrameworkId(), 10) },
                 headers: this.getConsentAuthHeaders()
               });
@@ -3847,6 +3849,7 @@ export default {
               console.log('[UserProfile] 🔵 Loading GRC consent configurations...');
               
               const response = await axios.get(`${API_BASE_URL}/api/consent/configurations/`, {
+                withCredentials: true,
                 params: { 
                   framework_id: this.consentFrameworkId,
                   created_by: userId
@@ -3947,7 +3950,7 @@ export default {
                 configs: grcConfigsToUpdate,
                 updated_by: userId
               },
-              { headers: this.getConsentAuthHeaders() }
+              this.getConsentRequestConfig()
             );
             
             if (grcResponse.data.status !== 'success') {
@@ -3963,7 +3966,7 @@ export default {
                 configs: tprmConfigsToUpdate,
                 updated_by: userId
               },
-              { headers: this.getConsentAuthHeaders() }
+              this.getConsentRequestConfig()
             );
             
             if (tprmResponse.data.status !== 'success') {
@@ -4047,7 +4050,7 @@ export default {
           
           const response = await axios.get(
             `${API_BASE_URL}/api/data-subject-requests/${userId}/`,
-            { headers: this.getConsentAuthHeaders() }
+            this.getConsentRequestConfig()
           );
           
           if (response.data.status === 'success') {
@@ -4084,7 +4087,7 @@ export default {
           
           const response = await axios.get(
             API_ENDPOINTS.TPRM_ACCESS_REQUESTS(userId),
-            { headers: this.getConsentAuthHeaders() }
+            this.getConsentRequestConfig()
           );
           
           console.log('🔵 [UserProfile] TPRM access requests response:', response.data);
@@ -4245,7 +4248,7 @@ export default {
           const response = await axios.put(
             endpoint,
             requestBody,
-            { headers: this.getConsentAuthHeaders() }
+            this.getConsentRequestConfig()
           );
           
           if (response.data.status === 'success') {
@@ -4334,9 +4337,21 @@ export default {
  
       getConsentAuthHeaders() {
         const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
-        return {
-          'Authorization': `Bearer ${token}`,
+        const headers = {
           'Content-Type': 'application/json'
+        };
+        // Avoid sending malformed Authorization headers such as "Bearer null".
+        if (token && token.split('.').length === 3) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+        return headers;
+      },
+
+      getConsentRequestConfig(extra = {}) {
+        return {
+          withCredentials: true,
+          headers: this.getConsentAuthHeaders(),
+          ...extra
         };
       },
       

@@ -327,7 +327,7 @@ import { mapState, mapActions } from 'vuex'
 import '@fortawesome/fontawesome-free/css/all.min.css'
 import { complianceService } from '@/services/api'
 import complianceDataService from '@/services/complianceService' // NEW: Use cached compliance data
-import axios from 'axios'
+import apiService from '@/services/apiService.js'
 import { API_ENDPOINTS } from '../../config/api.js'
 import html2canvas from 'html2canvas'
 import { convertColorForColorblind as convertColorFromUtil } from '@/utils/colorblindness'
@@ -347,6 +347,14 @@ ChartJS.register(
   Tooltip,
   Legend
 )
+
+const axios = {
+  get: async (url, config = {}) => ({ data: await apiService.get(url, config.params || {}, { ...config, params: undefined }) }),
+  post: async (url, data, config = {}) => ({ data: await apiService.post(url, data, config) }),
+  put: async (url, data, config = {}) => ({ data: await apiService.put(url, data, config) }),
+  patch: async (url, data, config = {}) => ({ data: await apiService.patch(url, data, config) }),
+  delete: async (url, config = {}) => ({ data: await apiService.delete(url, config) })
+}
 
 export default {
   name: 'ComplianceDashboard',

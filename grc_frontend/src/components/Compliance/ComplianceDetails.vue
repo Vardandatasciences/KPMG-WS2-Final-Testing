@@ -119,6 +119,23 @@
           <span v-else>{{ row.value }}</span>
         </div>
       </div>
+
+      <!-- Show edited fields for resubmitted reviewer items -->
+      <div v-if="changedFieldsForDisplay.length" class="compliance_info_section">
+        <h4>Edited Changes (Previous vs Current)</h4>
+        <div
+          v-for="change in changedFieldsForDisplay"
+          :key="change.field"
+          class="compliance_detail_row"
+        >
+          <strong>{{ formatFieldName(change.field) }}:</strong>
+          <span>
+            <span style="color:#b91c1c;">{{ sanitizeValue(change.old_value ?? 'N/A') }}</span>
+            <span> -> </span>
+            <span style="color:#166534;">{{ sanitizeValue(change.new_value ?? 'N/A') }}</span>
+          </span>
+        </div>
+      </div>
       
       <!-- Add a message for rejected compliances -->
       <div v-if="selectedApproval.ApprovedNot === false" class="rejected-compliance-message">
@@ -153,11 +170,19 @@
 </template>
 
 <script>
-import axios from 'axios'
+import apiService from '@/services/apiService.js'
 import { PopupService } from '@/modules/popus/popupService'
 import PopupModal from '@/modules/popus/PopupModal.vue'
 import { API_ENDPOINTS } from '../../config/api.js'
 import { complianceService } from '@/services/api.js'
+
+const axios = {
+  get: async (url, config = {}) => ({ data: await apiService.get(url, config.params || {}, { ...config, params: undefined }) }),
+  post: async (url, data, config = {}) => ({ data: await apiService.post(url, data, config) }),
+  put: async (url, data, config = {}) => ({ data: await apiService.put(url, data, config) }),
+  patch: async (url, data, config = {}) => ({ data: await apiService.patch(url, data, config) }),
+  delete: async (url, config = {}) => ({ data: await apiService.delete(url, config) })
+}
 
 export default {
   name: 'ComplianceDetails',
@@ -284,8 +309,9 @@ export default {
           ...compData,
           ComplianceId: compData.ComplianceId || compData.compliance_id || this.complianceId,
           ExtractedData: {
-            ...(approvalMeta.ExtractedData || {}),
             ...compData,
+            // Keep latest review/resubmission edits from approval payload authoritative.
+            ...(approvalMeta.ExtractedData || {}),
           }
         };
 
@@ -995,6 +1021,51 @@ export default {
             : 'N/A'
         };
       });
+    },
+
+    changedFieldsForDisplay() {
+      if (!this.selectedApproval) return [];
+
+      // Prefer backend-computed diff when available.
+      const serverChanges = this.selectedApproval.ChangedFields;
+      if (Array.isArray(serverChanges) && serverChanges.length) {
+        return serverChanges;
+      }
+
+      // Fallback: compute diff client-side from previous/current extracted payload.
+      const current = this.selectedApproval.ExtractedData || {};
+      const previous = this.selectedApproval.PreviousExtractedData || {};
+      if (!Object.keys(previous).length) return [];
+
+      const normalize = (value) => {
+        if (value === null || value === undefined) return null;
+        if (typeof value === 'string') return value.trim();
+        if (Array.isArray(value) || typeof value === 'object') {
+          try {
+            return JSON.stringify(value);
+          } catch (_e) {
+            return String(value);
+          }
+        }
+        return value;
+      };
+
+      const ignoredKeys = new Set(['compliance_approval', 'inResubmission']);
+      const keys = new Set([...Object.keys(current), ...Object.keys(previous)]);
+      const changes = [];
+
+      keys.forEach((key) => {
+        if (ignoredKeys.has(key)) return;
+        if (normalize(current[key]) !== normalize(previous[key])) {
+          changes.push({
+            field: key,
+            old_value: previous[key],
+            new_value: current[key]
+          });
+        }
+      });
+
+      return changes;
     },
 
     // Computed property to get the correct compliance status

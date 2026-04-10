@@ -55,12 +55,15 @@ apiClient.interceptors.request.use((config) => {
     globalLoading.value = true;
   }
 
-  // 1. Identity: Inject context
+  // 1. Identity: Inject context (legacy compatibility)
+  // SECURITY: Never inject client user identifiers for compliance APIs.
+  const requestUrl = String(config.url || '');
+  const isComplianceApi = requestUrl.includes('/api/compliance') || requestUrl.includes('api/compliance');
   const userId = localStorage.getItem('user_id');
 
 
 
-  if (userId) {
+  if (userId && !isComplianceApi) {
     if (config.method === 'get' && !config.params?.user_id) {
       config.params = { ...config.params, user_id: userId };
     }
