@@ -260,7 +260,7 @@ export default {
     }
   },
   async mounted() {
-    this.userId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id');
+    this.userId = sessionStorage.getItem('user_id');
     await this.checkUserRole();
     if (this.isGRCAdministrator) {
       await this.initializeFramework();
@@ -296,7 +296,7 @@ export default {
         try {
           // Try to get selected framework from session
           const response = await axios.get(`${API_BASE_URL}/api/frameworks/get-selected/`, {
-            headers: this.getAuthHeaders()
+            ...this.getAuthRequestConfig()
           });
           if (response.data && response.data.frameworkId) {
             this.frameworkId = parseInt(response.data.frameworkId);
@@ -307,7 +307,7 @@ export default {
           // If that fails, try to get first available framework
           try {
             const frameworksResponse = await axios.get(`${API_BASE_URL}/api/frameworks/`, {
-              headers: this.getAuthHeaders()
+              ...this.getAuthRequestConfig()
             });
             if (frameworksResponse.data && Array.isArray(frameworksResponse.data)) {
               const activeFrameworks = frameworksResponse.data.filter(
@@ -329,7 +329,7 @@ export default {
       try {
         this.loadingFrameworks = true;
         const response = await axios.get(`${API_BASE_URL}/api/frameworks/`, {
-          headers: this.getAuthHeaders()
+          ...this.getAuthRequestConfig()
         });
         
         if (response.data && Array.isArray(response.data)) {
@@ -364,24 +364,22 @@ export default {
       try {
         this.checkingRole = true;
         const response = await axios.get(API_ENDPOINTS.USER_ROLE, {
-          headers: this.getAuthHeaders()
+          ...this.getAuthRequestConfig()
         });
 
         if (response.data && response.data.success) {
           this.userRole = response.data.role;
           this.isGRCAdministrator = response.data.role === 'GRC Administrator';
         } else {
-          // Fallback: check localStorage or session
-          const storedRole = localStorage.getItem('user_role');
-          this.userRole = storedRole || 'Unknown';
-          this.isGRCAdministrator = storedRole === 'GRC Administrator';
+          // Do not trust client-side role storage.
+          this.userRole = 'Unknown';
+          this.isGRCAdministrator = false;
         }
       } catch (error) {
         console.error('Error checking user role:', error);
-        // Fallback check
-        const storedRole = localStorage.getItem('user_role');
-        this.userRole = storedRole || 'Unknown';
-        this.isGRCAdministrator = storedRole === 'GRC Administrator';
+        // On auth/role lookup failure, deny privileged access by default.
+        this.userRole = 'Unknown';
+        this.isGRCAdministrator = false;
       } finally {
         this.checkingRole = false;
       }
@@ -415,7 +413,7 @@ export default {
             
             const tprmResponse = await axios.get(`${API_BASE_URL}/api/tprm/consent/configurations/`, {
               params: { framework_id: this.frameworkId || 1 },
-              headers: this.getAuthHeaders()
+              ...this.getAuthRequestConfig()
             });
 
             console.log('[ConsentConfiguration] 🔵 TPRM response status:', tprmResponse.status);
@@ -477,7 +475,7 @@ export default {
             
             const grcResponse = await axios.get(`${API_BASE_URL}/api/consent/configurations/`, {
               params: { framework_id: this.frameworkId },
-              headers: this.getAuthHeaders()
+              ...this.getAuthRequestConfig()
             });
 
             if (grcResponse.data.status === 'success') {
@@ -546,7 +544,7 @@ export default {
         try {
           const grcResponse = await axios.get(`${API_BASE_URL}/api/consent/acceptances/`, {
             params: { framework_id: this.frameworkId },
-            headers: this.getAuthHeaders()
+            ...this.getAuthRequestConfig()
           });
 
           if (grcResponse.data.status === 'success') {
@@ -564,7 +562,7 @@ export default {
         try {
           const tprmResponse = await axios.get(`${API_BASE_URL}/api/tprm/consent/acceptances/`, {
             params: { framework_id: this.frameworkId || 1 },
-            headers: this.getAuthHeaders()
+            ...this.getAuthRequestConfig()
           });
 
           if (tprmResponse.data.status === 'success') {
@@ -637,7 +635,7 @@ export default {
               configs: grcConfigsToUpdate,
               updated_by: this.userId
             },
-            { headers: this.getAuthHeaders() }
+            this.getAuthRequestConfig()
           );
           
           if (grcResponse.data.status !== 'success') {
@@ -653,7 +651,7 @@ export default {
               configs: tprmConfigsToUpdate,
               updated_by: this.userId
             },
-            { headers: this.getAuthHeaders() }
+            this.getAuthRequestConfig()
           );
           
           if (tprmResponse.data.status !== 'success') {
@@ -724,10 +722,23 @@ export default {
     },
 
     getAuthHeaders() {
-      const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
-      return {
-        'Authorization': `Bearer ${token}`,
+      const token = sessionStorage.getItem('access_token');
+      const headers = {
         'Content-Type': 'application/json'
+      };
+
+      // Only send Authorization when token resembles a JWT.
+      if (token && token.split('.').length === 3) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+      return headers;
+    },
+
+    getAuthRequestConfig(extra = {}) {
+      return {
+        withCredentials: true,
+        headers: this.getAuthHeaders(),
+        ...extra
       };
     }
   }

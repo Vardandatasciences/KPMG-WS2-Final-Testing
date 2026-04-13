@@ -3,8 +3,62 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 from django.db.models import Q
-from grc.models import Policy, Compliance, Audit, Incident, Risk, RiskInstance, Event
+from grc.models import Policy, Compliance, Audit, Incident, Risk, RiskInstance, Event, Users
+from grc.rbac.utils import RBACUtils
 import json
+import logging
+
+
+logger = logging.getLogger(__name__)
+
+
+def _sanitize_text_output(value, max_len=256):
+    if value is None:
+        return ''
+    text = str(value)
+    text = ''.join(ch for ch in text if ch == '\t' or ch == '\n' or ord(ch) >= 32).strip()
+    if len(text) > max_len:
+        text = text[:max_len]
+    if text.startswith(('=', '+', '-', '@')):
+        text = "'" + text
+    return text
+
+
+def _get_authenticated_user(request):
+    raw_request = getattr(request, '_request', request)
+    grc_user = getattr(raw_request, '_grc_user', None)
+    if grc_user and hasattr(grc_user, 'UserId'):
+        try:
+            return Users.objects.filter(UserId=int(grc_user.UserId)).first()
+        except Exception:
+            return None
+    resolved_user_id = RBACUtils.get_user_id_from_request(request)
+    if not resolved_user_id:
+        return None
+    try:
+        return Users.objects.filter(UserId=int(resolved_user_id)).first()
+    except Exception:
+        return None
+
+
+def _is_system_admin(user):
+    try:
+        return bool(user and RBACUtils.is_system_admin(int(user.UserId)))
+    except Exception:
+        return False
+
+
+def _scope_queryset_for_user(queryset, user, is_admin=False):
+    if user is None:
+        return queryset.none()
+    if hasattr(queryset.model, 'tenant_id') and getattr(user, 'tenant_id', None):
+        queryset = queryset.filter(tenant_id=user.tenant_id)
+    if is_admin:
+        return queryset
+    user_framework_id = getattr(user, 'FrameworkId_id', None)
+    if user_framework_id and hasattr(queryset.model, 'FrameworkId_id'):
+        queryset = queryset.filter(FrameworkId_id=user_framework_id)
+    return queryset
 
 
 @api_view(['GET'])
@@ -15,7 +69,16 @@ def get_data_analysis(request):
     Returns percentage breakdown of personal, regular, and confidential data for each module.
     """
     try:
+        current_user = _get_authenticated_user(request)
+        if not current_user:
+            return Response({'status': 'error', 'message': 'Authentication required.'}, status=status.HTTP_401_UNAUTHORIZED)
+        is_admin = _is_system_admin(current_user)
         framework_id = request.query_params.get('framework_id', None)
+        logger.info(
+            "DataAnalysis summary requested: actor_user_id=%s framework_id=%s",
+            getattr(current_user, 'UserId', None),
+            framework_id,
+        )
         
         # Build filter query
         filter_query = Q()
@@ -54,13 +117,13 @@ def get_data_analysis(request):
                                 value_lower = value.lower()
                                 if value_lower == 'personal':
                                     personal_count += 1
-                                    personal_columns.add(key)
+                                    personal_columns.add(_sanitize_text_output(key, max_len=120))
                                 elif value_lower == 'regular':
                                     regular_count += 1
-                                    regular_columns.add(key)
+                                    regular_columns.add(_sanitize_text_output(key, max_len=120))
                                 elif value_lower == 'confidential':
                                     confidential_count += 1
-                                    confidential_columns.add(key)
+                                    confidential_columns.add(_sanitize_text_output(key, max_len=120))
             
             total = personal_count + regular_count + confidential_count
             if total == 0:
@@ -96,24 +159,24 @@ def get_data_analysis(request):
             }
         
         # Policy Module
-        policy_queryset = Policy.objects.filter(filter_query)
+        policy_queryset = _scope_queryset_for_user(Policy.objects.filter(filter_query), current_user, is_admin=is_admin)
         results['policy'] = analyze_data_inventory(policy_queryset)
         
         # Compliance Module
-        compliance_queryset = Compliance.objects.filter(filter_query)
+        compliance_queryset = _scope_queryset_for_user(Compliance.objects.filter(filter_query), current_user, is_admin=is_admin)
         results['compliance'] = analyze_data_inventory(compliance_queryset)
         
         # Audit Module
-        audit_queryset = Audit.objects.filter(filter_query)
+        audit_queryset = _scope_queryset_for_user(Audit.objects.filter(filter_query), current_user, is_admin=is_admin)
         results['audit'] = analyze_data_inventory(audit_queryset)
         
         # Incident Module
-        incident_queryset = Incident.objects.filter(filter_query)
+        incident_queryset = _scope_queryset_for_user(Incident.objects.filter(filter_query), current_user, is_admin=is_admin)
         results['incident'] = analyze_data_inventory(incident_queryset)
         
         # Risk Module - Combine Risk and RiskInstance
-        risk_queryset = Risk.objects.filter(filter_query)
-        risk_instance_queryset = RiskInstance.objects.filter(filter_query)
+        risk_queryset = _scope_queryset_for_user(Risk.objects.filter(filter_query), current_user, is_admin=is_admin)
+        risk_instance_queryset = _scope_queryset_for_user(RiskInstance.objects.filter(filter_query), current_user, is_admin=is_admin)
         
         # Combine both risk tables
         risk_personal = 0
@@ -141,13 +204,13 @@ def get_data_analysis(request):
                             value_lower = value.lower()
                             if value_lower == 'personal':
                                 risk_personal += 1
-                                risk_personal_columns.add(key)
+                                risk_personal_columns.add(_sanitize_text_output(key, max_len=120))
                             elif value_lower == 'regular':
                                 risk_regular += 1
-                                risk_regular_columns.add(key)
+                                risk_regular_columns.add(_sanitize_text_output(key, max_len=120))
                             elif value_lower == 'confidential':
                                 risk_confidential += 1
-                                risk_confidential_columns.add(key)
+                                risk_confidential_columns.add(_sanitize_text_output(key, max_len=120))
         
         for record in risk_instance_queryset:
             data_inventory = getattr(record, 'data_inventory', None)
@@ -165,13 +228,13 @@ def get_data_analysis(request):
                             value_lower = value.lower()
                             if value_lower == 'personal':
                                 risk_personal += 1
-                                risk_personal_columns.add(key)
+                                risk_personal_columns.add(_sanitize_text_output(key, max_len=120))
                             elif value_lower == 'regular':
                                 risk_regular += 1
-                                risk_regular_columns.add(key)
+                                risk_regular_columns.add(_sanitize_text_output(key, max_len=120))
                             elif value_lower == 'confidential':
                                 risk_confidential += 1
-                                risk_confidential_columns.add(key)
+                                risk_confidential_columns.add(_sanitize_text_output(key, max_len=120))
         
         risk_total = risk_personal + risk_regular + risk_confidential
         if risk_total == 0:
@@ -207,7 +270,7 @@ def get_data_analysis(request):
             }
         
         # Event Module
-        event_queryset = Event.objects.filter(filter_query)
+        event_queryset = _scope_queryset_for_user(Event.objects.filter(filter_query), current_user, is_admin=is_admin)
         results['event'] = analyze_data_inventory(event_queryset)
         
         return Response({
@@ -216,6 +279,7 @@ def get_data_analysis(request):
         }, status=status.HTTP_200_OK)
         
     except Exception as e:
+        logger.error("Error in get_data_analysis: %s", e, exc_info=True)
         return Response({
             'status': 'error',
             'message': 'An internal server error occurred.'

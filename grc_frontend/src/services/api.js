@@ -2,6 +2,22 @@ import { API_BASE_URL, API_ENDPOINTS, createAxiosInstance } from '../config/api.
  
 // Use centralized axios instance configuration (includes withCredentials: true)
 const api = createAxiosInstance(API_BASE_URL);
+
+const JWT_SEGMENT_RE = /^[A-Za-z0-9\-_]+$/;
+
+function normalizeAndValidateJwt(rawToken) {
+  if (!rawToken || typeof rawToken !== 'string') return null;
+  const trimmed = rawToken.trim();
+  if (!trimmed) return null;
+  const withoutPrefix = trimmed.replace(/^Bearer\s+/i, '');
+  if (!withoutPrefix || ['null', 'undefined', '[object object]'].includes(withoutPrefix.toLowerCase())) {
+    return null;
+  }
+  const parts = withoutPrefix.split('.');
+  if (parts.length !== 3) return null;
+  if (!parts.every((p) => p && JWT_SEGMENT_RE.test(p))) return null;
+  return withoutPrefix;
+}
  
 // Add response interceptor for error handling
 api.interceptors.response.use(
@@ -17,14 +33,14 @@ api.interceptors.response.use(
       if (isSessionExpired) {
         console.warn('⏰ [API] Session expired - logging out user');
         
-        // Clear all auth data
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
-        localStorage.removeItem('user_id');
-        localStorage.removeItem('user');
-        localStorage.removeItem('user_email');
-        localStorage.removeItem('user_name');
-        localStorage.removeItem('is_logged_in');
+        // Clear session-scoped auth data
+        sessionStorage.removeItem('access_token');
+        sessionStorage.removeItem('refresh_token');
+        sessionStorage.removeItem('user_id');
+        sessionStorage.removeItem('user');
+        sessionStorage.removeItem('user_email');
+        sessionStorage.removeItem('user_name');
+        sessionStorage.removeItem('is_logged_in');
         
         // Stop session timeout service
         try {
@@ -136,27 +152,16 @@ api.interceptors.request.use((config) => {
     config.url.includes('/cookie/preferences/')
   );
   
-  // Get JWT token from multiple possible locations
-  const token = sessionStorage.getItem('access_token') ||
-                sessionStorage.getItem('token') ||
-                sessionStorage.getItem('session_token') ||
-                localStorage.getItem('access_token') ||
-                localStorage.getItem('token') ||
-                localStorage.getItem('session_token') ||
-                sessionStorage.getItem('access_token') ||
-                sessionStorage.getItem('token');
-  
-  // Validate JWT token before adding to header
-  // Ensure token is not a degenerate string from stale storage (null, undefined, etc.)
-  const isValidToken = token && 
-                      typeof token === 'string' && 
-                      token.length > 20 && 
-                      !['null', 'undefined', '[object object]'].includes(token.toLowerCase());
+  // Get JWT token from session storage only (avoid localStorage for sensitive tokens).
+  const rawToken = sessionStorage.getItem('access_token') ||
+                   sessionStorage.getItem('token') ||
+                   sessionStorage.getItem('session_token');
+  const token = normalizeAndValidateJwt(rawToken);
 
   // ALWAYS send JWT token if available, even for cookie preferences endpoints
   // Prioritize secure HttpOnly cookies: if no valid token in storage, 
   // the browser will automatically send cookies via withCredentials.
-  if (isValidToken) {
+  if (token) {
     config.headers.Authorization = `Bearer ${token}`;
     if (isCookiePreferencesEndpoint) {
       console.log(`🍪 [API] Cookie preferences endpoint - including JWT token: ${config.method?.toUpperCase()} ${config.url}`);
@@ -165,8 +170,12 @@ api.interceptors.request.use((config) => {
     }
   } else {
     // If token is malformed, we log it but don't send it, letting backend fall back to cookies
-    if (token) {
-        console.warn(`⚠️ [API] Degenerate token detected and suppressed: "${token}" for ${config.method?.toUpperCase()} ${config.url}`);
+    if (rawToken) {
+      console.warn(`⚠️ [API] Invalid JWT token suppressed for ${config.method?.toUpperCase()} ${config.url}`);
+      // Prevent repeated malformed JWT attempts in this session.
+      sessionStorage.removeItem('access_token');
+      sessionStorage.removeItem('token');
+      sessionStorage.removeItem('session_token');
     }
     
     if (isCookiePreferencesEndpoint) {
@@ -180,18 +189,26 @@ api.interceptors.request.use((config) => {
   // SECURITY: Never inject client user identifiers for compliance APIs.
   const requestUrl = String(config.url || '');
   const isComplianceApi = requestUrl.includes('/api/compliance') || requestUrl.includes('api/compliance');
+  const isDocumentHandlingApi =
+    requestUrl.includes('/api/documents/') ||
+    requestUrl.includes('/api/company-folders/');
+  const isDataAnalysisApi =
+    requestUrl.includes('/api/data-analysis') ||
+    requestUrl.includes('/api/ai-privacy-analysis') ||
+    requestUrl.includes('/api/privacy-dashboard-metrics') ||
+    requestUrl.includes('/api/privacy-compliance-report') ||
+    requestUrl.includes('/api/export-privacy-report');
+  const isChangeManagementApi = requestUrl.includes('/api/change-management/');
 
   // CRITICAL: Add user_id to request if available (for backward compatibility)
-  // Try multiple sources for user_id
-  let userId = localStorage.getItem('user_id') || 
-               localStorage.getItem('userId') ||
-               sessionStorage.getItem('user_id') ||
+  // Read from session only; do not trust localStorage identity.
+  let userId = sessionStorage.getItem('user_id') ||
                sessionStorage.getItem('userId');
   
   // Also check current_user object
   if (!userId) {
     try {
-      const currentUserStr = sessionStorage.getItem('current_user') || localStorage.getItem('current_user');
+      const currentUserStr = sessionStorage.getItem('current_user');
       if (currentUserStr) {
         const currentUser = JSON.parse(currentUserStr);
         userId = currentUser.UserId || currentUser.user_id || currentUser.userId || currentUser.id;
@@ -208,7 +225,7 @@ api.interceptors.request.use((config) => {
   
   // CRITICAL: For cookie preferences endpoint, ALWAYS add user_id if available
   // This ensures user_id is sent even if it was null/undefined in the original data
-  if (userId && !isNaN(userId) && !config.url.includes('api/incidents/recent/') && !isComplianceApi) {
+  if (userId && !isNaN(userId) && !config.url.includes('api/incidents/recent/') && !isComplianceApi && !isDocumentHandlingApi && !isDataAnalysisApi && !isChangeManagementApi) {
     // Add user_id to query params for GET requests
     if (config.method === 'get') {
       config.params = config.params || {};
@@ -257,10 +274,9 @@ api.interceptors.request.use((config) => {
     }
   } else if (isCookiePreferencesEndpoint) {
     if (!userId) {
-      console.log(`🍪 [API] Interceptor: No user_id found in localStorage/sessionStorage for cookie preferences`);
-      console.log(`🍪 [API] Interceptor: Checked localStorage keys: user_id, userId`);
+      console.log(`🍪 [API] Interceptor: No user_id found in sessionStorage for cookie preferences`);
       console.log(`🍪 [API] Interceptor: Checked sessionStorage keys: user_id, userId`);
-      console.log(`🍪 [API] Interceptor: Checked current_user object in localStorage`);
+      console.log(`🍪 [API] Interceptor: Checked current_user object in sessionStorage`);
     } else {
       console.log(`🍪 [API] Interceptor: user_id found but isNaN: ${userId}`);
     }
@@ -269,9 +285,7 @@ api.interceptors.request.use((config) => {
   // CRITICAL: Final verification and fix for cookie preferences
   if (isCookiePreferencesEndpoint && (config.method === 'post' || config.method === 'put')) {
     // Double-check that user_id is in the data
-    const userId = localStorage.getItem('user_id') || 
-                   localStorage.getItem('userId') ||
-                   sessionStorage.getItem('user_id') ||
+    const userId = sessionStorage.getItem('user_id') ||
                    sessionStorage.getItem('userId');
     
     if (userId && !isNaN(parseInt(userId))) {
@@ -285,17 +299,13 @@ api.interceptors.request.use((config) => {
     }
     
     // Also ensure JWT token is set
-    const token = sessionStorage.getItem('access_token') ||
-                  sessionStorage.getItem('token') ||
-                  sessionStorage.getItem('session_token') ||
-                  localStorage.getItem('access_token') ||
-                  localStorage.getItem('token') ||
-                  localStorage.getItem('session_token') ||
-                  sessionStorage.getItem('access_token') ||
-                  sessionStorage.getItem('token');
+    const finalRawToken = sessionStorage.getItem('access_token') ||
+                          sessionStorage.getItem('token') ||
+                          sessionStorage.getItem('session_token');
+    const finalToken = normalizeAndValidateJwt(finalRawToken);
     
-    if (token && !config.headers.Authorization) {
-      config.headers.Authorization = `Bearer ${token}`;
+    if (finalToken && !config.headers.Authorization) {
+      config.headers.Authorization = `Bearer ${finalToken}`;
       console.log(`🍪 [API] Final check: Added JWT token to headers`);
     }
   }
@@ -502,10 +512,10 @@ export const complianceService = {
   // Add updateCompliance function
   updateCompliance: (complianceId, data) => {
     // Format the data similar to createCompliance
-        // Always get user_id from localStorage/session and set as UserId
-    let userId = localStorage.getItem('user_id') || sessionStorage.getItem('userId');
+        // Always get user_id from session and set as UserId
+    let userId = sessionStorage.getItem('user_id') || sessionStorage.getItem('userId');
     if (!userId) {
-      const userObj = localStorage.getItem('user') || sessionStorage.getItem('user');
+      const userObj = sessionStorage.getItem('user');
       if (userObj) {
         try {
           const parsed = JSON.parse(userObj);

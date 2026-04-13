@@ -7,6 +7,7 @@ from rest_framework.decorators import (
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from django.conf import settings
 from django.db.models import Q
 from grc.models import (
     FileOperations,
@@ -17,24 +18,116 @@ from grc.models import (
     compute_retention_expiry,
     upsert_retention_timeline,
 )
+from grc.rbac.utils import RBACUtils
 from datetime import datetime
 import logging
 import os
 import tempfile
+from pathlib import Path
 from grc.routes.Global.s3_fucntions import create_direct_mysql_client, RenderS3Client
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from grc.utils.auto_decrypt_helper import decrypt_any_encrypted_value
 from grc.utils.data_encryption import GCM_ENVELOPE_PREFIX
+from grc.utils.safe_paths import (
+    safe_join,
+    resolved_path_under_base,
+    safe_upload_filename,
+    UnsafePathError,
+)
 import re
 
 logger = logging.getLogger(__name__)
+CLIENT_SAFE_ERROR = "An internal error occurred. Please try again later."
+MAX_SEARCH_LENGTH = 256
+ALLOWED_MODULE_FILTERS = {'all', 'policy', 'audit', 'incident', 'risk', 'event', 'document_handling'}
+ALLOWED_UPLOAD_MODULES = {'policy', 'audit', 'incident', 'risk', 'event', 'document_handling'}
+ALLOWED_FILE_TYPE_FILTERS = {'all', 'pdf', 'doc', 'docx', 'xlsx', 'xls', 'csv', 'txt'}
+ALLOWED_DISPOSITIONS = {'attachment', 'inline'}
 
 # Never send raw encrypted blobs to the UI; if decryption failed, show this instead
 ENCRYPTED_PLACEHOLDER = '—'
 
 # Modules we never want to expose to the UI
 EXCLUDED_MODULES = {'synthetic'}
+
+
+def _get_authenticated_user(request):
+    """Resolve authenticated GRC user from request context."""
+    raw_request = getattr(request, '_request', request)
+    grc_user = getattr(raw_request, '_grc_user', None)
+    if grc_user and hasattr(grc_user, 'UserId'):
+        try:
+            return Users.objects.filter(UserId=int(grc_user.UserId)).first()
+        except Exception:
+            return None
+
+    resolved_user_id = RBACUtils.get_user_id_from_request(request)
+    if not resolved_user_id:
+        return None
+    try:
+        return Users.objects.filter(UserId=int(resolved_user_id)).first()
+    except Exception:
+        return None
+
+
+def _is_system_admin(user):
+    try:
+        return bool(user and RBACUtils.is_system_admin(int(user.UserId)))
+    except Exception:
+        return False
+
+
+def _scope_file_operations_queryset(queryset, user, is_admin=False):
+    """Scope FileOperations to authorized tenant/framework/user context."""
+    if not user:
+        return queryset.none()
+
+    # Tenant boundary first when available on model + user.
+    if hasattr(FileOperations, 'tenant_id') and getattr(user, 'tenant_id', None):
+        queryset = queryset.filter(tenant_id=user.tenant_id)
+
+    # Admin can view tenant-scoped records.
+    if is_admin:
+        return queryset
+
+    user_id_str = str(user.UserId)
+    user_framework_id = getattr(user, 'FrameworkId_id', None)
+    if user_framework_id:
+        return queryset.filter(Q(user_id=user_id_str) | Q(FrameworkId_id=user_framework_id))
+    return queryset.filter(user_id=user_id_str)
+
+
+def _can_access_file_operation(file_op, user, is_admin=False):
+    if not user or not file_op:
+        return False
+
+    # Tenant isolation.
+    if hasattr(file_op, 'tenant_id') and getattr(user, 'tenant_id', None):
+        if file_op.tenant_id and file_op.tenant_id != user.tenant_id:
+            return False
+
+    if is_admin:
+        return True
+
+    if str(file_op.user_id or '') == str(user.UserId):
+        return True
+
+    user_framework_id = getattr(user, 'FrameworkId_id', None)
+    file_framework_id = getattr(file_op, 'FrameworkId_id', None)
+    return bool(user_framework_id and file_framework_id and int(user_framework_id) == int(file_framework_id))
+
+
+def _get_approved_temp_upload_dir():
+    """
+    Return an approved temp upload directory under BASE_DIR/tmp/document_uploads.
+    Uses centralized safe path helpers to enforce normalized boundary checks.
+    """
+    approved_path = safe_join(settings.BASE_DIR, "tmp", "document_uploads")
+    Path(approved_path).mkdir(parents=True, exist_ok=True)
+    if not resolved_path_under_base(approved_path, settings.BASE_DIR):
+        raise UnsafePathError("Upload temp path is outside approved base directory")
+    return approved_path
 
 
 def _safe_for_display(value):
@@ -51,6 +144,40 @@ def _safe_for_display(value):
     if lower.startswith('gaaaaa') or (len(s) >= 6 and lower[1:6] == 'aaaaa'):
         return ENCRYPTED_PLACEHOLDER
     return value
+
+
+def _sanitize_text_output(value, max_len: int = 512):
+    """
+    Normalize text output for JSON/HTML rendering contexts.
+    - Remove control characters
+    - Trim excessive length
+    - Neutralize CSV formula prefixes to reduce spreadsheet injection risk
+    """
+    if value is None:
+        return value
+    if not isinstance(value, str):
+        value = str(value)
+
+    cleaned = ''.join(ch for ch in value if ch == '\t' or ch == '\n' or ord(ch) >= 32)
+    cleaned = cleaned.strip()
+    if len(cleaned) > max_len:
+        cleaned = cleaned[:max_len]
+    if cleaned.startswith(('=', '+', '-', '@')):
+        cleaned = "'" + cleaned
+    return cleaned
+
+
+def _sanitize_folder_name(value: str) -> str:
+    if not isinstance(value, str):
+        return ''
+    normalized = value.strip()
+    if not normalized:
+        return ''
+    if len(normalized) > 120:
+        return ''
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9 _\-.]{0,119}", normalized):
+        return ''
+    return normalized
 
 
 def apply_module_exclusions(queryset):
@@ -107,17 +234,28 @@ def get_documents(request):
     Fetch documents from FileOperations table with pagination
     Optionally filter by module: policy, audit, incident, risk
     """
-    raw_request = getattr(request, '_request', request)
-    grc_user = getattr(raw_request, '_grc_user', None)
-    if not grc_user or not hasattr(grc_user, 'UserId'):
+    current_user = _get_authenticated_user(request)
+    if not current_user:
         return Response({'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
+    is_admin = _is_system_admin(current_user)
     try:
         # Get query parameters
-        module_filter = request.GET.get('module', 'all')
-        search_query = request.GET.get('search', '')
-        file_type_filter = request.GET.get('file_type', 'all')
-        company_code = request.GET.get('company_code', '') or request.GET.get('company', '')
-        subfolder_code = request.GET.get('subfolder_code', '') or request.GET.get('subfolder', '')
+        module_filter = (request.GET.get('module', 'all') or 'all').strip().lower()
+        search_query = (request.GET.get('search', '') or '').strip()
+        file_type_filter = (request.GET.get('file_type', 'all') or 'all').strip().lower()
+        company_code = (request.GET.get('company_code', '') or request.GET.get('company', '') or '').strip()
+        subfolder_code = (request.GET.get('subfolder_code', '') or request.GET.get('subfolder', '') or '').strip()
+
+        if module_filter not in ALLOWED_MODULE_FILTERS:
+            return Response({'success': False, 'error': 'Invalid module filter'}, status=status.HTTP_400_BAD_REQUEST)
+        if file_type_filter not in ALLOWED_FILE_TYPE_FILTERS:
+            return Response({'success': False, 'error': 'Invalid file type filter'}, status=status.HTTP_400_BAD_REQUEST)
+        if len(search_query) > MAX_SEARCH_LENGTH:
+            return Response({'success': False, 'error': 'Search query too long'}, status=status.HTTP_400_BAD_REQUEST)
+        if company_code and not _is_safe_lookup_code(company_code):
+            return Response({'success': False, 'error': 'Invalid company code format'}, status=status.HTTP_400_BAD_REQUEST)
+        if subfolder_code and not _is_safe_lookup_code(subfolder_code):
+            return Response({'success': False, 'error': 'Invalid subfolder code format'}, status=status.HTTP_400_BAD_REQUEST)
         
         # Pagination parameters
         try:
@@ -139,6 +277,7 @@ def get_documents(request):
             user_id='export_user'  # Exclude system-generated exports
         )
         queryset = apply_module_exclusions(queryset)
+        queryset = _scope_file_operations_queryset(queryset, current_user, is_admin=is_admin)
         
         # Filter by module
         if module_filter and module_filter != 'all':
@@ -159,6 +298,9 @@ def get_documents(request):
         # Company filter - filename prefix company_ or company_subfolder_, OR linked via CompanySubfolderDocument
         if company_code:
             try:
+                resolved_folder, resolved_subfolder = _resolve_and_authorize_company_scope(
+                    current_user, company_code=company_code, subfolder_code=subfolder_code
+                )
                 company_prefix = sanitize_filename_part(company_code)
                 if company_prefix and company_prefix != 'na':
                     linked_file_op_ids = []
@@ -166,17 +308,12 @@ def get_documents(request):
                         sub_prefix = sanitize_filename_part(subfolder_code)
                         if sub_prefix and sub_prefix != 'na':
                             # Include docs whose file_name has the prefix (legacy) OR that are linked to this subfolder (e.g. AI audit evidence)
-                            folder = CompanyFolder.objects.filter(code__iexact=company_code.strip()).first()
-                            if folder:
-                                subfolder = CompanySubfolder.objects.filter(
-                                    company_folder=folder, code__iexact=subfolder_code.strip()
-                                ).first()
-                                if subfolder:
-                                    linked_file_op_ids = list(
-                                        CompanySubfolderDocument.objects.filter(
-                                            company_subfolder=subfolder
-                                        ).values_list('file_operation_id', flat=True)
-                                    )
+                            if resolved_subfolder:
+                                linked_file_op_ids = list(
+                                    CompanySubfolderDocument.objects.filter(
+                                        company_subfolder=resolved_subfolder
+                                    ).values_list('file_operation_id', flat=True)
+                                )
                             if linked_file_op_ids:
                                 queryset = queryset.filter(
                                     Q(file_name__istartswith=f"{company_prefix}_{sub_prefix}_") | Q(id__in=linked_file_op_ids)
@@ -189,11 +326,10 @@ def get_documents(request):
                             queryset = queryset.filter(file_name__istartswith=f"{company_prefix}_")
                     else:
                         # No subfolder selected: include prefix-based docs and docs linked to any subfolder (e.g. AI audit evidence)
-                        folder = CompanyFolder.objects.filter(code__iexact=company_code.strip()).first()
-                        if folder:
+                        if resolved_folder:
                             linked_file_op_ids = list(
                                 CompanySubfolderDocument.objects.filter(
-                                    company_subfolder__company_folder=folder
+                                    company_subfolder__company_folder=resolved_folder
                                 ).values_list('file_operation_id', flat=True)
                             )
                             if linked_file_op_ids:
@@ -204,6 +340,8 @@ def get_documents(request):
                                 queryset = queryset.filter(file_name__istartswith=f"{company_prefix}_")
                         else:
                             queryset = queryset.filter(file_name__istartswith=f"{company_prefix}_")
+            except (ValueError, PermissionError):
+                return Response({'success': False, 'error': 'Invalid company/subfolder scope'}, status=status.HTTP_400_BAD_REQUEST)
             except Exception as prefix_exc:
                 logger.warning(f"Error applying company_code filter '{company_code}': {prefix_exc}")
         
@@ -288,23 +426,32 @@ def get_documents(request):
 
             # Get user display name
             user_display_name = get_user_display_name(file_op.user_id)
+            safe_display_name = _sanitize_text_output(_safe_for_display(display_name), max_len=255)
+            safe_stored_name = _sanitize_text_output(_safe_for_display(stored_file_name), max_len=255)
+            safe_uploaded_by = _sanitize_text_output(user_display_name, max_len=120)
+            safe_module_name = _sanitize_text_output(file_op.module or 'general', max_len=64)
+            safe_status = _sanitize_text_output(file_op.status or '', max_len=64)
+            safe_content_type = _sanitize_text_output(file_op.content_type or '', max_len=120)
             
             documents.append({
                 'id': file_op.id,
-                'name': display_name,
-                'file_name': stored_file_name,  # stored filename for company/subfolder filtering (decrypted for display)
+                'name': safe_display_name,
+                'file_name': safe_stored_name,  # stored filename for company/subfolder filtering (decrypted for display)
                 'fileType': file_ext.lower(),
                 'fileSize': file_size_str,
                 'uploadTime': file_op.created_at.isoformat() if file_op.created_at else None,
-                'uploadedBy': user_display_name,
-                'module': file_op.module or 'general',
+                'uploadedBy': safe_uploaded_by,
+                'module': safe_module_name,
                 # s3Url intentionally omitted — use /api/documents/<id>/download-url/ for a short-lived signed URL
                 's3Url': '',
                 's3Key': '',
                 's3Bucket': '',
-                'description': f'{file_op.module or "General"} document uploaded on {file_op.created_at.strftime("%Y-%m-%d") if file_op.created_at else "unknown date"}',
-                'status': file_op.status,
-                'contentType': file_op.content_type or ''
+                'description': _sanitize_text_output(
+                    f'{file_op.module or "General"} document uploaded on {file_op.created_at.strftime("%Y-%m-%d") if file_op.created_at else "unknown date"}',
+                    max_len=256,
+                ),
+                'status': safe_status,
+                'contentType': safe_content_type
             })
         
         return Response({
@@ -321,7 +468,7 @@ def get_documents(request):
         logger.error(f"Error fetching documents: {str(e)}", exc_info=True)
         return Response({
             'success': False,
-            'error': str(e),
+            'error': CLIENT_SAFE_ERROR,
             'documents': []
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -332,10 +479,10 @@ def get_document_counts(request):
     """
     Get document counts by module
     """
-    raw_request = getattr(request, '_request', request)
-    grc_user = getattr(raw_request, '_grc_user', None)
-    if not grc_user or not hasattr(grc_user, 'UserId'):
+    current_user = _get_authenticated_user(request)
+    if not current_user:
         return Response({'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
+    is_admin = _is_system_admin(current_user)
     try:
         # Base query - all uploads (exclude downloads, exports, and system files)
         base_query = FileOperations.objects.filter(
@@ -344,6 +491,7 @@ def get_document_counts(request):
             user_id='export_user'  # Exclude system-generated exports
         )
         base_query = apply_module_exclusions(base_query)
+        base_query = _scope_file_operations_queryset(base_query, current_user, is_admin=is_admin)
         
         counts = {
             'all': base_query.count(),
@@ -363,7 +511,7 @@ def get_document_counts(request):
         logger.error(f"Error fetching document counts: {str(e)}", exc_info=True)
         return Response({
             'success': False,
-            'error': str(e),
+            'error': CLIENT_SAFE_ERROR,
             'counts': {}
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -395,6 +543,11 @@ def delete_document(request, doc_id: int):
       Work In Progress / Under review / Completed, deletion is blocked.
     """
     try:
+        current_user = _get_authenticated_user(request)
+        if not current_user:
+            return Response({"success": False, "error": "Authentication required"}, status=status.HTTP_401_UNAUTHORIZED)
+        is_admin = _is_system_admin(current_user)
+
         from grc.models import CompanySubfolderDocument, CompanySubfolder, CompanyFolder
 
         try:
@@ -403,6 +556,12 @@ def delete_document(request, doc_id: int):
             return Response(
                 {"success": False, "error": "Document not found"},
                 status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if not _can_access_file_operation(file_op, current_user, is_admin=is_admin):
+            return Response(
+                {"success": False, "error": "Forbidden"},
+                status=status.HTTP_403_FORBIDDEN,
             )
 
         # First, try to infer audit status from the company folder code.
@@ -472,6 +631,11 @@ def delete_document(request, doc_id: int):
 
         # Finally delete the FileOperations row itself
         file_op.delete()
+        logger.info(
+            "Document deleted: doc_id=%s actor_user_id=%s",
+            doc_id,
+            getattr(current_user, 'UserId', None),
+        )
 
         return Response(
             {"success": True, "message": "Document deleted successfully"},
@@ -480,7 +644,7 @@ def delete_document(request, doc_id: int):
     except Exception as exc:
         logger.error(f"Error deleting document {doc_id}: {exc}", exc_info=True)
         return Response(
-            {"success": False, "error": str(exc)},
+            {"success": False, "error": CLIENT_SAFE_ERROR},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
@@ -492,9 +656,14 @@ def get_document_download_url(request, doc_id: int):
     Return a short-lived, read-only download URL for a document.
 
     - For new secure uploads: uses s3_bucket + s3_key and the S3 microservice (/presign-get).
-    - For legacy records that still have s3_url: falls back to that URL.
+    - Legacy direct `s3_url` values are not exposed by this endpoint.
     """
     try:
+        current_user = _get_authenticated_user(request)
+        if not current_user:
+            return Response({"success": False, "error": "Authentication required"}, status=status.HTTP_401_UNAUTHORIZED)
+        is_admin = _is_system_admin(current_user)
+
         try:
             file_op = FileOperations.objects.get(id=doc_id, operation_type='upload')
         except FileOperations.DoesNotExist:
@@ -503,12 +672,20 @@ def get_document_download_url(request, doc_id: int):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
+        if not _can_access_file_operation(file_op, current_user, is_admin=is_admin):
+            return Response(
+                {"success": False, "error": "Forbidden"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         # Preferred: secure mode with S3 key. Try multiple candidates so we match how Direct stored the object.
         bucket = (file_op.s3_bucket or "").strip()
         key = (file_op.s3_key or "").strip()
         stored_name = (file_op.stored_name or "").strip() if hasattr(file_op, "stored_name") else ""
-        file_name = file_op.original_name or file_op.file_name or "document"
-        disposition = request.GET.get("disposition", "attachment")
+        file_name = safe_upload_filename(file_op.original_name or file_op.file_name or "document")
+        disposition = (request.GET.get("disposition", "attachment") or "attachment").strip().lower()
+        if disposition not in ALLOWED_DISPOSITIONS:
+            disposition = "attachment"
 
         # Build candidate keys: s3_key, stored_name, and their basenames
         candidates = []
@@ -550,23 +727,12 @@ def get_document_download_url(request, doc_id: int):
                     f"Last error: {last_error}"
                 )
 
-        # Legacy fallback: use stored s3_url if present
-        if file_op.s3_url:
-            return Response(
-                {
-                    "success": True,
-                    "downloadUrl": file_op.s3_url,
-                    "legacy": True,
-                },
-                status=status.HTTP_200_OK,
-            )
-
         return Response(
             {
                 "success": False,
-                "error": "No S3 location stored for this document",
+                "error": "Download URL unavailable for this document",
             },
-            status=status.HTTP_400_BAD_REQUEST,
+            status=status.HTTP_404_NOT_FOUND,
         )
 
     except Exception as exc:
@@ -595,6 +761,52 @@ def sanitize_filename_part(value: str) -> str:
     return value or 'na'
 
 
+def _is_safe_lookup_code(value: str, max_len: int = 120) -> bool:
+    if not isinstance(value, str):
+        return False
+    normalized = value.strip()
+    if not normalized or len(normalized) > max_len:
+        return False
+    return bool(re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_\- ]*', normalized))
+
+
+def _resolve_and_authorize_company_scope(user, company_code: str = '', subfolder_code: str = ''):
+    """
+    Validate company/subfolder codes and return tenant-authorized objects.
+    Raises ValueError for malformed/unresolvable inputs and PermissionError for tenant violations.
+    """
+    folder = None
+    subfolder = None
+
+    if company_code:
+        if not _is_safe_lookup_code(company_code):
+            raise ValueError("Invalid company code format")
+        folder = CompanyFolder.objects.filter(code__iexact=company_code.strip(), is_active=True).first()
+        if not folder:
+            raise ValueError("Company folder not found")
+        if hasattr(folder, 'tenant_id') and getattr(user, 'tenant_id', None):
+            if folder.tenant_id and folder.tenant_id != user.tenant_id:
+                raise PermissionError("Forbidden")
+
+    if subfolder_code:
+        if not folder:
+            raise ValueError("Subfolder requires a company folder")
+        if not _is_safe_lookup_code(subfolder_code):
+            raise ValueError("Invalid subfolder code format")
+        subfolder = CompanySubfolder.objects.filter(
+            company_folder=folder,
+            code__iexact=subfolder_code.strip(),
+            is_active=True,
+        ).first()
+        if not subfolder:
+            raise ValueError("Subfolder not found")
+        if hasattr(subfolder, 'tenant_id') and getattr(user, 'tenant_id', None):
+            if subfolder.tenant_id and subfolder.tenant_id != user.tenant_id:
+                raise PermissionError("Forbidden")
+
+    return folder, subfolder
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def list_company_folders(request):
@@ -602,14 +814,17 @@ def list_company_folders(request):
     List all active company folders for the current tenant (if available).
     """
     try:
+        current_user = _get_authenticated_user(request)
+        if not current_user:
+            return Response({'success': False, 'error': 'Authentication required', 'folders': []}, status=status.HTTP_401_UNAUTHORIZED)
+        is_admin = _is_system_admin(current_user)
+
         queryset = CompanyFolder.objects.filter(is_active=True).order_by('name')
 
         # If the model has tenant information and a current tenant is set,
         # filter by tenant. We avoid hard dependency on tenant context here.
         if hasattr(CompanyFolder, 'tenant'):
-            from grc.tenant_context import get_current_tenant
-
-            tenant_id = get_current_tenant()
+            tenant_id = getattr(current_user, 'tenant_id', None)
             if tenant_id:
                 queryset = queryset.filter(tenant__tenant_id=tenant_id)
 
@@ -689,6 +904,7 @@ def list_company_folders(request):
                 ).values_list('file_operation_id', flat=True)
             )
             base_qs = FileOperations.objects.filter(operation_type='upload').exclude(user_id='export_user')
+            base_qs = _scope_file_operations_queryset(base_qs, current_user, is_admin=is_admin)
             if linked_ids:
                 doc_count = base_qs.filter(
                     Q(file_name__istartswith=prefix) | Q(id__in=linked_ids)
@@ -710,9 +926,9 @@ def list_company_folders(request):
                 doc_count = max(doc_count, subfolder_total)
             folders.append({
                 'id': folder.folder_id,
-                'name': name,
-                'code': code,
-                'description': description,
+                'name': _sanitize_text_output(name, max_len=120),
+                'code': _sanitize_text_output(code, max_len=120),
+                'description': _sanitize_text_output(description, max_len=400),
                 'document_count': doc_count,
                 'can_delete': folder.folder_id not in blocking_folder_ids,
             })
@@ -729,7 +945,7 @@ def list_company_folders(request):
         return Response(
             {
                 'success': False,
-                'error': str(exc),
+                'error': CLIENT_SAFE_ERROR,
                 'folders': [],
             },
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -744,8 +960,14 @@ def create_company_folder(request):
     Create a new company folder.
     """
     try:
-        name = (request.data.get('name') or '').strip()
-        description = (request.data.get('description') or '').strip()
+        current_user = _get_authenticated_user(request)
+        if not current_user:
+            return Response({'success': False, 'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
+        if not _is_system_admin(current_user):
+            return Response({'success': False, 'error': 'Forbidden'}, status=status.HTTP_403_FORBIDDEN)
+
+        name = _sanitize_folder_name(request.data.get('name') or '')
+        description = _sanitize_text_output((request.data.get('description') or '').strip(), max_len=400)
 
         if not name:
             return Response(
@@ -759,7 +981,10 @@ def create_company_folder(request):
         code = sanitize_filename_part(name)
 
         # Ensure code is unique
-        existing = CompanyFolder.objects.filter(code__iexact=code).first()
+        existing = CompanyFolder.objects.filter(code__iexact=code, is_active=True)
+        if hasattr(CompanyFolder, 'tenant_id') and getattr(current_user, 'tenant_id', None):
+            existing = existing.filter(tenant_id=current_user.tenant_id)
+        existing = existing.first()
         if existing:
             return Response(
                 {
@@ -778,12 +1003,11 @@ def create_company_folder(request):
 
         # Best-effort: set created_by from authenticated user if available
         try:
-            if hasattr(request, 'user') and getattr(request.user, 'id', None):
-                # Map Django auth user to grc.Users if possible
-                user = Users.objects.filter(UserId=getattr(request.user, 'id')).first()
-                if user:
-                    folder.created_by = user
-                    folder.updated_by = user
+            if current_user:
+                folder.created_by = current_user
+                folder.updated_by = current_user
+                if hasattr(folder, 'tenant_id') and getattr(current_user, 'tenant_id', None):
+                    folder.tenant_id = current_user.tenant_id
         except Exception as map_exc:
             logger.warning(f"Could not map request.user to Users: {map_exc}")
 
@@ -794,9 +1018,9 @@ def create_company_folder(request):
                 'success': True,
                 'folder': {
                     'id': folder.folder_id,
-                    'name': folder.name,
-                    'code': folder.code,
-                    'description': folder.description or '',
+                    'name': _sanitize_text_output(folder.name, max_len=120),
+                    'code': _sanitize_text_output(folder.code, max_len=120),
+                    'description': _sanitize_text_output(folder.description or '', max_len=400),
                 },
             },
             status=status.HTTP_201_CREATED,
@@ -806,7 +1030,7 @@ def create_company_folder(request):
         return Response(
             {
                 'success': False,
-                'error': str(exc),
+                'error': CLIENT_SAFE_ERROR,
             },
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
@@ -821,6 +1045,12 @@ def delete_company_folder(request, folder_id):
     Files in S3 / file_operations are NOT deleted.
     """
     try:
+        current_user = _get_authenticated_user(request)
+        if not current_user:
+            return Response({'success': False, 'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
+        if not _is_system_admin(current_user):
+            return Response({'success': False, 'error': 'Forbidden'}, status=status.HTTP_403_FORBIDDEN)
+
         from grc.models import CompanySubfolderDocument  # Lazy import to avoid heavy imports
 
         folder = CompanyFolder.objects.filter(folder_id=folder_id, is_active=True).first()
@@ -832,6 +1062,12 @@ def delete_company_folder(request, folder_id):
                 },
                 status=status.HTTP_404_NOT_FOUND,
             )
+        if hasattr(folder, 'tenant_id') and getattr(current_user, 'tenant_id', None):
+            if folder.tenant_id and folder.tenant_id != current_user.tenant_id:
+                return Response(
+                    {'success': False, 'error': 'Forbidden'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
 
         # Before deleting, ensure this folder does not contain evidence needed
         # for audits that are already in progress or completed.
@@ -903,7 +1139,7 @@ def delete_company_folder(request, folder_id):
         return Response(
             {
                 'success': False,
-                'error': str(exc),
+                'error': CLIENT_SAFE_ERROR,
             },
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
@@ -916,6 +1152,11 @@ def list_company_subfolders(request, folder_id):
     List subfolders for a company folder. Returns id, name, code, document_count.
     """
     try:
+        current_user = _get_authenticated_user(request)
+        if not current_user:
+            return Response({'success': False, 'error': 'Authentication required', 'subfolders': []}, status=status.HTTP_401_UNAUTHORIZED)
+        is_admin = _is_system_admin(current_user)
+
         company_folder = CompanyFolder.objects.filter(
             folder_id=folder_id, is_active=True
         ).first()
@@ -924,6 +1165,12 @@ def list_company_subfolders(request, folder_id):
                 {'success': False, 'error': 'Company folder not found', 'subfolders': []},
                 status=status.HTTP_404_NOT_FOUND,
             )
+        if hasattr(company_folder, 'tenant_id') and getattr(current_user, 'tenant_id', None):
+            if company_folder.tenant_id and company_folder.tenant_id != current_user.tenant_id:
+                return Response(
+                    {'success': False, 'error': 'Forbidden', 'subfolders': []},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
         queryset = CompanySubfolder.objects.filter(
             company_folder_id=folder_id, is_active=True
         ).order_by('name')
@@ -944,6 +1191,7 @@ def list_company_subfolders(request, folder_id):
                 CompanySubfolderDocument.objects.filter(company_subfolder=sub).values_list('file_operation_id', flat=True)
             )
             base_qs = FileOperations.objects.filter(operation_type='upload').exclude(user_id='export_user')
+            base_qs = _scope_file_operations_queryset(base_qs, current_user, is_admin=is_admin)
             if linked_ids:
                 doc_count = base_qs.filter(
                     Q(file_name__istartswith=prefix) | Q(id__in=linked_ids)
@@ -952,8 +1200,8 @@ def list_company_subfolders(request, folder_id):
                 doc_count = base_qs.filter(file_name__istartswith=prefix).count()
             subfolders.append({
                 'id': sub.subfolder_id,
-                'name': name,
-                'code': code,
+                'name': _sanitize_text_output(name, max_len=120),
+                'code': _sanitize_text_output(code, max_len=120),
                 'document_count': doc_count,
             })
         return Response(
@@ -963,7 +1211,7 @@ def list_company_subfolders(request, folder_id):
     except Exception as exc:
         logger.error(f"Error listing company subfolders: {exc}", exc_info=True)
         return Response(
-            {'success': False, 'error': str(exc), 'subfolders': []},
+            {'success': False, 'error': CLIENT_SAFE_ERROR, 'subfolders': []},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
@@ -976,6 +1224,12 @@ def create_company_subfolder(request, folder_id):
     Create a subfolder inside a company folder.
     """
     try:
+        current_user = _get_authenticated_user(request)
+        if not current_user:
+            return Response({'success': False, 'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
+        if not _is_system_admin(current_user):
+            return Response({'success': False, 'error': 'Forbidden'}, status=status.HTTP_403_FORBIDDEN)
+
         company_folder = CompanyFolder.objects.filter(
             folder_id=folder_id, is_active=True
         ).first()
@@ -984,7 +1238,13 @@ def create_company_subfolder(request, folder_id):
                 {'success': False, 'error': 'Company folder not found'},
                 status=status.HTTP_404_NOT_FOUND,
             )
-        name = (request.data.get('name') or '').strip()
+        if hasattr(company_folder, 'tenant_id') and getattr(current_user, 'tenant_id', None):
+            if company_folder.tenant_id and company_folder.tenant_id != current_user.tenant_id:
+                return Response(
+                    {'success': False, 'error': 'Forbidden'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+        name = _sanitize_folder_name(request.data.get('name') or '')
         if not name:
             return Response(
                 {'success': False, 'error': 'Name is required'},
@@ -992,7 +1252,7 @@ def create_company_subfolder(request, folder_id):
             )
         code = sanitize_filename_part(name)
         existing = CompanySubfolder.objects.filter(
-            company_folder_id=folder_id, code__iexact=code
+            company_folder_id=folder_id, code__iexact=code, is_active=True
         ).first()
         if existing:
             return Response(
@@ -1011,8 +1271,8 @@ def create_company_subfolder(request, folder_id):
                 'success': True,
                 'subfolder': {
                     'id': subfolder.subfolder_id,
-                    'name': subfolder.name,
-                    'code': subfolder.code,
+                    'name': _sanitize_text_output(subfolder.name, max_len=120),
+                    'code': _sanitize_text_output(subfolder.code, max_len=120),
                 },
             },
             status=status.HTTP_201_CREATED,
@@ -1020,13 +1280,12 @@ def create_company_subfolder(request, folder_id):
     except Exception as exc:
         logger.error(f"Error creating company subfolder: {exc}", exc_info=True)
         return Response(
-            {'success': False, 'error': str(exc)},
+            {'success': False, 'error': CLIENT_SAFE_ERROR},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
 @csrf_exempt
 @api_view(['POST'])
-@authentication_classes([])
 @parser_classes([MultiPartParser, FormParser])
 @permission_classes([IsAuthenticated])
 def upload_document(request):
@@ -1035,19 +1294,19 @@ def upload_document(request):
     Naming convention: framework_module_datetime.filetype (if framework selected)
     Or: module_datetime.filetype (if no framework)
     """
-    raw_request = getattr(request, '_request', request)
-    grc_user = getattr(raw_request, '_grc_user', None)
-    if not grc_user or not hasattr(grc_user, 'UserId'):
+    current_user = _get_authenticated_user(request)
+    if not current_user:
         return Response({'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
+    is_admin = _is_system_admin(current_user)
     try:
         # Get form data
         uploaded_file = request.FILES.get('file')
-        module = request.data.get('module')
-        framework = request.data.get('framework', '')
+        module = (request.data.get('module') or '').strip().lower()
+        framework = (request.data.get('framework', '') or '').strip()
         # Optional company code and subfolder (from company folders dropdown)
-        company_code = request.data.get('company', '') or request.data.get('company_code', '')
-        subfolder_code = request.data.get('subfolder', '') or request.data.get('subfolder_code', '')
-        user_id = request.data.get('user_id', 'unknown-user')
+        company_code = (request.data.get('company', '') or request.data.get('company_code', '') or '').strip()
+        subfolder_code = (request.data.get('subfolder', '') or request.data.get('subfolder_code', '') or '').strip()
+        user_id = str(current_user.UserId)
         
         # Validation
         if not uploaded_file:
@@ -1061,6 +1320,48 @@ def upload_document(request):
                 'success': False,
                 'error': 'Module is required'
             }, status=status.HTTP_400_BAD_REQUEST)
+        if module not in ALLOWED_UPLOAD_MODULES:
+            return Response({
+                'success': False,
+                'error': 'Invalid module'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        if framework and len(framework) > 120:
+            return Response({
+                'success': False,
+                'error': 'Invalid framework'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        if company_code and not _is_safe_lookup_code(company_code):
+            return Response({
+                'success': False,
+                'error': 'Invalid company'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        if subfolder_code and not _is_safe_lookup_code(subfolder_code):
+            return Response({
+                'success': False,
+                'error': 'Invalid subfolder'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        if company_code or subfolder_code:
+            try:
+                _resolve_and_authorize_company_scope(
+                    current_user, company_code=company_code, subfolder_code=subfolder_code
+                )
+            except PermissionError:
+                logger.info(
+                    "Document uploaded: operation_id=%s actor_user_id=%s module=%s",
+                    operation_id,
+                    getattr(current_user, 'UserId', None),
+                    module,
+                )
+                return Response({
+                    'success': False,
+                    'error': 'Forbidden'
+                }, status=status.HTTP_403_FORBIDDEN)
+            except ValueError:
+                return Response({
+                    'success': False,
+                    'error': 'Invalid company/subfolder'
+                }, status=status.HTTP_400_BAD_REQUEST)
 
         # Security: validate file type, MIME, magic bytes, and content
         from grc.utils.file_validation import validate_upload
@@ -1074,23 +1375,40 @@ def upload_document(request):
                 'success': False,
                 'error': validation.error
             }, status=status.HTTP_400_BAD_REQUEST)
-           # Convert framework name to framework_id if framework is provided
+        # Convert framework name/id to framework_id if framework is provided
         framework_id = None
         if framework:
             try:
                 from ...models import Framework
-                # Try to find framework by name
-                framework_obj = Framework.objects.filter(FrameworkName=framework).first()
+                framework_obj = None
+                framework_str = str(framework).strip()
+                if framework_str.isdigit():
+                    framework_obj = Framework.objects.filter(FrameworkId=int(framework_str)).first()
+                if framework_obj is None:
+                    framework_obj = Framework.objects.filter(FrameworkName=framework_str).first()
                 if framework_obj:
                     framework_id = framework_obj.FrameworkId
-                    logger.info(f"✅ Found framework_id {framework_id} for framework '{framework}'")
+                    if not is_admin and int(getattr(current_user, 'FrameworkId_id', 0) or 0) != int(framework_id):
+                        return Response({
+                            'success': False,
+                            'error': 'Forbidden framework selection'
+                        }, status=status.HTTP_403_FORBIDDEN)
                 else:
-                    logger.warning(f"⚠️ Framework '{framework}' not found in database")
+                    return Response({
+                        'success': False,
+                        'error': 'Invalid framework'
+                    }, status=status.HTTP_400_BAD_REQUEST)
             except Exception as e:
                 logger.warning(f"⚠️ Error looking up framework '{framework}': {str(e)}")
+                return Response({
+                    'success': False,
+                    'error': 'Invalid framework'
+                }, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            framework_id = getattr(current_user, 'FrameworkId_id', None)
  
-        # Get file extension
-        original_filename = uploaded_file.name
+        # Get file extension from a safe filename component only
+        original_filename = safe_upload_filename(uploaded_file.name)
         file_extension = os.path.splitext(original_filename)[1]  # includes the dot
         
         # Generate timestamp
@@ -1122,12 +1440,15 @@ def upload_document(request):
         # Save uploaded file temporarily
         temp_file_path = None
         try:
-            # Create temporary file
-            with tempfile.NamedTemporaryFile(delete=False, suffix=file_extension) as temp_file:
+            approved_temp_dir = _get_approved_temp_upload_dir()
+            # Create temporary file inside approved app directory only.
+            with tempfile.NamedTemporaryFile(delete=False, suffix=file_extension, dir=approved_temp_dir) as temp_file:
                 # Write uploaded file content to temp file
                 for chunk in uploaded_file.chunks():
                     temp_file.write(chunk)
                 temp_file_path = temp_file.name
+            if not resolved_path_under_base(temp_file_path, approved_temp_dir):
+                raise UnsafePathError("Temporary upload path escaped approved directory")
             
             # logger.info(f"📁 Temporary file created: {temp_file_path}")
             
@@ -1153,8 +1474,14 @@ def upload_document(request):
                     try:
                         # Load operation, update filename and apply retention
                         file_op = FileOperations.objects.get(id=operation_id)
+                        if not _can_access_file_operation(file_op, current_user, is_admin=is_admin):
+                            return Response({
+                                'success': False,
+                                'error': 'Forbidden'
+                            }, status=status.HTTP_403_FORBIDDEN)
                         file_op.file_name = custom_filename
                         file_op.original_name = custom_filename
+                        file_op.user_id = user_id
                         if framework_id:
                             from ...models import Framework
                             try:
@@ -1168,9 +1495,10 @@ def upload_document(request):
 
                         # Compute and set retention expiry based on configuration
                         expiry_date = compute_retention_expiry('document_handling', 'document_upload')
+                        update_fields = ['file_name', 'original_name', 'user_id']
                         if expiry_date:
                             file_op.retentionExpiry = expiry_date
-                            update_fields = ['file_name', 'original_name', 'retentionExpiry']
+                            update_fields.append('retentionExpiry')
                         if framework_id:
                             update_fields.append('FrameworkId')
                         file_op.save(update_fields=update_fields)
@@ -1202,12 +1530,13 @@ def upload_document(request):
                     'module': module,
                     'framework': framework or None
                 }, status=status.HTTP_200_OK)
+                
             else:
                 error_msg = upload_result.get('error', 'Unknown error during upload')
                 logger.error(f"❌ Upload failed: {error_msg}")
                 return Response({
                     'success': False,
-                    'error': error_msg
+                    'error': 'Upload failed'
                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         finally:
@@ -1223,5 +1552,5 @@ def upload_document(request):
         logger.error(f"❌ Upload error: {str(e)}", exc_info=True)
         return Response({
             'success': False,
-            'error': str(e)
+            'error': CLIENT_SAFE_ERROR
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

@@ -14,6 +14,7 @@ from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from django.utils.decorators import method_decorator
 from ...models import ConsentConfiguration, ConsentAcceptance, ConsentWithdrawal, Users, Framework, RBAC, GRCLog
 from ...serializers import ConsentConfigurationSerializer, ConsentAcceptanceSerializer, ConsentWithdrawalSerializer
+from ...rbac.utils import RBACUtils
 import logging
 import json
 
@@ -97,6 +98,39 @@ def is_user_administrator(user_id):
 class CsrfExemptSessionAuthentication(SessionAuthentication):
     def enforce_csrf(self, request):
         return  # Disable CSRF check
+
+
+def _get_authenticated_user_id(request):
+    """Resolve authenticated user id from request auth context."""
+    try:
+        return RBACUtils.get_user_id_from_request(request)
+    except Exception as e:
+        logger.warning(f"[Consent] Failed to resolve authenticated user id: {str(e)}")
+        return None
+
+
+def _require_user_scope(request, requested_user_id, allow_admin=False):
+    """
+    Enforce authenticated access and ownership (or admin override when enabled).
+    Returns (resolved_user_id, error_response_or_none)
+    """
+    auth_user_id = _get_authenticated_user_id(request)
+    if not auth_user_id:
+        return None, Response({
+            'status': 'error',
+            'message': 'Authentication required'
+        }, status=status.HTTP_401_UNAUTHORIZED)
+
+    requested_id_str = str(requested_user_id)
+    auth_id_str = str(auth_user_id)
+    if requested_id_str != auth_id_str:
+        if not (allow_admin and is_user_administrator(auth_user_id)):
+            return None, Response({
+                'status': 'error',
+                'message': 'Access denied'
+            }, status=status.HTTP_403_FORBIDDEN)
+
+    return auth_user_id, None
 
 
 # =============================================================================
@@ -585,6 +619,10 @@ def record_consent_acceptance(request):
                 'status': 'error',
                 'message': 'user_id, config_id, action_type, and framework_id are required'
             }, status=status.HTTP_400_BAD_REQUEST)
+
+        _, scope_error = _require_user_scope(request, user_id, allow_admin=False)
+        if scope_error:
+            return scope_error
         
         # Get user and config
         user = Users.objects.get(UserId=user_id)
@@ -703,6 +741,10 @@ def get_user_consent_history(request, user_id):
     Query params: framework_id (optional), action_type (optional)
     """
     try:
+        _, scope_error = _require_user_scope(request, user_id, allow_admin=True)
+        if scope_error:
+            return scope_error
+
         framework_id = request.GET.get('framework_id')
         action_type = request.GET.get('action_type')
         
@@ -737,6 +779,18 @@ def get_all_consent_acceptances(request):
     Query params: framework_id (optional), action_type (optional)
     """
     try:
+        auth_user_id = _get_authenticated_user_id(request)
+        if not auth_user_id:
+            return Response({
+                'status': 'error',
+                'message': 'Authentication required'
+            }, status=status.HTTP_401_UNAUTHORIZED)
+        if not is_user_administrator(auth_user_id):
+            return Response({
+                'status': 'error',
+                'message': 'Access denied'
+            }, status=status.HTTP_403_FORBIDDEN)
+
         framework_id = request.GET.get('framework_id')
         action_type = request.GET.get('action_type')
         
@@ -795,6 +849,10 @@ def withdraw_consent(request):
                 'status': 'error',
                 'message': 'user_id, action_type, and framework_id are required'
             }, status=status.HTTP_400_BAD_REQUEST)
+
+        _, scope_error = _require_user_scope(request, user_id, allow_admin=False)
+        if scope_error:
+            return scope_error
         
         # Get user and framework
         user = Users.objects.get(UserId=user_id)
@@ -927,6 +985,10 @@ def withdraw_all_consents(request):
                 'status': 'error',
                 'message': 'user_id is required'
             }, status=status.HTTP_400_BAD_REQUEST)
+
+        _, scope_error = _require_user_scope(request, user_id, allow_admin=False)
+        if scope_error:
+            return scope_error
         
         # Get user
         user = Users.objects.get(UserId=user_id)
@@ -1057,6 +1119,10 @@ def get_user_consent_withdrawals(request, user_id):
     Query params: framework_id (optional), action_type (optional)
     """
     try:
+        _, scope_error = _require_user_scope(request, user_id, allow_admin=True)
+        if scope_error:
+            return scope_error
+
         framework_id = request.GET.get('framework_id')
         action_type = request.GET.get('action_type')
         
@@ -1089,7 +1155,7 @@ def get_user_consent_withdrawals(request, user_id):
 def check_consent_status(request, user_id):
     """
     Check the current consent status for a user (including withdrawals)
-    Query params: framework_id (required), action_type (optional)
+    Query params: framework_id (optional), action_type (optional)
     Returns: {
         "action_type": "create_policy",
         "has_active_consent": true/false,
@@ -1098,17 +1164,17 @@ def check_consent_status(request, user_id):
     }
     """
     try:
+        _, scope_error = _require_user_scope(request, user_id, allow_admin=True)
+        if scope_error:
+            return scope_error
+
         framework_id = request.GET.get('framework_id')
         action_type = request.GET.get('action_type')
         
-        if not framework_id:
-            return Response({
-                'status': 'error',
-                'message': 'framework_id is required'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
         # Build query
-        query = {'user_id': user_id, 'framework_id': framework_id}
+        query = {'user_id': user_id}
+        if framework_id:
+            query['framework_id'] = framework_id
         if action_type:
             query['action_type'] = action_type
         
@@ -1142,14 +1208,17 @@ def check_consent_status(request, user_id):
         
         # If no action_type, return status for all actions
         actions_status = []
-        all_action_types = set(
-            list(acceptances.values_list('action_type', flat=True)) +
-            list(withdrawals.values_list('action_type', flat=True))
+        all_action_framework_pairs = set(
+            list(acceptances.values_list('action_type', 'framework_id')) +
+            list(withdrawals.values_list('action_type', 'framework_id'))
         )
         
-        for act_type in all_action_types:
-            last_acceptance = acceptances.filter(action_type=act_type).first()
-            last_withdrawal = withdrawals.filter(action_type=act_type).first()
+        for act_type, act_framework_id in all_action_framework_pairs:
+            action_acceptances = acceptances.filter(action_type=act_type, framework_id=act_framework_id)
+            action_withdrawals = withdrawals.filter(action_type=act_type, framework_id=act_framework_id)
+
+            last_acceptance = action_acceptances.first()
+            last_withdrawal = action_withdrawals.first()
             
             has_active_consent = False
             if last_acceptance:
@@ -1160,6 +1229,7 @@ def check_consent_status(request, user_id):
             
             actions_status.append({
                 'action_type': act_type,
+                'framework_id': act_framework_id,
                 'has_active_consent': has_active_consent,
                 'last_accepted': ConsentAcceptanceSerializer(last_acceptance).data if last_acceptance else None,
                 'last_withdrawn': ConsentWithdrawalSerializer(last_withdrawal).data if last_withdrawal else None

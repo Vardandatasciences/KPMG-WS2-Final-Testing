@@ -21,7 +21,7 @@ function getFrameworkId() {
 }
 
 function buildConsentRequestConfig(extra = {}) {
-  const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
+  const token = sessionStorage.getItem('access_token');
   const headers = {
     'Content-Type': 'application/json'
   };
@@ -39,7 +39,7 @@ function buildConsentRequestConfig(extra = {}) {
 export async function checkConsentRequired(actionType) {
   try {
     const frameworkId = getFrameworkId();
-    const userId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id');
+    const userId = sessionStorage.getItem('user_id');
     
     console.log(`🔍 [Consent] Checking consent for action: ${actionType}, framework: ${frameworkId}`);
     console.log(`🔍 [Consent] API URL: ${API_BASE_URL}/api/consent/check/`);
@@ -285,18 +285,19 @@ export function useConsent() {
  * @param {number} userId - User ID
  * @param {string} actionType - Action type
  * @param {string} reason - Optional reason for withdrawal
+ * @param {number|null} frameworkId - Optional framework override
  * @returns {Promise<Object>} - Withdrawal response
  */
-export async function withdrawConsent(userId, actionType, reason = null) {
+export async function withdrawConsent(userId, actionType, reason = null, frameworkId = null) {
   try {
-    const frameworkId = getFrameworkId();
+    const fwId = frameworkId || getFrameworkId();
 
     const response = await axios.post(
       `${API_BASE_URL}/api/consent/withdraw/`,
       {
         user_id: userId,
         action_type: actionType,
-        framework_id: frameworkId,
+        framework_id: fwId,
         ip_address: null, // Can be set server-side if needed
         user_agent: navigator.userAgent,
         reason: reason
@@ -377,17 +378,49 @@ export async function getUserConsentWithdrawals(userId, frameworkId = null, acti
 }
 
 /**
+ * Get user's consent acceptance history
+ * @param {number} userId - User ID
+ * @param {number|null} frameworkId - Optional framework ID filter
+ * @param {string|null} actionType - Optional action type filter
+ * @returns {Promise<Object>} - Consent history
+ */
+export async function getUserConsentHistory(userId, frameworkId = null, actionType = null) {
+  try {
+    const params = {};
+
+    if (frameworkId) {
+      params.framework_id = frameworkId;
+    }
+    if (actionType) {
+      params.action_type = actionType;
+    }
+
+    const response = await axios.get(
+      `${API_BASE_URL}/api/consent/user-history/${userId}/`,
+      buildConsentRequestConfig({ params })
+    );
+
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching consent history:', error);
+    throw error;
+  }
+}
+
+/**
  * Check consent status for a user (including withdrawals)
  * @param {number} userId - User ID
- * @param {number} frameworkId - Framework ID
+ * @param {number|null} frameworkId - Optional framework ID
  * @param {string|null} actionType - Optional action type
  * @returns {Promise<Object>} - Consent status
  */
 export async function checkConsentStatus(userId, frameworkId, actionType = null) {
   try {
-    const params = {
-      framework_id: frameworkId
-    };
+    const params = {};
+
+    if (frameworkId !== null && frameworkId !== undefined && frameworkId !== '') {
+      params.framework_id = frameworkId;
+    }
 
     if (actionType) {
       params.action_type = actionType;
@@ -410,6 +443,7 @@ export default {
   recordConsentAcceptance,
   withdrawConsent,
   withdrawAllConsents,
+  getUserConsentHistory,
   getUserConsentWithdrawals,
   checkConsentStatus,
   CONSENT_ACTIONS,

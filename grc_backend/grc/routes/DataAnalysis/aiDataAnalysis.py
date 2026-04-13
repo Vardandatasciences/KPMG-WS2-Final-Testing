@@ -8,11 +8,13 @@ from django.conf import settings
 from django.http import HttpResponse
 from grc.models import (
     Policy, Compliance, Audit, Incident, Risk, RiskInstance, Event,
-    ConsentConfiguration, ConsentAcceptance, ConsentWithdrawal
+    ConsentConfiguration, ConsentAcceptance, ConsentWithdrawal, Users
 )
+from grc.rbac.utils import RBACUtils
 import json
 import requests
 import logging
+import re
 from datetime import datetime, timedelta
 from collections import defaultdict
 import io
@@ -34,6 +36,84 @@ except ImportError:
     REPORTLAB_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
+ALLOWED_EXPORT_FORMATS = {'json', 'csv', 'xml', 'txt', 'pdf', 'xlsx'}
+
+
+def _get_authenticated_user(request):
+    raw_request = getattr(request, '_request', request)
+    grc_user = getattr(raw_request, '_grc_user', None)
+    if grc_user and hasattr(grc_user, 'UserId'):
+        try:
+            return Users.objects.filter(UserId=int(grc_user.UserId)).first()
+        except Exception:
+            return None
+    resolved_user_id = RBACUtils.get_user_id_from_request(request)
+    if not resolved_user_id:
+        return None
+    try:
+        return Users.objects.filter(UserId=int(resolved_user_id)).first()
+    except Exception:
+        return None
+
+
+def _is_system_admin(user):
+    try:
+        return bool(user and RBACUtils.is_system_admin(int(user.UserId)))
+    except Exception:
+        return False
+
+
+def _parse_framework_id(raw_framework_id):
+    if raw_framework_id in (None, '', 'all', 'null'):
+        return None
+    try:
+        return int(raw_framework_id)
+    except (TypeError, ValueError):
+        return None
+
+
+def _scope_queryset_for_user(queryset, user, is_admin=False):
+    if user is None:
+        return queryset.none()
+    if hasattr(queryset.model, 'tenant_id') and getattr(user, 'tenant_id', None):
+        queryset = queryset.filter(tenant_id=user.tenant_id)
+    if is_admin:
+        return queryset
+    user_framework_id = getattr(user, 'FrameworkId_id', None)
+    if user_framework_id and hasattr(queryset.model, 'FrameworkId_id'):
+        queryset = queryset.filter(FrameworkId_id=user_framework_id)
+    return queryset
+
+
+def _sanitize_text_output(value, max_len=512):
+    if value is None:
+        return ''
+    text = str(value)
+    text = ''.join(ch for ch in text if ch == '\t' or ch == '\n' or ord(ch) >= 32).strip()
+    if len(text) > max_len:
+        text = text[:max_len]
+    return text
+
+
+def _neutralize_csv_formula(value):
+    text = _sanitize_text_output(value)
+    if text.startswith(('=', '+', '-', '@')):
+        return "'" + text
+    return text
+
+
+def _sanitize_export_value(value):
+    if isinstance(value, dict):
+        sanitized = {}
+        for k, v in value.items():
+            safe_key = _sanitize_text_output(k, max_len=120)
+            sanitized[safe_key] = _sanitize_export_value(v)
+        return sanitized
+    if isinstance(value, list):
+        return [_sanitize_export_value(v) for v in value]
+    if isinstance(value, str):
+        return _neutralize_csv_formula(value)
+    return value
 
 
 class CsrfExemptSessionAuthentication(SessionAuthentication):
@@ -101,18 +181,15 @@ def _call_openai_api(prompt, temperature=0.3, max_tokens=4000):
         raise Exception(f"OpenAI API request failed: {str(e)}")
 
 
-def collect_privacy_data_across_modules(framework_id=None):
+def collect_privacy_data_across_modules(framework_id=None, user=None, is_admin=False):
     """
     Centralized aggregation: Collect privacy data across all modules
     Returns comprehensive privacy data inventory
     """
     filter_query = Q()
-    if framework_id and framework_id != 'all' and framework_id != 'null':
-        try:
-            framework_id = int(framework_id)
-            filter_query = Q(FrameworkId=framework_id)
-        except (ValueError, TypeError):
-            pass
+    parsed_framework_id = _parse_framework_id(framework_id)
+    if parsed_framework_id:
+        filter_query = Q(FrameworkId=parsed_framework_id)
     
     privacy_data = {
         'modules': {},
@@ -136,7 +213,7 @@ def collect_privacy_data_across_modules(framework_id=None):
     ]
     
     for module_name, model_class in modules_config:
-        queryset = model_class.objects.filter(filter_query)
+        queryset = _scope_queryset_for_user(model_class.objects.filter(filter_query), user, is_admin=is_admin)
         module_data = {
             'name': module_name,
             'total_records': queryset.count(),
@@ -314,29 +391,32 @@ def calculate_privacy_metrics(privacy_data):
     return metrics
 
 
-def get_consent_rates(framework_id=None):
+def get_consent_rates(framework_id=None, user=None, is_admin=False):
     """
     Calculate consent rates from consent management data
     """
     filter_query = Q()
-    if framework_id and framework_id != 'all' and framework_id != 'null':
-        try:
-            framework_id = int(framework_id)
-            filter_query = Q(FrameworkId=framework_id)
-        except (ValueError, TypeError):
-            pass
+    parsed_framework_id = _parse_framework_id(framework_id)
+    if parsed_framework_id:
+        filter_query = Q(FrameworkId=parsed_framework_id)
     
     # Get consent configurations
-    consent_configs = ConsentConfiguration.objects.filter(filter_query)
+    consent_configs = _scope_queryset_for_user(
+        ConsentConfiguration.objects.filter(filter_query), user, is_admin=is_admin
+    )
     total_configs = consent_configs.count()
     enabled_configs = consent_configs.filter(is_enabled=True).count()
     
     # Get consent acceptances
-    consent_acceptances = ConsentAcceptance.objects.filter(filter_query)
+    consent_acceptances = _scope_queryset_for_user(
+        ConsentAcceptance.objects.filter(filter_query), user, is_admin=is_admin
+    )
     total_acceptances = consent_acceptances.count()
     
     # Get consent withdrawals
-    consent_withdrawals = ConsentWithdrawal.objects.filter(filter_query)
+    consent_withdrawals = _scope_queryset_for_user(
+        ConsentWithdrawal.objects.filter(filter_query), user, is_admin=is_admin
+    )
     total_withdrawals = consent_withdrawals.count()
     
     # Calculate rates
@@ -517,11 +597,20 @@ def get_ai_privacy_analysis(request):
     - Automated AI insights and recommendations
     """
     try:
+        current_user = _get_authenticated_user(request)
+        if not current_user:
+            return Response({'status': 'error', 'message': 'Authentication required.'}, status=status.HTTP_401_UNAUTHORIZED)
+        is_admin = _is_system_admin(current_user)
         framework_id = request.query_params.get('framework_id', None)
         
+        logger.info(
+            "DataAnalysis AI privacy analysis requested: actor_user_id=%s framework_id=%s",
+            getattr(current_user, 'UserId', None),
+            framework_id,
+        )
         # Step 1: Collect privacy data across modules
         logger.info("Collecting privacy data across modules...")
-        privacy_data = collect_privacy_data_across_modules(framework_id)
+        privacy_data = collect_privacy_data_across_modules(framework_id, user=current_user, is_admin=is_admin)
         
         # Step 2: Calculate privacy metrics
         logger.info("Calculating privacy metrics...")
@@ -529,7 +618,7 @@ def get_ai_privacy_analysis(request):
         
         # Step 3: Get consent rates
         logger.info("Calculating consent rates...")
-        consent_data = get_consent_rates(framework_id)
+        consent_data = get_consent_rates(framework_id, user=current_user, is_admin=is_admin)
         
         # Step 4: Generate AI insights (with timeout handling)
         logger.info("Generating AI insights...")
@@ -576,11 +665,20 @@ def get_privacy_dashboard_metrics(request):
     Returns simplified metrics for dashboard display
     """
     try:
+        current_user = _get_authenticated_user(request)
+        if not current_user:
+            return Response({'status': 'error', 'message': 'Authentication required.'}, status=status.HTTP_401_UNAUTHORIZED)
+        is_admin = _is_system_admin(current_user)
         framework_id = request.query_params.get('framework_id', None)
         
-        privacy_data = collect_privacy_data_across_modules(framework_id)
+        logger.info(
+            "DataAnalysis dashboard metrics requested: actor_user_id=%s framework_id=%s",
+            getattr(current_user, 'UserId', None),
+            framework_id,
+        )
+        privacy_data = collect_privacy_data_across_modules(framework_id, user=current_user, is_admin=is_admin)
         metrics = calculate_privacy_metrics(privacy_data)
-        consent_data = get_consent_rates(framework_id)
+        consent_data = get_consent_rates(framework_id, user=current_user, is_admin=is_admin)
         
         # Prepare dashboard-friendly response
         dashboard_data = {
@@ -647,12 +745,22 @@ def get_privacy_compliance_report(request):
     Generate privacy compliance report with AI insights
     """
     try:
+        current_user = _get_authenticated_user(request)
+        if not current_user:
+            return Response({'status': 'error', 'message': 'Authentication required.'}, status=status.HTTP_401_UNAUTHORIZED)
+        is_admin = _is_system_admin(current_user)
         framework_id = request.query_params.get('framework_id', None)
         include_ai = request.query_params.get('include_ai', 'true').lower() == 'true'
         
-        privacy_data = collect_privacy_data_across_modules(framework_id)
+        logger.info(
+            "DataAnalysis compliance report requested: actor_user_id=%s framework_id=%s include_ai=%s",
+            getattr(current_user, 'UserId', None),
+            framework_id,
+            include_ai,
+        )
+        privacy_data = collect_privacy_data_across_modules(framework_id, user=current_user, is_admin=is_admin)
         metrics = calculate_privacy_metrics(privacy_data)
-        consent_data = get_consent_rates(framework_id)
+        consent_data = get_consent_rates(framework_id, user=current_user, is_admin=is_admin)
         
         report = {
             'report_metadata': {
@@ -1273,22 +1381,32 @@ def export_privacy_report(request):
     Query params: format (pdf/excel), framework_id (optional)
     """
     try:
+        current_user = _get_authenticated_user(request)
+        if not current_user:
+            return Response({'status': 'error', 'message': 'Authentication required.'}, status=status.HTTP_401_UNAUTHORIZED)
+        is_admin = _is_system_admin(current_user)
         # POST flow is used by Data Analysis Dashboard export:
         # generate file server-side, upload to S3, and return file URL.
         if request.method == 'POST':
             export_format = str(request.data.get('export_format', 'json')).lower()
             report_data = request.data.get('report_data', {})
-            framework_id = request.data.get('framework_id')
-            user_id = request.data.get('user_id') or str(getattr(request.user, 'id', 'anonymous'))
+            framework_id = _parse_framework_id(request.data.get('framework_id'))
+            user_id = str(getattr(current_user, 'UserId', 'anonymous'))
             file_name = request.data.get('file_name') or f"data_analysis_dashboard_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            file_name = re.sub(r'[^A-Za-z0-9._-]+', '_', str(file_name)).strip('._-')[:120] or 'data_analysis_dashboard'
 
-            allowed_formats = ['json', 'csv', 'xml', 'txt', 'pdf', 'xlsx']
-            if export_format not in allowed_formats:
+            if export_format not in ALLOWED_EXPORT_FORMATS:
                 return Response({
                     'success': False,
-                    'message': f'Invalid format. Supported formats: {", ".join(allowed_formats)}'
+                    'message': f'Invalid format. Supported formats: {", ".join(sorted(ALLOWED_EXPORT_FORMATS))}'
                 }, status=status.HTTP_400_BAD_REQUEST)
 
+            logger.info(
+                "DataAnalysis export requested: actor_user_id=%s framework_id=%s format=%s",
+                getattr(current_user, 'UserId', None),
+                framework_id,
+                export_format,
+            )
             # Always normalize payload for non-JSON formats to avoid nested-object rendering
             # (e.g. [object Object]) in microservice-generated files.
             export_payload = report_data
@@ -1309,9 +1427,9 @@ def export_privacy_report(request):
                         columns = module_data.get('columns', {}) if isinstance(module_data.get('columns', {}), dict) else {}
 
                         rows.append({
-                            'module': module_name,
-                            'framework': framework_name,
-                            'generated_at': generated_at,
+                            'module': _neutralize_csv_formula(module_name),
+                            'framework': _neutralize_csv_formula(framework_name),
+                            'generated_at': _sanitize_text_output(generated_at, max_len=80),
                             'total_records': module_data.get('total_records', 0),
                             'total_fields': module_data.get('total_fields', 0),
                             'personal_percent': module_data.get('personal', 0),
@@ -1320,9 +1438,9 @@ def export_privacy_report(request):
                             'personal_count': counts.get('personal', 0),
                             'regular_count': counts.get('regular', 0),
                             'confidential_count': counts.get('confidential', 0),
-                            'personal_columns': ', '.join(columns.get('personal', [])) if isinstance(columns.get('personal', []), list) else '',
-                            'regular_columns': ', '.join(columns.get('regular', [])) if isinstance(columns.get('regular', []), list) else '',
-                            'confidential_columns': ', '.join(columns.get('confidential', [])) if isinstance(columns.get('confidential', []), list) else '',
+                            'personal_columns': _neutralize_csv_formula(', '.join(columns.get('personal', []))) if isinstance(columns.get('personal', []), list) else '',
+                            'regular_columns': _neutralize_csv_formula(', '.join(columns.get('regular', []))) if isinstance(columns.get('regular', []), list) else '',
+                            'confidential_columns': _neutralize_csv_formula(', '.join(columns.get('confidential', []))) if isinstance(columns.get('confidential', []), list) else '',
                             'overall_personal_percent': overall_stats.get('personal', 0),
                             'overall_regular_percent': overall_stats.get('regular', 0),
                             'overall_confidential_percent': overall_stats.get('confidential', 0),
@@ -1339,8 +1457,8 @@ def export_privacy_report(request):
                 if not rows:
                     rows.append({
                         'module': 'N/A',
-                        'framework': framework_name,
-                        'generated_at': generated_at,
+                        'framework': _neutralize_csv_formula(framework_name),
+                        'generated_at': _sanitize_text_output(generated_at, max_len=80),
                         'overall_personal_percent': overall_stats.get('personal', 0),
                         'overall_regular_percent': overall_stats.get('regular', 0),
                         'overall_confidential_percent': overall_stats.get('confidential', 0),
@@ -1353,7 +1471,9 @@ def export_privacy_report(request):
                         'data_inventory_coverage': privacy_metrics.get('data_inventory_coverage', 0)
                     })
 
-                export_payload = rows
+                export_payload = _sanitize_export_value(rows)
+            else:
+                export_payload = _sanitize_export_value(export_payload)
 
             from ..Global.s3_fucntions import export_data as s3_export_data
             export_result = s3_export_data(
@@ -1370,8 +1490,8 @@ def export_privacy_report(request):
             if export_result.get('success'):
                 return Response({
                     'success': True,
-                    'file_url': export_result.get('file_url'),
-                    'file_name': export_result.get('file_name'),
+                    'file_url': _sanitize_text_output(export_result.get('file_url', ''), max_len=2048),
+                    'file_name': _sanitize_text_output(export_result.get('file_name', ''), max_len=160),
                     'metadata': export_result.get('metadata', {})
                 }, status=status.HTTP_200_OK)
 
@@ -1381,7 +1501,7 @@ def export_privacy_report(request):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         export_format = request.query_params.get('format', 'pdf').lower()
-        framework_id = request.query_params.get('framework_id', None)
+        framework_id = _parse_framework_id(request.query_params.get('framework_id', None))
         include_ai = request.query_params.get('include_ai', 'true').lower() == 'true'
         
         if export_format not in ['pdf', 'excel', 'xlsx']:
@@ -1391,9 +1511,9 @@ def export_privacy_report(request):
             }, status=status.HTTP_400_BAD_REQUEST)
         
         # Get report data
-        privacy_data = collect_privacy_data_across_modules(framework_id)
+        privacy_data = collect_privacy_data_across_modules(framework_id, user=current_user, is_admin=is_admin)
         metrics = calculate_privacy_metrics(privacy_data)
-        consent_data = get_consent_rates(framework_id)
+        consent_data = get_consent_rates(framework_id, user=current_user, is_admin=is_admin)
         
         report = {
             'report_metadata': {
@@ -1450,9 +1570,10 @@ def export_privacy_report(request):
                 response['Content-Disposition'] = f'attachment; filename="{filename}"'
                 return response
             except Exception as e:
+                logger.error("Failed to generate Excel privacy report: %s", e, exc_info=True)
                 return Response({
                     'status': 'error',
-                    'message': f'Failed to generate Excel: {str(e)}'
+                    'message': 'Failed to generate Excel report.'
                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         else:  # PDF
             try:
@@ -1465,9 +1586,10 @@ def export_privacy_report(request):
                 response['Content-Disposition'] = f'attachment; filename="{filename}"'
                 return response
             except Exception as e:
+                logger.error("Failed to generate PDF privacy report: %s", e, exc_info=True)
                 return Response({
                     'status': 'error',
-                    'message': f'Failed to generate PDF: {str(e)}'
+                    'message': 'Failed to generate PDF report.'
                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
     except Exception as e:

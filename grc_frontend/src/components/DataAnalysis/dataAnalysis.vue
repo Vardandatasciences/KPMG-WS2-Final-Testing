@@ -582,13 +582,31 @@
 
 <script>
 import { ref, onMounted, computed, watch } from 'vue'
-import axios from 'axios'
-import { API_ENDPOINTS, API_BASE_URL } from '../../config/api.js'
+import { API_ENDPOINTS, API_BASE_URL, axiosInstance } from '../../config/api.js'
 import CustomDropdown from '@/components/CustomDropdown.vue'
 import { PopupService } from '../../modules/popus/popupService'
 import './dataAnalysis.css'
 import aiPrivacyService from '@/services/aiPrivacyService' // NEW: reuse AI privacy metrics
 import moduleAiAnalysisService from '@/services/moduleAiAnalysisService' // NEW: reuse module AI analysis
+
+const JWT_SEGMENT_RE = /^[A-Za-z0-9\-_]+$/
+
+const getValidAccessToken = () => {
+  const raw = sessionStorage.getItem('access_token') ||
+              sessionStorage.getItem('token') ||
+              sessionStorage.getItem('session_token')
+  if (!raw || typeof raw !== 'string') return null
+  const token = raw.trim().replace(/^Bearer\s+/i, '')
+  const parts = token.split('.')
+  if (parts.length !== 3) return null
+  if (!parts.every((p) => p && JWT_SEGMENT_RE.test(p))) return null
+  return token
+}
+
+const buildAuthHeaders = () => {
+  const token = getValidAccessToken()
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
 
 export default {
   name: 'DataAnalysis',
@@ -687,10 +705,9 @@ export default {
     const fetchFrameworks = async () => {
       try {
         loadingFrameworks.value = true
-        const accessToken = sessionStorage.getItem('access_token') || localStorage.getItem('access_token')
-        const response = await axios.get(`${API_BASE_URL}/api/frameworks/`, {
+        const response = await axiosInstance.get(`${API_BASE_URL}/api/frameworks/`, {
           headers: {
-            'Authorization': `Bearer ${accessToken}`,
+            ...buildAuthHeaders(),
             'Content-Type': 'application/json'
           }
         })
@@ -726,11 +743,10 @@ export default {
         }
 
         const url = API_ENDPOINTS.DATA_ANALYSIS(frameworkId)
-        const accessToken = sessionStorage.getItem('access_token') || localStorage.getItem('access_token')
 
-        const response = await axios.get(url, {
+        const response = await axiosInstance.get(url, {
           headers: {
-            'Authorization': `Bearer ${accessToken}`,
+            ...buildAuthHeaders(),
             'Content-Type': 'application/json'
           }
         })
@@ -1005,22 +1021,19 @@ export default {
           }
         })
 
-        const accessToken = sessionStorage.getItem('access_token') || localStorage.getItem('access_token')
-        const userId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || 'default_user'
         const fileName = `data-analysis-dashboard-${new Date().toISOString().split('T')[0]}`
 
-        const response = await axios.post(
+        const response = await axiosInstance.post(
           `${API_BASE_URL}/api/export-privacy-report/`,
           {
             export_format: selectedExportFormat.value,
             framework_id: exportData.frameworkId,
-            user_id: userId,
             file_name: fileName,
             report_data: exportData
           },
           {
             headers: {
-              'Authorization': `Bearer ${accessToken}`,
+              ...buildAuthHeaders(),
               'Content-Type': 'application/json'
             }
           }

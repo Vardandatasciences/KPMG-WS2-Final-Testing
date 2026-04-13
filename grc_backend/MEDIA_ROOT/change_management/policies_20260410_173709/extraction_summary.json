@@ -1,0 +1,21 @@
+{
+  "framework_metadata": {
+    "framework_name": "Health Insurance Portability and Accountability Act (HIPAA)",
+    "current_version": "2013",
+    "framework_description": "The Health Insurance Portability and Accountability Act (HIPAA) sets the standard for sensitive patient data protection. Companies that deal with protected health information (PHI) must have physical, network, and process security measures in place and follow them to ensure HIPAA compliance.",
+    "category": "Healthcare Privacy and Security",
+    "start_date": "2013-01-17",
+    "end_date": null,
+    "identifier_prefix": "HIPAA"
+  },
+  "extraction_summary": {
+    "total_sections_processed": 1,
+    "total_policies": 2,
+    "total_subpolicies": 5,
+    "policy_type_distribution": {
+      "General": 2
+    },
+    "api_calls_made": 12,
+    "extraction_date": "2026-04-10T17:43:36.415979"
+  }
+}

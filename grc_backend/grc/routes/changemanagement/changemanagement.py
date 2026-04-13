@@ -28,14 +28,18 @@ except ImportError:  # pragma: no cover
 # Django imports
 from django.conf import settings
 from django.db import transaction
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from grc.rbac.utils import RBACUtils
 
 # Local imports
-from grc.models import Framework, GRCLog
+from grc.models import Framework, GRCLog, Users
 from ...debug_utils import debug_print
 from grc.routes.Global.s3_fucntions import create_direct_mysql_client
 
 
 logger = logging.getLogger(__name__)
+CLIENT_SAFE_ERROR = "An internal error occurred. Please try again later."
 
 
 class ChangeManagementService:
@@ -893,6 +897,117 @@ def get_change_management_service() -> ChangeManagementService:
     return _change_management_service
 
 
+def _get_authenticated_user(request):
+    raw_request = getattr(request, '_request', request)
+    grc_user = getattr(raw_request, '_grc_user', None)
+    if grc_user and hasattr(grc_user, 'UserId'):
+        try:
+            return Users.objects.filter(UserId=int(grc_user.UserId)).first()
+        except Exception:
+            return None
+    resolved_user_id = RBACUtils.get_user_id_from_request(request)
+    if not resolved_user_id:
+        return None
+    try:
+        return Users.objects.filter(UserId=int(resolved_user_id)).first()
+    except Exception:
+        return None
+
+
+def _is_system_admin(user) -> bool:
+    try:
+        return bool(user and RBACUtils.is_system_admin(int(user.UserId)))
+    except Exception:
+        return False
+
+
+def _sanitize_filename_component(value: str) -> str:
+    if not isinstance(value, str):
+        return ''
+    sanitized = re.sub(r'[^A-Za-z0-9._-]+', '_', value).strip('._-')
+    return sanitized[:180]
+
+
+def _safe_pdf_path_under_data_dir(service: ChangeManagementService, file_name: str) -> Optional[Path]:
+    safe_name = _sanitize_filename_component(file_name or '')
+    if not safe_name:
+        return None
+    if not safe_name.lower().endswith('.pdf'):
+        return None
+    candidate = (service.data_dir / safe_name).resolve()
+    data_dir_resolved = service.data_dir.resolve()
+    try:
+        candidate.relative_to(data_dir_resolved)
+    except Exception:
+        return None
+    return candidate
+
+
+def _can_access_framework(user, framework: Framework, is_admin: bool) -> bool:
+    if framework is None or user is None:
+        return False
+    if hasattr(framework, 'tenant_id') and getattr(user, 'tenant_id', None):
+        if getattr(framework, 'tenant_id', None) and framework.tenant_id != user.tenant_id:
+            return False
+    if is_admin:
+        return True
+    user_fw = getattr(user, 'FrameworkId_id', None)
+    return bool(user_fw and getattr(framework, 'FrameworkId', None) and int(user_fw) == int(framework.FrameworkId))
+
+
+def _safe_status_payload(status_data: Dict[str, Any]) -> Dict[str, Any]:
+    if not isinstance(status_data, dict):
+        return {}
+    safe_formats = status_data.get('supported_formats')
+    if isinstance(safe_formats, list):
+        safe_formats = [str(x).lower() for x in safe_formats if str(x).lower() in {'.pdf'}]
+    else:
+        safe_formats = ['.pdf']
+    return {
+        'service_status': 'operational' if status_data.get('service_status') == 'operational' else 'unknown',
+        'data_directory': 'configured',
+        'pdf_files_count': int(status_data.get('pdf_files_count', 0) or 0),
+        'processed_files_count': int(status_data.get('processed_files_count', 0) or 0),
+        's3_configured': bool(status_data.get('s3_configured')),
+        'supported_formats': safe_formats,
+    }
+
+
+def _sanitize_amendments_for_response(amendments: Any) -> List[Dict[str, Any]]:
+    def _sanitize_text(value: str, max_len: int = 1024) -> str:
+        text = ''.join(ch for ch in str(value) if ch == '\t' or ch == '\n' or ord(ch) >= 32).strip()
+        if len(text) > max_len:
+            text = text[:max_len]
+        # Neutralize spreadsheet formulas to reduce CSV injection risk in downstream exports.
+        if text.startswith(('=', '+', '-', '@')):
+            text = "'" + text
+        return text
+
+    def _sanitize_value(value: Any):
+        if isinstance(value, dict):
+            sanitized = {}
+            for k, v in value.items():
+                safe_key = _sanitize_text(k, max_len=120)
+                if safe_key in {'s3_url'}:
+                    continue
+                sanitized[safe_key] = _sanitize_value(v)
+            return sanitized
+        if isinstance(value, list):
+            return [_sanitize_value(v) for v in value]
+        if isinstance(value, str):
+            return _sanitize_text(value)
+        return value
+
+    safe_items: List[Dict[str, Any]] = []
+    if not isinstance(amendments, list):
+        return safe_items
+    for item in amendments:
+        if not isinstance(item, dict):
+            continue
+        safe_items.append(_sanitize_value(item))
+    return safe_items
+
+
 # Convenience functions for API endpoints
 def scan_and_process_changes(user_id: str = "system") -> Dict:
     """Scan data directory and process any new PDF files"""
@@ -903,36 +1018,40 @@ def scan_and_process_changes(user_id: str = "system") -> Dict:
 def process_specific_file(file_name: str, user_id: str = "system") -> Dict:
     """Process a specific PDF file by name"""
     service = get_change_management_service()
-    file_path = service.data_dir / file_name
-    
-    if not file_path.exists():
+    file_path = _safe_pdf_path_under_data_dir(service, file_name)
+    if not file_path or not file_path.exists():
         return {
             'success': False,
-            'error': f'File not found: {file_name}'
+            'error': 'File not found'
         }
     
     return service.process_pdf_file(file_path, user_id)
 
 
-def get_framework_amendments(framework_id: int) -> Dict:
+def get_framework_amendments(framework_id: int, user=None, is_admin: bool = False) -> Dict:
     """Get all amendments for a specific framework"""
     try:
         framework = Framework.objects.get(FrameworkId=framework_id)
+        if not _can_access_framework(user, framework, is_admin=is_admin):
+            return {
+                'success': False,
+                'error': 'Forbidden'
+            }
         return {
             'success': True,
             'framework_id': framework.FrameworkId,
             'framework_name': framework.FrameworkName,
-            'amendments': framework.Amendment if framework.Amendment else []
+            'amendments': _sanitize_amendments_for_response(framework.Amendment if framework.Amendment else [])
         }
     except Framework.DoesNotExist:
         return {
             'success': False,
-            'error': f'Framework not found: {framework_id}'
+            'error': 'Framework not found'
         }
     except Exception as e:
         return {
             'success': False,
-            'error': str(e)
+            'error': CLIENT_SAFE_ERROR
         }
 
 
@@ -946,8 +1065,8 @@ from django.views.decorators.csrf import csrf_protect as csrf_exempt
 import json as json_module
 
 
-@csrf_exempt
-@require_http_methods(["POST", "GET"])
+@api_view(["POST", "GET"])
+@permission_classes([IsAuthenticated])
 def scan_changes(request):
     """
     API endpoint to scan and process PDF files from data directory
@@ -955,16 +1074,10 @@ def scan_changes(request):
     GET: Get the last scan results
     """
     try:
-        # Get user_id from request
-        user_id = "system"
-        if request.method == "POST":
-            try:
-                body = json_module.loads(request.body) if request.body else {}
-                user_id = body.get('user_id', 'system')
-            except:
-                pass
-        elif request.user and hasattr(request.user, 'UserId'):
-            user_id = str(request.user.UserId)
+        current_user = _get_authenticated_user(request)
+        if not current_user:
+            return JsonResponse({'success': False, 'error': 'Authentication required'}, status=401)
+        user_id = str(current_user.UserId)
         
         # Run the scan
         result = scan_and_process_changes(user_id)
@@ -991,17 +1104,7 @@ def scan_changes(request):
             except:
                 pass
             
-            # Get user name if user_id is provided
-            user_name = None
-            if user_id and user_id != 'system':
-                try:
-                    from grc.models import Users
-                    user_obj = Users.objects.get(UserId=user_id)
-                    user_name = user_obj.UserName
-                except:
-                    user_name = f'User {user_id}'
-            else:
-                user_name = 'System'
+            user_name = current_user.UserName or f'User {user_id}'
             
             if framework:
                 files_processed = result.get("files_processed", 0)
@@ -1012,7 +1115,7 @@ def scan_changes(request):
                     Module='Change Management',
                     ActionType='CHANGE_SCAN',
                     Description=f'Change management scan completed: {files_processed} processed, {files_skipped} skipped, {files_failed} failed',
-                    UserId=str(user_id) if user_id != 'system' else None,
+                    UserId=str(user_id),
                     UserName=user_name,
                     LogLevel='INFO',
                     IPAddress=client_ip[:45] if client_ip else None,
@@ -1035,32 +1138,30 @@ def scan_changes(request):
         }, status=200)
         
     except Exception as e:
+        logger.error("Error in change scan endpoint: %s", e, exc_info=True)
         return JsonResponse({
             'success': False,
-            'error': str(e)
+            'error': CLIENT_SAFE_ERROR
         }, status=500)
 
 
-@csrf_exempt
-@require_http_methods(["POST"])
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
 def process_file(request, file_name):
     """
     API endpoint to process a specific PDF file
     """
     try:
-        # Get user_id from request
-        user_id = "system"
-        if request.body:
-            try:
-                body = json_module.loads(request.body)
-                user_id = body.get('user_id', 'system')
-            except:
-                pass
-        elif request.user and hasattr(request.user, 'UserId'):
-            user_id = str(request.user.UserId)
+        current_user = _get_authenticated_user(request)
+        if not current_user:
+            return JsonResponse({'success': False, 'error': 'Authentication required'}, status=401)
+        user_id = str(current_user.UserId)
+        safe_file_name = _sanitize_filename_component(file_name or '')
+        if not safe_file_name or not safe_file_name.lower().endswith('.pdf'):
+            return JsonResponse({'success': False, 'error': 'Invalid file name'}, status=400)
         
         # Process the file
-        result = process_specific_file(file_name, user_id)
+        result = process_specific_file(safe_file_name, user_id)
         
         if result.get('success'):
             return JsonResponse({
@@ -1076,19 +1177,25 @@ def process_file(request, file_name):
             }, status=400)
         
     except Exception as e:
+        logger.error("Error in process file endpoint: %s", e, exc_info=True)
         return JsonResponse({
             'success': False,
-            'error': str(e)
+            'error': CLIENT_SAFE_ERROR
         }, status=500)
 
 
-@require_http_methods(["GET"])
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def get_amendments(request, framework_id):
     """
     API endpoint to get all amendments for a specific framework
     """
     try:
-        result = get_framework_amendments(framework_id)
+        current_user = _get_authenticated_user(request)
+        if not current_user:
+            return JsonResponse({'success': False, 'error': 'Authentication required'}, status=401)
+        is_admin = _is_system_admin(current_user)
+        result = get_framework_amendments(framework_id, user=current_user, is_admin=is_admin)
         
         if result.get('success'):
             return JsonResponse({
@@ -1097,24 +1204,31 @@ def get_amendments(request, framework_id):
                 'message': f'Retrieved amendments for framework {framework_id}'
             }, status=200)
         else:
+            if result.get('error') == 'Forbidden':
+                return JsonResponse({'success': False, 'error': 'Forbidden'}, status=403)
             return JsonResponse({
                 'success': False,
                 'error': result.get('error', 'Unknown error')
             }, status=404)
         
     except Exception as e:
+        logger.error("Error in get amendments endpoint: %s", e, exc_info=True)
         return JsonResponse({
             'success': False,
-            'error': str(e)
+            'error': CLIENT_SAFE_ERROR
         }, status=500)
 
 
-@require_http_methods(["GET"])
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def get_status(request):
     """
     API endpoint to get change management system status
     """
     try:
+        current_user = _get_authenticated_user(request)
+        if not current_user:
+            return JsonResponse({'success': False, 'error': 'Authentication required'}, status=401)
         service = get_change_management_service()
         
         # Get processed files state
@@ -1127,7 +1241,7 @@ def get_status(request):
         
         status = {
             'service_status': 'operational',
-            'data_directory': str(service.data_dir),
+            'data_directory': 'configured',
             'pdf_files_count': len(pdf_files),
             'processed_files_count': len(processed_files.get('processed', [])),
             's3_configured': service.s3_client is not None,
@@ -1136,14 +1250,15 @@ def get_status(request):
         
         return JsonResponse({
             'success': True,
-            'data': status,
+            'data': _safe_status_payload(status),
             'message': 'Change management system is operational'
         }, status=200)
         
     except Exception as e:
+        logger.error("Error in get status endpoint: %s", e, exc_info=True)
         return JsonResponse({
             'success': False,
-            'error': str(e),
+            'error': CLIENT_SAFE_ERROR,
             'service_status': 'error'
         }, status=500)
 

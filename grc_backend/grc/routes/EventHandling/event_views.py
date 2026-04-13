@@ -4851,7 +4851,7 @@ def get_integration_events(request):
             # Use Django ORM - this automatically decrypts encrypted fields via EncryptedFieldsMixin
             integration_records = IntegrationDataList.objects.only(
                 'id', 'heading', 'source', 'username', 'time', 'data', 'metadata', 'created_at', 'updated_at'
-            ).order_by('-created_at')[:100]
+            ).order_by('-id')[:100]
             
             debug_print(f"DEBUG: Django ORM query succeeded, got {len(integration_records)} records (decrypted)")
             
@@ -4867,12 +4867,12 @@ def get_integration_events(request):
         except Exception as query_error:
             _log_exception(query_error, context='get_integration_events.orm')
             
-            # Fallback: try with a simpler query (no ordering)
+            # Fallback: retry with indexed ordering to avoid DB filesort pressure
             try:
                 integration_records = IntegrationDataList.objects.only(
                     'id', 'heading', 'source', 'username', 'time', 'data', 'metadata', 'created_at', 'updated_at'
-                )[:100]
-                debug_print(f"DEBUG: Fallback query (no ordering) succeeded, got {len(integration_records)} records")
+                ).order_by('-id')[:100]
+                debug_print(f"DEBUG: Fallback query (id ordering) succeeded, got {len(integration_records)} records")
             except Exception as fallback_error:
                 _log_exception(fallback_error, context='get_integration_events.fallback')
                 return Response({
