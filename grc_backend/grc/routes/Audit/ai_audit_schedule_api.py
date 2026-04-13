@@ -421,7 +421,7 @@ def create_ai_audit_schedule(request, audit_id):
     with connection.cursor() as cursor:
         for q, params in [
             ("SELECT TenantId, FrameworkId FROM audit WHERE AuditId = %s LIMIT 1", [audit_id]),
-            ("SELECT tenant_id, framework_id FROM audit WHERE audit_id = %s LIMIT 1", [audit_id]),
+            ("SELECT TenantId, FrameworkId FROM audit WHERE AuditId = %s LIMIT 1", [audit_id]),
         ]:
             try:
                 cursor.execute(q, params)

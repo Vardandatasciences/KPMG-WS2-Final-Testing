@@ -306,7 +306,7 @@ def get_all_audits(request):
                     users reviewer_user ON a.reviewer = reviewer_user.UserId
                 LEFT JOIN 
                     audit_findings af ON a.AuditId = af.AuditId
-                WHERE a.tenant_id = %(tenant_id)s
+                WHERE a.TenantId = %(tenant_id)s
                     {where_clause}
                 GROUP BY 
                     a.AuditId, f.FrameworkName, p.PolicyName, sp.SubPolicyName, 
@@ -389,7 +389,7 @@ def get_all_audits_public(request):
                     users reviewer_user ON a.reviewer = reviewer_user.UserId
                 LEFT JOIN 
                     audit_findings af ON a.AuditId = af.AuditId
-                WHERE a.tenant_id = %s
+                WHERE a.TenantId = %s
                 GROUP BY 
                     a.AuditId, a.Title, f.FrameworkName, p.PolicyName, sp.SubPolicyName, 
                     auditor_user.UserName, a.DueDate, a.Frequency, reviewer_user.UserName, a.AuditType, a.Status
@@ -498,7 +498,7 @@ def get_my_audits(request):
                     users reviewer_user ON a.reviewer = reviewer_user.UserId
                 LEFT JOIN 
                     audit_findings af ON a.AuditId = af.AuditId
-                WHERE a.tenant_id = %(tenant_id)s
+                WHERE a.TenantId = %(tenant_id)s
                     AND a.auditor = %(user_id)s
                     {where_clause}
                 GROUP BY 
@@ -627,7 +627,7 @@ def get_audit_details(request, audit_id):
                 LEFT JOIN 
                     audit_findings af ON a.AuditId = af.AuditId
                 WHERE 
-                    a.AuditId = %s AND a.tenant_id = %s
+                    a.AuditId = %s AND a.TenantId = %s
                 GROUP BY 
                     a.AuditId, f.FrameworkName, p.PolicyName, sp.SubPolicyName, 
                     auditor_user.UserName, auditor_user.UserId, a.DueDate, a.Frequency, 
