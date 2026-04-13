@@ -1387,7 +1387,7 @@ def update_audit_review_status(request, audit_id):
                         for i, mitigation in enumerate(selected_mitigations):
                             debug_print(f"    Mitigation {i+1}: Risk ID={mitigation.get('risk_id')}, Mitigation='{mitigation.get('mitigation')}'")
                         
-                        # Convert criticality text to numeric format
+                        # Map criticality text to numeric format
                         criticality_value = ''
                         criticality_text = data.get('criticality', '').strip().lower() if data.get('criticality') else ''
                         if criticality_text == 'major':
@@ -1398,6 +1398,15 @@ def update_audit_review_status(request, audit_id):
                             criticality_value = '2'
                         else:
                             criticality_value = '0'  # Default to Minor
+                        
+                        # Validate severity_rating (Range 1-10)
+                        severity_rating = data.get('severity_rating', 0)
+                        try:
+                            severity_rating = int(severity_rating)
+                            if severity_rating < 1: severity_rating = 1
+                            if severity_rating > 10: severity_rating = 10
+                        except (ValueError, TypeError):
+                            severity_rating = 1 # Default to lowest severity if invalid
                         
                         # Convert empty string to None (NULL) to avoid database type errors
                         review_comments_value = data.get('review_comments', '')
@@ -1447,7 +1456,7 @@ def update_audit_review_status(request, audit_id):
                             data.get('details_of_finding', ''),
                             data.get('comments', ''),
                             criticality_value,
-                            data.get('severity_rating', 0),
+                            severity_rating, # Validated 1-10
                             predictive_risks,
                             corrective_actions,
                             data.get('underlying_cause', ''),
@@ -1464,7 +1473,7 @@ def update_audit_review_status(request, audit_id):
                             audit_id,
                             compliance_id
                         ])
-                        debug_print(f"DEBUG: Updated audit_finding for compliance_id {compliance_id}")
+                        debug_print(f"DEBUG: Updated audit_finding for compliance_id {compliance_id} with severity {severity_rating}")
                 
                 elif compliance_reviews:
                     for review in compliance_reviews:
@@ -1530,7 +1539,20 @@ def update_audit_review_status(request, audit_id):
                                 # Default to Minor if nothing valid is provided
                                 criticality_value = '0'
                         
-                        debug_print(f"DEBUG: Setting MajorMinor to '{criticality_value}' for compliance_id {compliance_id}")
+                        # Validate severity_rating (Range 1-10)
+                        severity_rating = review.get('severity_rating', 0)
+                        try:
+                            # Handle empty string or None
+                            if severity_rating is None or severity_rating == '':
+                                severity_rating = 1
+                            else:
+                                severity_rating = int(severity_rating)
+                                if severity_rating < 1: severity_rating = 1
+                                if severity_rating > 10: severity_rating = 10
+                        except (ValueError, TypeError):
+                            severity_rating = 1
+                        
+                        debug_print(f"DEBUG: Setting MajorMinor to '{criticality_value}' for compliance_id {compliance_id}, SeverityRating to {severity_rating}")
                         
                         # CRITICAL: Extract and validate review_comments - ensure it's not a status string
                         review_comments_value = review.get('review_comments', '')
@@ -1582,7 +1604,7 @@ def update_audit_review_status(request, audit_id):
                             _safe_value(review.get('details_of_finding')),
                             _safe_value(review.get('comments')),
                             criticality_value,  # Use converted numeric value from JSON
-                            review.get('severity_rating') if review.get('severity_rating') is not None and review.get('severity_rating') != '' else None,  # Keep 0, convert None/empty to None
+                            severity_rating,  # Validated 1-10
                             predictive_risks,
                             corrective_actions,
                             _safe_value(review.get('underlying_cause')),
@@ -1598,7 +1620,7 @@ def update_audit_review_status(request, audit_id):
                             audit_id,
                             compliance_id
                         ])
-                        debug_print(f"DEBUG: Updated audit_finding for compliance_id {compliance_id} with check_value {check_value}")
+                        debug_print(f"DEBUG: Updated audit_finding for compliance_id {compliance_id} with check_value {check_value} and severity {severity_rating}")
                 
                 # Update version data to indicate acceptance
                 cursor.execute("""

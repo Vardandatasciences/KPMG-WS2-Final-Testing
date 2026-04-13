@@ -129,9 +129,9 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import axios from 'axios'
+import apiService from '@/services/apiService'
 import { ElMessage } from 'element-plus'
-import { API_ENDPOINTS } from '../../config/api.js'
+import { API_ENDPOINTS } from '@/config/api.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -156,12 +156,12 @@ async function fetchReportData() {
     loading.value = true
     error.value = null
     
-          const response = await axios.get(API_ENDPOINTS.AUDIT_REPORT(auditId.value))
+          const data = await apiService.get(API_ENDPOINTS.AUDIT_REPORT(auditId.value))
     
-    if (response.data && response.data.success) {
-      reportData.value = response.data.data
+    if (data && data.success) {
+      reportData.value = data.data
     } else {
-      throw new Error(response.data.message || 'Failed to fetch audit report')
+      throw new Error(data?.message || 'Failed to fetch audit report')
     }
   } catch (err) {
     console.error('Error fetching audit report:', err)
@@ -247,15 +247,13 @@ async function downloadReport() {
   try {
     downloading.value = true
     
-    const response = await axios({
-      url: `/generate-audit-report/${auditId.value}/`,
-      method: 'GET',
+    const blobData = await apiService.get(API_ENDPOINTS.GENERATE_AUDIT_REPORT(auditId.value), {
       responseType: 'blob',
       timeout: 30000
     })
 
     // Create blob and download
-    const blob = new Blob([response.data], { 
+    const blob = new Blob([blobData], { 
       type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' 
     })
     

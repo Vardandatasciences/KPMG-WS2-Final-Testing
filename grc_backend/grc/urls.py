@@ -231,6 +231,8 @@ from .routes.Framework.frameworks import (
 
     submit_framework_review, get_latest_framework_approval, get_rejected_frameworks_for_user,
 
+    get_framework_policies_with_subpolicies,
+
     approve_reject_subpolicy_in_framework, approve_reject_policy_in_framework,
 
     get_framework_approvals_by_user, get_framework_approvals_by_reviewer,
@@ -952,6 +954,7 @@ policy_urlpatterns = [
     path('frameworks/<int:framework_id>/submit-review/', submit_framework_review, name='submit-framework-review'),
 
     path('framework-approvals/latest/<int:framework_id>/', get_latest_framework_approval, name='get-latest-framework-approval'),
+    path('frameworks/<int:framework_id>/policies-recursive/', get_framework_policies_with_subpolicies, name='get-framework-policies-recursive'),
 
     path('frameworks/<int:framework_id>/rejected/', get_rejected_frameworks_for_user, name='get-rejected-frameworks-for-user'),
 

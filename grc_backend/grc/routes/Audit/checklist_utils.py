@@ -85,6 +85,45 @@ def check_audit_findings(audit_id):
         traceback.print_exc()
         return False
 
+def normalize_complied_status(status_value):
+    """
+    Normalize status value to '0', '1', or '2' (max length 1).
+    Maps common descriptive strings to their numeric codes.
+    """
+    if status_value is None:
+        return '0'
+    
+    status_str = str(status_value).strip().lower()
+    
+    # Direct numeric matches
+    if status_str in ['0', '1', '2']:
+        return status_str
+        
+    # Mapping for descriptive strings (Case-insensitive)
+    mapping = {
+        'not compliant': '0',
+        'non compliant': '0',
+        'non-compliant': '0',
+        'not started': '0',
+        'partially compliant': '1',
+        'in progress': '1',
+        'compliant': '1',
+        'fully compliant': '2',
+        'completed': '2',
+        'not applicable': '2', # Map 3 to 2 as user said 0,1,2 only
+    }
+    
+    if status_str in mapping:
+        return mapping[status_str]
+        
+    # If it's a number longer than 1 character or some other string
+    # Try to extract the first digit if it's 0, 1, or 2
+    if len(status_str) > 0 and status_str[0] in ['0', '1', '2']:
+        return status_str[0]
+        
+    # Default to '0' if unknown
+    return '0'
+
 def test_update_function(audit_id):
     """
     Test function to call update_lastchecklistitem_verified with a specific audit ID
@@ -397,6 +436,9 @@ def update_lastchecklistitem_verified(audit_id):
             
             for i, finding in enumerate(findings):
                 audit_findings_id, compliance_id, user_id, check_value, comments, subpolicy_id, policy_id, framework_id = finding
+                
+                # Normalize check_value to '0', '1', or '2' (fixed length 1) to avoid DataError
+                check_value = normalize_complied_status(check_value)
                 
                 debug_print(f"DEBUG: Processing finding {i+1}/{len(findings)}:")
                 debug_print(f"DEBUG:   AuditFindingsId: {audit_findings_id}")

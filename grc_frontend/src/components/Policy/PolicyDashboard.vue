@@ -744,15 +744,15 @@ export default {
           response = await dashboardService.getAllPolicies()
         }
         
-        console.log('🔍 DEBUG: Raw policies response:', response.data)
+        console.log('🔍 DEBUG: Raw policies response:', response)
         
         let policiesData = []
-        if (response.data && Array.isArray(response.data)) {
+        if (Array.isArray(response)) {
+          policiesData = response
+        } else if (response && response.policies) {
+          policiesData = response.policies
+        } else if (response && response.data) {
           policiesData = response.data
-        } else if (response.data && response.data.policies) {
-          policiesData = response.data.policies
-        } else if (response.data && response.data.data) {
-          policiesData = response.data.data
         }
         
         policies.value = policiesData.map(policy => ({
@@ -919,11 +919,11 @@ export default {
         }
         
         const response = await dashboardService.getPolicyAnalytics(params)
-        const data = response.data
+        const data = response || []
         
         // Process active/inactive data
-        const activeCount = data.find(item => item.label === 'Active')?.value || 0
-        const inactiveCount = data.find(item => item.label === 'Inactive')?.value || 0
+        const activeCount = Array.isArray(data) ? (data.find(item => item.label === 'Active')?.value || 0) : 0
+        const inactiveCount = Array.isArray(data) ? (data.find(item => item.label === 'Inactive')?.value || 0) : 0
         
         const chartData = [activeCount, inactiveCount]
         activeInactiveData.datasets[0].data = chartData
@@ -975,10 +975,10 @@ export default {
         }
         
         const response = await dashboardService.getPolicyAnalytics(params)
-        const data = response.data
+        const data = response || []
         
-        const labels = data.map(item => item.label || 'Unknown')
-        const values = data.map(item => item.value || 0)
+        const labels = Array.isArray(data) ? data.map(item => item.label || 'Unknown') : []
+        const values = Array.isArray(data) ? data.map(item => item.value || 0) : []
         
         categoryData.labels = labels
         categoryData.datasets[0].data = values
@@ -1031,10 +1031,10 @@ export default {
         }
         
         const response = await dashboardService.getPolicyAnalytics(params)
-        const data = response.data
+        const data = response || []
         
-        const labels = data.map(item => item.label || 'Unknown')
-        const values = data.map(item => item.value || 0)
+        const labels = Array.isArray(data) ? data.map(item => item.label || 'Unknown') : []
+        const values = Array.isArray(data) ? data.map(item => item.value || 0) : []
         
         statusData.labels = labels
         statusData.datasets[0].data = values
@@ -1087,10 +1087,10 @@ export default {
         }
         
         const response = await dashboardService.getPolicyAnalytics(params)
-        const data = response.data
+        const data = response || []
         
-        const labels = data.map(item => item.label || 'Unknown')
-        const values = data.map(item => item.value || 0)
+        const labels = Array.isArray(data) ? data.map(item => item.label || 'Unknown') : []
+        const values = Array.isArray(data) ? data.map(item => item.value || 0) : []
         
         departmentData.labels = labels
         departmentData.datasets[0].data = values
@@ -1122,16 +1122,16 @@ export default {
           dashboardService.getAllFrameworks()
         ])
 
-        dashboardData.value = summaryRes.data
+        dashboardData.value = summaryRes || {}
         
         // Process frameworks
         let frameworksData = []
-        if (frameworksRes.data && Array.isArray(frameworksRes.data)) {
+        if (Array.isArray(frameworksRes)) {
+          frameworksData = frameworksRes
+        } else if (frameworksRes && frameworksRes.frameworks) {
+          frameworksData = frameworksRes.frameworks
+        } else if (frameworksRes && frameworksRes.data) {
           frameworksData = frameworksRes.data
-        } else if (frameworksRes.data && frameworksRes.data.frameworks) {
-          frameworksData = frameworksRes.data.frameworks
-        } else if (frameworksRes.data && frameworksRes.data.data) {
-          frameworksData = frameworksRes.data.data
         }
         
         frameworks.value = frameworksData.map(fw => ({
@@ -1180,10 +1180,10 @@ export default {
           loadCharts()
         ])
 
-        statusDistribution.value = statusRes.data
-        recentActivity.value = activityRes.data
-        avgApprovalTime.value = approvalTimeRes.data.average_days
-        reviewerWorkload.value = workloadRes.data
+        statusDistribution.value = statusRes || []
+        recentActivity.value = activityRes || []
+        avgApprovalTime.value = approvalTimeRes?.average_days || 0
+        reviewerWorkload.value = workloadRes || []
         
         // Load policies if needed
         if (!selectedFramework.value || selectedFramework.value === 'all') {
@@ -1291,14 +1291,14 @@ export default {
         // Update dashboard data with new filtered data
         dashboardData.value = {
           ...dashboardData.value,
-          ...summaryRes.data
+          ...summaryRes
         }
-        statusDistribution.value = statusRes.data
-        avgApprovalTime.value = approvalTimeRes.data.average_days
-        reviewerWorkload.value = workloadRes.data
+        statusDistribution.value = statusRes || []
+        avgApprovalTime.value = approvalTimeRes?.average_days || 0
+        reviewerWorkload.value = workloadRes || []
         
         console.log('🔍 DEBUG: Dashboard summary refreshed with filters')
-        console.log('🔍 DEBUG: Updated summary data:', summaryRes.data)
+        console.log('🔍 DEBUG: Updated summary data:', summaryRes)
         console.log('🔍 DEBUG: Updated dashboardData.value:', dashboardData.value)
       } catch (err) {
         console.error('Error refreshing dashboard summary:', err)
@@ -1416,12 +1416,12 @@ export default {
           console.log('Activity API response:', activityRes)
           
           let policyActivities = []
-          if (Array.isArray(activityRes.data)) {
+          if (Array.isArray(activityRes)) {
+            policyActivities = activityRes
+          } else if (activityRes && Array.isArray(activityRes.results)) {
+            policyActivities = activityRes.results
+          } else if (activityRes && Array.isArray(activityRes.data)) {
             policyActivities = activityRes.data
-          } else if (activityRes.data && Array.isArray(activityRes.data.results)) {
-            policyActivities = activityRes.data.results
-          } else if (activityRes.data && Array.isArray(activityRes.data.data)) {
-            policyActivities = activityRes.data.data
           }
           
           console.log('Processed policy activities from API:', policyActivities.length)
@@ -1463,19 +1463,19 @@ export default {
             ])
             console.log('Recent policies response:', policiesRes)
             
-            let policies = []
-            if (Array.isArray(policiesRes.data)) {
-              policies = policiesRes.data
-            } else if (policiesRes.data && Array.isArray(policiesRes.data.results)) {
-              policies = policiesRes.data.results
-            } else if (policiesRes.data && Array.isArray(policiesRes.data.data)) {
-              policies = policiesRes.data.data
+            let policiesList = []
+            if (Array.isArray(policiesRes)) {
+              policiesList = policiesRes
+            } else if (policiesRes && Array.isArray(policiesRes.results)) {
+              policiesList = policiesRes.results
+            } else if (policiesRes && Array.isArray(policiesRes.data)) {
+              policiesList = policiesRes.data
             }
             
-            console.log('Processed policies for activities:', policies.length)
+            console.log('Processed policies for activities:', policiesList.length)
             
-            if (policies && policies.length > 0) {
-              policies.slice(0, 3).forEach(policy => {
+            if (policiesList && policiesList.length > 0) {
+              policiesList.slice(0, 3).forEach(policy => {
                 const policyName = policy.PolicyName || policy.name || 'Unknown Policy'
                 const createdBy = policy.CreatedByName || policy.CreatedBy || policy.created_by || 'Unknown User'
                 const createdDate = policy.CreatedByDate || policy.CreatedDate || policy.created_date

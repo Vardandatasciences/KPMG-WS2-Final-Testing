@@ -4600,10 +4600,8 @@ name: 'VV',
         const module = this.selectedTab === 'framework' ? 'framework' : 'policy'
         const currentUserId = this.currentUser?.UserId || ''
         const response = await apiService.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
-          params: {
-            module: module,
-            current_user_id: currentUserId
-          }
+          module: module,
+          current_user_id: currentUserId
         })
         console.log('Raw users response:', response)
         

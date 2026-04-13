@@ -91,11 +91,11 @@
 
 <script>
 import { ref, onMounted, computed } from 'vue';
-import axios from 'axios';
+import apiService from '@/services/apiService';
 import { useRouter } from 'vue-router';
 import DynamicTable from '../DynamicTable.vue';
 import { AccessUtils } from '@/utils/accessUtils';
-import { API_ENDPOINTS } from '../../config/api.js';
+import { API_ENDPOINTS } from '@/config/api.js';
 import PopupService from '../../modules/popus/popupService.js';
 
 export default {
@@ -123,18 +123,8 @@ export default {
     // Push notification sender
     const sendPushNotification = async (notificationData) => {
       try {
-        const response = await fetch(API_ENDPOINTS.PUSH_NOTIFICATION, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(notificationData)
-        });
-        if (response.ok) {
-          console.log('Push notification sent successfully');
-        } else {
-          console.error('Failed to send push notification');
-        }
+        await apiService.post(API_ENDPOINTS.PUSH_NOTIFICATION, notificationData);
+        console.log('Push notification sent successfully');
       } catch (error) {
         console.error('Error sending push notification:', error);
       }
@@ -230,8 +220,8 @@ export default {
         const params = {};
         if (dateFrom.value) params.date_from = dateFrom.value;
         if (dateTo.value) params.date_to = dateTo.value;
-        const response = await axios.get(API_ENDPOINTS.AUDIT_REPORTS, { params });
-        audits.value = response.data.audits;
+        const data = await apiService.get(API_ENDPOINTS.AUDIT_REPORTS, { params });
+        audits.value = data.audits;
       } catch (err) {
         console.error('Error fetching audit reports:', err);
         // Handle access denied errors
@@ -274,13 +264,13 @@ export default {
         console.log('Generating audit report...');
         
         // Call the generate audit report endpoint
-        const response = await axios.get(`${API_ENDPOINTS.GENERATE_AUDIT_REPORT(auditId)}`, {
+        const blobData = await apiService.get(`${API_ENDPOINTS.GENERATE_AUDIT_REPORT(auditId)}`, {
           responseType: 'blob',
           timeout: 30000 // 30 second timeout
         });
         
         // Create blob from response
-        const blob = new Blob([response.data], {
+        const blob = new Blob([blobData], {
           type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
         });
         

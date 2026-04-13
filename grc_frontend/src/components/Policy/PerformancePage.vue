@@ -126,6 +126,7 @@
 <script>
 import { ref, computed, onMounted } from 'vue'
 import apiService from '@/services/apiService'
+import { API_ENDPOINTS } from '../../config/api.js'
 
 export default {
   name: 'PerformancePage',
@@ -186,7 +187,7 @@ export default {
         console.log('[RBAC DEBUG] Attempting to load Policy KPIs...')
         
         // Make API call to RBAC-protected endpoint using apiService
-        const response = await apiService.get('/policy-kpis/')
+        const response = await apiService.get(API_ENDPOINTS.POLICY_KPIS)
 
         console.log('[RBAC DEBUG] Policy KPIs loaded successfully:', response)
         kpiData.value = response

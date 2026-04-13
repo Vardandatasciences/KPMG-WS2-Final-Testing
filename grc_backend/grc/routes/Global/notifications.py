@@ -1,10 +1,16 @@
 from django.http import JsonResponse
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.authentication import SessionAuthentication, BasicAuthentication
 from rest_framework.response import Response
 from rest_framework import status
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
+
+# DRF Session auth variant that skips CSRF enforcement for API clients
+class CsrfExemptSessionAuthentication(SessionAuthentication):
+    def enforce_csrf(self, request):
+        return
 import json
 from django.db import connection
 from ...debug_utils import debug_print
@@ -143,6 +149,7 @@ def create_ai_audit_evidence_reminder_notification(audit_id, user_id, framework_
 @csrf_exempt
 @require_http_methods(["POST"])
 @api_view(['POST'])
+@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([IsAuthenticated])
 def push_notification(request):
     """
@@ -347,6 +354,7 @@ def get_notifications(request):
 @csrf_exempt
 @require_http_methods(["POST"])
 @api_view(['POST'])
+@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([IsAuthenticated])
 def mark_as_read(request):
     """
@@ -387,6 +395,7 @@ def mark_as_read(request):
         }, status=500)
 
 @api_view(['POST'])
+@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([IsAuthenticated])
 def mark_all_as_read(request):
     """

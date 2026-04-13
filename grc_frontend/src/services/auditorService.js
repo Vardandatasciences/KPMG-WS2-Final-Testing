@@ -7,7 +7,7 @@
  * 3. Providing cached data to components
  */
 
-import { axiosInstance } from '@/config/api.js';
+import apiService from '@/services/apiService';
 import { API_ENDPOINTS } from '@/config/api.js';
 
 class AuditorService {
@@ -62,17 +62,15 @@ class AuditorService {
    */
   async fetchAudits() {
     try {
-      const response = await axiosInstance.get(API_ENDPOINTS.AUDIT_MY_AUDITS, {
-        timeout: 60000
-      });
+      const data = await apiService.get(API_ENDPOINTS.AUDIT_MY_AUDITS, {}, { timeout: 60000 });
 
       // Handle both old and new response formats
-      if (Array.isArray(response.data)) {
-        this.dataStore.audits = response.data;
-      } else if (response.data?.success && Array.isArray(response.data?.audits)) {
-        this.dataStore.audits = response.data.audits;
-      } else if (response.data?.success && Array.isArray(response.data?.data)) {
-        this.dataStore.audits = response.data.data;
+      if (Array.isArray(data)) {
+        this.dataStore.audits = data;
+      } else if (data?.success && Array.isArray(data?.audits)) {
+        this.dataStore.audits = data.audits;
+      } else if (data?.success && Array.isArray(data?.data)) {
+        this.dataStore.audits = data.data;
       } else {
         this.dataStore.audits = [];
       }
@@ -90,16 +88,14 @@ class AuditorService {
    */
   async fetchBusinessUnits() {
     try {
-      const response = await axiosInstance.get(API_ENDPOINTS.BUSINESS_UNITS, {
-        timeout: 60000
-      });
+      const data = await apiService.get(API_ENDPOINTS.BUSINESS_UNITS, {}, { timeout: 60000 });
 
-      if (Array.isArray(response.data)) {
-        this.dataStore.businessUnits = response.data;
-      } else if (response.data?.success && Array.isArray(response.data?.data)) {
-        this.dataStore.businessUnits = response.data.data;
-      } else if (response.data?.success && Array.isArray(response.data?.businessUnits)) {
-        this.dataStore.businessUnits = response.data.businessUnits;
+      if (Array.isArray(data)) {
+        this.dataStore.businessUnits = data;
+      } else if (data?.success && Array.isArray(data?.data)) {
+        this.dataStore.businessUnits = data.data;
+      } else if (data?.success && Array.isArray(data?.businessUnits)) {
+        this.dataStore.businessUnits = data.businessUnits;
       } else {
         this.dataStore.businessUnits = [];
       }

@@ -315,7 +315,7 @@ def get_user_detailed_permissions(user_id):
     try:
         from ...models import RBAC
         
-        # Get user's RBAC info
+        # Get user s RBAC info
         rbac_info = RBAC.objects.filter(user_id=user_id).first()
         if not rbac_info:
             logger.warning(f"[RBAC] No RBAC info found for user {user_id}")
@@ -392,7 +392,7 @@ def debug_permission_check(user_id, module, permission, result):
         # Get the actual database values
         from ...models import RBAC
         
-        # Get user's RBAC record
+        # Get user s RBAC record
         rbac_info = RBAC.objects.filter(user_id=user_id).first()
         if rbac_info:
             logger.info(f"[RBAC PERM CHECK] User Role: {rbac_info.role}")
@@ -455,8 +455,8 @@ def validate_string(value, field_name, max_length=255, min_length=0, required=Fa
     
     return value
 
-def validate_date(value, field_name, required=False):
-    """Validate a date value"""
+def validate_date(value, field_name, required=False, min_date=None, max_date=None):
+    """Validate a date value with optional range checks"""
     # Check if required
     if required and (value is None or value == ''):
         raise ValidationError(field_name, "This field is required")
@@ -465,23 +465,32 @@ def validate_date(value, field_name, required=False):
     if not required and (value is None or value == ''):
         return value
     
-    # If already a date object, return as is
-    if isinstance(value, date):
-        return value
+    # If already a date object, skip parsing
+    parsed_date = value
+    if not isinstance(value, date):
+        # Try to parse the date
+        try:
+            if isinstance(value, str):
+                # Try ISO format YYYY-MM-DD
+                parts = value.split('-')
+                if len(parts) == 3:
+                    year, month, day = map(int, parts)
+                    parsed_date = date(year, month, day)
+                else:
+                    raise ValidationError(field_name, "Invalid date format, expected YYYY-MM-DD")
+            else:
+                raise ValidationError(field_name, "Invalid date format, expected YYYY-MM-DD")
+        except (ValueError, TypeError):
+            raise ValidationError(field_name, "Invalid date format, expected YYYY-MM-DD")
     
-    # Try to parse the date
-    try:
-        # Handle different date formats
-        if isinstance(value, str):
-            # Try ISO format YYYY-MM-DD
-            parts = value.split('-')
-            if len(parts) == 3:
-                year, month, day = map(int, parts)
-                return date(year, month, day)
-        
-        raise ValidationError(field_name, "Invalid date format, expected YYYY-MM-DD")
-    except (ValueError, TypeError):
-        raise ValidationError(field_name, "Invalid date format, expected YYYY-MM-DD")
+    # Range checks
+    if min_date and parsed_date < min_date:
+        raise ValidationError(field_name, f"Date is too far in the past (must be after {min_date})")
+    
+    if max_date and parsed_date > max_date:
+        raise ValidationError(field_name, f"Date cannot be in the future (must be before {max_date})")
+    
+    return parsed_date
 
 def validate_time(value, field_name, required=False):
     """Validate a time value"""
@@ -561,7 +570,7 @@ def validate_incident_data(data):
     
     # Define allowed patterns for enhanced security
     ALPHANUMERIC_WITH_SPACES = r'^[a-zA-Z0-9\s\-_.,!?()]+$'
-    BUSINESS_TEXT_PATTERN = r'^[a-zA-Z0-9\s\-_.,!?():;/\\@#$%&*+=<>[\]{}|~`"\']+$'
+    BUSINESS_TEXT_PATTERN = r'^[a-zA-Z0-9\s\-_.,!?():;/\\@#$%&*+=<>[\]{}|~`"\' ]+$'
     CURRENCY_PATTERN = r'^[$£€]?[0-9]+(\.[0-9]{1,2})?$'
     
     # Required fields
@@ -577,9 +586,15 @@ def validate_incident_data(data):
         allowed_pattern=BUSINESS_TEXT_PATTERN
     )
     
+    # Realistic range for incidents: not in future, max 20 years in past
+    _today = date.today()
+    _min_incident_date = _today - datetime.timedelta(days=365*20)
+    
     validated_data['Date'] = validate_date(
         data.get('Date'), 'Date', 
-        required=True
+        required=True,
+        min_date=_min_incident_date,
+        max_date=_today
     )
     
     validated_data['Time'] = validate_time(
@@ -936,7 +951,7 @@ def register(request):
 @authentication_classes([])
 @permission_classes([IsAuthenticated])
 def get_user_permissions(request):
-    """Get current user's permissions for frontend"""
+    """Get current user s permissions for frontend"""
     try:
         # RBAC Debug - Log user access attempt
         debug_info = debug_user_permissions(request, "GET_USER_PERMISSIONS", "rbac", None)
@@ -947,7 +962,7 @@ def get_user_permissions(request):
         
         from ...models import RBAC, RBACDepartmentAccess, RBACResourceAccess, RBACUserPermission
         
-        # Get user's RBAC info
+        # Get user s RBAC info
         rbac_info = RBAC.objects.filter(UserId=user_id).first()
         
         if not rbac_info:
@@ -1024,7 +1039,7 @@ def get_user_permissions(request):
 @authentication_classes([])
 @permission_classes([IsAuthenticated])
 def get_user_role(request):
-    """Get current user's role"""
+    """Get current user s role"""
     try:
         user_id = getattr(request.user, 'id', None)
         if not user_id:
@@ -1171,7 +1186,7 @@ def test_user_permissions_comprehensive(request):
                     test_results['permission_tests'][module][permission] = {
                         'result': False,
                         'status': 'ERROR',
-                        'error': str(e)
+                        'error': 'An internal error occurred'
                     }
                     test_results['summary']['total_tests'] += 1
                     test_results['summary']['failed'] += 1
@@ -1190,7 +1205,7 @@ def test_user_permissions_comprehensive(request):
                     'department': rbac_info.get('department'),
                     'has_access': False,
                     'status': 'ERROR',
-                    'error': str(e)
+                    'error': 'An internal error occurred'
                 }
         
         # 5. Log comprehensive test results
@@ -1377,7 +1392,7 @@ def validate_json_request_body(request, validation_rules):
 def incident_by_id(request, incident_id):
     """
     Get or update a specific incident by ID
-    MULTI-TENANCY: Only returns/updates incidents for user's tenant
+    MULTI-TENANCY: Only returns/updates incidents for user s tenant
     """
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
@@ -1549,7 +1564,7 @@ def incident_by_id(request, incident_id):
 def update_incident_by_id(request, incident_id):
     """
     Update a specific incident by ID
-    MULTI-TENANCY: Only updates incidents for user's tenant
+    MULTI-TENANCY: Only updates incidents for user s tenant
     """
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
@@ -1651,7 +1666,7 @@ def get_framework_policy_subpolicy_from_compliance(compliance_id):
 def list_incidents(request):
     """
     List incidents with filtering and pagination
-    MULTI-TENANCY: Only returns incidents for user's tenant
+    MULTI-TENANCY: Only returns incidents for user s tenant
     """
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
@@ -2188,7 +2203,7 @@ import json
 def update_incident_status(request, incident_id):
     """
     Update incident status
-    MULTI-TENANCY: Only updates incidents for user's tenant
+    MULTI-TENANCY: Only updates incidents for user s tenant
     """
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
@@ -2214,7 +2229,7 @@ def update_incident_status(request, incident_id):
         try:
             validated_incident_id = validate_path_parameter(incident_id, 'incident_id', 'integer')
         except ValidationError as e:
-            return Response({'error': str(e)}, status=400)
+            return Response({'error': 'An internal error occurred'}, status=400)
         
         # Define validation rules for JSON body
         validation_rules = {
@@ -2239,7 +2254,7 @@ def update_incident_status(request, incident_id):
             debug_print(f"DEBUG: Status type: {type(validated_data.get('status'))}")
         except ValidationError as e:
             debug_print(f"DEBUG: Validation error: {str(e)}")
-            return Response({'error': str(e)}, status=400)
+            return Response({'error': 'An internal error occurred'}, status=400)
         
         # MULTI-TENANCY: Get the incident filtered by tenant
         incident = Incident.objects.get(IncidentId=validated_incident_id, tenant_id=tenant_id)
@@ -2440,7 +2455,7 @@ def update_incident_status(request, incident_id):
             entityId=str(incident_id),
             logLevel="ERROR",
             ipAddress=client_ip,
-            additionalInfo={"error": str(e)}
+            additionalInfo={"error": "An internal error occurred"}
         )
         
         debug_print(f"Error updating incident status: {str(e)}")
@@ -2461,7 +2476,7 @@ def update_incident_status(request, incident_id):
 def create_incident(request):
     """
     Create a new incident
-    MULTI-TENANCY: Incident will be automatically assigned to user's tenant
+    MULTI-TENANCY: Incident will be automatically assigned to user s tenant
     """
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
@@ -2503,8 +2518,8 @@ def create_incident(request):
         # Apply strict allow-list validation using centralized validation function
         validated_data = validate_incident_data(request.data)
         
-        # SECURITY FIX: Always use the authenticated user's ID for incident creation
-        # Get the authenticated user's ID from JWT token or session
+        # SECURITY FIX: Always use the authenticated user s ID for incident creation
+        # Get the authenticated user s ID from JWT token or session
         from ...rbac.utils import RBACUtils
         authenticated_user_id = None
         try:
@@ -2538,7 +2553,7 @@ def create_incident(request):
         # MULTI-TENANCY: Verify the user exists in our custom Users table and belongs to tenant
         try:
             authenticated_user = Users.objects.get(UserId=authenticated_user_id, tenant_id=tenant_id)
-            # Override any UserId sent from frontend with the authenticated user's ID
+            # Override any UserId sent from frontend with the authenticated user s ID
             validated_data['UserId'] = authenticated_user_id
             debug_print(f"Setting incident UserId to authenticated user: {authenticated_user_id} ({authenticated_user.UserName})")
         except Users.DoesNotExist:
@@ -2663,7 +2678,7 @@ def create_incident(request):
             entityType="Incident",
             logLevel="ERROR",
             ipAddress=client_ip,
-            additionalInfo={"error": str(e)}
+            additionalInfo={"error": "An internal error occurred"}
         )
         
         debug_print(f"Error validating incident data: {str(e)}")
@@ -2704,7 +2719,7 @@ def incident_page(request):
 def assign_incident(request, incident_id):
     """
     Assign incident to assigner and reviewer
-    MULTI-TENANCY: Only assigns incidents for user's tenant
+    MULTI-TENANCY: Only assigns incidents for user s tenant
     """
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
@@ -2743,7 +2758,7 @@ def assign_incident(request, incident_id):
                 logLevel="WARNING",
                 ipAddress=client_ip
             )
-            return Response({'error': str(e)}, status=400)
+            return Response({'error': 'An internal error occurred'}, status=400)
         
         # MULTI-TENANCY: Get the incident from the database filtered by tenant
         incident = Incident.objects.get(IncidentId=validated_incident_id, tenant_id=tenant_id)
@@ -2798,7 +2813,7 @@ def assign_incident(request, incident_id):
         try:
             validated_data = validate_json_request_body(request, validation_rules)
         except ValidationError as e:
-            return Response({'error': str(e)}, status=400)
+            return Response({'error': 'An internal error occurred'}, status=400)
         
         # Get raw data for additional fields not validated (assigned_date, mitigations, due_date)
         # Use request.data instead of request.body to avoid re-reading the stream
@@ -2815,14 +2830,14 @@ def assign_incident(request, incident_id):
         incident.Status = validated_data.get('status', 'Assigned')
         
         # SECURITY: Always use the authenticated user as the assigner for audit trail
-        # Get the authenticated user's ID from session
+        # Get the authenticated user s ID from session
         authenticated_user_id = None
         if hasattr(request, 'session') and 'user_id' in request.session:
             authenticated_user_id = request.session['user_id']
         elif hasattr(request, 'session') and 'grc_user_id' in request.session:
             authenticated_user_id = request.session['grc_user_id']
         
-        # Override any assigner_id sent from frontend with the authenticated user's ID
+        # Override any assigner_id sent from frontend with the authenticated user s ID
         if authenticated_user_id:
             incident.AssignerId = authenticated_user_id
             debug_print(f"SECURITY: Setting incident AssignerId to authenticated user: {authenticated_user_id}")
@@ -2832,6 +2847,16 @@ def assign_incident(request, incident_id):
             debug_print(f"WARNING: No authenticated user found in session, using provided assigner_id: {incident.AssignerId}")
             
         reviewer_id = validated_data.get('reviewer_id')
+        
+        # SECURITY: Maker-Checker Integrity (Point 12)
+        # A user should not be able to review their own assignment
+        if reviewer_id and incident.AssignerId and int(reviewer_id) == int(incident.AssignerId):
+            debug_print(f"SECURITY: Blocking self-assignment review for user {reviewer_id}")
+            return Response(
+                {"error": "Maker-Checker violation: Reviewer cannot be the same as the Assigner."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
         incident.ReviewerId = reviewer_id
         incident.AssignmentNotes = validated_data.get('assignment_notes', '')
         
@@ -2885,21 +2910,50 @@ def assign_incident(request, incident_id):
         # Handle due date if provided
         due_date = data.get('due_date')
         if due_date:
-            from datetime import datetime
+            from datetime import datetime, date, timedelta
             from django.conf import settings
             from django.utils import timezone
             
             # Parse the date (assuming it's just a date, not datetime)
-            dt = datetime.strptime(due_date, '%Y-%m-%d')
-            
-            # Handle timezone awareness based on Django settings
-            if getattr(settings, 'USE_TZ', True):
-                # If USE_TZ is True, make datetime timezone-aware
-                dt = timezone.make_aware(dt)
+            try:
+                dt_obj = datetime.strptime(due_date, '%Y-%m-%d')
+                due_date_obj = dt_obj.date()
+                
+                # SECURITY: Realistic range validation
+                _today = date.today()
+                _max_allowed = _today + timedelta(days=365*10)
+                
+                if due_date_obj < _today:
+                    from django.http import JsonResponse
+                    return JsonResponse({
+                        "success": False, 
+                        "error": "Invalid due date", 
+                        "details": "Due date cannot be in the past."
+                    }, status=400)
+                    
+                if due_date_obj > _max_allowed:
+                    from django.http import JsonResponse
+                    return JsonResponse({
+                        "success": False, 
+                        "error": "Invalid due date", 
+                        "details": "Due date cannot be more than 10 years in the future."
+                    }, status=400)
+
+                # Handle timezone awareness based on Django settings
+                if getattr(settings, 'USE_TZ', True):
+                    dt = timezone.make_aware(dt_obj)
+                else:
+                    dt = dt_obj
+                
                 incident.MitigationDueDate = dt
-            else:
-                # If USE_TZ is False, keep datetime timezone-naive
-                incident.MitigationDueDate = dt
+                
+            except (ValueError, TypeError):
+                from django.http import JsonResponse
+                return JsonResponse({
+                    "success": False, 
+                    "error": "Invalid date format", 
+                    "details": "Expected YYYY-MM-DD"
+                }, status=400)
         
         # Save the incident with all updates
         debug_print(f"🔍 DEBUG: assign_incident - About to save incident {incident.IncidentId}")
@@ -3027,12 +3081,12 @@ def assign_incident(request, incident_id):
             entityId=str(incident_id),
             logLevel="ERROR",
             ipAddress=client_ip,
-            additionalInfo={'error': str(e)}
+            additionalInfo={'error': 'An internal error occurred'}
         )
         debug_print(f"Error assigning incident: {str(e)}")
         return Response({
             'success': False,
-            'error': str(e),
+            'error': 'An internal error occurred',
             'IncidentId': incident_id
         }, status=500)
 
@@ -3045,7 +3099,7 @@ def assign_incident(request, incident_id):
 def unchecked_audit_findings(request):
     """
     Get unchecked audit findings
-    MULTI-TENANCY: Only returns findings for user's tenant
+    MULTI-TENANCY: Only returns findings for user s tenant
     """
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
@@ -3065,7 +3119,7 @@ def unchecked_audit_findings(request):
 def list_users(request):
     """
     List all users
-    MULTI-TENANCY: Only returns users for user's tenant
+    MULTI-TENANCY: Only returns users for user s tenant
     """
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
@@ -3127,10 +3181,10 @@ def list_users(request):
             entityType="User",
             logLevel="ERROR",
             ipAddress=get_client_ip(request),
-            additionalInfo={'error': str(e)}
+            additionalInfo={'error': 'An internal error occurred'}
         )
         
-        return Response({'error': str(e)}, status=500)
+        return Response({'error': 'An internal error occurred'}, status=500)
 
 @api_view(['GET'])
 @authentication_classes([])
@@ -3141,7 +3195,7 @@ def list_users(request):
 def combined_incidents_and_audit_findings(request):
     """
     Get combined incidents and audit findings
-    MULTI-TENANCY: Only returns data for user's tenant
+    MULTI-TENANCY: Only returns data for user s tenant
     """
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
@@ -3234,7 +3288,7 @@ def combined_incidents_and_audit_findings(request):
 def create_workflow(request):
     """
     Create a workflow
-    MULTI-TENANCY: Workflow will be automatically assigned to user's tenant
+    MULTI-TENANCY: Workflow will be automatically assigned to user s tenant
     """
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
@@ -3286,7 +3340,7 @@ def create_workflow(request):
     try:
         validated_data = validate_json_request_body(request, validation_rules)
     except ValidationError as e:
-        return Response({'error': str(e)}, status=400)
+        return Response({'error': 'An internal error occurred'}, status=400)
     
     # Accept either finding_id or IncidentId
     finding_id = validated_data.get('finding_id')
@@ -3354,7 +3408,7 @@ def create_workflow(request):
 def list_assigned_findings(request):
     """
     List assigned findings
-    MULTI-TENANCY: Only returns findings for user's tenant
+    MULTI-TENANCY: Only returns findings for user s tenant
     """
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
@@ -3407,7 +3461,7 @@ def list_assigned_findings(request):
 def create_incident_from_audit_finding(request):
     """
     Create incident from audit finding
-    MULTI-TENANCY: Incident will be automatically assigned to user's tenant
+    MULTI-TENANCY: Incident will be automatically assigned to user s tenant
     """
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
@@ -3438,7 +3492,7 @@ def create_incident_from_audit_finding(request):
     try:
         validated_data = validate_json_request_body(request, validation_rules)
     except ValidationError as e:
-        return Response({'error': str(e)}, status=400)
+        return Response({'error': 'An internal error occurred'}, status=400)
     
     finding_id = validated_data.get('audit_finding_id')
 
@@ -3507,7 +3561,7 @@ def create_incident_from_audit_finding(request):
 def schedule_manual_incident(request):
     """
     Schedule manual incident
-    MULTI-TENANCY: Only schedules incidents for user's tenant
+    MULTI-TENANCY: Only schedules incidents for user s tenant
     """
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
@@ -3538,7 +3592,7 @@ def schedule_manual_incident(request):
     try:
         validated_data = validate_json_request_body(request, validation_rules)
     except ValidationError as e:
-        return Response({'error': str(e)}, status=400)
+        return Response({'error': 'An internal error occurred'}, status=400)
     
     incident_id = validated_data.get('incident_id')
     try:
@@ -3630,7 +3684,7 @@ def schedule_manual_incident(request):
 def reject_incident(request):
     """
     Reject incident
-    MULTI-TENANCY: Only rejects incidents for user's tenant
+    MULTI-TENANCY: Only rejects incidents for user s tenant
     """
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
@@ -3671,7 +3725,7 @@ def reject_incident(request):
     try:
         validated_data = validate_json_request_body(request, validation_rules)
     except ValidationError as e:
-        return Response({'error': str(e)}, status=400)
+        return Response({'error': 'An internal error occurred'}, status=400)
     
     incident_id = validated_data.get('incident_id')
     audit_finding_id = validated_data.get('audit_finding_id')
@@ -3877,15 +3931,8 @@ def _validate_and_sanitize_client_export_data(raw_data):
 def export_incidents(request):
     """
     Export incidents to various file formats
-    MULTI-TENANCY: Only exports incidents for user's tenant
-    """
-    # MULTI-TENANCY: Extract tenant_id from request
-    tenant_id = get_tenant_id_from_request(request)
-    """
+    MULTI-TENANCY: Only exports incidents for user s tenant
 
-export_incidents.throttle_scope = 'export_incidents'
-    Export incidents to various file formats.
-    
     Supported formats:
     - xlsx (Excel)
     - pdf (PDF)
@@ -3894,6 +3941,9 @@ export_incidents.throttle_scope = 'export_incidents'
     - xml (XML)
     - txt (Text)
     """
+    export_incidents.throttle_scope = 'export_incidents'
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
     # Skip RBAC permission check since we're using AllowAny
     client_ip = get_client_ip(request)
     user_id = request.data.get('user_id')
@@ -3940,7 +3990,7 @@ export_incidents.throttle_scope = 'export_incidents'
         try:
             validated_data = validate_json_request_body(request, validation_rules)
         except ValidationError as e:
-            return Response({'error': str(e)}, status=400)
+            return Response({'error': 'An internal error occurred'}, status=400)
         
         # Get validated request data
         file_format = validated_data.get('file_format', 'xlsx')
@@ -3963,15 +4013,17 @@ export_incidents.throttle_scope = 'export_incidents'
             try:
                 incidents_data = _validate_and_sanitize_client_export_data(request.data['data'])
             except ValidationError as e:
-                return Response({'error': str(e)}, status=400)
+                return Response({'error': 'An internal error occurred'}, status=400)
         else:
             filters = export_options.get('filters', {}) if isinstance(export_options.get('filters', {}), dict) else {}
 
             def _to_int(value):
                 try:
-                    if value in (None, '', 'all'):
+                    if value in (None, '', 'all', 'undefined', 'null'):
                         return None
-                    return int(value)
+                    val = int(value)
+                    # SECURITY: Ensure ID is positive
+                    return val if val > 0 else None
                 except (TypeError, ValueError):
                     return None
 
@@ -4101,7 +4153,7 @@ export_incidents.throttle_scope = 'export_incidents'
     except ValidationError as e:
         return Response({
             'success': False,
-            'error': str(e)
+            'error': 'An internal error occurred'
         }, status=400)
 
     except Exception as e:
@@ -4115,13 +4167,13 @@ export_incidents.throttle_scope = 'export_incidents'
             entityType="Export",
             logLevel="ERROR",
             ipAddress=client_ip,
-            additionalInfo={"error": str(e)}
+            additionalInfo={"error": "An internal error occurred"}
         )
         
         debug_print(f"Export error: {str(e)}")
         return Response({
             'success': False,
-            'error': str(e)
+            'error': 'An internal error occurred'
         }, status=500) 
 
 @api_view(['GET'])
@@ -4131,7 +4183,7 @@ export_incidents.throttle_scope = 'export_incidents'
 def get_audit_findings(request):
     """
     Get audit finding incidents from incidents table where origin = 'Audit Finding'
-    MULTI-TENANCY: Only returns findings for user's tenant
+    MULTI-TENANCY: Only returns findings for user s tenant
     """
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
@@ -4307,11 +4359,13 @@ def get_audit_findings(request):
 @permission_classes([IncidentViewPermission])
 @throttle_classes([ScopedRateThrottle])
 @rbac_required(required_permission='view_all_incident')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def export_audit_findings(request):
-    debug_print(f"Exporting audit findings: entereeeeeeeeeeeedddddddddd")
     """
     Export audit finding incidents to various file formats.
-    
+    MULTI-TENANCY: Only exports findings for user s tenant
+
     Supported formats:
     - xlsx (Excel)
     - pdf (PDF)
@@ -4320,6 +4374,7 @@ def export_audit_findings(request):
     - xml (XML)
     - txt (Text)
     """
+    export_audit_findings.throttle_scope = 'export_incidents'
     try:
         from django.utils import timezone
         
@@ -4352,7 +4407,7 @@ def export_audit_findings(request):
         try:
             validated_data = validate_json_request_body(request, validation_rules)
         except ValidationError as e:
-            return Response({'error': str(e)}, status=400)
+            return Response({'error': 'An internal error occurred'}, status=400)
         
         # Get validated request data
         file_format = validated_data.get('file_format', 'xlsx')
@@ -4380,7 +4435,7 @@ def export_audit_findings(request):
             try:
                 audit_findings_data = _validate_and_sanitize_client_export_data(validated_data['data'])
             except ValidationError as e:
-                return Response({'error': str(e)}, status=400)
+                return Response({'error': 'An internal error occurred'}, status=400)
         else:
             # Fetch audit finding incidents from database with filters
             audit_findings_query = Incident.objects.filter(Origin__in=['Audit Finding', 'AuditFinding', 'Compliance Gap'])
@@ -4465,6 +4520,10 @@ def export_audit_findings(request):
         export_options['record_count'] = len(audit_findings_data)
         export_options['export_type'] = 'audit_findings'
         
+        # CSV formula-injection hardening at endpoint level as defense-in-depth.
+        if str(file_format).lower() == 'csv':
+            audit_findings_data = sanitize_csv_dataset(audit_findings_data)
+
         # Call the export service
         export_result = export_data(
             data=audit_findings_data,
@@ -4479,22 +4538,24 @@ def export_audit_findings(request):
     except Exception as e:
         debug_print(f"Audit findings export error: {str(e)}")
         
-        # Log export error
+        # Log export error with full details
         send_log(
             module="Incident",
             actionType="EXPORT_AUDIT_FINDINGS_ERROR",
-            description=f"Audit findings export failed: {str(e)}",
+            description=f"Audit findings export failed",
             userId=request.user.id if request.user.is_authenticated else None,
             userName=request.user.username if request.user.is_authenticated else None,
             entityType="AuditFinding",
             logLevel="ERROR",
-            ipAddress=get_client_ip(request)
+            ipAddress=get_client_ip(request),
+            additionalInfo={"error": "An internal error occurred"}
         )
         
+        # Return generic error to prevent infrastructure leakage
         return Response({
             'success': False,
-            'error': str(e)
-        }, status=500) 
+            'message': 'An internal error occurred while processing the export. Please contact support.'
+        }, status=500)
 
 @api_view(['GET'])
 @permission_classes([AuditFindingsAccessPermission])
@@ -4606,7 +4667,7 @@ def audit_findings_list(request):
                         value, 'complied', ['0', '1', '2'], required=False
                     )
             except ValidationError as e:
-                return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({'error': 'An internal error occurred'}, status=status.HTTP_400_BAD_REQUEST)
         
         # If no complied values specified, default to showing non-compliant (0) and partially compliant (1)
         if not complied_values:
@@ -4798,10 +4859,8 @@ def get_compliances(request):
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def audit_finding_detail(request, compliance_id):
-    """
-    Get detailed information for a specific audit finding by compliance ID
-    MULTI-TENANCY: Only returns findings for user's tenant
-    """
+    # Get detailed information for a specific audit finding by compliance ID
+    # MULTI-TENANCY: Only returns findings for user s tenant
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
     try:
@@ -5004,7 +5063,7 @@ def audit_finding_incident_detail(request, incident_id):
 def user_incidents(request, user_id):
     """
     Get incidents assigned BY a specific user (where user is the assigner)
-    MULTI-TENANCY: Only returns incidents for user's tenant
+    MULTI-TENANCY: Only returns incidents for user s tenant
     """
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
@@ -5013,7 +5072,7 @@ def user_incidents(request, user_id):
         try:
             validated_user_id = validate_path_parameter(user_id, 'user_id', 'integer')
         except ValidationError as e:
-            return JsonResponse({'error': str(e)}, status=400)
+            return JsonResponse({'error': 'An internal error occurred'}, status=400)
         
         # Get optional framework_id parameter from query string
         framework_id = request.GET.get('framework_id', None)
@@ -5101,7 +5160,7 @@ def incident_reviewer_tasks(request, user_id):
         try:
             validated_user_id = validate_path_parameter(user_id, 'user_id', 'integer')
         except ValidationError as e:
-            return JsonResponse({'error': str(e)}, status=400)
+            return JsonResponse({'error': 'An internal error occurred'}, status=400)
         
         # Get optional framework_id parameter from query string
         framework_id = request.GET.get('framework_id', None)
@@ -5168,7 +5227,7 @@ def incident_mitigations(request, incident_id):
         try:
             validated_incident_id = validate_path_parameter(incident_id, 'incident_id', 'integer')
         except ValidationError as e:
-            return JsonResponse({'error': str(e)}, status=400)
+            return JsonResponse({'error': 'An internal error occurred'}, status=400)
         
         incident = Incident.objects.get(IncidentId=validated_incident_id)
         
@@ -5340,7 +5399,7 @@ def assign_incident_reviewer(request):
         try:
             validated_data = validate_json_request_body(request, validation_rules)
         except ValidationError as e:
-            return JsonResponse({'error': str(e)}, status=400)
+            return JsonResponse({'error': 'An internal error occurred'}, status=400)
         
         incident_id = validated_data.get('incident_id')
         reviewer_id = validated_data.get('reviewer_id')
@@ -5377,7 +5436,7 @@ def assign_incident_reviewer(request):
         debug_print(f"Error assigning incident reviewer: {str(e)}")
         return JsonResponse({
             'success': False,
-            'error': str(e),
+            'error': 'An internal error occurred',
             'IncidentId': incident_id
         }, status=500)
 
@@ -5392,7 +5451,7 @@ def incident_review_data(request, incident_id):
         try:
             validated_incident_id = validate_path_parameter(incident_id, 'incident_id', 'integer')
         except ValidationError as e:
-            return JsonResponse({'error': str(e)}, status=400)
+            return JsonResponse({'error': 'An internal error occurred'}, status=400)
         
         incident = Incident.objects.get(IncidentId=validated_incident_id)
         
@@ -5543,7 +5602,7 @@ def incident_review_data(request, incident_id):
         return JsonResponse({'error': 'Incident not found'}, status=404)
     except Exception as e:
         debug_print(f"Error fetching incident review data: {str(e)}")
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': 'An internal error occurred'}, status=500)
 
 @api_view(['GET'])
 @authentication_classes([])
@@ -5559,7 +5618,7 @@ def incident_versions(request, incident_id):
         try:
             validated_incident_id = validate_path_parameter(incident_id, 'incident_id', 'integer')
         except ValidationError as e:
-            return JsonResponse({'error': str(e)}, status=400)
+            return JsonResponse({'error': 'An internal error occurred'}, status=400)
         
         # Get all incident approval entries for this incident, ordered by date (newest first)
         all_entries = IncidentApproval.objects.filter(
@@ -5638,7 +5697,7 @@ def incident_versions(request, incident_id):
         
     except Exception as e:
         debug_print(f"Error fetching incident versions: {str(e)}")
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': 'An internal error occurred'}, status=500)
 
 @api_view(['GET'])
 @authentication_classes([])
@@ -5654,7 +5713,7 @@ def incident_version_detail(request, incident_id, version):
         try:
             validated_incident_id = validate_path_parameter(incident_id, 'incident_id', 'integer')
         except ValidationError as e:
-            return JsonResponse({'error': str(e)}, status=400)
+            return JsonResponse({'error': 'An internal error occurred'}, status=400)
         
         # Get the specific version entry
         try:
@@ -5721,7 +5780,7 @@ def incident_version_detail(request, incident_id, version):
         
     except Exception as e:
         debug_print(f"Error fetching incident version detail: {str(e)}")
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': 'An internal error occurred'}, status=500)
 
 @api_view(['GET'])
 @permission_classes([AuditViewPermission])
@@ -5736,7 +5795,7 @@ def audit_finding_versions(request, incident_id):
         try:
             validated_incident_id = validate_path_parameter(incident_id, 'incident_id', 'integer')
         except ValidationError as e:
-            return JsonResponse({'error': str(e)}, status=400)
+            return JsonResponse({'error': 'An internal error occurred'}, status=400)
         
         # Get all incident approval entries for this audit finding, ordered by date (newest first)
         all_entries = IncidentApproval.objects.filter(
@@ -5815,7 +5874,7 @@ def audit_finding_versions(request, incident_id):
         
     except Exception as e:
         debug_print(f"Error fetching audit finding versions: {str(e)}")
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': 'An internal error occurred'}, status=500)
 
 @api_view(['GET'])
 @permission_classes([AuditViewPermission])
@@ -5829,7 +5888,7 @@ def audit_finding_version_detail(request, incident_id, version):
         try:
             validated_incident_id = validate_path_parameter(incident_id, 'incident_id', 'integer')
         except ValidationError as e:
-            return JsonResponse({'error': str(e)}, status=400)
+            return JsonResponse({'error': 'An internal error occurred'}, status=400)
         
         # Get the specific version entry
         try:
@@ -5896,7 +5955,7 @@ def audit_finding_version_detail(request, incident_id, version):
         
     except Exception as e:
         debug_print(f"Error fetching audit finding version detail: {str(e)}")
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': 'An internal error occurred'}, status=500)
 
 @api_view(['POST'])
 @authentication_classes([])
@@ -5930,7 +5989,7 @@ def complete_incident_review(request):
         try:
             validated_data = validate_json_request_body(request, validation_rules)
         except ValidationError as e:
-            return JsonResponse({'error': str(e)}, status=400)
+            return JsonResponse({'error': 'An internal error occurred'}, status=400)
         
         incident_id = validated_data.get('incident_id')
         approved_raw = validated_data.get('approved')
@@ -6166,7 +6225,7 @@ def complete_incident_review(request):
         
         return JsonResponse({
             'success': False,
-            'error': str(e),
+            'error': 'An internal error occurred',
             'IncidentId': incident_id
         }, status=500)
 
@@ -6200,7 +6259,7 @@ def submit_incident_assessment(request):
         try:
             validated_data = validate_json_request_body(request, validation_rules)
         except ValidationError as e:
-            return JsonResponse({'error': str(e)}, status=400)
+            return JsonResponse({'error': 'An internal error occurred'}, status=400)
         
         # Get raw data for fields not handled by validation
         if hasattr(request, 'data') and request.data:
@@ -6381,7 +6440,7 @@ def submit_incident_assessment(request):
         
         return JsonResponse({
             'success': False,
-            'error': str(e),
+            'error': 'An internal error occurred',
             'IncidentId': incident_id
         }, status=500)
 
@@ -6396,7 +6455,7 @@ def incident_approval_data(request, incident_id):
         try:
             validated_incident_id = validate_path_parameter(incident_id, 'incident_id', 'integer')
         except ValidationError as e:
-            return JsonResponse({'error': str(e)}, status=400)
+            return JsonResponse({'error': 'An internal error occurred'}, status=400)
         
         incident = Incident.objects.get(IncidentId=validated_incident_id)
         
@@ -6434,7 +6493,7 @@ def incident_approval_data(request, incident_id):
         return JsonResponse({'error': 'Incident not found'}, status=404)
     except Exception as e:
         debug_print(f"Error fetching incident approval data: {str(e)}")
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': 'An internal error occurred'}, status=500)
 
 # Audit Finding User Task Endpoints
 @api_view(['GET'])
@@ -6447,7 +6506,7 @@ def user_audit_findings(request, user_id):
         try:
             validated_user_id = validate_path_parameter(user_id, 'user_id', 'integer')
         except ValidationError as e:
-            return JsonResponse({'error': str(e)}, status=400)
+            return JsonResponse({'error': 'An internal error occurred'}, status=400)
         
         # Get optional framework_id parameter from query string
         framework_id = request.GET.get('framework_id', None)
@@ -6495,7 +6554,7 @@ def user_audit_findings(request, user_id):
         return JsonResponse(audit_finding_list, safe=False)
     except Exception as e:
         debug_print(f"Error fetching user audit findings: {str(e)}")
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': 'An internal error occurred'}, status=500)
 
 @api_view(['GET'])
 @permission_classes([AuditFindingsAccessPermission])
@@ -6506,7 +6565,7 @@ def audit_finding_reviewer_tasks(request, user_id):
         try:
             validated_user_id = validate_path_parameter(user_id, 'user_id', 'integer')
         except ValidationError as e:
-            return JsonResponse({'error': str(e)}, status=400)
+            return JsonResponse({'error': 'An internal error occurred'}, status=400)
         
         # Get optional framework_id parameter from query string
         framework_id = request.GET.get('framework_id', None)
@@ -6551,7 +6610,7 @@ def audit_finding_reviewer_tasks(request, user_id):
         return JsonResponse(audit_finding_list, safe=False)
     except Exception as e:
         debug_print(f"Error fetching audit finding reviewer tasks: {str(e)}")
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': 'An internal error occurred'}, status=500)
 
 @api_view(['GET'])
 @permission_classes([AuditViewPermission])
@@ -6563,7 +6622,7 @@ def audit_finding_mitigations(request, incident_id):
         try:
             validated_incident_id = validate_path_parameter(incident_id, 'incident_id', 'integer')
         except ValidationError as e:
-            return JsonResponse({'error': str(e)}, status=400)
+            return JsonResponse({'error': 'An internal error occurred'}, status=400)
         
         incident = Incident.objects.get(IncidentId=validated_incident_id)
         
@@ -6697,7 +6756,7 @@ def audit_finding_mitigations(request, incident_id):
         return JsonResponse({'error': 'Audit finding incident not found'}, status=404)
     except Exception as e:
         debug_print(f"Error fetching audit finding mitigations: {str(e)}")
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': 'An internal error occurred'}, status=500)
 
 @api_view(['POST'])
 @permission_classes([AuditAssignPermission])
@@ -6743,7 +6802,7 @@ def assign_audit_finding_reviewer(request):
         return JsonResponse({'error': 'Audit finding incident not found'}, status=404)
     except Exception as e:
         debug_print(f"Error assigning audit finding reviewer: {str(e)}")
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': 'An internal error occurred'}, status=500)
 
 @api_view(['GET'])
 @permission_classes([AuditReviewPermission])
@@ -6755,7 +6814,7 @@ def audit_finding_review_data(request, incident_id):
         try:
             validated_incident_id = validate_path_parameter(incident_id, 'incident_id', 'integer')
         except ValidationError as e:
-            return JsonResponse({'error': str(e)}, status=400)
+            return JsonResponse({'error': 'An internal error occurred'}, status=400)
         
         incident = Incident.objects.get(IncidentId=validated_incident_id)
         
@@ -6832,7 +6891,7 @@ def audit_finding_review_data(request, incident_id):
         return JsonResponse({'error': 'Audit finding incident not found'}, status=404)
     except Exception as e:
         debug_print(f"Error fetching audit finding review data: {str(e)}")
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': 'An internal error occurred'}, status=500)
 
 @api_view(['POST'])
 @permission_classes([AuditReviewPermission])
@@ -6940,7 +6999,7 @@ def complete_audit_finding_review(request):
         })
     except Exception as e:
         debug_print(f"Error completing audit finding review: {str(e)}")
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': 'An internal error occurred'}, status=500)
 
 @api_view(['POST'])
 @authentication_classes([])
@@ -7047,7 +7106,7 @@ def submit_audit_finding_assessment(request):
         })
     except Exception as e:
         debug_print(f"Error submitting audit finding assessment: {str(e)}")
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': 'An internal error occurred'}, status=500)
 
 @api_view(['GET'])
 @authentication_classes([])
@@ -7141,7 +7200,7 @@ def test_notification(request):
         try:
             validated_data = validate_json_request_body(request, validation_rules)
         except ValidationError as e:
-            return Response({'error': str(e)}, status=400)
+            return Response({'error': 'An internal error occurred'}, status=400)
         
         notification_service = NotificationService()
         
@@ -7185,7 +7244,7 @@ def test_notification(request):
         debug_print(f"Error in test notification: {str(e)}")
         return Response({
             'success': False,
-            'error': str(e)
+            'error': 'An internal error occurred'
         }, status=500)
 
 
@@ -7203,7 +7262,7 @@ def debug_category_data(request):
         })
     except Exception as e:
         debug_print(f"Error fetching debug data: {str(e)}")
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': 'An internal error occurred'}, status=500)
 
 @api_view(['POST'])
 @authentication_classes([])
@@ -7308,7 +7367,7 @@ from rest_framework.permissions import IsAuthenticated
 # 4. JSON OUTPUT ENCODING:
 #    safe_error = SecureOutputEncoder.sanitize_error_message(error)
 #    return JsonResponse({'error': safe_error})  # GOOD
-#    return JsonResponse({'error': str(e)})      # BAD
+#    return JsonResponse({'error': 'An internal error occurred'})      # BAD
 
 # Try to import python-magic, fall back to mimetypes if not available
 try:
@@ -7465,7 +7524,7 @@ class SecureFileUploadHandler:
         self._ensure_directories()
     
     def _ensure_directories(self):
-        """Create secure upload directories if they don't exist"""
+        "Create secure upload directories if they do not exist"
         try:
             # Convert to absolute paths from the project root
             from django.conf import settings
@@ -8120,7 +8179,7 @@ class FileUploadView(APIView):
                     ipAddress=get_client_ip(request),
                     additionalInfo={
                         'filename': file.name,
-                        'error': str(e),
+                        'error': 'An internal error occurred',
                         'incident_id': incident_id,
                         'mitigation_number': mitigation_number,
                         'platform': 'Render',
@@ -8150,7 +8209,7 @@ class FileUploadView(APIView):
                 entityType="File",
                 logLevel="ERROR",
                 ipAddress=get_client_ip(request),
-                additionalInfo={'error': str(e)}
+                additionalInfo={'error': 'An internal error occurred'}
             )
             
             debug_print(f"[SECURITY] File upload error: {str(e)}")
@@ -8399,7 +8458,7 @@ def upload_evidence_file(request):
             ipAddress=get_client_ip(request),
             logLevel='ERROR',
             additionalInfo={
-                'error': str(e),
+                'error': 'An internal error occurred',
                 'incident_id': request.POST.get('incident_id')
             }
         )
@@ -8422,7 +8481,7 @@ def get_categories(request):
         return JsonResponse(list(categories), safe=False)
     except Exception as e:
         debug_print(f"Error fetching categories: {str(e)}")
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': 'An internal error occurred'}, status=500)
 
 @api_view(['GET'])
 @authentication_classes([])
@@ -8460,7 +8519,7 @@ def get_incident_categories(request):
         return JsonResponse(all_categories, safe=False)
     except Exception as e:
         debug_print(f"Error fetching incident categories: {str(e)}")
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': 'An internal error occurred'}, status=500)
 
 @api_view(['POST'])
 @authentication_classes([])
@@ -8483,7 +8542,7 @@ def add_incident_category(request):
         try:
             validated_data = validate_json_request_body(request, validation_rules)
         except ValidationError as e:
-            return JsonResponse({'error': str(e)}, status=400)
+            return JsonResponse({'error': 'An internal error occurred'}, status=400)
         
         category_value = validated_data.get('value', '').strip()
         
@@ -8504,7 +8563,7 @@ def add_incident_category(request):
             
     except Exception as e:
         debug_print(f"Error adding incident category: {str(e)}")
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': 'An internal error occurred'}, status=500)
 
 @api_view(['GET'])
 @authentication_classes([])
@@ -8580,7 +8639,7 @@ def get_business_units(request):
         return JsonResponse(list(business_units), safe=False)
     except Exception as e:
         debug_print(f"Error fetching business units: {str(e)}")
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': 'An internal error occurred'}, status=500)
 
 @api_view(['POST'])
 @authentication_classes([])
@@ -8603,7 +8662,7 @@ def add_category(request):
         try:
             validated_data = validate_json_request_body(request, validation_rules)
         except ValidationError as e:
-            return JsonResponse({'error': str(e)}, status=400)
+            return JsonResponse({'error': 'An internal error occurred'}, status=400)
         
         category_value = validated_data.get('value', '').strip()
         
@@ -8624,7 +8683,7 @@ def add_category(request):
             
     except Exception as e:
         debug_print(f"Error adding category: {str(e)}")
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': 'An internal error occurred'}, status=500)
 
 @api_view(['POST'])
 @authentication_classes([])
@@ -8647,7 +8706,7 @@ def add_business_unit(request):
         try:
             validated_data = validate_json_request_body(request, validation_rules)
         except ValidationError as e:
-            return JsonResponse({'error': str(e)}, status=400)
+            return JsonResponse({'error': 'An internal error occurred'}, status=400)
         
         business_unit_value = validated_data.get('value', '').strip()
         
@@ -8668,7 +8727,7 @@ def add_business_unit(request):
             
     except Exception as e:
         debug_print(f"Error adding business unit: {str(e)}")
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': 'An internal error occurred'}, status=500)
 
 @api_view(['GET'])
 @authentication_classes([])
@@ -8713,7 +8772,7 @@ def test_s3_integration(request):
         debug_print(f"S3 integration test failed: {str(e)}")
         return JsonResponse({
             'success': False,
-            'error': str(e),
+            'error': 'An internal error occurred',
             'message': 'S3 microservice integration test failed',
             'platform': 'Render'
         }, status=500)
@@ -8803,7 +8862,7 @@ def seed_sample_data(request):
         
     except Exception as e:
         debug_print(f"Error seeding sample data: {str(e)}")
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': 'An internal error occurred'}, status=500)
 
 @api_view(['GET'])
 @authentication_classes([])
@@ -8819,7 +8878,7 @@ def debug_category_data(request):
         })
     except Exception as e:
         debug_print(f"Error fetching debug data: {str(e)}")
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': 'An internal error occurred'}, status=500)
 
 @api_view(['POST'])
 @authentication_classes([])
@@ -9623,7 +9682,7 @@ def incident_dashboard(request):
             entityType="Dashboard",
             logLevel="ERROR",
             ipAddress=client_ip,
-            additionalInfo={"error": str(e)}
+            additionalInfo={"error": "An internal error occurred"}
         )
         
         # Return an error response
@@ -10533,5 +10592,5 @@ def get_incident_business_units(request):
         debug_print(f"Error fetching incident business units: {str(e)}")
         return JsonResponse({
             'success': False,
-            'error': str(e)
+            'error': 'An internal error occurred'
         }, status=500)

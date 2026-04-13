@@ -1,16 +1,13 @@
-import axios from 'axios';
+import apiService from '@/services/apiService';
+import { API_ENDPOINTS } from '@/config/api.js';
 
 class AIRecommendationService {
-  constructor() {
-    this.baseURL = 'http://localhost:8000';
-    this.aiEndpoint = '/api/ai-recommendations/';
-  }
-
   async getRecommendations(taskData) {
     try {
       console.log('AI Service: Getting recommendations for:', taskData);
       
-      const response = await axios.post(`${this.baseURL}${this.aiEndpoint}`, {
+      // First update the audit status to 'Under review' using centralized apiService
+      const data = await apiService.post(API_ENDPOINTS.AI_RECOMMENDATIONS, {
         review_id: taskData.reviewId || `audit_${Date.now()}`,
         review_type: 'audit',
         title: taskData.title || taskData.auditTitle,
@@ -21,11 +18,11 @@ class AIRecommendationService {
         max_recommendations: 5
       });
 
-      console.log('AI Service: Response received:', response.data);
+      console.log('AI Service: Response received:', data);
       
       return {
         success: true,
-        data: response.data
+        data: data
       };
     } catch (error) {
       console.error('AI Recommendation Error:', error);
@@ -38,7 +35,7 @@ class AIRecommendationService {
 
   async getRiskRecommendations(taskData) {
     try {
-      const response = await axios.post(`${this.baseURL}${this.aiEndpoint}`, {
+      const data = await apiService.post(API_ENDPOINTS.AI_RECOMMENDATIONS, {
         review_id: taskData.reviewId || `risk_${Date.now()}`,
         review_type: 'risk',
         title: taskData.title || taskData.riskTitle,
@@ -51,7 +48,7 @@ class AIRecommendationService {
 
       return {
         success: true,
-        data: response.data
+        data: data
       };
     } catch (error) {
       console.error('AI Risk Recommendation Error:', error);
@@ -64,7 +61,7 @@ class AIRecommendationService {
 
   async getPolicyRecommendations(taskData) {
     try {
-      const response = await axios.post(`${this.baseURL}${this.aiEndpoint}`, {
+      const data = await apiService.post(API_ENDPOINTS.AI_RECOMMENDATIONS, {
         review_id: taskData.reviewId || `policy_${Date.now()}`,
         review_type: 'policy',
         title: taskData.title || taskData.policyTitle,
@@ -77,7 +74,7 @@ class AIRecommendationService {
 
       return {
         success: true,
-        data: response.data
+        data: data
       };
     } catch (error) {
       console.error('AI Policy Recommendation Error:', error);

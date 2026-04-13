@@ -57,7 +57,7 @@ export default {
       
       // Save to backend session
       try {
-        const userId = localStorage.getItem('user_id') || 'default_user'
+        const userId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || 'default_user'
         const frameworkId = (id === 'all' || !id) ? null : id
         
         console.log('💾 Saving framework to backend session:', { frameworkId, userId })
@@ -87,7 +87,7 @@ export default {
     
     async loadFrameworkFromSession({ commit }) {
       try {
-        const userId = localStorage.getItem('user_id') || 'default_user'
+        const userId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || 'default_user'
         console.log('🔄 Loading framework from session for user:', userId)
         
         const response = await axios.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED, {
@@ -133,7 +133,7 @@ export default {
       
       // Save "All Frameworks" (null) to backend session
       try {
-        const userId = localStorage.getItem('user_id') || 'default_user'
+        const userId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || 'default_user'
         console.log('🔄 Clearing framework from backend session (All Frameworks selected)')
         
         const response = await axios.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, {

@@ -329,7 +329,8 @@
 </template>
 
 <script>
-import { api } from '../../data/api';
+import apiService from '@/services/apiService';
+import { API_ENDPOINTS } from '@/config/api.js';
 import auditorDataService from '@/services/auditorService'; // NEW: Use cached auditor data
 import { AccessUtils } from '@/utils/accessUtils';
 
@@ -405,17 +406,17 @@ export default {
       } else {
         // Fallback: Fetch from API if cache is empty
         console.log('⚠️ [Audits] No cached data found, fetching from API...');
-      api.getAllAudits()
-        .then(res => {
-            console.log("Audit data received from API:", res.data);
-          if (Array.isArray(res.data)) {
-            this.auditData = res.data;
-            this.filteredAuditData = res.data;
+      apiService.get('/api/audits/')
+        .then(data => {
+            console.log("Audit data received from API:", data);
+          if (Array.isArray(data)) {
+            this.auditData = data;
+            this.filteredAuditData = data;
               // Update cache
-              auditorDataService.setData('audits', res.data);
+              auditorDataService.setData('audits', data);
               console.log('ℹ️ [Audits] Cache updated after direct API fetch');
           } else {
-            console.warn("Received non-array audit data:", res.data);
+            console.warn("Received non-array audit data:", data);
             this.auditData = [];
             this.filteredAuditData = [];
           }
@@ -517,10 +518,10 @@ export default {
       this.showAuditDetails = true;
       
       console.log("Fetching audit details for ID:", auditId);
-      api.getAuditDetails(auditId)
-        .then(response => {
-          console.log("Audit details received:", response.data);
-          this.currentAudit = response.data;
+      apiService.get(API_ENDPOINTS.AUDITS(auditId))
+        .then(data => {
+          console.log("Audit details received:", data);
+          this.currentAudit = data;
           this.loadingAuditDetails = false;
         })
         .catch(err => {
@@ -593,9 +594,9 @@ export default {
       this.error = '';
       
       // Call API to update status
-      api.updateAuditStatus(audit.audit_id, newStatus)
-        .then(response => {
-          console.log("Status updated successfully:", response.data);
+      apiService.post(API_ENDPOINTS.AUDIT_STATUS(audit.audit_id), { status: newStatus })
+        .then(data => {
+          console.log("Status updated successfully:", data);
           // Update local data
           audit.status = newStatus;
           this.loading = false;

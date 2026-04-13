@@ -281,9 +281,9 @@ import { useStore } from 'vuex'
 import { Chart, ArcElement, BarElement, CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend } from 'chart.js'
 import { Doughnut, Bar, Line } from 'vue-chartjs'
 import '@fortawesome/fontawesome-free/css/all.min.css'
-import axios from 'axios'
+import apiService from '@/services/apiService'
 import { AccessUtils } from '@/utils/accessUtils'
-import { API_ENDPOINTS } from '../../config/api.js'
+import { API_ENDPOINTS } from '@/config/api.js'
 import html2canvas from 'html2canvas'
 import jsPDF from 'jspdf'
 import '@/assets/css/dropdown.css'
@@ -505,12 +505,12 @@ export default {
         }
         
         const url = params.toString() ? `${API_ENDPOINTS.AUDIT_COMPLETION_RATE}?${params}` : API_ENDPOINTS.AUDIT_COMPLETION_RATE
-        const response = await axios.get(url)
-        if (response.data) {
-          auditCompletionData.current_month_rate = response.data.current_month_rate
-          auditCompletionData.previous_month_rate = response.data.previous_month_rate
-          auditCompletionData.change_in_rate = response.data.change_in_rate
-          auditCompletionData.is_positive_change = response.data.is_positive_change
+        const data = await apiService.get(url)
+        if (data) {
+          auditCompletionData.current_month_rate = data.current_month_rate
+          auditCompletionData.previous_month_rate = data.previous_month_rate
+          auditCompletionData.change_in_rate = data.change_in_rate
+          auditCompletionData.is_positive_change = data.is_positive_change
         }
       } catch (error) {
         console.error('Error fetching audit completion rate:', error)
@@ -532,12 +532,12 @@ export default {
         }
         
         const url = params.toString() ? `${API_ENDPOINTS.AUDIT_TOTAL_AUDITS}?${params}` : API_ENDPOINTS.AUDIT_TOTAL_AUDITS
-        const response = await axios.get(url)
-        if (response.data) {
-          totalAuditsData.total_current_month = response.data.total_current_month
-          totalAuditsData.total_previous_month = response.data.total_previous_month
-          totalAuditsData.change_in_total = response.data.change_in_total
-          totalAuditsData.is_positive_change = response.data.is_positive_change
+        const data = await apiService.get(url)
+        if (data) {
+          totalAuditsData.total_current_month = data.total_current_month
+          totalAuditsData.total_previous_month = data.total_previous_month
+          totalAuditsData.change_in_total = data.change_in_total
+          totalAuditsData.is_positive_change = data.is_positive_change
         }
       } catch (error) {
         console.error('Error fetching total audits:', error)
@@ -559,13 +559,13 @@ export default {
         }
         
         const url = params.toString() ? `${API_ENDPOINTS.AUDIT_OPEN_AUDITS}?${params}` : API_ENDPOINTS.AUDIT_OPEN_AUDITS
-        const response = await axios.get(url)
-        if (response.data) {
-          openAuditsData.open_this_week = response.data.open_this_week
-          openAuditsData.open_last_week = response.data.open_last_week
-          openAuditsData.change_in_open = response.data.change_in_open
-          openAuditsData.percent_change = response.data.percent_change
-          openAuditsData.is_improvement = response.data.is_improvement
+        const data = await apiService.get(url)
+        if (data) {
+          openAuditsData.open_this_week = data.open_this_week
+          openAuditsData.open_last_week = data.open_last_week
+          openAuditsData.change_in_open = data.change_in_open
+          openAuditsData.percent_change = data.percent_change
+          openAuditsData.is_improvement = data.is_improvement
         }
       } catch (error) {
         console.error('Error fetching open audits:', error)
@@ -587,13 +587,13 @@ export default {
         }
         
         const url = params.toString() ? `${API_ENDPOINTS.AUDIT_COMPLETED_AUDITS}?${params}` : API_ENDPOINTS.AUDIT_COMPLETED_AUDITS
-        const response = await axios.get(url)
-        if (response.data) {
-          completedAuditsData.this_week_count = response.data.this_week_count
-          completedAuditsData.last_week_count = response.data.last_week_count
-          completedAuditsData.change_in_completed = response.data.change_in_completed
-          completedAuditsData.percent_change = response.data.percent_change
-          completedAuditsData.is_improvement = response.data.is_improvement
+        const data = await apiService.get(url)
+        if (data) {
+          completedAuditsData.this_week_count = data.this_week_count
+          completedAuditsData.last_week_count = data.last_week_count
+          completedAuditsData.change_in_completed = data.change_in_completed
+          completedAuditsData.percent_change = data.percent_change
+          completedAuditsData.is_improvement = data.is_improvement
         }
       } catch (error) {
         console.error('Error fetching completed audits:', error)
@@ -607,13 +607,13 @@ export default {
     const fetchFrameworks = async () => {
       try {
         console.log('Fetching frameworks...')
-        const response = await axios.get(API_ENDPOINTS.COMPLIANCE_ALL_POLICIES_FRAMEWORKS, {
-          params: { active_only: 'true' }
+        const data = await apiService.get(API_ENDPOINTS.COMPLIANCE_ALL_POLICIES_FRAMEWORKS, {
+          active_only: 'true'
         })
-        console.log('Frameworks response:', response.data)
-        if (response.data && Array.isArray(response.data)) {
+        console.log('Frameworks response:', data)
+        if (data && Array.isArray(data)) {
           // Filter to only show active frameworks
-          const activeFrameworks = response.data.filter(fw => {
+          const activeFrameworks = data.filter(fw => {
             const status = fw.status || fw.ActiveInactive || '';
             return status.toLowerCase() === 'active';
           });
@@ -644,13 +644,13 @@ export default {
     const checkSelectedFrameworkFromSession = async () => {
       try {
         console.log('🔍 DEBUG: Checking for selected framework from session in Auditor Dashboard...')
-        const response = await axios.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED)
-        console.log('📊 DEBUG: Selected framework response:', response.data)
+        const data = await apiService.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED)
+        console.log('📊 DEBUG: Selected framework response:', data)
         
-        if (response.data && response.data.success) {
+        if (data && data.success) {
           // Check if a framework is selected (not null)
-          if (response.data.frameworkId) {
-            const sessionFrameworkId = response.data.frameworkId
+          if (data.frameworkId) {
+            const sessionFrameworkId = data.frameworkId
             console.log('✅ DEBUG: Found selected framework in session:', sessionFrameworkId)
             
             // Check if this framework exists in our loaded frameworks
@@ -693,12 +693,12 @@ export default {
     const fetchPolicies = async (frameworkId) => {
       try {
         console.log('Fetching policies for framework:', frameworkId)
-        const response = await axios.get(API_ENDPOINTS.COMPLIANCE_ALL_POLICIES_POLICIES, {
-          params: { framework_id: frameworkId }
+        const data = await apiService.get(API_ENDPOINTS.COMPLIANCE_ALL_POLICIES_POLICIES, {
+          framework_id: frameworkId
         })
-        console.log('Policies response:', response.data)
-        if (response.data && Array.isArray(response.data)) {
-          policies.value = response.data
+        console.log('Policies response:', data)
+        if (data && Array.isArray(data)) {
+          policies.value = data
           console.log('Policies loaded:', policies.value)
         } else {
           policies.value = []
@@ -820,12 +820,12 @@ export default {
         const url = params.toString() ? `${API_ENDPOINTS.AUDIT_CATEGORY_DISTRIBUTION}?${params}` : API_ENDPOINTS.AUDIT_CATEGORY_DISTRIBUTION
         console.log('📡 DEBUG: Category chart API URL:', url)
         
-        const response = await axios.get(url)
-        console.log('📊 DEBUG: Category chart response:', response.data)
+        const data = await apiService.get(url)
+        console.log('📊 DEBUG: Category chart response:', data)
         
-        if (response.data && response.data.categories) {
-          categoryData.labels = response.data.categories.map(cat => cat.name)
-          categoryData.datasets[0].data = response.data.categories.map(cat => cat.count)
+        if (data && data.categories) {
+          categoryData.labels = data.categories.map(cat => cat.name)
+          categoryData.datasets[0].data = data.categories.map(cat => cat.count)
           console.log('✅ DEBUG: Category chart updated with real data')
         } else {
           // Fallback to mock data if API fails
@@ -871,11 +871,11 @@ export default {
         const url = params.toString() ? `${API_ENDPOINTS.AUDIT_STATUS_DISTRIBUTION}?${params}` : API_ENDPOINTS.AUDIT_STATUS_DISTRIBUTION
         console.log('📡 DEBUG: Status chart API URL:', url)
         
-        const response = await axios.get(url)
-        console.log('📊 DEBUG: Status chart response:', response.data)
+        const data = await apiService.get(url)
+        console.log('📊 DEBUG: Status chart response:', data)
         
-        if (response.data && response.data.statuses) {
-          statusData.datasets[0].data = response.data.statuses.map(status => status.count)
+        if (data && data.statuses) {
+          statusData.datasets[0].data = data.statuses.map(status => status.count)
           console.log('✅ DEBUG: Status chart updated with real data')
         } else {
           // Fallback to mock data if API fails
@@ -1001,10 +1001,10 @@ export default {
         }
         
         const url = params.toString() ? `${API_ENDPOINTS.AUDIT_RECENT_ACTIVITIES}?${params}` : API_ENDPOINTS.AUDIT_RECENT_ACTIVITIES
-        const response = await axios.get(url)
-        if (response.data) {
+        const data = await apiService.get(url)
+        if (data) {
           // Process activities to ensure they have proper types and icons
-          recentActivities.value = response.data.map(activity => {
+          recentActivities.value = data.map(activity => {
             // Determine activity type based on title or description
             let activityType = 'completed' // default
             const title = (activity.title || '').toLowerCase()

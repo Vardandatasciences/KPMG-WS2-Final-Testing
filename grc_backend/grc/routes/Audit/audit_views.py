@@ -2,7 +2,7 @@ from rest_framework.decorators import api_view, permission_classes, authenticati
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.authentication import SessionAuthentication, BasicAuthentication
 from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from django.conf import settings
@@ -39,6 +39,22 @@ from ...rbac.decorators import (
 )
 from .framework_filter_helper import get_active_framework_filter, apply_framework_filter_to_audits, get_framework_sql_filter
 from ...debug_utils import debug_print
+from ...tenant_utils import require_tenant, tenant_filter, get_tenant_id_from_request, get_tenant_aware_queryset
+from ...routes.Global.validation import SecureValidator
+import logging
+
+logger = logging.getLogger(__name__)
+
+def send_log(module, actionType, description, userId=None, userName=None, entityType=None, entityId=None, logLevel="INFO", ipAddress=None, additionalInfo=None):
+    """Placeholder or wrapper for logging service"""
+    from ...routes.Global.notification_service import NotificationService
+    # Implementation depends on how send_log is defined in the project
+    # For now, we ensure it's available or imported correctly if defined elsewhere
+    try:
+        from ...utils.logging_utils import send_log as actual_send_log
+        return actual_send_log(module, actionType, description, userId, userName, entityType, entityId, logLevel, ipAddress, additionalInfo)
+    except ImportError:
+        debug_print(f"LOG: [{logLevel}] {module} - {actionType}: {description}")
 
 def get_user_id_from_jwt(request):
     """
@@ -71,47 +87,74 @@ def get_user_id_from_jwt(request):
 @authentication_classes([CsrfExemptSessionAuthentication])
 @permission_classes([AuditAssignPermission])
 @audit_assign_required
+@require_tenant
+@tenant_filter
 def get_frameworks(request):
     """
-    Get all frameworks
+    Get all frameworks - Filtered by Tenant
     """
     try:
-        frameworks = Framework.objects.all()
+        tenant_id = get_tenant_id_from_request(request)
+        frameworks = Framework.objects.filter(tenant_id=tenant_id)
         serializer = FrameworkSerializer(frameworks, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
     except Exception as e:
-        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        logger.error(f"Error in get_frameworks: {str(e)}")
+        return Response({'error': 'An internal error occurred while fetching frameworks.'}, status=status.HTTP_400_BAD_REQUEST)
 
 @csrf_exempt
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication])
 @permission_classes([AuditAssignPermission])
 @audit_assign_required
+@require_tenant
+@tenant_filter
 def get_policies_by_framework(request, framework_id):
     """
-    Get all policies for a specific framework
+    Get all policies for a specific framework - Filtered by Tenant
     """
     try:
-        policies = Policy.objects.filter(FrameworkId=framework_id)
+        tenant_id = get_tenant_id_from_request(request)
+        
+        # SECURITY: Validate framework_id
+        framework_id = SecureValidator.validate_numeric_input(framework_id, "framework_id")
+        if framework_id is None:
+            return Response({'error': 'Invalid framework ID'}, status=status.HTTP_400_BAD_REQUEST)
+
+        policies = Policy.objects.filter(FrameworkId=framework_id, tenant_id=tenant_id)
         serializer = PolicySerializer(policies, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
     except Exception as e:
-        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        logger.error(f"Error in get_policies_by_framework: {str(e)}")
+        return Response({'error': 'An internal error occurred while fetching policies.'}, status=status.HTTP_400_BAD_REQUEST)
 
 @csrf_exempt
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication])
 @permission_classes([AuditAssignPermission])
 @audit_assign_required
+@require_tenant
+@tenant_filter
 def get_subpolicies(request):
-    """Return all subpolicies for a given policy (SubPolicyId, SubPolicyName, PolicyId)"""
+    """Return all subpolicies for a given policy (SubPolicyId, SubPolicyName, PolicyId) - Filtered by Tenant"""
+    policy_id = request.GET.get('policy_id')
     try:
-        policy_id = request.GET.get('policy_id')
+        tenant_id = get_tenant_id_from_request(request)
+        
+        # SECURITY: Validate policy_id
+        policy_id = SecureValidator.validate_numeric_input(policy_id, "policy_id")
         if not policy_id:
-            return Response({'error': 'policy_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': 'policy_id is required and must be a positive integer'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        # SECURITY: Ensure the policy belongs to the tenant before fetching subpolicies
+        policy_exists = Policy.objects.filter(PolicyId=policy_id, tenant_id=tenant_id).exists()
+        if not policy_exists:
+            return Response({'error': 'Policy not found or access denied'}, status=status.HTTP_404_NOT_FOUND)
+
         subpolicies = SubPolicy.objects.filter(PolicyId=policy_id).values('SubPolicyId', 'SubPolicyName', 'PolicyId')
+        
         # Log the action
-        user_id = request.user.id if request.user.is_authenticated else None
+        user_id = getattr(request.user, 'id', None)
         send_log(
             module="Audit",
             actionType="GET_SUBPOLICIES",
@@ -122,16 +165,15 @@ def get_subpolicies(request):
         )
         return Response(list(subpolicies), status=status.HTTP_200_OK)
     except Exception as e:
+        logger.error(f"Error in get_subpolicies: {str(e)}")
         send_log(
             module="Audit",
             actionType="GET_SUBPOLICIES_ERROR",
-            description=f"Error retrieving subpolicies: {str(e)}",
-            userId=request.user.id if request.user.is_authenticated else None,
-            entityType="SubPolicy",
-            entityId=policy_id if 'policy_id' in locals() else None,
+            description=f"Internal error retrieving subpolicies",
+            userId=getattr(request.user, 'id', None),
             logLevel="ERROR"
         )
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'error': 'An internal error occurred while fetching subpolicies.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
  
 def get_compliances_by_scope(framework_id, policy_id=None, subpolicy_id=None):
@@ -160,15 +202,23 @@ def get_compliances_by_scope(framework_id, policy_id=None, subpolicy_id=None):
 @api_view(['GET'])
 @permission_classes([AuditAssignPermission])
 @audit_assign_required
+@require_tenant
+@tenant_filter
 def get_assign_data(request):
     """
-    Fetch frameworks, policies, subpolicies, and users for assignment data
+    Fetch frameworks, policies, subpolicies, and users for assignment data - Filtered by Tenant
     """
     try:
-        frameworks = Framework.objects.all().values('FrameworkId', 'FrameworkName')
-        policies = Policy.objects.all().values('PolicyId', 'PolicyName', 'FrameworkId_id')
-        subpolicies = SubPolicy.objects.all().values('SubPolicyId', 'SubPolicyName', 'PolicyId_id')
-        users = Users.objects.all().values('UserId', 'UserName')
+        tenant_id = get_tenant_id_from_request(request)
+        frameworks = Framework.objects.filter(tenant_id=tenant_id).values('FrameworkId', 'FrameworkName')
+        
+        # Performance optimization: filter related objects by tenant if applicable
+        policies = Policy.objects.filter(tenant_id=tenant_id).values('PolicyId', 'PolicyName', 'FrameworkId_id')
+        # subpolicies usually don't have tenant_id themselves but are children of policies
+        subpolicies = SubPolicy.objects.filter(PolicyId__tenant_id=tenant_id).values('SubPolicyId', 'SubPolicyName', 'PolicyId_id')
+        
+        # SECURITY: Only show users from the same tenant
+        users = Users.objects.filter(tenant_id=tenant_id).values('UserId', 'UserName')
 
         # Transform field names for frontend compatibility
         formatted_policies = []
@@ -194,34 +244,31 @@ def get_assign_data(request):
             'users': list(users)
         }, status=status.HTTP_200_OK)
     except Exception as e:
-        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        logger.error(f"Error in get_assign_data: {str(e)}")
+        return Response({'error': 'An internal error occurred while fetching mapping data.'}, status=status.HTTP_400_BAD_REQUEST)
 
  
 @api_view(['GET'])
 @permission_classes([AuditViewAllPermission])
 @audit_view_all_required
+@require_tenant
+@tenant_filter
 def get_all_audits(request):
     """
-    Fetch all audits with related data for display in the audit table
+    Fetch all audits for the current tenant with related data
     """
     try:
-        debug_print("DEBUG: get_all_audits was called")
+        tenant_id = get_tenant_id_from_request(request)
+        debug_print(f"DEBUG: get_all_audits called for tenant {tenant_id}")
         
         # Get framework filter
         where_clause, params = get_framework_sql_filter(request, 'a')
-        debug_print(f"DEBUG: Framework filter for get_all_audits: {params.get('framework_id', 'None')}")
+        
+        # Add tenant_id to params
+        params['tenant_id'] = tenant_id
         
         # Using raw SQL for better performance and to join multiple tables
         with connection.cursor() as cursor:
-            debug_print("DEBUG: Executing SQL query for get_all_audits")
-            debug_print("DEBUG: Dumping table schemas to verify column names")
-            try:
-                cursor.execute("DESCRIBE audit")
-                audit_columns = cursor.fetchall()
-                debug_print("DEBUG: Audit table columns:", audit_columns)
-            except Exception as e:
-                debug_print("DEBUG: Error describing audit table:", str(e))
-                
             query = f"""
                 SELECT 
                     a.AuditId as audit_id,
@@ -258,7 +305,7 @@ def get_all_audits(request):
                     users reviewer_user ON a.reviewer = reviewer_user.UserId
                 LEFT JOIN 
                     audit_findings af ON a.AuditId = af.AuditId
-                WHERE 1=1
+                WHERE a.tenant_id = %(tenant_id)s
                     {where_clause}
                 GROUP BY 
                     a.AuditId, f.FrameworkName, p.PolicyName, sp.SubPolicyName, 
@@ -267,69 +314,48 @@ def get_all_audits(request):
                     a.AuditId DESC
             """
             cursor.execute(query, params)
-            debug_print("DEBUG: SQL query executed successfully")
             columns = [col[0] for col in cursor.description]
-            debug_print(f"DEBUG: Result columns: {columns}")
             audits = [dict(zip(columns, row)) for row in cursor.fetchall()]
-            debug_print(f"DEBUG: Fetched {len(audits)} audit records")
 
-        # Process frequency to display text instead of number
+        # Process results
         for audit in audits:
-            # Format date
             if audit.get('duedate'):
                 audit['duedate'] = audit['duedate'].strftime('%d/%m/%Y')
             
             # Convert frequency number to text
             freq = audit.get('frequency')
             if freq is not None:
-                if freq == 0:
-                    audit['frequency'] = 'Only Once'
-                elif freq == 1:
-                    audit['frequency'] = 'Daily'
-                elif freq <= 60:
-                    audit['frequency'] = 'Every 2 Months'
-                elif freq <= 120:
-                    audit['frequency'] = 'Every 4 Months'
-                elif freq <= 182:
-                    audit['frequency'] = 'Half Yearly'
-                elif freq <= 365:
-                    audit['frequency'] = 'Yearly'
-                else:
-                    audit['frequency'] = f'Every {freq} days'
+                if freq == 0: audit['frequency'] = 'Only Once'
+                elif freq == 1: audit['frequency'] = 'Daily'
+                elif freq <= 60: audit['frequency'] = 'Every 2 Months'
+                elif freq <= 120: audit['frequency'] = 'Every 4 Months'
+                elif freq <= 182: audit['frequency'] = 'Half Yearly'
+                elif freq <= 365: audit['frequency'] = 'Yearly'
+                else: audit['frequency'] = f'Every {freq} days'
             
-            # Convert audit type from I/E to Internal/External
-            if audit.get('audit_type') == 'I':
-                audit['audit_type'] = 'Internal'
-            elif audit.get('audit_type') == 'E':
-                audit['audit_type'] = 'External'
+            if audit.get('audit_type') == 'I': audit['audit_type'] = 'Internal'
+            elif audit.get('audit_type') == 'E': audit['audit_type'] = 'External'
             
-            # Add report field
             audit['report'] = 'Download' if audit.get('status') == 'Completed' else 'Pending'
 
         return Response(audits, status=status.HTTP_200_OK)
     except Exception as e:
-        debug_print(f"ERROR in get_all_audits: {str(e)}")
-        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        logger.error(f"ERROR in get_all_audits: {str(e)}")
+        return Response({'error': 'An internal error occurred while fetching audits.'}, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated]) # SECURITY: Changed from AllowAny to IsAuthenticated
+@require_tenant
+@tenant_filter
 def get_all_audits_public(request):
     """
-    Fetch all audits with related data for display in the audit table (public access)
+    Fetch all audits for display in the dashboard (requires authentication and tenant context)
     """
     try:
-        debug_print("DEBUG: get_all_audits_public was called")
-        # Using raw SQL for better performance and to join multiple tables
+        tenant_id = get_tenant_id_from_request(request)
+        debug_print(f"DEBUG: get_all_audits_public called for tenant {tenant_id}")
+        
         with connection.cursor() as cursor:
-            debug_print("DEBUG: Executing SQL query for get_all_audits_public")
-            debug_print("DEBUG: Dumping table schemas to verify column names")
-            try:
-                cursor.execute("DESCRIBE audit")
-                audit_columns = cursor.fetchall()
-                debug_print("DEBUG: Audit table columns:", audit_columns)
-            except Exception as e:
-                debug_print("DEBUG: Error describing audit table:", str(e))
-                
             cursor.execute("""
                 SELECT 
                     a.AuditId as audit_id,
@@ -362,92 +388,73 @@ def get_all_audits_public(request):
                     users reviewer_user ON a.reviewer = reviewer_user.UserId
                 LEFT JOIN 
                     audit_findings af ON a.AuditId = af.AuditId
+                WHERE a.tenant_id = %s
                 GROUP BY 
                     a.AuditId, a.Title, f.FrameworkName, p.PolicyName, sp.SubPolicyName, 
                     auditor_user.UserName, a.DueDate, a.Frequency, reviewer_user.UserName, a.AuditType, a.Status
                 ORDER BY 
                     a.AuditId DESC
-            """)
-            debug_print("DEBUG: SQL query executed successfully")
+            """, [tenant_id])
+            
             columns = [col[0] for col in cursor.description]
-            debug_print(f"DEBUG: Result columns: {columns}")
             audits = [dict(zip(columns, row)) for row in cursor.fetchall()]
-            debug_print(f"DEBUG: Fetched {len(audits)} audit records")
 
-        # Process frequency to display text instead of number
         for audit in audits:
-            # Format date
             if audit.get('duedate'):
                 audit['duedate'] = audit['duedate'].strftime('%d/%m/%Y')
             
-            # Convert frequency number to text
             freq = audit.get('frequency')
             if freq is not None:
-                if freq == 0:
-                    audit['frequency'] = 'Only Once'
-                elif freq == 1:
-                    audit['frequency'] = 'Daily'
-                elif freq <= 60:
-                    audit['frequency'] = 'Every 2 Months'
-                elif freq <= 120:
-                    audit['frequency'] = 'Every 4 Months'
-                elif freq <= 182:
-                    audit['frequency'] = 'Half Yearly'
-                elif freq <= 365:
-                    audit['frequency'] = 'Yearly'
-                else:
-                    audit['frequency'] = f'Every {freq} days'
+                if freq == 0: audit['frequency'] = 'Only Once'
+                elif freq == 1: audit['frequency'] = 'Daily'
+                elif freq <= 60: audit['frequency'] = 'Every 2 Months'
+                elif freq <= 120: audit['frequency'] = 'Every 4 Months'
+                elif freq <= 182: audit['frequency'] = 'Half Yearly'
+                elif freq <= 365: audit['frequency'] = 'Yearly'
+                else: audit['frequency'] = f'Every {freq} days'
             
-            # Convert audit type from I/E to Internal/External
-            if audit.get('audit_type') == 'I':
-                audit['audit_type'] = 'Internal'
-            elif audit.get('audit_type') == 'E':
-                audit['audit_type'] = 'External'
+            if audit.get('audit_type') == 'I': audit['audit_type'] = 'Internal'
+            elif audit.get('audit_type') == 'E': audit['audit_type'] = 'External'
             
-            # Add report field
             audit['report'] = 'Download' if audit.get('status') == 'Completed' else 'Pending'
 
         return Response(audits, status=status.HTTP_200_OK)
     except Exception as e:
-        debug_print(f"ERROR in get_all_audits_public: {str(e)}")
-        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        logger.error(f"ERROR in get_all_audits_public: {str(e)}")
+        return Response({'error': 'An internal error occurred while fetching public audit data.'}, status=status.HTTP_400_BAD_REQUEST)
 
 @csrf_exempt
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([AuditConductPermission])
 @audit_conduct_required
+@require_tenant
+@tenant_filter
 def get_my_audits(request):
     """
-    Fetch audits assigned to the current user (as auditor)
-    Uses JWT authentication to get user_id
+    Fetch audits assigned to the current user (as auditor) - Filtered by Tenant
+    Uses JWT authentication to get user_id and tenant context
     """
     try:
-        debug_print("DEBUG: get_my_audits was called")
-        
-        # Get user_id from JWT token using RBAC utils
+        tenant_id = get_tenant_id_from_request(request)
         from ...rbac.utils import RBACUtils
         user_id = RBACUtils.get_user_id_from_request(request)
         
         if not user_id:
             return Response({
-                'error': 'Authentication required. Please login again.',
-                'message': 'No valid JWT token found'
+                'error': 'Authentication required.',
             }, status=status.HTTP_401_UNAUTHORIZED)
         
-        debug_print(f"DEBUG: Using user_id from JWT: {user_id}")
+        debug_print(f"DEBUG: get_my_audits for user {user_id}, tenant {tenant_id}")
         
         # Get framework filter
         where_clause, params = get_framework_sql_filter(request, 'a')
-        debug_print(f"DEBUG: Framework filter for my_audits: {params.get('framework_id', 'None')}")
         
         # Merge parameters
-        query_params = {'user_id': user_id}
+        query_params = {'user_id': user_id, 'tenant_id': tenant_id}
         query_params.update(params)
         
-        # Using raw SQL to join multiple tables and get comprehensive data
         with connection.cursor() as cursor:
-            debug_print(f"DEBUG: Executing SQL query for my audits")
             query = f"""
                 SELECT 
                     a.AuditId as audit_id,
@@ -490,8 +497,8 @@ def get_my_audits(request):
                     users reviewer_user ON a.reviewer = reviewer_user.UserId
                 LEFT JOIN 
                     audit_findings af ON a.AuditId = af.AuditId
-                WHERE 
-                    a.auditor = %(user_id)s
+                WHERE a.tenant_id = %(tenant_id)s
+                    AND a.auditor = %(user_id)s
                     {where_clause}
                 GROUP BY 
                     a.AuditId, a.Title, f.FrameworkName, p.PolicyName, sp.SubPolicyName, 
@@ -500,84 +507,52 @@ def get_my_audits(request):
                     a.DueDate ASC
             """
             cursor.execute(query, query_params)
-            
             columns = [col[0] for col in cursor.description]
-            debug_print(f"DEBUG: My audits query columns: {columns}")
             audits = [dict(zip(columns, row)) for row in cursor.fetchall()]
-            debug_print(f"DEBUG: Fetched {len(audits)} my audits")
 
-        # Process and format audit data for display
         for audit in audits:
-            # Format date
             if audit.get('duedate'):
                 audit['duedate'] = audit['duedate'].strftime('%d/%m/%Y')
-            
-            # Format completion date if present
             if audit.get('completion_date'):
                 audit['completion_date'] = audit['completion_date'].strftime('%d/%m/%Y %H:%M')
             
-            # Calculate completion percentage
             total = audit.get('total_compliances') or 0
             completed = audit.get('completed_compliances') or 0
             audit['completion_percentage'] = round((completed / total) * 100) if total > 0 else 0
-            
-            # Use the database status instead of calculated status
             audit['status'] = audit.get('status_from_db') or audit.get('calculated_status') or 'Yet to Start'
-            debug_print(f"DEBUG: Status  for now: {audit['status']}---------------========================================")
             
-            # Convert frequency number to text
             freq = audit.get('frequency')
             if freq is not None:
-                if freq == 0:
-                    audit['frequency_text'] = 'Only Once'
-                elif freq == 1:
-                    audit['frequency_text'] = 'Daily'
-                elif freq <= 60:
-                    audit['frequency_text'] = 'Every 2 Months'
-                elif freq <= 120:
-                    audit['frequency_text'] = 'Every 4 Months'
-                elif freq <= 182:
-                    audit['frequency_text'] = 'Half Yearly'
-                elif freq <= 365:
-                    audit['frequency_text'] = 'Yearly'
-                else:
-                    audit['frequency_text'] = f'Every {freq} days'
+                if freq == 0: audit['frequency_text'] = 'Only Once'
+                elif freq == 1: audit['frequency_text'] = 'Daily'
+                elif freq <= 60: audit['frequency_text'] = 'Every 2 Months'
+                elif freq <= 120: audit['frequency_text'] = 'Every 4 Months'
+                elif freq <= 182: audit['frequency_text'] = 'Half Yearly'
+                elif freq <= 365: audit['frequency_text'] = 'Yearly'
+                else: audit['frequency_text'] = f'Every {freq} days'
             
-            # Convert audit type from I/E to Internal/External
-            if audit.get('audit_type') == 'I':
-                audit['audit_type_text'] = 'Internal'
-            elif audit.get('audit_type') == 'E':
-                audit['audit_type_text'] = 'External'
+            if audit.get('audit_type') == 'I': audit['audit_type_text'] = 'Internal'
+            elif audit.get('audit_type') == 'E': audit['audit_type_text'] = 'External'
             
-            # Add report status based on Reports field
-            reports_data = audit.get('reports')
-            debug_print(f"Reports data for audit {audit.get('audit_id')}: {reports_data}")
             try:
+                reports_data = audit.get('reports')
                 if isinstance(reports_data, str):
                     reports_data = json.loads(reports_data) if reports_data else []
                 audit['reports'] = reports_data
-                audit['report_available'] = bool(reports_data and reports_data != [] and reports_data != {})
-            except (json.JSONDecodeError, TypeError):
+                audit['report_available'] = bool(reports_data)
+            except:
                 audit['reports'] = []
                 audit['report_available'] = False
-            debug_print(f"Report available for audit {audit.get('audit_id')}: {audit['report_available']}")
             
-            # Ensure business_unit field is included
             audit['business_unit'] = audit.get('business_unit') or 'Not Specified'
 
-        debug_print(f"DEBUG: Successfully prepared my audits response")
-
-
-        debug_print(f"DEBUG: My audits response: {audits}---------------------------------------------{user_id}")
-
-    
         return Response({
             'user_id': user_id,
             'audits': audits
         }, status=status.HTTP_200_OK)
     except Exception as e:
-        debug_print(f"ERROR in get_my_audits: {str(e)}")
-        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        logger.error(f"ERROR in get_my_audits: {str(e)}")
+        return Response({'error': 'An internal error occurred while fetching your audits.'}, status=status.HTTP_400_BAD_REQUEST)
  
 
 @csrf_exempt
@@ -585,30 +560,30 @@ def get_my_audits(request):
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([AuditViewPermission])
 @audit_view_reports_required
+@require_tenant
+@tenant_filter
 def get_audit_details(request, audit_id):
     """
-    Fetch detailed information for a specific audit including compliance items
+    Fetch detailed information for a specific audit including compliance items - Filtered by Tenant
     """
     try:
-
-        debug_print("api--------------------------------------------------------",audit_id)
-
-        request.session['current_audit_id'] = audit_id
-
-
-        debug_print(f"DEBUG: get_audit_details was called for audit_id {audit_id}", "this is clicked by the user")
+        tenant_id = get_tenant_id_from_request(request)
         
-        # Check if audit exists
+        # SECURITY: Validate audit_id
+        audit_id = SecureValidator.validate_numeric_input(audit_id, "audit_id")
+        if not audit_id:
+            return Response({'error': 'Invalid audit ID'}, status=status.HTTP_400_BAD_REQUEST)
+
+        debug_print(f"DEBUG: get_audit_details for audit {audit_id}, tenant {tenant_id}")
+
+        # SECURITY: Check if audit exists and belongs to the tenant
         try:
-            audit = Audit.objects.get(AuditId=audit_id)
-            debug_print(f"DEBUG: Found audit record with ID {audit_id}")
+            audit = Audit.objects.get(AuditId=audit_id, tenant_id=tenant_id)
         except Audit.DoesNotExist:
-            debug_print(f"DEBUG: Audit with ID {audit_id} not found")
-            return Response({'error': 'Audit not found'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'error': 'Audit not found or access denied'}, status=status.HTTP_404_NOT_FOUND)
         
-        # Get basic audit information
+        # Get basic audit information using raw SQL (preserving original query structure but adding tenant_id)
         with connection.cursor() as cursor:
-            debug_print(f"DEBUG: Executing SQL query to get audit details")
             cursor.execute("""
                 SELECT 
                     a.AuditId as audit_id,
@@ -651,36 +626,29 @@ def get_audit_details(request, audit_id):
                 LEFT JOIN 
                     audit_findings af ON a.AuditId = af.AuditId
                 WHERE 
-                    a.AuditId = %s
+                    a.AuditId = %s AND a.tenant_id = %s
                 GROUP BY 
                     a.AuditId, f.FrameworkName, p.PolicyName, sp.SubPolicyName, 
                     auditor_user.UserName, auditor_user.UserId, a.DueDate, a.Frequency, 
                     reviewer_user.UserName, reviewer_user.UserId, a.AuditType, 
                     assignee_user.UserName, assignee_user.UserId, a.Status, a.CompletionDate, a.Reports
-            """, [audit_id])
+            """, [audit_id, tenant_id])
             
             columns = [col[0] for col in cursor.description]
-            debug_print(f"DEBUG: Audit details query columns: {columns}")
             audit_data = dict(zip(columns, cursor.fetchone())) if cursor.rowcount > 0 else None
-            debug_print(f"DEBUG: Fetched audit details: {audit_data is not None}")
         
         if not audit_data:
             return Response({'error': 'Audit details not found'}, status=status.HTTP_404_NOT_FOUND)
         
-        # Format date
         if audit_data.get('duedate'):
             audit_data['duedate'] = audit_data['duedate'].strftime('%Y-%m-%d')
-            
-        # Format completion date if present
         if audit_data.get('completion_date'):
             audit_data['completion_date'] = audit_data['completion_date'].strftime('%Y-%m-%d %H:%M:%S')
         
-        # Use the database status instead of calculated status
         audit_data['status'] = audit_data.get('status_from_db') or audit_data.get('calculated_status') or 'Yet to Start'
         
-        # Get compliance items for this audit
+        # Get compliance items for this audit - ensured via AuditId + tenant_id check earlier
         with connection.cursor() as cursor:
-            debug_print(f"DEBUG: Executing SQL query for compliance items")
             cursor.execute("""
                 SELECT 
                     af.AuditId as audit_id,
@@ -703,32 +671,21 @@ def get_audit_details(request, audit_id):
             """, [audit_id])
             
             columns = [col[0] for col in cursor.description]
-            debug_print(f"DEBUG: Compliance items query columns: {columns}")
             compliance_items = [dict(zip(columns, row)) for row in cursor.fetchall()]
-            debug_print(f"DEBUG: Fetched {len(compliance_items)} compliance items")
         
-        # Process compliance items
         for item in compliance_items:
-            # Convert status from 0,1,2 to text
-            if item['status'] == '0':
-                item['status_text'] = 'Yet to Start'
-            elif item['status'] == '1':
-                item['status_text'] = 'In Progress'
-            elif item['status'] == '2':
-                item['status_text'] = 'Completed'
+            if item['status'] == '0': item['status_text'] = 'Yet to Start'
+            elif item['status'] == '1': item['status_text'] = 'In Progress'
+            elif item['status'] == '2': item['status_text'] = 'Completed'
             
-            # Format date if present
             if item.get('checked_date'):
                 item['checked_date'] = item['checked_date'].strftime('%Y-%m-%d %H:%M:%S')
         
-        # Combine audit data with compliance items
         audit_data['compliance_items'] = compliance_items
-        
-        debug_print(f"DEBUG: Successfully prepared audit details response")
         return Response(audit_data, status=status.HTTP_200_OK)
     except Exception as e:
-        debug_print(f"ERROR in get_audit_details: {str(e)}")
-        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        logger.error(f"ERROR in get_audit_details: {str(e)}")
+        return Response({'error': 'An internal error occurred while fetching audit details.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
  
 
 def copy_review_data_from_r_to_a(audit_id, audit_data):
@@ -924,7 +881,7 @@ def check_audit_reports(request):
 
     except Exception as e:
         debug_print(f"ERROR in check_audit_reports: {str(e)}")
-        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'error': 'An internal error occurred'}, status=status.HTTP_400_BAD_REQUEST)
  
 
 @csrf_exempt
@@ -939,10 +896,10 @@ def get_users(request):
         serializer = UserSerializer(users, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
     except Exception as e:
-        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'error': 'An internal error occurred'}, status=status.HTTP_400_BAD_REQUEST)
 
 @csrf_exempt
-@api_view(['POST'])
+@api_view(['POST', 'PUT'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([AuditConductPermission])
 @audit_conduct_required
@@ -1203,7 +1160,7 @@ def get_audit_status(request, audit_id):
         }, status=status.HTTP_200_OK)
     except Exception as e:
         debug_print(f"ERROR in get_audit_status: {str(e)}")
-        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'error': 'An internal error occurred'}, status=status.HTTP_400_BAD_REQUEST)
 
 
 
@@ -1221,7 +1178,7 @@ def get_all_compliance(request):
             'message': f'Found {len(compliance_items)} compliance items'
         }, status=status.HTTP_200_OK)
     except Exception as e:
-        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'error': 'An internal error occurred'}, status=status.HTTP_400_BAD_REQUEST)
 
 
 @csrf_exempt
@@ -1276,7 +1233,7 @@ def create_compliance(request):
             'compliance_id': compliance.ComplianceId
         }, status=status.HTTP_201_CREATED)
     except Exception as e:
-        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'error': 'An internal error occurred'}, status=status.HTTP_400_BAD_REQUEST)
 
 
 @csrf_exempt
@@ -1295,7 +1252,7 @@ def get_compliance_by_subpolicy(request, subpolicy_id):
             'items': serializer.data
         }, status=status.HTTP_200_OK)
     except Exception as e:
-        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'error': 'An internal error occurred'}, status=status.HTTP_400_BAD_REQUEST)
  
 @csrf_exempt
 @api_view(['GET'])
@@ -1502,7 +1459,7 @@ def get_audit_compliances(request, audit_id):
 
     except Exception as e:
         debug_print(f"ERROR in get_audit_compliances: {str(e)}")
-        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'error': 'An internal error occurred'}, status=status.HTTP_400_BAD_REQUEST)
 
  
 def create_new_version(audit_id, user_id, data, prefix):
@@ -1763,7 +1720,7 @@ def update_audit_finding(request, compliance_id):
         debug_print(f"ERROR in update_audit_finding: {str(e)}")
         import traceback
         traceback.print_exc()
-        return Response({"error": str(e)}, status=500)
+        return Response({"error": "An internal error occurred"}, status=500)
 
 
 
@@ -1854,7 +1811,7 @@ def update_audit_finding(request, compliance_id):
         
 #     except Exception as e:
 #         debug_print(f"ERROR in upload_evidence: {str(e)}")
-#         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+#         return Response({'error': 'An internal error occurred'}, status=status.HTTP_400_BAD_REQUEST)
 
  
  
@@ -1991,7 +1948,7 @@ def add_majorminor_column(request):
                 }, status=status.HTTP_200_OK)
     except Exception as e:
         debug_print(f"ERROR adding MajorMinor column: {str(e)}")
-        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'error': 'An internal error occurred'}, status=status.HTTP_400_BAD_REQUEST)
 
 # @api_view(['POST'])
 # def add_compliance_to_audit(request, audit_id):
@@ -2172,7 +2129,7 @@ def add_majorminor_column(request):
         
 #     except Exception as e:
 #         debug_print(f"ERROR in add_compliance_to_audit: {str(e)}")
-#         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+#         return Response({'error': 'An internal error occurred'}, status=status.HTTP_400_BAD_REQUEST)
  
 @api_view(['GET'])
 def fix_subpolicy_version_field(request):
@@ -2228,7 +2185,7 @@ def fix_subpolicy_version_field(request):
                 }, status=status.HTTP_200_OK)
     except Exception as e:
         debug_print(f"ERROR fixing subpolicy version field: {str(e)}")
-        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'error': 'An internal error occurred'}, status=status.HTTP_400_BAD_REQUEST)
 
   
 
@@ -2522,7 +2479,7 @@ def get_my_reviews(request):
         }, status=status.HTTP_200_OK)
     except Exception as e:
         debug_print(f"ERROR in get_my_reviews: {str(e)}")
-        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'error': 'An internal error occurred'}, status=status.HTTP_400_BAD_REQUEST)
     
 
 @csrf_exempt
@@ -2702,7 +2659,7 @@ def upload_evidence(request, compliance_id):
         debug_print(f"ERROR in upload_evidence: {str(e)}")
         import traceback
         traceback.print_exc()
-        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'error': 'An internal error occurred'}, status=status.HTTP_400_BAD_REQUEST)
 
  
 @csrf_exempt
@@ -2820,7 +2777,7 @@ def submit_audit_findings(request, audit_id):
         
     except Exception as e:
         debug_print(f"ERROR in submit_audit_findings: {str(e)}")
-        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'error': 'An internal error occurred'}, status=status.HTTP_400_BAD_REQUEST)
     
  
 @csrf_exempt
@@ -3189,7 +3146,7 @@ def allocate_policy(request):
         import traceback
         traceback.print_exc()
         return Response({
-            'error': str(e)
+            'error': 'An internal error occurred'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
 def create_review_version(audit_id, user_id, compliance_reviews=None, overall_comments=None, custom_version=None):
@@ -3693,7 +3650,7 @@ def create_review_version(audit_id, user_id, compliance_reviews=None, overall_co
         debug_print(f"ERROR in create_review_version: {str(e)}")
         return {
             'success': False,
-            'error': str(e)
+            'error': 'An internal error occurred'
         }
 
 
@@ -3767,7 +3724,7 @@ def fix_audit_table(request):
         }, status=status.HTTP_200_OK)
     except Exception as e:
         debug_print(f"ERROR in fix_audit_table: {str(e)}")
-        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'error': 'An internal error occurred'}, status=status.HTTP_400_BAD_REQUEST)
 
 @csrf_exempt
 @api_view(['GET'])
@@ -3848,7 +3805,7 @@ def get_audit_versions(request, audit_id):
     
     except Exception as e:
         debug_print(f"ERROR in get_audit_versions: {str(e)}")
-        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'error': 'An internal error occurred'}, status=status.HTTP_400_BAD_REQUEST)
 
 @csrf_exempt
 @api_view(['GET'])
@@ -4312,7 +4269,7 @@ def save_review_progress(request, audit_id):
  
     except Exception as e:
         debug_print(f"ERROR in save_review_progress: {str(e)}")
-        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'error': 'An internal error occurred'}, status=status.HTTP_400_BAD_REQUEST)
  
 
 @csrf_exempt
@@ -4432,7 +4389,7 @@ def check_audit_version(request, audit_id):
         debug_print(f"ERROR in check_audit_version: {str(e)}")
         import traceback
         traceback.print_exc()
-        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'error': 'An internal error occurred'}, status=status.HTTP_400_BAD_REQUEST)
  
 # Add this helper function to determine next version number
 def get_next_version_number(audit_id, prefix):
@@ -4639,7 +4596,7 @@ def load_review_data(request, audit_id):
         debug_print(f"ERROR in load_review_data: {str(e)}")
         import traceback
         traceback.print_exc()
-        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST) 
+        return Response({'error': 'An internal error occurred'}, status=status.HTTP_400_BAD_REQUEST) 
 
 
 @csrf_exempt
@@ -4773,7 +4730,7 @@ def update_audit_version_review_data(request, audit_id, version_id):
         
     except Exception as e:
         debug_print(f"ERROR in update_audit_version_review_data: {str(e)}")
-        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'error': 'An internal error occurred'}, status=status.HTTP_400_BAD_REQUEST)
 
  
 
@@ -5106,7 +5063,7 @@ def update_audit_version_table(request):
         debug_print(f"ERROR in update_audit_version_table: {str(e)}")
         import traceback
         traceback.print_exc()
-        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'error': 'An internal error occurred'}, status=status.HTTP_400_BAD_REQUEST)
 
 @csrf_exempt
 @api_view(['GET'])
@@ -5249,7 +5206,7 @@ def load_latest_review_version(request, audit_id):
         debug_print(f"ERROR in load_latest_review_version: {str(e)}")
         import traceback
         traceback.print_exc()
-        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'error': 'An internal error occurred'}, status=status.HTTP_400_BAD_REQUEST)
 
 def get_empty_review_structure(audit_id, user_id):
     """
@@ -5327,7 +5284,7 @@ def get_empty_review_structure(audit_id, user_id):
                 'reviewer_id': user_id,
                 'review_date': timezone.now().strftime('%Y-%m-%d %H:%M:%S'),
                 'version_type': 'Reviewer',
-                'error': str(e)
+                'error': 'An internal error occurred'
             },
             'overall_comments': ""
         }
@@ -5458,7 +5415,7 @@ def load_continuing_data(request, audit_id):
         debug_print(f"ERROR in load_continuing_data: {str(e)}")
         import traceback
         traceback.print_exc()
-        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'error': 'An internal error occurred'}, status=status.HTTP_400_BAD_REQUEST)
 
 @csrf_exempt
 @api_view(['GET'])
@@ -5717,7 +5674,7 @@ def load_audit_continuing_data(request, audit_id):
         debug_print(f"ERROR in load_audit_continuing_data: {str(e)}")
         import traceback
         traceback.print_exc()
-        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'error': 'An internal error occurred'}, status=status.HTTP_400_BAD_REQUEST)
         
 @csrf_exempt
 @api_view(['POST'])
@@ -5963,7 +5920,7 @@ def save_audit_version(request, audit_id):
         debug_print(f"ERROR in save_audit_version: {str(e)}")
         import traceback
         traceback.print_exc()
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'error': 'An internal error occurred'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
 @csrf_exempt
 @api_view(['GET'])
@@ -6044,7 +6001,7 @@ def get_latest_reviewer_data(request, audit_id):
         debug_print(f"ERROR in get_latest_reviewer_data: {str(e)}")
         import traceback
         traceback.print_exc()
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'error': 'An internal error occurred'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
 @csrf_exempt
 @api_view(['GET'])
@@ -6168,7 +6125,7 @@ def load_audit_with_reviewer_feedback(request, audit_id):
         debug_print(f"ERROR in load_audit_with_reviewer_feedback: {str(e)}")
         import traceback
         traceback.print_exc()
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'error': 'An internal error occurred'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
 @csrf_exempt
 @api_view(['POST'])
@@ -6326,7 +6283,7 @@ def get_audit_finding_details(request, audit_findings_id):
     except Exception as e:
         return Response({
             'success': False,
-            'message': f'Error fetching audit finding details: {str(e)}'
+            'message': 'An internal error occurred'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
 @csrf_exempt
@@ -6470,7 +6427,7 @@ def save_audit_json_version(request, audit_id):
         debug_print(f"ERROR in save_audit_json_version: {str(e)}")
         import traceback
         traceback.print_exc()
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'error': 'An internal error occurred'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 def _build_ai_audit_section_docx(ai_findings, audit):
     """Build a DOCX document containing AI audit results for appending to the audit report."""
@@ -6739,7 +6696,7 @@ def generate_audit_report(request, audit_id):
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({"error": "An internal error occurred"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
 @csrf_exempt
@@ -6846,7 +6803,7 @@ def export_audit_compliances(request, format, item_type, item_id):
             debug_print(f"Error fetching compliances: {str(e)}")
             return Response({
                 'success': False,
-                'message': f'Error fetching compliances: {str(e)}'
+                'message': 'An internal error occurred'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         # Get user email for notification
@@ -6953,5 +6910,5 @@ def export_audit_compliances(request, format, item_type, item_id):
         
         return Response({
             'success': False,
-            'message': f'Export failed: {str(e)}'
+            'message': 'An internal error occurred'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

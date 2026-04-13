@@ -525,51 +525,35 @@ export default {
       }
     },
 
-    // Fetch framework policies and subpolicies
+    // Optimized: Fetch framework policies and subpolicies in one go
     async fetchFrameworkPolicies(frameworkId) {
+      if (!this.selectedApproval || !this.selectedApproval.ExtractedData) return;
+      
+      this.loading = true;
       try {
-        const response = await axios.get(API_ENDPOINTS.FRAMEWORK_GET_POLICIES(frameworkId));
-        console.log('Framework policies:', response.data);
-        if (response.data) {
-          // Update policies with status
+        console.log('Fetching recursive policies for framework:', frameworkId);
+        const response = await axios.get(API_ENDPOINTS.FRAMEWORK_POLICIES_RECURSIVE(frameworkId));
+        
+        if (response.data && Array.isArray(response.data)) {
+          // The backend now returns the full tree (policies with subpolicies)
           const policies = response.data.map(policy => ({
             ...policy,
             Status: policy.Status || 'Under Review',
-            subpolicies: []
+            subpolicies: (policy.subpolicies || []).map(sub => ({
+              ...sub,
+              Status: sub.Status || 'Under Review'
+            }))
           }));
 
           // Update the framework data with policies
           this.selectedApproval.ExtractedData.policies = policies;
-
-          // For each policy, fetch its subpolicies
-          const subpolicyPromises = policies.map(policy => 
-            axios.get(API_ENDPOINTS.POLICY_GET_SUBPOLICIES(policy.PolicyId))
-              .then(subResponse => {
-                console.log(`Subpolicies for policy ${policy.PolicyId}:`, subResponse.data);
-                if (subResponse.data) {
-                  // Find the policy and update its subpolicies
-                  const policyToUpdate = this.selectedApproval.ExtractedData.policies.find(p => p.PolicyId === policy.PolicyId);
-                  if (policyToUpdate) {
-                    policyToUpdate.subpolicies = subResponse.data.map(sub => ({
-                      ...sub,
-                      Status: sub.Status || 'Under Review'
-                    }));
-                    console.log(`Updated policy ${policy.PolicyId} with ${subResponse.data.length} subpolicies`);
-                  }
-                }
-              })
-              .catch(error => {
-                console.error(`Error fetching subpolicies for policy ${policy.PolicyId}:`, error);
-              })
-          );
-
-          // Wait for all subpolicy requests to complete
-          await Promise.all(subpolicyPromises);
-          console.log('All policies and subpolicies loaded');
+          console.log(`Loaded ${policies.length} policies with subpolicies recursively`);
         }
       } catch (error) {
-        console.error('Error fetching policies:', error);
+        console.error('Error fetching policies recursively:', error);
         PopupService.error('Error loading policies. Please try again.', 'Loading Error');
+      } finally {
+        this.loading = false;
       }
     },
 

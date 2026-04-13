@@ -75,6 +75,9 @@ class PolicySerializer(AutoDecryptingModelSerializer):
 class PolicyApprovalSerializer(AutoDecryptingModelSerializer):
     ApprovedDate = serializers.DateField(read_only=True)
     PolicyId = serializers.PrimaryKeyRelatedField(source='PolicyId.PolicyId', read_only=True)
+    PolicyName = serializers.CharField(source='PolicyId.PolicyName', read_only=True)
+    PolicyIdentifier = serializers.CharField(source='PolicyId.Identifier', read_only=True)
+    PolicyStatus = serializers.CharField(source='PolicyId.Status', read_only=True)
     
     def to_representation(self, instance):
         """
@@ -101,7 +104,8 @@ class PolicyApprovalSerializer(AutoDecryptingModelSerializer):
         model = PolicyApproval
         fields = [
             'ApprovalId', 'ExtractedData', 'UserId', 
-            'ReviewerId', 'Version', 'ApprovedNot', 'ApprovedDate', 'PolicyId'
+            'ReviewerId', 'Version', 'ApprovedNot', 'ApprovedDate', 'PolicyId',
+            'PolicyName', 'PolicyIdentifier', 'PolicyStatus'
         ]
 
 

@@ -1537,13 +1537,13 @@ export default {
             version: approval.Version,
             UserId: approval.UserId,
             ReviewerId: approval.ReviewerId,
-            dbStatus: null,
+            dbStatus: approval.PolicyStatus,
+            PolicyName: approval.PolicyName,
+            PolicyIdentifier: approval.PolicyIdentifier,
             rejectionReason: rejectionReason
           };
         });
 
-        // Get policy status from database
-        await this.updateTasksWithPolicyStatus(this.myTasks);
       } catch (error) {
         console.error('Error fetching my tasks:', error);
         this.myTasks = [];
@@ -1626,13 +1626,13 @@ export default {
             version: approval.Version,
             UserId: approval.UserId,
             ReviewerId: approval.ReviewerId,
-            dbStatus: null,
+            dbStatus: approval.PolicyStatus,
+            PolicyName: approval.PolicyName,
+            PolicyIdentifier: approval.PolicyIdentifier,
             rejectionReason: rejectionReason
           };
         });
 
-        // Get policy status from database
-        await this.updateTasksWithPolicyStatus(this.reviewerTasks);
       } catch (error) {
         console.error('Error fetching reviewer tasks:', error);
         // Fallback to existing behavior for backwards compatibility
@@ -1641,39 +1641,7 @@ export default {
     },
 
     // Helper method to update tasks with policy status
-    async updateTasksWithPolicyStatus(tasks) {
-      const policyIds = tasks
-        .filter(task => task.PolicyId)
-        .map(task => typeof task.PolicyId === 'object' ? task.PolicyId.PolicyId : task.PolicyId);
-      
-                    const fetchPromises = policyIds.map(policyId => 
-              apiService.get(API_ENDPOINTS.POLICY(policyId))
-                .then(policyResponse => {
-              return {
-                policyId: policyId,
-                status: policyResponse.Status
-              };
-            })
-            .catch(error => {
-              console.error(`Error fetching policy ${policyId}:`, error);
-              return { policyId: policyId, status: null };
-            })
-        );
-        
-        const policyStatuses = await Promise.all(fetchPromises);
-        
-        // Update tasks with database status
-        policyStatuses.forEach(policyStatus => {
-          const task = tasks.find(t => {
-            const taskPolicyId = typeof t.PolicyId === 'object' ? t.PolicyId.PolicyId : t.PolicyId;
-            return taskPolicyId === policyStatus.policyId;
-          });
-          
-          if (task) {
-            task.dbStatus = policyStatus.status;
-          }
-        });
-    },
+
 
     // Update the method to fetch policies and policy approvals
     fetchPolicies() {
@@ -1715,70 +1683,28 @@ export default {
               }
             }
             
-            return {
+            const taskObj = {
               ApprovalId: approval.ApprovalId,
               PolicyId: approval.PolicyId,
-              ExtractedData: approval.ExtractedData,
+              ExtractedData: {
+                ...approval.ExtractedData,
+                Status: approval.PolicyStatus
+              },
               ApprovedNot: approval.ApprovedNot,
               ApprovedDate: approval.ApprovedDate,
               version: approval.Version,
               UserId: approval.UserId,
               ReviewerId: approval.ReviewerId,
-              dbStatus: null, // Will be populated from database table
+              dbStatus: approval.PolicyStatus,
+              PolicyName: approval.PolicyName,
+              PolicyIdentifier: approval.PolicyIdentifier,
               rejectionReason: rejectionReason
             };
+            return taskObj;
           });
           
-          // Get policy IDs to fetch their direct status from database
-          const policyIds = approvals
-            .filter(approval => approval.PolicyId)
-            .map(approval => typeof approval.PolicyId === 'object' ? approval.PolicyId.PolicyId : approval.PolicyId);
-          
-          if (policyIds.length > 0) {
-            // Fetch the actual policy status from the database table for all policies
-            const fetchPromises = policyIds.map(policyId => 
-              apiService.get(API_ENDPOINTS.POLICY(policyId))
-                .then(policyResponse => {
-                  return {
-                    policyId: policyId,
-                    status: policyResponse.Status
-                  };
-                })
-                .catch(error => {
-                  console.error(`Error fetching policy ${policyId}:`, error);
-                  return { policyId: policyId, status: null };
-                })
-            );
-            
-            Promise.all(fetchPromises)
-              .then(policyStatuses => {
-                // Update the approvals with database status
-                policyStatuses.forEach(policyStatus => {
-                  const approval = approvals.find(a => {
-                    const approvalPolicyId = typeof a.PolicyId === 'object' ? a.PolicyId.PolicyId : a.PolicyId;
-                    return approvalPolicyId === policyStatus.policyId;
-                  });
-                  
-                  if (approval) {
-                    approval.dbStatus = policyStatus.status;
-                    
-                    // Update ExtractedData Status as well to ensure consistency
-                    if (approval.ExtractedData && policyStatus.status) {
-                      approval.ExtractedData.Status = policyStatus.status;
-                    }
-                  }
-                });
-                
-                this.approvals = approvals;
-                console.log('Updated approvals with database status:', this.approvals);
-              })
-              .catch(error => {
-                console.error('Error updating policy statuses:', error);
-                this.approvals = approvals;
-              });
-          } else {
-            this.approvals = approvals;
-          }
+          this.approvals = approvals;
+          console.log('Updated approvals with database status:', this.approvals);
         })
         .catch(error => {
           console.error('Error fetching policy approvals:', error);

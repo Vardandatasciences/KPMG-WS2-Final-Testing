@@ -2672,10 +2672,8 @@ export default {
         // Fetch reviewers filtered by RBAC permissions (ApprovePolicy) and exclude current user
         const currentUserId = currentUser.value?.UserId || ''
         const data = await apiService.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
-          params: {
-            module: 'policy',
-            current_user_id: currentUserId
-          }
+          module: 'policy',
+          current_user_id: currentUserId
         })        
         users.value = data || []
       } catch (err) {

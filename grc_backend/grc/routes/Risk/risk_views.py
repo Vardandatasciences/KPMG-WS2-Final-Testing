@@ -243,7 +243,7 @@ def export_risk_register_v2(request):
         debug_print(f"❌ Export endpoint error: {str(e)}")
         import traceback
         traceback.print_exc()
-        return JsonResponse({"success": False, "error": str(e)}, status=500)
+        return JsonResponse({"success": False, "error": "An internal error occurred"}, status=500)
 
 
 @csrf_exempt
@@ -305,7 +305,7 @@ def export_compliance_management(request):
                 }, status=400)
                 
     except Exception as e:
-        return JsonResponse({"success": False, "error": str(e)}, status=500)
+        return JsonResponse({"success": False, "error": "An internal error occurred"}, status=500)
 
 
 
@@ -564,7 +564,7 @@ def last_incident(request):
         entityType="Incident"
     )
     
-    last = Incident.objects.order_by('-IncidentId').first()
+    last = Incident.objects.filter(tenant_id=tenant_id).order_by('-IncidentId').first()
     if last:
         serializer = IncidentSerializer(last)
         return Response(serializer.data)
@@ -590,8 +590,8 @@ def get_compliance_by_incident(request, incident_id):
     )
     
     try:
-        # Find the incident
-        incident = Incident.objects.get(IncidentId=incident_id)
+        # Find the incident - MULTI-TENANCY: Enforce tenant isolation
+        incident = Incident.objects.get(IncidentId=incident_id, tenant_id=tenant_id)
         
         # Find related compliance(s) where ComplianceId matches the incident's ComplianceId
         if incident.ComplianceId:
@@ -623,8 +623,8 @@ def get_risks_by_incident(request, incident_id):
     )
     
     try:
-        # Find the incident
-        incident = Incident.objects.get(IncidentId=incident_id)
+        # Find the incident - MULTI-TENANCY: Enforce tenant isolation
+        incident = Incident.objects.get(IncidentId=incident_id, tenant_id=tenant_id)
         
         # Get compliance ID from the incident
         compliance_id = incident.ComplianceId
@@ -1092,7 +1092,7 @@ class RiskInstanceViewSet(viewsets.ModelViewSet):
             debug_print(f"Error in RiskInstanceViewSet.list: {e}")
             import traceback
             traceback.print_exc()
-            return Response({"error": str(e)}, status=500)
+            return Response({"error": "An internal error occurred"}, status=500)
    
     def retrieve(self, request, *args, **kwargs):
         """Retrieve a single risk instance by ID"""
@@ -1146,7 +1146,7 @@ class RiskInstanceViewSet(viewsets.ModelViewSet):
             debug_print(f"Error retrieving risk instance: {e}")
             import traceback
             traceback.print_exc()
-            return Response({"error": str(e)}, status=500)
+            return Response({"error": "An internal error occurred"}, status=500)
    
     def create(self, request, *args, **kwargs):
         # MULTI-TENANCY: Extract tenant_id from request
@@ -1236,7 +1236,7 @@ class RiskInstanceViewSet(viewsets.ModelViewSet):
             debug_print(f"Error creating risk instance: {e}")
             import traceback
             traceback.print_exc()
-            return Response({"error": str(e)}, status=500)
+            return Response({"error": "An internal error occurred"}, status=500)
  
     @csrf_exempt
     def update(self, request, *args, **kwargs):
@@ -1274,7 +1274,7 @@ class RiskInstanceViewSet(viewsets.ModelViewSet):
             debug_print(f"Error updating risk instance {instance.RiskInstanceId}: {e}")
             import traceback
             traceback.print_exc()
-            return Response({"error": str(e)}, status=400)
+            return Response({"error": "An internal error occurred"}, status=400)
    
     def destroy(self, request, *args, **kwargs):
         # Log the delete operation
@@ -1696,7 +1696,7 @@ def risk_workflow(request):
             logLevel="ERROR"
         )
         debug_print(f"Error in risk_workflow view: {e}")
-        return Response({"error": str(e)}, status=500)
+        return Response({"error": "An internal error occurred"}, status=500)
 
 @csrf_exempt
 @api_view(['POST'])
@@ -1753,7 +1753,7 @@ def assign_risk_instance(request):
         # Just validate the user exists
         from django.db import connection
         with connection.cursor() as cursor:
-            cursor.execute("SELECT UserId, UserName FROM grc2.users WHERE UserId = %s", [user_id])
+            cursor.execute("SELECT UserId, UserName FROM users WHERE UserId = %s", [user_id])
             user = cursor.fetchone()
         
         if not user:
@@ -1814,12 +1814,12 @@ def assign_risk_instance(request):
                 logLevel="ERROR",
                 additionalInfo={"risk_id": risk_id, "assigned_to": user_id}
             )
-            return Response({'error': str(e)}, status=500)
+            return Response({'error': 'An internal error occurred'}, status=500)
     except RiskInstance.DoesNotExist:
         return Response({'error': 'Risk instance not found'}, status=404)
     except Exception as e:
         debug_print(f"Error assigning risk: {e}")
-        return Response({'error': str(e)}, status=500)
+        return Response({'error': 'An internal error occurred'}, status=500)
 
 @api_view(['GET'])
 @rbac_required(required_permission='view_all_risk')
@@ -1843,7 +1843,7 @@ def get_custom_users(request):
         # Using raw SQL query to fetch from your custom table
         from django.db import connection
         with connection.cursor() as cursor:
-            cursor.execute("SELECT * FROM grc2.users")
+            cursor.execute("SELECT * FROM users")
             columns = [col[0] for col in cursor.description]
             users = [
                 dict(zip(columns, row))
@@ -1862,7 +1862,7 @@ def get_custom_users(request):
         return Response(users)
     except Exception as e:
         debug_print(f"Error fetching custom users: {e}")
-        return Response({"error": str(e)}, status=500)
+        return Response({"error": "An internal error occurred"}, status=500)
 
 @api_view(['GET'])
 @rbac_required(required_permission='view_all_risk')
@@ -1887,12 +1887,13 @@ def get_custom_user(request, user_id):
         # Using raw SQL query to fetch from your custom table
         from django.db import connection
         with connection.cursor() as cursor:
-            cursor.execute("SELECT * FROM grc2.users WHERE UserId = %s", [user_id])
+            # MULTI-TENANCY: Remove hardcoded DB name and enforce tenant isolation
+            cursor.execute("SELECT * FROM users WHERE UserId = %s AND TenantId = %s", [user_id, tenant_id])
             columns = [col[0] for col in cursor.description]
             row = cursor.fetchone()
             
             if not row:
-                return Response({"error": f"User with ID {user_id} not found"}, status=404)
+                return Response({"error": "User not found or access denied"}, status=404)
                 
             user = dict(zip(columns, row))
             
@@ -1905,7 +1906,7 @@ def get_custom_user(request, user_id):
         return Response(user)
     except Exception as e:
         debug_print(f"Error fetching custom user {user_id}: {e}")
-        return Response({"error": str(e)}, status=500)
+        return Response({"error": "An internal error occurred while fetching user data"}, status=500)
 
 @api_view(['GET'])
 @rbac_required(required_permission='view_all_risk')
@@ -2099,7 +2100,7 @@ def risk_instances_view(request):
         debug_print(f"Error fetching risk instances: {e}")
         import traceback
         traceback.print_exc()
-        return Response({"error": str(e)}, status=500)
+        return Response({"error": "An internal error occurred"}, status=500)
 
 @api_view(['GET'])
 @rbac_required(required_permission='view_all_risk')
@@ -2126,11 +2127,11 @@ def get_user_risks(request, user_id):
         try:
             from django.db import connection
             with connection.cursor() as cursor:
-                cursor.execute("SELECT user_id FROM grc2.users WHERE user_id = %s", [user_id])
+                cursor.execute("SELECT user_id FROM users WHERE user_id = %s", [user_id])
                 user = cursor.fetchone()
                 
             if not user:
-                debug_print(f"User with ID {user_id} not found in grc2.users table, but continuing anyway")
+                debug_print(f"User with ID {user_id} not found in users table, but continuing anyway")
                 # Return empty list instead of 404
                 return Response([])
         except Exception as db_error:
@@ -2313,7 +2314,7 @@ def update_risk_status(request):
         return Response({'error': 'Risk instance not found'}, status=404)
     except Exception as e:
         debug_print(f"Error updating risk status: {e}")
-        return Response({'error': str(e)}, status=500)
+        return Response({'error': 'An internal error occurred'}, status=500)
 
 @api_view(['GET'])
 @rbac_required(required_permission='view_all_risk')
@@ -2490,7 +2491,7 @@ def update_mitigation_approval(request):
             # Get the latest version for this risk
             cursor.execute("""
                 SELECT ra.ExtractedInfo, ra.UserId, ra.ApproverId, ra.version 
-                FROM grc2.risk_approval ra
+                FROM risk_approval ra
                 WHERE ra.RiskInstanceId = %s
                 ORDER BY 
                     CASE 
@@ -2527,7 +2528,7 @@ def update_mitigation_approval(request):
                 
                 # Insert a new record with the interim version
                 cursor.execute("""
-                    INSERT INTO grc2.risk_approval 
+                    INSERT INTO risk_approval 
                     (RiskInstanceId, version, ExtractedInfo, UserId, ApproverId, FrameworkId)
                     VALUES (%s, %s, %s, %s, %s, %s)
                 """, [
@@ -2550,7 +2551,7 @@ def update_mitigation_approval(request):
                 return Response({'error': 'Mitigation ID not found in approval record'}, status=404)
     except Exception as e:
         debug_print(f"Error updating mitigation approval: {e}")
-        return Response({'error': str(e)}, status=500)
+        return Response({'error': 'An internal error occurred'}, status=500)
 
 
 def get_reviewer_id(reviewer_name):
@@ -2560,7 +2561,7 @@ def get_reviewer_id(reviewer_name):
         debug_print(type(reviewer_name),'--------------saddaes-----------------------------')
         from django.db import connection
         with connection.cursor() as cursor:
-            cursor.execute("SELECT user_id FROM grc2.users WHERE user_name = %s", [reviewer_name])
+            cursor.execute("SELECT user_id FROM users WHERE user_name = %s", [reviewer_name])
             row = cursor.fetchone()
             debug_print(row,'-------------------------------------------')
             if row:
@@ -2684,22 +2685,22 @@ def assign_reviewer(request):
         if isinstance(reviewer_id, str) and not reviewer_id.isdigit():
             # It's a name, look up the ID
             with connection.cursor() as cursor:
-                cursor.execute("SELECT UserId, UserName, email FROM grc2.users WHERE UserName = %s", [reviewer_id])
+                cursor.execute("SELECT UserId, UserName, email FROM users WHERE UserName = %s", [reviewer_id])
                 reviewer = cursor.fetchone()
                 
                 if not reviewer:
                     # Try to find by partial match
-                    cursor.execute("SELECT UserId, UserName, email FROM grc2.users WHERE UserName LIKE %s LIMIT 1", [f"%{reviewer_id}%"])
+                    cursor.execute("SELECT UserId, UserName, email FROM users WHERE UserName LIKE %s LIMIT 1", [f"%{reviewer_id}%"])
                     reviewer = cursor.fetchone()
         else:
             # It's already an ID or a string that can be converted to an ID
             with connection.cursor() as cursor:
-                cursor.execute("SELECT UserId, UserName, email FROM grc2.users WHERE UserId = %s", [reviewer_id])
+                cursor.execute("SELECT UserId, UserName, email FROM users WHERE UserId = %s", [reviewer_id])
                 reviewer = cursor.fetchone()
         
         # Also get user info
         with connection.cursor() as cursor:
-            cursor.execute("SELECT UserId, UserName, email FROM grc2.users WHERE UserId = %s", [user_id])
+            cursor.execute("SELECT UserId, UserName, email FROM users WHERE UserId = %s", [user_id])
             user = cursor.fetchone()
         
         if not reviewer:
@@ -2735,7 +2736,7 @@ def assign_reviewer(request):
         # Ensure ReviewerId is set correctly in the database with direct SQL update
         with connection.cursor() as cursor:
             cursor.execute("""
-                UPDATE grc2.risk_instance
+                UPDATE risk_instance
                 SET ReviewerId = %s
                 WHERE RiskInstanceId = %s
             """, [reviewer_id, risk_id])
@@ -2747,7 +2748,7 @@ def assign_reviewer(request):
             # Determine the next version number (U1, U2, etc.)
             with connection.cursor() as cursor:
                 cursor.execute("""
-                    SELECT version FROM grc2.risk_approval 
+                    SELECT version FROM risk_approval 
                     WHERE RiskInstanceId = %s AND version LIKE 'U%%'
                     ORDER BY CAST(SUBSTRING(version, 2) AS UNSIGNED) DESC
                     LIMIT 1
@@ -2841,7 +2842,7 @@ def assign_reviewer(request):
                     debug_print(f"🔵 [RISK APPROVAL] Inserting into risk_approval: RiskInstanceId={risk_id}, version={version}, UserId={user_id}, ApproverId={reviewer_id}, FrameworkId={framework_id}")
                     cursor.execute(
                         """
-                        INSERT INTO grc2.risk_approval 
+                        INSERT INTO risk_approval 
                         (RiskInstanceId, version, ExtractedInfo, UserId, ApproverId, ApprovedRejected, FrameworkId)
                         VALUES (%s, %s, %s, %s, %s, NULL, %s)
                         """,
@@ -2864,7 +2865,7 @@ def assign_reviewer(request):
                     # Verify the insert by querying back
                     cursor.execute("""
                         SELECT RiskInstanceId, version, UserId, ApproverId, FrameworkId 
-                        FROM grc2.risk_approval 
+                        FROM risk_approval 
                         WHERE RiskInstanceId = %s AND version = %s
                         ORDER BY RiskInstanceId DESC, version DESC LIMIT 1
                     """, [risk_id, version])
@@ -2915,7 +2916,7 @@ def assign_reviewer(request):
         debug_print(f"Error assigning reviewer: {e}")
         # Add traceback for more detailed error information
         traceback.print_exc()
-        return Response({'error': str(e)}, status=500)
+        return Response({'error': 'An internal error occurred'}, status=500)
 
 @api_view(['GET'])
 @rbac_required(required_permission='evaluate_assigned_risk')
@@ -2941,11 +2942,11 @@ def get_reviewer_tasks(request, user_id):
         try:
             from django.db import connection
             with connection.cursor() as cursor:
-                cursor.execute("SELECT user_id FROM grc2.users WHERE user_id = %s", [user_id])
+                cursor.execute("SELECT user_id FROM users WHERE user_id = %s", [user_id])
                 user = cursor.fetchone()
                 
             if not user:
-                debug_print(f"User with ID {user_id} not found in grc2.users table, but continuing anyway")
+                debug_print(f"User with ID {user_id} not found in users table, but continuing anyway")
                 # Return empty list instead of 404
                 return Response([])
         except Exception as db_error:
@@ -2970,17 +2971,17 @@ def get_reviewer_tasks(request, user_id):
                 query = f"""
                     WITH latest_versions AS (
                         SELECT ra.RiskInstanceId, MAX(ra.version) as latest_version
-                        FROM grc2.risk_approval ra
+                        FROM risk_approval ra
                         WHERE ra.ApproverId = %(approver_id)s
                         GROUP BY ra.RiskInstanceId
                     )
                     SELECT ra.RiskInstanceId, ra.ExtractedInfo, ra.UserId, ra.ApproverId, ra.version,
                            ri.RiskDescription, ri.Criticality, ri.Category, ri.RiskStatus, ri.RiskPriority,
                            r.FrameworkId
-                    FROM grc2.risk_approval ra
+                    FROM risk_approval ra
                     JOIN latest_versions lv ON ra.RiskInstanceId = lv.RiskInstanceId AND ra.version = lv.latest_version
-                    LEFT JOIN grc2.risk_instance ri ON ra.RiskInstanceId = ri.RiskInstanceId
-                    LEFT JOIN grc2.risk r ON ri.RiskId = r.RiskId
+                    LEFT JOIN risk_instance ri ON ra.RiskInstanceId = ri.RiskInstanceId
+                    LEFT JOIN risk r ON ri.RiskId = r.RiskId
                     WHERE ra.ApproverId = %(approver_id)s
                     {framework_where}
                 """
@@ -3030,11 +3031,11 @@ def get_reviewer_tasks(request, user_id):
                            ri.RiskStatus, 
                            ri.RiskPriority,
                            r.FrameworkId
-                    FROM grc2.risk_instance ri
-                    LEFT JOIN grc2.risk r ON ri.RiskId = r.RiskId
+                    FROM risk_instance ri
+                    LEFT JOIN risk r ON ri.RiskId = r.RiskId
                     WHERE ri.ReviewerId = %(approver_id)s
                     AND NOT EXISTS (
-                        SELECT 1 FROM grc2.risk_approval ra 
+                        SELECT 1 FROM risk_approval ra 
                         WHERE ra.RiskInstanceId = ri.RiskInstanceId 
                         AND ra.ApproverId = %(approver_id)s
                     )
@@ -3086,7 +3087,7 @@ def get_reviewer_tasks(request, user_id):
                         previous_version = f"U{previous_num}"
                         cursor.execute("""
                             SELECT ExtractedInfo
-                            FROM grc2.risk_approval
+                            FROM risk_approval
                             WHERE RiskInstanceId = %s AND version = %s
                             LIMIT 1
                         """, [risk_id, previous_version])
@@ -3223,7 +3224,7 @@ def complete_review(request):
                 # Get the latest version
                 cursor.execute("""
                     SELECT ExtractedInfo, UserId, ApproverId, version
-                    FROM grc2.risk_approval
+                    FROM risk_approval
                     WHERE RiskInstanceId = %s
                     ORDER BY version DESC
                     LIMIT 1
@@ -3237,7 +3238,7 @@ def complete_review(request):
                 
                 # Determine the next R version
                 cursor.execute("""
-                    SELECT version FROM grc2.risk_approval 
+                    SELECT version FROM risk_approval 
                     WHERE RiskInstanceId = %s AND version LIKE 'R%%'
                     ORDER BY version DESC
                     LIMIT 1
@@ -3309,7 +3310,7 @@ def complete_review(request):
                 # Insert new record with the R version and set ApprovedRejected column
                 debug_print(f"🔵 [RISK REVIEW] Inserting into risk_approval: RiskInstanceId={risk_id}, version={new_version}, UserId={user_id}, ApproverId={approver_id}, FrameworkId={framework_id}, Approved={approved}")
                 cursor.execute("""
-                    INSERT INTO grc2.risk_approval 
+                    INSERT INTO risk_approval 
                     (RiskInstanceId, version, ExtractedInfo, UserId, ApproverId, ApprovedRejected, FrameworkId)
                     VALUES (%s, %s, %s, %s, %s, %s, %s)
                 """, [
@@ -3332,7 +3333,7 @@ def complete_review(request):
                 # Update the risk status based on approval
                 risk_status = 'Approved' if approved else 'Revision Required by User'
                 cursor.execute("""
-                    UPDATE grc2.risk_instance
+                    UPDATE risk_instance
                     SET RiskStatus = %s
                     WHERE RiskInstanceId = %s
                 """, [risk_status, risk_id])
@@ -3344,7 +3345,7 @@ def complete_review(request):
                 # Verify the insert by querying back
                 cursor.execute("""
                     SELECT RiskInstanceId, version, UserId, ApproverId, FrameworkId, ApprovedRejected
-                    FROM grc2.risk_approval 
+                    FROM risk_approval 
                     WHERE RiskInstanceId = %s AND version = %s
                     ORDER BY RiskInstanceId DESC, version DESC LIMIT 1
                 """, [risk_id, new_version])
@@ -3376,7 +3377,7 @@ def complete_review(request):
     except Exception as e:
         debug_print(f"Error completing review: {e}")
         traceback.print_exc()
-        return Response({'error': str(e)}, status=500)
+        return Response({'error': 'An internal error occurred'}, status=500)
 
 @api_view(['GET'])
 @rbac_required(required_permission='view_all_risk')
@@ -3534,7 +3535,7 @@ def update_mitigation_status(request):
         return Response({'error': 'Risk instance not found'}, status=404)
     except Exception as e:
         debug_print(f"Error updating mitigation status: {e}")
-        return Response({'error': str(e)}, status=500)
+        return Response({'error': 'An internal error occurred'}, status=500)
 
 @api_view(['GET'])
 @rbac_required(required_permission='view_all_risk')
@@ -3561,7 +3562,7 @@ def get_reviewer_comments(request, risk_id):
             # Get the latest R version for this risk
             cursor.execute("""
                 SELECT ra.ExtractedInfo
-                FROM grc2.risk_approval ra
+                FROM risk_approval ra
                 WHERE ra.RiskInstanceId = %s 
                 AND ra.version LIKE 'R%%'
                 ORDER BY version DESC
@@ -3586,7 +3587,7 @@ def get_reviewer_comments(request, risk_id):
     except Exception as e:
         debug_print(f"Error fetching reviewer comments: {e}")
         traceback.print_exc()
-        return Response({"error": str(e)}, status=500)
+        return Response({"error": "An internal error occurred"}, status=500)
 
 @api_view(['GET'])
 @rbac_required(required_permission='view_all_risk')
@@ -3613,7 +3614,7 @@ def get_latest_review(request, risk_id):
             # Get the latest R version of review data
             cursor.execute("""
                 SELECT ExtractedInfo
-                FROM grc2.risk_approval
+                FROM risk_approval
                 WHERE RiskInstanceId = %s AND version LIKE 'R%%'
                 ORDER BY 
                     CAST(SUBSTRING(version, 2) AS UNSIGNED) DESC
@@ -3651,7 +3652,7 @@ def get_assigned_reviewer(request, risk_id):
             # First check if we have both ReviewerId and Reviewer columns populated
             cursor.execute("""
                 SELECT RiskInstanceId, ReviewerId, Reviewer 
-                FROM grc2.risk_instance
+                FROM risk_instance
                 WHERE RiskInstanceId = %s
                 LIMIT 1
             """, [risk_id])
@@ -3683,7 +3684,7 @@ def get_assigned_reviewer(request, risk_id):
                 if reviewer_name is not None and reviewer_id is None:
                     debug_print(f"Only have reviewer_name, looking up ID for: {reviewer_name}")
                     cursor.execute("""
-                        SELECT UserId FROM grc2.users
+                        SELECT UserId FROM users
                         WHERE UserName = %s
                         LIMIT 1
                     """, [reviewer_name])
@@ -3695,7 +3696,7 @@ def get_assigned_reviewer(request, risk_id):
                         
                         # Update the ReviewerId field in the risk_instance table
                         cursor.execute("""
-                            UPDATE grc2.risk_instance
+                            UPDATE risk_instance
                             SET ReviewerId = %s
                             WHERE RiskInstanceId = %s
                         """, [reviewer_id, risk_id])
@@ -3716,7 +3717,7 @@ def get_assigned_reviewer(request, risk_id):
                 if reviewer_id is not None and reviewer_name is None:
                     debug_print(f"Only have reviewer_id, looking up name for: {reviewer_id}")
                     cursor.execute("""
-                        SELECT UserName FROM grc2.users
+                        SELECT UserName FROM users
                         WHERE UserId = %s
                         LIMIT 1
                     """, [reviewer_id])
@@ -3728,7 +3729,7 @@ def get_assigned_reviewer(request, risk_id):
                         
                         # Update the Reviewer field in the risk_instance table
                         cursor.execute("""
-                            UPDATE grc2.risk_instance
+                            UPDATE risk_instance
                             SET Reviewer = %s
                             WHERE RiskInstanceId = %s
                         """, [reviewer_name, risk_id])
@@ -3749,8 +3750,8 @@ def get_assigned_reviewer(request, risk_id):
             # If not found in RiskInstance, fall back to checking risk_approval table
             cursor.execute("""
                 SELECT ApproverId, UserName 
-                FROM grc2.risk_approval ra
-                JOIN grc2.users u ON ra.ApproverId = u.UserId
+                FROM risk_approval ra
+                JOIN users u ON ra.ApproverId = u.UserId
                 WHERE ra.RiskInstanceId = %s
                 LIMIT 1
             """, [risk_id])
@@ -3826,7 +3827,7 @@ def update_risk_mitigation(request, risk_id):
         return Response({'error': 'Risk instance not found'}, status=404)
     except Exception as e:
         debug_print(f"Error updating modified mitigation: {e}")
-        return Response({'error': str(e)}, status=500)
+        return Response({'error': 'An internal error occurred'}, status=500)
 
 @api_view(['GET'])
 @rbac_required(required_permission='view_all_risk')
@@ -3861,7 +3862,7 @@ def get_risk_form_details(request, risk_id):
         return Response({"error": "Risk instance not found"}, status=404)
     except Exception as e:
         debug_print(f"Error fetching risk form details: {e}")
-        return Response({"error": str(e)}, status=500)
+        return Response({"error": "An internal error occurred"}, status=500)
 
 class GRCLogList(generics.ListCreateAPIView):
     queryset = GRCLog.objects.all().order_by('-Timestamp')
@@ -4069,7 +4070,7 @@ def get_system_logs(request):
         logger.error(traceback.format_exc())
         return Response({
             'success': False,
-            'error': str(e),
+            'error': 'An internal error occurred',
             'data': [],
             'total_count': 0
         }, status=500)
@@ -4227,7 +4228,7 @@ def export_system_logs(request):
         logger.error(traceback.format_exc())
         return Response({
             'success': False,
-            'error': str(e)
+            'error': 'An internal error occurred'
         }, status=500)
 
 @api_view(['GET'])
@@ -4561,7 +4562,7 @@ def get_all_risks_for_dropdown(request):
         debug_print(f"Error fetching risks for dropdown: {e}")
         debug_print(f"Full traceback: {error_traceback}")
         return Response({
-            "error": str(e),
+            "error": "An internal error occurred",
             "success": False
         }, status=500)
 
@@ -4592,7 +4593,7 @@ def get_all_compliances_for_dropdown(request, query=None):
         return Response(compliance_data)
     except Exception as e:
         debug_print(f"Error fetching compliances for dropdown: {e}")
-        return Response({"error": str(e)}, status=500)
+        return Response({"error": "An internal error occurred"}, status=500)
 
 @api_view(['GET'])
 @permission_classes([RiskViewPermission])  # RBAC: Require RiskViewPermission for viewing users dropdown
@@ -4622,7 +4623,7 @@ def get_users_for_dropdown(request):
         return Response(user_data)
     except Exception as e:
         debug_print(f"Error fetching users for dropdown: {e}")
-        return Response({"error": str(e)}, status=500)
+        return Response({"error": "An internal error occurred"}, status=500)
 
 @api_view(['GET'])
 @permission_classes([RiskViewPermission])  # RBAC: Require RiskViewPermission for viewing business impacts
@@ -4949,7 +4950,7 @@ def get_risk_heatmap_data(request):
         })
     except Exception as e:
         debug_print(f"Error generating risk heatmap data: {e}")
-        return Response({"error": str(e)}, status=500)
+        return Response({"error": "An internal error occurred"}, status=500)
 
 
 @api_view(['GET'])
@@ -5047,7 +5048,7 @@ def get_risks_by_heatmap_coordinates(request, impact, likelihood):
         return Response({
             'status': 'error',
             'message': f'Error fetching risks for Impact {impact}, Likelihood {likelihood}',
-            'error': str(e)
+            'error': 'An internal error occurred'
         }, status=500)
  
 @api_view(['GET'])
@@ -5248,7 +5249,7 @@ def risk_trend_over_time(request):
         debug_print("Traceback:")
         debug_print(traceback.format_exc())
         return JsonResponse({
-            'error': str(e)
+            'error': 'An internal error occurred'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
  
 @api_view(['GET'])
@@ -5346,7 +5347,7 @@ def get_risks_by_category(request, category):
         return Response({
             'status': 'error',
             'message': f'Error fetching risks for category {category}',
-            'error': str(e)
+            'error': 'An internal error occurred'
         }, status=500)
 
 
@@ -5678,7 +5679,7 @@ def custom_risk_analysis(request):
         debug_print(f"Error in custom_risk_analysis: {str(e)}")
         traceback.print_exc()
         return JsonResponse({
-            'error': str(e),
+            'error': 'An internal error occurred',
             'message': 'An error occurred while processing risk analysis data'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -6075,7 +6076,7 @@ def create_risk_instance(request):
             logLevel="ERROR"
         )
         
-        return Response({"error": str(e)}, status=500)
+        return Response({"error": "An internal error occurred"}, status=500)
 
 
 @csrf_exempt
@@ -6451,7 +6452,7 @@ def link_evidence_to_risk(request):
             ipAddress=get_client_ip(request),
             logLevel='ERROR',
             additionalInfo={
-                'error': str(e),
+                'error': 'An internal error occurred',
                 'error_type': str(type(e)),
                 'traceback': traceback.format_exc(),
                 'risk_instance_id': request.data.get('risk_instance_id') if hasattr(request, 'data') else None
@@ -6510,5 +6511,5 @@ def test_link_evidence_endpoint(request):
     except Exception as e:
         return JsonResponse({
             'success': False,
-            'error': str(e)
+            'error': 'An internal error occurred'
         }, status=500)

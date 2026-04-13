@@ -454,7 +454,8 @@ def get_framework_approvals_by_user(request, user_id):
             framework_id = get_active_framework_filter(request)
         
         # Get framework approvals where user is the creator and filter by tenant
-        approvals = FrameworkApproval.objects.filter(UserId=user_id, FrameworkId__tenant_id=tenant_id)
+        # Use select_related to fetch Framework details in the same query
+        approvals = FrameworkApproval.objects.filter(UserId=user_id, FrameworkId__tenant_id=tenant_id).select_related('FrameworkId')
         
         # Apply framework filter if provided
         if framework_id:
@@ -472,35 +473,27 @@ def get_framework_approvals_by_user(request, user_id):
         approvals = approvals.filter(ApprovalId__in=latest_approval_ids)
         debug_print(f"DEBUG: Found {approvals.count()} latest approvals for user {user_id}")
         
+        # Batch fetch reviewers to avoid N+1
+        reviewer_ids = list(approvals.values_list('ReviewerId', flat=True).distinct())
+        reviewer_ids = [rid for rid in reviewer_ids if rid is not None]
+        reviewers_map = {}
+        if reviewer_ids:
+            reviewers = Users.objects.filter(UserId__in=reviewer_ids, tenant_id=tenant_id)
+            reviewers_map = {u.UserId: u.UserName for u in reviewers}
+        
         approvals_data = []
         for approval in approvals:
-            # Get framework details for the approval
-            framework_name = None
-            framework_category = None
-            framework_status = None
-            created_by_name = None
-            created_by_date = None
-            reviewer_name = None
-            
-            if approval.FrameworkId:
-                framework_name = approval.FrameworkId.FrameworkName
-                framework_category = approval.FrameworkId.Category
-                framework_status = approval.FrameworkId.Status
-                created_by_name = approval.FrameworkId.CreatedByName
-                created_by_date = approval.FrameworkId.CreatedByDate
-                
-                # Get reviewer name from Users table
-                if approval.ReviewerId:
-                    try:
-                        reviewer_user = Users.objects.filter(UserId=approval.ReviewerId, tenant_id=tenant_id).first()
-                        if reviewer_user:
-                            reviewer_name = reviewer_user.UserName
-                    except Exception as e:
-                        logger.warning(f"Error looking up reviewer name: {e}")
+            framework = approval.FrameworkId
+            framework_name = framework.FrameworkName if framework else None
+            framework_category = framework.Category if framework else None
+            framework_status = framework.Status if framework else None
+            created_by_name = framework.CreatedByName if framework else None
+            created_by_date = framework.CreatedByDate if framework else None
+            reviewer_name = reviewers_map.get(approval.ReviewerId)
             
             approval_data = {
                 "ApprovalId": approval.ApprovalId,
-                "FrameworkId": approval.FrameworkId.FrameworkId if approval.FrameworkId else None,
+                "FrameworkId": framework.FrameworkId if framework else None,
                 "FrameworkName": framework_name,
                 "Category": framework_category,
                 "FrameworkStatus": framework_status,
@@ -560,7 +553,8 @@ def get_framework_approvals_by_reviewer(request, user_id):
             framework_id = get_active_framework_filter(request)
         
         # Get framework approvals where user is the reviewer and filter by tenant
-        approvals = FrameworkApproval.objects.filter(ReviewerId=user_id, FrameworkId__tenant_id=tenant_id)
+        # Use select_related to fetch Framework details in the same query
+        approvals = FrameworkApproval.objects.filter(ReviewerId=user_id, FrameworkId__tenant_id=tenant_id).select_related('FrameworkId')
         
         # Apply framework filter if provided
         if framework_id:
@@ -578,35 +572,27 @@ def get_framework_approvals_by_reviewer(request, user_id):
         approvals = approvals.filter(ApprovalId__in=latest_approval_ids)
         debug_print(f"DEBUG: Found {approvals.count()} latest approvals for reviewer {user_id}")
         
+        # Batch fetch reviewers to avoid N+1
+        reviewer_ids = list(approvals.values_list('ReviewerId', flat=True).distinct())
+        reviewer_ids = [rid for rid in reviewer_ids if rid is not None]
+        reviewers_map = {}
+        if reviewer_ids:
+            reviewers = Users.objects.filter(UserId__in=reviewer_ids, tenant_id=tenant_id)
+            reviewers_map = {u.UserId: u.UserName for u in reviewers}
+        
         approvals_data = []
         for approval in approvals:
-            # Get framework details for the approval
-            framework_name = None
-            framework_category = None
-            framework_status = None
-            created_by_name = None
-            created_by_date = None
-            reviewer_name = None
-            
-            if approval.FrameworkId:
-                framework_name = approval.FrameworkId.FrameworkName
-                framework_category = approval.FrameworkId.Category
-                framework_status = approval.FrameworkId.Status
-                created_by_name = approval.FrameworkId.CreatedByName
-                created_by_date = approval.FrameworkId.CreatedByDate
-                
-                # Get reviewer name from Users table
-                if approval.ReviewerId:
-                    try:
-                        reviewer_user = Users.objects.filter(UserId=approval.ReviewerId, tenant_id=tenant_id).first()
-                        if reviewer_user:
-                            reviewer_name = reviewer_user.UserName
-                    except Exception as e:
-                        logger.warning(f"Error looking up reviewer name: {e}")
+            framework = approval.FrameworkId
+            framework_name = framework.FrameworkName if framework else None
+            framework_category = framework.Category if framework else None
+            framework_status = framework.Status if framework else None
+            created_by_name = framework.CreatedByName if framework else None
+            created_by_date = framework.CreatedByDate if framework else None
+            reviewer_name = reviewers_map.get(approval.ReviewerId)
             
             approval_data = {
                 "ApprovalId": approval.ApprovalId,
-                "FrameworkId": approval.FrameworkId.FrameworkId if approval.FrameworkId else None,
+                "FrameworkId": framework.FrameworkId if framework else None,
                 "FrameworkName": framework_name,
                 "Category": framework_category,
                 "FrameworkStatus": framework_status,
@@ -686,12 +672,12 @@ def get_framework_approvals(request, framework_id=None):
             approvals = FrameworkApproval.objects.filter(
                 FrameworkId=framework_id,
                 FrameworkId__tenant_id=tenant_id  # MULTI-TENANCY: Verify framework belongs to tenant
-            )
+            ).select_related('FrameworkId')
         else:
             logger.info("Getting all framework approvals")
             debug_print("DEBUG: Getting all framework approvals")
             # MULTI-TENANCY: Only get approvals for frameworks belonging to this tenant
-            approvals = FrameworkApproval.objects.filter(FrameworkId__tenant_id=tenant_id)
+            approvals = FrameworkApproval.objects.filter(FrameworkId__tenant_id=tenant_id).select_related('FrameworkId')
             
             # NEW: Apply user filtering if user_id parameter is provided
             if filter_user_id:
@@ -714,38 +700,42 @@ def get_framework_approvals(request, framework_id=None):
         debug_print(f"DEBUG: After filtering to latest approvals per framework: {approvals.count()} records")
         logger.info(f"Showing {approvals.count()} latest approvals (one per framework)")
             
+        # Batch fetch reviewers to avoid N+1
+        reviewer_ids = list(approvals.values_list('ReviewerId', flat=True).distinct())
+        reviewer_ids = [rid for rid in reviewer_ids if rid is not None]
+        reviewers_map = {}
+        if reviewer_ids:
+            reviewers = Users.objects.filter(UserId__in=reviewer_ids, tenant_id=tenant_id)
+            reviewers_map = {u.UserId: u.UserName for u in reviewers}
+            
+        # Efficiently fetch policies for approved frameworks if needed
+        approved_framework_ids = [a.FrameworkId_id for a in approvals if a.ApprovedNot is True and a.FrameworkId]
+        policies_by_framework = {}
+        if approved_framework_ids:
+            all_policies = Policy.objects.filter(tenant_id=tenant_id, FrameworkId__in=approved_framework_ids)
+            for policy in all_policies:
+                fw_id = policy.FrameworkId_id
+                if fw_id not in policies_by_framework:
+                    policies_by_framework[fw_id] = []
+                policies_by_framework[fw_id].append({
+                    "PolicyId": policy.PolicyId,
+                    "PolicyName": escape_html(policy.PolicyName),
+                    "Status": policy.Status
+                })
+            
         approvals_data = []
         for approval in approvals:
-            debug_print(f"DEBUG: Processing approval {approval.ApprovalId} for framework {approval.FrameworkId.FrameworkId if approval.FrameworkId else 'None'}")
-            debug_print(f"       UserId: {approval.UserId}, ReviewerId: {approval.ReviewerId}, ApprovedNot: {approval.ApprovedNot}")
-            
-            # Get framework details for the approval
-            framework_name = None
-            framework_category = None
-            framework_status = None
-            created_by_name = None
-            created_by_date = None
-            reviewer_name = None
-            
-            if approval.FrameworkId:
-                framework_name = approval.FrameworkId.FrameworkName
-                framework_category = approval.FrameworkId.Category
-                framework_status = approval.FrameworkId.Status
-                created_by_name = approval.FrameworkId.CreatedByName
-                created_by_date = approval.FrameworkId.CreatedByDate
-                
-                # Get reviewer name from Users table
-                if approval.ReviewerId:
-                    try:
-                        reviewer_user = Users.objects.filter(UserId=approval.ReviewerId, tenant_id=tenant_id).first()
-                        if reviewer_user:
-                            reviewer_name = reviewer_user.UserName
-                    except Exception as e:
-                        logger.warning(f"Error looking up reviewer name: {e}")
+            framework = approval.FrameworkId
+            framework_name = framework.FrameworkName if framework else None
+            framework_category = framework.Category if framework else None
+            framework_status = framework.Status if framework else None
+            created_by_name = framework.CreatedByName if framework else None
+            created_by_date = framework.CreatedByDate if framework else None
+            reviewer_name = reviewers_map.get(approval.ReviewerId)
             
             approval_data = {
                 "ApprovalId": approval.ApprovalId,
-                "FrameworkId": approval.FrameworkId.FrameworkId if approval.FrameworkId else None,
+                "FrameworkId": framework.FrameworkId if framework else None,
                 "FrameworkName": framework_name,
                 "Category": framework_category,
                 "FrameworkStatus": framework_status,
@@ -760,21 +750,9 @@ def get_framework_approvals(request, framework_id=None):
                 "ApprovedDate": approval.ApprovedDate.isoformat() if approval.ApprovedDate else None
             }
             
-            # If this is an approved framework, also include its policies
-            if approval.ApprovedNot is True:
-                policies = Policy.objects.filter(tenant_id=tenant_id, FrameworkId=approval.FrameworkId)
-                policies_data = []
-                
-                for policy in policies:
-                    # Security: XSS Protection - Escape policy name in response data
-                    policy_data = {
-                        "PolicyId": policy.PolicyId,
-                        "PolicyName": escape_html(policy.PolicyName),
-                        "Status": policy.Status
-                    }
-                    policies_data.append(policy_data)
-                
-                approval_data["policies"] = policies_data
+            # If this is an approved framework, add its policies from the pre-fetched map
+            if approval.ApprovedNot is True and framework:
+                approval_data["policies"] = policies_by_framework.get(framework.FrameworkId, [])
             
             approvals_data.append(approval_data)
         
@@ -1445,6 +1423,71 @@ def get_latest_framework_approval(request, framework_id):
         return Response(approval_data, status=status.HTTP_200_OK)
         
     except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([PolicyViewPermission])
+@require_tenant
+@tenant_filter
+def get_framework_policies_with_subpolicies(request, framework_id):
+    """
+    Get all policies and their subpolicies for a framework in a single request.
+    Eliminates N+1 pattern on the frontend by returning the full tree.
+    """
+    tenant_id = request.tenant_id if hasattr(request, 'tenant_id') else get_tenant_id_from_request(request)
+    debug_print(f"DEBUG: get_framework_policies_with_subpolicies called for framework {framework_id}")
+    
+    try:
+        # Check if framework exists and belongs to tenant
+        framework = Framework.objects.filter(FrameworkId=framework_id, tenant_id=tenant_id).first()
+        if not framework:
+            return Response({"error": "Framework not found"}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Get policies for this framework
+        policies = Policy.objects.filter(FrameworkId=framework_id, tenant_id=tenant_id)
+        
+        # Batch fetch subpolicies using a separate query to avoid N+1
+        from collections import defaultdict
+        subpolicies_by_policy = defaultdict(list)
+        
+        policy_ids = list(policies.values_list('PolicyId', flat=True))
+        if policy_ids:
+            all_subpolicies = SubPolicy.objects.filter(
+                PolicyId__in=policy_ids,
+                tenant_id=tenant_id
+            )
+            
+            for sub in all_subpolicies:
+                subpolicies_by_policy[sub.PolicyId_id].append({
+                    "SubPolicyId": sub.SubPolicyId,
+                    "SubPolicyName": sub.SubPolicyName,
+                    "Description": sub.Description,
+                    "Status": sub.Status or 'Under Review',
+                    "Identifier": sub.Identifier,
+                    "Control": sub.Control
+                })
+            
+        policies_data = []
+        for policy in policies:
+            policies_data.append({
+                "PolicyId": policy.PolicyId,
+                "PolicyName": policy.PolicyName,
+                "PolicyDescription": policy.PolicyDescription,
+                "Status": policy.Status or 'Under Review',
+                "Department": policy.Department,
+                "Entities": policy.Entities,
+                "Identifier": policy.Identifier,
+                "CoverageRate": policy.CoverageRate,
+                "subpolicies": subpolicies_by_policy.get(policy.PolicyId, [])
+            })
+            
+        logger.info(f"Successfully retrieved {len(policies_data)} policies with subpolicies for framework {framework_id}")
+        return Response(policies_data, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        logger.error(f"Error in get_framework_policies_with_subpolicies: {str(e)}")
+        debug_print(f"ERROR: {str(e)}")
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 

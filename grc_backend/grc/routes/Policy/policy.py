@@ -5175,28 +5175,48 @@ def get_framework_explorer_data(request):
         else:
             frameworks = Framework.objects.filter(tenant_id=tenant_id)
        
+        # Pre-fetch all policies for this tenant to avoid N+1 queries
+        from collections import defaultdict
+        
+        all_policies = Policy.objects.filter(tenant_id=tenant_id).values(
+            'FrameworkId_id', 'ActiveInactive', 'Entities'
+        )
+        
+        fw_policy_stats = defaultdict(lambda: {'active': 0, 'inactive': 0})
+        
+        for policy in all_policies:
+            fw_id = policy['FrameworkId_id']
+            status = policy['ActiveInactive']
+            entities = policy['Entities']
+            
+            # Apply entity filtering logic
+            include_policy = True
+            if entity_filter:
+                include_policy = False
+                if entity_filter == 'all':
+                    if isinstance(entities, list) and 'all' in entities:
+                        include_policy = True
+                    elif entities == 'all':
+                        include_policy = True
+                else:
+                    if isinstance(entities, list):
+                        if int(entity_filter) in entities or 'all' in entities:
+                            include_policy = True
+                    elif entities == 'all' or str(entities) == str(entity_filter):
+                        include_policy = True
+            
+            if include_policy:
+                if status == 'Active':
+                    fw_policy_stats[fw_id]['active'] += 1
+                elif status == 'Inactive':
+                    fw_policy_stats[fw_id]['inactive'] += 1
+
         # Prepare response data with additional counts
         framework_data = []
         for fw in frameworks:
-            # Base policy query for this framework
-            policy_query = Policy.objects.filter(tenant_id=tenant_id, FrameworkId=fw.FrameworkId)
-            
-            # Apply entity filtering if specified
-            if entity_filter:
-                if entity_filter == 'all':
-                    # Filter for policies that apply to all entities
-                    policy_query = policy_query.filter(Entities__contains='all')
-                else:
-                    # Filter for policies that include this specific entity ID
-                    # This handles both list format [1,2,3] and single entity [1]
-                    policy_query = policy_query.filter(
-                        models.Q(Entities__contains=[int(entity_filter)]) |  # Entity in list
-                        models.Q(Entities__contains='all')  # Or applies to all entities
-                    )
-            
-            # Count policies for this framework (with entity filter applied)
-            active_policies = policy_query.filter(ActiveInactive='Active').count()
-            inactive_policies = policy_query.filter(ActiveInactive='Inactive').count()
+            fw_id = fw.FrameworkId
+            active_policies = fw_policy_stats.get(fw_id, {}).get('active', 0)
+            inactive_policies = fw_policy_stats.get(fw_id, {}).get('inactive', 0)
             
             # Skip frameworks that have no policies matching the entity filter
             if entity_filter and (active_policies == 0 and inactive_policies == 0):
@@ -12092,7 +12112,9 @@ def list_policy_approvals_for_user(request, user_id):
         )
         
         # Filter policy approvals by UserId (creator)
-        policy_approvals = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, 
+        # Optimization: Use select_related to avoid N+1 queries for Policy data
+        policy_approvals = PolicyApproval.objects.select_related('PolicyId').filter(
+            PolicyId__tenant=tenant_id, 
             UserId=user_id
         ).order_by('-ApprovalId')
         
@@ -12152,12 +12174,6 @@ def list_policy_approvals_for_user(request, user_id):
         
         serializer = PolicyApprovalSerializer(policy_approvals, many=True)
         data = serializer.data
-        # Decrypt any encrypted values in ExtractedData (belt-and-suspenders)
-        try:
-            from ...utils.auto_decrypt_helper import decrypt_all_encrypted_in_dict
-            data = decrypt_all_encrypted_in_dict(data)
-        except Exception as dec_err:
-            debug_print(f"Warning: Failed to decrypt policy approvals response: {dec_err}")
         return Response({
             'success': True,
             'data': data,
@@ -12230,7 +12246,9 @@ def list_policy_approvals_for_reviewer_by_id(request, user_id):
         )
         
         # Filter policy approvals by ReviewerId
-        policy_approvals = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, 
+        # Optimization: Use select_related to avoid N+1 queries for Policy data
+        policy_approvals = PolicyApproval.objects.select_related('PolicyId').filter(
+            PolicyId__tenant=tenant_id, 
             ReviewerId=user_id
         ).order_by('-ApprovalId')
         
@@ -12290,11 +12308,6 @@ def list_policy_approvals_for_reviewer_by_id(request, user_id):
         
         serializer = PolicyApprovalSerializer(policy_approvals, many=True)
         data = serializer.data
-        try:
-            from ...utils.auto_decrypt_helper import decrypt_all_encrypted_in_dict
-            data = decrypt_all_encrypted_in_dict(data)
-        except Exception as dec_err:
-            debug_print(f"Warning: Failed to decrypt reviewer policy approvals response: {dec_err}")
         return Response({
             'success': True,
             'data': data,

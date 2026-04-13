@@ -158,7 +158,7 @@ export default {
         
         if (policyId && policyName) {
           // Fetch all notifications
-          const response = await apiService.get(`/get-notifications/?user_id=${userId}`, {}, { background: true })
+          const response = await apiService.get(API_ENDPOINTS.GET_NOTIFICATIONS(userId), {}, { background: true })
           
           if (response && response.status === 'success' && response.notifications) {
             const data = response
@@ -201,7 +201,7 @@ export default {
               
               // Mark ONLY this specific notification as read
               if (finalNotification) {
-                await apiService.post('/mark-as-read/', { notification_id: finalNotification.id }, { background: true })
+                await apiService.post(API_ENDPOINTS.MARK_AS_READ, { notification_id: finalNotification.id }, { background: true })
                 console.log(`✅ Marked notification ${finalNotification.id} as read for policy "${policyName}"`)
               } else {
                 console.log(`⚠️ No matching notification found for policy "${policyName}" - notification will remain visible`)

@@ -190,8 +190,8 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import axios from 'axios'
-import { API_ENDPOINTS } from '../../config/api.js'
+import apiService from '@/services/apiService'
+import { API_ENDPOINTS } from '@/config/api.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -215,12 +215,12 @@ async function fetchFindingData() {
     loading.value = true
     error.value = null
     
-          const response = await axios.get(API_ENDPOINTS.AUDIT_FINDINGS_DETAILS(auditFindingId.value))
+    const data = await apiService.get(API_ENDPOINTS.AUDIT_FINDINGS_DETAILS(auditFindingId.value))
     
-    if (response.data && response.data.success) {
-      findingData.value = response.data.data
+    if (data && data.success) {
+      findingData.value = data.data
     } else {
-      throw new Error(response.data.message || 'Failed to fetch audit finding details')
+      throw new Error(data?.message || 'Failed to fetch audit finding details')
     }
   } catch (err) {
     console.error('Error fetching audit finding details:', err)

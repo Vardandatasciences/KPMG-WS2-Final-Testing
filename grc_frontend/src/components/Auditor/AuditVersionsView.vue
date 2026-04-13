@@ -114,8 +114,8 @@
 </template>
 
 <script>
-import axios from 'axios';
-import { API_ENDPOINTS } from '../../config/api.js';
+import apiService from '@/services/apiService';
+import { API_ENDPOINTS } from '@/config/api.js';
 import { AccessUtils } from '@/utils/accessUtils';
 
 export default {
@@ -169,10 +169,10 @@ export default {
       try {
         console.log(`Fetching versions for audit ${this.$route.params.auditId}`);
 
-        const response = await axios.get(API_ENDPOINTS.AUDIT_REPORT_VERSIONS(this.$route.params.auditId));
+        const data = await apiService.get(API_ENDPOINTS.AUDIT_REPORT_VERSIONS(this.$route.params.auditId));
         
-        if (response.data && response.data.versions) {
-          this.auditVersions = response.data.versions;
+        if (data && data.versions) {
+          this.auditVersions = data.versions;
           
           // Apply manual status correction if needed (similar to AuditReport.vue)
           this.auditVersions.forEach(version => {

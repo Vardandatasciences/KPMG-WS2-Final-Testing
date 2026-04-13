@@ -958,7 +958,14 @@ def extend_retention(request):
     try:
         data = request.data
         timeline_id = data.get('retention_timeline_id')
-        extra_days = int(data.get('extra_days', 0) or 0)
+        
+        # SECURITY: Secure numeric parsing with range validation
+        from ...routes.Global.validation import validate_numeric_input, ValidationError as GlobalValidationError
+        try:
+            extra_days = validate_numeric_input(data.get('extra_days'), min_val=1, max_val=3650, field_name="extra_days")
+        except GlobalValidationError as e:
+            return Response({'status': 'error', 'message': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            
         reason = data.get('reason')
         performed_by_id = data.get('performed_by')
 
@@ -1181,8 +1188,10 @@ def retention_dashboard_overview(request):
         archived_qs = RetentionTimeline.objects.filter(is_archived=True)
         paused_qs = RetentionTimeline.objects.filter(deletion_paused=True)
         disposed_qs = RetentionTimeline.objects.filter(Status='Disposed')
-
-        expiring_days = int(request.GET.get('expiring_days', 30) or 30)
+        
+        from ...routes.Global.validation import clamp_int
+        expiring_days = clamp_int(request.GET.get('expiring_days'), 1, 365, default=30)
+        
         expiring_qs = active_qs.filter(
             RetentionEndDate__gte=today,
             RetentionEndDate__lte=today + timedelta(days=expiring_days),
@@ -1258,9 +1267,11 @@ def retention_dashboard_expiring(request):
                 pass
         
         today = timezone.now().date()
-        days = int(request.GET.get('days', 30) or 30)
-        limit = int(request.GET.get('limit', 100) or 100)
-
+        
+        from ...routes.Global.validation import clamp_int
+        days = clamp_int(request.GET.get('days'), 1, 3650, default=30)
+        limit = clamp_int(request.GET.get('limit'), 1, 500, default=100)
+        
         qs = RetentionTimeline.objects.filter(
             Status='Active',
             RetentionEndDate__gte=today,
@@ -1339,7 +1350,7 @@ def retention_dashboard_archived(request):
             except:
                 pass
         
-        limit = int(request.GET.get('limit', 100) or 100)
+        limit = clamp_int(request.GET.get('limit'), 1, 500, default=100)
         qs = RetentionTimeline.objects.filter(is_archived=True).order_by('-archived_date')[:limit]
         data = [
             {
@@ -1410,7 +1421,7 @@ def retention_dashboard_paused(request):
             except:
                 pass
         
-        limit = int(request.GET.get('limit', 100) or 100)
+        limit = clamp_int(request.GET.get('limit'), 1, 500, default=100)
         qs = RetentionTimeline.objects.filter(deletion_paused=True).order_by('-UpdatedAt')[:limit]
         data = [
             {
@@ -1484,8 +1495,8 @@ def retention_dashboard_audit_trail(request):
         
         record_type = request.GET.get('record_type')
         record_id = request.GET.get('record_id')
-        limit = int(request.GET.get('limit', 100) or 100)
-
+        limit = clamp_int(request.GET.get('limit'), 1, 500, default=100)
+        
         qs = DataLifecycleAuditLog.objects.all().order_by('-timestamp')
         if record_type:
             qs = qs.filter(record_type=record_type)

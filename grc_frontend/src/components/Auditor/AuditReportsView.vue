@@ -128,7 +128,8 @@
 </template>
 
 <script>
-import axios from 'axios';
+import apiService from '@/services/apiService';
+import { API_ENDPOINTS } from '@/config/api.js';
 
 export default {
   name: 'AuditReportsView',
@@ -182,9 +183,9 @@ export default {
         console.log(`Fetching reports for audit ${this.$route.params.auditId}`);
 
         // Use the same API endpoint as the original popup
-        let response;
+        let data;
         try {
-          response = await axios.get(`/audit-report/${this.$route.params.auditId}/`);
+          data = await apiService.get(API_ENDPOINTS.AUDIT_REPORT(this.$route.params.auditId));
         } catch (apiError) {
           console.error('Primary API failed, trying fallback:', apiError);
           
@@ -218,8 +219,8 @@ export default {
           throw apiError; // Re-throw if no fallback data available
         }
         
-        if (response.data && response.data.success && response.data.data) {
-          const reportData = response.data.data;
+        if (data && data.success && data.data) {
+          const reportData = data.data;
           
           // Create a single report entry from the API response
           this.processedReports = [{

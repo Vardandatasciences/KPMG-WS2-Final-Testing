@@ -1664,7 +1664,8 @@
 </template>
 
 <script>
-import api from '@/services/api.js'
+import apiService from '@/services/apiService';
+import { API_ENDPOINTS } from '@/config/api.js';
 import auditorDataService from '@/services/auditorService' // NEW: Use cached auditor data
 import { compressFile, shouldCompressFile } from '@/utils/fileCompression.js'
 
@@ -2306,18 +2307,16 @@ export default {
       this.annualSummary = null
       this.annualItems = []
       try {
-        const response = await api.get(
-          `/api/ai-audit/${this.currentAuditId}/annual-consolidation/`,
-          {
-            params: { year: this.annualYear }
-          }
+        const data = await apiService.get(
+          API_ENDPOINTS.annualConsolidation(this.currentAuditId),
+          { params: { year: this.annualYear } }
         )
-        if (!response.data || response.data.success === false) {
-          this.annualSummaryError = response.data?.error || 'Failed to load annual consolidation.'
+        if (!data || data.success === false) {
+          this.annualSummaryError = data?.error || 'Failed to load annual consolidation.'
           return
         }
-        this.annualSummary = response.data.summary || null
-        this.annualItems = response.data.items || []
+        this.annualSummary = data.summary || null
+        this.annualItems = data.items || []
       } catch (e) {
         console.error('Error loading AI annual consolidation:', e)
         this.annualSummaryError = e.response?.data?.error || e.message || 'Failed to load annual consolidation.'
@@ -2354,21 +2353,21 @@ export default {
         return
       }
       try {
-        const res = await api.post(`/api/ai-audit/${this.currentAuditId}/add-custom-compliance/`, {
+        const data = await apiService.post(API_ENDPOINTS.AI_AUDIT_ADD_CUSTOM_COMPLIANCE(this.currentAuditId), {
           policy_id: this.manualPolicyId,
           subpolicy_id: this.manualSubpolicyId,
           name: q
         })
-        if (!res.data || !res.data.success) {
-          const err = (res.data?.error || '').toLowerCase()
+        if (!data || !data.success) {
+          const err = (data?.error || '').toLowerCase()
           if (err.includes('audit') && err.includes('closed')) {
             this.$popup?.info('Audit is closed.')
           } else {
-            this.$popup?.error(res.data?.error || 'Failed to create compliance.')
+            this.$popup?.error(data?.error || 'Failed to create compliance.')
           }
           return
         }
-        const c = res.data.compliance || {}
+        const c = data.compliance || {}
         const customId = c.compliance_id || c.ComplianceId
         const customEntry = {
           compliance_id: customId,
@@ -2678,9 +2677,9 @@ export default {
         }
         // Include all findings (manual + scheduled) so report matches Compliance Results list
 
-        const url = `/api/ai-audit/${auditId}/download-report/`
-        const response = await api.get(url, { responseType: 'blob', params })
-        const blob = new Blob([response.data], { type: 'application/pdf' })
+        const url = API_ENDPOINTS.AI_AUDIT_REPORT_DOWNLOAD(auditId)
+        const blobData = await apiService.get(url, { responseType: 'blob', params })
+        const blob = new Blob([blobData], { type: 'application/pdf' })
         const link = document.createElement('a')
         const fileURL = window.URL.createObjectURL(blob)
         link.href = fileURL
@@ -3167,14 +3166,14 @@ export default {
           let policiesResp
           let policies = []
           try {
-            policiesResp = await api.get(`/api/tree/frameworks/${fwId}/policies/`, { timeout: 20000 })
+            policiesResp = await apiService.get(`/api/tree/frameworks/${fwId}/policies/`, { timeout: 20000 })
             policies = policiesResp.data?.data || policiesResp.data || []
             console.log('📚 Found', policies.length, 'policies from tree endpoint for framework', fwId)
           } catch (treeError) {
             console.warn('⚠️ Tree endpoint failed, trying fallback endpoint:', treeError.message)
             // Fallback to simpler endpoint
             try {
-              policiesResp = await api.get(`/api/frameworks/${fwId}/get-policies/`, { timeout: 20000 })
+              policiesResp = await apiService.get(`/api/frameworks/${fwId}/get-policies/`, { timeout: 20000 })
               policies = Array.isArray(policiesResp.data) ? policiesResp.data : []
               console.log('📚 Found', policies.length, 'policies from fallback endpoint for framework', fwId)
             } catch (fallbackError) {
@@ -3213,7 +3212,7 @@ export default {
 
             try {
               // Get subpolicies for this policy
-              const subpoliciesResp = await api.get(
+              const subpoliciesResp = await apiService.get(
                 `/api/tree/policies/${policyId}/subpolicies/`,
                 { timeout: 15000 }
               )
@@ -3228,7 +3227,7 @@ export default {
                   if (!subpolicyId) return null
 
                   try {
-                    const compliancesResp = await api.get(`/api/tree/subpolicies/${subpolicyId}/compliances/`, { timeout: 15000 })
+                    const compliancesResp = await apiService.get(`/api/tree/subpolicies/${subpolicyId}/compliances/`, { timeout: 15000 })
                     const compliancesData = compliancesResp.data?.data || compliancesResp.data || []
                     return {
                       subpolicy_id: subpolicyId,
@@ -3324,9 +3323,9 @@ export default {
           // Fallback: Fetch auditor, reviewer and public audits in parallel and merge
           console.log('⚠️ [AIAuditUpload] No cached data found, fetching from API...')
           const results = await Promise.allSettled([
-            api.get('/api/my-audits/'),
-            api.get('/api/my-reviews/'),
-            api.get('/api/audits/public/')
+            apiService.get(API_ENDPOINTS.AUDIT_MY_AUDITS),
+            apiService.get(API_ENDPOINTS.AUDIT_MY_REVIEWS),
+            apiService.get(API_ENDPOINTS.AUDITS_PUBLIC)
           ])
 
           const pushNormalized = (arr) => {
@@ -3336,7 +3335,7 @@ export default {
 
           results.forEach((res, idx) => {
             if (res.status === 'fulfilled') {
-              const data = res.value?.data
+              const data = res.value
               const list = Array.isArray(data?.audits) ? data.audits : (Array.isArray(data) ? data : [])
               console.log('🔎 Source', idx, 'count:', Array.isArray(list) ? list.length : 0)
               pushNormalized(list)
@@ -3516,7 +3515,7 @@ export default {
     },
     async loadAuditInfo() {
       try {
-        const auditId = this.currentAuditId
+        const auditId = this.currentAuditId || this.$route.params.auditId
         console.log('🔄 Loading audit info for ID:', auditId)
         
         if (!auditId || auditId === 'Unknown') {
@@ -3530,32 +3529,29 @@ export default {
         }
         
         // Load audit details
-        const response = await api.get(`/api/audits/${auditId}/task-details/`)
-        console.log('🔍 API Response for audit', auditId, ':', response.data)
-        console.log('🔍 Policy from API:', response.data?.policy_name)
-        console.log('🔍 Sub-policy from API:', response.data?.subpolicy_name)
-        console.log('🔍 Framework from API:', response.data?.framework_name)
-        console.log('🔍 Framework ID from API:', response.data?.framework_id)
+        const data = await apiService.get(API_ENDPOINTS.AUDIT_TASK_DETAILS(auditId))
+        this.auditDetails = data
+        console.log('🔍 API Response for audit', auditId, ':', data)
         
-        if (response.data && !response.data.error) {
+        if (data && !data.error) {
           // Extract actual audit data from the API response
           // Handle framework_id - it might be 0, null, undefined, or empty string
-          const frameworkId = response.data.framework_id
+          const frameworkId = data.framework_id
           const validFrameworkId = (frameworkId && frameworkId !== 0 && frameworkId !== '0' && frameworkId !== '') ? frameworkId : null
           
           this.auditInfo = {
-            title: response.data.title || `Audit ${auditId}`,
+            title: data.title || `Audit ${auditId}`,
             type: 'AI Audit', // Since this is the AI audit upload page
-            framework: response.data.framework_name || 'Framework Not Set',
+            framework: data.framework_name || 'Framework Not Set',
             framework_id: validFrameworkId,
-            policy: response.data.policy_name || 'Not Specified',
-            subpolicy: response.data.subpolicy_name || 'Not Specified'
+            policy: data.policy_name || 'Not Specified',
+            subpolicy: data.subpolicy_name || 'Not Specified'
           }
           console.log('✅ Stored auditInfo with framework_id:', this.auditInfo.framework_id, '(raw:', frameworkId, ')')
           
           // Pre-populate the selected policy and sub-policy
-          this.selectedPolicyName = response.data.policy_name || 'Not Specified'
-          this.selectedSubPolicyName = response.data.subpolicy_name || 'Not Specified'
+          this.selectedPolicyName = data.policy_name || 'Not Specified'
+          this.selectedSubPolicyName = data.subpolicy_name || 'Not Specified'
           
           console.log('✅ Updated selectedPolicyName to:', this.selectedPolicyName)
           console.log('✅ Updated selectedSubPolicyName to:', this.selectedSubPolicyName)
@@ -3563,7 +3559,7 @@ export default {
           // Load compliance requirements in background (non-blocking, don't await)
           // This is for the old single-policy display, not needed for multi-select hierarchy
           console.log('🔍 Loading compliance by policy and sub-policy names (non-blocking)')
-          this.loadComplianceByPolicyNames(response.data.policy_name, response.data.subpolicy_name).catch(e => {
+          this.loadComplianceByPolicyNames(data.policy_name, data.subpolicy_name).catch(e => {
             console.warn('⚠️ loadComplianceByPolicyNames failed (non-critical):', e.message)
           })
 
@@ -3572,9 +3568,13 @@ export default {
             if (policyId) {
               this.selectedPolicyId = policyId
               // Attempt to resolve subpolicy under this policy
-              api.get(`/api/compliance/policies/${policyId}/subpolicies/`).then(spRes => {
-                const sp = spRes.data?.subpolicies?.find(sp => sp.SubPolicyName?.toLowerCase() === this.selectedSubPolicyName?.toLowerCase())
-                if (sp) this.selectedSubPolicyId = sp.SubPolicyId || sp.id
+              console.log('Fetching subpolicies for policy:', policyId)
+              apiService.get(API_ENDPOINTS.COMPLIANCE_SUBPOLICIES(policyId)).then(data => {
+                if (data && Array.isArray(data)) {
+                  console.log('Found', data.length, 'subpolicies')
+                  const sp = data.find(sp => sp.SubPolicyName?.toLowerCase() === this.selectedSubPolicyName?.toLowerCase())
+                  if (sp) this.selectedSubPolicyId = sp.SubPolicyId || sp.id
+                }
               }).catch(() => { /* ignore */ })
             }
           }).catch(e => {
@@ -3626,56 +3626,63 @@ export default {
         console.log('🔍 Checking SEBI AI Auditor status for framework:', frameworkId)
         
         // Check if SEBI is enabled via dashboard endpoint
-        const dashboardResponse = await api.get(`/api/sebi-auditor/dashboard/`, {
-          params: { framework_id: frameworkId }
+        const data = await apiService.get(API_ENDPOINTS.SEBI_AUDITOR_DASHBOARD, {
+          params: { audit_id: auditId }
         })
+        this.sebiDashboard = data || {}
         
-        if (dashboardResponse.data && dashboardResponse.data.sebi_enabled) {
+        if (this.sebiDashboard && this.sebiDashboard.sebi_enabled) {
           this.sebiEnabled = true
           console.log('✅ SEBI AI Auditor enabled - running checks for audit:', auditId)
           
           // Run SEBI checks in parallel (non-blocking)
           Promise.all([
             // 1. Filing Accuracy Verification
-            api.get(`/api/sebi-auditor/audit/${auditId}/filing-accuracy/`).then(res => {
-              this.sebiInsights.filingAccuracy = res.data
-              console.log('✅ SEBI Filing Accuracy:', res.data)
+            console.log('Fetching filing accuracy for audit:', auditId),
+            apiService.get(API_ENDPOINTS.SEBI_AUDITOR_FILING_ACCURACY(auditId)).then(data => {
+              this.filingAccuracyData = data || {}
+              this.sebiInsights.filingAccuracy = data
+              console.log('✅ SEBI Filing Accuracy:', data)
             }).catch(e => {
               console.warn('⚠️ SEBI Filing Accuracy check failed:', e.message)
             }),
             
             // 2. Timeliness & SLA Monitoring
-            api.get(`/api/sebi-auditor/audit/${auditId}/timeliness-sla/`).then(res => {
-              this.sebiInsights.timelinessSLA = res.data
-              console.log('✅ SEBI Timeliness SLA:', res.data)
+            console.log('Fetching timeliness SLA for audit:', auditId),
+            apiService.get(API_ENDPOINTS.SEBI_AUDITOR_TIMELINESS_SLA(auditId)).then(data => {
+              this.timelinessSlaData = data || {}
+              this.sebiInsights.timelinessSLA = data
+              console.log('✅ SEBI Timeliness SLA:', data)
               
               // Show alert if SLA breach detected
-              if (res.data.sla_breach && res.data.severity === 'high') {
-                this.$popup?.warning(`SEBI SLA Breach: ${res.data.days_delayed} days delayed (${res.data.severity} severity)`)
+              if (data.sla_breach && data.severity === 'high') {
+                this.$popup?.warning(`SEBI SLA Breach: ${data.days_delayed} days delayed (${data.severity} severity)`)
               }
             }).catch(e => {
               console.warn('⚠️ SEBI Timeliness SLA check failed:', e.message)
             }),
             
             // 3. Risk Score Calculation
-            api.get(`/api/sebi-auditor/audit/${auditId}/risk-score/`).then(res => {
-              this.sebiInsights.riskScore = res.data
-              console.log('✅ SEBI Risk Score:', res.data)
+            console.log('Fetching risk score for audit:', auditId),
+            apiService.get(API_ENDPOINTS.SEBI_AUDITOR_RISK_SCORE(auditId)).then(data => {
+              this.riskScoreData = data || {}
+              this.sebiInsights.riskScore = data
+              console.log('✅ SEBI Risk Score:', data)
               
               // Show alert if high risk
-              if (res.data.risk_level === 'High') {
-                this.$popup?.warning(`SEBI High Risk Detected: Risk Score ${res.data.risk_score} (${res.data.risk_level})`)
+              if (data.risk_level === 'High') {
+                this.$popup?.warning(`SEBI High Risk Detected: Risk Score ${data.risk_score} (${data.risk_level})`)
               }
             }).catch(e => {
               console.warn('⚠️ SEBI Risk Score check failed:', e.message)
             }),
             
             // 4. Pattern Detection
-            api.get(`/api/sebi-auditor/patterns/`, {
+            console.log('Fetching auditor patterns...'),
+            apiService.get(API_ENDPOINTS.SEBI_AUDITOR_PATTERNS, {
               params: { audit_id: auditId }
-            }).then(res => {
-              this.sebiInsights.patterns = res.data
-              console.log('✅ SEBI Patterns:', res.data)
+            }).then(data => {
+              this.auditorPatterns = data || []
             }).catch(e => {
               console.warn('⚠️ SEBI Pattern detection failed:', e.message)
             })
@@ -3921,8 +3928,8 @@ export default {
     async loadPolicies() {
       try {
         // Try to load policies, but don't fail if permission denied
-        const response = await api.get('/api/policies/')
-        this.policies = response.data || []
+        const data = await apiService.get(API_ENDPOINTS.COMPLIANCE_POLICIES_ALL)
+        this.policies = data || []
       } catch (error) {
         console.error('Error loading policies:', error)
         // Set empty array if policies can't be loaded
@@ -3938,18 +3945,11 @@ export default {
       if (this.selectedPolicyId) {
         console.log('🔍 Policy changed to:', this.selectedPolicyId, 'Type:', typeof this.selectedPolicyId)
         try {
-          // Get JWT token for authentication
-          const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token')
-          const headers = { 'Content-Type': 'application/json' }
-          if (token) {
-            headers['Authorization'] = `Bearer ${token}`
-          }
-          
           // Load subpolicies - using the correct API endpoint
-          const response = await api.get(`/api/compliance/policies/${this.selectedPolicyId}/subpolicies/`, { headers })
-          console.log('🔍 Subpolicies response:', response.data)
-          if (response.data && response.data.success) {
-            this.subpolicies = response.data.subpolicies || []
+          const data = await apiService.get(API_ENDPOINTS.COMPLIANCE_SUBPOLICIES(this.selectedPolicyId))
+          console.log('🔍 Subpolicies response:', data)
+          if (data && data.success) {
+            this.subpolicies = data.subpolicies || []
             console.log('🔍 Loaded subpolicies:', this.subpolicies.length)
           } else {
             this.subpolicies = []
@@ -3994,12 +3994,12 @@ export default {
         
         // If not found in loaded policies, try API search
         console.log('🔍 Policy not found in cache, searching via API')
-        const response = await api.get('/api/policies/', {
-          params: { search: policyName }
+        const data = await apiService.get(API_ENDPOINTS.COMPLIANCE_POLICIES_ALL, {
+          search: policyName
         });
         
-        if (response.data && response.data.length > 0) {
-          const foundPolicy = response.data.find(p => 
+        if (data && data.length > 0) {
+          const foundPolicy = data.find(p => 
             p.PolicyName?.toLowerCase() === policyName.toLowerCase() ||
             p.policy_name?.toLowerCase() === policyName.toLowerCase()
           );
@@ -4040,17 +4040,16 @@ export default {
             
             // Now find sub-policy ID
             try {
-              const subPolicyResponse = await api.get(`/api/compliance/policies/${policyId}/subpolicies/`);
-              if (subPolicyResponse.data.success && subPolicyResponse.data.subpolicies) {
-                const subPolicy = subPolicyResponse.data.subpolicies.find(sp => 
-                  sp.SubPolicyName?.toLowerCase() === subPolicyName?.toLowerCase() ||
-                  sp.name?.toLowerCase() === subPolicyName?.toLowerCase()
-                );
-                
-                if (subPolicy) {
-                  subPolicyId = subPolicy.SubPolicyId || subPolicy.id;
-                  console.log('✅ Found sub-policy ID:', subPolicyId, 'for sub-policy:', subPolicyName);
-                }
+              const data = await apiService.get(API_ENDPOINTS.COMPLIANCE_SUBPOLICIES(policyId));
+              const subPolicies = data.subpolicies || data || [];
+              const subPolicy = subPolicies.find(sp => 
+                sp.SubPolicyName?.toLowerCase() === subPolicyName?.toLowerCase() ||
+                sp.name?.toLowerCase() === subPolicyName?.toLowerCase()
+              );
+              
+              if (subPolicy) {
+                subPolicyId = subPolicy.SubPolicyId || subPolicy.id;
+                console.log('✅ Found sub-policy ID:', subPolicyId, 'for sub-policy:', subPolicyName);
               }
             } catch (error) {
               console.log('❌ Error finding sub-policy ID:', error.response?.status);
@@ -4087,15 +4086,15 @@ export default {
         for (const endpoint of endpoints) {
           try {
             console.log('🔍 Trying endpoint:', endpoint)
-            const response = await api.get(endpoint);
-            console.log('🔍 Response from', endpoint, ':', response.data)
+            const data = await apiService.get(endpoint);
+            console.log('🔍 Response from', endpoint, ':', data)
             
-            if (response.data && Array.isArray(response.data)) {
-              foundCompliances = response.data;
+            if (data && Array.isArray(data)) {
+              foundCompliances = data;
               console.log('✅ Found compliances via', endpoint, ':', foundCompliances.length, 'items')
               break;
-            } else if (response.data && response.data.compliances && Array.isArray(response.data.compliances)) {
-              foundCompliances = response.data.compliances;
+            } else if (data && data.compliances && Array.isArray(data.compliances)) {
+              foundCompliances = data.compliances;
               console.log('✅ Found compliances via', endpoint, ':', foundCompliances.length, 'items')
               break;
             }
@@ -4116,6 +4115,9 @@ export default {
             mandatory: (comp.MandatoryOptional || comp.mandatory) === 'Mandatory' || comp.mandatory === true
           }));
           console.log('✅ Formatted compliance requirements:', this.complianceRequirements.length, 'items')
+        } else if (policyId) {
+          const data = await apiService.get(API_ENDPOINTS.COMPLIANCE_MAPPING_REQUIREMENTS(policyId));
+          this.complianceRequirements = data.requirements || [];
         } else {
           console.log('ℹ️ No compliance requirements found for this policy/sub-policy combination')
           this.complianceRequirements = [];
@@ -4130,15 +4132,9 @@ export default {
     async loadComplianceRequirements(policyId) {
       try {
         console.log('🔍 Loading compliance requirements for policy:', policyId)
-        const response = await api.get(`/api/compliance-mapping/requirements/${policyId}/`);
-        console.log('🔍 Compliance API response:', response.data)
-        if (response.data.success) {
-          this.complianceRequirements = response.data.requirements;
-          console.log('✅ Loaded compliance requirements:', this.complianceRequirements.length, 'items')
-        } else {
-          console.warn('❌ Compliance API returned no success flag')
-          this.complianceRequirements = [];
-        }
+        const data = await apiService.get(API_ENDPOINTS.COMPLIANCE_MAPPING_REQUIREMENTS(policyId));
+        this.complianceRequirements = data.requirements || [];
+        console.log('✅ Loaded compliance requirements:', this.complianceRequirements.length, 'items')
       } catch (error) {
         console.error('❌ Error loading compliance requirements:', error);
         if (error.response?.status === 404) {
@@ -4172,22 +4168,22 @@ export default {
             console.log('🤖 AI Analysis - Using audit ID:', this.currentAuditId)
             console.log('🤖 AI Analysis - Document ID:', document.document_id)
             console.log('🤖 AI Analysis - Document name:', document.document_name)
-            const response = await api.post(`/api/ai-audit/${this.currentAuditId}/analyze-document-relevance/`, {
+            const data = await apiService.post(API_ENDPOINTS.AI_AUDIT_ANALYZE_RELEVANCE(this.currentAuditId), {
               document_id: document.document_id,
               document_name: document.document_name,
               compliance_requirements: this.complianceRequirements
             })
             
-            if (response.data.success) {
+            if (data.success) {
               mappingResults.push({
                 document_id: document.document_id,
                 document_name: document.document_name,
-                relevance_scores: response.data.relevance_scores,
-                suggested_compliances: response.data.suggested_compliances
+                relevance_scores: data.relevance_scores,
+                suggested_compliances: data.suggested_compliances
               })
               
               console.log(`✅ Relevance analysis complete for: ${document.document_name}`)
-              console.log('🎯 Suggested compliances:', response.data.suggested_compliances)
+              console.log('🎯 Suggested compliances:', data.suggested_compliances)
             }
           } catch (error) {
             console.error(`❌ Error analyzing ${document.document_name}:`, error)
@@ -4271,18 +4267,19 @@ export default {
       
       try {
         // Call AI processing endpoint with selected compliance requirements
-        const response = await api.post(`/api/ai-audit/${this.currentAuditId}/start-selective-processing/`, {
+        this.processingStatus = 'Processing Selective...';
+        const data = await apiService.post(API_ENDPOINTS.AI_AUDIT_SELECTIVE_PROCESSING(this.currentAuditId), {
           selected_compliance_ids: this.selectedComplianceIds,
           document_compliance_mapping: this.documentComplianceMapping
         })
         
-        if (response.data.success) {
+        if (data.success) {
           this.$popup?.success('AI processing started! Check the status below for progress.')
           
           // Start polling for results
           this.startStatusPolling()
         } else {
-          this.$popup?.error('Failed to start AI processing: ' + response.data.error)
+          this.$popup?.error('Failed to start AI processing: ' + data.error)
         }
         
       } catch (error) {
@@ -4543,29 +4540,26 @@ export default {
           // Append all mappings as JSON array
           formData.append('mappings', JSON.stringify(mappingPairs))
 
-          const response = await api.post(
-            `/api/ai-audit/${auditId}/upload-document/`,
+          const data = await apiService.post(
+            API_ENDPOINTS.AI_AUDIT_DOCUMENT_UPLOAD(auditId),
             formData,
             {
-              // Don't set Content-Type manually - let axios/browser set it with boundary automatically
-              onUploadProgress: progressEvent => {
-                const singleFileProgress =
-                  (progressEvent.loaded / progressEvent.total) || 0
-                const overallProgress =
-                  ((completedFiles + singleFileProgress) / totalFiles) * 100
-                this.uploadProgress = Math.round(overallProgress)
+              headers: { 'Content-Type': 'multipart/form-data' },
+              onUploadProgress: (progressEvent) => {
+                const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+                this.uploadProgress = percentCompleted;
               }
             }
-          )
-
-          if (response.data.success) {
-            if (response.data.already_uploaded) {
+          );
+          
+          if (data && data.success) {
+            if (data.already_uploaded) {
               this.$popup?.info(
-                response.data.message || 'Evidence already uploaded for the selected policy/subpolicy/compliance.'
+                data.message || 'Evidence already uploaded for the selected policy/subpolicy/compliance.'
               )
             } else {
               newUploadCount += 1
-              const mappingsCount = response.data.mappings_count || mappingPairs.length
+              const mappingsCount = data.mappings_count || mappingPairs.length
               this.$popup?.success(
                 `File "${file.name}" uploaded successfully with ${mappingsCount} mapping(s)`
               )
@@ -4589,9 +4583,6 @@ export default {
         
       } catch (error) {
         console.error('❌ Upload error details:', error)
-        console.error('❌ Error response:', error.response?.data)
-        console.error('❌ Error status:', error.response?.status)
-        console.error('❌ Error message:', error.message)
         
         const errMsg = (error.response?.data?.error || '').toLowerCase()
         const isAuditClosed = error.response?.status === 403 && (errMsg.includes('audit') && errMsg.includes('closed'))
@@ -4636,16 +4627,11 @@ export default {
           })
         }
 
-        const response = await api.get(`/api/ai-audit/${auditId}/documents/`, {
-          timeout: 120000 // 2 minute timeout for large document lists
-        })
-        console.log('📋 Documents response:', response.data)
-        console.log('📋 Response success:', response.data.success)
-        console.log('📋 Response documents array length:', response.data.documents?.length || 0)
-        console.log('📋 Raw response status:', response.status)
-        if (response.data.success) {
+        const data = await apiService.get(API_ENDPOINTS.AI_AUDIT_DOCUMENTS(auditId));
+        
+        if (data && Array.isArray(data.documents)) {
           // Map API response fields to component expected fields
-          const mappedDocs = response.data.documents.map(doc => {
+          const mappedDocs = data.documents.map(doc => {
             // Preserve root-level metadata from compliance_analyses BEFORE transforming it
             // (e.g., part_of_combined_check flag that gets lost when converting to array)
             let compliance_analyses_metadata = {}
@@ -5099,7 +5085,7 @@ export default {
             this.$forceUpdate()
           })
         } else {
-          console.warn('📋 Failed to load documents:', response.data.error)
+          console.warn('📋 Failed to load documents:', data.error)
           this.uploadedDocuments = []
         }
         
@@ -5135,11 +5121,12 @@ export default {
         if (!silent) this.isLoadingComplianceResults = true
         await this.loadSchedules()
         // Load ALL compliance results for this audit (manual checks + scheduled runs) so user sees same list whether they did "select policies, upload, Check" or a scheduled run
-        const response = await api.get(`/api/ai-audit/${auditId}/compliance-results/`, { params: {} })
-        if (response.data.success) {
-          this.auditComplianceResults = response.data.results || []
+        const data = await apiService.get(API_ENDPOINTS.AI_AUDIT_COMPLIANCE_RESULTS(auditId), { params: {} });
+        
+        if (data && data.results) {
+          this.auditComplianceResults = data.results;
         } else {
-          this.auditComplianceResults = []
+          this.auditComplianceResults = [];
         }
       } catch (e) {
         console.warn('Failed to load compliance results:', e)
@@ -5188,7 +5175,7 @@ export default {
           params.compliance_ids = this.selectedComplianceIds.join(',')
         }
         
-        const response = await api.get(`/api/ai-audit/${auditId}/relevant-documents/`, { params })
+        const response = await apiService.get(API_ENDPOINTS.AI_AUDIT_RELEVANT_DOCS(auditId), { params })
         console.log('📋 Relevant documents response:', response.data)
         
         if (response.data.success) {
@@ -5763,21 +5750,29 @@ export default {
           
           console.log(`📤 Uploading document ${doc.file_operation_id} with mappings:`, mappingPairs.length > 0 ? mappingPairs : 'empty (using AI-analyzed relevance)')
           
-          const response = await api.post(`/api/ai-audit/${auditId}/upload-document/`, formData, {
-            // Don't set Content-Type manually - let axios/browser set it with boundary automatically
-          })
+          const data = await apiService.post(
+            API_ENDPOINTS.AI_AUDIT_DOCUMENT_UPLOAD(auditId),
+            formData,
+            {
+              headers: { 'Content-Type': 'multipart/form-data' },
+              onUploadProgress: (progressEvent) => {
+                const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+                this.uploadProgress = percentCompleted;
+              }
+            }
+          );
           
-          console.log(`✅ Document ${doc.file_operation_id} uploaded successfully:`, response.data)
-          return response
+          console.log(`✅ Document ${doc.file_operation_id} uploaded successfully:`, data)
+          return data
         })
         
         const results = await Promise.all(uploadPromises)
         console.log('✅ Upload results:', results.length)
         
-        const alreadyUploadedResults = results.filter(r => r?.data?.already_uploaded)
-        const newUploadResults = results.filter(r => r?.data?.document_id != null || (r?.data?.document_ids?.length ?? 0) > 0)
+        const alreadyUploadedResults = results.filter(r => r?.already_uploaded)
+        const newUploadResults = results.filter(r => r?.document_id != null || (r?.document_ids?.length ?? 0) > 0)
         if (alreadyUploadedResults.length > 0) {
-          const msg = alreadyUploadedResults[0]?.data?.message || 'Evidence already uploaded for the selected policy/subpolicy/compliance.'
+          const msg = alreadyUploadedResults[0]?.message || 'Evidence already uploaded for the selected policy/subpolicy/compliance.'
           this.$popup?.info(msg)
         }
         if (newUploadResults.length > 0) {
@@ -6040,43 +6035,10 @@ export default {
           return
         }
         
-        if (this.uploadedDocuments.length === 0) {
-          console.warn('No uploaded documents to process')
-          this.$popup?.error('Please upload documents before starting AI processing.')
-          return
-        }
-        
-        // Check authentication status
-        const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token')
-        if (!token) {
-          console.warn('No JWT token found, cannot start AI processing')
-          this.$popup?.error('Authentication required. Please log in again.')
-          return
-        }
-        
-        // Set loading state
-        this.isProcessingAI = true
-        
-        console.log('🚀 Starting AI processing request...')
-        console.log('🚀 Audit ID:', auditId)
-        console.log('🚀 Token available:', !!token)
-        
-        const response = await api.post(`/api/ai-audit/${auditId}/start-processing/`, {
-          processing_options: {
-            enable_compliance_mapping: true,
-            enable_risk_assessment: true,
-            enable_recommendations: true
-          }
-        }, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
+        const data = await apiService.post(API_ENDPOINTS.AI_AUDIT_START_PROCESSING(auditId), {
+          document_ids: this.selectedDocuments
         })
-        
-        console.log('🚀 AI processing response:', response.data)
-        
-        if (response.data && response.data.success) {
+        if (data && data.success) {
           this.$popup?.success('AI processing started successfully')
           
           // Wait a moment then refresh status manually
@@ -6087,7 +6049,7 @@ export default {
           
           this.startStatusPolling()
         } else {
-          const errorMessage = response.data?.error || response.data?.message || 'Unknown error occurred'
+          const errorMessage = data?.error || data?.message || 'Unknown error occurred'
           console.error('🚀 AI processing failed:', errorMessage)
           this.$popup?.error(`AI processing failed: ${errorMessage}`)
         }
@@ -6149,11 +6111,11 @@ export default {
           return
         }
         console.log('📊 Loading AI status for audit:', auditId)
-        const response = await api.get(`/api/ai-audit/${auditId}/status/`)
-        console.log('📊 AI status response:', response.data)
-        if (response.data.success) {
-          this.processingStatus = response.data.processing_status
-          this.complianceResults = response.data.compliance_results || []
+        const data = await apiService.get(API_ENDPOINTS.AI_AUDIT_STATUS(auditId))
+        if (data && data.success) {
+          this.processingStatus = data.status
+          this.processingProgress = data.progress
+          this.complianceResults = data.compliance_results || []
           console.log('📊 Updated processing status:', this.processingStatus)
         }
         
@@ -6172,11 +6134,11 @@ export default {
         }
         
         console.log('🤖 Loading AI processing results for audit:', auditId)
-        const response = await api.get(`/api/ai-audit/${auditId}/documents/`)
+        const data = await apiService.get(API_ENDPOINTS.AI_AUDIT_DOCUMENTS(auditId))
         
-        if (response.data.success) {
+        if (data && data.success) {
           // Filter documents that have been processed by AI
-          const processedDocs = response.data.documents.filter(doc => 
+          const processedDocs = data.documents.filter(doc => 
             doc.processing_status === 'completed' && doc.processing_results
           )
           
@@ -6309,11 +6271,11 @@ export default {
       }
       this.viewingDocumentId = documentId
       try {
-        const res = await api.get(`/api/ai-audit/${auditId}/documents/${documentId}/view-url/`)
-        if (res.data?.success && res.data.viewUrl) {
-          window.open(res.data.viewUrl, '_blank', 'noopener,noreferrer')
+        const data = await apiService.get(API_ENDPOINTS.AI_AUDIT_DOCUMENT_VIEW_URL(auditId, documentId))
+        if (data && data.success) {
+          window.open(data.view_url, '_blank')
         } else {
-          this.$popup?.error(res.data?.error || 'Could not open document.')
+          this.$popup?.error(data?.error || 'Could not open document.')
         }
       } catch (err) {
         this.$popup?.error(err.response?.data?.error || 'Failed to open document.')
@@ -6332,19 +6294,17 @@ export default {
             return
           }
           
-          const response = await api.delete(`/api/ai-audit/${auditId}/documents/${documentId}/`, {
-            timeout: 60000 // 60 seconds timeout for delete operations (may need to delete multiple records)
-          })
+          const data = await apiService.delete(API_ENDPOINTS.AI_AUDIT_DOCUMENT_DELETE(auditId, documentId))
           
-          if (response.data.success) {
+          if (data && data.success) {
             console.log('✅ Document deleted successfully')
             this.$popup?.success('Document deleted successfully!')
             
             // Reload the documents list
             await this.loadUploadedDocuments()
           } else {
-            console.error('❌ Delete failed:', response.data.error)
-            this.$popup?.error(`Delete failed: ${response.data.error}`)
+            console.error('❌ Delete failed:', data.error)
+            this.$popup?.error(`Delete failed: ${data.error}`)
           }
         } catch (error) {
           console.error('❌ Error deleting document:', error)
@@ -6385,17 +6345,17 @@ export default {
         }
 
         console.log('🗑️ Bulk deleting all additional evidence for audit:', auditId)
-        const response = await api.delete(`/api/ai-audit/${auditId}/documents/delete-all/`, {
+        const data = await apiService.delete(API_ENDPOINTS.AI_AUDIT_DOCUMENT_DELETE_ALL(auditId), {
           params: { type: 'database' }
         })
 
-        if (response.data.success) {
-          console.log('✅ Bulk delete successful', response.data)
+        if (data && data.success) {
+          console.log('✅ Bulk delete successful', data)
           this.$popup?.success('All additional evidence deleted for this audit.')
           await this.loadUploadedDocuments()
         } else {
-          console.error('❌ Bulk delete failed:', response.data.error)
-          this.$popup?.error(`Delete failed: ${response.data.error}`)
+          console.error('❌ Bulk delete failed:', data.error)
+          this.$popup?.error(`Delete failed: ${data.error}`)
         }
       } catch (error) {
         console.error('❌ Error bulk deleting additional evidence:', error)
@@ -6446,8 +6406,8 @@ export default {
         let failedCount = 0
         for (const docId of documentIds) {
           try {
-            const response = await api.delete(`/api/ai-audit/${auditId}/documents/${docId}/`)
-            if (response.data.success) {
+            const data = await apiService.delete(API_ENDPOINTS.AI_AUDIT_DOCUMENT_DELETE(auditId, docId))
+            if (data && data.success) {
               deletedCount++
             } else {
               failedCount++
@@ -6507,7 +6467,7 @@ export default {
         console.log('📊 Generating comprehensive report for audit:', auditId)
         
         // Call the new comprehensive report endpoint
-        const response = await api.get(`/api/ai-audit/${auditId}/download-report/`, {
+        const response = await apiService.get(API_ENDPOINTS.AI_AUDIT_REPORT_DOWNLOAD(auditId), {
           responseType: 'blob',
           timeout: 30000 // 30 second timeout
         })
@@ -6691,22 +6651,29 @@ export default {
             }
             console.log(`🧪 Checking ALL mappings with ${allComplianceIds.size} compliance IDs:`, payload.selected_compliance_ids)
             
-            const res = await api.post(
-              `/api/ai-audit/${auditId}/documents/${documentIdToUse}/check/`,
+            const data = await apiService.post(
+              API_ENDPOINTS.AI_AUDIT_DOCUMENT_CHECK(auditId, documentIdToUse),
               payload,
               { timeout: 600000 } // 10 minutes timeout for compliance checks (can take longer for multiple compliances)
             )
-            console.log('🧪 Check response for all mappings:', res.status, res.data)
             
-            if (res.data && res.data.success) {
+            if (data && data.success) {
+              const jobId = data.job_id
+              if (jobId) {
+                console.log(`🚀 Background job started: ${jobId}. Polling for status...`)
+                this.$popup?.info(`Processing ${data.total_requirements || 'multiple'} requirements in background.`)
+                this.pollJobStatus(jobId, null, fileGroup)
+                return
+              }
+              
               // Update all mappings with the results
-              const analyses = res.data.analyses || []
+              const analyses = data.analyses || []
               
               // Group analyses by compliance_id and update corresponding mappings
               for (const mapping of fileGroup.mappings) {
                 mapping.processing_status = 'completed'
-                mapping.compliance_status = res.data.status || mapping.compliance_status
-                mapping.confidence_score = res.data.confidence ?? mapping.confidence_score
+                mapping.compliance_status = data.status || mapping.compliance_status
+                mapping.confidence_score = data.confidence ?? mapping.confidence_score
                 
                 // Filter analyses for this mapping's compliance IDs (support both compliance_id and compliance_ids)
                 const mappingCompIds = mapping.compliance_ids && mapping.compliance_ids.length
@@ -6780,7 +6747,7 @@ export default {
               // Start reload after a short delay
               setTimeout(() => reloadWithRetry(), 1500) // Start with 1.5 second delay
             } else {
-              const errorMsg = res.data?.error || 'Unknown error'
+              const errorMsg = data?.error || 'Unknown error'
               this.$popup?.error(`Failed to check compliance for "${fileGroup.document_name}". ${errorMsg}`)
             }
           } catch (err) {
@@ -6805,10 +6772,10 @@ export default {
         }
 
         // Check this single document record (allow long-running AI job)
-        const res = await api.post(
-          `/api/ai-audit/${auditId}/documents/${doc.document_id}/check/`,
+        const res = await apiService.post(
+          API_ENDPOINTS.AI_AUDIT_DOCUMENT_CHECK(auditId, doc.document_id),
           payload,
-          { timeout: 600000 } // 10 minutes
+          { timeout: 600000 }
         )
         console.log('🧪 Check response:', res.status, res.data)
         
@@ -6905,54 +6872,53 @@ export default {
             return
           }
           
-          const res = await api.get(`/api/ai-audit/compliance-job/${jobId}/status/`)
-          const job = res.data
-          
-          console.log(`📊 Job ${jobId} status: ${job.status}, progress: ${job.progress_percent}% (${job.processed_requirements}/${job.total_requirements})`)
-          
-          // Update UI with progress
-          if (doc) {
-            doc._job_progress = job.progress_percent
-            doc._job_status = job.status
-            this.$forceUpdate()
-          }
-          
-          if (job.status === 'completed') {
-            console.log(`✅ Job ${jobId} completed!`)
-            // Update document status
-            if (doc) {
-              doc.processing_status = 'completed'
-              doc.compliance_status = job.results?.status || doc.compliance_status
-              doc.confidence_score = job.results?.confidence ?? doc.confidence_score
-              doc.compliance_analyses = job.results?.analyses || doc.compliance_analyses
-              doc._job_progress = 100
-              this.$forceUpdate()
-            }
-            
-            this.$popup?.success(`Compliance check completed for "${fileGroup.document_name}" - ${job.completed_requirements} requirements analyzed`)
-            
-            // Reload documents to get final status
-            setTimeout(async () => {
-              try {
-                await this.loadUploadedDocuments()
-              } catch (err) {
-                console.error('Error reloading documents after job completion:', err)
+          const data = await apiService.get(API_ENDPOINTS.AI_AUDIT_JOB_STATUS(jobId))
+          if (data && data.success) {
+            if (data.status === 'completed') {
+              console.log(`✅ Job ${jobId} completed!`)
+              // Update document status
+              if (doc) {
+                doc.processing_status = 'completed'
+                doc.compliance_status = data.results?.status || doc.compliance_status
+                doc.confidence_score = data.results?.confidence ?? doc.confidence_score
+                doc.compliance_analyses = data.results?.analyses || doc.compliance_analyses
+                doc._job_progress = 100
+                this.$forceUpdate()
               }
-            }, 1000)
-            
-            return // Stop polling
-          } else if (job.status === 'failed') {
-            console.error(`❌ Job ${jobId} failed: ${job.error}`)
-            if (doc) {
-              doc.processing_status = 'failed'
-              doc._job_error = job.error
-              this.$forceUpdate()
+              
+              this.$popup?.success(`Compliance check completed for "${fileGroup.document_name}" - ${data.completed_requirements} requirements analyzed`)
+              
+              // Reload documents to get final status
+              setTimeout(async () => {
+                try {
+                  await this.loadUploadedDocuments()
+                } catch (err) {
+                  console.error('Error reloading documents after job completion:', err)
+                }
+              }, 1000)
+              
+              return // Stop polling
+            } else if (data.status === 'failed') {
+              console.error(`❌ Job ${jobId} failed: ${data.error}`)
+              if (doc) {
+                doc.processing_status = 'failed'
+                doc._job_error = data.error
+                this.$forceUpdate()
+              }
+              this.$popup?.error(`Compliance check failed: ${data.error}`)
+              return // Stop polling
+            } else {
+              // Still processing - poll again
+              console.log(`📊 Job ${jobId} status: ${data.status}, progress: ${data.progress_percent}% (${data.processed_requirements}/${data.total_requirements})`)
+              
+              // Update UI with progress
+              if (doc) {
+                doc._job_progress = data.progress_percent
+                doc._job_status = data.status
+                this.$forceUpdate()
+              }
+              setTimeout(poll, pollInterval)
             }
-            this.$popup?.error(`Compliance check failed: ${job.error}`)
-            return // Stop polling
-          } else {
-            // Still processing - poll again
-            setTimeout(poll, pollInterval)
           }
         } catch (err) {
           console.error(`❌ Error polling job ${jobId} status:`, err)
@@ -7013,8 +6979,8 @@ export default {
                 console.log(`🧪 Checking mapping "${mapping.mapping_display}" with ${mapping.compliance_ids.length} compliance(s)`)
               }
               
-              const res = await api.post(
-                `/api/ai-audit/${auditId}/documents/${mapping.document_id}/check/`,
+              const res = await apiService.post(
+                API_ENDPOINTS.AI_AUDIT_DOCUMENT_CHECK(auditId, mapping.document_id),
                 payload,
                 { timeout: 600000 } // 10 minutes per mapping
               )
@@ -7059,9 +7025,9 @@ export default {
     },
     async loadCompanyFolders() {
       try {
-        const res = await api.get('/api/company-folders/')
-        if (res.data?.success && res.data.folders) {
-          this.companyFolders = res.data.folders
+        const data = await apiService.get('/api/company-folders/')
+        if (data && data.success) {
+          this.companyFolders = data.folders
         }
         if (this.scheduleCompanyFolderId) {
           await this.loadCompanySubfolders(this.scheduleCompanyFolderId)
@@ -7080,9 +7046,9 @@ export default {
     async loadCompanySubfolders(folderId) {
       if (!folderId) return
       try {
-        const res = await api.get(`/api/company-folders/${folderId}/subfolders/`)
-        if (res.data?.success && Array.isArray(res.data.subfolders)) {
-          this.companySubfolders = res.data.subfolders
+        const data = await apiService.get(`/api/company-folders/${folderId}/subfolders/`)
+        if (data && data.success) {
+          this.companySubfolders = data.subfolders
         } else {
           this.companySubfolders = []
         }
@@ -7156,9 +7122,9 @@ export default {
       const auditId = this.currentAuditId
       if (!auditId || auditId === 'Unknown') return
       try {
-        const res = await api.get(`/api/ai-audit/${auditId}/schedules/`)
-        if (res.data?.success) {
-          this.schedules = res.data.schedules || []
+        const data = await apiService.get(API_ENDPOINTS.AI_AUDIT_SCHEDULES(auditId))
+        if (data && data.success) {
+          this.schedules = data.schedules || []
         }
       } catch (err) {
         console.error('Error loading schedules:', err)
@@ -7253,13 +7219,13 @@ export default {
             payload.cron_expression = cron
           }
         }
-        const res = await api.post(`/api/ai-audit/${auditId}/schedule/`, payload)
-        if (res.data?.success) {
-          this.$popup?.success('Schedule created successfully.')
+        const data = await apiService.post(API_ENDPOINTS.AI_AUDIT_SCHEDULE_CREATE(auditId), payload)
+        if (data && data.success) {
+          this.$popup?.success('Schedule created successfully')
           await this.loadSchedules()
           await this.loadComplianceResults(true)
         } else {
-          const msg = res.data?.error || res.data?.detail || 'Failed to create schedule.'
+          const msg = data?.error || data?.detail || 'Failed to create schedule.'
           this.$popup?.error(msg)
         }
       } catch (err) {
@@ -7273,12 +7239,12 @@ export default {
     },
     async toggleSchedule(s) {
       try {
-        const res = await api.patch(`/api/ai-audit/schedules/${s.id}/`, { is_active: !s.is_active })
-        if (res.data?.success) {
+        const data = await apiService.patch(API_ENDPOINTS.AI_AUDIT_SCHEDULE_ACTION(s.id), { is_active: !s.is_active })
+        if (data && data.success) {
           await this.loadSchedules()
-          this.$popup?.success(s.is_active ? 'Schedule paused.' : 'Schedule activated.')
+          this.$popup?.success(`Schedule ${s.is_active ? 'deactivated' : 'activated'} successfully`)
         } else {
-          this.$popup?.error(res.data?.error || 'Failed to update schedule.')
+          this.$popup?.error(data?.error || 'Failed to update schedule.')
         }
       } catch (err) {
         this.$popup?.error(err?.response?.data?.error || 'Failed to update schedule.')
@@ -7287,7 +7253,8 @@ export default {
     async deleteSchedule(s) {
       if (!confirm('Delete this schedule?')) return
       try {
-        await api.delete(`/api/ai-audit/schedules/${s.id}/`)
+        await apiService.delete(API_ENDPOINTS.AI_AUDIT_SCHEDULE_ACTION(s.id))
+        this.$popup?.success('Schedule deleted successfully')
         await this.loadSchedules()
         await this.loadComplianceResults(true)
       } catch (err) {
@@ -7310,7 +7277,7 @@ export default {
       if (this.scheduleRuns[id]) return
       this.scheduleRunsLoading = { ...this.scheduleRunsLoading, [id]: true }
       try {
-        const res = await api.get(`/api/ai-audit/schedules/${id}/runs/`)
+        const res = await apiService.get(API_ENDPOINTS.AI_AUDIT_RUNS(id))
         if (res.data?.success && Array.isArray(res.data.runs)) {
           this.scheduleRuns = { ...this.scheduleRuns, [id]: res.data.runs }
         } else {

@@ -470,11 +470,47 @@ from typing import Any, Dict, List, Optional
 
 
 class ValidationError(Exception):
-    """Custom exception for validation errors"""
-    def __init__(self, field: str, message: str):
-        self.field = field
-        self.message = message
-        super().__init__(f"{field}: {message}")
+    """
+    Custom exception for validation errors.
+    Supports both legacy (message only) and modern (field, message) formats.
+    """
+    def __init__(self, *args, **kwargs):
+        if len(args) == 2:
+            self.field = args[0]
+            self.message = args[1]
+            super().__init__(f"{self.field}: {self.message}")
+        elif len(args) == 1:
+            self.field = "field"
+            self.message = args[0]
+            super().__init__(self.message)
+        else:
+            self.field = kwargs.get('field', 'field')
+            self.message = kwargs.get('message', 'Invalid input')
+            super().__init__(self.message)
+
+def clamp_int(value: Any, min_val: int, max_val: int, default: int = 0) -> int:
+    """Clamp an integer value between min and max. Returns default if parsing fails."""
+    try:
+        if value is None or value == '':
+            return default
+        val = int(value)
+        return max(min_val, min(val, max_val))
+    except (ValueError, TypeError):
+        return default
+
+def validate_numeric_input(value: Any, min_val: int = 1, max_val: int = 1000, field_name: str = "field") -> int:
+    """Validate numeric input and raise ValidationError if out of range or invalid."""
+    try:
+        if value is None or value == '':
+            raise ValidationError(field_name, "is required")
+        val = int(value)
+        if val < min_val:
+            raise ValidationError(field_name, f"must be at least {min_val}")
+        if val > max_val:
+            raise ValidationError(field_name, f"cannot exceed {max_val}")
+        return val
+    except (ValueError, TypeError):
+        raise ValidationError(field_name, "must be a valid integer")
  
 
 

@@ -527,6 +527,15 @@ def create_ai_audit_schedule(request, audit_id):
         cron_dow = _day_to_cron_dow(day_of_week)
         cron_expression = f'{minute} {hour} * * {cron_dow}'
 
+    # SECURITY: Centralized validation for scheduled_at
+    if scheduled_at:
+        _now = timezone.now()
+        _max_future = _now + timedelta(days=365*10)
+        if scheduled_at < _now:
+            return Response({'success': False, 'error': 'Scheduled time cannot be in the past'}, status=status.HTTP_400_BAD_REQUEST)
+        if scheduled_at > _max_future:
+            return Response({'success': False, 'error': 'Scheduled time cannot be more than 10 years in the future'}, status=status.HTTP_400_BAD_REQUEST)
+
     elif schedule_type == 'cron':
         cron_expression = (data.get('cron_expression') or data.get('cronExpression') or '').strip()
         if not cron_expression:
@@ -573,6 +582,22 @@ def create_ai_audit_schedule(request, audit_id):
         return Response({'success': False, 'error': 'Could not compute next run time. Check cron expression or install croniter: pip install croniter'}, status=status.HTTP_400_BAD_REQUEST)
     if start_date and next_run < start_date:
         next_run = start_date
+
+    # SECURITY: Centralized validation for start_date and computed next_run
+    _now = timezone.now()
+    _max_future = _now + timedelta(days=365*10)
+    
+    if start_date:
+        if start_date > _max_future:
+            return Response({'success': False, 'error': 'Start date cannot be more than 10 years in the future'}, status=status.HTTP_400_BAD_REQUEST)
+        # Note: start_date in the past is often allowed for series calculation, 
+        # but next_run must be in the future.
+    
+    if next_run:
+        if next_run < _now - timedelta(minutes=1): # Allow 1 min grace
+            return Response({'success': False, 'error': 'Computed next run time is in the past'}, status=status.HTTP_400_BAD_REQUEST)
+        if next_run > _max_future:
+            return Response({'success': False, 'error': 'Next run time cannot be more than 10 years in the future'}, status=status.HTTP_400_BAD_REQUEST)
 
     schedule_tenant_id = tenant_id if tenant_id is not None else audit_tenant_id
 

@@ -43,8 +43,11 @@ def get_audit_completion_metrics(request):
     try:
         # Get time period from query params (default to current month)
         period = request.GET.get('period', 'month')
-        year = request.GET.get('year', datetime.now().year)
-        
+        try:
+            year = int(request.GET.get('year', datetime.now().year))
+        except (ValueError, TypeError):
+            year = datetime.now().year
+            
         # Calculate date range
         today = timezone.now()
         if period == 'day':
@@ -61,8 +64,8 @@ def get_audit_completion_metrics(request):
             else:
                 end_date = datetime(today.year, today.month + 1, 1) - timedelta(days=1)
         else:  # year
-            start_date = datetime(int(year), 1, 1)
-            end_date = datetime(int(year), 12, 31)
+            start_date = datetime(year, 1, 1)
+            end_date = datetime(year, 12, 31)
 
         # Apply framework filter
         base_queryset = Audit.objects.all()
@@ -84,7 +87,7 @@ def get_audit_completion_metrics(request):
         
         monthly_data_query = f"""
             SELECT 
-                DATE_FORMAT(AssignedDate, '%%Y-%%m') AS month,
+                DATE_FORMAT(AssignedDate, '%Y-%m') AS month,
                 COUNT(*) AS planned,
                 SUM(CASE WHEN Status = 'Completed' THEN 1 ELSE 0 END) AS completed
             FROM 
@@ -107,19 +110,22 @@ def get_audit_completion_metrics(request):
             
             for row in cursor.fetchall():
                 month_str, planned, completed = row
-                if month_str:
-                    year, month = map(int, month_str.split('-'))
-                    month_date = datetime(year, month, 1)
-                    month_name = month_date.strftime('%b')  # Short month name
+                if month_str and '-' in month_str:
+                    try:
+                        year_val, month_val = map(int, month_str.split('-'))
+                        month_date = datetime(year_val, month_val, 1)
+                        month_name = month_date.strftime('%b')  # Short month name
                     
-                    monthly_data.append({
-                        'month': month_name,
-                        'month_num': month,
-                        'year': year,
+                        monthly_data.append({
+                            'month': month_name,
+                            'month_num': month_val,
+                            'year': year_val,
                         'planned': planned,
                         'completed': completed,
-                        'completion_percentage': round((completed / planned * 100), 2) if planned > 0 else 0
-                    })
+                            'completion_percentage': round((completed / planned * 100), 2) if planned > 0 else 0
+                        })
+                    except (ValueError, TypeError) as parse_error:
+                        logger.warning(f"Failed to parse month string: {month_str} - {parse_error}")
         
         # Ensure all months are represented, even if no data
         all_months = []
@@ -293,7 +299,7 @@ def get_audit_cycle_time(request):
         # Use raw SQL to calculate the date difference by month
         monthly_query = f"""
             SELECT 
-                DATE_FORMAT(AssignedDate, '%%Y-%%m') AS month,
+                DATE_FORMAT(AssignedDate, '%Y-%m') AS month,
                 AVG(DATEDIFF(CompletionDate, AssignedDate)) AS avg_cycle_days
             FROM 
                 audit
@@ -323,14 +329,17 @@ def get_audit_cycle_time(request):
             
             for row in cursor.fetchall():
                 month_str, avg_days = row
-                # Parse YYYY-MM to a date object for better formatting
-                year, month = map(int, month_str.split('-'))
-                month_date = datetime(year, month, 1)
-                
-                monthly_data.append({
-                    'month': month_date.strftime('%b %Y'),  # Short month name and year
-                    'avg_cycle_days': round(float(avg_days), 1) if avg_days else 0
-                })
+                if month_str and '-' in month_str:
+                    try:
+                        year_val, month_val = map(int, month_str.split('-'))
+                        month_date = datetime(year_val, month_val, 1)
+                        
+                        monthly_data.append({
+                            'month': month_date.strftime('%b %Y'),  # Short month name and year
+                            'avg_cycle_days': round(float(avg_days), 1) if avg_days else 0
+                        })
+                    except (ValueError, TypeError) as parse_error:
+                        logger.warning(f"Failed to parse month string in cycle time: {month_str} - {parse_error}")
         
         # Calculate overall average with the same conditions
         overall_avg_query = f"""
@@ -639,7 +648,7 @@ def get_time_to_close_findings(request):
         # Get monthly trend
         monthly_trend_query = """
             SELECT 
-                DATE_FORMAT(ReviewDate, '%%Y-%%m') AS month,
+                DATE_FORMAT(ReviewDate, '%Y-%m') AS month,
                 AVG(DATEDIFF(ReviewDate, AssignedDate)) AS avg_close_days
             FROM 
                 audit_findings
@@ -691,13 +700,17 @@ def get_time_to_close_findings(request):
             
             for row in cursor.fetchall():
                 month_str, avg_days = row
-                year, month = map(int, month_str.split('-'))
-                month_date = datetime(year, month, 1)
-                
-                monthly_trend.append({
-                    'month': month_date.strftime('%b %Y'),
-                    'avg_close_days': round(float(avg_days), 1) if avg_days else 0
-                })
+                if month_str and '-' in month_str:
+                    try:
+                        year_val, month_val = map(int, month_str.split('-'))
+                        month_date = datetime(year_val, month_val, 1)
+                        
+                        monthly_trend.append({
+                            'month': month_date.strftime('%b %Y'),
+                            'avg_close_days': round(float(avg_days), 1) if avg_days else 0
+                        })
+                    except (ValueError, TypeError) as parse_error:
+                        logger.warning(f"Failed to parse month string in close findings: {month_str} - {parse_error}")
             
             # Get top 5 oldest open findings
             cursor.execute(oldest_open_findings_query)
@@ -819,7 +832,7 @@ def get_non_compliance_issues(request):
         # Get monthly trend data
         monthly_trend_query = f"""
             SELECT 
-                DATE_FORMAT(af.AssignedDate, '%%Y-%%m') AS month,
+                DATE_FORMAT(af.AssignedDate, '%Y-%m') AS month,
                 COUNT(*) AS issue_count
             FROM 
                 audit_findings af
@@ -907,14 +920,17 @@ def get_non_compliance_issues(request):
             
             for row in cursor.fetchall():
                 month_str, count = row
-                if month_str:
-                    year, month = map(int, month_str.split('-'))
-                    month_date = datetime(year, month, 1)
-                    
-                    monthly_trend.append({
-                        'month': month_date.strftime('%b %Y'),
-                        'count': count
-                    })
+                if month_str and '-' in month_str:
+                    try:
+                        year_val, month_val = map(int, month_str.split('-'))
+                        month_date = datetime(year_val, month_val, 1)
+                        
+                        monthly_trend.append({
+                            'month': month_date.strftime('%b %Y'),
+                            'count': count
+                        })
+                    except (ValueError, TypeError) as parse_error:
+                        logger.warning(f"Failed to parse month string in non-compliance: {month_str} - {parse_error}")
             
             # Get severity breakdown
             cursor.execute(severity_breakdown_query, [tenant_id, start_date, end_date])
@@ -1075,7 +1091,7 @@ def get_severity_distribution(request):
         # Get severity trend over time
         trend_query = """
             SELECT 
-                DATE_FORMAT(af.AssignedDate, '%%Y-%%m') AS month,
+                DATE_FORMAT(af.AssignedDate, '%Y-%m') AS month,
                 CASE
                     WHEN MajorMinor = '1' THEN 'Major'
                     WHEN MajorMinor = '0' THEN 'Minor'
@@ -1166,19 +1182,22 @@ def get_severity_distribution(request):
             # Convert trend data to array format
             trend_array = []
             for month_str, severities in trend_data.items():
-                if month_str:
-                    year, month = map(int, month_str.split('-'))
-                    month_date = datetime(year, month, 1)
-                    month_name = month_date.strftime('%b %Y')
-                    
-                    # Ensure all severity levels are represented
-                    month_data = {
-                        'month': month_name,
-                        'Major': severities.get('Major', 0),
-                        'Minor': severities.get('Minor', 0),
-                        'None': severities.get('None', 0)
-                    }
-                    trend_array.append(month_data)
+                if month_str and '-' in month_str:
+                    try:
+                        year_val, month_val = map(int, month_str.split('-'))
+                        month_date = datetime(year_val, month_val, 1)
+                        month_name = month_date.strftime('%b %Y')
+                        
+                        # Ensure all severity levels are represented
+                        month_data = {
+                            'month': month_name,
+                            'Major': severities.get('Major', 0),
+                            'Minor': severities.get('Minor', 0),
+                            'None': severities.get('None', 0)
+                        }
+                        trend_array.append(month_data)
+                    except (ValueError, TypeError) as parse_error:
+                        logger.warning(f"Failed to parse month string in severity trend: {month_str} - {parse_error}")
             
             # Sort by date
             trend_array.sort(key=lambda x: datetime.strptime(x['month'], '%b %Y'))
@@ -1304,7 +1323,7 @@ def get_findings_closure_rate(request):
         # Calculate monthly closure rates for trend
         monthly_trend_query = """
             SELECT
-                DATE_FORMAT(month_date, '%%Y-%%m') AS month,
+                DATE_FORMAT(month_date, '%Y-%m') AS month,
                 closed_count,
                 opened_count,
                 ROUND(
@@ -1313,7 +1332,7 @@ def get_findings_closure_rate(request):
                 ) AS closure_rate
             FROM (
                 SELECT
-                    DATE(DATE_FORMAT(af.AssignedDate, '%%Y-%%m-01')) AS month_date,
+                    DATE(DATE_FORMAT(af.AssignedDate, '%Y-%m-01')) AS month_date,
                     SUM(CASE WHEN af.ReviewStatus = '1' AND af.ReviewDate BETWEEN %s AND %s THEN 1 ELSE 0 END) AS closed_count,
                     COUNT(*) AS opened_count
                 FROM
@@ -1740,7 +1759,7 @@ def get_report_timeliness(request):
         # Get trend data over months
         trend_query = """
             SELECT
-                DATE_FORMAT(DueDate, '%%Y-%%m') AS month,
+                DATE_FORMAT(DueDate, '%Y-%m') AS month,
                 ROUND(SUM(CASE WHEN CompletionDate <= DueDate THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 2) AS percent_on_time,
                 COUNT(*) AS total_reports
             FROM
@@ -1800,7 +1819,7 @@ def get_report_timeliness(request):
             late_reports = []
             
             for row in cursor.fetchall():
-                audit_id, framework_id, assigned_date, due_date, completion_date, status, days_late, framework_name = row
+                audit_id, framework_id, assigned_date, due_date, completion_date, audit_status, days_late, framework_name = row
                 
                 late_reports.append({
                     'audit_id': audit_id,
@@ -1809,7 +1828,7 @@ def get_report_timeliness(request):
                     'assigned_date': assigned_date.strftime('%Y-%m-%d') if assigned_date else None,
                     'due_date': due_date.strftime('%Y-%m-%d') if due_date else None,
                     'completion_date': completion_date.strftime('%Y-%m-%d') if completion_date else None,
-                    'status': status,
+                    'status': audit_status,
                     'days_late': days_late
                 })
             
@@ -1819,15 +1838,18 @@ def get_report_timeliness(request):
             
             for row in cursor.fetchall():
                 month_str, month_percent, month_total = row
-                if month_str:
-                    year, month = map(int, month_str.split('-'))
-                    month_date = datetime(year, month, 1)
-                    
-                    trend_data.append({
-                        'month': month_date.strftime('%b %Y'),
-                        'percent_on_time': float(month_percent) if month_percent else 0,
-                        'total_reports': month_total
-                    })
+                if month_str and '-' in month_str:
+                    try:
+                        year_val, month_val = map(int, month_str.split('-'))
+                        month_date = datetime(year_val, month_val, 1)
+                        
+                        trend_data.append({
+                            'month': month_date.strftime('%b %Y'),
+                            'percent_on_time': float(month_percent) if month_percent else 0,
+                            'total_reports': month_total
+                        })
+                    except (ValueError, TypeError) as parse_error:
+                        logger.warning(f"Failed to parse month string in trend: {month_str} - {parse_error}")
         
         # Determine timeliness rating
         if percent_on_time >= 90:
@@ -2154,7 +2176,7 @@ def debug_mttd_calculation(request):
         with connection.cursor() as cursor:
             cursor.execute("""
                 SELECT AVG(ABS(TIMESTAMPDIFF(SECOND, CreatedAt, IdentifiedAt)) / 60) AS MTTD_minutes
-                FROM grc2.incidents
+                FROM incidents
                 WHERE CreatedAt IS NOT NULL
                 AND IdentifiedAt IS NOT NULL
                 AND IdentifiedAt >= CreatedAt

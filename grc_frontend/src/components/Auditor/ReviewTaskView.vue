@@ -398,9 +398,9 @@
 </template>
 
 <script>
-import { api } from '../../data/api';
+import apiService from '@/services/apiService';
 import { AccessUtils } from '@/utils/accessUtils';
-import { API_ENDPOINTS, axiosInstance } from '../../config/api.js';
+import { API_ENDPOINTS } from '@/config/api.js';
 
 export default {
   name: 'ReviewTaskView',
@@ -439,18 +439,8 @@ export default {
 
     async sendPushNotification(notificationData) {
       try {
-        const response = await fetch(API_ENDPOINTS.PUSH_NOTIFICATION, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(notificationData)
-        });
-        if (response.ok) {
-          console.log('Push notification sent successfully');
-        } else {
-          console.error('Failed to send push notification');
-        }
+        await apiService.post(API_ENDPOINTS.PUSH_NOTIFICATION, notificationData);
+        console.log('Push notification sent successfully');
       } catch (error) {
         console.error('Error sending push notification:', error);
       }
@@ -459,9 +449,8 @@ export default {
     async downloadAiAuditReport() {
       try {
         const auditId = this.$route.params.auditId;
-        const url = this.aiAuditReportUrl || `/api/ai-audit/${auditId}/download-report/`;
-        const response = await axiosInstance.get(url, { responseType: 'blob' });
-        const blob = new Blob([response.data], { type: 'application/pdf' });
+        const url = this.aiAuditReportUrl || API_ENDPOINTS.AI_AUDIT_REPORT_DOWNLOAD(auditId);
+        const blob = await apiService.get(url, { responseType: 'blob' });
         const link = document.createElement('a');
         const fileURL = window.URL.createObjectURL(blob);
         link.href = fileURL;
@@ -487,8 +476,8 @@ export default {
           return;
         }
         console.log('Fetching details for audit:', auditId);
-        const taskResponse = await api.getAuditTaskDetails(auditId);
-        this.auditDetails = taskResponse.data;
+        const data = await apiService.get(API_ENDPOINTS.AUDIT_TASK_DETAILS(auditId));
+        this.auditDetails = data;
         
         // Initialize review fields if not present and normalize values
         this.auditDetails.compliances.forEach(compliance => {
@@ -529,19 +518,17 @@ export default {
 
         // For AI audits, also pull evidence from AI audit documents so reviewer sees the same files
         if (this.auditDetails.audit_type === 'A') {
-          this.aiAuditReportUrl = `/api/ai-audit/${auditId}/download-report/`;
+          this.aiAuditReportUrl = API_ENDPOINTS.AI_AUDIT_REPORT_DOWNLOAD(auditId);
           try {
-            const docsResponse = await axiosInstance.get(`/api/ai-audit/${auditId}/documents/`, {
-              timeout: 60000
-            });
-            console.log('[ReviewTaskView] AI audit documents response:', docsResponse.data);
-            if (docsResponse.data && docsResponse.data.success && Array.isArray(docsResponse.data.documents)) {
-              const aiDocs = docsResponse.data.documents.map(doc => {
+            const docsResponse = await apiService.get(API_ENDPOINTS.AI_AUDIT_DOCUMENTS(auditId));
+            console.log('[ReviewTaskView] AI audit documents response:', docsResponse);
+            if (docsResponse && docsResponse.success && Array.isArray(docsResponse.documents)) {
+              const aiDocs = docsResponse.documents.map(doc => {
                 const name =
                   doc.document_name ||
                   this.extractFilenameFromUrl(doc.document_path) ||
                   'AI Audit Evidence';
-                const serveUrl = `/api/ai-audit/${auditId}/documents/${doc.document_id || doc.id}/serve/`;
+                const serveUrl = API_ENDPOINTS.AI_AUDIT_DOCUMENT_SERVE(auditId, doc.document_id || doc.id);
                 return {
                   name,
                   url: serveUrl,
@@ -692,9 +679,9 @@ export default {
         }
 
         // Save the review version
-        const response = await api.saveReviewProgress(auditId, payload);
-        if (response.data.message) {
-          this.currentVersion = response.data.review_version;
+        const response = await apiService.post(API_ENDPOINTS.AUDIT_SAVE_REVIEW_PROGRESS(auditId), payload);
+        if (response.message) {
+          this.currentVersion = response.review_version;
           this.lastSavedTime = new Date().toISOString();
           this.hasUnsavedChanges = false;
           this.$toast?.success(`Review version ${this.currentVersion} saved successfully`);
@@ -746,7 +733,7 @@ export default {
           const auditId = this.$route.params.auditId;
           
           // First save the review version with rejection status
-          const saveResponse = await api.saveReviewProgress(auditId, {
+          const saveResponse = await apiService.post(API_ENDPOINTS.AUDIT_SAVE_REVIEW_PROGRESS(auditId), {
             compliance_reviews: this.savedVersionData.compliance_reviews,
             review_comments: this.overallReviewComments,
             overall_audit_comments: this.overallAuditComments, // Preserve audit comments
@@ -754,9 +741,9 @@ export default {
             is_rejected: true
           });
 
-          if (saveResponse.data.message) {
+          if (saveResponse.message) {
             // Then update the review status
-            await api.updateReviewStatus(auditId, {
+            await apiService.post(API_ENDPOINTS.UPDATE_AUDIT_REVIEW_STATUS(auditId), {
               review_status: 'Reject',  // This maps to '3' in backend
               status: 'Work In Progress',
               review_comments: this.overallReviewComments,
@@ -796,7 +783,7 @@ export default {
         this.$toast?.error('Failed to process rejection: ' + (error.response?.data?.error || error.response?.data?.message || error.message));
         this.sendPushNotification({
           title: 'Review Rejection Failed',
-          message: 'Failed to process rejection: ' + (error.response?.data?.error || error.message),
+          message: 'Failed to process rejection: ' + (error.response?.data?.error || error.response?.data?.message || error.message),
           category: 'review',
           priority: 'error',
           user_id: 'default_user'
@@ -851,16 +838,16 @@ export default {
           }));
 
           // First save the review data with complete compliance information
-          const saveResponse = await api.saveReviewProgress(auditId, {
+          const saveResponse = await apiService.post(API_ENDPOINTS.AUDIT_SAVE_REVIEW_PROGRESS(auditId), {
             ...this.savedVersionData,
             compliance_data: complianceData,
             overall_audit_comments: this.overallAuditComments, // Preserve audit comments
             save_only: false // Allow status update
           });
 
-          if (saveResponse.data.message) {
+          if (saveResponse.message) {
             // Then update the review status with complete compliance data
-            await api.updateReviewStatus(auditId, {
+            await apiService.post(API_ENDPOINTS.UPDATE_AUDIT_REVIEW_STATUS(auditId), {
               status: 'accept',
               review_comments: this.overallReviewComments,
               overall_audit_comments: this.overallAuditComments, // Preserve audit comments
@@ -907,15 +894,14 @@ export default {
       // Save the version without any status updates if there's pending data
       if (this.savedVersionData) {
         const auditId = this.$route.params.auditId;
-        api.saveReviewProgress(auditId, {
+        apiService.post(API_ENDPOINTS.AUDIT_SAVE_REVIEW_PROGRESS(auditId), {
           ...this.savedVersionData,
           overall_audit_comments: this.overallAuditComments, // Preserve audit comments
           review_comments: this.overallReviewComments, // Use review comments
           save_only: true,  // Don't update any status
           is_rejected: false  // Don't mark as rejected
-        }).then(response => {
-          if (response.data.message) {
-            this.currentVersion = response.data.review_version;
+        }).then(data => {
+            this.currentVersion = data.review_version;
             this.lastSavedTime = new Date().toISOString();
             this.$toast?.success(`Review version ${this.currentVersion} saved successfully`);
             this.sendPushNotification({
@@ -926,7 +912,7 @@ export default {
               user_id: 'default_user'
             });
           }
-        }).catch(error => {
+        ).catch(error => {
           console.error('Error saving review:', error);
           // Handle access denied errors
           if (AccessUtils.handleApiError(error, 'audit review save')) {

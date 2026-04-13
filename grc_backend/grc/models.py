@@ -53,7 +53,7 @@ class TenantAwareModel(models.Model):
         
         super().save(*args, **kwargs)
 
-class Tenant(models.Model):
+class Tenant(EncryptedFieldsMixin, models.Model):
     """
     Tenant model for multi-tenancy support.
     Each tenant represents an organization/company using the GRC platform.
@@ -117,7 +117,7 @@ class Tenant(models.Model):
             return timezone.now() > self.trial_ends_at
         return False
 
-class CompanyFolder(TenantAwareModel):
+class CompanyFolder(EncryptedFieldsMixin, TenantAwareModel):
     """
     Stores logical company folders for Document Handling.
     These folders are used to group documents in S3 using the
@@ -172,7 +172,7 @@ class CompanyFolder(TenantAwareModel):
         return self.name
  
  
-class CompanySubfolder(TenantAwareModel):
+class CompanySubfolder(EncryptedFieldsMixin, TenantAwareModel):
     """
     Subfolders inside a company folder. Users can create multiple folders
     per company and store files in them (filename prefix: company_subfolder_...).
@@ -213,7 +213,7 @@ class CompanySubfolder(TenantAwareModel):
         return f"{self.company_folder.name} / {self.name}"
 
 
-class CompanySubfolderDocument(models.Model):
+class CompanySubfolderDocument(EncryptedFieldsMixin, models.Model):
     """
     Links a file (FileOperations) to a company subfolder for Document Handling.
     Used so the same file can appear under a company folder / subfolder in the UI.

@@ -154,12 +154,11 @@
 </template>
 
 <script>
-import { api } from '../../data/api';
-import axios from 'axios';
-import auditorDataService from '@/services/auditorService'; // NEW: Use cached auditor data
+import apiService from '@/services/apiService';
+import auditorDataService from '@/services/auditorService';
 import DynamicTable from '../DynamicTable.vue';
 import { AccessUtils } from '@/utils/accessUtils';
-import { API_ENDPOINTS } from '../../config/api.js';
+import { API_ENDPOINTS } from '@/config/api.js';
 
 export default {
   name: 'ReviewerPage',
@@ -281,8 +280,8 @@ export default {
       
       try {
         console.log('Fetching review tasks...');
-        const response = await api.getMyReviews();
-        this.audits = response.data.audits;
+        const data = await apiService.get(API_ENDPOINTS.MY_REVIEWS);
+        this.audits = data.audits;
         console.log(`Fetched ${this.audits.length} review tasks`);
         // Push notification for successful fetch (optional, can be omitted if not needed)
       } catch (error) {
@@ -317,8 +316,8 @@ export default {
         } else {
           // Fallback: Fetch from API if cache is empty
           console.log('⚠️ [Reviewer] No cached business units found, fetching from API...');
-          const response = await axios.get('/api/business-units/');
-          this.businessUnits = response.data;
+          const data = await apiService.get(API_ENDPOINTS.BUSINESS_UNITS);
+          this.businessUnits = data;
           
           // Update cache
           auditorDataService.setData('businessUnits', this.businessUnits);
@@ -399,14 +398,13 @@ export default {
         if (audit.status !== 'Under review') {
           console.log(`Audit status is currently ${audit.status}, updating to 'Under review' first`);
           
-          // First update the audit status to 'Under review' using direct axios.post call
+          // First update the audit status to 'Under review' using centralized apiService
           // to avoid any method inconsistencies
           try {
-            console.log(`Making direct POST request to ${API_ENDPOINTS.AUDIT_STATUS(audit.audit_id)}`);
-            const statusResponse = await axios.post(API_ENDPOINTS.AUDIT_STATUS(audit.audit_id), {
+            console.log(`Making request to update status to 'Under review'`);
+            await apiService.post(API_ENDPOINTS.AUDIT_STATUS(audit.audit_id), {
               status: 'Under review'
             });
-            console.log('Status update response:', statusResponse.data);
             
             // Update the local audit object
             audit.status = 'Under review';
@@ -414,28 +412,9 @@ export default {
             console.log('Audit status updated to Under review');
             justUpdatedToUnderReview = true;
           } catch (statusError) {
-            console.error('Error updating audit status with direct axios:', statusError);
-            console.error('Status code:', statusError.response?.status);
-            console.error('Error message:', statusError.response?.data || statusError.message);
-            
-            // Try fallback to api.js implementation
-            try {
-              console.log('Trying fallback to api.updateAuditStatus...');
-              const fallbackResponse = await api.updateAuditStatus(audit.audit_id, {
-                status: 'Under review'
-              });
-              console.log('Fallback status update successful:', fallbackResponse.data);
-              
-              // Update the local audit object
-              audit.status = 'Under review';
-              audit.justUpdatedToUnderReview = true;
-              console.log('Audit status updated to Under review via fallback');
-              justUpdatedToUnderReview = true;
-            } catch (fallbackError) {
-              console.error('Both direct and fallback status update methods failed:', fallbackError);
-              this.$popup.error(`Failed to update audit status. Please try again later. Error: ${fallbackError.message || 'Unknown error'}`);
-              throw fallbackError;
-            }
+            console.error('Error updating audit status:', statusError);
+            this.$popup.error(`Failed to update audit status. Please try again later. Error: ${statusError.message || 'Unknown error'}`);
+            throw statusError;
           }
         }
         
@@ -472,19 +451,19 @@ export default {
           }
         }
         
-        const response = await api.updateReviewStatus(audit.audit_id, {
+        const data = await apiService.post(API_ENDPOINTS.UPDATE_AUDIT_REVIEW_STATUS(audit.audit_id), {
           review_status: audit.review_status,
           review_comments: review_comments
         });
         
-        console.log('Review status updated successfully:', response.data);
+        console.log('Review status updated successfully:', data);
         
         // Update the local audit object with the comments
         audit.review_comments = review_comments;
         
         // If accepted, update audit status to Completed
-        if (audit.review_status === 'Accept' && response.data.audit_status) {
-          audit.status = response.data.audit_status;
+        if (audit.review_status === 'Accept' && data.audit_status) {
+          audit.status = data.audit_status;
         }
         
         // Show success message
@@ -521,18 +500,8 @@ export default {
     // --- Push Notification Method ---
     async sendPushNotification(notificationData) {
       try {
-        const response = await fetch(API_ENDPOINTS.PUSH_NOTIFICATION, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(notificationData)
-        });
-        if (response.ok) {
-          console.log('Push notification sent successfully');
-        } else {
-          console.error('Failed to send push notification');
-        }
+        await apiService.post(API_ENDPOINTS.PUSH_NOTIFICATION, notificationData);
+        console.log('Push notification sent successfully');
       } catch (error) {
         console.error('Error sending push notification:', error);
       }

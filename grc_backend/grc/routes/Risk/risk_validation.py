@@ -6,6 +6,8 @@ This module implements secure input validation following the allow-list pattern.
 from typing import Dict, Any, Union, Optional
 from django.core.exceptions import ValidationError
 import re
+import datetime
+from django.utils import timezone
 
 
 class RiskValidator:
@@ -78,6 +80,39 @@ class RiskValidator:
                 f"{field_name} contains invalid characters"
             )
         return value
+
+    @classmethod
+    def validate_date_range(cls, value: Union[str, datetime.date], field_name: str, 
+                            min_offset_days: Optional[int] = None, 
+                            max_offset_days: Optional[int] = 365*10) -> datetime.date:
+        """Validate a date field against a relative range from today."""
+        if not value:
+            return None
+        
+        try:
+            if isinstance(value, str):
+                # Try to parse YYYY-MM-DD
+                parsed_date = datetime.datetime.strptime(value, '%Y-%m-%d').date()
+            else:
+                parsed_date = value
+            
+            today = datetime.date.today()
+            
+            # Check past limit if provided
+            if min_offset_days is not None:
+                min_date = today + datetime.timedelta(days=min_offset_days)
+                if parsed_date < min_date:
+                    raise ValidationError(f"{field_name} cannot be in the past")
+            
+            # Check future limit (default 10 years)
+            if max_offset_days is not None:
+                max_date = today + datetime.timedelta(days=max_offset_days)
+                if parsed_date > max_date:
+                    raise ValidationError(f"{field_name} is too far in the future (max 10 years)")
+            
+            return parsed_date
+        except (ValueError, TypeError):
+            raise ValidationError(f"Invalid date format for {field_name}, expected YYYY-MM-DD")
 
     @classmethod
     def validate_risk_data(cls, data: Dict[str, Any]) -> Dict[str, Any]:
@@ -178,12 +213,23 @@ class RiskValidator:
         # First validate the base risk data
         validated_data = cls.validate_risk_data(data)
 
-        # Add validation for instance-specific fields here if needed
-        # For now, we're just passing them through as they don't require validation
+        # Add validation for instance-specific fields
+        if 'MitigationDueDate' in data:
+            validated_data['MitigationDueDate'] = cls.validate_date_range(
+                data['MitigationDueDate'], 'MitigationDueDate', min_offset_days=0
+            )
+
+        if 'MitigationCompletedDate' in data:
+            # Completed date can be in the past, but not future
+            validated_data['MitigationCompletedDate'] = cls.validate_date_range(
+                data['MitigationCompletedDate'], 'MitigationCompletedDate', 
+                min_offset_days=-365*20, max_offset_days=0
+            )
+
         instance_fields = [
             'RiskInstanceId', 'IncidentId', 'ReportedBy', 'UserId',
-            'MitigationDueDate', 'ModifiedMitigations', 'MitigationStatus',
-            'MitigationCompletedDate', 'ReviewerCount', 'RiskFormDetails',
+            'ModifiedMitigations', 'MitigationStatus',
+            'ReviewerCount', 'RiskFormDetails',
             'RecurrenceCount', 'Reviewer', 'ReviewerId', 'FirstResponseAt'
         ]
         for field in instance_fields:

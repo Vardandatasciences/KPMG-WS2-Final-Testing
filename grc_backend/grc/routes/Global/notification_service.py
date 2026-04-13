@@ -1672,6 +1672,29 @@ class NotificationService:
             template_data: Data to populate email template
         """
         try:
+            # CHECK FOR DEDUPLICATION (Spam Protection)
+            # Suppression window: 5 minutes (300 seconds)
+            try:
+                conn = self.get_db_connection()
+                cursor = conn.cursor()
+                # Check for identical notification sent to this recipient in the last 5 minutes
+                dedup_query = """
+                SELECT id FROM notifications 
+                WHERE recipient = %s AND type = %s AND success = 1
+                AND created_at > (NOW() - INTERVAL 5 MINUTE)
+                LIMIT 1
+                """
+                cursor.execute(dedup_query, (to, notification_type))
+                existing = cursor.fetchone()
+                cursor.close()
+                conn.close()
+                
+                if existing:
+                    logger.info(f"[DEDUPLICATION] Skipping notification of type '{notification_type}' to '{to}' (already sent in last 5 min)")
+                    return {"success": True, "message": "Notification suppressed (deduplicated)"}
+            except Exception as dedup_err:
+                logger.warning(f"[DEDUPLICATION] Check failed (continuing anyway): {str(dedup_err)}")
+
             logger.info("=" * 60)
             logger.info(f"[EMAIL START] Attempting to send email to {to}")
             logger.info(f"[EMAIL START] Notification Type: {notification_type}")
@@ -1953,16 +1976,15 @@ class NotificationService:
             query = """
             INSERT INTO notifications 
             (recipient, type, channel, success, error, created_at) 
-            VALUES (%s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, NOW())
             """
             
             values = (
                 recipient, 
                 notification_type, 
                 channel, 
-                success, 
-                error, 
-                datetime.now()
+                1 if success else 0, 
+                error
             )
             
             cursor.execute(query, values)
@@ -2174,7 +2196,13 @@ class NotificationService:
             return {"success": False, "error": str(e)}
 
     def send_multi_channel_notification(self, notification_data):
-        """Send notification through multiple channels"""
+        """
+        Send notification through multiple channels with spam/deduplication protection.
+        Deduplicates identical notifications sent to the same recipient within a 5-minute window.
+        """
+        from django.core.cache import cache
+        import hashlib
+
         results = {
             "email": None,
             "whatsapp": None,
@@ -2184,6 +2212,27 @@ class NotificationService:
         notification_type = notification_data.get('notification_type')
         if not notification_type:
             return {"success": False, "error": "Missing notification_type"}
+
+        # --- NOTIFICATION SPAM PROTECTION (DEDUPLICATION) ---
+        recipient = notification_data.get('email') or notification_data.get('whatsapp_number')
+        template_data = notification_data.get('template_data', [])
+        
+        # Create a unique hash for this specific notification content
+        content_hash = hashlib.md5(json.dumps(template_data, sort_keys=True).encode()).hexdigest()
+        dedup_key = f"notif_dedup_{recipient}_{notification_type}_{content_hash}"
+        
+        # Check if identical notification was sent recently (5 minute window)
+        if cache.get(dedup_key):
+            logger.info(f"[SPAM PROTECTION] Suppressing duplicate notification: {notification_type} to {recipient}")
+            return {
+                "success": True, 
+                "message": "Notification suppressed (duplicate detected within 5-minute window)",
+                "suppressed": True
+            }
+        
+        # Mark as sent for next 5 minutes
+        cache.set(dedup_key, True, 300)
+        # ---------------------------------------------------
         
         # Send email if email details provided
         if notification_data.get('email') and notification_data.get('email_type'):

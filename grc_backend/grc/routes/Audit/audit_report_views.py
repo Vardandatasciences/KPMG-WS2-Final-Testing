@@ -137,7 +137,7 @@ def get_audit_reports(request):
         debug_print(f"ERROR in get_audit_reports: {error_message}")
         debug_print(f"Traceback: {error_traceback}")
         return Response({
-            'error': error_message,
+            'error': 'An internal error occurred',
             'message': 'Failed to retrieve audit reports'
         }, status=status.HTTP_400_BAD_REQUEST)
 
@@ -250,7 +250,7 @@ def get_audit_report_versions(request, audit_id):
     
     except Exception as e:
         debug_print(f"ERROR in get_audit_report_versions: {str(e)}")
-        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'error': 'An internal error occurred'}, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['POST'])
 @permission_classes([AuditReviewPermission])
@@ -332,7 +332,7 @@ def delete_audit_report_version(request, audit_id, version):
     
     except Exception as e:
         debug_print(f"ERROR in delete_audit_report_version: {str(e)}")
-        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'error': 'An internal error occurred'}, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['GET'])
 @permission_classes([AuditViewPermission])
@@ -416,7 +416,7 @@ def get_audit_report_s3_link(request, audit_id, version):
     
     except Exception as e:
         debug_print(f"ERROR in get_audit_report_s3_link: {str(e)}")
-        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'error': 'An internal error occurred'}, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['GET'])
 @permission_classes([AuditViewPermission])
@@ -572,7 +572,7 @@ def get_audit_report(request, audit_id):
         debug_print(f"ERROR in get_audit_report: {str(e)}")
         return Response({
             'success': False,
-            'message': f'Error fetching audit report: {str(e)}'
+            'message': 'An internal error occurred'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
@@ -618,5 +618,5 @@ def test_audit_reports(request):
         debug_print(f"ERROR in test_audit_reports: {str(e)}")
         return Response({
             'success': False,
-            'message': f'Error fetching audit reports: {str(e)}'
+            'message': 'An internal error occurred'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

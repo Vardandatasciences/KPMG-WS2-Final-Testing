@@ -212,96 +212,12 @@
 
 <script>
 import './AuditorDashboard.css';
-import axios from 'axios';
-import auditorDataService from '@/services/auditorService'; // NEW: Use cached auditor data
+import auditorDataService from '@/services/auditorService';
 import DynamicTable from '../DynamicTable.vue';
 import CustomButton from '../CustomButton.vue';
+import apiService from '@/services/apiService';
 import { AccessUtils } from '@/utils/accessUtils';
-import { API_ENDPOINTS } from '../../config/api.js';
-
-// Create an api object with the required methods
-const api = {
-  getMyAudits: async () => {
-    try {
-              const response = await axios.get(API_ENDPOINTS.AUDIT_MY_AUDITS);
-      return response;
-    } catch (error) {
-      console.error('Error fetching audits:', error);
-      // Handle access denied errors
-      if (AccessUtils.handleApiError(error, 'audit dashboard access')) {
-        throw error;
-      }
-      throw error;
-    }
-  },
-  
-  updateAuditStatus: async (auditId, data) => {
-    try {
-      console.log(`Attempting to update audit status for audit ${auditId} to ${data.status}`);
-      
-      // First try with POST method (correct according to API documentation)
-      try {
-        console.log('Trying POST method...');
-        const response = await axios.post(API_ENDPOINTS.AUDIT_STATUS(auditId), data);
-        console.log('POST method successful:', response.data);
-        return response;
-      } catch (postError) {
-        console.error('POST method failed:', postError);
-        
-        // If we get Method Not Allowed (405), it might be a deployment mismatch issue
-        // Try PUT as a fallback
-        if (postError.response && postError.response.status === 405) {
-          console.warn('POST method not allowed, falling back to PUT method');
-          const putResponse = await axios.put(API_ENDPOINTS.AUDIT_STATUS(auditId), data);
-          console.log('PUT method successful (fallback):', putResponse.data);
-          return putResponse;
-        }
-        
-        // If the error wasn't 405 or PUT also failed, throw the original error
-        throw postError;
-      }
-    } catch (error) {
-      console.error('Error updating audit status:', error);
-      console.error('Status code:', error.response?.status);
-      console.error('Error message:', error.response?.data || error.message);
-      // Handle access denied errors
-      if (AccessUtils.handleApiError(error, 'audit status update')) {
-        throw error;
-      }
-      throw error;
-    }
-  },
-  
-  // Add new method to get audit versions
-  getAuditVersions: async (auditId) => {
-    try {
-              const response = await axios.get(API_ENDPOINTS.AUDIT_REPORT_VERSIONS(auditId));
-      return response;
-    } catch (error) {
-      console.error(`Error fetching versions for audit ${auditId}:`, error);
-      // Handle access denied errors
-      if (AccessUtils.handleApiError(error, 'audit versions access')) {
-        throw error;
-      }
-      throw error;
-    }
-  },
-  
-  // Add method to get S3 link for a version
-  getAuditVersionS3Link: async (auditId, version) => {
-    try {
-              const response = await axios.get(API_ENDPOINTS.AUDIT_REPORT_VERSION_S3_LINK(auditId, version));
-      return response;
-    } catch (error) {
-      console.error(`Error getting S3 link for audit ${auditId}, version ${version}:`, error);
-      // Handle access denied errors
-      if (AccessUtils.handleApiError(error, 'audit report download access')) {
-        throw error;
-      }
-      throw error;
-    }
-  }
-};
+import { API_ENDPOINTS } from '@/config/api.js';
 
 export default {
   name: 'AuditorDashboard',
@@ -429,9 +345,9 @@ export default {
         } else {
           // Fallback: Fetch from API if cache is empty
           console.log('⚠️ [AuditorDashboard] No cached business units found, fetching from API...');
-          const response = await axios.get('/api/business-units/');
-          if (response.data && response.data.business_units) {
-            this.businessUnits = response.data.business_units;
+          const data = await apiService.get(API_ENDPOINTS.BUSINESS_UNITS);
+          if (data) {
+            this.businessUnits = Array.isArray(data) ? data : (data.business_units || []);
             
             // Update cache
             auditorDataService.setData('businessUnits', this.businessUnits);
@@ -478,17 +394,17 @@ export default {
       } else {
         // Fallback: Fetch from API if cache is empty
         console.log('⚠️ [AuditorDashboard] No cached data found, fetching from API...');
-        api.getMyAudits()
-          .then(response => {
-            console.log('[AuditorDashboard] Audit data received from API:', response.data);
+        apiService.get(API_ENDPOINTS.AUDIT_MY_AUDITS)
+          .then(data => {
+            console.log('[AuditorDashboard] Audit data received from API:', data);
             
             // Update cache for subsequent loads
-            if (response.data && response.data.audits) {
-              auditorDataService.setData('audits', response.data.audits);
+            if (data && data.audits) {
+              auditorDataService.setData('audits', data.audits);
               console.log('ℹ️ [AuditorDashboard] Cache updated after direct API fetch');
             }
             
-            this.processAuditsData(response);
+            this.processAuditsData({ data });
           })
           .catch(error => {
             console.error('[AuditorDashboard] Error fetching audits:', error);
@@ -622,8 +538,11 @@ export default {
 
       try {
         // Fetch compliance data
-        const response = await axios.get(API_ENDPOINTS.AUDIT_COMPLIANCES(audit.audit_id));
-        this.popupData.compliances = response.data.compliances;
+        const data = await apiService.get(API_ENDPOINTS.AUDIT_COMPLIANCES(audit.audit_id));
+        this.popupData = {
+          ...audit,
+          compliances: data.compliances || data || []
+        };
       } catch (error) {
         console.error('Error fetching compliance data:', error);
         // Handle access denied errors
@@ -658,48 +577,33 @@ export default {
       this.audits[idx].status = newStatus;
       
       // Update the server - fix by passing status in correct format
-      api.updateAuditStatus(auditId, { status: newStatus })
-        .then(response => {
-          console.log('Status update successful:', response.data);
-          this.statusUpdating = false;
+      (async () => {
+        try {
+          // Use apiService.post for status updates
+          const data = await apiService.post(API_ENDPOINTS.AUDIT_STATUS(auditId), { status: newStatus })
           
-          // Show success message
-            this.showSuccessMessage(`Status updated to "${newStatus}" successfully!`);
-        })
-        .catch(async (error) => {
-          console.error('Error updating status:', error);
-          
+          if (data && data.success) {
+            this.$popup.success(`Audit status updated to ${newStatus}`);
+            await this.fetchAudits();
+          } else {
+            // If post failed, try put as fallback (legacy behavior)
+            const putData = await apiService.put(API_ENDPOINTS.AUDIT_STATUS(auditId), { status: newStatus })
+            if (putData && putData.success) {
+              this.$popup.success(`Audit status updated to ${newStatus}`);
+              await this.fetchAudits();
+            } else {
+              this.$popup.error('Failed to update audit status');
+            }
+          }
+        } catch (error) {
+          console.error('Error updating audit status:', error);
+          this.$popup.error('Error updating audit status');
           // Revert to old status on error
           this.audits[idx].status = oldStatus;
-          
-          // Handle access denied errors
-          if (AccessUtils.handleApiError(error, 'audit status update')) {
-            this.statusUpdating = false;
-            return;
-          }
-          
-          // Show detailed error message
-          let errorMessage = 'Failed to update status. ';
-          if (error.response) {
-            errorMessage += `Server responded with ${error.response.status}: ${error.response.data?.error || error.response.statusText}`;
-          } else if (error.request) {
-            errorMessage += 'No response received from server. Please check your connection.';
-          } else {
-            errorMessage += error.message || 'Unknown error occurred.';
-          }
-          
-          this.error = errorMessage;
+        } finally {
           this.statusUpdating = false;
-          
-          // Show option to retry
-          const shouldRetry = await this.$popup.confirm(`${errorMessage}<br/><br/>Would you like to retry?`, 'Retry');
-          if (shouldRetry) {
-            // Wait a moment then retry
-            setTimeout(() => {
-              this.updateAuditStatus(idx, newStatus);
-            }, 500);
-          }
-        });
+        }
+      })();
     },
     
     closePopup() {
@@ -743,86 +647,46 @@ export default {
     },
     
 
-    showReports(audit) {
+    async showReports(audit) {
       // Prefer opening the latest available report version (S3 link)
       const auditId = audit.audit_id;
       console.log(`🔍 Attempting to show reports for audit ${auditId}`);
       
-      // Try to load available versions then open the newest; fallback to direct Reports page
-      api.getAuditVersions(auditId)
-        .then(async (resp) => {
-          console.log(`📋 Versions response for audit ${auditId}:`, resp?.data);
-          const versions = resp?.data?.versions || resp?.data || [];
+      this.latestAuditVersionS3Link = '';
+      
+      try {
+        const data = await apiService.get(API_ENDPOINTS.AUDIT_REPORT_VERSIONS(auditId))
+        const versions = data.versions || data || [];
+        
+        if (versions.length > 0) {
+          // Get the most recent version
+          const latestVersion = versions[0].version || versions[0];
+          const s3Data = await apiService.get(API_ENDPOINTS.AUDIT_REPORT_VERSION_S3_LINK(auditId, latestVersion));
           
-          if (versions.length > 0) {
-            // Try different possible version field names
-            const latestVersion = versions[0]?.version || 
-                                 versions[0]?.Version || 
-                                 versions[0]?.version_number ||
-                                 versions[0]?.id ||
-                                 versions[0];
-            
-            console.log(`📄 Latest version found:`, latestVersion);
-            
-            if (latestVersion && latestVersion !== 'undefined' && latestVersion !== undefined) {
-              try {
-                console.log(`🔗 Getting S3 link for audit ${auditId}, version ${latestVersion}`);
-                const s3Resp = await api.getAuditVersionS3Link(auditId, latestVersion);
-                console.log(`📎 S3 response:`, s3Resp?.data);
-                
-                const url = s3Resp?.data?.url || 
-                           s3Resp?.data?.s3_url || 
-                           s3Resp?.data?.download_url ||
-                           s3Resp?.data?.link;
-                
-                if (url) {
-                  console.log(`✅ Opening report URL:`, url);
-                  window.open(url, '_blank', 'noopener,noreferrer');
-                  return;
-                } else {
-                  console.warn('No URL found in S3 response');
-                }
-              } catch (e) {
-                console.error('Error getting S3 link:', e);
-                console.warn('Could not get S3 link for latest version; falling back to reports view');
-              }
-            } else {
-              console.warn('No valid version found in versions array');
-            }
-          } else {
-            console.warn('No versions found for audit');
+          if (s3Data && s3Data.s3_link) {
+            this.latestAuditVersionS3Link = s3Data.s3_link;
           }
-          
-          // Fallback: navigate to reports page which will render current report state
-          console.log(`🔄 Falling back to reports view for audit ${auditId}`);
-          localStorage.setItem(`audit_${auditId}_data`, JSON.stringify(audit));
-          this.$router.push(`/audit-reports/${auditId}`);
-        })
-        .catch((error) => {
-          console.error('Error fetching versions:', error);
-          // If versions fetch fails, still navigate to the reports page
-          console.log(`🔄 Versions fetch failed, navigating to reports view for audit ${auditId}`);
-          localStorage.setItem(`audit_${auditId}_data`, JSON.stringify(audit));
-          this.$router.push(`/audit-reports/${auditId}`);
-        });
+        }
+      } catch (error) {
+        console.error('Error fetching audit versions:', error);
+      }
+      
+      if (this.latestAuditVersionS3Link) {
+        window.open(this.latestAuditVersionS3Link, '_blank', 'noopener,noreferrer');
+      } else {
+        // Fallback: navigate to reports page which will render current report state
+        console.log(`🔄 Falling back to reports view for audit ${auditId}`);
+        localStorage.setItem(`audit_${auditId}_data`, JSON.stringify(audit));
+        this.$router.push(`/audit-reports/${auditId}`);
+      }
     },
 
 
     // Add sendPushNotification method
     async sendPushNotification(notificationData) {
       try {
-        const response = await fetch(API_ENDPOINTS.PUSH_NOTIFICATION, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(notificationData)
-        });
-        if (response.ok) {
-          console.log('Push notification sent successfully');
-        } else {
-          console.error('Failed to send push notification');
-        }
+        await apiService.post(API_ENDPOINTS.PUSH_NOTIFICATION, notificationData);
+        console.log('Push notification sent successfully');
       } catch (error) {
         console.error('Error sending push notification:', error);
       }
@@ -863,8 +727,8 @@ export default {
       this.popupData.complianceError = null;
       
       try {
-        const response = await axios.get(API_ENDPOINTS.AUDIT_COMPLIANCES(this.popupData.audit_id));
-        this.popupData.compliances = response.data.compliances;
+        const data = await apiService.get(API_ENDPOINTS.AUDIT_COMPLIANCES(this.popupData.audit_id));
+        this.popupData.compliances = data.compliances || data || [];
       } catch (error) {
         console.error('Error fetching compliance data:', error);
         this.popupData.complianceError = 'Failed to load compliance data. Please try again.';
@@ -877,6 +741,7 @@ export default {
       const compliance = this.popupData.compliances.find(c => c.finding_id === findingId);
       if (compliance) {
         compliance.check = event.target.checked ? '1' : '0';
+        compliance.is_modified = true;
         // Clear major/minor if compliant
         if (event.target.checked) {
           compliance.major_minor = null;
@@ -888,6 +753,7 @@ export default {
       const compliance = this.popupData.compliances.find(c => c.finding_id === findingId);
       if (compliance) {
         compliance.evidence = event.target.value;
+        compliance.is_modified = true;
       }
     },
 
@@ -895,6 +761,7 @@ export default {
       const compliance = this.popupData.compliances.find(c => c.finding_id === findingId);
       if (compliance) {
         compliance.comments = event.target.value;
+        compliance.is_modified = true;
       }
     },
 
@@ -902,28 +769,27 @@ export default {
       const compliance = this.popupData.compliances.find(c => c.finding_id === findingId);
       if (compliance) {
         compliance.major_minor = event.target.value;
+        compliance.is_modified = true;
       }
     },
 
     async saveCompliances() {
       try {
-        // Create an array of updates
-        const updates = this.popupData.compliances.map(compliance => ({
-          finding_id: compliance.finding_id,
-          check: compliance.check,
-          evidence: compliance.evidence,
-          comments: compliance.comments,
-          major_minor: compliance.major_minor
-        }));
-
-        // Send updates to backend
-        await axios.post(API_ENDPOINTS.AUDIT_FINDINGS_BULK_UPDATE, {
-          audit_id: this.popupData.audit_id,
-          findings: updates
-        });
-
-        // Show success message
-        this.showSuccessMessage('Compliance updates saved successfully!');
+        const modifiedCompliances = (this.popupData.compliances || []).filter(c => c.is_modified);
+        
+        if (modifiedCompliances.length > 0) {
+          await apiService.post(API_ENDPOINTS.AUDIT_FINDINGS_BULK_UPDATE, {
+            audit_id: this.popupData.audit_id,
+            findings: modifiedCompliances.map(c => ({
+              finding_id: c.finding_id,
+              check: c.check,
+              evidence: c.evidence,
+              comments: c.comments,
+              major_minor: c.major_minor
+            }))
+          });
+          this.$popup.success('Compliance updates saved successfully');
+        }
         
         // Close the popup
         this.closePopup();

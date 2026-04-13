@@ -906,8 +906,7 @@
                         { value: '60', label: 'Every 2 Months' },
                         { value: '120', label: 'Every 4 Months' },
                         { value: '182', label: 'Half Yearly' },
-                        { value: '365', label: 'Yearly' },
-                        { value: '365a', label: 'Annually' }
+                        { value: '365', label: 'Yearly' }
                       ]"
                       label="Frequency"
                       placeholder="Select Frequency"
@@ -1307,8 +1306,7 @@
                         { value: '60', label: 'Every 2 Months' },
                         { value: '120', label: 'Every 4 Months' },
                         { value: '182', label: 'Half Yearly' },
-                        { value: '365', label: 'Yearly' },
-                        { value: '365a', label: 'Annually' }
+                        { value: '365', label: 'Yearly' }
                       ]"
                       label="Frequency"
                       placeholder="Select Frequency"
@@ -1732,8 +1730,7 @@
                           { value: '60', label: 'Every 2 Months' },
                           { value: '120', label: 'Every 4 Months' },
                           { value: '182', label: 'Half Yearly' },
-                          { value: '365', label: 'Yearly' },
-                          { value: '365a', label: 'Annually' }
+                          { value: '365', label: 'Yearly' }
                         ]"
                         label="Frequency"
                         placeholder="Select Frequency"
@@ -2036,14 +2033,14 @@
 </template>
 
 <script>
-import axios from 'axios';
+import apiService from '@/services/apiService';
 import ValidationMixin from '@/mixins/ValidationMixin';
 import SelectInput from '@/components/inputs/SelectInput.vue';
 import CustomDropdown from '@/components/CustomDropdown.vue';
 // import TextInput from '@/components/inputs/TextInput.vue';
 import DateInput from '@/components/inputs/DateInput.vue';
 import { AccessUtils } from '@/utils/accessUtils';
-import { API_ENDPOINTS } from '../../config/api.js';
+import { API_ENDPOINTS } from '@/config/api.js';
 import aiRecommendationService from '@/services/aiRecommendationService';
 import auditorDataService from '@/services/auditorService';
 
@@ -2059,14 +2056,6 @@ export default {
   data() {
     return {
       currentTab: 0,
-      tabs: [
-        { name: 'Framework Selection', required: ['framework', 'type'] },
-        { name: 'Policy Selection', required: ['policy'] }, // For AI audits (deprecated - will be removed)
-        { name: 'Team Creation', required: [] }, // For Internal/External/Self audits
-        { name: 'Auditor Assignment', required: [] }, // For AI audits
-        { name: 'Policy Assignment', required: [] }, // For Internal/External/Self audits
-        { name: 'Review & Assign', required: ['scope', 'objective', 'type', 'frequency', 'dueDate'] }
-      ],
       auditData: {
         framework: '',
         policy: '',
@@ -2191,6 +2180,21 @@ export default {
     };
   },
   computed: {
+    tabs() {
+      if (this.auditData.type === 'AI') {
+        return [
+          { name: 'Framework Selection', required: ['framework', 'type'] },
+          { name: 'Auditor Assignment', required: [] },
+          { name: 'Review & Assign', required: ['scope', 'objective', 'type', 'dueDate'] }
+        ];
+      }
+      return [
+        { name: 'Framework Selection', required: ['framework', 'type'] },
+        { name: 'Team Creation', required: [] },
+        { name: 'Policy Assignment', required: [] },
+        { name: 'Review & Assign', required: ['scope', 'objective', 'type', 'frequency', 'dueDate'] }
+      ];
+    },
     canProceed() {
       if (this.currentTab === 0) {
         return !!(this.auditData.framework && this.auditData.type);
@@ -2461,169 +2465,47 @@ export default {
     
     async fetchFrameworks() {
       try {
-        console.log('🔄 [FRAMEWORK DROPDOWN] Fetching frameworks...');
-        const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
-        const res = await axios.get('/api/frameworks/', {
-          withCredentials: true,
-          headers: token ? { Authorization: `Bearer ${token}` } : {}
-        });
+        console.log('🔄 [AssignAudit] Fetching frameworks...');
+        const data = await apiService.get(API_ENDPOINTS.FRAMEWORKS);
+        this.frameworks = data;
+        console.log(`✅ [AssignAudit] Fetched ${this.frameworks.length} frameworks`);
         
-        console.log('✅ [FRAMEWORK DROPDOWN] Received frameworks:', res.data);
-        console.log('✅ [FRAMEWORK DROPDOWN] Framework count:', res.data.length);
-
-        // 1) Default to server response
-        let frameworks = Array.isArray(res.data) ? res.data : [];
-
-        // 2) Ask backend which framework is currently selected in session
+        // Load selected framework context if it exists
         try {
-          const sel = await axios.get('/api/frameworks/get-selected/', {
-            withCredentials: true,
-            headers: token ? { Authorization: `Bearer ${token}` } : {},
-            params: { userId: sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || 'default_user' }
-          });
-
-          if (sel.data && sel.data.success && sel.data.hasFramework && sel.data.frameworkId) {
-            const activeId = String(sel.data.frameworkId);
-            console.log('✅ [FRAMEWORK DROPDOWN] Active framework in session:', activeId);
-            // Guard on frontend: if a framework is active, show only that
-            frameworks = frameworks.filter(f => String(f.FrameworkId) === activeId);
-          } else {
-            console.log('ℹ️ [FRAMEWORK DROPDOWN] No active framework (All Frameworks)');
+          const sel = await apiService.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED);
+          if (sel && sel.FrameworkId && !this.auditData.framework) {
+            console.log('✅ [AssignAudit] Setting default framework from session context:', sel.FrameworkName);
+            this.auditData.framework = sel.FrameworkId;
+            this.onFrameworkChange(sel.FrameworkId);
           }
-        } catch (err) {
-          console.warn('⚠️ [FRAMEWORK DROPDOWN] Could not read selected framework; leaving server response as-is');
+        } catch (selErr) {
+          console.log('ℹ️ [AssignAudit] No pre-selected framework session found');
         }
-
-        this.frameworks = frameworks;
-        console.log('✅ [FRAMEWORK DROPDOWN] Final frameworks shown:', this.frameworks);
-      } catch (e) {
-        console.error('❌ [FRAMEWORK DROPDOWN] Error fetching frameworks:', e);
-        // Handle access denied errors
-        if (AccessUtils.handleApiError(e, 'audit framework access')) {
-          return;
-        }
-        this.frameworks = [];
+      } catch (error) {
+        console.error('❌ [AssignAudit] Error fetching frameworks:', error);
       }
     },
     async fetchUsers() {
       try {
-        console.log('🔄 Fetching users...');
-        // Get current user ID to exclude from lists
-        const currentUserId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || ''
+        const currentUserId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || '';
         
         // Fetch reviewers (users with ReviewAudit permission)
-        const reviewersRes = await axios.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
-          params: {
-            module: 'audit',
-            permission_type: 'reviewer',
-            current_user_id: currentUserId
-          },
-          withCredentials: true,
-          headers: {
-            'Content-Type': 'application/json'
-          }
+        const reviewers = await apiService.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
+          module: 'audit',
+          permission_type: 'reviewer',
+          current_user_id: currentUserId
         });
         
         // Fetch auditors (users with ConductAudit permission)
         // For Self-Audit, don't exclude current user so they can select themselves
         const excludeCurrentUser = this.auditData.type !== 'S';
-        const auditorsRes = await axios.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
-          params: {
-            module: 'audit',
-            permission_type: 'auditor',
-            current_user_id: excludeCurrentUser ? currentUserId : ''
-          },
-          withCredentials: true,
-          headers: {
-            'Content-Type': 'application/json'
-          }
+        const auditors = await apiService.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
+          module: 'audit',
+          permission_type: 'auditor',
+          current_user_id: excludeCurrentUser ? currentUserId : ''
         });
         
-        console.log('✅ Reviewers API response:', reviewersRes.data);
-        console.log('✅ Auditors API response:', auditorsRes.data);
-        
-        // Process reviewers
-        let reviewers = [];
-        if (Array.isArray(reviewersRes.data)) {
-          reviewers = reviewersRes.data;
-        }
-        reviewers = reviewers.map(user => ({
-          UserId: user.UserId || user.id || user.userId,
-          UserName: user.UserName || user.name || user.username || 'Unknown',
-          Role: user.Role || user.role || '',
-          Email: user.Email || user.email || '',
-          ...user
-        })).filter(user => user.UserId);
         this.users = reviewers;
-        
-        // Process auditors
-        let auditors = [];
-        if (Array.isArray(auditorsRes.data)) {
-          auditors = auditorsRes.data;
-        }
-        auditors = auditors.map(user => ({
-          UserId: user.UserId || user.id || user.userId,
-          UserName: user.UserName || user.name || user.username || 'Unknown',
-          Role: user.Role || user.role || '',
-          Email: user.Email || user.email || '',
-          ...user
-        })).filter(user => user.UserId);
-        
-        // For Self-Audit, include the current logged-in user in the auditors list if not already present
-        if (this.auditData.type === 'S' && currentUserId) {
-          const currentUserIdNum = parseInt(currentUserId);
-          const currentUserInList = auditors.find(a => parseInt(a.UserId) === currentUserIdNum);
-          
-          if (!currentUserInList) {
-            // Try to get username from storage or construct from available data
-            let currentUserName = sessionStorage.getItem('user_name') || 
-                                 localStorage.getItem('user_name') ||
-                                 sessionStorage.getItem('username') ||
-                                 localStorage.getItem('username') ||
-                                 'Current User';
-            
-            // Try to fetch current user details from API
-            try {
-              const currentUserRes = await axios.get(`/api/users/${currentUserId}/`, {
-                withCredentials: true,
-                headers: { 'Content-Type': 'application/json' }
-              });
-              
-              if (currentUserRes.data && currentUserRes.data.user) {
-                const currentUser = currentUserRes.data.user;
-                currentUserName = currentUser.username || currentUser.name || currentUserName;
-                auditors.push({
-                  UserId: currentUser.id || currentUserIdNum,
-                  UserName: currentUserName,
-                  Role: currentUser.role || '',
-                  Email: currentUser.email || '',
-                });
-                console.log('✅ Added current user to auditors list for Self-Audit:', currentUserName);
-              } else if (currentUserRes.data) {
-                // Handle different response formats
-                const userData = currentUserRes.data.UserName ? currentUserRes.data : (currentUserRes.data.user || currentUserRes.data);
-                auditors.push({
-                  UserId: userData.UserId || userData.id || userData.user_id || currentUserIdNum,
-                  UserName: userData.UserName || userData.username || userData.name || currentUserName,
-                  Role: userData.Role || userData.role || '',
-                  Email: userData.Email || userData.email || '',
-                });
-                console.log('✅ Added current user to auditors list for Self-Audit:', userData.UserName || userData.username);
-              }
-            } catch (e) {
-              console.warn('⚠️ Could not fetch current user details, using basic info:', e);
-              // Fallback: add basic user info with username from storage
-              auditors.push({
-                UserId: currentUserIdNum,
-                UserName: currentUserName,
-                Role: '',
-                Email: ''
-              });
-              console.log('✅ Added current user to auditors list (fallback):', currentUserName);
-            }
-          }
-        }
-        
         this.auditors = auditors;
         
         // If Self-Audit is selected, auto-populate auditor with logged-in user
@@ -2633,43 +2515,23 @@ export default {
         
         console.log('✅ Reviewers processed successfully:', reviewers.length, 'users');
         console.log('✅ Auditors processed successfully:', auditors.length, 'users');
-        console.log('🔍 Sample reviewers:', reviewers.slice(0, 3));
-        console.log('🔍 Sample auditors:', auditors.slice(0, 3));
         
         if (reviewers.length === 0 && auditors.length === 0) {
           console.warn('⚠️ No users found. This might indicate an API issue or empty database.');
         }
       } catch (e) {
         console.error('❌ Error fetching users:', e);
-        console.error('❌ Error details:', e.response?.data);
-        console.error('❌ Error status:', e.response?.status);
-        console.error('❌ Error message:', e.message);
         
         // Handle access denied errors
         if (AccessUtils.handleApiError(e, 'audit user access')) {
           return;
         }
         
-        // Try fallback endpoint
-        try {
-          console.log('🔄 Trying fallback endpoint: /api/compliance-users/');
-          const fallbackRes = await axios.get('/api/compliance-users/', {
-            withCredentials: true
-          });
-          if (fallbackRes.data && fallbackRes.data.success && fallbackRes.data.users) {
-            this.users = fallbackRes.data.users;
-            console.log('✅ Fallback endpoint succeeded:', this.users.length, 'users');
-            return;
-          }
-        } catch (fallbackError) {
-          console.error('❌ Fallback endpoint also failed:', fallbackError);
-        }
-        
         this.users = [];
         this.$popup?.error('Failed to load reviewers. Please refresh the page and try again.');
       }
     },
-    async onFrameworkChange() {
+    async onFrameworkChange(frameworkId) {
       this.auditData.policy = '';
       this.auditData.subPolicy = '';
       this.auditData.selectedComplianceIds = [];
@@ -2677,21 +2539,30 @@ export default {
       this.policies = [];
       this.subpolicies = [];
       this.scopeCompliances = [];
-      if (this.auditData.framework) {
+      if (frameworkId) {
+        // Handle dropdown selection (could be an object {value, label} or just the ID)
+        const fwId = typeof frameworkId === 'object' ? frameworkId.value : frameworkId;
+        if (!fwId) return;
+
         try {
-          const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
-          const res = await axios.get('/api/policies/', {
-            params: { framework_id: this.auditData.framework },
-            withCredentials: true,
-            headers: token ? { Authorization: `Bearer ${token}` } : {}
-          });
-          this.policies = res.data.policies || res.data;
-        } catch (e) {
-          console.error('Error fetching policies:', e);
-          if (AccessUtils.handleApiError(e, 'audit policy access')) {
-            return;
+          console.log(`🔄 [AssignAudit] Fetching policies for framework ${fwId}...`);
+          // Use AUDIT_POLICIES endpoint instead of COMPLIANCE_POLICIES
+          const data = await apiService.get(API_ENDPOINTS.AUDIT_POLICIES, { framework_id: fwId });
+          this.policies = data;
+          console.log(`✅ [AssignAudit] Fetched ${this.policies.length} policies`);
+          
+          // Also fetch compliances for current framework scope
+          try {
+            const scopeData = await apiService.get(API_ENDPOINTS.AUDIT_COMPLIANCES_FOR_SCOPE, {
+              framework: fwId
+            });
+            this.allFrameworkCompliances = scopeData;
+            console.log(`✅ [AssignAudit] Fetched ${this.allFrameworkCompliances.length} framework-level compliances`);
+          } catch (scopeErr) {
+            console.error('❌ [AssignAudit] Error fetching framework scope compliances:', scopeErr);
           }
-          this.policies = [];
+        } catch (error) {
+          console.error('❌ [AssignAudit] Error fetching policies:', error);
         }
       }
     },
@@ -2699,16 +2570,11 @@ export default {
       if (!this.auditData.framework) return;
       this.loadingScopeCompliances = true;
       try {
-        const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
         const params = { framework_id: this.auditData.framework };
         if (this.auditData.policy) params.policy_id = this.auditData.policy;
         if (this.auditData.subPolicy) params.subpolicy_id = this.auditData.subPolicy;
-        const res = await axios.get(API_ENDPOINTS.AUDIT_COMPLIANCES_FOR_SCOPE, {
-          params,
-          withCredentials: true,
-          headers: token ? { Authorization: `Bearer ${token}` } : {}
-        });
-        this.scopeCompliances = Array.isArray(res.data) ? res.data : (res.data.compliances || []);
+        const res = await apiService.get(API_ENDPOINTS.AUDIT_COMPLIANCES_FOR_SCOPE, params);
+        this.scopeCompliances = Array.isArray(res) ? res : (res.compliances || []);
       } catch (e) {
         console.error('Error loading scope compliances:', e);
         if (AccessUtils.handleApiError(e, 'audit compliances')) return;
@@ -2763,18 +2629,13 @@ export default {
       }
       this.loadingScopeCompliances = true;
       try {
-        const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
         const params = {
           framework_id: this.auditData.framework,
           policy_id: member.assignedPolicy
         };
         if (member.assignedSubPolicy) params.subpolicy_id = member.assignedSubPolicy;
-        const res = await axios.get(API_ENDPOINTS.AUDIT_COMPLIANCES_FOR_SCOPE, {
-          params,
-          withCredentials: true,
-          headers: token ? { Authorization: `Bearer ${token}` } : {}
-        });
-        this.scopeCompliances = Array.isArray(res.data) ? res.data : (res.data.compliances || []);
+        const res = await apiService.get(API_ENDPOINTS.AUDIT_COMPLIANCES_FOR_SCOPE, params);
+        this.scopeCompliances = Array.isArray(res) ? res : (res.compliances || []);
       } catch (e) {
         console.error('Error loading scope compliances:', e);
         if (AccessUtils.handleApiError(e, 'audit compliances')) return;
@@ -2793,18 +2654,13 @@ export default {
       this.expandedComplianceScopeMemberIndex = memberIndex;
       this.loadingScopeCompliances = true;
       try {
-        const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
         const params = {
           framework_id: this.auditData.framework,
           policy_id: member.assignedPolicy
         };
         if (member.assignedSubPolicy) params.subpolicy_id = member.assignedSubPolicy;
-        const res = await axios.get(API_ENDPOINTS.AUDIT_COMPLIANCES_FOR_SCOPE, {
-          params,
-          withCredentials: true,
-          headers: token ? { Authorization: `Bearer ${token}` } : {}
-        });
-        this.scopeCompliances = Array.isArray(res.data) ? res.data : (res.data.compliances || []);
+        const res = await apiService.get(API_ENDPOINTS.AUDIT_COMPLIANCES_FOR_SCOPE, params);
+        this.scopeCompliances = Array.isArray(res) ? res : (res.compliances || []);
       } catch (e) {
         console.error('Error loading scope compliances:', e);
         if (AccessUtils.handleApiError(e, 'audit compliances')) return;
@@ -2873,11 +2729,7 @@ export default {
         }];
         // Update tabs for AI workflow
         // Update tabs for AI audit workflow (Policy Selection removed)
-        this.tabs = [
-          { name: 'Framework Selection', required: ['framework', 'type'] },
-          { name: 'Auditor Assignment', required: [] },
-          { name: 'Review & Assign', required: ['scope', 'objective', 'type', 'dueDate'] }
-        ];
+        // Note: tabs is now a computed property, no manual assignment needed
       } else {
         // For Internal/External/Self audits, reset to basic team member structure
         // Get current user ID for Self-Audit
@@ -2924,12 +2776,7 @@ export default {
           filteredBusinessUnits: [],
         }];
         // Update tabs for Internal/External/Self audit workflow
-        this.tabs = [
-          { name: 'Framework Selection', required: ['framework', 'type'] },
-          { name: 'Team Creation', required: [] },
-          { name: 'Policy Assignment', required: [] },
-          { name: 'Review & Assign', required: ['scope', 'objective', 'type', 'frequency', 'dueDate'] }
-        ];
+        // Note: tabs is now a computed property, no manual assignment needed
         
         // For Self-Audit, re-fetch auditors to include current user if not already set
         if (this.auditData.type === 'S') {
@@ -2950,50 +2797,36 @@ export default {
       this.currentTab = 0;
     },
     async onPolicyChange() {
+      // Handle dropdown selection (could be an object {value, label} or just the ID)
+      const policyId = typeof this.auditData.policy === 'object' ? this.auditData.policy.value : this.auditData.policy;
+      if (!policyId) return;
+
       this.auditData.subPolicy = '';
       this.subpolicies = [];
-      if (this.auditData.policy) {
-        try {
-          // Get JWT token for authentication
-          const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
-          const headers = { 'Content-Type': 'application/json' };
-          if (token) {
-            headers['Authorization'] = `Bearer ${token}`;
-          }
-          
-          const res = await axios.get(`/api/compliance/policies/${this.auditData.policy}/subpolicies/`, { headers });
-          console.log('🔍 Main subpolicies API response:', res.data);
-          if (res.data && res.data.success) {
-            // Transform the response to match expected format
-            this.subpolicies = (res.data.subpolicies || []).map(sp => ({
-              id: sp.id,
-              name: sp.name,
-              description: sp.description,
-              status: sp.status,
-              createdBy: sp.createdBy,
-              createdDate: sp.createdDate,
-              identifier: sp.identifier,
-              control: sp.control,
-              permanentTemporary: sp.permanentTemporary
-            }));
-            console.log('✅ Main subpolicies loaded:', this.subpolicies);
-          } else {
-            this.subpolicies = [];
-            console.log('❌ No main subpolicies found');
-          }
-        } catch (e) {
-          console.error('Error fetching subpolicies:', e);
-          this.subpolicies = [];
-        }
+      try {
+        console.log(`🔄 [AssignAudit] Fetching subpolicies for policy ${policyId}...`);
+        // Use AUDIT_SUBPOLICIES instead of COMPLIANCE_SUBPOLICIES
+        const data = await apiService.get(API_ENDPOINTS.AUDIT_SUBPOLICIES, { policy_id: policyId });
         
-        // Update team members with selected policy (only for non-AI audits)
-        // AI audits don't require policy selection here - it happens in AI Audit Upload page
-        if (this.auditData.type !== 'AI') {
-          this.teamMembers.forEach(member => {
-            member.assignedPolicy = this.auditData.policy;
-            member.assignedSubPolicy = this.auditData.subPolicy || '';
-          });
-        }
+        // Map backend fields to frontend expectations
+        this.subpolicies = (data || []).map(sp => ({
+          id: sp.SubPolicyId,
+          name: sp.SubPolicyName
+        }));
+        
+        console.log(`✅ [AssignAudit] Fetched ${this.subpolicies.length} subpolicies`);
+      } catch (error) {
+        console.error('❌ [AssignAudit] Error fetching subpolicies:', error);
+        this.subpolicies = [];
+      }
+      
+      // Update team members with selected policy (only for non-AI audits)
+      // AI audits don't require policy selection here - it happens in AI Audit Upload page
+      if (this.auditData.type !== 'AI') {
+        this.teamMembers.forEach(member => {
+          member.assignedPolicy = this.auditData.policy;
+          member.assignedSubPolicy = this.auditData.subPolicy || '';
+        });
       }
     },
     
@@ -3208,27 +3041,20 @@ export default {
         };
 
         console.log('🚀 Submitting audit with payload:', payload);
-        console.log('🔍 Debug - team_members:', payload.team_members);
-        console.log('🔍 Debug - reviewer:', payload.reviewer);
-        console.log('🔍 Debug - audit_type:', payload.audit_type);
-        console.log('🔍 Debug - framework_id:', payload.framework_id);
-        console.log('🔍 Debug - policy_id:', payload.policy_id);
-        console.log('🔍 Debug - due_date:', payload.due_date);
-        console.log('🔍 Debug - frequency:', payload.frequency);
-        const response = await axios.post(API_ENDPOINTS.AUDIT_CREATE, payload);
-        console.log('✅ Audit submission response:', response.data);
+        const data = await apiService.post(API_ENDPOINTS.AUDIT_CREATE, payload);
+        console.log('✅ Audit submission response:', data);
         
-        if (response.data.audits_created > 0) {
+        if (data.audits_created > 0) {
           // Show different messages based on audit type
           if (this.auditData.type === 'AI') {
             this.$popup.info('AI audit created successfully! You will be redirected to document upload page.');
           } else {
-            this.$popup.success(`Successfully created ${response.data.audits_created} audit(s)`);
+            this.$popup.success(`Successfully created ${data.audits_created} audit(s)`);
           }
           
           await this.sendPushNotification({
             title: 'Audit Assigned',
-            message: `Successfully created ${response.data.audits_created} audit(s).`,
+            message: `Successfully created ${data.audits_created} audit(s).`,
             category: 'audit',
             priority: 'high',
             user_id: 'default_user'
@@ -3237,10 +3063,6 @@ export default {
           
           // Navigate based on audit type
           console.log('🔄 Navigating after successful assignment in 2 seconds...');
-          console.log('🔍 Debug - auditData.type:', this.auditData.type);
-          console.log('🔍 Debug - templateMember.type:', templateMember.type);
-          console.log('🔍 Debug - templateMember object:', templateMember);
-          console.log('🔍 Debug - condition check:', this.auditData.type === 'AI', templateMember.type === 'AI');
           setTimeout(() => {
             if (this.auditData.type === 'AI' || templateMember.type === 'AI') {
               // For AI audits, go to document upload page
@@ -3256,7 +3078,7 @@ export default {
               if (typeof window !== 'undefined' && window.auditorDataFetchPromise) {
                 window.auditorDataFetchPromise = null;
               }
-              this.$router.push(`/auditor/ai-audit/${response.data.audit_ids[0]}/upload`);
+              this.$router.push(`/auditor/ai-audit/${data.audit_ids[0]}/upload`);
             } else {
               // For regular audits, go to reviews page
               console.log('🚀 Navigating to /auditor/reviews');
@@ -3267,7 +3089,7 @@ export default {
           throw new Error('No audits were created');
         }
         
-        return response; // Return the response for potential chaining
+        return data; 
         
       } catch (error) {
         console.error('Error in submitAudit:', error);
@@ -3384,19 +3206,13 @@ export default {
             [`${member.assignedPolicy}-loading`]: true
           };
 
-          // Get JWT token for authentication
-          const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
-          const headers = { 'Content-Type': 'application/json' };
-          if (token) {
-            headers['Authorization'] = `Bearer ${token}`;
-          }
+          console.log(`🔄 [AssignAudit] Fetching subpolicies for policy ${member.assignedPolicy}...`);
+          const data = await apiService.get(API_ENDPOINTS.COMPLIANCE_SUBPOLICIES(member.assignedPolicy));
+          console.log('✅ Subpolicies API response:', data);
           
-          const response = await axios.get(`/api/compliance/policies/${member.assignedPolicy}/subpolicies/`, { headers });
-          console.log('🔍 Subpolicies API response:', response.data);
-          
-          if (response.data && response.data.success) {
+          if (data && data.success) {
             // Transform the response to match expected format
-            member.memberSubpolicies = (response.data.subpolicies || []).map(sp => ({
+            member.memberSubpolicies = (data.subpolicies || []).map(sp => ({
               SubPolicyId: sp.id,
               SubPolicyName: sp.name,
               Description: sp.description,
@@ -3416,14 +3232,7 @@ export default {
           
         } catch (error) {
           console.error('Error in onMemberPolicyChange:', error);
-          
-          // Handle access denied errors
-
-          if (AccessUtils.handleApiError(error, 'audit subpolicy access')) {
-
-return;
-
-}
+          if (AccessUtils.handleApiError(error, 'audit subpolicy access')) return;
         } finally {
           this.complianceCountLoading = {
             ...this.complianceCountLoading,
@@ -3437,18 +3246,15 @@ return;
       if (!member || !member.assignedPolicy) return;
 
       try {
-        const countResponse = await axios.get('/api/compliance-count/', {
-          params: {
-            policy_id: member.assignedPolicy,
-            subpolicy_id: member.assignedSubPolicy || ''
-          }
+        const data = await apiService.get(API_ENDPOINTS.AUDIT_COMPLIANCE_COUNT, {
+          policy_id: member.assignedPolicy,
+          subpolicy_id: member.assignedSubPolicy || ''
         });
         
-        // Handle access denied errors
         const key = `${member.assignedPolicy}-${member.assignedSubPolicy || ''}`;
         this.memberComplianceCounts = {
           ...this.memberComplianceCounts,
-          [key]: countResponse.data.count || 0
+          [key]: data.count || 0
         };
         
       } catch (error) {
@@ -3502,14 +3308,12 @@ return;
       this.selectedReports = [];
       
       try {
-        const params = new URLSearchParams({
+        const data = await apiService.get(API_ENDPOINTS.AUDIT_REPORTS_CHECK, {
           framework_id: this.auditData.framework,
           policy_id: member.assignedPolicy || '',
           subpolicy_id: member.assignedSubPolicy || ''
         });
-        
-        const response = await axios.get(API_ENDPOINTS.AUDIT_REPORTS_CHECK, { params });
-        this.availableReports = response.data.reports || [];
+        this.availableReports = data.reports || [];
       } catch (error) {
         console.error('Error fetching reports:', error);
         this.reportsError = 'Failed to load reports. Please try again.';
@@ -3530,11 +3334,10 @@ return;
       try {
         if (this.selectedReports.length === 0) return;
 
-        const params = new URLSearchParams();
-        params.append('report_ids', this.selectedReports.join(','));
-        
-        const response = await axios.get(API_ENDPOINTS.AUDIT_REPORTS_DETAILS, { params });
-        const reportDetails = response.data.reports;
+        const data = await apiService.get(API_ENDPOINTS.AUDIT_REPORTS_DETAILS, {
+          report_ids: this.selectedReports.join(',')
+        });
+        const reportDetails = data.reports;
 
         const reportsData = {
           reports: reportDetails.map((report, index) => ({
@@ -3698,21 +3501,10 @@ return;
     },  
     async sendPushNotification(notificationData) {
       try {
-        const response = await fetch('http://localhost:8000/api/push-notification/', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(notificationData)
-        });
-
-        if (response.ok) {
-          console.log('Push notification sent successfully');
-        } else {
-          console.error('Failed to send push notification');
-        }
+        await apiService.post(API_ENDPOINTS.PUSH_NOTIFICATION, notificationData);
+        console.log('✅ Push notification sent successfully');
       } catch (error) {
-        console.error('Error sending push notification:', error);
+        console.error('❌ Error sending push notification:', error);
       }
     },
     expandAllSections() {
@@ -4077,9 +3869,15 @@ return;
     },
     async fetchBusinessUnits() {
       try {
-        const res = await axios.get(API_ENDPOINTS.BUSINESS_UNITS);
-        this.availableBusinessUnits = res.data;
-        this.filteredBusinessUnits = res.data;
+        console.log('🔄 [AssignAudit] Fetching business units...');
+        const data = await apiService.get(API_ENDPOINTS.BUSINESS_UNITS);
+        const businessUnits = Array.isArray(data) ? data : (data.businessUnits || []);
+        
+        // Transform based on the data structure (names or values)
+        this.allBusinessUnits = businessUnits.map(bu => bu.name || bu.value || bu).filter(Boolean);
+        console.log(`✅ [AssignAudit] Fetched ${this.allBusinessUnits.length} business units`);
+        this.availableBusinessUnits = this.allBusinessUnits;
+        this.filteredBusinessUnits = this.allBusinessUnits;
       } catch (e) {
         console.error('Error fetching business units:', e);
         this.availableBusinessUnits = [];

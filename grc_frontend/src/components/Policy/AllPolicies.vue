@@ -617,7 +617,7 @@ const fetchFrameworks = async () => {
     }
 
     console.log('⚠️ [AllPolicies] No cached data found, fetching from API...')
-    const response = await apiService.get('/all-policies/frameworks/')
+    const response = await apiService.get(API_ENDPOINTS.POLICY_ALL_POLICIES_FRAMEWORKS)
     frameworks.value = response || []
 
     // Update cache for subsequent loads
@@ -696,7 +696,7 @@ const fetchFrameworkVersions = async (frameworkId) => {
   
   try {
     console.log(`Fetching framework versions for framework ID: ${frameworkId}`)
-    const response = await apiService.get(`/all-policies/frameworks/${frameworkId}/versions/`)
+    const response = await apiService.get(API_ENDPOINTS.POLICY_FRAMEWORK_VERSIONS(frameworkId))
     
     console.log('Framework versions response:', response)
     
@@ -728,7 +728,7 @@ const fetchFrameworkVersionPolicies = async (versionId) => {
   
   try {
     console.log(`Fetching policies for framework version: ${versionId}`)
-    const response = await apiService.get(`/all-policies/framework-versions/${versionId}/policies/`)
+    const response = await apiService.get(API_ENDPOINTS.POLICY_FRAMEWORK_VERSION_POLICIES(versionId))
     console.log(`Received ${response.length} policies for framework version ${versionId}`)
     
     // Update the policies in the framework's version object for hierarchical view
@@ -787,7 +787,7 @@ const fetchAllPolicies = async () => {
   
   try {
     console.log("Fetching all policies...")
-    const response = await apiService.get(url)
+    const response = await apiService.get(url) // Note: url is constructed with API_BASE_URL_FULL which includes /api
     
     // Show initial data immediately for better user experience
     const initialPolicies = response

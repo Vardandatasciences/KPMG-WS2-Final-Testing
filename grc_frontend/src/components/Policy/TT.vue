@@ -3105,9 +3105,9 @@ import {  API_ENDPOINTS } from '../../config/api.js'
         // Store raw API data for fallback use in fetchPolicyDetails
         this.rawPoliciesData = policiesData
 
-        // Filter policies to only show Approved and Active ones
+        // Filter policies to only show Approved ones (allowing null for ActiveInactive)
         this.policies = policiesData
-          .filter(p => p.Status === 'Approved' && p.ActiveInactive === 'Active')
+          .filter(p => p.Status === 'Approved' && (p.ActiveInactive === 'Active' || p.ActiveInactive === null || p.ActiveInactive === undefined || p.ActiveInactive === ''))
           .map(p => ({ 
             id: p.PolicyId, 
             name: p.PolicyName,
@@ -4604,10 +4604,8 @@ import {  API_ENDPOINTS } from '../../config/api.js'
         const module = this.selectedTab === 'framework' ? 'framework' : 'policy'
         const currentUserId = this.currentUser?.UserId || ''
         const response = await apiService.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
-          params: {
-            module: module,
-            current_user_id: currentUserId
-          }
+          module: module,
+          current_user_id: currentUserId
         })
         console.log('Raw users response:', response)
         this.users = response.map(user => ({

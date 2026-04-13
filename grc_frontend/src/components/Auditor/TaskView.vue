@@ -573,10 +573,10 @@
 </template>
 
 <script>
-import { api } from '../../data/api';
+import apiService from '@/services/apiService';
 import ValidationMixin from '@/mixins/ValidationMixin';
 import { AccessUtils } from '@/utils/accessUtils';
-import { API_ENDPOINTS } from '../../config/api.js';
+import { API_ENDPOINTS } from '@/config/api.js';
 
 export default {
   name: 'TaskView',
@@ -946,8 +946,8 @@ export default {
           return;
         }
         console.log('Fetching details for audit:', auditId);
-        const taskResponse = await api.getAuditTaskDetails(auditId);
-        this.auditDetails = taskResponse.data;
+        const data = await apiService.get(API_ENDPOINTS.AUDIT_TASK_DETAILS(auditId));
+        this.auditDetails = data;
         
         // Initialize selected_risks and selected_mitigations for each compliance
         this.auditDetails.compliances.forEach(compliance => {
@@ -1260,21 +1260,19 @@ export default {
         
         console.log('Payload to be sent:', JSON.stringify(payload, null, 2));
         const auditId = this.$route.params.auditId;
-        console.log('Calling api.saveVersion with auditId:', auditId);
-
-        // Call the new versioning endpoint
-        const saveResponse = await api.saveVersion(auditId, payload);
-        console.log('Save response received:', saveResponse);
+        console.log('Calling saveVersion with auditId:', auditId);
+        const data = await apiService.post(API_ENDPOINTS.AUDIT_SAVE_VERSION(auditId), payload);
+        console.log('Save response received:', data);
         
-        if (saveResponse.data.success) {
+        if (data.success) {
           // Store the saved version data
           this.savedVersionData = {
-            version: saveResponse.data.version,
-            data: saveResponse.data.data
+            version: data.version,
+            data: data.data
           };
           
           this.hasUnsavedChanges = false;
-          this.currentVersion = saveResponse.data.version;
+          this.currentVersion = data.version;
           this.lastSavedTime = new Date().toISOString();
           
           // Clear validation errors on successful save
@@ -1282,8 +1280,8 @@ export default {
           this.fieldErrors = {};
           
           // Show version information to user
-          console.log('Saved version:', saveResponse.data.version);
-          console.log('Version data:', saveResponse.data.data);
+          console.log('Saved version:', data.version);
+          console.log('Version data:', data.data);
           
           // Check if all compliances have status set before showing review modal
           const compliancesWithoutStatus = this.auditDetails.compliances.filter(comp => {
@@ -1381,13 +1379,16 @@ export default {
         const auditId = this.$route.params.auditId;
         
         // Call backend to update audit status to "Under Review"
-        const reviewResponse = await api.sendForReview(auditId, {
+        const data = await apiService.post(API_ENDPOINTS.AUDIT_SEND_FOR_REVIEW(auditId), {
           version: this.currentVersion
         });
-        
-        if (reviewResponse.data.success) {
-          this.closeReviewModal();
-          this.showSentForReviewSuccess = true;  // Show success popup
+
+        if (data.success) {
+          this.showReviewModal = false;
+          this.showSentForReviewSuccess = true;
+          this.isReadOnlyMode = true;
+          this.isAuditFrozen = true;
+          this.$toast?.success('Audit sent for review successfully');
           await this.sendPushNotification({
             title: 'Audit Sent for Review',
             message: `Audit "${this.auditDetails?.title || ''}" sent for review (version: ${this.currentVersion})`,
@@ -1491,9 +1492,9 @@ export default {
         console.log('Submitting compliance data:', complianceData);
         
         // Call backend API to add compliance
-        const response = await api.addComplianceToAudit(auditId, complianceData);
+        const data = await apiService.post(API_ENDPOINTS.AUDIT_ADD_COMPLIANCE(auditId), complianceData);
         
-        if (response.data.success) {
+        if (data.success) {
           this.$toast?.success('Compliance added successfully');
           this.closeAddComplianceModal();
           
@@ -1528,7 +1529,7 @@ export default {
             user_id: 'current-user'
           });
         } else {
-          throw new Error(response.data.error || 'Failed to add compliance');
+          throw new Error(data.error || 'Failed to add compliance');
         }
       } catch (error) {
         console.error('Error adding compliance:', error);

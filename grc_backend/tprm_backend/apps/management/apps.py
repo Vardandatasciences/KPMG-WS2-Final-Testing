@@ -23,6 +23,8 @@ def _run_due_schedules():
     Core screening-schedule runner.  Imported lazily (inside the thread)
     so Django is fully initialised before we touch the ORM.
     """
+    from django import db
+    db.close_old_connections()
     try:
         from tprm_backend.apps.management.models import ScreeningSchedule
         from tprm_backend.apps.management.views import (

@@ -7,7 +7,8 @@
  * 3. Allow other components (HomeView, aiPrivacyAnalysis) to reuse cached data
  */
 
-import { axiosInstance, API_ENDPOINTS } from '@/config/api.js';
+import apiService from '@/services/apiService';
+import { API_ENDPOINTS } from '@/config/api.js';
 
 class AiPrivacyService {
   constructor() {
@@ -62,24 +63,21 @@ class AiPrivacyService {
           frameworkId && frameworkId !== 'all' ? frameworkId : null
         );
 
-        const response = await axiosInstance.get(url, {
-          timeout: 120000 // 2 minutes for full AI analysis
-        });
-
-        if (response.data && response.data.status === 'success') {
-          const data = response.data.data;
+        const data = await apiService.get(url, {}, { timeout: 120000 });
+        
+        if (data && data.status === 'success') {
+          const result = data.data;
           this.dataStore[cacheKey] = {
-            data,
+            data: result,
             lastFetchTime: new Date()
           };
           console.log(
             `[AI Privacy Service] ✅ Fetch complete for key=${cacheKey} at ${this.dataStore[cacheKey].lastFetchTime.toISOString()}`
           );
-          return data;
+          return result;
         }
 
-        const message =
-          response.data?.message || 'Failed to fetch AI privacy analysis from backend';
+        const message = data?.message || 'Failed to fetch AI privacy analysis from backend';
         console.error('[AI Privacy Service] ❌ Backend responded with error:', message);
         throw new Error(message);
       } catch (error) {

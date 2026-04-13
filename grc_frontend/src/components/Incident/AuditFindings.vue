@@ -488,6 +488,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useStore } from 'vuex';
 import { axiosInstance, API_BASE_URL } from '@/config/api.js';
+import apiService from '@/services/apiService';
 import { API_ENDPOINTS } from '../../config/api.js';
 import '@fortawesome/fontawesome-free/css/all.min.css';
 import { PopupModal, PopupService } from '@/modules/popup';
@@ -1396,8 +1397,8 @@ export default {
 
         // 1) Try custom dropdown API (users-for-dropdown) first
         try {
-          const response = await axiosInstance.get(API_ENDPOINTS.USERS_FOR_DROPDOWN);
-          const raw = Array.isArray(response.data) ? response.data : (response.data?.data ?? response.data ?? []);
+          const responseData = await apiService.get(API_ENDPOINTS.USERS_FOR_DROPDOWN);
+          const raw = Array.isArray(responseData) ? responseData : (responseData?.data ?? responseData ?? []);
           if (Array.isArray(raw) && raw.length > 0) {
             availableUsers.value = raw.map(normalizeUser);
             console.log('✅ Loaded from USERS_FOR_DROPDOWN:', availableUsers.value.length);
@@ -1408,10 +1409,11 @@ export default {
         }
 
         // 2) Reviewer selection (RBAC-filtered for incident module)
-        const response = await axiosInstance.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
-          params: { module: 'incident', current_user_id: currentUserId }
+        const responseData = await apiService.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
+          module: 'incident', 
+          current_user_id: currentUserId 
         });
-        const raw = Array.isArray(response.data) ? response.data : (response.data?.data ?? []);
+        const raw = Array.isArray(responseData) ? responseData : (responseData?.data ?? []);
         availableUsers.value = Array.isArray(raw) ? raw.map(normalizeUser) : [];
         console.log('✅ Loaded from USERS_FOR_REVIEWER_SELECTION:', availableUsers.value.length);
       } catch (err) {
