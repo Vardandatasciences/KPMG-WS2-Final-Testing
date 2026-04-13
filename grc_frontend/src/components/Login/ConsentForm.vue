@@ -947,6 +947,14 @@ const retentionFrameworkName = ref('')
 const retentionModuleConfigs = ref({})
 const retentionPageConfigs = ref({})
 
+const getAuthToken = () => sessionStorage.getItem('access_token') || localStorage.getItem('access_token')
+const isLikelyJwt = (token) => typeof token === 'string' && token.split('.').length === 3
+const hasAuthenticatedSession = () => {
+  const token = getAuthToken()
+  const isLoggedIn = (sessionStorage.getItem('is_logged_in') || localStorage.getItem('is_logged_in')) === 'true'
+  return isLoggedIn && isLikelyJwt(token)
+}
+
 // Computed
 const allAgreed = computed(() => {
   return agreements.value.eula && 
@@ -1055,6 +1063,11 @@ const downloadDocument = (docType) => {
 // Data Retention Methods
 const initializeRetentionConfig = async () => {
   try {
+    // Consent form also renders on login route; skip protected calls when unauthenticated.
+    if (!hasAuthenticatedSession()) {
+      return
+    }
+
     loadingRetention.value = true
     
     // Session-scoped framework context only (no localStorage)
@@ -1072,7 +1085,8 @@ const initializeRetentionConfig = async () => {
     // If no framework ID, try to get from API
     if (!retentionFrameworkId.value) {
       try {
-        const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token')
+        const token = getAuthToken()
+        if (!isLikelyJwt(token)) return
         const response = await axios.get(`${API_BASE_URL}/api/frameworks/get-selected/`, {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -1103,7 +1117,8 @@ const initializeRetentionConfig = async () => {
 
 const loadFirstApprovedFramework = async () => {
   try {
-    const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token')
+    const token = getAuthToken()
+    if (!isLikelyJwt(token)) return
     const response = await axios.get(`${API_BASE_URL}/api/frameworks/`, {
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -1130,7 +1145,8 @@ const loadFirstApprovedFramework = async () => {
 
 const loadRetentionFrameworkInfo = async (frameworkId) => {
   try {
-    const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token')
+    const token = getAuthToken()
+    if (!isLikelyJwt(token)) return
     const response = await axios.get(`${API_BASE_URL}/api/frameworks/${frameworkId}/`, {
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -1148,7 +1164,8 @@ const loadRetentionFrameworkInfo = async (frameworkId) => {
 
 const loadRetentionConfigs = async (frameworkId) => {
   try {
-    const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token')
+    const token = getAuthToken()
+    if (!isLikelyJwt(token)) return
     
     // Load module configs
     const moduleResponse = await axios.get(

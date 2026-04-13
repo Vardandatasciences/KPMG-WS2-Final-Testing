@@ -1586,7 +1586,7 @@
 <script>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import axios from 'axios'
+import apiService from '@/services/apiService.js'
 import { API_ENDPOINTS } from '../../config/api.js'
 import './CreateIncident.css'
 import { PopupService, PopupModal } from '@/modules/popup'
@@ -2216,9 +2216,9 @@ export default {
 
       loadingCompliances.value = true
       try {
-        const response = await axios.get(API_ENDPOINTS.INCIDENT_COMPLIANCES)
-        if (response.data.success) {
-          compliances.value = response.data.data
+        const response = await apiService.get(API_ENDPOINTS.INCIDENT_COMPLIANCES)
+        if (response.success) {
+          compliances.value = response.data
           console.log('Loaded compliances:', compliances.value.length)
           
           // Debug: Check for any compliance items with invalid data types
@@ -2232,7 +2232,7 @@ export default {
             console.warn('Found compliances with invalid data types:', invalidCompliances)
           }
         } else {
-          console.error('Failed to fetch compliances:', response.data.message)
+          console.error('Failed to fetch compliances:', response.message)
         }
       } catch (error) {
         console.error('Error fetching compliances:', error)
@@ -2456,16 +2456,14 @@ export default {
         console.log('Submitting incident with data:', submissionData)
         console.log('Data inventory:', dataInventory)
         
-        const response = await axios.post(API_ENDPOINTS.INCIDENT_CREATE, submissionData)
-        if (response.status === 201) {
-          // Show success message and redirect
-          PopupService.success('Incident created successfully! It has been saved to the incidents table and will be escalated to risk management when needed.')
-          
-          // Navigate to incidents list after a short delay to allow user to see success message
-          setTimeout(() => {
-            router.push('/incident/incident')
-          }, 2000) // 2 second delay to show the success message
-        }
+        await apiService.post(API_ENDPOINTS.INCIDENT_CREATE, submissionData)
+        // Show success message and redirect
+        PopupService.success('Incident created successfully! It has been saved to the incidents table and will be escalated to risk management when needed.')
+        
+        // Navigate to incidents list after a short delay to allow user to see success message
+        setTimeout(() => {
+          router.push('/incident/incident')
+        }, 2000) // 2 second delay to show the success message
       } catch (error) {
         console.error('Error creating incident:', error)
         
@@ -2516,13 +2514,13 @@ export default {
         PopupService.info('Generating analysis... This may take a few moments.')
         
         // Call the analysis API without timeout
-        const response = await axios.post('api/incidents/generate-analysis/', {
+        const response = await apiService.post('/api/incidents/generate-analysis/', {
           title: formData.value.IncidentTitle.trim(),
           description: formData.value.Description.trim()
         })
 
-        if (response.data.success && response.data.analysis) {
-          const analysis = response.data.analysis
+        if (response.success && response.analysis) {
+          const analysis = response.analysis
           console.log('🔥 Mapping AI analysis to incident form fields:')
           console.log('📊 AI Response Keys:', Object.keys(analysis))
           console.log('📋 Full AI Response:', analysis)
@@ -2783,7 +2781,7 @@ export default {
             aiJustifications.value[key] && !aiJustifications.value[key].includes('not available')).length} fields have detailed AI justifications. Please review and modify as needed before saving.`)
           
         } else {
-          throw new Error(response.data.error || 'Analysis failed')
+          throw new Error(response.error || 'Analysis failed')
         }
 
       } catch (error) {
@@ -2813,9 +2811,9 @@ export default {
     // Category dropdown methods
     const fetchCategories = async () => {
       try {
-        const response = await axios.get(API_ENDPOINTS.CATEGORIES)
-        availableCategories.value = response.data
-        filteredCategories.value = response.data
+        const response = await apiService.get(API_ENDPOINTS.CATEGORIES)
+        availableCategories.value = response
+        filteredCategories.value = response
       } catch (error) {
         console.error('Error fetching categories:', error)
         
@@ -2862,10 +2860,10 @@ export default {
       if (newCategory && !availableCategories.value.some(cat => cat.toLowerCase() === newCategory.toLowerCase())) {
         try {
           console.log('Posting new category to API:', newCategory)
-          const response = await axios.post(API_ENDPOINTS.CATEGORIES_ADD, { value: newCategory })
-          console.log('API response:', response.data)
+          const response = await apiService.post(API_ENDPOINTS.CATEGORIES_ADD, { value: newCategory })
+          console.log('API response:', response)
           
-          const addedCategory = response.data.value || newCategory
+          const addedCategory = response.value || newCategory
           
           // Add to available categories if not already there
           if (!availableCategories.value.includes(addedCategory)) {
@@ -2929,9 +2927,9 @@ export default {
     // Business Unit dropdown methods
     const fetchBusinessUnits = async () => {
       try {
-        const response = await axios.get(API_ENDPOINTS.BUSINESS_UNITS)
-        availableBusinessUnits.value = response.data
-        filteredBusinessUnits.value = response.data
+        const response = await apiService.get(API_ENDPOINTS.BUSINESS_UNITS)
+        availableBusinessUnits.value = response
+        filteredBusinessUnits.value = response
       } catch (error) {
         console.error('Error fetching business units:', error)
         
@@ -2978,10 +2976,10 @@ export default {
       if (newUnit && !availableBusinessUnits.value.some(unit => unit.toLowerCase() === newUnit.toLowerCase())) {
         try {
           console.log('Posting new business unit to API:', newUnit)
-          const response = await axios.post(API_ENDPOINTS.BUSINESS_UNITS_ADD, { value: newUnit })
-          console.log('API response:', response.data)
+          const response = await apiService.post(API_ENDPOINTS.BUSINESS_UNITS_ADD, { value: newUnit })
+          console.log('API response:', response)
           
-          const addedUnit = response.data.value || newUnit
+          const addedUnit = response.value || newUnit
           
           // Add to available business units if not already there
           if (!availableBusinessUnits.value.includes(addedUnit)) {
@@ -3044,7 +3042,7 @@ export default {
     const fetchIncidentCategories = async () => {
       try {
         // Use the dedicated incident categories endpoint
-        const response = await axios.get(API_ENDPOINTS.INCIDENT_CATEGORIES)
+        const response = await apiService.get(API_ENDPOINTS.INCIDENT_CATEGORIES)
         
         // Default incident categories if none exist
         const defaultIncidentCategories = [
@@ -3066,7 +3064,7 @@ export default {
         ]
         
         // The response should be an array of categories
-        const existingCategories = Array.isArray(response.data) ? response.data : []
+        const existingCategories = Array.isArray(response) ? response : []
         const combinedCategories = [...new Set([...existingCategories, ...defaultIncidentCategories])]
         
         availableIncidentCategories.value = combinedCategories
@@ -3137,10 +3135,10 @@ export default {
       if (newCategory && !availableIncidentCategories.value.some(cat => cat.toLowerCase() === newCategory.toLowerCase())) {
         try {
           console.log('Posting new incident category to API:', newCategory)
-          const response = await axios.post(API_ENDPOINTS.INCIDENT_CATEGORIES_ADD, { value: newCategory })
-          console.log('API response:', response.data)
+          const response = await apiService.post(API_ENDPOINTS.INCIDENT_CATEGORIES_ADD, { value: newCategory })
+          console.log('API response:', response)
           
-          const addedCategory = response.data.value || newCategory
+          const addedCategory = response.value || newCategory
           
           // Add to available incident categories if not already there
           if (!availableIncidentCategories.value.includes(addedCategory)) {

@@ -102,10 +102,10 @@ def _set_user_session_token(user_id, session_token):
     cache_key = f"user_session_{user_id}"
     grace_key = f"user_session_grace_{user_id}"
     
-    # Store current token as grace for 30s to prevent race conditions during rotation
+    # Store current token as grace to prevent race conditions during rotation (long requests / multi-tab).
     current_token = cache.get(cache_key)
     if current_token:
-        cache.set(grace_key, current_token, 30)
+        cache.set(grace_key, current_token, 120)
         
     # Set new active token for 7 days
     cache.set(cache_key, session_token, 7 * 24 * 60 * 60)

@@ -1305,6 +1305,23 @@ def validate_path_parameter(param_value, param_name, param_type='integer', min_v
     except ValidationError as e:
         raise e
 
+def get_incident_for_request(request, incident_id, *, origins=None):
+    """
+    Tenant-scoped incident fetch helper to prevent cross-tenant object access.
+    Keeps behavior identical for valid in-tenant records and raises Incident.DoesNotExist otherwise.
+    """
+    tenant_id = get_tenant_id_from_request(request)
+    filters = {'IncidentId': incident_id}
+    if tenant_id is not None:
+        filters['tenant_id'] = tenant_id
+    qs = Incident.objects.filter(**filters)
+    if origins:
+        qs = qs.filter(Origin__in=origins)
+    incident = qs.first()
+    if not incident:
+        raise Incident.DoesNotExist()
+    return incident
+
 def validate_json_request_body(request, validation_rules):
     """
     Validate JSON request body using SecureValidator and defined rules
@@ -2915,45 +2932,37 @@ def assign_incident(request, incident_id):
             from django.utils import timezone
             
             # Parse the date (assuming it's just a date, not datetime)
-            try:
-                dt_obj = datetime.strptime(due_date, '%Y-%m-%d')
-                due_date_obj = dt_obj.date()
-                
-                # SECURITY: Realistic range validation
-                _today = date.today()
-                _max_allowed = _today + timedelta(days=365*10)
-                
-                if due_date_obj < _today:
-                    from django.http import JsonResponse
-                    return JsonResponse({
-                        "success": False, 
-                        "error": "Invalid due date", 
-                        "details": "Due date cannot be in the past."
-                    }, status=400)
-                    
-                if due_date_obj > _max_allowed:
-                    from django.http import JsonResponse
-                    return JsonResponse({
-                        "success": False, 
-                        "error": "Invalid due date", 
-                        "details": "Due date cannot be more than 10 years in the future."
-                    }, status=400)
+            dt = datetime.strptime(due_date, '%Y-%m-%d')
+            
+            # Handle timezone awareness based on Django settings
+            if getattr(settings, 'USE_TZ', True):
+                # If USE_TZ is True, make datetime timezone-aware
+                dt = timezone.make_aware(dt)
+            else:
+                # If USE_TZ is False, keep datetime timezone-naive
+                pass
 
-                # Handle timezone awareness based on Django settings
-                if getattr(settings, 'USE_TZ', True):
-                    dt = timezone.make_aware(dt_obj)
-                else:
-                    dt = dt_obj
-                
-                incident.MitigationDueDate = dt
-                
-            except (ValueError, TypeError):
-                from django.http import JsonResponse
-                return JsonResponse({
-                    "success": False, 
-                    "error": "Invalid date format", 
-                    "details": "Expected YYYY-MM-DD"
-                }, status=400)
+            # Security validation: due date must be >= incident creation date and within a realistic max window.
+            created_at = incident.CreatedAt
+            if created_at and getattr(settings, 'USE_TZ', True) and timezone.is_naive(created_at):
+                created_at = timezone.make_aware(created_at)
+            created_ref_date = created_at.date() if created_at else timezone.now().date()
+            due_ref_date = dt.date()
+            max_future_days = int(getattr(settings, 'INCIDENT_DUE_DATE_MAX_DAYS', 730))
+            from datetime import timedelta
+            max_allowed_date = created_ref_date + timedelta(days=max_future_days)
+            if due_ref_date < created_ref_date:
+                return Response(
+                    {'error': 'Due date cannot be earlier than incident creation date.'},
+                    status=400
+                )
+            if due_ref_date > max_allowed_date:
+                return Response(
+                    {'error': f'Due date cannot be more than {max_future_days} days from incident creation date.'},
+                    status=400
+                )
+
+            incident.MitigationDueDate = dt
         
         # Save the incident with all updates
         debug_print(f"🔍 DEBUG: assign_incident - About to save incident {incident.IncidentId}")
@@ -4158,22 +4167,23 @@ def export_incidents(request):
 
     except Exception as e:
         # Log export error
+        safe_error = SecureOutputEncoder.sanitize_error_message(str(e))
         send_log(
             module="Incident",
             actionType="EXPORT_INCIDENTS_ERROR",
-            description=f"Export incidents error: {str(e)}",
+            description=f"Export incidents error: {safe_error}",
             userId=str(user_id) if user_id else None,
             userName=request.data.get('userName', 'Unknown'),
             entityType="Export",
             logLevel="ERROR",
             ipAddress=client_ip,
-            additionalInfo={"error": "An internal error occurred"}
+            additionalInfo={"error": safe_error}
         )
         
-        debug_print(f"Export error: {str(e)}")
+        debug_print(f"Export error: {safe_error}")
         return Response({
             'success': False,
-            'error': 'An internal error occurred'
+            'error': 'Export failed due to an internal error. Please try again later.'
         }, status=500) 
 
 @api_view(['GET'])
@@ -4519,6 +4529,10 @@ def export_audit_findings(request):
         export_options['exported_at'] = timezone.now().isoformat()
         export_options['record_count'] = len(audit_findings_data)
         export_options['export_type'] = 'audit_findings'
+
+        # CSV formula-injection hardening parity with incident export.
+        if str(file_format).lower() == 'csv':
+            audit_findings_data = sanitize_csv_dataset(audit_findings_data)
         
         # CSV formula-injection hardening at endpoint level as defense-in-depth.
         if str(file_format).lower() == 'csv':
@@ -4536,13 +4550,14 @@ def export_audit_findings(request):
         return Response(export_result)
     
     except Exception as e:
-        debug_print(f"Audit findings export error: {str(e)}")
+        safe_error = SecureOutputEncoder.sanitize_error_message(str(e))
+        debug_print(f"Audit findings export error: {safe_error}")
         
         # Log export error with full details
         send_log(
             module="Incident",
             actionType="EXPORT_AUDIT_FINDINGS_ERROR",
-            description=f"Audit findings export failed",
+            description=f"Audit findings export failed: {safe_error}",
             userId=request.user.id if request.user.is_authenticated else None,
             userName=request.user.username if request.user.is_authenticated else None,
             entityType="AuditFinding",
@@ -4554,8 +4569,8 @@ def export_audit_findings(request):
         # Return generic error to prevent infrastructure leakage
         return Response({
             'success': False,
-            'message': 'An internal error occurred while processing the export. Please contact support.'
-        }, status=500)
+            'error': 'Export failed due to an internal error. Please try again later.'
+        }, status=500) 
 
 @api_view(['GET'])
 @permission_classes([AuditFindingsAccessPermission])
@@ -4999,6 +5014,8 @@ def audit_finding_detail(request, compliance_id):
 @api_view(['GET'])
 @permission_classes([AuditViewPermission])
 @rbac_required(required_permission='view_audit_reports')
+@require_tenant
+@tenant_filter
 def audit_finding_incident_detail(request, incident_id):
     """
     Get detailed information for a specific audit finding incident (where Origin='Audit Finding')
@@ -5011,7 +5028,11 @@ def audit_finding_incident_detail(request, incident_id):
             return Response({'success': False, 'message': 'An internal server error occurred.'}, status=400)
         
         # Get the specific incident (audit finding or compliance gap)
-        incident = Incident.objects.get(IncidentId=validated_incident_id, Origin__in=['Audit Finding', 'AuditFinding', 'Compliance Gap'])
+        incident = get_incident_for_request(
+            request,
+            validated_incident_id,
+            origins=['Audit Finding', 'AuditFinding', 'Compliance Gap']
+        )
         
         # Use the serializer to properly convert the model to JSON-serializable data
         serializer = IncidentSerializer(incident)
@@ -5153,6 +5174,8 @@ def user_incidents(request, user_id):
 @authentication_classes([])
 @permission_classes([IncidentEvaluatePermission])
 @rbac_required(required_permission='evaluate_assigned_incident')
+@require_tenant
+@tenant_filter
 def incident_reviewer_tasks(request, user_id):
     """Get incidents where the user is assigned as reviewer"""
     try:
@@ -5170,7 +5193,9 @@ def incident_reviewer_tasks(request, user_id):
         # Include all statuses (including NULL) except 'Closed' and 'Completed'
         # This ensures all assigned incidents are shown to the reviewer
         debug_print(f"🔍 DEBUG: incident_reviewer_tasks - Filtering by ReviewerId={validated_user_id}")
+        tenant_id = get_tenant_id_from_request(request)
         incidents = Incident.objects.filter(
+            tenant_id=tenant_id,
             ReviewerId=validated_user_id
         ).exclude(
             Status__in=['Closed', 'Completed', 'Cancelled']
@@ -5220,6 +5245,8 @@ def incident_reviewer_tasks(request, user_id):
 @authentication_classes([])
 @permission_classes([IncidentViewPermission])
 @rbac_required(required_permission='view_all_incident')
+@require_tenant
+@tenant_filter
 def incident_mitigations(request, incident_id):
     """Get mitigation steps for a specific incident with reviewer feedback"""
     try:
@@ -5229,7 +5256,7 @@ def incident_mitigations(request, incident_id):
         except ValidationError as e:
             return JsonResponse({'error': 'An internal error occurred'}, status=400)
         
-        incident = Incident.objects.get(IncidentId=validated_incident_id)
+        incident = get_incident_for_request(request, validated_incident_id)
         
         # Parse the Mitigation field which contains the mitigation steps
         mitigations = {}
@@ -5368,6 +5395,8 @@ def incident_mitigations(request, incident_id):
 @authentication_classes([])
 @permission_classes([IncidentAssignPermission])
 @rbac_required(required_permission='assign_incident')
+@require_tenant
+@tenant_filter
 def assign_incident_reviewer(request):
     """Assign a reviewer to an incident with mitigation data"""
     try:
@@ -5407,7 +5436,7 @@ def assign_incident_reviewer(request):
         mitigations = validated_data.get('mitigations', {})
         
         # Update the incident with reviewer and mitigation data
-        incident = Incident.objects.get(IncidentId=incident_id)
+        incident = get_incident_for_request(request, incident_id)
         incident.ReviewerId = reviewer_id
         incident.Status = 'In Progress'  # Changed from 'Under Review' to 'In Progress'
         
@@ -5444,6 +5473,8 @@ def assign_incident_reviewer(request):
 @authentication_classes([])
 @permission_classes([IncidentEvaluatePermission])
 @rbac_required(required_permission='evaluate_assigned_incident')
+@require_tenant
+@tenant_filter
 def incident_review_data(request, incident_id):
     """Get incident review data for reviewer workflow with previous versions"""
     try:
@@ -5453,7 +5484,7 @@ def incident_review_data(request, incident_id):
         except ValidationError as e:
             return JsonResponse({'error': 'An internal error occurred'}, status=400)
         
-        incident = Incident.objects.get(IncidentId=validated_incident_id)
+        incident = get_incident_for_request(request, validated_incident_id)
         
         # Get all incident approval entries ordered by date
         all_entries = IncidentApproval.objects.filter(
@@ -5961,6 +5992,8 @@ def audit_finding_version_detail(request, incident_id, version):
 @authentication_classes([])
 @permission_classes([IncidentEvaluatePermission])
 @rbac_required(required_permission='evaluate_assigned_incident')
+@require_tenant
+@tenant_filter
 def complete_incident_review(request):
     """Complete the review of an incident"""
     try:
@@ -6025,7 +6058,7 @@ def complete_incident_review(request):
         )
         
         # Update the incident status based on approval
-        incident = Incident.objects.get(IncidentId=incident_id)
+        incident = get_incident_for_request(request, incident_id)
         
         if approved:
             incident.Status = 'Approved'
@@ -6233,6 +6266,8 @@ def complete_incident_review(request):
 @authentication_classes([])
 @permission_classes([IncidentEvaluatePermission])
 @rbac_required(required_permission='evaluate_assigned_incident')
+@require_tenant
+@tenant_filter
 def submit_incident_assessment(request):
     """Submit incident assessment with cost impact analysis"""
     try:
@@ -6350,7 +6385,7 @@ def submit_incident_assessment(request):
         user_version = f"U{user_count + 1}"  # U1, U2, U3, etc.
         
         # Get FrameworkId from the incident
-        incident = Incident.objects.get(IncidentId=incident_id)
+        incident = get_incident_for_request(request, incident_id)
         framework_id = incident.FrameworkId if incident.FrameworkId else None
         debug_print(f"DEBUG: Using FrameworkId: {framework_id} for user incident assessment submission")
         
@@ -6448,6 +6483,8 @@ def submit_incident_assessment(request):
 @authentication_classes([])
 @permission_classes([IncidentViewPermission])
 @rbac_required(required_permission='view_incident_approval_data')
+@require_tenant
+@tenant_filter
 def incident_approval_data(request, incident_id):
     """Get incident approval data for incident workflow"""
     try:
@@ -6457,7 +6494,7 @@ def incident_approval_data(request, incident_id):
         except ValidationError as e:
             return JsonResponse({'error': 'An internal error occurred'}, status=400)
         
-        incident = Incident.objects.get(IncidentId=validated_incident_id)
+        incident = get_incident_for_request(request, validated_incident_id)
         
         # Get all incident approval entries ordered by date
         all_entries = IncidentApproval.objects.filter(
@@ -6499,6 +6536,8 @@ def incident_approval_data(request, incident_id):
 @api_view(['GET'])
 @authentication_classes([])
 @permission_classes([AuditFindingsAccessPermission])
+@require_tenant
+@tenant_filter
 def user_audit_findings(request, user_id):
     """Get audit findings assigned BY a specific user (where user is the assigner)"""
     try:
@@ -6558,6 +6597,8 @@ def user_audit_findings(request, user_id):
 
 @api_view(['GET'])
 @permission_classes([AuditFindingsAccessPermission])
+@require_tenant
+@tenant_filter
 def audit_finding_reviewer_tasks(request, user_id):
     """Get audit findings where the user is assigned as reviewer"""
     try:
@@ -6615,6 +6656,8 @@ def audit_finding_reviewer_tasks(request, user_id):
 @api_view(['GET'])
 @permission_classes([AuditViewPermission])
 # @rbac_required(required_permission='view_audit_reports')
+@require_tenant
+@tenant_filter
 def audit_finding_mitigations(request, incident_id):
     """Get mitigation steps for a specific audit finding incident with reviewer feedback"""
     try:
@@ -6624,7 +6667,7 @@ def audit_finding_mitigations(request, incident_id):
         except ValidationError as e:
             return JsonResponse({'error': 'An internal error occurred'}, status=400)
         
-        incident = Incident.objects.get(IncidentId=validated_incident_id)
+        incident = get_incident_for_request(request, validated_incident_id)
         
         # Parse the Mitigation field which contains the mitigation steps
         mitigations = {}
@@ -6761,6 +6804,8 @@ def audit_finding_mitigations(request, incident_id):
 @api_view(['POST'])
 @permission_classes([AuditAssignPermission])
 @rbac_required(required_permission='assign_audit')
+@require_tenant
+@tenant_filter
 def assign_audit_finding_reviewer(request):
     """Assign a reviewer to an audit finding incident with mitigation data"""
     try:
@@ -6783,7 +6828,7 @@ def assign_audit_finding_reviewer(request):
                 return JsonResponse({"error": "Invalid evidence URL", "field": getattr(e, "field", "unknown")}, status=400)
         
         # Update the incident with reviewer and mitigation data
-        incident = Incident.objects.get(IncidentId=incident_id)
+        incident = get_incident_for_request(request, incident_id)
         incident.ReviewerId = reviewer_id
         incident.Status = 'In Progress'  # Changed from 'Under Review' to 'In Progress'
         
@@ -6807,6 +6852,8 @@ def assign_audit_finding_reviewer(request):
 @api_view(['GET'])
 @permission_classes([AuditReviewPermission])
 @rbac_required(required_permission='review_audit')
+@require_tenant
+@tenant_filter
 def audit_finding_review_data(request, incident_id):
     """Get audit finding review data for reviewer workflow with previous versions"""
     try:
@@ -6816,7 +6863,7 @@ def audit_finding_review_data(request, incident_id):
         except ValidationError as e:
             return JsonResponse({'error': 'An internal error occurred'}, status=400)
         
-        incident = Incident.objects.get(IncidentId=validated_incident_id)
+        incident = get_incident_for_request(request, validated_incident_id)
         
         # Parse the Mitigation field which contains the mitigation steps
         mitigations = {}
@@ -6896,6 +6943,8 @@ def audit_finding_review_data(request, incident_id):
 @api_view(['POST'])
 @permission_classes([AuditReviewPermission])
 @rbac_required(required_permission='review_audit')
+@require_tenant
+@tenant_filter
 def complete_audit_finding_review(request):
     """Complete audit finding review with approval/rejection decisions"""
     try:
@@ -6946,7 +6995,7 @@ def complete_audit_finding_review(request):
         reviewer_version = f"R{reviewer_count + 1}"  # R1, R2, R3, etc.
         
         # Get FrameworkId from the incident
-        incident = Incident.objects.get(IncidentId=incident_id)
+        incident = get_incident_for_request(request, incident_id)
         framework_id = incident.FrameworkId if incident.FrameworkId else None
         debug_print(f"DEBUG: Using FrameworkId: {framework_id} for audit finding approval")
         
@@ -6983,7 +7032,7 @@ def complete_audit_finding_review(request):
         debug_print(f"  ApprovedRejected: {approval_entry.ApprovedRejected}")
         
         # Update incident status based on decision
-        incident = Incident.objects.get(IncidentId=incident_id)
+        incident = get_incident_for_request(request, incident_id)
         if overall_decision == 'approved':
             incident.Status = 'Approved'
         else:
@@ -7005,6 +7054,8 @@ def complete_audit_finding_review(request):
 @authentication_classes([])
 @permission_classes([AuditReviewPermission])
 @rbac_required(required_permission='review_audit')
+@require_tenant
+@tenant_filter
 def submit_audit_finding_assessment(request):
     """Submit audit finding assessment with cost impact analysis"""
     try:
@@ -7064,7 +7115,7 @@ def submit_audit_finding_assessment(request):
         user_version = f"U{user_count + 1}"  # U1, U2, U3, etc.
         
         # Get FrameworkId from the incident
-        incident = Incident.objects.get(IncidentId=incident_id)
+        incident = get_incident_for_request(request, incident_id)
         framework_id = incident.FrameworkId if incident.FrameworkId else None
         debug_print(f"DEBUG: Using FrameworkId: {framework_id} for user audit finding assessment submission")
         

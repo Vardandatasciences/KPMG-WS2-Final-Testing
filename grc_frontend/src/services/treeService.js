@@ -124,9 +124,22 @@ class TreeService {
    */
   async fetchPolicies(frameworkId) {
     try {
-      const response = await axiosInstance.get(API_ENDPOINTS.TREE_GET_POLICIES(frameworkId), {
-        timeout: 60000
-      });
+      let response;
+      try {
+        response = await axiosInstance.get(API_ENDPOINTS.TREE_GET_POLICIES(frameworkId), {
+          timeout: 60000
+        });
+      } catch (primaryError) {
+        // Some environments do not expose /api/tree/frameworks/:id/policies/.
+        // Fallback to framework policies endpoint to avoid hard failure noise.
+        if (primaryError?.response?.status === 404) {
+          response = await axiosInstance.get(API_ENDPOINTS.FRAMEWORK_GET_POLICIES(frameworkId), {
+            timeout: 60000
+          });
+        } else {
+          throw primaryError;
+        }
+      }
 
       if (response.data.status === 'success') {
         this.dataStore.policiesByFramework[frameworkId] = response.data.data.map(item => ({
@@ -135,6 +148,13 @@ class TreeService {
           id: item.PolicyId
         }));
         console.log(`[Tree Service] Fetched ${this.dataStore.policiesByFramework[frameworkId].length} policies for framework ${frameworkId}`);
+      } else if (Array.isArray(response.data)) {
+        this.dataStore.policiesByFramework[frameworkId] = response.data.map(item => ({
+          ...item,
+          type: 'policy',
+          id: item.PolicyId || item.id
+        }));
+        console.log(`[Tree Service] Fetched ${this.dataStore.policiesByFramework[frameworkId].length} policies for framework ${frameworkId} (fallback format)`);
       } else {
         this.dataStore.policiesByFramework[frameworkId] = [];
       }

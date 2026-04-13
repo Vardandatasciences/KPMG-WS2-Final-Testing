@@ -487,8 +487,8 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useStore } from 'vuex';
-import { axiosInstance, API_BASE_URL } from '@/config/api.js';
-import apiService from '@/services/apiService';
+import { API_BASE_URL } from '@/config/api.js';
+import apiService from '@/services/apiService.js';
 import { API_ENDPOINTS } from '../../config/api.js';
 import '@fortawesome/fontawesome-free/css/all.min.css';
 import { PopupModal, PopupService } from '@/modules/popup';
@@ -936,9 +936,7 @@ export default {
         
         const params = {
           // Set default limit to improve performance
-          limit: 100,
-          // Add timeout for faster response
-          timeout: 5000
+          limit: 100
         };
         
         // Apply framework filter if selected
@@ -975,21 +973,20 @@ export default {
         
         console.log('📤 Fetching audit findings with params:', params);
         
-        // Use Promise.race to implement timeout
-        const fetchPromise = axiosInstance.get(API_ENDPOINTS.AUDIT_FINDINGS, { 
-          params,
-          timeout: 10000 // 10 second timeout
+        // Use Promise.race to implement timeout (params + timeout per apiService.get signature)
+        const fetchPromise = apiService.get(API_ENDPOINTS.AUDIT_FINDINGS, params, {
+          timeout: 10000
         });
         
         const timeoutPromise = new Promise((_, reject) => 
           setTimeout(() => reject(new Error('Request timeout')), 10000)
         );
         
-        const response = await Promise.race([fetchPromise, timeoutPromise]);
+        const payload = await Promise.race([fetchPromise, timeoutPromise]);
         
-        if (response.data && response.data.success) {
-          findings.value = response.data.data || [];
-          summary.value = response.data.summary || {};
+        if (payload && payload.success) {
+          findings.value = payload.data || [];
+          summary.value = payload.summary || {};
           console.log('✅ Loaded', findings.value.length, 'audit findings from API');
           
           // Cache the results if no filters
@@ -998,7 +995,7 @@ export default {
             console.log('💾 Cached audit findings for future use');
           }
         } else {
-          throw new Error(response.data?.message || 'Failed to load audit finding incidents');
+          throw new Error(payload?.message || 'Failed to load audit finding incidents');
         }
       } catch (err) {
         console.error('Error fetching audit finding incidents:', err);
@@ -1274,7 +1271,7 @@ export default {
       });
 
       // Update incident with assignment details and mitigations
-      axiosInstance.put(API_ENDPOINTS.INCIDENT_ASSIGN(selectedIncident.value.IncidentId), {
+      apiService.put(API_ENDPOINTS.INCIDENT_ASSIGN(selectedIncident.value.IncidentId), {
         status: 'In Progress',
         assigner_id: currentUserId,
         assigner_name: currentUserName.value,
@@ -1285,8 +1282,8 @@ export default {
         mitigations: mitigationsJson,
         due_date: mitigationDueDate.value
       })
-      .then(response => {
-        console.log('Incident assigned successfully - API response:', response.data);
+      .then((body) => {
+        console.log('Incident assigned successfully - API response:', body);
         
         // Show success popup
         PopupService.success(`Incident ${selectedIncident.value.IncidentId} assigned successfully with mitigation steps!`);
@@ -1310,14 +1307,14 @@ export default {
       console.log('Escalating incident to risk:', incident.IncidentId);
       
       // Update incident status to "Scheduled"
-      axiosInstance.put(API_ENDPOINTS.INCIDENT_STATUS(incident.IncidentId), {
+      apiService.put(API_ENDPOINTS.INCIDENT_STATUS(incident.IncidentId), {
         status: 'Scheduled'
       })
-      .then(response => {
-        console.log('Incident escalated to risk - API response:', response.data);
+      .then((body) => {
+        console.log('Incident escalated to risk - API response:', body);
         
         // Check if the response indicates success
-        if (response.data.success) {
+        if (body.success) {
           // Show success popup
           PopupService.success(`Incident #${incident.IncidentId} escalated to Risk successfully!`);
           
@@ -1331,8 +1328,8 @@ export default {
           }, 2000);
         } else {
           // Handle unsuccessful response
-          console.error('API returned unsuccessful response:', response.data);
-          PopupService.error(response.data.message || 'Failed to escalate incident. Please try again.');
+          console.error('API returned unsuccessful response:', body);
+          PopupService.error(body.message || 'Failed to escalate incident. Please try again.');
         }
       })
       .catch(err => {
@@ -1347,15 +1344,15 @@ export default {
       console.log('Rejecting incident:', selectedIncident.value.IncidentId);
       
       // Update incident status to "Rejected"
-      axiosInstance.put(API_ENDPOINTS.INCIDENT_STATUS(selectedIncident.value.IncidentId), {
+      apiService.put(API_ENDPOINTS.INCIDENT_STATUS(selectedIncident.value.IncidentId), {
         status: 'Rejected',
         rejection_source: 'INCIDENT'
       })
-      .then(response => {
-        console.log('Incident rejected - API response:', response.data);
+      .then((body) => {
+        console.log('Incident rejected - API response:', body);
         
         // Check if the response indicates success
-        if (response.data.success) {
+        if (body.success) {
           // Show success popup
           PopupService.success(`Incident ${selectedIncident.value.IncidentId} rejected successfully!`);
           
@@ -1369,8 +1366,8 @@ export default {
           }, 2000);
         } else {
           // Handle unsuccessful response
-          console.error('API returned unsuccessful response:', response.data);
-          PopupService.error(response.data.message || 'Failed to reject incident. Please try again.');
+          console.error('API returned unsuccessful response:', body);
+          PopupService.error(body.message || 'Failed to reject incident. Please try again.');
         }
       })
       .catch(err => {
@@ -1397,8 +1394,8 @@ export default {
 
         // 1) Try custom dropdown API (users-for-dropdown) first
         try {
-          const responseData = await apiService.get(API_ENDPOINTS.USERS_FOR_DROPDOWN);
-          const raw = Array.isArray(responseData) ? responseData : (responseData?.data ?? responseData ?? []);
+          const payload = await apiService.get(API_ENDPOINTS.USERS_FOR_DROPDOWN);
+          const raw = Array.isArray(payload) ? payload : (payload?.data ?? payload ?? []);
           if (Array.isArray(raw) && raw.length > 0) {
             availableUsers.value = raw.map(normalizeUser);
             console.log('✅ Loaded from USERS_FOR_DROPDOWN:', availableUsers.value.length);
@@ -1409,18 +1406,18 @@ export default {
         }
 
         // 2) Reviewer selection (RBAC-filtered for incident module)
-        const responseData = await apiService.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
-          module: 'incident', 
-          current_user_id: currentUserId 
+        const payload = await apiService.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
+          module: 'incident',
+          current_user_id: currentUserId
         });
-        const raw = Array.isArray(responseData) ? responseData : (responseData?.data ?? []);
+        const raw = Array.isArray(payload) ? payload : (payload?.data ?? []);
         availableUsers.value = Array.isArray(raw) ? raw.map(normalizeUser) : [];
         console.log('✅ Loaded from USERS_FOR_REVIEWER_SELECTION:', availableUsers.value.length);
       } catch (err) {
         console.error('❌ Failed to fetch users:', err);
         try {
-          const fallbackResponse = await axiosInstance.get(API_ENDPOINTS.CUSTOM_USERS);
-          const raw = Array.isArray(fallbackResponse.data) ? fallbackResponse.data : (fallbackResponse.data?.data ?? []);
+          const fallbackPayload = await apiService.get(API_ENDPOINTS.CUSTOM_USERS);
+          const raw = Array.isArray(fallbackPayload) ? fallbackPayload : (fallbackPayload?.data ?? []);
           availableUsers.value = Array.isArray(raw) ? raw.map(normalizeUser) : [];
           console.log('✅ Fallback CUSTOM_USERS loaded:', availableUsers.value.length);
         } catch (fallbackErr) {
@@ -1436,10 +1433,10 @@ export default {
     // Fetch business units from incidents table
     const fetchBusinessUnits = async () => {
       try {
-        const response = await axiosInstance.get(API_ENDPOINTS.INCIDENT_BUSINESS_UNITS);
+        const payload = await apiService.get(API_ENDPOINTS.INCIDENT_BUSINESS_UNITS);
         
-        if (response.data && response.data.success) {
-          businessUnits.value = response.data.data || [];
+        if (payload && payload.success) {
+          businessUnits.value = payload.data || [];
           // Update filter config with fetched business units
           businessUnitFilterConfig.value.values = [
             { value: 'all', label: 'All Business Units' },
@@ -1449,7 +1446,7 @@ export default {
             }))
           ];
         } else {
-          console.error('Failed to fetch business units - invalid response format:', response.data);
+          console.error('Failed to fetch business units - invalid response format:', payload);
           businessUnits.value = [];
         }
       } catch (err) {
@@ -1461,12 +1458,12 @@ export default {
     // Fetch categories from database
     const fetchCategories = async () => {
       try {
-        const response = await axiosInstance.get(API_ENDPOINTS.CATEGORY_BUSINESS_UNITS, {
-          params: { source: 'Categories' }
+        const payload = await apiService.get(API_ENDPOINTS.CATEGORY_BUSINESS_UNITS, {
+          source: 'Categories'
         });
         
-        if (response.data && response.data.success) {
-          categories.value = response.data.data || [];
+        if (payload && payload.success) {
+          categories.value = payload.data || [];
           // Update filter config with fetched categories
           categoryFilterConfig.value.values = [
             { value: 'all', label: 'All Categories' },
@@ -1487,19 +1484,42 @@ export default {
       try {
         loadingFrameworks.value = true;
         console.log('🔍 Fetching frameworks for audit findings...');
-        const response = await axiosInstance.get(API_ENDPOINTS.INCIDENT_FRAMEWORKS);
-        console.log('✅ Frameworks API response:', response.data);
-        
-        // Handle the API response format
+        // NOTE:
+        // INCIDENT_FRAMEWORKS is not guaranteed in API_ENDPOINTS across environments.
+        // If undefined, apiService.get(undefined) can resolve to "/" and produce noisy 500s.
+        const frameworkEndpoints = [
+          API_ENDPOINTS.INCIDENT_FRAMEWORKS,
+          API_ENDPOINTS.FRAMEWORKS_APPROVED_ACTIVE,
+          API_ENDPOINTS.FRAMEWORKS
+        ].filter((url) => typeof url === 'string' && url.trim().length > 0);
+
+        let payload = null;
         let frameworksData = [];
-        if (response.data.success && response.data.frameworks) {
-          frameworksData = response.data.frameworks;
-        } else if (response.data.success && Array.isArray(response.data.data)) {
-          frameworksData = response.data.data;
-        } else if (Array.isArray(response.data)) {
-          frameworksData = response.data;
-        } else {
-          console.error('Unexpected frameworks response format:', response.data);
+
+        for (const endpoint of frameworkEndpoints) {
+          try {
+            payload = await apiService.get(endpoint, {}, { skipCache: true, timeout: 30000 });
+            console.log('✅ Frameworks API response from', endpoint, payload);
+
+            if (payload?.success && Array.isArray(payload.frameworks)) {
+              frameworksData = payload.frameworks;
+              break;
+            }
+            if (payload?.success && Array.isArray(payload.data)) {
+              frameworksData = payload.data;
+              break;
+            }
+            if (Array.isArray(payload)) {
+              frameworksData = payload;
+              break;
+            }
+          } catch (endpointError) {
+            console.warn('⚠️ Framework endpoint failed:', endpoint, endpointError?.response?.status || endpointError?.message);
+          }
+        }
+
+        if (!Array.isArray(frameworksData) || frameworksData.length === 0) {
+          console.warn('⚠️ No frameworks loaded from API, using empty list fallback');
           frameworks.value = [];
           return;
         }
@@ -1538,11 +1558,11 @@ export default {
         }
         
         // Then check API
-        const response = await axiosInstance.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED);
-        console.log('✅ Selected framework API response:', response.data);
+        const payload = await apiService.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED);
+        console.log('✅ Selected framework API response:', payload);
         
-        if (response.data && response.data.frameworkId) {
-          const frameworkId = parseInt(response.data.frameworkId);
+        if (payload && payload.frameworkId) {
+          const frameworkId = parseInt(payload.frameworkId);
           selectedFramework.value = frameworkId || '';
           console.log('✅ Set selected framework ID for audit findings:', selectedFramework.value);
         } else {
@@ -1652,9 +1672,8 @@ export default {
       try {
         // Instead of sending all data, let the backend fetch the data
         // This avoids the character limit issue
-        const response = await axiosInstance.post(API_ENDPOINTS.AUDIT_FINDINGS_EXPORT, {
+        const exportPayload = await apiService.post(API_ENDPOINTS.AUDIT_FINDINGS_EXPORT, {
           file_format: exportFormat.value,
-          user_id: 'audit_user', // You might want to get this from your auth system
           options: JSON.stringify({
             filters: {
               filterStatus: filterStatus.value,
@@ -1668,13 +1687,13 @@ export default {
           // Remove the data field to let backend fetch fresh data
         });
         
-        console.log('Export successful:', response.data);
+        console.log('Export successful:', exportPayload);
         
         // Check if we have a file URL
-        if (response.data && response.data.file_url) {
+        if (exportPayload && exportPayload.file_url) {
           const ok = await openDownloadInNewTabWithAnchorFallback(
-            response.data.file_url,
-            response.data.file_name || `audit_findings.${exportFormat.value}`
+            exportPayload.file_url,
+            exportPayload.file_name || `audit_findings.${exportFormat.value}`
           );
           if (ok) {
             PopupService.success('Export completed successfully! File opened or downloaded.');
@@ -1755,21 +1774,21 @@ export default {
     };
 
     const confirmClose = (incident) => {
-      axiosInstance.put(API_ENDPOINTS.INCIDENT_STATUS(incident.IncidentId), {
+      apiService.put(API_ENDPOINTS.INCIDENT_STATUS(incident.IncidentId), {
         status: 'Closed',
         close_source: 'INCIDENT'
       })
-      .then(response => {
-        console.log('Incident closed - API response:', response.data);
+      .then((body) => {
+        console.log('Incident closed - API response:', body);
         
         // Check if the response indicates success
-        if (response.data.success) {
+        if (body.success) {
           PopupService.success(`Incident #${incident.IncidentId} closed successfully!`, 'Incident Closed');
           fetchData();
         } else {
           // Handle unsuccessful response
-          console.error('API returned unsuccessful response:', response.data);
-          PopupService.error(response.data.message || 'Failed to close incident. Please try again.');
+          console.error('API returned unsuccessful response:', body);
+          PopupService.error(body.message || 'Failed to close incident. Please try again.');
         }
       })
       .catch(error => {
@@ -1831,18 +1850,15 @@ export default {
       // Initialize table columns
       initializeTableColumns();
       
-      // Wait for incident data fetch if still in progress
+      // First paint: fetch findings immediately (cache/API) without waiting for other prefetch jobs.
+      fetchData();
+
+      // Do not block page on cross-module prefetch completion.
       if (window.incidentDataFetchPromise) {
-        console.log('⏳ [AuditFindings] Waiting for incident data fetch...');
-        try {
-          await window.incidentDataFetchPromise;
-          console.log('✅ [AuditFindings] Incident data fetch completed');
-        } catch (error) {
-          console.warn('⚠️ [AuditFindings] Incident data fetch failed:', error);
-        }
+        console.log('⏳ [AuditFindings] Incident prefetch still running in background');
       }
-      
-      // Fetch frameworks and selected framework first
+
+      // Fetch frameworks and selected framework in background.
       await fetchFrameworks();
       const previousFramework = selectedFramework.value;
       await fetchSelectedFramework();
@@ -1880,19 +1896,19 @@ export default {
         console.log(`🔄 Framework changed from ${previousFramework} to ${selectedFramework.value} - will refresh audit findings`);
       }
       
-      // Then fetch audit findings data (will use cache if available)
-      fetchData();
+      // Refresh once if selected framework changed after initial load.
+      if (previousFramework !== selectedFramework.value) {
+        fetchData();
+      }
       
       // Listen for storage events to detect framework changes from other tabs/pages
       window.addEventListener('storage', handleStorageChange);
       
       // Load supporting data from cache or API
       const cachedUsers = incidentService.getData('incidentUsers');
-      if (cachedUsers && Array.isArray(cachedUsers)) {
+      if (cachedUsers && Array.isArray(cachedUsers) && cachedUsers.length > 0) {
         console.log(`✅ [AuditFindings] Loaded ${cachedUsers.length} users from cache`);
         availableUsers.value = cachedUsers;
-      } else {
-        fetchUsers();
       }
       
       const cachedBusinessUnits = incidentService.getData('incidentBusinessUnits');
@@ -1903,7 +1919,7 @@ export default {
           ...cachedBusinessUnits.map(bu => ({ value: bu, label: bu }))
         ];
       } else {
-        fetchBusinessUnits();
+        fetchBusinessUnits().catch(() => {});
       }
       
       const cachedCategories = incidentService.getData('incidentCategories');
@@ -1914,7 +1930,7 @@ export default {
           ...cachedCategories.map(cat => ({ value: cat, label: cat }))
         ];
       } else {
-        fetchCategories();
+        fetchCategories().catch(() => {});
       }
       
       // Close dropdowns when clicking outside

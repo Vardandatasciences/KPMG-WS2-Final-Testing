@@ -17,7 +17,7 @@
         <button 
           :class="['task-type-button', { active: activeTab === 'user' }]" 
           @click="activeTab = 'user'"
-        >
+        >                           
           My Tasks
           <span class="task-count">{{ userIncidents.length }}</span>
         </button>
@@ -923,8 +923,8 @@
 </template>
 
 <script>
-import axios from 'axios';
-import { API_ENDPOINTS } from '../../config/api.js';
+import apiService from '@/services/apiService.js';
+import { API_ENDPOINTS, API_BASE_URL } from '../../config/api.js';
 import { PopupService, PopupModal } from '@/modules/popup';
 import CustomDropdown from '@/components/CustomDropdown.vue';
 import CollapsibleTable from '@/components/CollapsibleTable.vue';
@@ -1151,21 +1151,165 @@ export default {
     });
   },
   methods: {
+    /** Normalize status for bucket matching (cached/API may differ in casing) */
+    incidentStatusNorm(s) {
+      if (s == null || s === '') return '';
+      return String(s).trim().toLowerCase();
+    },
+    isApprovedStatus(s) {
+      return this.incidentStatusNorm(s) === 'approved';
+    },
+    isRejectedStatus(s) {
+      return this.incidentStatusNorm(s) === 'rejected';
+    },
+    isPendingReviewStatus(s) {
+      const n = this.incidentStatusNorm(s);
+      return n === 'pending review' || n === 'under review';
+    },
+    isAssignedBucketStatus(s) {
+      return !this.isApprovedStatus(s) && !this.isRejectedStatus(s) && !this.isPendingReviewStatus(s);
+    },
+    /**
+     * When a framework is selected, keep rows that match it OR have no framework field (lenient —
+     * backend user_* + framework_id often returns [] while bulk cache has assigner tasks).
+     */
+    taskMatchesSelectedFramework(task) {
+      const fw = this.selectedFramework;
+      if (fw === '' || fw == null) return true;
+      const want = String(fw);
+      const itemFw =
+        task.framework_id ??
+        task.FrameworkId ??
+        (task.Framework && (task.Framework.id ?? task.Framework.Id)) ??
+        (task.framework && (task.framework.id ?? task.framework.Id));
+      if (itemFw === null || itemFw === undefined || itemFw === '') return true;
+      return String(itemFw) === want;
+    },
+    isReviewerTaskExcludedStatus(s) {
+      const n = this.incidentStatusNorm(s);
+      return n === 'closed' || n === 'completed' || n === 'cancelled';
+    },
+    taskMatchesReviewerUser(task, userId) {
+      const uid = parseInt(userId, 10);
+      if (Number.isNaN(uid)) return false;
+      const candidates = [
+        task.ReviewerId,
+        task.reviewer_id,
+        task.Reviewer
+      ];
+      return candidates.some((v) => {
+        if (v === null || v === undefined || v === '') return false;
+        const n = parseInt(v, 10);
+        return !Number.isNaN(n) && n === uid;
+      });
+    },
+    /**
+     * Same rules as backend incident_reviewer_tasks / audit_finding_reviewer_tasks over bulk prefetch cache.
+     */
+    deriveReviewerTasksFromBulkCache() {
+      const uid = this.selectedUserId;
+      if (uid == null || uid === '') return [];
+      const cachedIncidents = incidentService.getData('incidents') || [];
+      const cachedAuditFindings = incidentService.getData('auditFindings') || [];
+      const rows = [];
+      const seen = new Set();
+      const pushRow = (task, itemType) => {
+        if (!this.taskMatchesReviewerUser(task, uid)) return;
+        if (this.isReviewerTaskExcludedStatus(task.Status)) return;
+        const id = task.id || task.IncidentId;
+        if (id == null || seen.has(id)) return;
+        const shaped = {
+          ...task,
+          itemType,
+          id,
+          Title: task.Title || task.IncidentTitle,
+          Priority: task.Priority || task.RiskPriority,
+          Origin: task.Origin,
+          Status: task.Status,
+          MitigationDueDate: task.MitigationDueDate,
+          AssignerId: task.AssignerId,
+          ReviewerId: task.ReviewerId
+        };
+        if (!this.taskMatchesSelectedFramework(shaped)) return;
+        seen.add(id);
+        rows.push(shaped);
+      };
+      if (Array.isArray(cachedIncidents)) cachedIncidents.forEach((t) => pushRow(t, 'incident'));
+      if (Array.isArray(cachedAuditFindings)) cachedAuditFindings.forEach((t) => pushRow(t, 'audit_finding'));
+      return rows;
+    },
+    mergeReviewerTaskListsById(apiList, cacheList) {
+      const map = new Map();
+      const add = (t) => {
+        if (!t || t.id == null) return;
+        const key = String(t.id);
+        if (!map.has(key)) map.set(key, t);
+      };
+      (apiList || []).forEach(add);
+      (cacheList || []).forEach(add);
+      return [...map.values()];
+    },
+    async loadReviewerTasksAsync(params) {
+      const parseList = (body) => (Array.isArray(body) ? body : (body?.data || []));
+      const toMarked = (items, itemType) =>
+        (items || []).map((item) => ({
+          ...item,
+          itemType,
+          id: item.id || item.IncidentId,
+          Title: item.Title || item.IncidentTitle,
+          Priority: item.Priority || item.RiskPriority
+        }));
+
+      const fetchReviewerOnce = async (p) => {
+        const [incRes, audRes] = await Promise.all([
+          apiService.get(API_ENDPOINTS.INCIDENT_REVIEWER_TASKS(this.selectedUserId), p),
+          apiService.get(API_ENDPOINTS.AUDIT_FINDING_REVIEWER_TASKS(this.selectedUserId), p)
+        ]);
+        const combined = [
+          ...toMarked(parseList(incRes), 'incident'),
+          ...toMarked(parseList(audRes), 'audit_finding')
+        ];
+        return combined.filter(
+          (task, index, arr) => index === arr.findIndex((t) => t.id === task.id)
+        );
+      };
+
+      let apiTasks = await fetchReviewerOnce(params || {});
+      if (apiTasks.length === 0 && params && params.framework_id) {
+        console.warn('⚠️ [IncidentUserTasks] Reviewer API empty with framework_id; retrying without framework (client filter)');
+        apiTasks = await fetchReviewerOnce({});
+        if (this.selectedFramework) {
+          const before = apiTasks.length;
+          apiTasks = apiTasks.filter((t) => this.taskMatchesSelectedFramework(t));
+          console.log(`🔍 [IncidentUserTasks] Reviewer tasks client framework filter: ${before} → ${apiTasks.length}`);
+        }
+      }
+
+      const fromCache = this.deriveReviewerTasksFromBulkCache();
+      this.reviewerTasks = this.mergeReviewerTaskListsById(apiTasks, fromCache);
+      this.approvedReviewerTasks = this.reviewerTasks.filter((task) => this.isApprovedStatus(task.Status));
+      this.pendingReviewerTasks = this.reviewerTasks.filter((task) => !this.isApprovedStatus(task.Status));
+      this.expandedSections.reviewerPending = true;
+      this.expandedSections.reviewerApproved = true;
+      console.log(
+        `✅ [IncidentUserTasks] Reviewer tasks total: ${this.reviewerTasks.length} (API base ${apiTasks.length}, merged with cache)`
+      );
+    },
     safeEvidenceUrl,
     async fetchSelectedFramework() {
       try {
         console.log('🔍 Fetching selected framework for incident user tasks...');
-        const frameworkResponse = await axios.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED);
-        console.log('Framework response:', frameworkResponse.data);
+        const frameworkBody = await apiService.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED);
+        console.log('Framework response:', frameworkBody);
         
-        if (frameworkResponse.data && frameworkResponse.data.frameworkId) {
-          const frameworkId = parseInt(frameworkResponse.data.frameworkId);
+        if (frameworkBody && frameworkBody.frameworkId) {
+          const frameworkId = parseInt(frameworkBody.frameworkId);
           // If frameworkId is empty, null, undefined, or 0, set it to empty string (All Frameworks)
           this.selectedFramework = frameworkId || '';
           console.log('✅ Set selectedFramework for incident user tasks:', this.selectedFramework);
         } else {
           console.log('⚠️ No framework selected or frameworkId not found in response');
-          // Try to get from localStorage as fallback
+          // UX-only filter hint; server must enforce tenant/RBAC (do not trust for authorization).
           const storedFrameworkId = localStorage.getItem('selectedFrameworkId') || localStorage.getItem('frameworkId');
           if (storedFrameworkId && storedFrameworkId !== '' && storedFrameworkId !== 'null') {
             this.selectedFramework = parseInt(storedFrameworkId);
@@ -1228,163 +1372,131 @@ export default {
           return;
         }
 
-        // Fallback: Fetch directly from API
+        // Fallback: Fetch directly from API (await so default user + tasks load after users exist)
         console.log('⚠️ [IncidentUserTasks] No cached users found, fetching from API...');
-        this.fetchUsers();
+        await this.fetchUsers();
       } catch (error) {
         console.error('❌ [IncidentUserTasks] Error loading users:', error);
-        this.fetchUsers();
+        await this.fetchUsers();
       }
     },
-    fetchUsers() {
+    async fetchUsers() {
       console.log('🔄 [IncidentUserTasks] Fetching users from API...');
-      axios.get(API_ENDPOINTS.CUSTOM_USERS, {
-        withCredentials: true,
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      })
-        .then(response => {
-          console.log('✅ [IncidentUserTasks] Users API response:', response.data);
-          console.log('✅ [IncidentUserTasks] Response status:', response.status);
-          console.log('✅ [IncidentUserTasks] Response data type:', typeof response.data);
-          
-          // Handle multiple response formats
-          let users = [];
-          if (response.data && response.data.success && response.data.users) {
-            users = response.data.users;
-            console.log('✅ [IncidentUserTasks] Parsed users from success.users format:', users.length);
-          } else if (Array.isArray(response.data)) {
-            users = response.data;
-            console.log('✅ [IncidentUserTasks] Parsed users from direct array format:', users.length);
-          } else if (response.data && Array.isArray(response.data.data)) {
-            users = response.data.data;
-            console.log('✅ [IncidentUserTasks] Parsed users from data.data format:', users.length);
-          } else {
-            console.warn('⚠️ [IncidentUserTasks] Unexpected response format:', response.data);
-          }
-          
-          // Ensure users have required fields and normalize data
-          users = users.map(user => ({
+      const applyUserList = (users) => {
+        const normalized = (users || [])
+          .map(user => ({
             UserId: user.UserId || user.id || user.userId,
             UserName: user.UserName || user.name || user.username || 'Unknown',
             Role: user.Role || user.role || '',
             Email: user.Email || user.email || '',
             ...user
-          })).filter(user => user.UserId); // Filter out invalid users
-          
-          console.log('✅ [IncidentUserTasks] Users processed successfully:', users.length, 'users');
-          console.log('🔍 [IncidentUserTasks] Sample users:', users.slice(0, 3));
-          
-          this.users = users;
-          
-          // Update cache for subsequent loads
-          incidentService.setData('incidentUsers', users);
-          
-          // Update the userFilterConfig values
-          this.userFilterConfig.values = [
-            { value: '', label: 'All Users' },
-            ...users.map(user => ({
-              value: user.UserId,
-              label: `${user.UserName} (${user.role || user.Role || 'User'})`
-            }))
-          ];
-          
-          if (users.length === 0) {
-            console.warn('⚠️ [IncidentUserTasks] No users found. This might indicate an API issue or empty database.');
+          }))
+          .filter(user => user.UserId);
+        this.users = normalized;
+        incidentService.setData('incidentUsers', normalized);
+        this.userFilterConfig.values = [
+          { value: '', label: 'All Users' },
+          ...normalized.map(user => ({
+            value: user.UserId,
+            label: `${user.UserName} (${user.role || user.Role || 'User'})`
+          }))
+        ];
+        if (normalized.length === 0) {
+          console.warn('⚠️ [IncidentUserTasks] No users found. This might indicate an API issue or empty database.');
+        }
+        this.loading = false;
+        this.setDefaultUser();
+      };
+
+      const parseUsersPayload = (payload) => {
+        if (payload && payload.success && payload.users) return payload.users;
+        if (Array.isArray(payload)) return payload;
+        if (payload && Array.isArray(payload.data)) return payload.data;
+        console.warn('⚠️ [IncidentUserTasks] Unexpected response format:', payload);
+        return [];
+      };
+
+      try {
+        const payload = await apiService.get(API_ENDPOINTS.CUSTOM_USERS, {}, { timeout: 120000 });
+        console.log('✅ [IncidentUserTasks] Users API response:', payload);
+        applyUserList(parseUsersPayload(payload));
+        console.log('✅ [IncidentUserTasks] Users processed successfully:', this.users.length, 'users');
+      } catch (error) {
+        console.error('❌ [IncidentUserTasks] Error fetching users:', error);
+        console.log('🔄 [IncidentUserTasks] Trying fallback endpoint: /api/users/');
+        try {
+          const fallbackPayload = await apiService.get('/api/users/', {}, { timeout: 120000 });
+          console.log('✅ [IncidentUserTasks] Fallback endpoint response:', fallbackPayload);
+          let users = [];
+          if (fallbackPayload && fallbackPayload.success && fallbackPayload.users) {
+            users = fallbackPayload.users;
+          } else if (Array.isArray(fallbackPayload)) {
+            users = fallbackPayload;
+          } else if (fallbackPayload && Array.isArray(fallbackPayload.data)) {
+            users = fallbackPayload.data;
           }
-          
+          applyUserList(users);
+          console.log('✅ [IncidentUserTasks] Fallback endpoint succeeded:', this.users.length, 'users');
+        } catch (fallbackError) {
+          console.error('❌ [IncidentUserTasks] Fallback endpoint also failed:', fallbackError);
+          this.error = `Failed to fetch users: ${fallbackError.message || error.message}`;
           this.loading = false;
-          // Set default user after users are loaded
-          this.setDefaultUser();
-        })
-        .catch(error => {
-          console.error('❌ [IncidentUserTasks] Error fetching users:', error);
-          console.error('❌ [IncidentUserTasks] Error details:', error.response?.data);
-          console.error('❌ [IncidentUserTasks] Error status:', error.response?.status);
-          console.error('❌ [IncidentUserTasks] Error message:', error.message);
-          
-          // Try fallback endpoint
-          console.log('🔄 [IncidentUserTasks] Trying fallback endpoint: /api/users/');
-          axios.get('/api/users/', {
-            withCredentials: true,
-            headers: {
-              'Content-Type': 'application/json'
-            }
-          })
-          .then(fallbackResponse => {
-            console.log('✅ [IncidentUserTasks] Fallback endpoint response:', fallbackResponse.data);
-            
-            let users = [];
-            if (fallbackResponse.data && fallbackResponse.data.success && fallbackResponse.data.users) {
-              users = fallbackResponse.data.users;
-            } else if (Array.isArray(fallbackResponse.data)) {
-              users = fallbackResponse.data;
-            } else if (fallbackResponse.data && Array.isArray(fallbackResponse.data.data)) {
-              users = fallbackResponse.data.data;
-            }
-            
-            // Normalize users
-            users = users.map(user => ({
-              UserId: user.UserId || user.id || user.userId,
-              UserName: user.UserName || user.name || user.username || 'Unknown',
-              Role: user.Role || user.role || '',
-              Email: user.Email || user.email || '',
-              ...user
-            })).filter(user => user.UserId);
-            
-            this.users = users;
-            incidentService.setData('incidentUsers', users);
-            
-            this.userFilterConfig.values = [
-              { value: '', label: 'All Users' },
-              ...users.map(user => ({
-                value: user.UserId,
-                label: `${user.UserName} (${user.role || user.Role || 'User'})`
-              }))
-            ];
-            
-            this.loading = false;
-            this.setDefaultUser();
-            console.log('✅ [IncidentUserTasks] Fallback endpoint succeeded:', users.length, 'users');
-          })
-          .catch(fallbackError => {
-            console.error('❌ [IncidentUserTasks] Fallback endpoint also failed:', fallbackError);
-            this.error = `Failed to fetch users: ${error.message}`;
-            this.loading = false;
-            this.users = [];
-            PopupService.error('Failed to load reviewers. Please refresh the page and try again.');
-          });
-        });
+          this.users = [];
+          PopupService.error('Failed to load reviewers. Please refresh the page and try again.');
+        }
+      }
     },
     setDefaultUser() {
-      // Get current user from localStorage using the correct keys per memory
-      const currentUser = localStorage.getItem('user_name') || localStorage.getItem('user');
-      if (currentUser && this.users.length > 0) {
-        // Try to find the user by name
-        let userData;
-        try {
-          // Handle if user is stored as JSON object
-          userData = JSON.parse(currentUser);
-        } catch (e) {
-          // Handle if user is stored as plain string
-          userData = { UserName: currentUser };
-        }
-        
-        const userName = userData.UserName || userData.username || userData.name || currentUser;
-        const foundUser = this.users.find(user => 
-          user.UserName === userName || 
-          user.username === userName ||
-          user.UserName.toLowerCase() === userName.toLowerCase()
-        );
-        
-        if (foundUser) {
-          this.selectedUserId = foundUser.UserId;
-          // Add a small delay to ensure UI updates properly
+      if (!this.users.length) return;
+
+      // 1) Prefer logged-in user id from storage (matches session; list is only for dropdown)
+      const storedId =
+        sessionStorage.getItem('user_id') ||
+        localStorage.getItem('user_id') ||
+        sessionStorage.getItem('UserId') ||
+        localStorage.getItem('UserId');
+      if (storedId) {
+        const sid = String(storedId).trim();
+        const byId = this.users.find(u => String(u.UserId) === sid);
+        if (byId) {
+          this.selectedUserId = byId.UserId;
           this.$nextTick(() => {
             this.fetchData();
           });
+          return;
         }
+      }
+
+      // 2) Match by display name from storage
+      const currentUser = localStorage.getItem('user_name') || localStorage.getItem('user');
+      if (currentUser) {
+        let userData;
+        try {
+          userData = JSON.parse(currentUser);
+        } catch (e) {
+          userData = { UserName: currentUser };
+        }
+        const userName = userData.UserName || userData.username || userData.name || currentUser;
+        const foundUser = this.users.find(user =>
+          user.UserName === userName ||
+          user.username === userName ||
+          (user.UserName && userName && user.UserName.toLowerCase() === String(userName).toLowerCase())
+        );
+        if (foundUser) {
+          this.selectedUserId = foundUser.UserId;
+          this.$nextTick(() => {
+            this.fetchData();
+          });
+          return;
+        }
+      }
+
+      // 3) Single user in list — select them (common in small deployments)
+      if (this.users.length === 1) {
+        this.selectedUserId = this.users[0].UserId;
+        this.$nextTick(() => {
+          this.fetchData();
+        });
       }
     },
     switchToReviewerTab() {
@@ -1416,33 +1528,26 @@ export default {
       
       this.loading = true;
       
-      // Check if we have filters active
-      const hasFrameworkFilter = this.selectedFramework;
-      
-      // Three-tier fallback pattern: Check cache, wait for prefetch, fall back to API
-      if (!hasFrameworkFilter) {
-        console.log('🔍 [IncidentUserTasks] Checking for cached incident data...');
+      const hasFrameworkFilter = !!this.selectedFramework;
 
-        // Check if prefetch is in progress or cache is available
-        if (!window.incidentDataFetchPromise && !incidentService.hasValidIncidentsCache()) {
-          console.log('🚀 [IncidentUserTasks] Starting incident prefetch (user navigated directly)...');
-          window.incidentDataFetchPromise = incidentService.fetchAllIncidentData();
+      // Warm cache / wait for prefetch (needed even when a framework is selected — API user_* + framework_id often returns [])
+      if (!window.incidentDataFetchPromise && !incidentService.hasValidIncidentsCache() && !incidentService.hasValidAuditFindingsCache()) {
+        console.log('🚀 [IncidentUserTasks] Starting incident prefetch (user navigated directly)...');
+        window.incidentDataFetchPromise = incidentService.fetchAllIncidentData();
+      }
+      if (window.incidentDataFetchPromise) {
+        console.log('⏳ [IncidentUserTasks] Waiting for incident prefetch to complete...');
+        try {
+          await window.incidentDataFetchPromise;
+          console.log('✅ [IncidentUserTasks] Incident prefetch completed');
+        } catch (prefetchError) {
+          console.warn('⚠️ [IncidentUserTasks] Incident prefetch failed, will fetch directly from API', prefetchError);
         }
+      }
 
-        // Wait for prefetch if it's in progress
-        if (window.incidentDataFetchPromise) {
-          console.log('⏳ [IncidentUserTasks] Waiting for incident prefetch to complete...');
-          try {
-            await window.incidentDataFetchPromise;
-            console.log('✅ [IncidentUserTasks] Incident prefetch completed');
-          } catch (prefetchError) {
-            console.warn('⚠️ [IncidentUserTasks] Incident prefetch failed, will fetch directly from API', prefetchError);
-          }
-        }
-
-        // Use cached data if available - filter general incidents/audit findings by user client-side
-        if (incidentService.hasValidIncidentsCache() || incidentService.hasValidAuditFindingsCache()) {
-          console.log('✅ [IncidentUserTasks] Using cached incident data - filtering by user client-side');
+      // Prefer cache + client-side user/framework filters whenever bulk lists exist
+      if (incidentService.hasValidIncidentsCache() || incidentService.hasValidAuditFindingsCache()) {
+        console.log('✅ [IncidentUserTasks] Using cached incident data - filtering by user (and framework when set) client-side');
           
           // Get general incidents and audit findings from cache
           const cachedIncidents = incidentService.getData('incidents') || [];
@@ -1522,6 +1627,12 @@ export default {
             ReviewerId: task.ReviewerId,
             itemType: task.itemType
           }));
+
+          if (this.selectedFramework) {
+            const beforeFw = this.userIncidents.length;
+            this.userIncidents = this.userIncidents.filter(t => this.taskMatchesSelectedFramework(t));
+            console.log(`🔍 [IncidentUserTasks] Framework filter (${this.selectedFramework}): ${beforeFw} → ${this.userIncidents.length} tasks (cache)`);
+          }
           
           console.log('✅ [IncidentUserTasks] Filtered user tasks:', this.userIncidents.length);
           if (this.userIncidents.length > 0) {
@@ -1531,72 +1642,47 @@ export default {
               Priority: this.userIncidents[0].Priority
             });
           }
-          
-          // Filter incidents by status
-          this.approvedIncidents = this.userIncidents.filter(incident => incident.Status === 'Approved');
-          this.rejectedIncidents = this.userIncidents.filter(incident => incident.Status === 'Rejected');
-          this.pendingReviewIncidents = this.userIncidents.filter(incident => 
-            incident.Status === 'Pending Review' || incident.Status === 'Under Review'
-          );
-          this.assignedIncidents = this.userIncidents.filter(incident => 
-            !['Approved', 'Rejected', 'Pending Review', 'Under Review'].includes(incident.Status)
-          );
-          
-          // Set user task sections
-          this.expandedSections = {
-            approved: true,
-            rejected: true,
-            pendingReview: true,
-            assigned: true,
-            reviewerPending: true,
-            reviewerApproved: true
-          };
-          
-          // Reviewer tasks are user-specific and need to be fetched from API
-          // Fetch reviewer tasks separately (they're not in general cache)
-          // Always fetch them since the count is shown on both tabs
-          console.log('📋 [IncidentUserTasks] Fetching reviewer tasks from API (user-specific)...');
-          const params = this.selectedFramework ? { framework_id: this.selectedFramework } : {};
-          Promise.all([
-            axios.get(API_ENDPOINTS.INCIDENT_REVIEWER_TASKS(this.selectedUserId), { params }),
-            axios.get(API_ENDPOINTS.AUDIT_FINDING_REVIEWER_TASKS(this.selectedUserId), { params })
-          ])
-          .then(([incidentReviewerResponse, auditReviewerResponse]) => {
-            // Combine reviewer tasks
-            const incidentReviewerTasks = incidentReviewerResponse.data || [];
-            const auditReviewerTasks = auditReviewerResponse.data || [];
-            
-            const markedIncidentReviewerTasks = incidentReviewerTasks.map(item => ({ ...item, itemType: 'incident' }));
-            const markedAuditReviewerTasks = auditReviewerTasks.map(item => ({ ...item, itemType: 'audit_finding' }));
-            
-            // Combine and deduplicate reviewer tasks by ID
-            const combinedReviewerTasks = [...markedIncidentReviewerTasks, ...markedAuditReviewerTasks];
-            this.reviewerTasks = combinedReviewerTasks.filter((task, index, array) => 
-              index === array.findIndex(t => t.id === task.id)
+
+          if (this.userIncidents.length === 0) {
+            console.warn('⚠️ [IncidentUserTasks] No tasks after cache + user + framework filter; will try API');
+          } else {
+            // Filter incidents by status (case-insensitive; cache may differ from API casing)
+            this.approvedIncidents = this.userIncidents.filter(incident => this.isApprovedStatus(incident.Status));
+            this.rejectedIncidents = this.userIncidents.filter(incident => this.isRejectedStatus(incident.Status));
+            this.pendingReviewIncidents = this.userIncidents.filter(incident =>
+              this.isPendingReviewStatus(incident.Status)
+            );
+            this.assignedIncidents = this.userIncidents.filter(incident =>
+              this.isAssignedBucketStatus(incident.Status)
             );
             
-            // Filter reviewer tasks
-            this.approvedReviewerTasks = this.reviewerTasks.filter(task => task.Status === 'Approved');
-            this.pendingReviewerTasks = this.reviewerTasks.filter(task => task.Status !== 'Approved');
-            
-            this.expandedSections.reviewerPending = true;
-            this.expandedSections.reviewerApproved = true;
-            
+            this.expandedSections = {
+              approved: true,
+              rejected: true,
+              pendingReview: true,
+              assigned: true,
+              reviewerPending: true,
+              reviewerApproved: true
+            };
+
             this.loading = false;
             this.error = null;
-            console.log(`✅ [IncidentUserTasks] Loaded ${this.userIncidents.length} user tasks from cache and ${this.reviewerTasks.length} reviewer tasks from API`);
-          })
-          .catch(error => {
-            console.error('❌ [IncidentUserTasks] Error fetching reviewer tasks:', error);
-            this.reviewerTasks = [];
-            this.loading = false;
-            this.error = null;
-            console.log(`✅ [IncidentUserTasks] Loaded ${this.userIncidents.length} user tasks from cache (reviewer tasks failed)`);
-          });
-          
-          return;
+            
+            console.log('📋 [IncidentUserTasks] Fetching reviewer tasks (API + cache merge)...');
+            const revParams = this.selectedFramework ? { framework_id: this.selectedFramework } : {};
+            this.loadReviewerTasksAsync(revParams).catch((error) => {
+              console.error('❌ [IncidentUserTasks] Error fetching reviewer tasks:', error);
+              this.reviewerTasks = this.deriveReviewerTasksFromBulkCache();
+              this.approvedReviewerTasks = this.reviewerTasks.filter((task) => this.isApprovedStatus(task.Status));
+              this.pendingReviewerTasks = this.reviewerTasks.filter((task) => !this.isApprovedStatus(task.Status));
+              console.log(
+                `✅ [IncidentUserTasks] Loaded ${this.userIncidents.length} user tasks from cache; reviewer from cache only: ${this.reviewerTasks.length}`
+              );
+            });
+            
+            return;
+          }
         }
-      }
       
       // If framework filter or no cached data, fetch everything from API
       console.log(hasFrameworkFilter ? '🔍 [IncidentUserTasks] Framework filter active, fetching from API' : '⚠️ [IncidentUserTasks] No cached data, fetching from API');
@@ -1608,17 +1694,27 @@ export default {
         console.log('🔍 Adding framework filter to user tasks:', this.selectedFramework);
       }
       
-      // Fetch both incidents and audit findings for the user with framework filter
+      // Fetch user-assigned tasks first; reviewer endpoints are optional and may 401 without failing the page
       Promise.all([
-        axios.get(API_ENDPOINTS.USER_INCIDENTS(this.selectedUserId), { params }),
-        axios.get(API_ENDPOINTS.USER_AUDIT_FINDINGS(this.selectedUserId), { params }),
-        axios.get(API_ENDPOINTS.INCIDENT_REVIEWER_TASKS(this.selectedUserId), { params }),
-        axios.get(API_ENDPOINTS.AUDIT_FINDING_REVIEWER_TASKS(this.selectedUserId), { params })
+        apiService.get(API_ENDPOINTS.USER_INCIDENTS(this.selectedUserId), params),
+        apiService.get(API_ENDPOINTS.USER_AUDIT_FINDINGS(this.selectedUserId), params)
       ])
-      .then(([incidentsResponse, auditFindingsResponse, incidentReviewerResponse, auditReviewerResponse]) => {
-        // Combine incidents and audit findings
-        const incidents = incidentsResponse.data || [];
-        const auditFindings = auditFindingsResponse.data || [];
+      .then(async ([incidentsResponse, auditFindingsResponse]) => {
+        const parseList = (body) =>
+          (Array.isArray(body) ? body : (body?.data || []));
+
+        let incidents = parseList(incidentsResponse);
+        let auditFindings = parseList(auditFindingsResponse);
+
+        if (incidents.length === 0 && auditFindings.length === 0 && params.framework_id) {
+          console.warn('⚠️ [IncidentUserTasks] user_* endpoints returned empty with framework_id; retrying without framework (client filter)');
+          const [ir, ar] = await Promise.all([
+            apiService.get(API_ENDPOINTS.USER_INCIDENTS(this.selectedUserId), {}),
+            apiService.get(API_ENDPOINTS.USER_AUDIT_FINDINGS(this.selectedUserId), {})
+          ]);
+          incidents = parseList(ir);
+          auditFindings = parseList(ar);
+        }
         
         console.log('🔍 [IncidentUserTasks] API Response - Incidents:', incidents.length);
         console.log('🔍 [IncidentUserTasks] API Response - Audit Findings:', auditFindings.length);
@@ -1650,9 +1746,14 @@ export default {
         
         // Combine and deduplicate by ID
         const combinedUserTasks = [...markedIncidents, ...markedAuditFindings];
-        const uniqueUserTasks = combinedUserTasks.filter((task, index, array) => 
+        let uniqueUserTasks = combinedUserTasks.filter((task, index, array) => 
           index === array.findIndex(t => t.id === task.id)
         );
+        if (this.selectedFramework) {
+          const beforeFw = uniqueUserTasks.length;
+          uniqueUserTasks = uniqueUserTasks.filter(t => this.taskMatchesSelectedFramework(t));
+          console.log(`🔍 [IncidentUserTasks] Framework filter (${this.selectedFramework}): ${beforeFw} → ${uniqueUserTasks.length} tasks (API)`);
+        }
         this.userIncidents = uniqueUserTasks;
         
         console.log('✅ [IncidentUserTasks] Total user incidents after deduplication:', this.userIncidents.length);
@@ -1665,42 +1766,35 @@ export default {
           }, {})
         });
         
-        // Filter incidents by status
-        // Log all statuses first to debug
         console.log('🔍 [IncidentUserTasks] All incident statuses:', 
           this.userIncidents.map(inc => ({ id: inc.id, Status: inc.Status, Title: inc.Title }))
         );
         
         this.approvedIncidents = this.userIncidents.filter(incident => {
-          const matches = incident.Status === 'Approved';
+          const matches = this.isApprovedStatus(incident.Status);
           if (matches) console.log('✅ Approved:', incident.id, incident.Title);
           return matches;
         });
         
         this.rejectedIncidents = this.userIncidents.filter(incident => {
-          const matches = incident.Status === 'Rejected';
+          const matches = this.isRejectedStatus(incident.Status);
           if (matches) console.log('✅ Rejected:', incident.id, incident.Title);
           return matches;
         });
         
         this.pendingReviewIncidents = this.userIncidents.filter(incident => {
-          const matches = incident.Status === 'Pending Review' || incident.Status === 'Under Review';
+          const matches = this.isPendingReviewStatus(incident.Status);
           if (matches) console.log('✅ Pending Review:', incident.id, incident.Title, 'Status:', incident.Status);
           return matches;
         });
         
         this.assignedIncidents = this.userIncidents.filter(incident => {
-          const status = incident.Status;
-          // Include NULL, undefined, empty string, or any status not in the specific categories
-          const isAssigned = !['Approved', 'Rejected', 'Pending Review', 'Under Review'].includes(status);
+          const isAssigned = this.isAssignedBucketStatus(incident.Status);
           if (isAssigned) {
             console.log('✅ [IncidentUserTasks] Assigned incident found:', {
               id: incident.id,
               Title: incident.Title,
-              Status: status,
-              StatusType: typeof status,
-              StatusIsNull: status === null,
-              StatusIsUndefined: status === undefined,
+              Status: incident.Status,
               ReviewerId: incident.ReviewerId,
               AssignerId: incident.AssignerId
             });
@@ -1715,40 +1809,24 @@ export default {
           assigned: this.assignedIncidents.length
         });
         
-        // Set all sections to be expanded by default
         this.expandedSections = {
           approved: true,
           rejected: true,
           pendingReview: true,
-          assigned: true
+          assigned: true,
+          reviewerPending: true,
+          reviewerApproved: true
         };
-        
-        // Combine reviewer tasks
-        const incidentReviewerTasks = incidentReviewerResponse.data || [];
-        const auditReviewerTasks = auditReviewerResponse.data || [];
-        
-        const markedIncidentReviewerTasks = incidentReviewerTasks.map(item => ({ ...item, itemType: 'incident' }));
-        const markedAuditReviewerTasks = auditReviewerTasks.map(item => ({ ...item, itemType: 'audit_finding' }));
-        
-        // Combine and deduplicate reviewer tasks by ID
-        const combinedReviewerTasks = [...markedIncidentReviewerTasks, ...markedAuditReviewerTasks];
-        const uniqueReviewerTasks = combinedReviewerTasks.filter((task, index, array) => 
-          index === array.findIndex(t => t.id === task.id)
-        );
-        this.reviewerTasks = uniqueReviewerTasks;
-        
-        // Filter reviewer tasks
-        this.approvedReviewerTasks = this.reviewerTasks.filter(task => task.Status === 'Approved');
-        this.pendingReviewerTasks = this.reviewerTasks.filter(task => task.Status !== 'Approved');
-        
-        // Set reviewer sections to be expanded by default
-        this.expandedSections.reviewerPending = true;
-        this.expandedSections.reviewerApproved = true;
-        
-        console.log(`✅ [IncidentUserTasks] Loaded ${this.userIncidents.length} user tasks and ${this.reviewerTasks.length} reviewer tasks from API`);
-        
+
         this.loading = false;
         this.error = null;
+
+        return this.loadReviewerTasksAsync(params).catch((revErr) => {
+          console.warn('⚠️ [IncidentUserTasks] Reviewer tasks fetch failed (non-fatal):', revErr?.message || revErr);
+          this.reviewerTasks = this.deriveReviewerTasksFromBulkCache();
+          this.approvedReviewerTasks = this.reviewerTasks.filter((task) => this.isApprovedStatus(task.Status));
+          this.pendingReviewerTasks = this.reviewerTasks.filter((task) => !this.isApprovedStatus(task.Status));
+        });
       })
       .catch(error => {
         this.error = `Failed to fetch data: ${error.message}`;
@@ -1797,26 +1875,26 @@ export default {
         
         // Get the mitigation steps and assessment feedback
         Promise.all([
-          axios.get(mitigationsEndpoint),
-          axios.get(reviewEndpoint)
+          apiService.get(mitigationsEndpoint),
+          apiService.get(reviewEndpoint)
         ])
-        .then(([mitigationsResponse, reviewResponse]) => {
-          this.mitigationSteps = this.parseMitigations(mitigationsResponse.data);
+        .then(([mitigationsBody, reviewBody]) => {
+          this.mitigationSteps = this.parseMitigations(mitigationsBody);
           
           // Fetch enhanced linked evidence data with documents
           this.fetchLinkedEvidenceDocuments();
           
           // Check for assessment feedback from reviewer
-          if (reviewResponse.data && reviewResponse.data.assessment_feedback) {
-            this.assessmentFeedbackForUser = reviewResponse.data.assessment_feedback;
+          if (reviewBody && reviewBody.assessment_feedback) {
+            this.assessmentFeedbackForUser = reviewBody.assessment_feedback;
           }
           
           // Pre-fill questionnaire data if previous data exists
-          if (mitigationsResponse.data.previous_assessment_data && 
-              Object.keys(mitigationsResponse.data.previous_assessment_data).length > 0) {
+          if (mitigationsBody && mitigationsBody.previous_assessment_data &&
+              Object.keys(mitigationsBody.previous_assessment_data).length > 0) {
             this.questionnaireData = {
               ...this.questionnaireData,
-              ...mitigationsResponse.data.previous_assessment_data
+              ...mitigationsBody.previous_assessment_data
             };
           }
           
@@ -2024,7 +2102,7 @@ export default {
         ? API_ENDPOINTS.SUBMIT_AUDIT_FINDING_ASSESSMENT
         : API_ENDPOINTS.SUBMIT_INCIDENT_ASSESSMENT;
       
-      axios.post(submitEndpoint, {
+      apiService.post(submitEndpoint, {
         incident_id: this.selectedIncidentId,
         user_id: this.selectedUserId,
         extracted_info: extractedInfo
@@ -2110,7 +2188,7 @@ export default {
         ? API_ENDPOINTS.COMPLETE_AUDIT_FINDING_REVIEW
         : API_ENDPOINTS.COMPLETE_INCIDENT_REVIEW;
       
-      axios.post(reviewEndpoint, reviewData)
+      apiService.post(reviewEndpoint, reviewData)
         .then(() => {
           this.loading = false;
           
@@ -2160,22 +2238,22 @@ export default {
         : API_ENDPOINTS.INCIDENT_REVIEW_DATA(task.id);
       
       // Get review data (includes questionnaire, previous versions, and assessment feedback)
-      axios.get(reviewEndpoint)
-        .then(response => {
+      apiService.get(reviewEndpoint)
+        .then((body) => {
           
-          if (response.data) {
-            this.mitigationReviewData = response.data.mitigations || {};
-            this.questionnaireReviewData = response.data.questionnaire_data || {};
-            this.previousVersions = response.data.previous_versions || {};
+          if (body) {
+            this.mitigationReviewData = body.mitigations || {};
+            this.questionnaireReviewData = body.questionnaire_data || {};
+            this.previousVersions = body.previous_versions || {};
             
             // Load existing assessment feedback if review is completed
-            if (response.data.assessment_feedback) {
-              this.assessmentFeedback = response.data.assessment_feedback;
+            if (body.assessment_feedback) {
+              this.assessmentFeedback = body.assessment_feedback;
             }
             
-            const isCompleted = response.data.approval_entry?.review_completed;
+            const isCompleted = body.approval_entry?.review_completed;
             this.reviewCompleted = isCompleted;
-            this.reviewApproved = response.data.approval_entry?.approved_rejected === 'Approved';
+            this.reviewApproved = body.approval_entry?.approved_rejected === 'Approved';
             
             this.loadingMitigations = false;
           } else {
@@ -2359,7 +2437,7 @@ export default {
         : API_ENDPOINTS.INCIDENT_REVIEW_DATA(testId);
       
       // Test the mitigations endpoint
-      axios.get(mitigationsEndpoint)
+      apiService.get(mitigationsEndpoint)
         .then(() => {
           PopupService.success('Mitigations endpoint test successful');
         })
@@ -2368,7 +2446,7 @@ export default {
         });
       
       // Test the review endpoint
-      axios.get(reviewEndpoint)
+      apiService.get(reviewEndpoint)
         .then(() => {
           PopupService.success('Review endpoint test successful');
         })
@@ -2425,6 +2503,19 @@ export default {
       const i = Math.floor(Math.log(bytes) / Math.log(k));
       return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     },
+    /** Linked-evidence GET; older backends returned 404 when no IncidentApproval row — treat as empty list. */
+    async fetchIncidentLinkedEvidencePayload() {
+      const id = this.selectedIncidentId;
+      if (id == null) return { success: true, linked_evidence: [], count: 0 };
+      try {
+        return await apiService.get(`/api/incidents/${id}/linked-evidence/`, {}, { skipCache: true });
+      } catch (e) {
+        if (e?.response?.status === 404) {
+          return { success: true, linked_evidence: [], count: 0 };
+        }
+        throw e;
+      }
+    },
     handleUserTaskClick(task) {
       if (task.actions === 'view') this.viewMitigations(task.id);
       else if (task.actions === 'resubmit') this.viewMitigations(task.id); // Could be a resubmit modal if needed
@@ -2439,10 +2530,10 @@ export default {
         try {
           
           // Fetch enhanced linked evidence data
-          const response = await axios.get(`/api/incidents/${this.selectedIncidentId}/linked-evidence/`);
+          const linkedPayload = await this.fetchIncidentLinkedEvidencePayload();
           
-          if (response.data && response.data.success && response.data.linked_evidence) {
-            const enhancedLinkedEvidence = response.data.linked_evidence;
+          if (linkedPayload && linkedPayload.success && Array.isArray(linkedPayload.linked_evidence)) {
+            const enhancedLinkedEvidence = linkedPayload.linked_evidence;
             
             // Find the matching evidence for this linked event
             const matchingEvidence = enhancedLinkedEvidence.find(evidence => {
@@ -2509,10 +2600,10 @@ export default {
       
       try {
         
-        const response = await axios.get(`/api/incidents/${this.selectedIncidentId}/linked-evidence/`);
+        const linkedPayload = await this.fetchIncidentLinkedEvidencePayload();
         
-        if (response.data && response.data.success && response.data.linked_evidence) {
-          const enhancedLinkedEvidence = response.data.linked_evidence;
+        if (linkedPayload && linkedPayload.success && Array.isArray(linkedPayload.linked_evidence)) {
+          const enhancedLinkedEvidence = linkedPayload.linked_evidence;
           
           // Update the mitigation steps with enhanced linked evidence data
           this.mitigationSteps.forEach(step => {
@@ -2665,12 +2756,10 @@ export default {
           return;
         }
         
-        // Otherwise, use backend download endpoint
-        const userId = localStorage.getItem('user_id') || '1';
+        // Backend download route — use API origin (relative /api/... hits the SPA dev server, not Django).
+        // Do not pass client-controlled user_id; session/JWT must authorize (see event_views.download_linked_evidence_document).
         const incidentId = this.selectedIncidentId;
-        
-        // Create download URL
-        const downloadUrl = `/api/incidents/${incidentId}/linked-evidence/${evidenceId}/documents/${documentIndex}/download/?user_id=${userId}`;
+        const downloadUrl = `${API_BASE_URL}/api/incidents/${incidentId}/linked-evidence/${encodeURIComponent(String(evidenceId))}/documents/${Number(documentIndex)}/download/`;
         
         // Create a temporary link and click it to trigger download
         const link = document.createElement('a');
@@ -2718,45 +2807,24 @@ export default {
     async forceUpdateDocuments(file) {
       
       try {
-        // Fetch fresh evidence data from backend
-        const response = await fetch(`/api/incidents/${this.selectedIncidentId}/linked-evidence/`, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-          },
-          credentials: 'include', // Include cookies for session authentication
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          if (data.success && data.linked_evidence) {
-            // Find the matching evidence item
-            const matchingEvidence = data.linked_evidence.find(evidence => 
-              evidence.id === file.linkedEvent.id || 
-              evidence.title === file.linkedEvent.title
-            );
-            
-            if (matchingEvidence && matchingEvidence.documents) {
-              // Update the linkedEvent with fresh documents
-              const updatedLinkedEvent = {
-                ...file.linkedEvent,
-                documents: matchingEvidence.documents,
-                document_count: matchingEvidence.documents.length
-              };
-              
-              // Replace the entire linkedEvent object
-              file.linkedEvent = updatedLinkedEvent;
-              
-              // Force Vue update
-              this.$forceUpdate();
-              
-              alert(`Force updated ${file.linkedEvent.title} with ${matchingEvidence.documents.length} documents from backend`);
-            } else {
-              alert('No matching evidence found for force update');
-            }
+        // Use centralized HTTP layer (cookies + CSRF + same auth as rest of app). Avoid manual Bearer from storage.
+        const data = await this.fetchIncidentLinkedEvidencePayload();
+        if (data && data.success && Array.isArray(data.linked_evidence)) {
+          const matchingEvidence = data.linked_evidence.find(evidence =>
+            evidence.id === file.linkedEvent.id ||
+            evidence.title === file.linkedEvent.title
+          );
+          if (matchingEvidence && matchingEvidence.documents) {
+            const updatedLinkedEvent = {
+              ...file.linkedEvent,
+              documents: matchingEvidence.documents,
+              document_count: matchingEvidence.documents.length
+            };
+            file.linkedEvent = updatedLinkedEvent;
+            this.$forceUpdate();
+            alert(`Force updated ${file.linkedEvent.title} with ${matchingEvidence.documents.length} documents from backend`);
           } else {
-            alert('Failed to fetch evidence data from backend');
+            alert('No matching evidence found for force update');
           }
         } else {
           alert('Failed to fetch evidence data from backend');

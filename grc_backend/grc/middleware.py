@@ -285,25 +285,40 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
                 return None
         
         # Try JWT authentication first.
-        # Prefer Authorization header; fall back to HttpOnly cookie token if present.
+        # Prefer HttpOnly access_token cookie over Authorization: Bearer (matches UnifiedJWTAuthentication).
+        # Stale tokens in localStorage must not block a valid cookie from the latest login.
         auth_header = request.headers.get('Authorization')
-        token = None
+        header_token = None
         if auth_header and auth_header.startswith('Bearer '):
-            token = auth_header.split(' ')[1]
-        elif hasattr(request, 'COOKIES'):
-            token = request.COOKIES.get('access_token')
+            ht = auth_header.split(' ', 1)[1].strip()
+            if ht and ht.lower() not in ('null', 'undefined', '', 'none', '[object object]'):
+                header_token = ht
+        cookie_token = None
+        if hasattr(request, 'COOKIES'):
+            ct = request.COOKIES.get('access_token')
+            if ct and str(ct).strip():
+                cookie_token = str(ct).strip()
+
+        jwt_candidates = []
+        if cookie_token:
+            jwt_candidates.append(cookie_token)
+        if header_token and header_token not in jwt_candidates:
+            jwt_candidates.append(header_token)
+
+        payload = None
+        token = None
+        for cand in jwt_candidates:
+            p = verify_jwt_token(cand, check_session=True)
+            if p and p.get('user_id'):
+                payload = p
+                token = cand
+                break
 
         if token:
             #logger.debug(f"[JWT Middleware] Processing JWT token for path: {path}")
-            #logger.debug(f"[JWT Middleware] Token length: {len(token)}")
-            #logger.debug(f"[JWT Middleware] Token starts with: {token[:20]}...")
-            #logger.debug(f"[JWT Middleware] Full Authorization header: {auth_header}")
-            
             try:
-                # Verify JWT token using custom verification (since tokens are generated with custom method)
-                payload = verify_jwt_token(token, check_session=True)
                 user_id = payload.get('user_id') if payload else None
-                
+
                 if payload and user_id:
                     logger.debug(
                         "[JWT Middleware] Successfully decoded token with custom verification, user_id: %s",
@@ -325,7 +340,7 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
                         'error': 'Invalid token payload or session invalidated',
                         'session_invalidated': True
                     }, status=401)
-                
+
                 if payload and user_id:
                     # Get user from database
                     user = Users.objects.get(UserId=user_id)
@@ -644,6 +659,8 @@ class AuditLoggingMiddleware(MiddlewareMixin):
         skip_paths = [
             '/api/jwt/verify/',
             '/api/test-connection/',
+            '/api/ai-incident-upload/',
+            '/api/ai-incident-save/',
             '/admin/',
             '/static/',
             '/media/',
@@ -675,6 +692,8 @@ class AuditLoggingMiddleware(MiddlewareMixin):
         skip_paths = [
             '/api/jwt/verify/',
             '/api/test-connection/',
+            '/api/ai-incident-upload/',
+            '/api/ai-incident-save/',
             '/admin/',
             '/static/',
             '/media/',

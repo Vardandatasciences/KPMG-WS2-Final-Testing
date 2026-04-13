@@ -12,7 +12,7 @@
  * - Components should check for cached data before making API calls
  */
 
-import { axiosInstance } from '@/config/api.js';
+import { axiosCompat as axiosInstance } from '@/services/apiServiceCompat.js';
 import { API_ENDPOINTS } from '@/config/api.js';
 
 class IncidentService {
@@ -319,7 +319,7 @@ class IncidentService {
     
     try {
       const response = await axiosInstance.get(API_ENDPOINTS.INCIDENTS_USERS, {
-        timeout: 10000
+        timeout: 120000
       });
       
       const users = Array.isArray(response.data) ? response.data : [];
@@ -339,7 +339,7 @@ class IncidentService {
     
     try {
       const response = await axiosInstance.get(API_ENDPOINTS.BUSINESS_UNITS, {
-        timeout: 10000
+        timeout: 120000
       });
       
       if (Array.isArray(response.data)) {
@@ -363,7 +363,7 @@ class IncidentService {
     
     try {
       const response = await axiosInstance.get(API_ENDPOINTS.CATEGORIES, {
-        timeout: 10000
+        timeout: 120000
       });
       
       if (Array.isArray(response.data)) {
@@ -387,7 +387,7 @@ class IncidentService {
     
     try {
       const response = await axiosInstance.get(API_ENDPOINTS.COMPLIANCE_ALL_POLICIES_FRAMEWORKS, {
-        timeout: 10000
+        timeout: 120000
       });
       
       if (Array.isArray(response.data)) {

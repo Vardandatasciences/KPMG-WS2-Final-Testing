@@ -698,6 +698,7 @@
 import '../Incident/IncidentDashboard.css';
 import '@/assets/css/dropdown.css';
 import { API_ENDPOINTS } from '../../config/api.js';
+import apiService from '@/services/apiService.js';
 import incidentService from '../../services/incidentService.js';
 import CustomDropdown from '@/components/CustomDropdown.vue';
 
@@ -912,34 +913,33 @@ export default {
     async runRiskScan() {
       this.scanningRisks = true;
       try {
-        const response = await fetch(API_ENDPOINTS.SYSTEM_RISKS_RUN_SCAN_INCIDENT, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${sessionStorage.getItem('access_token') || localStorage.getItem('access_token')}`
-          },
-          body: JSON.stringify({
-            limit: 50
-          })
-        });
-        
-        const data = await response.json();
-        
+        // Use apiService (axios + withCredentials + CSRF). Native fetch() omitted cookies and forced a stale Bearer.
+        const data = await apiService.post(
+          '/api/system-risks/run-scan/incident/',
+          { limit: 5 },
+          { timeout: 120000, background: true }
+        );
         if (data.status === 'success') {
           this.$notify?.({
             type: 'success',
             title: 'Risk Scan Complete',
-            text: `${data.results.created} new risk candidates identified. Check System Identified Risks.`
+            text: `${data.results?.created ?? 0} new risk candidates identified. Check System Identified Risks.`
           });
         } else {
           throw new Error(data.message || 'Scan failed');
         }
       } catch (error) {
         console.error('Error running risk scan:', error);
+        const msg =
+          error.response?.data?.detail ||
+          error.response?.data?.message ||
+          error.response?.data?.error ||
+          error.message ||
+          'Failed to run risk scan on incidents.';
         this.$notify?.({
           type: 'error',
           title: 'Scan Failed',
-          text: 'Failed to run risk scan on incidents.'
+          text: typeof msg === 'string' ? msg : 'Failed to run risk scan on incidents.'
         });
       } finally {
         this.scanningRisks = false;
@@ -1227,24 +1227,38 @@ export default {
       }
     },
     
-    // Helper method for authenticated API calls
+    /**
+     * Authenticated GET for KPI endpoints — uses apiService so HttpOnly cookies + CSRF match the rest of the app.
+     * Avoids native fetch() without credentials and avoids forcing a stale Bearer token.
+     */
     async authenticatedFetch(url, options = {}) {
-      const token = sessionStorage.getItem('access_token') ||
-                    sessionStorage.getItem('token') ||
-                    localStorage.getItem('access_token') ||
-                    localStorage.getItem('token');
-      const defaultHeaders = {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      };
-      
-      return fetch(url, {
-        ...options,
-        headers: {
-          ...defaultHeaders,
-          ...options.headers
+      let pathname;
+      const params = {};
+      try {
+        const u = url.startsWith('http') ? new URL(url) : new URL(url, window.location.origin);
+        pathname = u.pathname;
+        u.searchParams.forEach((v, k) => {
+          params[k] = v;
+        });
+      } catch (e) {
+        const [pathOnly, qs] = url.split('?');
+        pathname = pathOnly || url;
+        if (qs) {
+          new URLSearchParams(qs).forEach((v, k) => {
+            params[k] = v;
+          });
         }
+      }
+      const data = await apiService.get(pathname, params, {
+        timeout: options.timeout || 45000
       });
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return data;
+        }
+      };
     },
     
     // Individual API fetch methods using API_ENDPOINTS

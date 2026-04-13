@@ -296,7 +296,7 @@
 </template>
  
 <script>
-import axios from 'axios';
+import { axiosCompat as axios, fetchCompat as fetch } from '@/services/apiServiceCompat.js';
 import { API_ENDPOINTS } from '../../config/api.js';
 import '@/assets/css/main.css';
 import './IncidentDetails.css';

@@ -21,32 +21,61 @@ class UnifiedJWTAuthentication(BaseAuthentication):
     def authenticate(self, request):
         """
         Authenticate the request and return a two-tuple of (user, token).
-        Checks for JWT token in:
-        1. Authorization header (Bearer <token>)
-        2. 'access_token' cookie
-        3. 'session_token' cookie
+
+        Collects JWTs from HttpOnly cookies and Authorization header. When both are present,
+        tries the cookie first so a fresh server-issued access cookie wins over a stale Bearer
+        token left in client storage (localStorage cannot read HttpOnly cookies to compare).
         """
         from rest_framework.exceptions import AuthenticationFailed
         from .authentication import _is_session_token_valid
-        
-        token = None
+
+        def _normalize_bearer_raw(raw_token):
+            if not raw_token:
+                return None
+            if raw_token.lower() in ('null', 'undefined', '', 'none', '[object object]'):
+                return None
+            return raw_token
+
         auth_header = request.headers.get('Authorization')
-        
+        header_raw = None
         if auth_header and auth_header.startswith('Bearer '):
-            raw_token = auth_header.split(' ')[1]
-            # Filter out degenerate tokens from stale frontend storage (e.g. "null", "undefined")
-            if raw_token and raw_token.lower() not in ('null', 'undefined', '', 'none', '[object object]'):
-                token = raw_token
-        
-        # Fallback to cookies if no valid token in header (prioritize secure HttpOnly cookies)
-        if not token:
-            token = request.COOKIES.get('access_token') or request.COOKIES.get('session_token')
-            if token:
-                logger.info("[Unified JWT Auth] Using token from secure cookies")
-        
-        if not token:
+            header_raw = _normalize_bearer_raw(auth_header.split(' ', 1)[1].strip())
+
+        cookie_raw = _normalize_bearer_raw(
+            request.COOKIES.get('access_token') or request.COOKIES.get('session_token')
+        )
+
+        # Prefer cookie first (matches current server session); then Authorization.
+        candidates = []
+        if cookie_raw:
+            candidates.append((cookie_raw, 'cookie'))
+        if header_raw:
+            candidates.append((header_raw, 'header'))
+
+        if not candidates:
             return None
-        
+
+        last_auth_error = None
+        for token, source in candidates:
+            try:
+                return self._authenticate_token(request, token, source, _is_session_token_valid)
+            except AuthenticationFailed as e:
+                last_auth_error = e
+                logger.info(
+                    "[Unified JWT Auth] Token from %s rejected: %s; trying next credential if any",
+                    source,
+                    e.detail if hasattr(e, 'detail') else str(e),
+                )
+
+        if last_auth_error:
+            raise last_auth_error
+        return None
+
+    def _authenticate_token(self, request, token, source_label, _is_session_token_valid):
+        from rest_framework.exceptions import AuthenticationFailed
+
+        if source_label == 'cookie':
+            logger.info("[Unified JWT Auth] Using token from secure cookies")
         try:
             # Decode JWT token with centralized algorithm/key configuration.
             verification_key = getattr(settings, 'JWT_VERIFYING_KEY', None) or getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
@@ -165,15 +194,17 @@ class UnifiedJWTAuthentication(BaseAuthentication):
                     sanitize_for_log(mock_user.username, 128),
                 )
                 return (mock_user, token)
-        
+
+        except AuthenticationFailed:
+            raise
         except jwt.ExpiredSignatureError:
             logger.warning("[Unified JWT Auth] JWT token expired")
             raise AuthenticationFailed('Token expired')
-        
+
         except jwt.InvalidTokenError as e:
             logger.warning(f"[Unified JWT Auth] Invalid JWT token: {e}")
             raise AuthenticationFailed('Invalid token')
-        
+
         except Exception as e:
             logger.error(f"[Unified JWT Auth] Unexpected error during JWT authentication: {e}")
             raise AuthenticationFailed(f"Authentication error: {e}")
