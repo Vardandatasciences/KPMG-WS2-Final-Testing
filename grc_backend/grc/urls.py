@@ -9,6 +9,9 @@ from .authentication import jwt_login, jwt_refresh, jwt_logout, jwt_verify, acce
 
 from .views import test_jwt_auth, list_users, clear_ai_cache
 
+# Import settings to check for DEBUG mode
+from django.conf import settings
+
 
 
 
@@ -532,19 +535,11 @@ auth_urlpatterns = [
 
     path('register/', views.register_user, name='register'),
 
-    
-
-    path('test-connection/', views.test_connection, name='test-connection'),
-
     path('login/', views.login_user, name='api-login'),
 
     path('logout/', views.logout_user, name='api-logout'),
 
     path('register/', views.register_user, name='api-register'),
-
-    
-
-    path('test-connection/', views.test_connection, name='api-test-connection'),
 
     path('send-otp/', views.send_otp, name='send-otp'),
 
@@ -558,12 +553,6 @@ auth_urlpatterns = [
 
     path('rbac/roles/', views.get_rbac_roles, name='api-rbac-roles'),
 
-    # path('departments/', views.get_departments, name='api-departments'),  # Removed duplicate
-
-    # path('rbac/role-permissions/<str:role>/', views.get_role_permissions, name='api-role-permissions'),
-
-    
-
     # JWT Authentication endpoints
 
     path('jwt/login/', jwt_login, name='jwt-login'),
@@ -575,15 +564,26 @@ auth_urlpatterns = [
     path('jwt/verify/', jwt_verify, name='jwt-verify'),
 
     path('jwt/accept-consent/', accept_consent, name='accept-consent'),
+
     path('product-version/', product_version_info, name='product-version-info'),
-    path('jwt/test-token-version/', test_token_version, name='test-token-version'),
 
-    path('jwt/test-consent-auth/', test_consent_auth, name='test-consent-auth'),
+    path('google-oauth/callback-payload/', google_oauth_callback_payload, name='google-oauth-callback-payload-compat'),
 
-    path('jwt/test-consent-simple/', test_consent_simple, name='test-consent-simple'),
+]
 
-    path('test-jwt-auth/', test_jwt_auth, name='test-jwt-auth'),
+# Protect debug-only authentication endpoints
+if settings.DEBUG:
+    auth_urlpatterns += [
+        path('test-connection/', views.test_connection, name='test-connection'),
+        path('test-connection/', views.test_connection, name='api-test-connection'),
+        path('jwt/test-token-version/', test_token_version, name='test-token-version'),
+        path('jwt/test-consent-auth/', test_consent_auth, name='test-consent-auth'),
+        path('jwt/test-consent-simple/', test_consent_simple, name='test-consent-simple'),
+        path('test-jwt-auth/', test_jwt_auth, name='test-jwt-auth'),
+    ]
 
+# MFA and SSO are production features
+auth_urlpatterns += [
     # MFA endpoints
     path('jwt/mfa/verify-otp/', mfa_verify_otp, name='mfa-verify-otp'),
     path('jwt/mfa/resend-otp/', mfa_resend_otp, name='mfa-resend-otp'),
@@ -602,7 +602,6 @@ auth_urlpatterns = [
     path('google-oauth/initiate/', google_oauth_initiate, name='google-oauth-initiate-compat'),
     path('google-oauth/callback/', google_oauth_callback, name='google-oauth-callback-compat'),
     path('google-oauth/callback-payload/', google_oauth_callback_payload, name='google-oauth-callback-payload-compat'),
-
 ]
 
 
@@ -673,21 +672,21 @@ rbac_urlpatterns = [
 
     # RBAC Test endpoints for permission verification
 
-    path('rbac/test/policy-view/', rbac_test_views.test_policy_view_permission, name='test-policy-view'),
-
-    path('rbac/test/policy-create/', rbac_test_views.test_policy_create_permission, name='test-policy-create'),
-
-    path('rbac/test/policy-edit/', rbac_test_views.test_policy_edit_permission, name='test-policy-edit'),
-
-    path('rbac/test/audit-view/', rbac_test_views.test_audit_view_permission, name='test-audit-view'),
-
-    path('rbac/test/audit-conduct/', rbac_test_views.test_audit_conduct_permission, name='test-audit-conduct'),
-
-    path('rbac/test/audit-review/', rbac_test_views.test_audit_review_permission, name='test-audit-review'),
-
-    path('rbac/test/public/', rbac_test_views.test_public_endpoint, name='test-public'),
+    path('rbac/save-user-session/', views.save_user_session, name='save-user-session'),
 
 ]
+
+# Protect debug-only RBAC endpoints
+if settings.DEBUG:
+    rbac_urlpatterns += [
+        path('rbac/test/policy-view/', rbac_test_views.test_policy_view_permission, name='test-policy-view'),
+        path('rbac/test/policy-create/', rbac_test_views.test_policy_create_permission, name='test-policy-create'),
+        path('rbac/test/policy-edit/', rbac_test_views.test_policy_edit_permission, name='test-policy-edit'),
+        path('rbac/test/audit-view/', rbac_test_views.test_audit_view_permission, name='test-audit-view'),
+        path('rbac/test/audit-conduct/', rbac_test_views.test_audit_conduct_permission, name='test-audit-conduct'),
+        path('rbac/test/audit-review/', rbac_test_views.test_audit_review_permission, name='test-audit-review'),
+        path('rbac/test/public/', rbac_test_views.test_public_endpoint, name='test-public'),
+    ]
 
 
 
@@ -753,10 +752,29 @@ policy_urlpatterns = [
     
     path('frameworks/<int:framework_id>/compliance-stats/', get_framework_compliance_stats, name='get-framework-compliance-stats'),
     
-    path('frameworks/test-session/', test_session_debug, name='test-session-debug'),
+    path('frameworks/<int:framework_id>/compliance-stats/', get_framework_compliance_stats, name='get-framework-compliance-stats'),
+
+]
+
+# Protect debug-only policy endpoints
+if settings.DEBUG:
+    policy_urlpatterns += [
+        path('frameworks/test-session/', test_session_debug, name='test-session-debug'),
+        path('test-auth/', test_auth, name='test-auth'),
+        path('test-submit-review/<int:policy_id>/', test_submit_review, name='test-submit-review'),
+        path('simple-test/<int:policy_id>/', simple_test_endpoint, name='simple-test-endpoint'),
+        path('tailoring/test-permissions/', test_tailoring_permissions, name='test-tailoring-permissions'),
+        path('framework-approvals/<int:approval_id>/test-routing/', test_framework_approval_routing, name='test-framework-approval-routing'),
+        path('framework-approvals/<int:approval_id>/test-post-routing/', test_framework_approval_post_routing, name='test-framework-approval-post-routing'),
+        path('test-user-id-extraction/', test_user_id_extraction, name='test-user-id-extraction'),
+        path('policies/<int:policy_id>/test-debug/', test_policy_status_debug, name='test-policy-status-debug'),
+        path('test-users/', create_test_users, name='create-test-users'),
+    ]
 
     
 
+
+policy_urlpatterns += [
     # Policy Management
 
     path('policies/', policy_list, name='policy-list'),
@@ -929,11 +947,6 @@ policy_urlpatterns = [
 
     path('policies/<int:policy_id>/version-history/', get_policy_version_history, name='get-policy-version-history'),
 
-    path('test-auth/', test_auth, name='test-auth'),
-
-    path('test-submit-review/<int:policy_id>/', test_submit_review, name='test-submit-review'),
-
-    path('simple-test/<int:policy_id>/', simple_test_endpoint, name='simple-test-endpoint'),
 
     
 
@@ -968,7 +981,6 @@ policy_urlpatterns = [
 
     path('tailoring/create-policy/', create_tailored_policy, name='create-tailored-policy'),
 
-    path('tailoring/test-permissions/', test_tailoring_permissions, name='test-tailoring-permissions'),
 
     
 
@@ -982,11 +994,6 @@ policy_urlpatterns = [
 
     path('frameworks/<int:framework_id>/request-status-change/', request_framework_status_change, name='request-framework-status-change'),
 
-    path('framework-approvals/<int:approval_id>/approve-status-change/', approve_framework_status_change, name='approve-framework-status-change'),
-
-    path('framework-approvals/<int:approval_id>/test-routing/', test_framework_approval_routing, name='test-framework-approval-routing'),
-
-    path('framework-approvals/<int:approval_id>/test-post-routing/', test_framework_approval_post_routing, name='test-framework-approval-post-routing'),
 
     path('frameworks/fix-versions/', fix_framework_versions, name='fix-framework-versions'),
 
@@ -996,7 +1003,6 @@ policy_urlpatterns = [
 
     path('framework-status-change-requests/reviewer/<int:reviewer_id>/', get_status_change_requests_by_reviewer, name='get-status-change-requests-by-reviewer'),
 
-    path('test-user-id-extraction/', test_user_id_extraction, name='test-user-id-extraction'),
 
     
 
@@ -1023,7 +1029,6 @@ policy_urlpatterns = [
 
     path('policy-status-change-requests-by-reviewer/<int:reviewer_id>/', get_policy_status_change_requests_by_reviewer, name='get-policy-status-change-requests-by-reviewer-filtered'),
 
-    path('policies/<int:policy_id>/test-debug/', test_policy_status_debug, name='test-policy-status-debug'),
 
     path('upload-policy-document/', upload_policy_document, name='upload-policy-document'),
 
@@ -1047,7 +1052,6 @@ policy_urlpatterns = [
 
     path('status-change-requests-by-reviewer/<int:reviewer_id>/', get_status_change_requests_by_reviewer, name='get-status-change-requests-by-reviewer-filtered'),
 
-    path('test-users/', create_test_users, name='create-test-users'),
 
     path('policies/<int:policy_id>/compliance-stats/', get_policy_compliance_stats, name='get-policy-compliance-stats'),
 
@@ -1119,7 +1123,7 @@ policy_urlpatterns = [
 
     path('save-framework-to-database/', save_framework_to_database, name='save-framework-to-database'),
 
-     path('save-checked-sections-json/', new_save_checked_sections_json, name='save-checked-sections-json'),
+    path('save-checked-sections-json/', new_save_checked_sections_json, name='save-checked-sections-json'),
 
     path('generate-compliances-for-checked-sections/', new_generate_compliances_for_checked_sections, name='generate-compliances-for-checked-sections'),
     path('compliance-generation-progress/', get_compliance_generation_progress, name='compliance-generation-progress'),
@@ -1179,8 +1183,9 @@ policy_urlpatterns = [
 
 
 
-]
 
+
+]
 
 
 # ============================================================================
@@ -1360,9 +1365,6 @@ compliance_urlpatterns = [
 
     path('api/compliance/dashboard-with-filters/', compliance.get_compliance_dashboard_with_filters, name='api-compliance-dashboard-with-filters'),
 
-    path('compliance/test-framework-filter/', compliance.test_framework_filter, name='test-framework-filter'),
-
-    path('api/compliance/test-framework-filter/', compliance.test_framework_filter, name='api-test-framework-filter'),
 
 
 
@@ -1410,11 +1412,6 @@ compliance_urlpatterns = [
 
          name='export-compliances-post'),
 
-    path('compliance/export/test/',
-
-         compliance_views.test_compliance_export,
-
-         name='test-compliance-export'),
 
     path('compliance/export/all-compliances/<str:export_format>/<str:item_type>/<int:item_id>/',
 
@@ -1488,7 +1485,6 @@ compliance_urlpatterns = [
 
     # Testing and Utilities
 
-    path('test-notification/', compliance_views.test_notification, name='test-notification'),
 
     # Compliance Approvals for User Tasks
 
@@ -1523,12 +1519,20 @@ compliance_urlpatterns = [
 
     path('api/compliance/business-units-for-audit-management/', compliance_views.get_business_units_for_audit_management, name='get_business_units_for_audit_management'),
 
-    path('api/compliance/debug-categories-business-units/', compliance_views.debug_categories_and_business_units, name='debug_categories_and_business_units'),
 
-    # New endpoint for categories and business units
     path('api/compliance/categories-and-business-units/', compliance_views.get_compliance_categories_and_business_units, name='get_compliance_categories_and_business_units'),
 
 ]
+
+# Protect debug-only compliance endpoints
+if settings.DEBUG:
+    compliance_urlpatterns += [
+        path('compliance/test-framework-filter/', compliance.test_framework_filter, name='test-framework-filter'),
+        path('api/compliance/test-framework-filter/', compliance.test_framework_filter, name='api-test-framework-filter'),
+        path('compliance/export/test/', compliance_views.test_compliance_export, name='test-compliance-export'),
+        path('test-notification/', compliance_views.test_notification, name='test-notification'),
+        path('api/compliance/debug-categories-business-units/', compliance_views.debug_categories_and_business_units, name='debug_categories_and_business_units'),
+    ]
 
 
 
@@ -1566,7 +1570,6 @@ audit_urlpatterns = [
 
     path('audits/<int:audit_id>/update-audit-review-status/', reviewing.update_audit_review_status, name='update_audit_review_status'),
 
-    path('test-json-extraction/', reviewing.test_json_extraction, name='test_json_extraction'),
 
     path('api/audits/<int:audit_id>/get-status/', audit_views.get_audit_status, name='get_audit_status'),
 
@@ -1646,7 +1649,6 @@ audit_urlpatterns = [
 
     path('audit-report/<int:audit_id>/', audit_report_views.get_audit_report, name='get_audit_report'),
 
-    path('test-audit-reports/', audit_report_views.test_audit_reports, name='test_audit_reports'),
 
     path('audit-reports/<int:audit_id>/versions/<str:version>/delete/', audit_report_views.delete_audit_report_version, name='delete_audit_report_version'),
 
@@ -1722,7 +1724,6 @@ audit_urlpatterns = [
 
     path('kpi/compliance-readiness/', kpi_functions.get_compliance_readiness, name='compliance_readiness'),
 
-    path('kpi/generate-sample-data/', kpi_functions.generate_sample_audit_data, name='generate_sample_audit_data'),
 
     
 
@@ -1786,13 +1787,17 @@ audit_urlpatterns = [
 
     path('api/fix-audit-table/', audit_views.fix_audit_table, name='fix_audit_table'),
 
-    path('api/audits/<int:audit_id>/debug-status-transition/', audit_views.debug_audit_status_transition, name='debug_audit_status_transition'),
-
-    path('api/debug/audit-version-schema/', audit_views.debug_audit_version_schema, name='debug_audit_version_schema'),
-
-
-
 ]
+
+# Protect debug-only audit endpoints
+if settings.DEBUG:
+    audit_urlpatterns += [
+        path('test-json-extraction/', reviewing.test_json_extraction, name='test_json_extraction'),
+        path('test-audit-reports/', audit_report_views.test_audit_reports, name='test_audit_reports'),
+        path('kpi/generate-sample-data/', kpi_functions.generate_sample_audit_data, name='generate_sample_audit_data'),
+        path('api/audits/<int:audit_id>/debug-status-transition/', audit_views.debug_audit_status_transition, name='debug_audit_status_transition'),
+        path('api/debug/audit-version-schema/', audit_views.debug_audit_version_schema, name='debug_audit_version_schema'),
+    ]
 
 
 
@@ -1830,9 +1835,6 @@ incident_urlpatterns = [
 
     path('api/incident-incidents/', incident_views.list_incidents, name='api-incident-incidents'),
 
-    path('api/test-incident/', incident_views.test_incident_endpoint, name='test-incident-endpoint'),
-
-    path('api/test-incident-count/', incident_views.test_incident_count, name='test-incident-count'),
 
     path('api/incidents-users/', incident_views.list_users, name='api-incidents-users'),
 
@@ -2074,7 +2076,6 @@ incident_urlpatterns = [
 
     path('ai-audit/<str:audit_id>/download-report/', ai_audit_api.download_audit_report, name='api-download-audit-report'),
 
-    path('ai-audit/<str:audit_id>/test-structured-compliance/', ai_audit_api.test_structured_compliance_api, name='api-test-structured-compliance'),
 
     path('ai-audit/<str:audit_id>/documents/<int:document_id>/', ai_audit_api.delete_audit_document_api, name='api-delete-audit-document'),
 
@@ -2145,7 +2146,6 @@ incident_urlpatterns = [
     path('ai-incident-save/', save_extracted_incidents, name='api-ai-incident-save'),
     
     # Test OpenAI connection for incident module
-    path('ai-incident-test/', test_openai_connection_incident, name='api-ai-incident-test'),
 
     # ========================================================================
     # SYSTEM IDENTIFIED RISK QUEUE
@@ -2153,7 +2153,6 @@ incident_urlpatterns = [
     # Note: this `grc/urls.py` file is included by `backend/urls.py` under `path('api/', include('grc.urls'))`.
     # Therefore these routes must NOT start with another `/api/` prefix.
     path('system-risks/run-scan/incident/', run_incident_risk_scan, name='api-system-risks-scan-incident'),
-    path('system-risks/run-test-analysis/', run_synthetic_risk_test_analysis, name='api-system-risks-run-test-analysis'),
     path('system-risks/run-test-analysis/<str:job_id>/status/', get_synthetic_risk_test_analysis_status, name='api-system-risks-run-test-analysis-status'),
     path('system-risks/run-test-analysis/<str:job_id>/cancel/', cancel_synthetic_risk_test_analysis, name='api-system-risks-run-test-analysis-cancel'),
     path('system-risks/', list_system_risk_queue, name='api-system-risks-list'),
@@ -2192,21 +2191,22 @@ incident_urlpatterns = [
 
     path('incident-categories/add/', incident_views.add_incident_category, name='add-incident-category'),
 
-    
-
-    # Test and Debug endpoints
-
-    path('api/test-notification/', incident_views.test_notification, name='test-notification'),
-
-    path('api/test-logging/', incident_views.test_logging, name='test-logging'),
-
-    path('api/test-s3-integration/', incident_views.test_s3_integration, name='test-s3-integration'),
-
-    path('seed-sample-data/', incident_views.seed_sample_data, name='seed-sample-data'),
-
-    path('debug-category-data/', incident_views.debug_category_data, name='debug-category-data'),
-
 ]
+
+# Protect debug-only incident endpoints
+if settings.DEBUG:
+    incident_urlpatterns += [
+        path('api/test-incident/', incident_views.test_incident_endpoint, name='test-incident-endpoint'),
+        path('api/test-incident-count/', incident_views.test_incident_count, name='test-incident-count'),
+        path('ai-audit/<str:audit_id>/test-structured-compliance/', ai_audit_api.test_structured_compliance_api, name='api-test-structured-compliance'),
+        path('ai-incident-test/', test_openai_connection_incident, name='api-ai-incident-test'),
+        path('system-risks/run-test-analysis/', run_synthetic_risk_test_analysis, name='api-system-risks-run-test-analysis'),
+        path('api/test-notification/', incident_views.test_notification, name='test-notification'),
+        path('api/test-logging/', incident_views.test_logging, name='test-logging'),
+        path('api/test-s3-integration/', incident_views.test_s3_integration, name='test-s3-integration'),
+        path('seed-sample-data/', incident_views.seed_sample_data, name='seed-sample-data'),
+        path('debug-category-data/', incident_views.debug_category_data, name='debug-category-data'),
+    ]
 
 
 
@@ -2268,7 +2268,6 @@ risk_urlpatterns = [
     path('ai-risk-instance-save/', save_extracted_risk_instances, name='ai-risk-instance-save-instances'),
     
     # Test Ollama connection for risk instance module
-    path('ai-risk-instance-test/', test_openai_connection_risk_instance, name='ai-risk-instance-test-openai'),
 
     
 
@@ -2341,7 +2340,6 @@ risk_urlpatterns = [
 
     path('user-notifications/<int:user_id>/', risk_views.get_user_notifications, name='user-notifications'),
 
-    path('generate-test-notification/<int:user_id>/', risk_views.generate_test_notification, name='generate-test-notification'),
 
     
 
@@ -2551,17 +2549,22 @@ risk_urlpatterns = [
 
     path('compliance/view/<str:type>/<int:id>/', compliance.get_compliances_by_type, name='get-compliances-by-type'),
 
-
-
-
-
 ]
+
+# Protect debug-only risk endpoints
+if settings.DEBUG:
+    risk_urlpatterns += [
+        path('ai-risk-test/', test_openai_connection, name='ai-risk-test-openai'),
+        path('ai-risk-test-upload/', test_file_upload, name='ai-risk-test-upload'),
+        path('ai-risk-instance-test/', test_openai_connection_risk_instance, name='ai-risk-instance-test-openai'),
+        path('generate-test-notification/<int:user_id>/', risk_views.generate_test_notification, name='generate-test-notification'),
+        path('risks/test-link-evidence/', risk_views.test_link_evidence_endpoint, name='test-link-evidence'),
+    ]
 
 event_handling_urlpatterns = [
 
     # Test endpoint
 
-    path('events/test/', event_views.test_endpoint, name='test-event-endpoint'),
 
     # Event Management URLs
 
@@ -2579,7 +2582,6 @@ event_handling_urlpatterns = [
 
     path('events/dynamic-fields/', event_views.get_dynamic_fields_for_event, name='get-dynamic-fields-for-event'),
     path('events/dynamic-fields', event_views.get_dynamic_fields_for_event, name='get-dynamic-fields-for-event-no-slash'),
-    path('events/test-dynamic-fields/', event_views.test_dynamic_fields_endpoint, name='test-dynamic-fields-endpoint'),
 
     path('events/create-event-type/', event_views.create_event_type, name='create-event-type'),
 
@@ -2638,7 +2640,6 @@ event_handling_urlpatterns = [
 
     # Create Events Table URL
 
-    path('events/create-table/', event_views.create_events_table, name='create-events-table'),
 
     
 
@@ -2646,7 +2647,6 @@ event_handling_urlpatterns = [
 
     path('riskavaire/webhook/', riskavaire_integration.riskavaire_webhook, name='riskavaire-webhook'),
 
-    path('riskavaire/check-triggers/', riskavaire_integration.check_automated_triggers, name='check-automated-triggers'),
 
     path('riskavaire/events/', riskavaire_integration.get_riskavaire_events, name='get-riskavaire-events'),
 
@@ -2654,7 +2654,6 @@ event_handling_urlpatterns = [
 
     # Integration Events URLs
 
-    path('events/test-integration-db/', event_views.test_integration_db_connection, name='test-integration-db'),
 
     path('events/integration-events/', event_views.get_integration_events, name='get-integration-events'),
 
@@ -2668,7 +2667,6 @@ event_handling_urlpatterns = [
 
     path('s3/download/<str:s3_key>/<str:file_name>/', event_views.s3_download_file, name='s3-download-file'),
 
-    path('s3/test-connection/', event_views.s3_test_connection, name='s3-test-connection'),
 
     
 
@@ -2708,9 +2706,18 @@ event_handling_urlpatterns = [
 
     path('risks/link-evidence/', risk_views.link_evidence_to_risk, name='link-evidence-to-risk'),
 
-    path('risks/test-link-evidence/', risk_views.test_link_evidence_endpoint, name='test-link-evidence'),
-
 ]
+
+# Protect debug-only event endpoints
+if settings.DEBUG:
+    event_handling_urlpatterns += [
+        path('events/test/', event_views.test_endpoint, name='test-event-endpoint'),
+        path('events/test-dynamic-fields/', event_views.test_dynamic_fields_endpoint, name='test-dynamic-fields-endpoint'),
+        path('events/create-table/', event_views.create_events_table, name='create-events-table'),
+        path('riskavaire/check-triggers/', riskavaire_integration.check_automated_triggers, name='check-automated-triggers'),
+        path('events/test-integration-db/', event_views.test_integration_db_connection, name='test-integration-db'),
+        path('s3/test-connection/', event_views.s3_test_connection, name='s3-test-connection'),
+    ]
 
 # ============================================================================
 
@@ -2948,7 +2955,6 @@ urlpatterns = [
     path('api/save-checked-sections-json/', new_save_checked_sections_json, name='api-save-checked-sections-json'),
     
     # Test endpoint
-    path('api/test-endpoint/', new_test_endpoint, name='api-test-endpoint'),
     
     # Get checked sections with compliance
     path('api/get-checked-sections-with-compliance/', new_get_checked_sections_with_compliance, name='api-get-checked-sections-with-compliance'),
@@ -3254,26 +3260,23 @@ path('bamboohr/oauth/', bamboohr_oauth, name='bamboohr-oauth'),
     path('jira/assign-project/', jira_assign_project, name='jira-assign-project'),
     path('jira/stored-data/', jira_stored_data, name='jira-stored-data'),
 
-    # ========================================================================
-    # INTEGRATIONS (EXTERNAL APPS LIST/STATUS)
-    # ========================================================================
-    path('integrations/test-auth/', test_integration_auth, name='integrations-test-auth'),
-    path('integrations/applications/', get_external_applications, name='get-external-applications'),
-    path('integrations/connect/', connect_external_application, name='connect-external-application'),
-    path('integrations/disconnect/', disconnect_external_application, name='disconnect-external-application'),
-    path('integrations/applications/<int:application_id>/', get_application_details, name='get-application-details'),
-    path('integrations/refresh-status/', refresh_application_status, name='refresh-application-status'),
     path('integrations/sync-logs/<int:application_id>/', get_sync_logs, name='get-sync-logs'),
 
-    # ========================================================================
-    # STREAMLINE (USER PROJECTS + TASK ACTIONS)
-    # ========================================================================
+]
+
+# Protect debug-only integration endpoints
+if settings.DEBUG:
+    urlpatterns += [
+        path('integrations/test-auth/', test_integration_auth, name='integrations-test-auth'),
+        path('api/test-endpoint/', new_test_endpoint, name='api-test-endpoint'),
+    ]
+
+# Streamline endpoints
+urlpatterns += [
     path('streamline/user-projects/', streamline_get_user_projects, name='streamline-get-user-projects'),
     path('streamline/project-details/', streamline_get_project_details, name='streamline-get-project-details'),
     path('streamline/user-statistics/', streamline_get_user_statistics, name='streamline-get-user-statistics'),
     path('streamline/task-action/', streamline_save_task_action, name='streamline-save-task-action'),
     path('streamline/save-project-tasks/', streamline_save_project_tasks, name='streamline-save-project-tasks'),
     path('streamline/user-task-actions/', streamline_get_user_task_actions, name='streamline-get-user-task-actions'),
-
- 
 ]

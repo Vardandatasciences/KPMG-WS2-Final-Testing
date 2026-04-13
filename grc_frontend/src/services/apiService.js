@@ -22,35 +22,11 @@ const CACHE_TTL = 30000; // 30 seconds default TTL
  
 // --- Helpers ---
  
-const JWT_SEGMENT_RE = /^[A-Za-z0-9\-_]+$/;
- 
 const purgeTokens = () => {
-  ['access_token', 'refresh_token', 'session_token', 'token', 'jwt_token'].forEach(k => {
+  ['user_id', 'userId', 'current_user', 'rbac_roles', 'user_permissions'].forEach(k => {
     localStorage.removeItem(k);
     sessionStorage.removeItem(k);
   });
-};
- 
-const clearInvalidSessionAuthTokens = () => {
-  ['access_token', 'session_token', 'token', 'jwt_token'].forEach((k) => {
-    sessionStorage.removeItem(k);
-  });
-};
- 
-const normalizeAndValidateJwt = (rawToken) => {
-  if (!rawToken || typeof rawToken !== 'string') return null;
-  const trimmed = rawToken.trim();
-  if (!trimmed) return null;
- 
-  const token = trimmed.replace(/^Bearer\s+/i, '');
-  if (!token || ['null', 'undefined', '[object object]'].includes(token.toLowerCase())) {
-    return null;
-  }
- 
-  const parts = token.split('.');
-  if (parts.length !== 3) return null;
-  if (!parts.every((p) => p && JWT_SEGMENT_RE.test(p))) return null;
-  return token;
 };
  
 const getSessionUserId = () => {
@@ -118,19 +94,10 @@ apiClient.interceptors.request.use((config) => {
     }
   }
  
-  // 2. Security: Attach only structurally valid JWT from session storage.
-  const rawToken = sessionStorage.getItem('access_token') ||
-                   sessionStorage.getItem('token') ||
-                   sessionStorage.getItem('session_token') ||
-                   sessionStorage.getItem('jwt_token');
-  const validToken = normalizeAndValidateJwt(rawToken);
-  if (validToken) {
-    config.headers = config.headers || {};
-    config.headers.Authorization = `Bearer ${validToken}`;
-  } else if (rawToken) {
-    console.warn(`⚠️ [APIService] Invalid JWT suppressed for ${config.method?.toUpperCase()} ${config.url}`);
-    clearInvalidSessionAuthTokens();
-  }
+  // 2. Security: Cookie-only authentication.
+  // The backend uses HttpOnly cookies for tokens. 
+  // No tokens should be read from or written to local/session storage.
+  // axiosInstance is already configured with withCredentials: true in config/api.js.
  
   return config;
 }, (error) => {
