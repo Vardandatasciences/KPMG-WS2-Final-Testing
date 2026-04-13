@@ -6105,8 +6105,11 @@ def upload_risk_evidence_file(request):
         debug_print(f"FILES data: {request.FILES}")
         debug_print(f"Request method: {request.method}")
         
-        # Get user info for logging from POST data (FormData)
+        # Get user info for logging from POST data (FormData); fallback to session identity
         user_id = request.POST.get('user_id')
+        if not user_id:
+            from ...rbac.utils import RBACUtils
+            user_id = RBACUtils.get_user_id_from_request(request)
         risk_instance_id = request.POST.get('risk_instance_id')
         
         if not request.FILES:

@@ -124,6 +124,16 @@ TRUSTED_EVIDENCE_URL_ALLOW_HTTP_HOSTS = _env_csv(
 # while internal/private/link-local/loopback hosts remain blocked.
 EXPORT_ALLOWED_DOMAINS = _env_csv("EXPORT_ALLOWED_DOMAINS", "")
 
+# RiskAvaire EventHandling: HMAC-SHA256 of raw request body, header X-Riskavaire-Signature: sha256=<hex>
+# When DEBUG is False, this must be non-empty or webhooks return 503 (misconfiguration).
+RISKAVAIRE_WEBHOOK_SECRET = os.environ.get("RISKAVAIRE_WEBHOOK_SECRET", "").strip()
+
+# EventHandling: allow outside DEBUG (off by default): schema DDL endpoints and
+# test_integration_db_connection (creates integration DB / tables — use only for maintenance).
+ALLOW_EVENT_SCHEMA_MAINTENANCE = os.environ.get(
+    "ALLOW_EVENT_SCHEMA_MAINTENANCE", ""
+).strip().lower() in ("1", "true", "yes")
+
 
 # Application definition
 

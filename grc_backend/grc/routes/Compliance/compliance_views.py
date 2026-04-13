@@ -4,7 +4,8 @@
 # type: ignore
 import logging
 from django.shortcuts import render, get_object_or_404
-from django.db.models import Count, Q
+from django.db.models import Count, Q, Max
+from django.db import DatabaseError
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.response import Response
@@ -1065,7 +1066,7 @@ def ensure_user_has_email(user_id, default_email=None):
 
 @csrf_exempt
 @api_view(['POST'])
-@authentication_classes([])
+@authentication_classes([SessionAuthentication, BasicAuthentication])
 @permission_classes([ComplianceCreatePermission])
 @compliance_create_required
 @require_consent('create_compliance')
@@ -1087,13 +1088,12 @@ def create_compliance(request):
         user_id = request.user.UserId
     if not user_id:
         user_id = request.session.get('user_id')
-    if not user_id and request.data.get('user_id'):
-        # Fallback from payload if provided
-        try:
-            user_id = int(request.data.get('user_id'))
-        except Exception:
-            user_id = None
     debug_print(f"Resolved creator user_id: {user_id}")
+    if not user_id:
+        return Response({
+            'success': False,
+            'message': 'Authentication required'
+        }, status=status.HTTP_401_UNAUTHORIZED)
     
     # Get data_inventory from request.data BEFORE validation (validator might filter it out)
     data_inventory_raw = request.data.get('data_inventory')
@@ -1119,7 +1119,7 @@ def create_compliance(request):
         # Use the user-provided identifier
         identifier = validated_data['Identifier']
     
-    # Use resolved user_id as creator; ignore client-supplied CreatedByName for integrity
+    # Use resolved user_id as creator; ignore client-supplied identity fields for integrity
     created_by_id = user_id
     logger = logging.getLogger(__name__)
     logger.debug(f'Creating compliance: created_by_id={created_by_id}')
@@ -1148,6 +1148,39 @@ def create_compliance(request):
                 'message': 'Failed to create compliance',
                 'errors': {'general': ['SubPolicy not found']}
             }, status=status.HTTP_400_BAD_REQUEST)
+        # Enforce reviewer existence, tenant ownership, reviewer authorization, and maker-checker
+        try:
+            reviewer_user = Users.objects.get(UserId=reviewer_id, tenant_id=tenant_id)
+        except Users.DoesNotExist:
+            return Response({
+                'success': False,
+                'message': 'Invalid reviewer selection',
+                'errors': {'reviewer': ['Selected reviewer does not exist for this tenant']}
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            reviewer_id_int = int(reviewer_id)
+            created_by_id_int = int(created_by_id)
+        except Exception:
+            return Response({
+                'success': False,
+                'message': 'Invalid reviewer or creator identity'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        if reviewer_id_int == created_by_id_int:
+            return Response({
+                'success': False,
+                'message': 'Maker-checker violation: reviewer must be different from creator',
+                'errors': {'reviewer': ['Reviewer cannot be the same as the creator']}
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        if not RBACUtils.has_compliance_permission(reviewer_id_int, 'ApproveCompliance'):
+            return Response({
+                'success': False,
+                'message': 'Invalid reviewer selection',
+                'errors': {'reviewer': ['Selected reviewer is not authorized to approve compliance']}
+            }, status=status.HTTP_400_BAD_REQUEST)
+
         # Always use format_mitigation_data to ensure correct type
         mitigation_for_db = format_mitigation_data(validated_data['mitigation'])
         
@@ -1246,7 +1279,7 @@ def create_compliance(request):
             'IsRisk': validated_data['IsRisk'],
             'MandatoryOptional': validated_data['MandatoryOptional'],
             'ManualAutomatic': validated_data['ManualAutomatic'],
-            'CreatedByName': validated_data.get('CreatedByName', created_by_name),
+            'CreatedByName': created_by_name,
             'CreatedByDate': datetime.date.today().isoformat(),
             'Status': 'Under Review',
             'ComplianceId': new_compliance.ComplianceId,
@@ -1264,12 +1297,6 @@ def create_compliance(request):
         # Use session user_id or fall back to validated data
         session_user_id = user_id
         
-        # Ensure users have emails for notifications
-        ensure_user_has_email(session_user_id, "system@example.com")
-        reviewer_has_email = ensure_user_has_email(reviewer_id, f"reviewer{reviewer_id}@example.com")
-        if not reviewer_has_email:
-            debug_print(f"WARNING: Reviewer {reviewer_id} has no email, notifications may fail")
-       
         # Get the policy ID from the subpolicy
         policy = subpolicy.PolicyId  # Get the actual Policy instance through the foreign key
             
@@ -1292,17 +1319,8 @@ def create_compliance(request):
             from ...routes.Global.notification_service import NotificationService
             notification_service = NotificationService()
             
-            # Make sure reviewer has a valid email
-            try:
-                reviewer = Users.objects.get(UserId=reviewer_id, tenant_id=tenant_id)
-                if not reviewer.Email or '@' not in reviewer.Email:
-                    reviewer.Email = f"reviewer{reviewer_id}@example.com"
-                    reviewer.save()
-                    debug_print(f"Updated reviewer {reviewer_id} with email {reviewer.Email}")
-                
-                debug_print(f"Found reviewer: {reviewer.UserName} with email: {reviewer.Email}")
-            except Users.DoesNotExist:
-                debug_print(f"ERROR: Reviewer with ID {reviewer_id} does not exist")
+            reviewer = reviewer_user
+            debug_print(f"Found reviewer: {reviewer.UserName} with email: {reviewer.Email}")
             
             # Send email notification to reviewer
             debug_print(f"Sending clone notification for compliance {new_compliance.ComplianceId} to reviewer {reviewer_id}")
@@ -1382,7 +1400,7 @@ def create_compliance(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 @csrf_exempt
 @api_view(['GET'])
-@authentication_classes([])
+@authentication_classes([SessionAuthentication, BasicAuthentication])
 @permission_classes([ComplianceViewPermission])
 @compliance_view_required
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
@@ -2162,7 +2180,7 @@ def get_compliances_by_subpolicy(request, subpolicy_id):
  
 @csrf_exempt
 @api_view(['PUT', 'OPTIONS'])
-@authentication_classes([])
+@authentication_classes([SessionAuthentication, BasicAuthentication])
 @permission_classes([ComplianceApprovePermission])
 @compliance_approve_required
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
@@ -2183,9 +2201,12 @@ def submit_compliance_review(request, approval_id):
         approval = get_object_or_404(ComplianceApproval, ApprovalId=approval_id)
         debug_print(f"Found approval: {approval.ApprovalId}, Identifier: {approval.Identifier}")
 
-        # Enforce reviewer identity and maker-checker on server side
+        # Enforce reviewer identity and maker-checker on server side.
         from ...rbac.utils import RBACUtils
-        current_user_id = RBACUtils.get_user_id_from_request(request) or getattr(request.user, 'id', None)
+        current_user_id = (
+            RBACUtils.get_user_id_from_request(request)
+            or getattr(request.user, 'id', None)
+        )
         try:
             current_user_id_int = int(current_user_id) if current_user_id is not None else None
             approval_reviewer_id_int = int(approval.ReviewerId) if approval.ReviewerId is not None else None
@@ -2197,10 +2218,72 @@ def submit_compliance_review(request, approval_id):
             }, status=status.HTTP_400_BAD_REQUEST)
 
         if current_user_id_int is None or approval_reviewer_id_int is None or current_user_id_int != approval_reviewer_id_int:
-            return Response({
-                'success': False,
-                'message': 'You are not the assigned reviewer for this request.'
-            }, status=status.HTTP_403_FORBIDDEN)
+            # Fallback: frontend can send a stale approval id.
+            # Resolve by current reviewer using either identifier or extracted compliance id.
+            source_extracted_data = approval.ExtractedData if isinstance(approval.ExtractedData, dict) else {}
+            request_extracted_data = request.data.get('ExtractedData') if isinstance(request.data.get('ExtractedData'), dict) else {}
+            resolved_compliance_id = (
+                source_extracted_data.get('ComplianceId')
+                or source_extracted_data.get('compliance_id')
+                or request_extracted_data.get('ComplianceId')
+                or request_extracted_data.get('compliance_id')
+            )
+            resolved_identifier = approval.Identifier
+            if not resolved_identifier and resolved_compliance_id:
+                compliance_for_id = Compliance.objects.filter(
+                    ComplianceId=resolved_compliance_id,
+                    tenant_id=tenant_id
+                ).only('Identifier').first()
+                if compliance_for_id:
+                    resolved_identifier = compliance_for_id.Identifier
+
+            reassigned_approval = None
+            if resolved_identifier:
+                reassigned_approval = ComplianceApproval.objects.filter(
+                    Identifier=resolved_identifier,
+                    ReviewerId=current_user_id_int,
+                    ApprovedNot=None,
+                    Version__startswith='u'
+                ).order_by('-ApprovalId').first()
+
+            # Wider fallback: if no pending u* found, use latest reviewer-assigned record by identifier.
+            if not reassigned_approval and resolved_identifier:
+                reassigned_approval = ComplianceApproval.objects.filter(
+                    Identifier=resolved_identifier,
+                    ReviewerId=current_user_id_int
+                ).order_by('-ApprovalId').first()
+
+            # ComplianceId fallback when identifier path misses.
+            if not reassigned_approval and resolved_compliance_id:
+                compliance_for_id = Compliance.objects.filter(
+                    ComplianceId=resolved_compliance_id,
+                    tenant_id=tenant_id
+                ).only('Identifier').first()
+                if compliance_for_id and compliance_for_id.Identifier:
+                    reassigned_approval = ComplianceApproval.objects.filter(
+                        Identifier=compliance_for_id.Identifier,
+                        ReviewerId=current_user_id_int
+                    ).order_by('-ApprovalId').first()
+
+            if reassigned_approval:
+                debug_print(
+                    f"⚠️ ApprovalId {approval.ApprovalId} reviewer mismatch; "
+                    f"resolved to reviewer-assigned pending approval {reassigned_approval.ApprovalId}"
+                )
+                approval = reassigned_approval
+                try:
+                    approval_reviewer_id_int = int(approval.ReviewerId) if approval.ReviewerId is not None else None
+                    approval_creator_id_int = int(approval.UserId) if approval.UserId is not None else None
+                except (TypeError, ValueError):
+                    return Response({
+                        'success': False,
+                        'message': 'Invalid approval user/reviewer data. Please contact an administrator.'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+            else:
+                return Response({
+                    'success': False,
+                    'message': 'You are not the assigned reviewer for this request.'
+                }, status=status.HTTP_403_FORBIDDEN)
 
         if approval_creator_id_int is not None and approval_creator_id_int == approval_reviewer_id_int:
             return Response({
@@ -2227,7 +2310,7 @@ def submit_compliance_review(request, approval_id):
         
         debug_print(f"Remarks: {remarks}")
         
-        extracted_data = approval.ExtractedData
+        extracted_data = approval.ExtractedData if isinstance(approval.ExtractedData, dict) else {}
         # --- Ensure compliance_approval is saved in ExtractedData for both approvals and rejections ---
         if 'compliance_approval' not in extracted_data:
             extracted_data['compliance_approval'] = {}
@@ -2594,7 +2677,7 @@ def submit_compliance_review(request, approval_id):
  
 @csrf_exempt
 @api_view(['PUT'])
-@authentication_classes([])
+@authentication_classes([SessionAuthentication, BasicAuthentication])
 @permission_classes([ComplianceApprovePermission])
 @compliance_approve_required
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
@@ -2755,7 +2838,8 @@ def resubmit_compliance_approval(request, approval_id):
             ExtractedData=extracted_data,
             UserId=original_user_id,
             ReviewerId=original_reviewer_id,  # Ensure this is an integer
-            ApprovedNot=0,
+            # Pending resubmission must be NULL so reviewer queue picks it up.
+            ApprovedNot=None,
             Version=new_version,
             PolicyId=approval.PolicyId,
             ApprovalDueDate=approval.ApprovalDueDate,
@@ -2800,7 +2884,7 @@ def resubmit_compliance_approval(request, approval_id):
         debug_print("Error in resubmit_compliance_approval:", str(e))
         import traceback
         traceback.print_exc()
-        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'error': 'Invalid request data'}, status=status.HTTP_400_BAD_REQUEST)
  
 @api_view(['GET'])
 @permission_classes([ComplianceVersioningPermission])
@@ -2840,6 +2924,45 @@ def get_policy_approvals_by_reviewer(request):
     try:
         from ...routes.Policy.framework_filter_helper import get_active_framework_filter
         from ...models import Users
+
+        def normalize_for_compare(value):
+            if value is None:
+                return None
+            if isinstance(value, str):
+                return value.strip()
+            if isinstance(value, (int, float, bool)):
+                return value
+            if isinstance(value, list):
+                return [normalize_for_compare(v) for v in value]
+            if isinstance(value, dict):
+                return {k: normalize_for_compare(v) for k, v in value.items()}
+            return str(value)
+
+        def get_previous_extracted_data(current_approval):
+            prev = ComplianceApproval.objects.filter(
+                Identifier=current_approval.Identifier,
+                ReviewerId=current_approval.ReviewerId,
+                Version__startswith='u',
+                ApprovalId__lt=current_approval.ApprovalId,
+                FrameworkId__tenant_id=tenant_id
+            ).order_by('-ApprovalId').only('ExtractedData').first()
+            return prev.ExtractedData if prev and isinstance(prev.ExtractedData, dict) else {}
+
+        def compute_changed_fields(current_extracted, previous_extracted):
+            current = current_extracted if isinstance(current_extracted, dict) else {}
+            previous = previous_extracted if isinstance(previous_extracted, dict) else {}
+            keys = set(current.keys()).union(set(previous.keys()))
+            changed = []
+            for key in sorted(keys):
+                if key in {'compliance_approval', 'inResubmission'}:
+                    continue
+                if normalize_for_compare(current.get(key)) != normalize_for_compare(previous.get(key)):
+                    changed.append({
+                        'field': key,
+                        'old_value': previous.get(key),
+                        'new_value': current.get(key)
+                    })
+            return changed
         
         # Helper function to get user name by ID
         def get_user_name_by_id(user_id):
@@ -2860,10 +2983,22 @@ def get_policy_approvals_by_reviewer(request):
             except Exception:
                 return None
         
-        # Get reviewer ID from session first, then from request params, then default
-        reviewer_id = request.session.get('user_id')
-        if not reviewer_id:
-            reviewer_id = request.query_params.get('reviewer_id', 1)
+        # Resolve reviewer strictly from authenticated server context.
+        # Do not trust client-supplied reviewer_id/user_id query parameters.
+        reviewer_id = (
+            RBACUtils.get_user_id_from_request(request)
+            or request.session.get('user_id')
+        )
+        try:
+            reviewer_id = int(reviewer_id) if reviewer_id is not None else None
+        except (TypeError, ValueError):
+            reviewer_id = None
+
+        if reviewer_id is None:
+            return Response({
+                'error': 'Authentication required',
+                'message': 'Reviewer identity is required to load reviewer tasks.'
+            }, status=status.HTTP_401_UNAUTHORIZED)
         
         # Get framework filter from session
         framework_id = get_active_framework_filter(request)
@@ -2948,13 +3083,12 @@ def get_policy_approvals_by_reviewer(request):
                         creator_id = user_match['UserId']
                 except Exception:
                     pass
-            # Finally, fall back to the requester if provided (but never a hardcoded default)
+            # Finally, fall back to authenticated requester context (never request payload/query ids)
             if not creator_id:
-                from ...rbac.utils import RBACUtils
                 try:
                     creator_id = RBACUtils.get_user_id_from_request(request)
                 except Exception:
-                    creator_id = request.query_params.get('user_id') or request.data.get('user_id')
+                    creator_id = None
             # Validate numeric creator_id
             try:
                 if isinstance(creator_id, str):
@@ -3018,6 +3152,9 @@ def get_policy_approvals_by_reviewer(request):
                         'FrameworkId_id': approval.FrameworkId_id if approval.FrameworkId_id else (approval.FrameworkId.FrameworkId if approval.FrameworkId else None),
                         'PolicyId': approval.PolicyId_id if approval.PolicyId_id else (approval.PolicyId.PolicyId if approval.PolicyId else None)
                     }
+                    previous_extracted_data = get_previous_extracted_data(approval)
+                    approval_dict['PreviousExtractedData'] = previous_extracted_data
+                    approval_dict['ChangedFields'] = compute_changed_fields(approval.ExtractedData, previous_extracted_data)
                     approvals.append(approval_dict)
             else:
                 # Fallback to previous logic if no pending user version exists
@@ -3068,6 +3205,9 @@ def get_policy_approvals_by_reviewer(request):
                             'FrameworkId_id': latest_approval.FrameworkId_id if latest_approval.FrameworkId_id else (latest_approval.FrameworkId.FrameworkId if latest_approval.FrameworkId else None),
                             'PolicyId': latest_approval.PolicyId_id if latest_approval.PolicyId_id else (latest_approval.PolicyId.PolicyId if latest_approval.PolicyId else None)
                         }
+                        previous_extracted_data = get_previous_extracted_data(latest_approval)
+                        approval_dict['PreviousExtractedData'] = previous_extracted_data
+                        approval_dict['ChangedFields'] = compute_changed_fields(latest_approval.ExtractedData, previous_extracted_data)
                         approvals.append(approval_dict)
                     else:
                         # Get user name for creator
@@ -3166,6 +3306,9 @@ def get_policy_approvals_by_reviewer(request):
                             'FrameworkId_id': new_approval.FrameworkId_id if new_approval.FrameworkId_id else (new_approval.FrameworkId.FrameworkId if new_approval.FrameworkId else None),
                             'PolicyId': new_approval.PolicyId_id if new_approval.PolicyId_id else (new_approval.PolicyId.PolicyId if new_approval.PolicyId else None)
                         }
+                        previous_extracted_data = get_previous_extracted_data(new_approval)
+                        approval_dict['PreviousExtractedData'] = previous_extracted_data
+                        approval_dict['ChangedFields'] = compute_changed_fields(extracted_data, previous_extracted_data)
                         approvals.append(approval_dict)
         
         # Process direct approvals that weren't found through Compliance query
@@ -3247,6 +3390,9 @@ def get_policy_approvals_by_reviewer(request):
                         'FrameworkId_id': approval.FrameworkId_id if approval.FrameworkId_id else (approval.FrameworkId.FrameworkId if approval.FrameworkId else None),
                         'PolicyId': approval.PolicyId_id if approval.PolicyId_id else (approval.PolicyId.PolicyId if approval.PolicyId else None)
                     }
+                    previous_extracted_data = get_previous_extracted_data(approval)
+                    approval_dict['PreviousExtractedData'] = previous_extracted_data
+                    approval_dict['ChangedFields'] = compute_changed_fields(approval.ExtractedData, previous_extracted_data)
                     approvals.append(approval_dict)
                     processed_identifiers.add(identifier)
         
@@ -3636,7 +3782,7 @@ def get_rejected_approvals(request, reviewer_id):
         debug_print(f"❌ Error in get_rejected_approvals: {str(e)}")
         import traceback
         traceback.print_exc()
-        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'error': 'Invalid request data'}, status=status.HTTP_400_BAD_REQUEST)
  
 @api_view(['GET'])
 @permission_classes([ComplianceViewPermission])
@@ -3685,7 +3831,7 @@ def get_all_users(request):
  
 @csrf_exempt
 @api_view(['POST'])
-@authentication_classes([])
+@authentication_classes([SessionAuthentication, BasicAuthentication])
 @permission_classes([ComplianceTogglePermission])
 @compliance_toggle_required
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
@@ -3988,7 +4134,7 @@ class ComplianceVersioningValidator:
 
 @csrf_exempt
 @api_view(['POST'])
-@authentication_classes([])
+@authentication_classes([SessionAuthentication, BasicAuthentication])
 @permission_classes([ComplianceDeactivatePermission])
 @compliance_deactivate_required
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
@@ -4167,7 +4313,7 @@ def deactivate_compliance(request, compliance_id):
 
 @csrf_exempt
 @api_view(['POST'])
-@authentication_classes([])
+@authentication_classes([SessionAuthentication, BasicAuthentication])
 @permission_classes([ComplianceApprovePermission])
 @compliance_approve_required
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
@@ -4286,7 +4432,7 @@ def approve_compliance_deactivation(request, approval_id):
 
 @csrf_exempt
 @api_view(['POST'])
-@authentication_classes([])
+@authentication_classes([SessionAuthentication, BasicAuthentication])
 @permission_classes([ComplianceApprovePermission])
 @compliance_approve_required
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
@@ -4431,7 +4577,7 @@ def test_analytics_endpoint(request):
 
 @api_view(['POST'])
 @csrf_exempt
-@authentication_classes([])
+@authentication_classes([SessionAuthentication, BasicAuthentication])
 @permission_classes([ComplianceAnalyticsPermission])
 @compliance_analytics_required
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
@@ -4640,7 +4786,7 @@ def get_compliance_analytics(request):
  #---------------------------------KPI Dashboard---------------------------------
  
 @api_view(['GET'])
-@authentication_classes([])
+@authentication_classes([SessionAuthentication, BasicAuthentication])
 @permission_classes([ComplianceKPIPermission])
 @compliance_kpi_required
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
@@ -5090,7 +5236,7 @@ def all_policies_get_frameworks(request):
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'error': 'Failed to fetch control categories'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
  
 @api_view(['GET'])
 @permission_classes([ComplianceFrameworkAccessPermission])
@@ -5142,7 +5288,7 @@ def all_policies_get_framework_version_policies(request, version_id):
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'error': 'Failed to create control category'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
  
 @api_view(['GET'])
 @permission_classes([ComplianceFrameworkAccessPermission])
@@ -5201,7 +5347,7 @@ def all_policies_get_policies(request):
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'error': 'Failed to update control category'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
  
 @api_view(['GET'])
 @permission_classes([ComplianceFrameworkPermission])
@@ -5332,7 +5478,7 @@ def all_policies_get_policy_versions(request, policy_id):
         import traceback
         debug_print(f"Error in all_policies_get_policy_versions: {str(e)}")
         traceback.print_exc()
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'error': 'Failed to fetch compliance business units'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
  
 @api_view(['GET'])
 @permission_classes([ComplianceFrameworkAccessPermission])
@@ -5418,7 +5564,7 @@ def all_policies_get_subpolicies(request):
         import traceback
         debug_print(f"Error in all_policies_get_subpolicies: {str(e)}")
         traceback.print_exc()
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'error': 'Failed to create compliance business unit'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
  
 @api_view(['GET'])
 @permission_classes([ComplianceFrameworkAccessPermission])
@@ -5453,7 +5599,7 @@ def all_policies_get_subpolicy_details(request, subpolicy_id):
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'error': 'Failed to update compliance business unit'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
  
 @api_view(['GET'])
 @permission_classes([ComplianceFrameworkAccessPermission])
@@ -5527,7 +5673,7 @@ def all_policies_get_framework_versions(request, framework_id):
         import traceback
         debug_print(f"Error in all_policies_get_framework_versions: {str(e)}")
         traceback.print_exc()
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'error': 'Failed to fetch subpolicy compliances'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
  
 @api_view(['GET'])
 @permission_classes([ComplianceFrameworkPermission])
@@ -5605,7 +5751,7 @@ def all_policies_get_policy_version_subpolicies(request, version_id):
         import traceback
         debug_print(f"Error in all_policies_get_policy_version_subpolicies: {str(e)}")
         traceback.print_exc()
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'error': 'Failed to fetch versioning summary'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
 @api_view(['GET'])
 @permission_classes([ComplianceViewPermission])
@@ -5852,14 +5998,15 @@ def all_policies_get_compliance_versions(request, compliance_id):
         
     except Exception as e:
         debug_print(f"Error in all_policies_get_compliance_versions: {str(e)}")
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'error': 'Failed to fetch compliance versions'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 from django.db import connection
 import logging
 
 # BRAND NEW API endpoint for cross-framework mapping - NO DECORATORS EXCEPT API_VIEW
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([ComplianceViewPermission])
+@compliance_view_required
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def cross_framework_get_compliances(request, framework_id):
@@ -5919,7 +6066,8 @@ def cross_framework_get_compliances(request, framework_id):
 
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([ComplianceViewPermission])
+@compliance_view_required
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_framework_compliances(request, framework_id):
@@ -6513,7 +6661,46 @@ def get_compliance_details(request, compliance_id):
     tenant_id = get_tenant_id_from_request(request)
 
     try:
-        compliance = get_object_or_404(Compliance, ComplianceId=compliance_id, tenant_id=tenant_id)
+        # Primary path: URL param is a ComplianceId
+        compliance = Compliance.objects.filter(
+            ComplianceId=compliance_id,
+            tenant_id=tenant_id
+        ).first()
+
+        # Fallback path: some screens send ApprovalId in this route param.
+        # Resolve ApprovalId -> Compliance using extracted compliance id or identifier.
+        if not compliance:
+            debug_print(f"⚠️ ComplianceId {compliance_id} not found; trying ComplianceApproval fallback")
+            approval = ComplianceApproval.objects.filter(ApprovalId=compliance_id).first()
+
+            if approval:
+                debug_print(f"✅ Found ComplianceApproval {approval.ApprovalId} with Identifier {approval.Identifier}")
+                extracted = approval.ExtractedData if isinstance(approval.ExtractedData, dict) else {}
+                mapped_compliance_id = extracted.get('ComplianceId') or extracted.get('compliance_id')
+
+                # Prefer explicit compliance id from approval payload.
+                if mapped_compliance_id:
+                    compliance = Compliance.objects.filter(
+                        ComplianceId=mapped_compliance_id,
+                        tenant_id=tenant_id
+                    ).first()
+                    if compliance:
+                        debug_print(f"✅ Resolved via ExtractedData ComplianceId: {mapped_compliance_id}")
+
+                # Fallback to latest compliance version by identifier.
+                if not compliance and approval.Identifier:
+                    compliance = Compliance.objects.filter(
+                        Identifier=approval.Identifier,
+                        tenant_id=tenant_id
+                    ).order_by('-ComplianceId').first()
+                    if compliance:
+                        debug_print(f"✅ Resolved via Identifier {approval.Identifier} -> ComplianceId {compliance.ComplianceId}")
+
+        if not compliance:
+            return Response({
+                'success': False,
+                'message': f'Compliance not found for id {compliance_id}'
+            }, status=404)
         
         # For editing/copying: Get the latest APPROVED version from ComplianceApproval, then fallback to Compliance table
         # For approval viewing: Use ComplianceApproval table if available
@@ -7198,11 +7385,10 @@ def test_notification(request):
             'db_record_count': recent_notifications.count()
         })
     except Exception as e:
-        import traceback
+        logging.exception("Error testing compliance notifications")
         return Response({
             'success': False,
-            'message': f'Error testing notification: {str(e)}',
-            'traceback': traceback.format_exc()
+            'message': 'Error testing notification'
         }, status=500)
 
 @api_view(['GET'])
@@ -7477,7 +7663,7 @@ def get_category_business_units(request):
             "data": units_data
         })
     except Exception as e:
-        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({"error": "Failed to fetch compliance categories"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['POST'])
 @permission_classes([ComplianceBusinessUnitPermission])
@@ -7517,11 +7703,11 @@ def add_category_business_unit(request):
             }
         })
     except Exception as e:
-        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({"error": "Failed to fetch compliance business units"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @csrf_exempt
 @api_view(['PUT'])
-@authentication_classes([])
+@authentication_classes([SessionAuthentication, BasicAuthentication])
 @permission_classes([ComplianceEditPermission])
 @compliance_edit_required
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
@@ -7550,11 +7736,7 @@ def edit_compliance(request, compliance_id):
             current_user_id = request.user.UserId
         if not current_user_id:
             current_user_id = request.session.get('user_id')
-        if not current_user_id and request.data.get('user_id'):
-            try:
-                current_user_id = int(request.data.get('user_id'))
-            except Exception:
-                current_user_id = None
+        # Never trust client payload identity for edit operations.
         
         # Get the current user's name (the latest creator) - only fetch needed fields
         current_user_name = 'Unknown User'
@@ -7865,7 +8047,7 @@ def edit_compliance(request, compliance_id):
 
 @csrf_exempt
 @api_view(['POST'])
-@authentication_classes([])
+@authentication_classes([SessionAuthentication, BasicAuthentication])
 @permission_classes([ComplianceClonePermission])
 @compliance_clone_required
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
@@ -8548,6 +8730,17 @@ def get_compliance_approvals_by_user(request, user_id):
         from ...routes.Policy.framework_filter_helper import get_active_framework_filter
         from ...models import Users
         
+        # Enforce object-level access: self only unless system admin
+        requester_user_id = RBACUtils.get_user_id_from_request(request)
+        if not requester_user_id:
+            return Response({'error': 'Authentication required'}, status=401)
+        try:
+            target_user_id = int(user_id)
+        except (TypeError, ValueError):
+            return Response({'error': 'Invalid user id'}, status=400)
+        if int(requester_user_id) != target_user_id and not RBACUtils.is_system_admin(requester_user_id):
+            return Response({'error': 'Forbidden'}, status=403)
+        
         # Helper function to get user name by ID
         def get_user_name_by_id(user_id):
             """Get user's full name or username by UserId"""
@@ -8576,7 +8769,10 @@ def get_compliance_approvals_by_user(request, user_id):
         
         debug_print(f"🔍 DEBUG: get_compliance_approvals_by_user called with framework_id: {framework_id}")
         
-        approvals = ComplianceApproval.objects.filter(UserId=user_id).order_by('-ApprovalId')
+        approvals = ComplianceApproval.objects.filter(
+            UserId=target_user_id,
+            FrameworkId__tenant_id=tenant_id
+        ).select_related('PolicyId', 'FrameworkId').order_by('-ApprovalId')
         
         # Apply framework filter if provided
         if framework_id:
@@ -8604,8 +8800,10 @@ def get_compliance_approvals_by_user(request, user_id):
                     approval_data['ExtractedData']['CreatedByName'] = user_name
         
         return Response(serialized_data, status=200)
-    except Exception as e:
-        return Response({'error': str(e)}, status=400)
+    except DatabaseError:
+        return Response({'error': 'Database temporarily unavailable. Please try again.'}, status=503)
+    except Exception:
+        return Response({'error': 'Unable to load user tasks at this time.'}, status=400)
 
 @api_view(['GET'])
 @permission_classes([ComplianceViewPermission])
@@ -8623,221 +8821,92 @@ def get_compliance_approvals_by_reviewer(request, user_id):
     try:
         from ...routes.Policy.framework_filter_helper import get_active_framework_filter
         from ...models import Users
-        
-        # Helper function to get user name by ID
-        def get_user_name_by_id(user_id):
-            """Get user's full name or username by UserId"""
-            if not user_id:
-                return None
-            try:
-                user = Users.objects.get(UserId=user_id, tenant_id=tenant_id)
-                # Try to get full name first
-                if user.FirstName or user.LastName:
-                    full_name = f"{user.FirstName or ''} {user.LastName or ''}".strip()
-                    if full_name:
-                        return full_name
-                # Fallback to username
-                return user.UserName if user.UserName else None
-            except Users.DoesNotExist:
-                return None
-            except Exception:
-                return None
-        
-        # Check for explicit framework filter in query params
-        framework_id = request.GET.get('framework_id', None)
-        
-        # If no explicit filter, check session-based framework filter
-        if not framework_id:
-            framework_id = get_active_framework_filter(request)
-        
+
+        # Check for explicit framework filter in query params, then session
+        framework_id = request.GET.get('framework_id', None) or get_active_framework_filter(request)
         debug_print(f"🔍 DEBUG: get_compliance_approvals_by_reviewer called with framework_id: {framework_id}")
-        
-        # Normalize user_id to integer to ensure proper matching
+
+        # Enforce object-level access: self only unless system admin
+        requester_user_id = RBACUtils.get_user_id_from_request(request)
+        if not requester_user_id:
+            return Response({'error': 'Authentication required'}, status=401)
+
+        # Normalize reviewer id
         try:
             reviewer_id = int(user_id) if user_id else None
             if not reviewer_id:
-                return Response({'error': 'Invalid reviewer_id. Must be a valid integer.'}, status=400)
-        except (ValueError, TypeError) as e:
-            return Response({'error': f'Invalid reviewer_id: An internal server error occurred. Must be a valid integer.'}, status=400)
-        
-        debug_print(f"🔍 DEBUG: Filtering compliance approvals by ReviewerId: {reviewer_id}")
-        
-        # CRITICAL APPROACH: 
-        # 1. Get ALL Identifiers that have at least one pending approval for this reviewer
-        # 2. For each Identifier, get ALL pending user versions (u*) regardless of ReviewerId
-        # 3. Select the LATEST one (highest ApprovalId) for each Identifier
-        # 4. This ensures we show u2, u3, etc. instead of old u1 versions
-        
-        debug_print(f"🔍 Step 1: Getting all Identifiers with user versions for reviewer {reviewer_id}...")
-        # Get all unique Identifiers that have user versions assigned to this reviewer
-        # We want to show the LATEST user version for each Identifier
-        reviewer_identifiers = ComplianceApproval.objects.filter(
+                return Response({'error': 'Invalid reviewer_id'}, status=400)
+        except (ValueError, TypeError):
+            return Response({'error': 'Invalid reviewer_id'}, status=400)
+        if int(requester_user_id) != reviewer_id and not RBACUtils.is_system_admin(requester_user_id):
+            return Response({'error': 'Forbidden'}, status=403)
+
+        # One-pass DB strategy:
+        # 1) filter all user versions for this reviewer (+ tenant/framework)
+        # 2) group by Identifier and get MAX(ApprovalId)
+        # 3) load only those latest rows with select_related to avoid N+1 serializer lookups
+        base_qs = ComplianceApproval.objects.filter(
+            FrameworkId__tenant_id=tenant_id,
             ReviewerId=reviewer_id,
             Version__startswith='u'
-        ).values_list('Identifier', flat=True).distinct()
-        
-        debug_print(f"✅ Found {len(reviewer_identifiers)} unique Identifiers with user versions for reviewer {reviewer_id}")
-        
-        # Step 2: For each Identifier, get ALL user versions and select the LATEST (highest ApprovalId)
-        filtered_approvals = []
-        
-        for identifier in reviewer_identifiers:
-            # CRITICAL FIX: Get user versions ONLY for this reviewer, then select the latest
-            # This ensures we show the latest version FOR THIS REVIEWER, not the overall latest
-            reviewer_versions_for_identifier = ComplianceApproval.objects.filter(
-                Identifier=identifier,
-                ReviewerId=reviewer_id,  # ONLY get versions for this reviewer
-                Version__startswith='u'
-            ).order_by('-ApprovalId')  # Latest first (highest ApprovalId)
-            
-            # Debug logging for the specific identifier we're tracking
-            if identifier == 'COMP-5577-260112-80f21c':
-                # First, check ALL records for this identifier (no filters)
-                all_for_identifier = ComplianceApproval.objects.filter(Identifier=identifier)
-                debug_print(f"🔍 DEBUG: TOTAL records for {identifier}: {all_for_identifier.count()}")
-                for v in all_for_identifier:
-                    debug_print(f"   ALL - ApprovalId: {v.ApprovalId}, Version: {v.Version}, ReviewerId: {v.ReviewerId}, ApprovedNot: {v.ApprovedNot} (type: {type(v.ApprovedNot)})")
-                
-                # Now check filtered results
-                versions_list = list(reviewer_versions_for_identifier)
-                debug_print(f"🔍 DEBUG: FILTERED versions for ReviewerId {reviewer_id} for {identifier}: {len(versions_list)}")
-                for v in versions_list:
-                    debug_print(f"   FILTERED - ApprovalId: {v.ApprovalId}, Version: {v.Version}, ReviewerId: {v.ReviewerId}, ApprovedNot: {v.ApprovedNot}")
-            
-            if reviewer_versions_for_identifier.exists():
-                # Get the latest one for THIS REVIEWER (highest ApprovalId = first in sorted list)
-                latest_approval = reviewer_versions_for_identifier.first()
-                
-                # Debug for the specific identifier
-                if identifier == 'COMP-5577-260112-80f21c':
-                    debug_print(f"🔍 DEBUG: Selected latest approval for {identifier}: ApprovalId={latest_approval.ApprovalId}, Version={latest_approval.Version}, ReviewerId={latest_approval.ReviewerId}, ApprovedNot={latest_approval.ApprovedNot}")
-                
-                # Add to results (we already filtered by reviewer_id above)
-                filtered_approvals.append(latest_approval)
-                debug_print(f"✅ Added LATEST user version for {identifier}: {latest_approval.Version} (ApprovalId: {latest_approval.ApprovalId}, ApprovedNot: {latest_approval.ApprovedNot})")
-        
-        approvals = filtered_approvals
-        debug_print(f"✅ Filtered to {len(approvals)} latest user versions for reviewer {reviewer_id}")
-        
-        # Debug: Check what we got for the specific identifier
-        debug_identifier = 'COMP-5577-260112-80f21c'
-        debug_approval = next((a for a in approvals if a.Identifier == debug_identifier), None)
-        if debug_approval:
-            debug_print(f"🔍 DEBUG: Selected approval for {debug_identifier}:")
-            debug_print(f"   - ApprovalId: {debug_approval.ApprovalId}, Version: {debug_approval.Version}, ReviewerId: {debug_approval.ReviewerId}")
-        else:
-            debug_print(f"⚠️ DEBUG: No approval selected for {debug_identifier}")
-            # Check what exists
-            all_for_debug = ComplianceApproval.objects.filter(
-                Identifier=debug_identifier,
-                ApprovedNot=None,
-                Version__startswith='u'
-            ).order_by('-ApprovalId')
-            debug_print(f"   Found {all_for_debug.count()} pending user versions in database:")
-            for a in all_for_debug:
-                debug_print(f"      - ApprovalId: {a.ApprovalId}, Version: {a.Version}, ReviewerId: {a.ReviewerId}, ApprovedNot: {a.ApprovedNot}")
-        
-        # Log all framework IDs in the results before filtering
-        if approvals:
-            framework_ids_before = [a.FrameworkId_id for a in approvals if hasattr(a, 'FrameworkId_id')]
-            debug_print(f"🔍 DEBUG: Framework IDs in results before filter: {list(set(framework_ids_before))}")
-        
-        # Apply framework filter if provided
+        )
         if framework_id:
-            # Normalize framework_id to integer for proper matching
             try:
-                framework_id_int = int(framework_id) if framework_id else None
+                framework_id_int = int(framework_id)
+                base_qs = base_qs.filter(FrameworkId_id=framework_id_int)
             except (ValueError, TypeError):
-                framework_id_int = None
-            
-            if framework_id_int:
-                debug_print(f"🔍 DEBUG: Filtering compliance reviewer tasks by framework_id: {framework_id_int}")
-                approvals_before_count = len(approvals)
-                # Filter by FrameworkId_id
-                approvals = [a for a in approvals if hasattr(a, 'FrameworkId_id') and a.FrameworkId_id == framework_id_int]
-                approvals_after_count = len(approvals)
-                debug_print(f"✅ Framework filter applied. Before: {approvals_before_count}, After: {approvals_after_count} compliance reviewer tasks.")
-                
-                # If framework filter resulted in 0 results, log a warning
-                if approvals_after_count == 0 and approvals_before_count > 0:
-                    debug_print(f"⚠️ WARNING: Framework filter {framework_id_int} excluded all {approvals_before_count} records for reviewer {reviewer_id}")
-                    debug_print(f"⚠️ Consider checking if framework_id filter should be applied or if records have correct FrameworkId")
-            else:
-                debug_print(f"⚠️ WARNING: Invalid framework_id '{framework_id}' - skipping framework filter")
-        else:
-            debug_print(f"ℹ️ No framework filter applied - returning all records for reviewer {reviewer_id}")
-        
-        # Serialize the approvals first
-        try:
-            serializer = ComplianceApprovalSerializer(approvals, many=True)
-            serialized_data = serializer.data
-            
-            # Use ExtractedData directly from ComplianceApproval table - DO NOT sync from Compliance table
-            # The ExtractedData in ComplianceApproval is the source of truth for reviewer tasks
-            for approval_data in serialized_data:
-                identifier = approval_data.get('Identifier')
-                extracted_data = approval_data.get('ExtractedData', {})
-                
-                # Use ExtractedData directly from ComplianceApproval - don't overwrite with Compliance table data
-                if not extracted_data:
-                    extracted_data = {}
-                
-                # Ensure essential fields are present
-                if not extracted_data.get('type'):
-                    extracted_data['type'] = 'compliance'
-                if not extracted_data.get('Identifier') and identifier:
-                    extracted_data['Identifier'] = identifier
-                
-                # Ensure CreatedByName is present in ExtractedData (only if missing)
-                if 'CreatedByName' not in extracted_data or not extracted_data.get('CreatedByName'):
-                    user_name = get_user_name_by_id(approval_data.get('UserId'))
-                    if user_name:
-                        extracted_data['CreatedByName'] = user_name
-                
-                approval_data['ExtractedData'] = extracted_data
-                
-                debug_print(f"✅ Using ExtractedData directly from ComplianceApproval for Identifier: {identifier}")
-                debug_print(f"   📝 ComplianceItemDescription: '{extracted_data.get('ComplianceItemDescription', 'NOT FOUND')}'")
-                debug_print(f"   👤 CreatedByName: '{extracted_data.get('CreatedByName', 'NOT FOUND')}'")
-            
-            debug_print(f"✅ Successfully serialized {len(serialized_data)} compliance approvals")
-            return Response(serialized_data, status=200)
-        except Exception as serialize_error:
-            debug_print(f"❌ ERROR during serialization: {str(serialize_error)}")
-            import traceback
-            traceback.print_exc()
-            # Try to get at least some data even if serialization fails partially
-            try:
-                # Get basic data without serializer
-                basic_data = []
-                for approval in approvals[:10]:  # Limit to first 10 to avoid too much data
-                    basic_data.append({
-                        'ApprovalId': approval.ApprovalId,
-                        'Identifier': approval.Identifier,
-                        'ReviewerId': approval.ReviewerId,
-                        'UserId': approval.UserId,
-                        'Version': approval.Version,
-                        'ApprovedNot': approval.ApprovedNot,
-                        'FrameworkId': approval.FrameworkId_id if hasattr(approval, 'FrameworkId_id') else None,
-                        'error': f'Serialization failed: {str(serialize_error)}'
-                    })
-                return Response({
-                    'error': f'Serialization error: {str(serialize_error)}',
-                    'partial_data': basic_data,
-                    'total_count': approvals.count()
-                }, status=200)  # Return 200 with error message so frontend can handle it
-            except Exception as fallback_error:
-                debug_print(f"❌ ERROR in fallback serialization: {str(fallback_error)}")
-                return Response({
-                    'error': f'Serialization failed: {str(serialize_error)}. Fallback also failed: {str(fallback_error)}'
-                }, status=400)
+                pass
+
+        latest_ids = list(
+            base_qs.values('Identifier')
+            .annotate(latest_id=Max('ApprovalId'))
+            .values_list('latest_id', flat=True)
+        )
+
+        approvals = ComplianceApproval.objects.filter(
+            FrameworkId__tenant_id=tenant_id,
+            ApprovalId__in=latest_ids
+        ).select_related('PolicyId', 'FrameworkId').order_by('-ApprovalId')
+
+        serializer = ComplianceApprovalSerializer(approvals, many=True)
+        serialized_data = serializer.data
+
+        # Batch resolve creator names to avoid per-row user lookups
+        user_ids = {item.get('UserId') for item in serialized_data if item.get('UserId')}
+        users_map = {}
+        if user_ids:
+            users = Users.objects.filter(UserId__in=user_ids, tenant_id=tenant_id).only('UserId', 'FirstName', 'LastName', 'UserName')
+            for u in users:
+                full_name = f"{u.FirstName or ''} {u.LastName or ''}".strip()
+                users_map[u.UserId] = full_name or u.UserName or None
+
+        for approval_data in serialized_data:
+            identifier = approval_data.get('Identifier')
+            extracted_data = approval_data.get('ExtractedData') or {}
+
+            if not extracted_data.get('type'):
+                extracted_data['type'] = 'compliance'
+            if not extracted_data.get('Identifier') and identifier:
+                extracted_data['Identifier'] = identifier
+            if not extracted_data.get('CreatedByName'):
+                creator_name = users_map.get(approval_data.get('UserId'))
+                if creator_name:
+                    extracted_data['CreatedByName'] = creator_name
+
+            approval_data['ExtractedData'] = extracted_data
+
+        debug_print(f"✅ Returning {len(serialized_data)} compliance reviewer tasks for reviewer {reviewer_id}")
+        return Response(serialized_data, status=200)
+
+    except DatabaseError as db_err:
+        debug_print(f"❌ DB error in get_compliance_approvals_by_reviewer: {str(db_err)}")
+        return Response({
+            'error': 'Database temporarily unavailable. Please try again.'
+        }, status=503)
     except Exception as e:
         debug_print(f"❌ ERROR in get_compliance_approvals_by_reviewer: {str(e)}")
-        import traceback
-        traceback.print_exc()
         return Response({
-            'error': str(e),
-            'type': type(e).__name__
+            'error': 'Unable to load reviewer tasks at this time.'
         }, status=400)
 
 @api_view(['GET'])
@@ -8965,7 +9034,7 @@ def get_compliance_approvals(request):
         import traceback
         traceback.print_exc()
         return Response({
-            'error': str(e),
+            'error': 'Failed to load versioning data',
             'type': type(e).__name__
         }, status=400)
 
@@ -9437,7 +9506,8 @@ def get_compliance_approvals(request):
 
 
 @api_view(['GET'])
-@permission_classes([AllowAny])  # Allow anyone for cross-framework mapping
+@permission_classes([ComplianceViewPermission])
+@compliance_view_required
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_framework_compliances(request, framework_id):
@@ -9687,7 +9757,7 @@ def export_compliances(request, export_format, item_type=None, item_id=None):
 
 @api_view(['POST'])
 @csrf_exempt
-@authentication_classes([])
+@authentication_classes([SessionAuthentication, BasicAuthentication])
 @permission_classes([ComplianceExportPermission])
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
@@ -9968,7 +10038,8 @@ def get_compliance_categories_and_business_units(request):
 
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([ComplianceViewPermission])
+@compliance_view_required
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_all_compliances_for_audit_management_public(request):
@@ -10084,7 +10155,8 @@ def get_all_compliances_for_audit_management_public(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([ComplianceViewPermission])
+@compliance_view_required
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_categories_for_audit_management(request):
@@ -10151,7 +10223,8 @@ def get_categories_for_audit_management(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([ComplianceViewPermission])
+@compliance_view_required
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_business_units_for_audit_management(request):
@@ -10269,7 +10342,8 @@ def initialize_default_categories_data():
         return 0
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([ComplianceViewPermission])
+@compliance_view_required
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def debug_categories_and_business_units(request):
@@ -10312,7 +10386,8 @@ def debug_categories_and_business_units(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET', 'POST'])
-@permission_classes([AllowAny])
+@permission_classes([ComplianceViewPermission])
+@compliance_view_required
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def test_compliance_export(request):
@@ -10325,7 +10400,8 @@ def test_compliance_export(request):
     })
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([ComplianceViewPermission])
+@compliance_view_required
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_frameworks_public(request):
@@ -10825,7 +10901,7 @@ def get_baseline_configurations(request, framework_id):
        
         return Response({'success': True, 'data': result})
     except Exception as e:
-        return Response({'success': False, 'error': str(e)}, status=500)
+        return Response({'success': False, 'error': 'Failed to fetch compliance baselines'}, status=500)
  
  
 @api_view(['GET'])
@@ -10848,26 +10924,26 @@ def get_active_baseline(request, framework_id, baseline_level):
         serializer = ComplianceBaselineSerializer(baselines, many=True)
         return Response({'success': True, 'data': serializer.data})
     except Exception as e:
-        return Response({'success': False, 'error': str(e)}, status=500)
+        return Response({'success': False, 'error': 'Failed to create baseline version'}, status=500)
  
  
 @csrf_exempt
 @api_view(['POST'])
-@authentication_classes([])
-@permission_classes([AllowAny])
+@authentication_classes([SessionAuthentication, BasicAuthentication])
+@permission_classes([ComplianceEditPermission])
+@compliance_edit_required
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def create_baseline_version(request):
     """Create a new baseline version (clones existing and updates)"""
-    # Manual authentication check since DRF IsAuthenticated doesn't work with custom auth
     try:
-        user_id = RBACUtils.get_user_id_from_request(request)
+        user_id = RBACUtils.get_user_id_from_request(request) or getattr(request.user, 'id', None)
         if not user_id:
             return Response({
                 'success': False,
                 'error': 'Authentication required'
             }, status=401)
-    except Exception as e:
+    except Exception:
         return Response({
             'success': False,
             'error': 'Authentication required'
@@ -10995,26 +11071,27 @@ def create_baseline_version(request):
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return Response({'success': False, 'error': str(e)}, status=500)
+        return Response({'success': False, 'error': 'Failed to create single baseline version'}, status=500)
  
  
 @csrf_exempt
 @api_view(['POST'])
-@authentication_classes([])
-@permission_classes([AllowAny])
+@authentication_classes([SessionAuthentication, BasicAuthentication])
+@permission_classes([ComplianceEditPermission])
+@compliance_edit_required
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def create_single_baseline_version(request):
     """Create a new baseline version for a single compliance entry only"""
-    # Manual authentication check
+    # Enforce server-side identity from authenticated context
     try:
-        user_id = RBACUtils.get_user_id_from_request(request)
+        user_id = RBACUtils.get_user_id_from_request(request) or getattr(request.user, 'id', None)
         if not user_id:
             return Response({
                 'success': False,
                 'error': 'Authentication required'
             }, status=401)
-    except Exception as e:
+    except Exception:
         return Response({
             'success': False,
             'error': 'Authentication required'
@@ -11083,7 +11160,7 @@ def create_single_baseline_version(request):
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return Response({'success': False, 'error': str(e)}, status=500)
+        return Response({'success': False, 'error': 'Failed to fetch baseline version history'}, status=500)
  
  
 @api_view(['PUT'])
@@ -11116,5 +11193,5 @@ def set_active_baseline(request, framework_id, baseline_level, version):
        
         return Response({'success': True, 'message': f'Version {version} activated'})
     except Exception as e:
-        return Response({'success': False, 'error': str(e)}, status=500)
+        return Response({'success': False, 'error': 'Failed to fetch latest baseline version'}, status=500)
  

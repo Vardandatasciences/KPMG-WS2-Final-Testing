@@ -2028,7 +2028,7 @@ class DataSubjectRequest(EncryptedFieldsMixin, models.Model):
     FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
    
     class Meta:
-        db_table = 'DataSubjectRequest'
+        db_table = 'datasubjectrequest'
         ordering = ['-created_at']
         verbose_name = 'Data Subject Request'
         verbose_name_plural = 'Data Subject Requests'

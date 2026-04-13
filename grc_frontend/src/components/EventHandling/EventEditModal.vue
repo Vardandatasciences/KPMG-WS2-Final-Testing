@@ -184,7 +184,7 @@ import { ref, onMounted, watch } from 'vue'
 import { eventService } from '../../services/api'
 import { MODULES } from '../../utils/constants'
 import PopupModal from '../../modules/popus/PopupModal.vue'
-import axios from 'axios'
+import apiService from '@/services/apiService.js'
 
 export default {
   name: 'EventEditModal',
@@ -242,11 +242,11 @@ export default {
     const fetchFrameworks = async () => {
       try {
         console.log('🚀 DEBUG: EventEditModal fetchFrameworks called - using /api/frameworks/ endpoint')
-        const response = await axios.get('/api/frameworks/')
-        console.log('🔍 DEBUG: Frameworks response in EventEditModal:', response.data)
+        const response = await apiService.get('/api/frameworks/')
+        console.log('🔍 DEBUG: Frameworks response in EventEditModal:', response)
         
         // Map the response to match the expected format
-        frameworks.value = response.data.map(fw => ({
+        frameworks.value = response.map(fw => ({
           FrameworkId: fw.FrameworkId,
           FrameworkName: fw.FrameworkName
         }))
@@ -268,13 +268,7 @@ export default {
 
     const fetchUsers = async () => {
       try {
-        const userId = localStorage.getItem('user_id')
-        if (!userId) {
-          console.error('No user ID found in localStorage')
-          return
-        }
-        
-        const response = await eventService.getUsersForReviewer(userId)
+        const response = await eventService.getUsersForReviewer()
         console.log('Users response:', response.data) // Debug log
         if (response.data.success) {
           users.value = response.data.users || []
@@ -291,13 +285,7 @@ export default {
 
     const fetchCurrentUser = async () => {
       try {
-        const userId = localStorage.getItem('user_id')
-        if (!userId) {
-          console.error('No user ID found in localStorage')
-          return
-        }
-        
-        const response = await eventService.getCurrentUser(userId)
+        const response = await eventService.getCurrentUser()
         console.log('Current user response:', response.data) // Debug log
         if (response.data.success) {
           const currentUser = response.data.user

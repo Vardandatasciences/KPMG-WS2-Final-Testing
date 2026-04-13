@@ -266,7 +266,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
-import { API_BASE_URL, API_ENDPOINTS, axiosInstance } from '../config/api.js';
+import { API_ENDPOINTS, axiosInstance } from '../config/api.js';
 
 // Define component name
 defineOptions({
@@ -396,46 +396,32 @@ const loadLogs = async () => {
   loading.value = true;
   error.value = null;
   try {
-    const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
-    if (!token) {
-      throw new Error('No authentication token found');
-    }
-
     // Build query parameters
-    const params = new URLSearchParams({
-      page: currentPage.value.toString(),
-      page_size: pageSize.value.toString()
-    });
+    const params = {
+      page: currentPage.value,
+      page_size: pageSize.value
+    };
     
     // Add date filters if provided (format: YYYY-MM-DD for backend)
     if (startDate.value) {
       // Ensure date is in YYYY-MM-DD format
       const startDateFormatted = new Date(startDate.value).toISOString().split('T')[0];
-      params.append('start_date', startDateFormatted);
+      params.start_date = startDateFormatted;
     }
     if (endDate.value) {
       // Ensure date is in YYYY-MM-DD format
       const endDateFormatted = new Date(endDate.value).toISOString().split('T')[0];
-      params.append('end_date', endDateFormatted);
+      params.end_date = endDateFormatted;
     }
     
     // Add search query if provided
     if (search.value && search.value.trim()) {
-      params.append('search', search.value.trim());
+      params.search = search.value.trim();
     }
 
-    const response = await fetch(`${API_BASE_URL}/api/system-logs/?${params.toString()}`, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to load logs: ${response.statusText}`);
-    }
-
-    const data = await response.json();
+    // Use unified axios instance (cookie/session auth + interceptors)
+    const response = await axiosInstance.get(API_ENDPOINTS.SYSTEM_LOGS, { params });
+    const data = response?.data || response;
     
     if (data.success) {
       logs.value = data.data || [];
@@ -581,13 +567,6 @@ const exportLogs = async () => {
   exporting.value = true;
   
   try {
-    const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
-    if (!token) {
-      alert('No authentication token found');
-      exporting.value = false;
-      return;
-    }
-
     // Generate filename with current date and filters
     const now = new Date();
     const dateStr = now.toISOString().split('T')[0];

@@ -113,7 +113,8 @@ def _build_compliance_export_data(tenant_id, framework_id=None, policy_id=None, 
 
 @api_view(['POST'])
 @authentication_classes([SessionAuthentication, BasicAuthentication])
-@permission_classes([AllowAny])  # Will be replaced with proper RBAC later
+@permission_classes([ComplianceExportPermission])
+@compliance_export_required
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def export_compliance_management(request):
@@ -149,7 +150,13 @@ def export_compliance_management(request):
         # Get request data
         export_format = request.data.get('export_format', 'xlsx')
         compliance_data = request.data.get('compliance_data', [])
-        user_id = request.data.get('user_id', 'default_user')
+        resolved_user_id = RBACUtils.get_user_id_from_request(request) or getattr(request.user, 'id', None)
+        if not resolved_user_id:
+            return Response({
+                'success': False,
+                'error': 'Authentication required'
+            }, status=status.HTTP_401_UNAUTHORIZED)
+        user_id = str(resolved_user_id)
         file_name = request.data.get('file_name', 'compliance_management_export')
         # Optional scope information for server-side aggregation
         scope = request.data.get('scope', {}) or {}
@@ -164,18 +171,19 @@ def export_compliance_management(request):
             except (json.JSONDecodeError, ValueError):
                 compliance_data = []
 
-        # If no compliance_data was provided, build it in one go on the server
-        if not compliance_data:
-            logger.info(
-                f"No compliance_data provided, building export on server "
-                f"(framework_id={framework_id}, policy_id={policy_id}, subpolicy_id={subpolicy_id})"
-            )
-            compliance_data = _build_compliance_export_data(
-                tenant_id=tenant_id,
-                framework_id=framework_id,
-                policy_id=policy_id,
-                subpolicy_id=subpolicy_id,
-            )
+        # Never trust client-supplied compliance rows for export content.
+        # Build export data server-side from tenant-scoped records.
+        if compliance_data:
+            logger.warning("Ignoring client-supplied compliance_data for secure server-side export generation")
+        logger.info(
+            f"Building export on server (framework_id={framework_id}, policy_id={policy_id}, subpolicy_id={subpolicy_id})"
+        )
+        compliance_data = _build_compliance_export_data(
+            tenant_id=tenant_id,
+            framework_id=framework_id,
+            policy_id=policy_id,
+            subpolicy_id=subpolicy_id,
+        )
         
         # Validate required fields - check for empty list or None AFTER server-side aggregation
         if not compliance_data or (isinstance(compliance_data, list) and len(compliance_data) == 0):
@@ -316,13 +324,14 @@ def export_compliance_management(request):
         logger.error(f"Compliance export error: {str(e)}")
         return Response({
             'success': False,
-            'error': str(e),
+            'error': 'An unexpected error occurred during export',
             'message': 'An unexpected error occurred during export'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
 @authentication_classes([SessionAuthentication, BasicAuthentication])
-@permission_classes([AllowAny])  # Will be replaced with proper RBAC later
+@permission_classes([ComplianceExportPermission])
+@compliance_export_required
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_export_status(request, export_id):
@@ -333,8 +342,15 @@ def get_export_status(request, export_id):
     tenant_id = get_tenant_id_from_request(request)
 
     try:
+        resolved_user_id = RBACUtils.get_user_id_from_request(request) or getattr(request.user, 'id', None)
+        if not resolved_user_id:
+            return Response({
+                'success': False,
+                'error': 'Authentication required'
+            }, status=status.HTTP_401_UNAUTHORIZED)
+
         # Query the export task from the database
-        export_task = ExportTask.objects.get(id=export_id)
+        export_task = ExportTask.objects.get(id=export_id, user_id=str(resolved_user_id))
         
         response_data = {
             'success': True,
@@ -361,13 +377,14 @@ def get_export_status(request, export_id):
         logger.error(f"Error getting export status: {str(e)}")
         return Response({
             'success': False,
-            'error': str(e),
+            'error': 'Failed to get export status',
             'message': 'Failed to get export status'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
 @authentication_classes([SessionAuthentication, BasicAuthentication])
-@permission_classes([AllowAny])  # Will be replaced with proper RBAC later
+@permission_classes([ComplianceExportPermission])
+@compliance_export_required
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def list_export_history(request):
@@ -378,13 +395,30 @@ def list_export_history(request):
     tenant_id = get_tenant_id_from_request(request)
 
     try:
-        user_id = request.GET.get('user_id', 'default_user')
-        
-        # This would typically query the export history from the database
-        # For now, return a simple response
+        resolved_user_id = RBACUtils.get_user_id_from_request(request) or getattr(request.user, 'id', None)
+        if not resolved_user_id:
+            return Response({
+                'success': False,
+                'error': 'Authentication required'
+            }, status=status.HTTP_401_UNAUTHORIZED)
+
+        exports = ExportTask.objects.filter(user_id=str(resolved_user_id)).order_by('-created_at')[:50]
+
         return Response({
             'success': True,
-            'exports': [],
+            'exports': [
+                {
+                    'id': item.id,
+                    'status': item.status,
+                    'file_name': item.file_name,
+                    'file_type': item.file_type,
+                    'file_url': item.s3_url,
+                    'created_at': item.created_at.isoformat() if item.created_at else None,
+                    'completed_at': item.completed_at.isoformat() if item.completed_at else None,
+                    'error': item.error,
+                }
+                for item in exports
+            ],
             'message': 'Export history retrieved successfully'
         }, status=status.HTTP_200_OK)
     
@@ -392,6 +426,6 @@ def list_export_history(request):
         logger.error(f"Error getting export history: {str(e)}")
         return Response({
             'success': False,
-            'error': str(e),
+            'error': 'Failed to get export history',
             'message': 'Failed to get export history'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

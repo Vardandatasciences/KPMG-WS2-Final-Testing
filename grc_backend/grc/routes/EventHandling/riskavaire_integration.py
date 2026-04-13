@@ -5,10 +5,17 @@ This module handles automatic event creation based on RiskAvaire tool triggers.
 It monitors risk, compliance, and audit conditions and creates appropriate events.
 """
 
+from django.conf import settings
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import AllowAny
+from rest_framework.authentication import SessionAuthentication
+
+
+class CsrfExemptSessionAuthentication(SessionAuthentication):
+    def enforce_csrf(self, request):
+        return
 from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from django.utils.decorators import method_decorator
 from django.db.models import Q
@@ -16,6 +23,8 @@ from django.utils import timezone
 from datetime import datetime, timedelta
 import json
 import logging
+import hmac
+import hashlib
 
 from ...rbac.permissions import EventViewAllPermission, EventViewModulePermission
 from ...rbac.utils import RBACUtils
@@ -30,9 +39,46 @@ from ...tenant_utils import (
     require_tenant, tenant_filter, get_tenant_id_from_request,
     validate_tenant_access, get_tenant_aware_queryset
 )
+from ...utils.log_sanitize import sanitize_for_log
 
 # Configure logging
 logger = logging.getLogger(__name__)
+
+
+def _riskavaire_log_exc(message: str, exc: BaseException) -> None:
+    logger.error("%s: %s", message, sanitize_for_log(exc, max_len=800))
+
+
+def _riskavaire_hmac_reject_response(request):
+    """
+    Production (DEBUG=False): RISKAVAIRE_WEBHOOK_SECRET must be set or requests are rejected.
+    When secret is set: require X-Riskavaire-Signature: sha256=<hmac_sha256_hex> over raw body.
+    Returns a DRF Response if rejected, or None if allowed.
+    """
+    secret = (getattr(settings, "RISKAVAIRE_WEBHOOK_SECRET", None) or "").strip()
+    if not getattr(settings, "DEBUG", True):
+        if not secret:
+            logger.error(
+                "RiskAvaire webhook rejected: RISKAVAIRE_WEBHOOK_SECRET is required when DEBUG is False"
+            )
+            return Response(
+                {"success": False, "message": "Service temporarily unavailable."},
+                status=503,
+            )
+    if not secret:
+        return None
+    body = getattr(request, "body", b"") or b""
+    if not isinstance(body, bytes):
+        body = bytes(body)
+    expected_hex = hmac.new(secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
+    raw = (request.META.get("HTTP_X_RISKAVAIRE_SIGNATURE") or "").strip()
+    if raw.lower().startswith("sha256="):
+        raw = raw[7:].strip()
+    if not raw or not hmac.compare_digest(expected_hex, raw):
+        logger.warning("RiskAvaire request rejected: missing or invalid HMAC signature")
+        return Response({"success": False, "message": "Unauthorized"}, status=401)
+    return None
+
 
 def _should_show_event_for_user(user_id, linked_record_type):
     """
@@ -154,11 +200,13 @@ class RiskAvaireEventTrigger:
     """
     
     @staticmethod
-    def create_risk_event(risk_instance, trigger_type="risk_detected"):
+    def create_risk_event(risk_instance, trigger_type="risk_detected", *, tenant_id=None):
         """
-        Create an event when a risk is detected or status changes
+        Create an event when a risk is detected or status changes.
+        tenant_id must match the request/integration context for multi-tenant isolation.
         """
         try:
+            resolved_tenant = tenant_id if tenant_id is not None else getattr(risk_instance, 'tenant_id', None)
             # Determine event details based on trigger type
             event_titles = {
                 "risk_detected": f"Risk Detected: {risk_instance.RiskTitle}",
@@ -210,11 +258,13 @@ class RiskAvaireEventTrigger:
                 'StartDate': timezone.now().date(),
                 'EndDate': risk_instance.MitigationDueDate if risk_instance.MitigationDueDate else (timezone.now().date() + timedelta(days=30)),
                 'RecurrenceType': 'Non-Recurring',
-                'CreatedBy': Users.objects.filter(tenant_id=tenant_id, UserId=risk_instance.UserId).first() if risk_instance.UserId else None,
-                'Owner': Users.objects.filter(tenant_id=tenant_id, UserId=risk_instance.UserId).first() if risk_instance.UserId else None,
-                'Reviewer': Users.objects.filter(tenant_id=tenant_id, UserId=risk_instance.ReviewerId).first() if risk_instance.ReviewerId else None,
+                'CreatedBy': Users.objects.filter(tenant_id=resolved_tenant, UserId=risk_instance.UserId).first() if (resolved_tenant and risk_instance.UserId) else None,
+                'Owner': Users.objects.filter(tenant_id=resolved_tenant, UserId=risk_instance.UserId).first() if (resolved_tenant and risk_instance.UserId) else None,
+                'Reviewer': Users.objects.filter(tenant_id=resolved_tenant, UserId=risk_instance.ReviewerId).first() if (resolved_tenant and risk_instance.ReviewerId) else None,
                 'IsTemplate': False
             }
+            if resolved_tenant is not None:
+                event_data['tenant_id'] = resolved_tenant
             
             event = Event.objects.create(**event_data)
             logger.info(f"Created risk event {event.EventId_Generated} for risk {risk_instance.RiskInstanceId}")
@@ -222,19 +272,20 @@ class RiskAvaireEventTrigger:
             # Send email notifications for event creation
             try:
                 from ...routes.Global.notification_service import NotificationService
+                from ...routes.Global.notifications import send_event_aware_multi_channel
                 notification_service = NotificationService()
                 
                 # Get recipients: Owner, Reviewer, and risk creator
                 recipients = []
                 if event.Owner and hasattr(event.Owner, 'Email') and event.Owner.Email:
-                    recipients.append(('owner', event.Owner.Email, event.Owner.UserName or event.Owner.Email.split('@')[0]))
+                    recipients.append(('owner', event.Owner.Email, event.Owner.UserName or event.Owner.Email.split('@')[0], event.Owner.UserId))
                 if event.Reviewer and hasattr(event.Reviewer, 'Email') and event.Reviewer.Email:
-                    recipients.append(('reviewer', event.Reviewer.Email, event.Reviewer.UserName or event.Reviewer.Email.split('@')[0]))
+                    recipients.append(('reviewer', event.Reviewer.Email, event.Reviewer.UserName or event.Reviewer.Email.split('@')[0], event.Reviewer.UserId))
                 if event.CreatedBy and hasattr(event.CreatedBy, 'Email') and event.CreatedBy.Email:
-                    recipients.append(('creator', event.CreatedBy.Email, event.CreatedBy.UserName or event.CreatedBy.Email.split('@')[0]))
+                    recipients.append(('creator', event.CreatedBy.Email, event.CreatedBy.UserName or event.CreatedBy.Email.split('@')[0], event.CreatedBy.UserId))
                 
                 # Send notifications to all recipients
-                for role, email, name in recipients:
+                for role, email, name, uid in recipients:
                     try:
                         notification_data = {
                             'notification_type': 'eventCreated',
@@ -248,18 +299,20 @@ class RiskAvaireEventTrigger:
                                 event.Category or 'General'
                             ]
                         }
-                        notification_service.send_multi_channel_notification(notification_data)
+                        send_event_aware_multi_channel(
+                            notification_service, notification_data, event.EventId, recipient_user_id=uid
+                        )
                         logger.info(f"Sent event creation notification to {role} ({email})")
                     except Exception as notify_error:
-                        logger.error(f"Error sending notification to {email}: {str(notify_error)}")
+                        _riskavaire_log_exc(f"Error sending notification to {email}", notify_error)
             except Exception as e:
-                logger.error(f"Error in event notification service: {str(e)}")
+                _riskavaire_log_exc("Error in event notification service", e)
                 # Don't fail event creation if notifications fail
             
             return event
             
         except Exception as e:
-            logger.error(f"Error creating risk event: {str(e)}")
+            _riskavaire_log_exc("Error creating risk event", e)
             return None
     
     @staticmethod
@@ -315,19 +368,20 @@ class RiskAvaireEventTrigger:
             # Send email notifications for event creation
             try:
                 from ...routes.Global.notification_service import NotificationService
+                from ...routes.Global.notifications import send_event_aware_multi_channel
                 notification_service = NotificationService()
                 
                 # Get recipients: Owner, Reviewer, and compliance creator
                 recipients = []
                 if event.Owner and hasattr(event.Owner, 'Email') and event.Owner.Email:
-                    recipients.append(('owner', event.Owner.Email, event.Owner.UserName or event.Owner.Email.split('@')[0]))
+                    recipients.append(('owner', event.Owner.Email, event.Owner.UserName or event.Owner.Email.split('@')[0], event.Owner.UserId))
                 if event.Reviewer and hasattr(event.Reviewer, 'Email') and event.Reviewer.Email:
-                    recipients.append(('reviewer', event.Reviewer.Email, event.Reviewer.UserName or event.Reviewer.Email.split('@')[0]))
+                    recipients.append(('reviewer', event.Reviewer.Email, event.Reviewer.UserName or event.Reviewer.Email.split('@')[0], event.Reviewer.UserId))
                 if event.CreatedBy and hasattr(event.CreatedBy, 'Email') and event.CreatedBy.Email:
-                    recipients.append(('creator', event.CreatedBy.Email, event.CreatedBy.UserName or event.CreatedBy.Email.split('@')[0]))
+                    recipients.append(('creator', event.CreatedBy.Email, event.CreatedBy.UserName or event.CreatedBy.Email.split('@')[0], event.CreatedBy.UserId))
                 
                 # Send notifications to all recipients
-                for role, email, name in recipients:
+                for role, email, name, uid in recipients:
                     try:
                         notification_data = {
                             'notification_type': 'eventCreated',
@@ -341,17 +395,19 @@ class RiskAvaireEventTrigger:
                                 event.Category or 'General'
                             ]
                         }
-                        notification_service.send_multi_channel_notification(notification_data)
+                        send_event_aware_multi_channel(
+                            notification_service, notification_data, event.EventId, recipient_user_id=uid
+                        )
                         logger.info(f"Sent event creation notification to {role} ({email})")
                     except Exception as notify_error:
-                        logger.error(f"Error sending notification to {email}: {str(notify_error)}")
+                        _riskavaire_log_exc(f"Error sending notification to {email}", notify_error)
             except Exception as e:
-                logger.error(f"Error in event notification service: {str(e)}")
+                _riskavaire_log_exc("Error in event notification service", e)
             
             return event
             
         except Exception as e:
-            logger.error(f"Error creating compliance event: {str(e)}")
+            _riskavaire_log_exc("Error creating compliance event", e)
             return None
     
     @staticmethod
@@ -397,19 +453,20 @@ class RiskAvaireEventTrigger:
             # Send email notifications for event creation
             try:
                 from ...routes.Global.notification_service import NotificationService
+                from ...routes.Global.notifications import send_event_aware_multi_channel
                 notification_service = NotificationService()
                 
                 # Get recipients: Owner, Reviewer, and audit creator
                 recipients = []
                 if event.Owner and hasattr(event.Owner, 'Email') and event.Owner.Email:
-                    recipients.append(('owner', event.Owner.Email, event.Owner.UserName or event.Owner.Email.split('@')[0]))
+                    recipients.append(('owner', event.Owner.Email, event.Owner.UserName or event.Owner.Email.split('@')[0], event.Owner.UserId))
                 if event.Reviewer and hasattr(event.Reviewer, 'Email') and event.Reviewer.Email:
-                    recipients.append(('reviewer', event.Reviewer.Email, event.Reviewer.UserName or event.Reviewer.Email.split('@')[0]))
+                    recipients.append(('reviewer', event.Reviewer.Email, event.Reviewer.UserName or event.Reviewer.Email.split('@')[0], event.Reviewer.UserId))
                 if event.CreatedBy and hasattr(event.CreatedBy, 'Email') and event.CreatedBy.Email:
-                    recipients.append(('creator', event.CreatedBy.Email, event.CreatedBy.UserName or event.CreatedBy.Email.split('@')[0]))
+                    recipients.append(('creator', event.CreatedBy.Email, event.CreatedBy.UserName or event.CreatedBy.Email.split('@')[0], event.CreatedBy.UserId))
                 
                 # Send notifications to all recipients
-                for role, email, name in recipients:
+                for role, email, name, uid in recipients:
                     try:
                         notification_data = {
                             'notification_type': 'eventCreated',
@@ -423,17 +480,19 @@ class RiskAvaireEventTrigger:
                                 event.Category or 'General'
                             ]
                         }
-                        notification_service.send_multi_channel_notification(notification_data)
+                        send_event_aware_multi_channel(
+                            notification_service, notification_data, event.EventId, recipient_user_id=uid
+                        )
                         logger.info(f"Sent event creation notification to {role} ({email})")
                     except Exception as notify_error:
-                        logger.error(f"Error sending notification to {email}: {str(notify_error)}")
+                        _riskavaire_log_exc(f"Error sending notification to {email}", notify_error)
             except Exception as e:
-                logger.error(f"Error in event notification service: {str(e)}")
+                _riskavaire_log_exc("Error in event notification service", e)
             
             return event
             
         except Exception as e:
-            logger.error(f"Error creating audit event: {str(e)}")
+            _riskavaire_log_exc("Error creating audit event", e)
             return None
     
     @staticmethod
@@ -487,19 +546,20 @@ class RiskAvaireEventTrigger:
             # Send email notifications for event creation
             try:
                 from ...routes.Global.notification_service import NotificationService
+                from ...routes.Global.notifications import send_event_aware_multi_channel
                 notification_service = NotificationService()
                 
                 # Get recipients: Owner, Reviewer, and incident creator
                 recipients = []
                 if event.Owner and hasattr(event.Owner, 'Email') and event.Owner.Email:
-                    recipients.append(('owner', event.Owner.Email, event.Owner.UserName or event.Owner.Email.split('@')[0]))
+                    recipients.append(('owner', event.Owner.Email, event.Owner.UserName or event.Owner.Email.split('@')[0], event.Owner.UserId))
                 if event.Reviewer and hasattr(event.Reviewer, 'Email') and event.Reviewer.Email:
-                    recipients.append(('reviewer', event.Reviewer.Email, event.Reviewer.UserName or event.Reviewer.Email.split('@')[0]))
+                    recipients.append(('reviewer', event.Reviewer.Email, event.Reviewer.UserName or event.Reviewer.Email.split('@')[0], event.Reviewer.UserId))
                 if event.CreatedBy and hasattr(event.CreatedBy, 'Email') and event.CreatedBy.Email:
-                    recipients.append(('creator', event.CreatedBy.Email, event.CreatedBy.UserName or event.CreatedBy.Email.split('@')[0]))
+                    recipients.append(('creator', event.CreatedBy.Email, event.CreatedBy.UserName or event.CreatedBy.Email.split('@')[0], event.CreatedBy.UserId))
                 
                 # Send notifications to all recipients
-                for role, email, name in recipients:
+                for role, email, name, uid in recipients:
                     try:
                         notification_data = {
                             'notification_type': 'eventCreated',
@@ -513,17 +573,19 @@ class RiskAvaireEventTrigger:
                                 event.Category or 'General'
                             ]
                         }
-                        notification_service.send_multi_channel_notification(notification_data)
+                        send_event_aware_multi_channel(
+                            notification_service, notification_data, event.EventId, recipient_user_id=uid
+                        )
                         logger.info(f"Sent event creation notification to {role} ({email})")
                     except Exception as notify_error:
-                        logger.error(f"Error sending notification to {email}: {str(notify_error)}")
+                        _riskavaire_log_exc(f"Error sending notification to {email}", notify_error)
             except Exception as e:
-                logger.error(f"Error in event notification service: {str(e)}")
+                _riskavaire_log_exc("Error in event notification service", e)
             
             return event
             
         except Exception as e:
-            logger.error(f"Error creating incident event: {str(e)}")
+            _riskavaire_log_exc("Error creating incident event", e)
             return None
 
     @staticmethod
@@ -620,19 +682,20 @@ class RiskAvaireEventTrigger:
                 # Send email notifications for event creation
                 try:
                     from ...routes.Global.notification_service import NotificationService
+                    from ...routes.Global.notifications import send_event_aware_multi_channel
                     notification_service = NotificationService()
                     
                     # Get recipients: Owner, Reviewer, and policy creator
                     recipients = []
                     if event.Owner and hasattr(event.Owner, 'Email') and event.Owner.Email:
-                        recipients.append(('owner', event.Owner.Email, event.Owner.UserName or event.Owner.Email.split('@')[0]))
+                        recipients.append(('owner', event.Owner.Email, event.Owner.UserName or event.Owner.Email.split('@')[0], event.Owner.UserId))
                     if event.Reviewer and hasattr(event.Reviewer, 'Email') and event.Reviewer.Email:
-                        recipients.append(('reviewer', event.Reviewer.Email, event.Reviewer.UserName or event.Reviewer.Email.split('@')[0]))
+                        recipients.append(('reviewer', event.Reviewer.Email, event.Reviewer.UserName or event.Reviewer.Email.split('@')[0], event.Reviewer.UserId))
                     if event.CreatedBy and hasattr(event.CreatedBy, 'Email') and event.CreatedBy.Email:
-                        recipients.append(('creator', event.CreatedBy.Email, event.CreatedBy.UserName or event.CreatedBy.Email.split('@')[0]))
+                        recipients.append(('creator', event.CreatedBy.Email, event.CreatedBy.UserName or event.CreatedBy.Email.split('@')[0], event.CreatedBy.UserId))
                     
                     # Send notifications to all recipients
-                    for role, email, name in recipients:
+                    for role, email, name, uid in recipients:
                         try:
                             notification_data = {
                                 'notification_type': 'eventCreated',
@@ -646,21 +709,25 @@ class RiskAvaireEventTrigger:
                                     event.Category or 'General'
                                 ]
                             }
-                            notification_service.send_multi_channel_notification(notification_data)
+                            send_event_aware_multi_channel(
+                                notification_service, notification_data, event.EventId, recipient_user_id=uid
+                            )
                             logger.info(f"Sent event creation notification to {role} ({email})")
                         except Exception as notify_error:
-                            logger.error(f"Error sending notification to {email}: {str(notify_error)}")
+                            _riskavaire_log_exc(f"Error sending notification to {email}", notify_error)
                 except Exception as e:
-                    logger.error(f"Error in event notification service: {str(e)}")
+                    _riskavaire_log_exc("Error in event notification service", e)
                 
                 return event
             except Exception as create_error:
                 # Log error but don't raise - event creation failures shouldn't break policy creation
-                logger.error(f"Error creating policy event for policy {policy.PolicyId}: {str(create_error)}")
+                _riskavaire_log_exc(
+                    f"Error creating policy event for policy {policy.PolicyId}", create_error
+                )
                 return None
             
         except Exception as e:
-            logger.error(f"Error creating policy event: {str(e)}")
+            _riskavaire_log_exc("Error creating policy event", e)
             return None
 
 
@@ -739,7 +806,7 @@ def handle_riskavaire_data(data, record_type):
             return incident.IncidentId
             
     except Exception as e:
-        logger.error(f"Error handling RiskAvaire data: {str(e)}")
+        _riskavaire_log_exc("Error handling RiskAvaire data", e)
         return None
     
     return None
@@ -758,6 +825,10 @@ def riskavaire_webhook(request):
     """
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
+
+    sig_denied = _riskavaire_hmac_reject_response(request)
+    if sig_denied is not None:
+        return sig_denied
 
     try:
         data = request.data
@@ -784,8 +855,10 @@ def riskavaire_webhook(request):
         # Handle different record types
         if record_type == 'risk' and record_id:
             try:
-                risk_instance = RiskInstance.objects.get(RiskInstanceId=record_id)
-                event = RiskAvaireEventTrigger.create_risk_event(risk_instance, trigger_type)
+                risk_instance = RiskInstance.objects.get(RiskInstanceId=record_id, tenant_id=tenant_id)
+                event = RiskAvaireEventTrigger.create_risk_event(
+                    risk_instance, trigger_type, tenant_id=tenant_id
+                )
                 if event:
                     created_events.append({
                         'event_id': event.EventId,
@@ -854,10 +927,10 @@ def riskavaire_webhook(request):
         })
         
     except Exception as e:
-        logger.error(f"Error in RiskAvaire webhook: {str(e)}")
+        _riskavaire_log_exc("Error in RiskAvaire webhook", e)
         return Response({
             'success': False,
-            'message': f'Error processing webhook: {str(e)}'
+            'message': 'Error processing webhook. Please try again later.'
         }, status=500)
 
 
@@ -874,12 +947,17 @@ def check_automated_triggers(request):
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
 
+    sig_denied = _riskavaire_hmac_reject_response(request)
+    if sig_denied is not None:
+        return sig_denied
+
     try:
         created_events = []
         current_date = timezone.now().date()
         
         # Check for overdue risk mitigations
         overdue_risks = RiskInstance.objects.filter(
+            tenant_id=tenant_id,
             MitigationDueDate__lt=current_date,
             MitigationStatus__in=['Yet to Start', 'Work In Progress'],
             RiskStatus='Approved'
@@ -894,7 +972,9 @@ def check_automated_triggers(request):
             ).first()
             
             if not existing_event:
-                event = RiskAvaireEventTrigger.create_risk_event(risk, "mitigation_overdue")
+                event = RiskAvaireEventTrigger.create_risk_event(
+                    risk, "mitigation_overdue", tenant_id=tenant_id
+                )
                 if event:
                     created_events.append({
                         'type': 'overdue_mitigation',
@@ -904,6 +984,7 @@ def check_automated_triggers(request):
         
         # Check for high-priority risks that need escalation
         high_priority_risks = RiskInstance.objects.filter(
+            tenant_id=tenant_id,
             Criticality__in=['Critical', 'High'],
             RiskStatus='Not Assigned',
             CreatedAt__gte=current_date - timedelta(days=7)  # Only recent risks
@@ -917,7 +998,9 @@ def check_automated_triggers(request):
             ).first()
             
             if not existing_event:
-                event = RiskAvaireEventTrigger.create_risk_event(risk, "risk_escalated")
+                event = RiskAvaireEventTrigger.create_risk_event(
+                    risk, "risk_escalated", tenant_id=tenant_id
+                )
                 if event:
                     created_events.append({
                         'type': 'risk_escalation',
@@ -954,14 +1037,15 @@ def check_automated_triggers(request):
         })
         
     except Exception as e:
-        logger.error(f"Error checking automated triggers: {str(e)}")
+        _riskavaire_log_exc("Error checking automated triggers", e)
         return Response({
             'success': False,
-            'message': f'Error checking triggers: {str(e)}'
+            'message': 'Error checking triggers. Please try again later.'
         }, status=500)
 
 
 @api_view(['GET'])
+@authentication_classes([CsrfExemptSessionAuthentication])
 @permission_classes([EventViewAllPermission, EventViewModulePermission])
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
@@ -1055,8 +1139,8 @@ def get_riskavaire_events(request):
         return Response(response_data)
         
     except Exception as e:
-        logger.error(f"Error getting RiskAvaire events: {str(e)}")
+        _riskavaire_log_exc("Error getting RiskAvaire events", e)
         return Response({
             'success': False,
-            'message': f'Error getting events: {str(e)}'
+            'message': 'Error getting events. Please try again later.'
         }, status=500)

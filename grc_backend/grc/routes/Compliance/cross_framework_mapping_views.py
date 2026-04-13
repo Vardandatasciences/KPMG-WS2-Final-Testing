@@ -42,6 +42,7 @@ def cross_framework_check(request):
         "target_framework_ids": [2, 3, 4]  # optional, if not provided checks all active frameworks
     }
     """
+    tenant_id = get_tenant_id_from_request(request)
     try:
         # Check authentication
         user_id = RBACUtils.get_user_id_from_request(request)
@@ -120,7 +121,7 @@ def cross_framework_check(request):
         logger.error(traceback.format_exc())
         return Response({
             'success': False,
-            'error': str(e)
+            'error': 'Failed to complete cross-framework check'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -225,7 +226,7 @@ def get_cross_framework_mappings(request, document_id):
         logger.error(traceback.format_exc())
         return Response({
             'success': False,
-            'error': str(e)
+            'error': 'Failed to fetch cross-framework mappings'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -263,6 +264,6 @@ def get_available_frameworks(request):
         logger.error(f"Error in get_available_frameworks: {e}")
         return Response({
             'success': False,
-            'error': str(e)
+            'error': 'Failed to fetch available frameworks'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 

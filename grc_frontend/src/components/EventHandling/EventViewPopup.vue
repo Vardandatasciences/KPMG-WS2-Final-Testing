@@ -250,7 +250,7 @@
 import { computed } from 'vue'
 import { useEventPermissions } from '../../composables/useEventPermissions'
 import PopupModal from '../../modules/popus/PopupModal.vue'
-import axios from 'axios'
+import apiService from '@/services/apiService.js'
 import { API_ENDPOINTS } from '../../config/api'
 import { PopupService } from '../../modules/popus/popupService'
 export default {
@@ -325,8 +325,7 @@ export default {
         console.log('DEBUG: EventViewPopup - Extracted S3 key:', s3Key)
         
         if (s3Key) {
-          const userId = localStorage.getItem('user_id') || '1'
-          const downloadUrl = `/api/events/s3/download/${encodeURIComponent(s3Key)}/${encodeURIComponent(filename)}/?user_id=${userId}`
+          const downloadUrl = `/api/events/s3/download/${encodeURIComponent(s3Key)}/${encodeURIComponent(filename)}/`
           console.log('DEBUG: EventViewPopup - Generated download URL:', downloadUrl)
           return downloadUrl
         }
@@ -392,11 +391,11 @@ export default {
         }
         PopupService.info('Running AI audit for this audit from calendar...')
         const url = API_ENDPOINTS.RUN_AI_AUDIT_FOR_AUDIT(auditId)
-        const response = await axios.post(url)
-        if (response.data && response.data.success) {
+        const response = await apiService.post(url, {})
+        if (response && response.success) {
           PopupService.success('AI audit run completed successfully for this audit')
         } else {
-          PopupService.error(response.data?.error || 'AI audit run failed')
+          PopupService.error(response?.error || 'AI audit run failed')
         }
       } catch (error) {
         console.error('Error running AI audit from calendar:', error)

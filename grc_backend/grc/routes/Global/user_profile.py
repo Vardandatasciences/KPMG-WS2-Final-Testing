@@ -1,6 +1,8 @@
 import logging
 import json
 import threading
+import re
+import html
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_protect as csrf_exempt
@@ -19,6 +21,152 @@ from ...debug_utils import debug_print
 logger = logging.getLogger(__name__)
 
 _CLIENT_SAFE_ERROR = 'An internal error occurred. Please try again later.'
+_ALLOWED_ACCESS_STATUS_UPDATES = {'APPROVED', 'REJECTED'}
+_ALLOWED_DSAR_TYPES = {'ACCESS', 'RECTIFICATION', 'ERASURE', 'PORTABILITY'}
+_ALLOWED_INFO_TYPES = {'personal', 'business', 'risk', 'risk_instance'}
+_PERMISSION_PATTERN = re.compile(r'^[a-z_]+\.[a-z_]+$')
+_ALLOWED_ACCESS_AUDIT_KEYS = {'requested_url', 'requested_feature', 'required_permission', 'requested_role', 'message'}
+
+
+def _sanitize_optional_text(value, max_len=255):
+    if value is None:
+        return ''
+    if not isinstance(value, str):
+        value = str(value)
+    value = value.strip()
+    if len(value) > max_len:
+        value = value[:max_len]
+    return value
+
+
+def _is_valid_requested_url(value):
+    if not value:
+        return True
+    if not isinstance(value, str):
+        return False
+    value = value.strip()
+    if len(value) > 512:
+        return False
+    # Access requests should only target internal app routes.
+    if value.startswith(('http://', 'https://', '//')):
+        return False
+    return value.startswith('/')
+
+
+def _is_valid_permission_string(value):
+    if not value:
+        return True
+    if not isinstance(value, str):
+        return False
+    return bool(_PERMISSION_PATTERN.fullmatch(value.strip()))
+
+
+def _is_valid_requested_role(requested_role):
+    if not requested_role:
+        return True
+    if not isinstance(requested_role, str):
+        return False
+    requested_role = requested_role.strip()
+    if len(requested_role) > 80:
+        return False
+    return bool(re.fullmatch(r"[A-Za-z0-9 _-]+", requested_role))
+
+
+def _sanitize_json_for_response(value):
+    # Defensive output sanitization for string values that may be rendered in HTML contexts by clients.
+    if isinstance(value, str):
+        return html.escape(value, quote=True)
+    if isinstance(value, list):
+        return [_sanitize_json_for_response(v) for v in value]
+    if isinstance(value, dict):
+        return {k: _sanitize_json_for_response(v) for k, v in value.items()}
+    return value
+
+
+def _sanitize_export_values(value):
+    # Prevent CSV/XLSX formula injection when exported files are opened in spreadsheet tools.
+    if isinstance(value, str):
+        stripped = value.lstrip()
+        if stripped.startswith(("=", "+", "-", "@")):
+            return "'" + value
+        return value
+    if isinstance(value, list):
+        return [_sanitize_export_values(v) for v in value]
+    if isinstance(value, dict):
+        return {k: _sanitize_export_values(v) for k, v in value.items()}
+    return value
+
+
+def _normalize_int(value, field_name, required=False, minimum=1):
+    if value in (None, ''):
+        if required:
+            raise ValueError(f'{field_name} is required')
+        return None
+    try:
+        normalized = int(value)
+    except (TypeError, ValueError):
+        raise ValueError(f'Invalid {field_name}')
+    if minimum is not None and normalized < minimum:
+        raise ValueError(f'Invalid {field_name}')
+    return normalized
+
+
+def _framework_id_value(framework_ref):
+    if framework_ref is None:
+        return None
+    if isinstance(framework_ref, int):
+        return framework_ref
+    return getattr(framework_ref, 'FrameworkId', None)
+
+
+def _has_same_framework(target_obj, user_obj):
+    user_fw = _framework_id_value(getattr(user_obj, 'FrameworkId', None))
+    target_fw = _framework_id_value(getattr(target_obj, 'FrameworkId', None))
+    if user_fw is None or target_fw is None:
+        return False
+    return int(user_fw) == int(target_fw)
+
+
+def _sanitize_access_audit_payload(audit_payload):
+    if not isinstance(audit_payload, dict):
+        return {}
+    cleaned = {}
+    for key in _ALLOWED_ACCESS_AUDIT_KEYS:
+        if key not in audit_payload:
+            continue
+        if key == 'requested_url':
+            value = _sanitize_optional_text(audit_payload.get(key), max_len=512)
+            if value and not _is_valid_requested_url(value):
+                raise ValueError('Invalid requested_url. Only internal relative paths are allowed.')
+            cleaned[key] = value
+        elif key == 'required_permission':
+            value = _sanitize_optional_text(audit_payload.get(key), max_len=128)
+            if value and not _is_valid_permission_string(value):
+                raise ValueError('Invalid required_permission format. Expected module.permission.')
+            cleaned[key] = value
+        elif key == 'requested_role':
+            value = _sanitize_optional_text(audit_payload.get(key), max_len=80)
+            if value and not _is_valid_requested_role(value):
+                raise ValueError('Invalid requested_role.')
+            cleaned[key] = value
+        elif key == 'message':
+            cleaned[key] = _sanitize_optional_text(audit_payload.get(key), max_len=1000)
+        else:
+            cleaned[key] = _sanitize_optional_text(audit_payload.get(key), max_len=255)
+    return cleaned
+
+
+def _safe_public_file_url(file_url):
+    if not isinstance(file_url, str):
+        return None
+    candidate = file_url.strip()
+    if not candidate:
+        return None
+    if candidate.lower().startswith(('javascript:', 'data:', 'file:')):
+        return None
+    if not candidate.startswith(('https://', 'http://')):
+        return None
+    return candidate
 
 
 class AlwaysAllowPermission(BasePermission):
@@ -304,7 +452,7 @@ def get_current_user(request):
 
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def check_encryption_key(request):
     """
     Check which encryption key is being used by GRC.
@@ -315,6 +463,12 @@ def check_encryption_key(request):
     from ...utils.data_encryption import get_encryption_service
     
     try:
+        requesting_user_id = RBACUtils.get_user_id_from_request(request)
+        if not requesting_user_id:
+            return Response({'error': 'User not authenticated'}, status=status.HTTP_401_UNAUTHORIZED)
+        if not RBACUtils.is_system_admin(requesting_user_id):
+            return Response({'error': 'Forbidden'}, status=status.HTTP_403_FORBIDDEN)
+
         # Check environment variable
         env_key = os.environ.get('GRC_ENCRYPTION_KEY', None)
         
@@ -329,13 +483,10 @@ def check_encryption_key(request):
         # Determine key source
         if env_key:
             key_source = 'ENVIRONMENT_VARIABLE'
-            key_preview = env_key[:20] + '...' + env_key[-10:] if len(env_key) > 30 else env_key
         elif settings_key:
             key_source = 'DJANGO_SETTINGS'
-            key_preview = settings_key[:20] + '...' + settings_key[-10:] if len(settings_key) > 30 else settings_key
         else:
             key_source = 'AUTO_GENERATED_FROM_SECRET_KEY'
-            key_preview = actual_key_str[:20] + '...' + actual_key_str[-10:] if len(actual_key_str) > 30 else actual_key_str
         
         # Test encryption/decryption
         test_text = "Test Framework Name"
@@ -345,11 +496,10 @@ def check_encryption_key(request):
             encryption_working = (decrypted == test_text)
         except Exception as e:
             encryption_working = False
-            encryption_error = str(e)
+            logger.warning("Encryption self-test failed")
         
         return Response({
             'key_source': key_source,
-            'key_preview': key_preview,
             'key_length': len(actual_key_str),
             'env_key_found': env_key is not None,
             'settings_key_found': settings_key is not None,
@@ -373,17 +523,31 @@ def get_data_subject_requests(request, user_id):
     Otherwise, show only the user's own requests.
     """
     try:
-        # Verify user exists
-        user = Users.objects.get(UserId=user_id)
-        
-        # Check if user is GRC Administrator
-        is_admin = False
+        requesting_user_id = RBACUtils.get_user_id_from_request(request)
+        if not requesting_user_id:
+            return Response(
+                {'status': 'error', 'message': 'User not authenticated'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+
         try:
-            rbac_record = RBACUtils.get_user_rbac_record(user_id)
-            if rbac_record and rbac_record.role == 'GRC Administrator':
-                is_admin = True
-        except Exception as e:
-            logger.warning(f"Could not check RBAC for user {user_id}: {str(e)}")
+            requesting_user_id_int = int(requesting_user_id)
+            requested_user_id_int = int(user_id)
+        except (ValueError, TypeError):
+            return Response(
+                {'status': 'error', 'message': 'Invalid user id'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        is_admin = RBACUtils.is_system_admin(requesting_user_id_int)
+        if not is_admin and requesting_user_id_int != requested_user_id_int:
+            return Response(
+                {'status': 'error', 'message': 'Forbidden'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # Verify target user exists
+        user = Users.objects.get(UserId=requested_user_id_int)
         
         # Use raw SQL to query the table with exact case-sensitive name
         # This works around Django's table name lowercasing issue
@@ -406,7 +570,7 @@ def get_data_subject_requests(request, user_id):
                         u.LastName,
                         approver.FirstName as ApproverFirstName,
                         approver.LastName as ApproverLastName
-                    FROM `DataSubjectRequest` dsr
+                    FROM `datasubjectrequest` dsr
                     LEFT JOIN `users` u ON dsr.user_id = u.UserId
                     LEFT JOIN `users` approver ON dsr.approved_by = approver.UserId
                     ORDER BY dsr.created_at DESC
@@ -427,11 +591,11 @@ def get_data_subject_requests(request, user_id):
                         dsr.approved_by,
                         approver.FirstName as ApproverFirstName,
                         approver.LastName as ApproverLastName
-                    FROM `DataSubjectRequest` dsr
+                    FROM `datasubjectrequest` dsr
                     LEFT JOIN `users` approver ON dsr.approved_by = approver.UserId
                     WHERE dsr.user_id = %s
                     ORDER BY dsr.created_at DESC
-                """, [user_id])
+                """, [requested_user_id_int])
             
             columns = [col[0] for col in cursor.description]
             rows = cursor.fetchall()
@@ -552,7 +716,7 @@ def get_data_subject_requests(request, user_id):
             client_ip = get_client_ip(request)
             user_name = None
             try:
-                viewing_user = Users.objects.filter(UserId=user_id).first()
+                viewing_user = Users.objects.filter(UserId=requesting_user_id_int).first()
                 if viewing_user:
                     user_name = getattr(viewing_user, 'UserName_plain', None) or getattr(viewing_user, 'UserName', None)
             except:
@@ -562,7 +726,7 @@ def get_data_subject_requests(request, user_id):
                 module='Data Subject Request',
                 actionType='VIEW_DATA_SUBJECT_REQUESTS',
                 description=f'User viewed data subject requests (is_admin: {is_admin}, count: {len(requests_data)})',
-                userId=str(user_id) if user_id else None,
+                userId=str(requesting_user_id_int) if requesting_user_id_int else None,
                 userName=user_name,
                 entityType='Data Subject Request',
                 logLevel='INFO',
@@ -580,12 +744,11 @@ def get_data_subject_requests(request, user_id):
                 logger.warning(f"Failed to log data subject request view - send_log returned None")
         except Exception as log_error:
             logger.error(f"Error logging data subject request view: {str(log_error)}")
-            import traceback
-            logger.error(traceback.format_exc())
+            logger.exception("Data subject request view logging failed")
         
         return Response({
             'status': 'success',
-            'data': requests_data,
+                'data': _sanitize_json_for_response(requests_data),
             'count': len(requests_data),
             'is_admin': is_admin
         }, status=status.HTTP_200_OK)
@@ -644,8 +807,12 @@ def create_data_subject_request(request):
         
         # Get request data
         request_type = request.data.get('request_type')
+        if isinstance(request_type, str):
+            request_type = request_type.strip().upper()
         changes = request.data.get('changes', {})
         info_type = request.data.get('info_type', 'personal')  # 'personal', 'business', 'risk', or 'risk_instance'
+        if isinstance(info_type, str):
+            info_type = info_type.strip().lower()
         audit_trail_data = request.data.get('audit_trail', {})  # For ACCESS type requests
         risk_id = request.data.get('risk_id')  # For risk rectification requests
         risk_instance_id = request.data.get('risk_instance_id')  # For risk instance rectification requests
@@ -674,14 +841,70 @@ def create_data_subject_request(request):
                 {'status': 'error', 'message': 'User ID or email is required. Please provide user_id or email in the request.'}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
-        # Validate request type
-        valid_types = ['ACCESS', 'RECTIFICATION', 'ERASURE', 'PORTABILITY']
-        if request_type not in valid_types:
+
+        # For authenticated calls, enforce object ownership unless system admin.
+        try:
+            user_id_int = int(user_id)
+        except (TypeError, ValueError):
             return Response(
-                {'status': 'error', 'message': f'Invalid request type. Must be one of: {", ".join(valid_types)}'}, 
+                {'status': 'error', 'message': 'Invalid user id'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+        requester_id = RBACUtils.get_user_id_from_request(request)
+        if requester_id:
+            try:
+                requester_id_int = int(requester_id)
+            except (TypeError, ValueError):
+                return Response(
+                    {'status': 'error', 'message': 'Invalid authenticated user id'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if requester_id_int != user_id_int and not RBACUtils.is_system_admin(requester_id_int):
+                return Response(
+                    {'status': 'error', 'message': 'Forbidden'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        
+        # Validate request type
+        if request_type not in _ALLOWED_DSAR_TYPES:
+            return Response(
+                {'status': 'error', 'message': f'Invalid request type. Must be one of: {", ".join(sorted(_ALLOWED_DSAR_TYPES))}'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        if info_type not in _ALLOWED_INFO_TYPES:
+            return Response(
+                {'status': 'error', 'message': f'Invalid info type. Must be one of: {", ".join(sorted(_ALLOWED_INFO_TYPES))}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            risk_id = _normalize_int(risk_id, 'risk_id', required=False, minimum=1)
+            risk_instance_id = _normalize_int(risk_instance_id, 'risk_instance_id', required=False, minimum=1)
+        except ValueError as validation_error:
+            return Response(
+                {'status': 'error', 'message': str(validation_error)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if info_type == 'risk' and request_type in {'RECTIFICATION', 'ERASURE'} and not risk_id:
+            return Response(
+                {'status': 'error', 'message': 'risk_id is required for risk requests'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        if info_type == 'risk_instance' and request_type in {'RECTIFICATION', 'ERASURE'} and not risk_instance_id:
+            return Response(
+                {'status': 'error', 'message': 'risk_instance_id is required for risk instance requests'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if request_type == 'ACCESS':
+            try:
+                audit_trail_data = _sanitize_access_audit_payload(audit_trail_data)
+            except ValueError as validation_error:
+                return Response(
+                    {'status': 'error', 'message': str(validation_error)},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
         
         # For RECTIFICATION requests on personal information, verify OTP
         # Note: For GDPR compliance, we allow the request to be created even without OTP
@@ -757,7 +980,7 @@ def create_data_subject_request(request):
                 SELECT COLUMN_NAME 
                 FROM INFORMATION_SCHEMA.COLUMNS 
                 WHERE TABLE_SCHEMA = DATABASE() 
-                AND TABLE_NAME = 'DataSubjectRequest' 
+                AND TABLE_NAME = 'datasubjectrequest' 
                 AND COLUMN_NAME = 'FrameworkId'
             """)
             has_framework_id = cursor.fetchone() is not None
@@ -765,7 +988,7 @@ def create_data_subject_request(request):
             if has_framework_id and framework_id_value:
                 # Include FrameworkId in the INSERT
                 cursor.execute("""
-                    INSERT INTO `DataSubjectRequest` 
+                    INSERT INTO `datasubjectrequest` 
                     (request_type, user_id, status, verification_status, audit_trail, approved_by, FrameworkId, created_at, updated_at)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """, [
@@ -782,7 +1005,7 @@ def create_data_subject_request(request):
             else:
                 # FrameworkId column doesn't exist, create without it
                 cursor.execute("""
-                    INSERT INTO `DataSubjectRequest` 
+                    INSERT INTO `datasubjectrequest` 
                     (request_type, user_id, status, verification_status, audit_trail, approved_by, created_at, updated_at)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 """, [
@@ -803,9 +1026,12 @@ def create_data_subject_request(request):
         # Log data subject request creation - MUST happen before response is returned
         # This logging is critical and should always execute
         # IMPORTANT: This must execute synchronously, not in background thread
-        print(f"\n{'='*80}")
-        print(f"[DATA SUBJECT REQUEST LOGGING] Starting logging for request_id={request_id}, user_id={user_id}, type={request_type}")
-        print(f"{'='*80}\n")
+        logger.debug(
+            "[DATA SUBJECT REQUEST LOGGING] Starting logging for request_id=%s, user_id=%s, type=%s",
+            request_id,
+            user_id,
+            request_type,
+        )
         
         from .logging_service import get_client_ip, send_log
         from ...models import GRCLog
@@ -816,7 +1042,6 @@ def create_data_subject_request(request):
         log_saved = False
         
         try:
-            print(f"[DATA SUBJECT REQUEST LOGGING] Inside try block, getting client IP...")
             
             client_ip = get_client_ip(request)
             user_name = None
@@ -852,7 +1077,6 @@ def create_data_subject_request(request):
                     pass
             
             logger.info(f"Logging data subject request creation: request_id={request_id}, user_id={user_id}, type={request_type}, framework_id={log_framework_id}")
-            print(f"[DATA SUBJECT REQUEST LOGGING] About to call send_log: framework_id={log_framework_id}, user_id={user_id}")
             
             # Build additional info with risk/risk_instance details if present
             additional_info = {
@@ -895,7 +1119,6 @@ def create_data_subject_request(request):
                 except:
                     numeric_user_id = None
             
-            print(f"[DATA SUBJECT REQUEST LOGGING] Calling send_log now... user_id={user_id}, numeric_user_id={numeric_user_id}")
             log_id = send_log(
                 module='Data Subject Request',
                 actionType='CREATE_DATA_SUBJECT_REQUEST',
@@ -911,11 +1134,10 @@ def create_data_subject_request(request):
                 frameworkId=log_framework_id
             )
             
-            print(f"[DATA SUBJECT REQUEST LOGGING] send_log returned: log_id={log_id}")
             
             if log_id:
                 logger.info(f"✅ Successfully logged data subject request creation with log ID: {log_id}")
-                print(f"[DATA SUBJECT REQUEST LOGGING] ✅ SUCCESS - Log saved with ID: {log_id}")
+                logger.debug("[DATA SUBJECT REQUEST LOGGING] SUCCESS - Log saved with ID: %s", log_id)
                 log_saved = True
             else:
                 logger.error(f"❌ Failed to log data subject request creation - send_log returned None. Framework ID: {log_framework_id}")
@@ -966,16 +1188,13 @@ def create_data_subject_request(request):
                                 logger.error(f"❌ Cannot save log - no framework exists in database")
                         except Exception as direct_error:
                             logger.error(f"❌ Direct database save failed: {str(direct_error)}")
-                            import traceback
-                            logger.error(traceback.format_exc())
+                            logger.exception("Direct database save for data subject request log failed")
                 except Exception as retry_error:
                     logger.error(f"❌ Retry logging also failed: {str(retry_error)}")
-                    import traceback
-                    logger.error(traceback.format_exc())
+                    logger.exception("Retry logging for data subject request failed")
         except Exception as log_error:
             logger.error(f"❌ Error logging data subject request creation: {str(log_error)}")
-            import traceback
-            logger.error(traceback.format_exc())
+            logger.exception("Data subject request creation logging failed")
             # Last resort: try to log with minimal info
             try:
                 from .logging_service import send_log
@@ -994,13 +1213,10 @@ def create_data_subject_request(request):
         
         # Final check - if logging still failed, try one more direct save
         if not log_saved:
-            print(f"\n[DATA SUBJECT REQUEST LOGGING] ❌ All logging attempts failed - trying final direct save")
             logger.error(f"❌ All logging attempts failed - trying final direct save for request_id={request_id}")
             try:
                 final_framework = Framework.objects.first()
-                print(f"[DATA SUBJECT REQUEST LOGGING] Final framework lookup: {final_framework.FrameworkId if final_framework else 'None'}")
                 if final_framework:
-                    print(f"[DATA SUBJECT REQUEST LOGGING] Attempting direct GRCLog save...")
                     final_log = GRCLog(
                         Module='Data Subject Request',
                         ActionType='CREATE_DATA_SUBJECT_REQUEST',
@@ -1012,20 +1228,15 @@ def create_data_subject_request(request):
                         FrameworkId=final_framework
                     )
                     final_log.save()
-                    print(f"[DATA SUBJECT REQUEST LOGGING] ✅ Final direct save successful - Log ID: {final_log.LogId}")
                     logger.info(f"✅ Final direct save successful - Log ID: {final_log.LogId}")
                     log_saved = True
                 else:
-                    print(f"[DATA SUBJECT REQUEST LOGGING] ❌ Final save failed - no framework in database")
                     logger.error(f"❌ Final save failed - no framework in database")
             except Exception as final_error:
-                print(f"[DATA SUBJECT REQUEST LOGGING] ❌ Final save exception: {str(final_error)}")
                 logger.error(f"❌ Final save exception: {str(final_error)}")
-                import traceback
-                logger.error(traceback.format_exc())
-                print(traceback.format_exc())
+                logger.exception("Final direct save for data subject request log failed")
         
-        print(f"[DATA SUBJECT REQUEST LOGGING] Logging complete. log_saved={log_saved}\n")
+        logger.debug("[DATA SUBJECT REQUEST LOGGING] Logging complete. log_saved=%s", log_saved)
         
         # Return response immediately, send notifications asynchronously in background
         # This prevents timeout issues and provides instant feedback to the user
@@ -1180,8 +1391,7 @@ def create_data_subject_request(request):
             except Exception as notification_error:
                 # Don't fail the request creation if notifications fail
                 logger.error(f"[Data Subject Request] ❌ Error sending notifications: {str(notification_error)}")
-                import traceback
-                logger.error(f"[Data Subject Request] Notification traceback: {traceback.format_exc()}")
+                logger.exception("[Data Subject Request] Notification dispatch failed")
         
         # Start notification sending in background thread (non-blocking)
         notification_thread = threading.Thread(
@@ -1333,6 +1543,9 @@ def export_user_data_portability(request):
         
         # Prepare data for export (convert dict to list format for export function)
         export_list = [export_data] if export_format == 'json' else [personal_data, business_data]
+        if export_format in {'csv', 'xlsx', 'txt'}:
+            export_list = _sanitize_export_values(export_list)
+            export_data = _sanitize_export_values(export_data)
         
         # Export and upload to S3
         file_name = f"user_data_export_{user_id}_{int(timezone.now().timestamp())}"
@@ -1348,8 +1561,14 @@ def export_user_data_portability(request):
         )
         
         if export_result.get('success'):
-            file_url = export_result.get('file_url')
+            file_url = _safe_public_file_url(export_result.get('file_url'))
             file_name = export_result.get('file_name')
+            if not file_url:
+                logger.warning("Portability export returned an invalid or non-public file URL")
+                return Response(
+                    {'status': 'error', 'message': 'Export succeeded but download URL is unavailable'},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
             
             # Get framework for logging
             framework = getattr(user, 'FrameworkId', None)
@@ -1393,8 +1612,7 @@ def export_user_data_portability(request):
                     logger.info(f"S3 file record created with ID: {s3_file.id} for portability export")
             except Exception as s3_error:
                 logger.error(f"Error saving to s3_files table: {str(s3_error)}")
-                import traceback
-                logger.error(traceback.format_exc())
+                logger.exception("Error saving portability export metadata")
             
             # Log to grc_logs table
             try:
@@ -1434,8 +1652,7 @@ def export_user_data_portability(request):
                     logger.error(f"Cannot log to grc_logs: No framework found")
             except Exception as log_error:
                 logger.error(f"Error logging to grc_logs table: {str(log_error)}")
-                import traceback
-                logger.error(traceback.format_exc())
+                logger.exception("Error logging portability export")
             
             # Create or update data subject request for PORTABILITY
             try:
@@ -1444,7 +1661,7 @@ def export_user_data_portability(request):
                         SELECT COLUMN_NAME 
                         FROM INFORMATION_SCHEMA.COLUMNS 
                         WHERE TABLE_SCHEMA = DATABASE() 
-                        AND TABLE_NAME = 'DataSubjectRequest' 
+                        AND TABLE_NAME = 'datasubjectrequest' 
                         AND COLUMN_NAME = 'FrameworkId'
                     """)
                     has_framework_id = cursor.fetchone() is not None
@@ -1461,7 +1678,7 @@ def export_user_data_portability(request):
                     
                     if has_framework_id and framework_id_value:
                         cursor.execute("""
-                            INSERT INTO `DataSubjectRequest` 
+                            INSERT INTO `datasubjectrequest` 
                             (request_type, user_id, status, verification_status, audit_trail, approved_by, FrameworkId, created_at, updated_at)
                             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                         """, [
@@ -1477,7 +1694,7 @@ def export_user_data_portability(request):
                         ])
                     else:
                         cursor.execute("""
-                            INSERT INTO `DataSubjectRequest` 
+                            INSERT INTO `datasubjectrequest` 
                             (request_type, user_id, status, verification_status, audit_trail, approved_by, created_at, updated_at)
                             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                         """, [
@@ -1509,7 +1726,7 @@ def export_user_data_portability(request):
             }, status=status.HTTP_200_OK)
         else:
             return Response(
-                {'status': 'error', 'message': f'Export failed: {export_result.get("error", "Unknown error")}'}, 
+                {'status': 'error', 'message': 'Export failed. Please try again later.'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
         
@@ -1534,7 +1751,7 @@ def update_data_subject_request_status(request, request_id):
         with connection.cursor() as cursor:
             cursor.execute("""
                 SELECT id, user_id, status
-                FROM `DataSubjectRequest`
+                FROM `datasubjectrequest`
                 WHERE id = %s
             """, [request_id])
             
@@ -1553,31 +1770,41 @@ def update_data_subject_request_status(request, request_id):
             logger.info(f"User ID from RBACUtils: {user_id}, type: {type(user_id)}")
             
             if not user_id:
-                # Fallback to request data if not in JWT/session
-                user_id = request.data.get('user_id')
-                logger.info(f"User ID from request data: {user_id}")
-                if not user_id:
-                    return Response(
-                        {'status': 'error', 'message': 'User not authenticated'}, 
-                        status=status.HTTP_401_UNAUTHORIZED
-                    )
+                return Response(
+                    {'status': 'error', 'message': 'User not authenticated'},
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
             
-            # Check if user is an admin (user IDs 1, 2, 3, or 4)
-            admin_user_ids = [1, 2, 3, 4]
             try:
                 user_id_int = int(user_id)
-                is_admin = user_id_int in admin_user_ids
-                logger.info(f"User ID {user_id_int} is admin: {is_admin}, admin list: {admin_user_ids}")
             except (ValueError, TypeError) as e:
                 logger.warning(f"Error converting user_id to int: {e}, user_id: {user_id}")
-                is_admin = False
+                return Response(
+                    {'status': 'error', 'message': 'Invalid user id'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            is_admin = RBACUtils.is_system_admin(user_id_int)
+            logger.info(f"User ID {user_id_int} is admin: {is_admin}")
             
             if not is_admin:
-                logger.warning(f"Access denied for user {user_id} - not in admin list {admin_user_ids}")
+                logger.warning(f"Access denied for user {user_id} - not an administrator")
                 return Response(
                     {'status': 'error', 'message': 'Only administrators can approve/reject requests'}, 
                     status=status.HTTP_403_FORBIDDEN
                 )
+
+            # Tenant/framework ownership guard for admin actions.
+            admin_user = Users.objects.filter(UserId=user_id_int).first()
+            request_owner_user = Users.objects.filter(UserId=request_data['user_id']).first()
+            if admin_user and request_owner_user:
+                admin_fw = _framework_id_value(getattr(admin_user, 'FrameworkId', None))
+                owner_fw = _framework_id_value(getattr(request_owner_user, 'FrameworkId', None))
+                if admin_fw is not None and owner_fw is not None and int(admin_fw) != int(owner_fw):
+                    return Response(
+                        {'status': 'error', 'message': 'Forbidden'},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
             
             # Get new status from request
             new_status = request.data.get('status')
@@ -1588,7 +1815,7 @@ def update_data_subject_request_status(request, request_id):
                 )
             
             # Validate status - use uppercase to match database values
-            valid_statuses = ['REQUESTED', 'APPROVED', 'REJECTED']
+            valid_statuses = sorted(_ALLOWED_ACCESS_STATUS_UPDATES)
             new_status_upper = new_status.upper()
             if new_status_upper not in valid_statuses:
                 return Response(
@@ -1612,7 +1839,7 @@ def update_data_subject_request_status(request, request_id):
             # Get current audit trail, request type, and request details
             cursor.execute("""
                 SELECT audit_trail, user_id, request_type
-                FROM `DataSubjectRequest`
+                FROM `datasubjectrequest`
                 WHERE id = %s
             """, [request_id])
             
@@ -1748,9 +1975,8 @@ def update_data_subject_request_status(request, request_id):
                         
                 except Exception as e:
                     logger.error(f"Error updating RBAC for access request {request_id}: {str(e)}")
-                    import traceback
-                    logger.error(traceback.format_exc())
-                    audit_trail['rbac_update_error'] = str(e)
+                    logger.exception("RBAC update failed for approved data subject ACCESS request")
+                    audit_trail['rbac_update_error'] = 'RBAC update failed'
             
             # Prepare changes to apply (we'll apply them after cursor context closes)
             user_update_dict = None
@@ -1760,6 +1986,7 @@ def update_data_subject_request_status(request, request_id):
             # Use 'if' instead of 'elif' so this can run for different request types independently
             if new_status_upper == 'APPROVED':
                 try:
+                    subject_user = Users.objects.get(UserId=request_user_id)
                     changes = audit_trail.get('changes', {})
                     info_type = audit_trail.get('info_type', 'personal')
                     request_type_from_trail = audit_trail.get('request_type', request_type)
@@ -1773,10 +2000,18 @@ def update_data_subject_request_status(request, request_id):
                             if not risk_id:
                                 # Try to get from changes if not in audit_trail
                                 risk_id = changes.get('risk_id') if isinstance(changes, dict) else None
-                            
+                            try:
+                                risk_id = _normalize_int(risk_id, 'risk_id', required=False, minimum=1)
+                            except ValueError:
+                                risk_id = None
+
                             if risk_id:
                                 try:
                                     risk = Risk.objects.get(RiskId=risk_id)
+                                    if not _has_same_framework(risk, subject_user):
+                                        logger.warning("Framework ownership mismatch for risk erasure request")
+                                        audit_trail['risk_deletion_error'] = 'Tenant ownership validation failed'
+                                        raise PermissionError('Tenant ownership validation failed')
                                     risk_title = risk.RiskTitle or f'Risk #{risk_id}'
                                     
                                     # Delete the risk
@@ -1789,11 +2024,11 @@ def update_data_subject_request_status(request, request_id):
                                 except Risk.DoesNotExist:
                                     logger.error(f"Risk with ID {risk_id} not found for deletion")
                                     audit_trail['risk_deletion_error'] = f"Risk with ID {risk_id} not found"
+                                except PermissionError:
+                                    pass
                                 except Exception as e:
                                     logger.error(f"Error deleting risk {risk_id}: {str(e)}")
-                                    import traceback
-                                    logger.error(traceback.format_exc())
-                                    audit_trail['risk_deletion_error'] = str(e)
+                                    audit_trail['risk_deletion_error'] = 'Risk deletion failed'
                             else:
                                 logger.warning("Risk ID not found in audit trail for risk ERASURE request")
                                 audit_trail['risk_deletion_error'] = "Risk ID not found in audit trail"
@@ -1804,10 +2039,18 @@ def update_data_subject_request_status(request, request_id):
                             if not risk_instance_id:
                                 # Try to get from changes if not in audit_trail
                                 risk_instance_id = changes.get('risk_instance_id') if isinstance(changes, dict) else None
-                            
+                            try:
+                                risk_instance_id = _normalize_int(risk_instance_id, 'risk_instance_id', required=False, minimum=1)
+                            except ValueError:
+                                risk_instance_id = None
+
                             if risk_instance_id:
                                 try:
                                     risk_instance = RiskInstance.objects.get(RiskInstanceId=risk_instance_id)
+                                    if not _has_same_framework(risk_instance, subject_user):
+                                        logger.warning("Framework ownership mismatch for risk instance erasure request")
+                                        audit_trail['risk_instance_deletion_error'] = 'Tenant ownership validation failed'
+                                        raise PermissionError('Tenant ownership validation failed')
                                     risk_instance_description = risk_instance.RiskDescription or f'Risk Instance #{risk_instance_id}'
                                     
                                     # Delete the risk instance
@@ -1820,11 +2063,11 @@ def update_data_subject_request_status(request, request_id):
                                 except RiskInstance.DoesNotExist:
                                     logger.error(f"Risk instance with ID {risk_instance_id} not found for deletion")
                                     audit_trail['risk_instance_deletion_error'] = f"Risk instance with ID {risk_instance_id} not found"
+                                except PermissionError:
+                                    pass
                                 except Exception as e:
                                     logger.error(f"Error deleting risk instance {risk_instance_id}: {str(e)}")
-                                    import traceback
-                                    logger.error(traceback.format_exc())
-                                    audit_trail['risk_instance_deletion_error'] = str(e)
+                                    audit_trail['risk_instance_deletion_error'] = 'Risk instance deletion failed'
                             else:
                                 logger.warning("Risk instance ID not found in audit trail for risk instance ERASURE request")
                                 audit_trail['risk_instance_deletion_error'] = "Risk instance ID not found in audit trail"
@@ -1875,10 +2118,13 @@ def update_data_subject_request_status(request, request_id):
                             if not risk_id:
                                 # Try to get from changes if not in audit_trail
                                 risk_id = changes.get('risk_id') if isinstance(changes, dict) else None
-                            
+                            risk_id = _normalize_int(risk_id, 'risk_id', required=True, minimum=1)
+
                             if risk_id:
                                 try:
                                     risk = Risk.objects.get(RiskId=risk_id)
+                                    if not _has_same_framework(risk, subject_user):
+                                        raise PermissionError('Tenant ownership validation failed')
                                     
                                     # Apply changes to risk fields
                                     field_mapping = {
@@ -1937,6 +2183,9 @@ def update_data_subject_request_status(request, request_id):
                                 except Risk.DoesNotExist:
                                     logger.error(f"Risk with ID {risk_id} not found")
                                     raise Exception(f"Risk with ID {risk_id} not found")
+                                except PermissionError as permission_error:
+                                    logger.warning(str(permission_error))
+                                    raise Exception('Tenant ownership validation failed')
                                 except Exception as e:
                                     logger.error(f"Error applying risk changes: {str(e)}")
                                     raise
@@ -1950,10 +2199,13 @@ def update_data_subject_request_status(request, request_id):
                             if not risk_instance_id:
                                 # Try to get from changes if not in audit_trail
                                 risk_instance_id = changes.get('risk_instance_id') if isinstance(changes, dict) else None
-                            
+                            risk_instance_id = _normalize_int(risk_instance_id, 'risk_instance_id', required=True, minimum=1)
+
                             if risk_instance_id:
                                 try:
                                     risk_instance = RiskInstance.objects.get(RiskInstanceId=risk_instance_id)
+                                    if not _has_same_framework(risk_instance, subject_user):
+                                        raise PermissionError('Tenant ownership validation failed')
                                     
                                     # Apply changes to risk instance fields
                                     field_mapping = {
@@ -1991,6 +2243,9 @@ def update_data_subject_request_status(request, request_id):
                                 except RiskInstance.DoesNotExist:
                                     logger.error(f"Risk instance with ID {risk_instance_id} not found")
                                     raise Exception(f"Risk instance with ID {risk_instance_id} not found")
+                                except PermissionError as permission_error:
+                                    logger.warning(str(permission_error))
+                                    raise Exception('Tenant ownership validation failed')
                                 except Exception as e:
                                     logger.error(f"Error applying risk instance changes: {str(e)}")
                                     raise
@@ -2010,12 +2265,11 @@ def update_data_subject_request_status(request, request_id):
                     
                 except Exception as e:
                     logger.error(f"Error applying changes for request {request_id}: {str(e)}")
-                    import traceback
-                    logger.error(traceback.format_exc())
+                    logger.exception("Failed applying data subject request changes")
                     # Don't return error here - allow status update to proceed
                     # Just mark in audit trail that changes failed
                     audit_trail['changes_applied'] = False
-                    audit_trail['changes_error'] = str(e)
+                    audit_trail['changes_error'] = 'Applying request changes failed'
                     audit_trail['changes_applied_at'] = updated_at.isoformat()
             
             # Add status change to audit trail
@@ -2041,8 +2295,7 @@ def update_data_subject_request_status(request, request_id):
                 logger.info(f"Applied personal information changes for user {request_user_id}: {', '.join(user_updated_fields)}")
             except Exception as e:
                 logger.error(f"Error applying user changes for user {request_user_id}: {str(e)}")
-                import traceback
-                logger.error(traceback.format_exc())
+                logger.exception("Failed applying user profile field updates from data subject request")
         
         # Update the request - set approved_by if status is APPROVED
         # (This code is outside the cursor context to avoid conflicts)
@@ -2137,13 +2390,11 @@ def update_data_subject_request_status(request, request_id):
                     logger.error(f"❌ Failed to log data subject request status update - send_log returned None. This usually means no framework exists in the database.")
             except Exception as send_log_error:
                 logger.error(f"❌ Exception in send_log call: {str(send_log_error)}")
-                import traceback
-                logger.error(traceback.format_exc())
+                logger.exception("send_log failed for data subject request status update")
                 
         except Exception as log_error:
             logger.error(f"❌ Error logging data subject request status update: {str(log_error)}")
-            import traceback
-            logger.error(traceback.format_exc())
+            logger.exception("Logging wrapper failed for data subject request status update")
         
         return Response({
             'status': 'success',
@@ -2179,13 +2430,21 @@ def get_access_requests(request, user_id):
                 status=status.HTTP_401_UNAUTHORIZED
             )
         
-        # Check if user is an admin
-        admin_user_ids = [1, 2, 3, 4]
         try:
             requesting_user_id_int = int(requesting_user_id)
-            is_admin = requesting_user_id_int in admin_user_ids
+            requested_user_id_int = int(user_id)
         except (ValueError, TypeError):
-            is_admin = False
+            return Response(
+                {'status': 'error', 'message': 'Invalid user id'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        is_admin = RBACUtils.is_system_admin(requesting_user_id_int)
+        if not is_admin and requesting_user_id_int != requested_user_id_int:
+            return Response(
+                {'status': 'error', 'message': 'Forbidden'},
+                status=status.HTTP_403_FORBIDDEN
+            )
         
         # This works around Django's table name lowercasing issue
         with connection.cursor() as cursor:
@@ -2237,7 +2496,7 @@ def get_access_requests(request, user_id):
                     LEFT JOIN `users` approver ON ar.approved_by = approver.UserId
                     WHERE ar.user_id = %s
                     ORDER BY ar.created_at DESC
-                """, [user_id])
+                """, [requested_user_id_int])
             
             columns = [col[0] for col in cursor.description]
             rows = cursor.fetchall()
@@ -2273,7 +2532,7 @@ def get_access_requests(request, user_id):
                     client_ip = get_client_ip(request)
                     user_name = None
                     try:
-                        viewing_user = Users.objects.filter(UserId=user_id).first()
+                        viewing_user = Users.objects.filter(UserId=requesting_user_id_int).first()
                         if viewing_user:
                             user_name = getattr(viewing_user, 'UserName_plain', None) or getattr(viewing_user, 'UserName', None)
                     except:
@@ -2283,7 +2542,7 @@ def get_access_requests(request, user_id):
                         module='Access Request',
                         actionType='VIEW_ACCESS_REQUESTS',
                         description=f'User viewed access requests (is_admin: {is_admin}, count: {len(requests)})',
-                        userId=str(user_id) if user_id else None,
+                        userId=str(requesting_user_id_int) if requesting_user_id_int else None,
                         userName=user_name,
                         entityType='Access Request',
                         logLevel='INFO',
@@ -2299,7 +2558,7 @@ def get_access_requests(request, user_id):
             
             return Response({
                 'status': 'success',
-                'data': requests
+                'data': _sanitize_json_for_response(requests)
             }, status=status.HTTP_200_OK)
             
     except Exception as e:
@@ -2327,11 +2586,27 @@ def create_access_request(request):
             )
         
         # Get request data
-        requested_url = request.data.get('requested_url', '')
-        requested_feature = request.data.get('requested_feature', '')
-        required_permission = request.data.get('required_permission', '')
-        requested_role = request.data.get('requested_role', '')
-        message = request.data.get('message', '')
+        requested_url = _sanitize_optional_text(request.data.get('requested_url', ''), max_len=512)
+        requested_feature = _sanitize_optional_text(request.data.get('requested_feature', ''), max_len=255)
+        required_permission = _sanitize_optional_text(request.data.get('required_permission', ''), max_len=128)
+        requested_role = _sanitize_optional_text(request.data.get('requested_role', ''), max_len=80)
+        message = _sanitize_optional_text(request.data.get('message', ''), max_len=1000)
+
+        if not _is_valid_requested_url(requested_url):
+            return Response(
+                {'status': 'error', 'message': 'Invalid requested_url. Only internal relative paths are allowed.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        if not _is_valid_permission_string(required_permission):
+            return Response(
+                {'status': 'error', 'message': 'Invalid required_permission format. Expected module.permission.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        if not _is_valid_requested_role(requested_role):
+            return Response(
+                {'status': 'error', 'message': 'Invalid requested_role.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         
         # Log the received data for debugging
         logger.info(f"Creating access request - URL: {requested_url}, Feature: {requested_feature}, Permission: {required_permission}, Role: {requested_role}")
@@ -2458,30 +2733,52 @@ def update_access_request_status(request, request_id):
             request_user_id = request_data['user_id']
             requested_role = request_data.get('requested_role')
             required_permission = request_data.get('required_permission')
+            if requested_role and not _is_valid_requested_role(requested_role):
+                return Response(
+                    {'status': 'error', 'message': 'Invalid requested_role in request record'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if required_permission and not _is_valid_permission_string(required_permission):
+                return Response(
+                    {'status': 'error', 'message': 'Invalid required_permission in request record'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
             
             # Get the user making the update from request
             user_id = RBACUtils.get_user_id_from_request(request)
             if not user_id:
-                user_id = request.data.get('user_id')
-                if not user_id:
-                    return Response(
-                        {'status': 'error', 'message': 'User not authenticated'}, 
-                        status=status.HTTP_401_UNAUTHORIZED
-                    )
+                return Response(
+                    {'status': 'error', 'message': 'User not authenticated'},
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
             
-            # Check if user is an admin
-            admin_user_ids = [1, 2, 3, 4]
             try:
                 user_id_int = int(user_id)
-                is_admin = user_id_int in admin_user_ids
             except (ValueError, TypeError):
-                is_admin = False
+                return Response(
+                    {'status': 'error', 'message': 'Invalid user id'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            is_admin = RBACUtils.is_system_admin(user_id_int)
             
             if not is_admin:
                 return Response(
                     {'status': 'error', 'message': 'Only administrators can approve/reject requests'}, 
                     status=status.HTTP_403_FORBIDDEN
                 )
+
+            # Tenant/framework ownership guard for admin actions.
+            admin_user = Users.objects.filter(UserId=user_id_int).first()
+            request_owner_user = Users.objects.filter(UserId=request_user_id).first()
+            if admin_user and request_owner_user:
+                admin_fw = _framework_id_value(getattr(admin_user, 'FrameworkId', None))
+                owner_fw = _framework_id_value(getattr(request_owner_user, 'FrameworkId', None))
+                if admin_fw is not None and owner_fw is not None and int(admin_fw) != int(owner_fw):
+                    return Response(
+                        {'status': 'error', 'message': 'Forbidden'},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
             
             # Get new status from request
             new_status = request.data.get('status')
@@ -2492,7 +2789,7 @@ def update_access_request_status(request, request_id):
                 )
             
             # Validate status
-            valid_statuses = ['REQUESTED', 'APPROVED', 'REJECTED']
+            valid_statuses = sorted(_ALLOWED_ACCESS_STATUS_UPDATES)
             new_status_upper = new_status.upper()
             if new_status_upper not in valid_statuses:
                 return Response(
@@ -2644,9 +2941,8 @@ def update_access_request_status(request, request_id):
                         
                 except Exception as e:
                     logger.error(f"Error updating RBAC for access request {request_id}: {str(e)}")
-                    import traceback
-                    logger.error(traceback.format_exc())
-                    audit_trail['rbac_update_error'] = str(e)
+                    logger.exception("RBAC update failed for approved access request")
+                    audit_trail['rbac_update_error'] = 'RBAC update failed'
             elif new_status_upper == 'REJECTED':
                 # Explicitly log that RBAC is NOT being updated for rejected requests
                 logger.info(f"Access request {request_id} rejected - RBAC table will NOT be updated (permissions remain unchanged)")

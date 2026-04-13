@@ -867,6 +867,31 @@ export const API_ENDPOINTS = {
 // Axios instance configuration with JWT authentication
 export const createAxiosInstance = (baseURL = API_BASE_URL) => {
   const axios = require('axios');
+
+  const readCookie = (name) => {
+    if (typeof document === 'undefined') return null;
+    const cookies = document.cookie ? document.cookie.split('; ') : [];
+    const match = cookies.find((c) => c.startsWith(`${name}=`));
+    return match ? decodeURIComponent(match.split('=').slice(1).join('=')) : null;
+  };
+
+  let csrfInitPromise = null;
+  const ensureCsrfCookie = async () => {
+    // Already present; no bootstrap needed.
+    if (readCookie('csrftoken')) return;
+    if (!csrfInitPromise) {
+      const csrfUrl = `${baseURL}/api/csrf/`;
+      csrfInitPromise = fetch(csrfUrl, {
+        method: 'GET',
+        credentials: 'include',
+        headers: { 'Accept': 'application/json' }
+      }).finally(() => {
+        csrfInitPromise = null;
+      });
+    }
+    await csrfInitPromise;
+  };
+
   const instance = axios.create({
     baseURL,
     headers: {
@@ -881,7 +906,17 @@ export const createAxiosInstance = (baseURL = API_BASE_URL) => {
 
   // Cookie-first auth: rely on HttpOnly cookies (no JS-accessible tokens).
   instance.interceptors.request.use(
-    (config) => {
+    async (config) => {
+      const method = (config.method || 'get').toLowerCase();
+      const unsafeMethods = ['post', 'put', 'patch', 'delete'];
+      if (unsafeMethods.includes(method)) {
+        await ensureCsrfCookie();
+        const csrfToken = readCookie('csrftoken');
+        if (csrfToken) {
+          config.headers = config.headers || {};
+          config.headers['X-CSRFToken'] = csrfToken;
+        }
+      }
       return config;
     },
     (error) => {

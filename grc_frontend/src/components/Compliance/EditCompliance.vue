@@ -1475,8 +1475,8 @@
 import { complianceService } from '@/services/api';
 import { CompliancePopups } from './utils/popupUtils';
 import AccessUtils from '@/utils/accessUtils';
-import axios from 'axios';
 import { API_ENDPOINTS } from '../../config/api.js';
+import apiService from '@/services/apiService.js';
 import { PopupService } from '@/modules/popus/popupService';
 
 export default {
@@ -1975,18 +1975,16 @@ export default {
         // Get current user ID to exclude from reviewer list
         const currentUserId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || ''
         // Fetch reviewers filtered by RBAC permissions (ApproveCompliance) for compliance module
-        const response = await axios.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
-          params: {
-            module: 'compliance',
-            current_user_id: currentUserId
-          }
+        const responseData = await apiService.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
+          module: 'compliance',
+          current_user_id: currentUserId
         });
         
-        if (Array.isArray(response.data)) {
-          this.users = response.data;
+        if (Array.isArray(responseData)) {
+          this.users = responseData;
           console.log('[loadUsers] Loaded users:', this.users);
         } else {
-          console.error('Invalid users data received:', response.data);
+          console.error('Invalid users data received:', responseData);
           this.error = 'Failed to load approvers';
           this.users = [];
         }

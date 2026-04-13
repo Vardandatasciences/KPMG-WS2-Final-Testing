@@ -421,7 +421,7 @@ import { eventService } from '../../services/api'
 import EventViewPopup from './EventViewPopup.vue'
 import { PopupService } from '../../modules/popus/popupService'
 import PopupModal from '../../modules/popus/PopupModal.vue'
-import axios from 'axios'
+import apiService from '@/services/apiService.js'
 import eventDataService from '../../services/eventService' // NEW: Centralized event data service
 
 export default {
@@ -440,14 +440,30 @@ export default {
     const error = ref(null)
     const selectedFrameworkFromSession = ref(null)
 
-    // Filter events for current user
-    const currentUserId = localStorage.getItem('user_id')
-    const myEvents = computed(() => events.value.filter(event => event.owner_id == currentUserId))
+    // Server-resolved user id (session); do not trust localStorage for authorization UI.
+    const currentUserId = ref(null)
+
+    const loadCurrentUserId = async () => {
+      try {
+        const r = await eventService.getCurrentUser()
+        if (r.data?.success && r.data.user?.id != null) {
+          currentUserId.value = String(r.data.user.id)
+        }
+      } catch (e) {
+        console.error('EventsApproval: failed to load current user', e)
+      }
+    }
+
+    const myEvents = computed(() => {
+      if (currentUserId.value == null) return []
+      return events.value.filter(event => String(event.owner_id) === currentUserId.value)
+    })
     const eventsForReview = computed(() => {
       // More inclusive filtering for events for review
+      const uid = currentUserId.value
       const filtered = events.value.filter(event => {
         // Show events that are assigned to current user as reviewer
-        const isAssignedToMe = event.reviewer_id == currentUserId
+        const isAssignedToMe = uid != null && String(event.reviewer_id) === uid
         // OR show events with no reviewer assigned (for admin users)
         const hasNoReviewer = !event.reviewer_id || event.reviewer_id === null
         // AND status should be reviewable
@@ -460,7 +476,7 @@ export default {
       
       console.log('Events for review filtering:', {
         totalEvents: events.value.length,
-        currentUserId: currentUserId,
+        currentUserId: uid,
         filteredCount: filtered.length,
         sampleFiltered: filtered.slice(0, 2)
       })
@@ -544,15 +560,8 @@ export default {
         }
 
         const eventId = selectedEvent.value.id
-        const userId = localStorage.getItem('user_id')
-        
-        if (!userId) {
-          console.error('No user ID found')
-          return
-        }
 
         const data = {
-          user_id: userId,
           comments: comment || ''
         }
 
@@ -612,17 +621,12 @@ export default {
     const checkSelectedFrameworkFromSession = async () => {
       try {
         console.log('🔍 DEBUG: Checking for selected framework from session in EventsApproval...')
-        const response = await axios.get('/api/frameworks/get-selected/', {
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-          }
-        })
+        const response = await apiService.get('/api/frameworks/get-selected/')
         
-        console.log('🔍 DEBUG: Framework response in EventsApproval:', response.data)
+        console.log('🔍 DEBUG: Framework response in EventsApproval:', response)
         
-        if (response.data && response.data.frameworkId) {
-          const frameworkIdFromSession = response.data.frameworkId.toString()
+        if (response && response.frameworkId) {
+          const frameworkIdFromSession = response.frameworkId.toString()
           console.log('✅ DEBUG: Found selected framework in session for EventsApproval:', frameworkIdFromSession)
           
           // Set the selected framework from session
@@ -656,15 +660,16 @@ export default {
           console.log('[EventsApproval] ✅ Using cached event data from HomeView prefetch')
           events.value = eventDataService.getData('events') || []
           console.log('Events loaded from cache:', events.value.length)
-          console.log('Current user ID:', currentUserId)
+          console.log('Current user ID:', currentUserId.value)
           console.log('Sample events:', events.value.slice(0, 3))
           
           // Debug filtering
+          const uidCache = currentUserId.value
           const eventsForReviewDebug = events.value.filter(event => 
-            event.reviewer_id == currentUserId && (event.status === 'Pending Review' || event.status === 'Pending Approval')
+            uidCache != null && String(event.reviewer_id) === uidCache && (event.status === 'Pending Review' || event.status === 'Pending Approval')
           )
           console.log('Events for review (debug):', eventsForReviewDebug.length)
-          console.log('Events with reviewer_id matching current user:', events.value.filter(event => event.reviewer_id == currentUserId))
+          console.log('Events with reviewer_id matching current user:', events.value.filter(event => uidCache != null && String(event.reviewer_id) === uidCache))
           console.log('Events with Pending Review status:', events.value.filter(event => event.status === 'Pending Review'))
           console.log('Events with Pending Approval status:', events.value.filter(event => event.status === 'Pending Approval'))
           loading.value = false
@@ -694,15 +699,16 @@ export default {
           // Cache the fetched data for future use
           eventDataService.setData('events', events.value)
           console.log('Events loaded from API:', events.value.length)
-          console.log('Current user ID:', currentUserId)
+          console.log('Current user ID:', currentUserId.value)
           console.log('Sample events:', events.value.slice(0, 3))
           
           // Debug filtering
+          const uidApi = currentUserId.value
           const eventsForReviewDebug = events.value.filter(event => 
-            event.reviewer_id == currentUserId && (event.status === 'Pending Review' || event.status === 'Pending Approval')
+            uidApi != null && String(event.reviewer_id) === uidApi && (event.status === 'Pending Review' || event.status === 'Pending Approval')
           )
           console.log('Events for review (debug):', eventsForReviewDebug.length)
-          console.log('Events with reviewer_id matching current user:', events.value.filter(event => event.reviewer_id == currentUserId))
+          console.log('Events with reviewer_id matching current user:', events.value.filter(event => uidApi != null && String(event.reviewer_id) === uidApi))
           console.log('Events with Pending Review status:', events.value.filter(event => event.status === 'Pending Review'))
           console.log('Events with Pending Approval status:', events.value.filter(event => event.status === 'Pending Approval'))
         } else {
@@ -750,6 +756,7 @@ export default {
     }
 
     onMounted(async () => {
+      await loadCurrentUserId()
       // Check for framework selection from session
       await checkSelectedFrameworkFromSession()
       

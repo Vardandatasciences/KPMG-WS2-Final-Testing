@@ -1,0 +1,90 @@
+{
+  "source_pdf": "C:\\Users\\louky\\Downloads\\GRC_TPRM-3\\grc_backend\\MEDIA_ROOT\\change_management\\Personal_Data_Protection_Act_(PDPA)_20260405_175153.pdf",
+  "extraction_method": "toc_text_with_positions",
+  "items": [
+    {
+      "level": 1,
+      "title": "Publisher’s Copyright",
+      "page_label": "C",
+      "page_number": 100,
+      "source_page": 2
+    },
+    {
+      "level": 1,
+      "title": "Amendment of section",
+      "page_label": "4",
+      "page_number": 4,
+      "source_page": 4
+    },
+    {
+      "level": 1,
+      "title": "Amendment of section",
+      "page_label": "5",
+      "page_number": 5,
+      "source_page": 4
+    },
+    {
+      "level": 2,
+      "title": "Amendment of section",
+      "page_label": "9",
+      "page_number": 9,
+      "source_page": 5
+    },
+    {
+      "level": 1,
+      "title": "New Division 1a of Part",
+      "page_label": "II",
+      "page_number": 2,
+      "source_page": 6
+    },
+    {
+      "level": 2,
+      "title": "Amendment of section",
+      "page_label": "16",
+      "page_number": 16,
+      "source_page": 7
+    },
+    {
+      "level": 2,
+      "title": "Amendment of section",
+      "page_label": "21",
+      "page_number": 21,
+      "source_page": 7
+    },
+    {
+      "level": 1,
+      "title": "9. The principal Act is amended by inserting after section",
+      "page_label": "43",
+      "page_number": 43,
+      "source_page": 8
+    },
+    {
+      "level": 1,
+      "title": "Amendment of section",
+      "page_label": "48",
+      "page_number": 48,
+      "source_page": 8
+    },
+    {
+      "level": 1,
+      "title": "Amendment of section",
+      "page_label": "67",
+      "page_number": 67,
+      "source_page": 8
+    },
+    {
+      "level": 2,
+      "title": "Amendment of section",
+      "page_label": "129",
+      "page_number": 129,
+      "source_page": 9
+    },
+    {
+      "level": 1,
+      "title": "Amendment of section",
+      "page_label": "136",
+      "page_number": 136,
+      "source_page": 10
+    }
+  ]
+}

@@ -26,7 +26,7 @@
     <!-- Consent Status Section -->
     <div v-if="!loading && !error" class="consent-status-section">
       <div class="section-header">
-        <h2>Active Consents</h2>
+        <h2>All Consents</h2>
         <button 
           v-if="activeConsents.length > 0" 
           @click="showWithdrawAllModal = true" 
@@ -36,31 +36,38 @@
         </button>
       </div>
 
-      <!-- Active Consents List -->
-      <div v-if="activeConsents.length > 0" class="consents-list">
+      <div class="consent-filter-row">
+        <button type="button" :class="['consent-filter-btn', { active: consentFilter === 'all' }]" @click="consentFilter = 'all'">All</button>
+        <button type="button" :class="['consent-filter-btn', { active: consentFilter === 'active' }]" @click="consentFilter = 'active'">Active</button>
+        <button type="button" :class="['consent-filter-btn', { active: consentFilter === 'withdrawn' }]" @click="consentFilter = 'withdrawn'">Withdrawn</button>
+      </div>
+
+      <!-- All Consents List -->
+      <div v-if="filteredConsents.length > 0" class="consents-list">
         <div 
-          v-for="consent in activeConsents" 
-          :key="`${consent.action_type}-${consent.framework}`"
-          class="consent-card active"
+          v-for="consent in filteredConsents" 
+          :key="`${consent.acceptance_id || consent.accepted_at}-${consent.action_type}-${consent.framework_id || 'all'}`"
+          :class="['consent-card', consent.has_active_consent ? 'active' : 'withdrawn']"
         >
           <div class="consent-card-header">
             <div class="consent-info">
-              <i class="fas fa-check-circle consent-icon"></i>
+              <i :class="['consent-icon', consent.has_active_consent ? 'fas fa-check-circle' : 'fas fa-ban']"></i>
               <div>
                 <h3>{{ getActionLabel(consent.action_type) }}</h3>
                 <p class="consent-meta">
                   <span class="meta-item">
                     <i class="fas fa-layer-group"></i>
-                    {{ getFrameworkName(consent.framework) }}
+                    {{ getFrameworkName(consent.framework_id || consent.framework || consent.last_accepted?.framework) }}
                   </span>
-                  <span v-if="consent.last_accepted" class="meta-item">
+                  <span class="meta-item">
                     <i class="fas fa-calendar-check"></i>
-                    {{ formatDate(consent.last_accepted.accepted_at) }}
+                    {{ formatDate(getConsentDate(consent)) }}
                   </span>
                 </p>
               </div>
             </div>
             <button 
+              v-if="consent.has_active_consent"
               @click="showWithdrawModal(consent)" 
               class="btn-withdraw"
             >
@@ -70,10 +77,10 @@
         </div>
       </div>
 
-      <!-- No Active Consents -->
+      <!-- No Consents -->
       <div v-else class="no-consents">
         <i class="fas fa-info-circle"></i>
-        <p>You don't have any active consents at the moment.</p>
+        <p>{{ noConsentsMessage }}</p>
       </div>
     </div>
 
@@ -252,7 +259,7 @@
 
 <script>
 import { 
-  checkConsentStatus, 
+  getUserConsentHistory,
   withdrawConsent, 
   withdrawAllConsents, 
   getUserConsentWithdrawals,
@@ -268,7 +275,7 @@ export default {
       loading: false,
       error: null,
       successMessage: null,
-      consentStatus: [],
+      consentHistory: [],
       withdrawals: [],
       frameworks: {},
       showWithdrawSingleModal: false,
@@ -276,15 +283,57 @@ export default {
       selectedConsent: null,
       withdrawReason: '',
       withdrawAllReason: '',
-      withdrawing: false
+      withdrawing: false,
+      consentFilter: 'all'
     };
   },
   computed: {
+    allConsents() {
+      const withdrawals = Array.isArray(this.withdrawals) ? this.withdrawals : [];
+      return (Array.isArray(this.consentHistory) ? this.consentHistory : [])
+        .map((consent) => {
+          const consentFrameworkId = consent.framework_id || consent.framework?.FrameworkId || consent.framework;
+          const consentAcceptedAt = consent.accepted_at || consent.acceptedAt;
+          const hasLaterWithdrawal = withdrawals.some((withdrawal) => {
+            const withdrawalFrameworkId = withdrawal.framework_id || withdrawal.framework?.FrameworkId || withdrawal.framework;
+            if (withdrawal.action_type !== consent.action_type) return false;
+            if (String(withdrawalFrameworkId || '') !== String(consentFrameworkId || '')) return false;
+            const withdrawnAt = new Date(withdrawal.withdrawn_at).getTime();
+            const acceptedAt = new Date(consentAcceptedAt).getTime();
+            return Number.isFinite(withdrawnAt) && Number.isFinite(acceptedAt) && withdrawnAt > acceptedAt;
+          });
+
+          return {
+            ...consent,
+            framework_id: consentFrameworkId,
+            has_active_consent: !hasLaterWithdrawal
+          };
+        })
+        .sort((a, b) => new Date(b.accepted_at).getTime() - new Date(a.accepted_at).getTime());
+    },
     activeConsents() {
-      return this.consentStatus.filter(c => c.has_active_consent);
+      return this.allConsents.filter(c => c.has_active_consent);
+    },
+    filteredConsents() {
+      if (this.consentFilter === 'active') {
+        return this.activeConsents;
+      }
+      if (this.consentFilter === 'withdrawn') {
+        return this.allConsents.filter(c => !c.has_active_consent);
+      }
+      return this.allConsents;
+    },
+    noConsentsMessage() {
+      if (this.consentFilter === 'active') {
+        return "You don't have any active consents at the moment.";
+      }
+      if (this.consentFilter === 'withdrawn') {
+        return "You don't have any withdrawn consents at the moment.";
+      }
+      return "You don't have any consent history at the moment.";
     },
     userId() {
-      return localStorage.getItem('user_id');
+      return sessionStorage.getItem('user_id');
     },
     frameworkId() {
       return getFrameworkIdForClient();
@@ -300,22 +349,20 @@ export default {
       this.error = null;
       
       try {
-        // Load consent status
-        const statusResponse = await checkConsentStatus(
+        // Load consent acceptance history (all consents for this user)
+        const historyResponse = await getUserConsentHistory(
           this.userId, 
-          this.frameworkId
+          null
         );
         
-        if (statusResponse.status === 'success') {
-          this.consentStatus = Array.isArray(statusResponse.data) 
-            ? statusResponse.data 
-            : [statusResponse];
+        if (historyResponse.status === 'success') {
+          this.consentHistory = historyResponse.data || [];
         }
         
         // Load withdrawal history
         const withdrawalsResponse = await getUserConsentWithdrawals(
           this.userId,
-          this.frameworkId
+          null
         );
         
         if (withdrawalsResponse.status === 'success') {
@@ -353,6 +400,10 @@ export default {
       // If it's a number or string ID, look it up
       const id = typeof frameworkId === 'object' ? frameworkId.FrameworkId : frameworkId;
       return this.frameworks[id] || (id ? `Framework ${id}` : 'Default Framework');
+    },
+
+    getConsentDate(consent) {
+      return consent?.accepted_at || consent?.last_accepted?.accepted_at || null;
     },
     
     getActionLabel(actionType) {
@@ -394,7 +445,8 @@ export default {
         const response = await withdrawConsent(
           this.userId,
           this.selectedConsent.action_type,
-          this.withdrawReason || null
+          this.withdrawReason || null,
+          this.selectedConsent.framework_id || this.selectedConsent.last_accepted?.framework || null
         );
         
         if (response.status === 'success') {
@@ -425,7 +477,7 @@ export default {
       try {
         const response = await withdrawAllConsents(
           this.userId,
-          this.frameworkId,
+          null,
           this.withdrawAllReason || null
         );
         
@@ -593,6 +645,35 @@ export default {
 
 .btn-withdraw-all:active {
   transform: translateY(0);
+}
+
+.consent-filter-row {
+  display: flex;
+  gap: 0.625rem;
+  margin-bottom: 1rem;
+}
+
+.consent-filter-btn {
+  padding: 0.5rem 0.9rem;
+  border: 1px solid #dbe3ef;
+  background: #ffffff;
+  color: #475569;
+  border-radius: 999px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.consent-filter-btn:hover {
+  border-color: #b8c6dc;
+  color: #334155;
+}
+
+.consent-filter-btn.active {
+  background: #6366f1;
+  border-color: #6366f1;
+  color: #ffffff;
 }
 
 .consents-list, .withdrawals-list {

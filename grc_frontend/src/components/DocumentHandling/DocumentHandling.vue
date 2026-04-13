@@ -896,18 +896,8 @@ export default {
     onMounted(() => {
       console.log('📄 Document Handling component mounted - INSTANT DISPLAY')
       
-      // Check if user is authenticated before loading documents
-      const isAuthenticated = localStorage.getItem('is_logged_in') === 'true' && 
-                             localStorage.getItem('access_token') !== null
-      
-      if (!isAuthenticated) {
-        console.warn('[DocumentHandling] ⚠️ User not authenticated, skipping document load')
-        error.value = 'Please log in to view documents'
-        isMounted.value = true
-        return
-      }
-      
-      // Load immediately (non-blocking) - only after authentication check
+      // Load immediately (non-blocking). Backend enforces authentication and
+      // cookie/session state; UI should not make trust decisions from browser storage.
       // Use pagination for initial load
       fetchDocuments(1)
       
@@ -1166,9 +1156,6 @@ export default {
         uploadProgress.value = 0
         uploadMessage.value = ''
 
-        // Get user info from localStorage
-        const userId = localStorage.getItem('user_name') || 'unknown-user'
-
         // Create FormData
         const formData = new FormData()
         formData.append('file', selectedFile.value)
@@ -1176,13 +1163,12 @@ export default {
         formData.append('framework', uploadFramework.value || '')
         formData.append('company', uploadCompany.value || '')
         formData.append('subfolder', uploadSubfolder.value || '')
-        formData.append('user_id', userId)
 
         console.log('📤 Uploading document...')
         console.log('   File:', selectedFile.value.name)
         console.log('   Module:', uploadModule.value)
         console.log('   Framework:', uploadFramework.value || 'None')
-        console.log('   User:', userId)
+        console.log('   User: session-derived on server')
 
         // Use documentService for upload (automatically refreshes cache)
         const response = await documentDataService.uploadDocument(formData, (progress) => {

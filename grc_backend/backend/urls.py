@@ -6,6 +6,9 @@ from django.http import HttpResponse
 from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from django.views.decorators.cache import cache_control
 from django.views.generic import TemplateView
+from django.views.decorators.csrf import ensure_csrf_cookie
+from django.middleware.csrf import get_token
+from django.http import JsonResponse
 
 # Import RFP views for direct URL patterns
 import tprm_backend.rfp.views as rfp_views
@@ -69,6 +72,15 @@ def favicon_view(request):
     favicon_data = b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xdb\x00\x00\x00\x00IEND\xaeB`\x82'
     response = HttpResponse(favicon_data, content_type='image/png')
     return response
+
+
+@ensure_csrf_cookie
+def csrf_token_view(request):
+    """
+    Issue/refresh CSRF cookie for SPA clients.
+    Frontend calls this before unsafe methods when csrftoken is missing.
+    """
+    return JsonResponse({'csrfToken': get_token(request)})
  
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -79,6 +91,7 @@ urlpatterns = [
     path('rfp/<int:rfp_id>/invitation', rfp_views.vendor_invitation_redirect, name='public_vendor_invitation_redirect'),
     
     path('api/', include('grc.urls')),  # Use the correct app name for API routes
+    path('api/csrf/', csrf_token_view, name='csrf-token'),
     # Versioned prefix for core GRC APIs (adds /api/v1/grc/* without breaking existing paths)
     path('api/v1/grc/', include('grc.urls')),
     path('api/', include('backend.api.urls')),  # Include API module URLs

@@ -2150,7 +2150,7 @@ export default {
         
         const response = await axios.get(
           `${API_BASE_URL}/api/profile-edit-otp/check/`,
-          { headers: this.getConsentAuthHeaders() }
+          this.getConsentRequestConfig()
         );
         
         return response.data.verified === true;
@@ -2172,7 +2172,7 @@ export default {
         const response = await axios.post(
           `${API_BASE_URL}/api/profile-edit-otp/send/`,
           {},
-          { headers: this.getConsentAuthHeaders() }
+          this.getConsentRequestConfig()
         );
         
         if (response.data.success) {
@@ -2214,7 +2214,7 @@ export default {
         const response = await axios.post(
           `${API_BASE_URL}/api/profile-edit-otp/verify/`,
           { otp: otp },
-          { headers: this.getConsentAuthHeaders() }
+          this.getConsentRequestConfig()
         );
         
         if (response.data.success) {
@@ -2341,7 +2341,7 @@ export default {
         const response = await axios.post(
           `${API_BASE_URL}/api/portability-otp/send/`,
           {},
-          { headers: this.getConsentAuthHeaders() }
+          this.getConsentRequestConfig()
         );
         
         if (response.data.success) {
@@ -2383,7 +2383,7 @@ export default {
         const response = await axios.post(
           `${API_BASE_URL}/api/portability-otp/verify/`,
           { otp: otp },
-          { headers: this.getConsentAuthHeaders() }
+          this.getConsentRequestConfig()
         );
         
         if (response.data.success) {
@@ -2501,7 +2501,7 @@ export default {
         const response = await axios.post(
           `${API_BASE_URL}/api/export-user-data-portability/`,
           { export_format: this.selectedExportFormat },
-          { headers: this.getConsentAuthHeaders() }
+          this.getConsentRequestConfig()
         );
         
         if (response.data.status === 'success') {
@@ -2607,7 +2607,7 @@ export default {
       }
     },
 
-    // Add a method to get the current user ID from all possible sources
+    // Resolve current user id from session/context only.
     getCurrentUserId() {
       console.log('=== DEBUGGING USER ID RETRIEVAL ===');
       
@@ -2620,10 +2620,10 @@ export default {
         return userId;
       }
       
-      // Try localStorage user_id (primary source for JWT authentication)
-      userId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id');
+      // Try session user_id
+      userId = sessionStorage.getItem('user_id');
       if (userId) {
-        console.log('Using userId from localStorage user_id:', userId);
+        console.log('Using userId from sessionStorage user_id:', userId);
         return userId;
       }
       
@@ -2651,27 +2651,10 @@ export default {
         }
       }
       
-      // Try localStorage user object
-      const localUser = sessionStorage.getItem('user') || localStorage.getItem('user');
-      console.log('Local user data:', localUser);
-      if (localUser) {
-        try {
-          const parsedUser = JSON.parse(localUser);
-          console.log('Parsed local user:', parsedUser);
-          userId = parsedUser.UserId || parsedUser.userId;
-          if (userId) {
-            console.log('Using userId from localStorage user object:', userId);
-            return userId;
-          }
-        } catch (e) {
-          console.error('Error parsing local user:', e);
-        }
-      }
-      
-      // Check for username in localStorage that might help identify the user
-      const userName = sessionStorage.getItem('user_name') || localStorage.getItem('user_name');
-      const fullName = sessionStorage.getItem('fullName') || localStorage.getItem('fullName');
-      const username = sessionStorage.getItem('username') || localStorage.getItem('username');
+      // Check for username in session storage that might help identify the user
+      const userName = sessionStorage.getItem('user_name');
+      const fullName = sessionStorage.getItem('fullName');
+      const username = sessionStorage.getItem('username');
       console.log('Additional user info - userName:', userName, 'fullName:', fullName, 'username:', username);
       
       // TEMPORARY FIX: Check if the current user is vikram.patel and use the correct user ID
@@ -2681,9 +2664,52 @@ export default {
         return '2';
       }
       
-      // Default to 1 if nothing else works
-      console.log('No user ID found, using default: 1');
-      return '1';
+      // Secure default: no implicit user id fallback.
+      console.log('No session user ID found');
+      return null;
+    },
+
+    async resolveCurrentUserId() {
+      // 1) Fast path from current session context.
+      const sessionUserId = this.getCurrentUserId();
+      if (sessionUserId) {
+        return sessionUserId;
+      }
+
+      // 2) Fallback to authenticated server identity (cookie/JWT).
+      try {
+        const token = sessionStorage.getItem('access_token');
+        const headers = {
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest'
+        };
+        if (token && token.split('.').length === 3) {
+          headers.Authorization = `Bearer ${token}`;
+        }
+
+        const response = await fetch('/api/user-role/', {
+          method: 'GET',
+          credentials: 'include',
+          headers
+        });
+
+        if (!response.ok) {
+          return null;
+        }
+
+        const payload = await response.json();
+        const serverUserId = payload?.user_id;
+        if (serverUserId !== undefined && serverUserId !== null && String(serverUserId).trim() !== '') {
+          const normalized = String(serverUserId);
+          sessionStorage.setItem('user_id', normalized);
+          sessionStorage.setItem('userId', normalized);
+          return normalized;
+        }
+      } catch (error) {
+        console.warn('Failed to resolve user id from server:', error);
+      }
+
+      return null;
     },
 
     async loadUserData() {
@@ -2691,7 +2717,7 @@ export default {
       this.error = null;
 
       try {
-        const userId = this.getCurrentUserId();
+        const userId = await this.resolveCurrentUserId();
         
         if (userId) {
           console.log('Fetching user profile for userId:', userId);
@@ -2808,10 +2834,10 @@ export default {
       this.success = null
 
       try {
-        const userData = JSON.parse(sessionStorage.getItem('user') || localStorage.getItem('user') || '{}')
+        const userData = JSON.parse(sessionStorage.getItem('user') || '{}')
         
         // Here you would typically send the updated data to your backend
-        // For now, we'll just update localStorage
+        // Update session-backed user cache for immediate UI consistency.
         userData.firstName = this.form.firstName
         userData.lastName = this.form.lastName
         userData.email = this.form.email
@@ -2846,9 +2872,9 @@ export default {
 
     // Here you would typically send the updated data to your backend
 
-    // For now, we'll just update localStorage
+    // Update session-backed user cache for immediate UI consistency.
 
-    const userData = JSON.parse(sessionStorage.getItem('user') || localStorage.getItem('user') || '{}')
+    const userData = JSON.parse(sessionStorage.getItem('user') || '{}')
 
     userData.departmentName = this.businessInfo.departmentName
 
@@ -3337,7 +3363,7 @@ export default {
        try {
          const { API_BASE_URL } = await import('../../config/api.js');
          const axios = (await import('axios')).default;
-         const accessToken = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
+        const accessToken = sessionStorage.getItem('access_token');
 
          const response = await axios.put(
            `${API_BASE_URL}/api/user-permissions/${this.selectedUserId}/update/`,
@@ -3392,7 +3418,7 @@ export default {
        this.allUsersSuccess = null;
        
        try {
-         const accessToken = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
+        const accessToken = sessionStorage.getItem('access_token');
          const headers = {
            'Content-Type': 'application/json',
            'X-Requested-With': 'XMLHttpRequest'
@@ -3441,7 +3467,7 @@ export default {
        user.IsActive = newStatus;
        
        try {
-         const accessToken = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
+        const accessToken = sessionStorage.getItem('access_token');
          const headers = {
            'Content-Type': 'application/json',
            'X-Requested-With': 'XMLHttpRequest'
@@ -3521,11 +3547,11 @@ export default {
           try {
             console.log('Making API call to:', '/api/register/');
             console.log('Request data:', newUser);
-            console.log('Access token:', sessionStorage.getItem('access_token') || localStorage.getItem('access_token'));
+            console.log('Access token present in session:', !!sessionStorage.getItem('access_token'));
             
             // Try with JWT first, then fallback to session-based auth
             let response;
-            const accessToken = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
+            const accessToken = sessionStorage.getItem('access_token');
             
             if (accessToken) {
               console.log('Using JWT authentication');
@@ -3756,6 +3782,7 @@ export default {
           const axios = (await import('axios')).default;
           
           const response = await axios.get(`${API_BASE_URL}/api/frameworks/`, {
+            withCredentials: true,
             headers: this.getConsentAuthHeaders()
           });
           
@@ -3801,6 +3828,7 @@ export default {
               console.log('[UserProfile] 🔵 Loading TPRM consent configurations...');
               
               const tprmResponse = await axios.get(`${API_BASE_URL}/api/tprm/consent/configurations/`, {
+                withCredentials: true,
                 params: { framework_id: this.consentFrameworkId || parseInt(getDefaultFrameworkId(), 10) },
                 headers: this.getConsentAuthHeaders()
               });
@@ -3847,6 +3875,7 @@ export default {
               console.log('[UserProfile] 🔵 Loading GRC consent configurations...');
               
               const response = await axios.get(`${API_BASE_URL}/api/consent/configurations/`, {
+                withCredentials: true,
                 params: { 
                   framework_id: this.consentFrameworkId,
                   created_by: userId
@@ -3947,7 +3976,7 @@ export default {
                 configs: grcConfigsToUpdate,
                 updated_by: userId
               },
-              { headers: this.getConsentAuthHeaders() }
+              this.getConsentRequestConfig()
             );
             
             if (grcResponse.data.status !== 'success') {
@@ -3963,7 +3992,7 @@ export default {
                 configs: tprmConfigsToUpdate,
                 updated_by: userId
               },
-              { headers: this.getConsentAuthHeaders() }
+              this.getConsentRequestConfig()
             );
             
             if (tprmResponse.data.status !== 'success') {
@@ -4047,7 +4076,7 @@ export default {
           
           const response = await axios.get(
             `${API_BASE_URL}/api/data-subject-requests/${userId}/`,
-            { headers: this.getConsentAuthHeaders() }
+            this.getConsentRequestConfig()
           );
           
           if (response.data.status === 'success') {
@@ -4084,7 +4113,7 @@ export default {
           
           const response = await axios.get(
             API_ENDPOINTS.TPRM_ACCESS_REQUESTS(userId),
-            { headers: this.getConsentAuthHeaders() }
+            this.getConsentRequestConfig()
           );
           
           console.log('🔵 [UserProfile] TPRM access requests response:', response.data);
@@ -4245,7 +4274,7 @@ export default {
           const response = await axios.put(
             endpoint,
             requestBody,
-            { headers: this.getConsentAuthHeaders() }
+            this.getConsentRequestConfig()
           );
           
           if (response.data.status === 'success') {
@@ -4333,10 +4362,22 @@ export default {
       },
  
       getConsentAuthHeaders() {
-        const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
-        return {
-          'Authorization': `Bearer ${token}`,
+        const token = sessionStorage.getItem('access_token');
+        const headers = {
           'Content-Type': 'application/json'
+        };
+        // Avoid sending malformed Authorization headers such as "Bearer null".
+        if (token && token.split('.').length === 3) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+        return headers;
+      },
+
+      getConsentRequestConfig(extra = {}) {
+        return {
+          withCredentials: true,
+          headers: this.getConsentAuthHeaders(),
+          ...extra
         };
       },
       

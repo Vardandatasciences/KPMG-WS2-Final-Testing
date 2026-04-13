@@ -412,7 +412,7 @@ import EventEditModal from './EventEditModal.vue'
 import { PopupService } from '../../modules/popus/popupService'
 import PopupModal from '../../modules/popus/PopupModal.vue'
 import AccessUtils from '../../utils/accessUtils'
-import axios from 'axios'
+import apiService from '@/services/apiService.js'
 import eventDataService from '../../services/eventService' // NEW: Centralized event data service
 import { openDownloadInNewTabWithAnchorFallback } from '@/utils/safeExternalNavigation'
 import {
@@ -530,7 +530,6 @@ export default {
           'Description': sanitizeExportCellValue(event.description || 'No description')
         }))
         
-        const userId = localStorage.getItem('user_id') || 'default_user'
         const normalizedFormat = String(format).toLowerCase()
         const fileBaseName = `events_export_${new Date().toISOString().split('T')[0]}`
         const fileBaseNameSafe = sanitizeExportDownloadFileName(fileBaseName)
@@ -538,7 +537,6 @@ export default {
         const response = await eventService.exportEventsToS3({
           export_format: normalizedFormat,
           events: exportData,
-          user_id: userId,
           file_name: fileBaseNameSafe
         })
 
@@ -560,6 +558,10 @@ export default {
         
       } catch (error) {
         console.error('Export error:', error)
+        if (error?.response?.status === 403) {
+          PopupService.error('Export permission denied by server policy.', 'Access Denied')
+          return
+        }
         PopupService.error(`Failed to export events: ${error.message}`, 'Export Error')
       }
     }
@@ -666,16 +668,14 @@ export default {
 
     const handleModalSubmit = async (comment) => {
       try {
-        const userId = localStorage.getItem('user_id')
         const eventId = selectedEvent.value?.id
         
-        if (!userId || !eventId) {
-          console.error('Missing user ID or event ID')
+        if (!eventId) {
+          console.error('Missing event ID')
           return
         }
         
         const data = {
-          user_id: userId,
           comments: comment || ''
         }
         
@@ -797,11 +797,22 @@ export default {
       return filteredEvents.value.filter(event => event.status === status)
     }
 
-    // Check if current user is the reviewer for the selected event
+    const sessionUserId = ref(null)
+    const loadSessionUserId = async () => {
+      try {
+        const r = await eventService.getCurrentUser()
+        if (r.data?.success && r.data.user?.id != null) {
+          sessionUserId.value = String(r.data.user.id)
+        }
+      } catch (e) {
+        console.warn('EventsList: could not load session user id', e)
+      }
+    }
+
+    // Check if current user is the reviewer for the selected event (id from server session)
     const isCurrentUserReviewer = computed(() => {
-      if (!selectedEvent.value) return false
-      const currentUserId = localStorage.getItem('user_id')
-      return selectedEvent.value.reviewer_id == currentUserId
+      if (!selectedEvent.value || sessionUserId.value == null) return false
+      return String(selectedEvent.value.reviewer_id) === sessionUserId.value
     })
 
     const fetchEvents = async () => {
@@ -867,17 +878,12 @@ export default {
     const checkSelectedFrameworkFromSession = async () => {
       try {
         console.log('🔍 DEBUG: Checking for selected framework from session in EventsList...')
-        const response = await axios.get('/api/frameworks/get-selected/', {
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-          }
-        })
+        const response = await apiService.get('/api/frameworks/get-selected/')
         
-        console.log('🔍 DEBUG: Framework response in EventsList:', response.data)
+        console.log('🔍 DEBUG: Framework response in EventsList:', response)
         
-        if (response.data && response.data.frameworkId) {
-          const frameworkIdFromSession = response.data.frameworkId.toString()
+        if (response && response.frameworkId) {
+          const frameworkIdFromSession = response.frameworkId.toString()
           console.log('✅ DEBUG: Found selected framework in session for EventsList:', frameworkIdFromSession)
           
           // Set the selected framework from session
@@ -899,6 +905,7 @@ export default {
     onMounted(async () => {
       // Fetch user permissions first
       await fetchEventPermissions()
+      await loadSessionUserId()
       
       // Check for framework selection from session
       await checkSelectedFrameworkFromSession()

@@ -68,7 +68,50 @@ const getErrorDetailText = (error) => {
       .join(' ');
   }
   return String(d.message || d.error || d.detail || error.message || '');
+
 };
+
+
+
+
+
+// const clearInvalidSessionAuthTokens = () => {
+//   ['access_token', 'session_token', 'token', 'jwt_token'].forEach((k) => {
+//     sessionStorage.removeItem(k);
+//   });
+// };
+
+// const normalizeAndValidateJwt = (rawToken) => {
+//   if (!rawToken || typeof rawToken !== 'string') return null;
+//   const trimmed = rawToken.trim();
+//   if (!trimmed) return null;
+
+//   const token = trimmed.replace(/^Bearer\s+/i, '');
+//   if (!token || ['null', 'undefined', '[object object]'].includes(token.toLowerCase())) {
+//     return null;
+//   }
+
+//   const parts = token.split('.');
+//   if (parts.length !== 3) return null;
+//   if (!parts.every((p) => p && JWT_SEGMENT_RE.test(p))) return null;
+//   return token;
+// };
+
+// const getSessionUserId = () => {
+//   let userId = sessionStorage.getItem('user_id') || sessionStorage.getItem('userId');
+//   if (!userId) {
+//     try {
+//       const currentUserStr = sessionStorage.getItem('current_user');
+//       if (currentUserStr) {
+//         const parsed = JSON.parse(currentUserStr);
+//         userId = parsed?.UserId || parsed?.user_id || parsed?.userId || parsed?.id;
+//       }
+//     } catch (e) {
+//       // ignore parse failures
+//     }
+//   }
+//   return userId || null;
+// };
 
 // --- Core Axios Instance ---
 const apiClient = createAxiosInstance(API_BASE_URL);

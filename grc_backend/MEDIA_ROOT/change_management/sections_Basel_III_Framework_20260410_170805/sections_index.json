@@ -1,0 +1,140 @@
+{
+  "source_pdf": "C:\\Users\\louky\\Downloads\\GRC_TPRM-3\\grc_backend\\MEDIA_ROOT\\change_management\\Personal_Data_Protection_Act_(PDPA)_20260405_175153.pdf",
+  "index_json": "C:\\Users\\louky\\Downloads\\GRC_TPRM-3\\grc_backend\\MEDIA_ROOT\\change_management\\sections_Basel_III_Framework_20260410_170805\\index.json",
+  "structure_type": "hierarchical",
+  "sections_written": [
+    {
+      "folder": "004-New_Division_1a_of_Part",
+      "title": "New Division 1a of Part",
+      "level": 1,
+      "start_page": 1,
+      "end_page": 9,
+      "printed_page": 2,
+      "has_children": true,
+      "pdf_file": "New_Division_1a_of_Part.pdf",
+      "out_of_range": false
+    },
+    {
+      "folder": "002-Amendment_of_section",
+      "title": "Amendment of section",
+      "level": 1,
+      "start_page": 9,
+      "end_page": 9,
+      "printed_page": 4,
+      "has_children": false,
+      "pdf_file": "(empty - page range beyond document)",
+      "out_of_range": true
+    },
+    {
+      "folder": "003-Amendment_of_section",
+      "title": "Amendment of section",
+      "level": 1,
+      "start_page": 9,
+      "end_page": 9,
+      "printed_page": 4,
+      "has_children": true,
+      "pdf_file": "(empty - page range beyond document)",
+      "out_of_range": true
+    },
+    {
+      "folder": "003-Amendment_of_section/001-Amendment_of_section",
+      "title": "Amendment of section",
+      "level": 2,
+      "start_page": 9,
+      "end_page": 9,
+      "printed_page": 4,
+      "has_children": false,
+      "pdf_file": "(empty - page range beyond document)",
+      "out_of_range": true
+    },
+    {
+      "folder": "004-New_Division_1a_of_Part/001-Amendment_of_section",
+      "title": "Amendment of section",
+      "level": 2,
+      "start_page": 9,
+      "end_page": 9,
+      "printed_page": 4,
+      "has_children": false,
+      "pdf_file": "(empty - page range beyond document)",
+      "out_of_range": true
+    },
+    {
+      "folder": "004-New_Division_1a_of_Part/002-Amendment_of_section",
+      "title": "Amendment of section",
+      "level": 2,
+      "start_page": 9,
+      "end_page": 9,
+      "printed_page": 4,
+      "has_children": false,
+      "pdf_file": "(empty - page range beyond document)",
+      "out_of_range": true
+    },
+    {
+      "folder": "006-Amendment_of_section",
+      "title": "Amendment of section",
+      "level": 1,
+      "start_page": 9,
+      "end_page": 9,
+      "printed_page": 4,
+      "has_children": false,
+      "pdf_file": "(empty - page range beyond document)",
+      "out_of_range": true
+    },
+    {
+      "folder": "007-Amendment_of_section",
+      "title": "Amendment of section",
+      "level": 1,
+      "start_page": 9,
+      "end_page": 9,
+      "printed_page": 4,
+      "has_children": true,
+      "pdf_file": "(empty - page range beyond document)",
+      "out_of_range": true
+    },
+    {
+      "folder": "007-Amendment_of_section/001-Amendment_of_section",
+      "title": "Amendment of section",
+      "level": 2,
+      "start_page": 9,
+      "end_page": 9,
+      "printed_page": 4,
+      "has_children": false,
+      "pdf_file": "(empty - page range beyond document)",
+      "out_of_range": true
+    },
+    {
+      "folder": "008-Amendment_of_section",
+      "title": "Amendment of section",
+      "level": 1,
+      "start_page": 9,
+      "end_page": 9,
+      "printed_page": 4,
+      "has_children": false,
+      "pdf_file": "(empty - page range beyond document)",
+      "out_of_range": true
+    },
+    {
+      "folder": "005-9_The_principal_Act_is_amended_by_insert",
+      "title": "9. The principal Act is amended by inserting after section",
+      "level": 1,
+      "start_page": 9,
+      "end_page": 9,
+      "printed_page": 43,
+      "has_children": false,
+      "pdf_file": "(empty - page range beyond document)",
+      "out_of_range": true
+    },
+    {
+      "folder": "001-Publisher_s_Copyright",
+      "title": "Publisher’s Copyright",
+      "level": 1,
+      "start_page": 9,
+      "end_page": 9,
+      "printed_page": 100,
+      "has_children": false,
+      "pdf_file": "(empty - page range beyond document)",
+      "out_of_range": true
+    }
+  ],
+  "unresolved_titles": []
+}

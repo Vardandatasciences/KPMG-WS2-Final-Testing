@@ -20,18 +20,26 @@ function getFrameworkId() {
   return id;
 }
 
+function buildConsentRequestConfig(extra = {}) {
+  const token = sessionStorage.getItem('access_token');
+  const headers = {
+    'Content-Type': 'application/json'
+  };
+  // Only send Authorization when token looks like a real JWT.
+  if (token && token.split('.').length === 3) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  return {
+    withCredentials: true,
+    headers,
+    ...extra
+  };
+}
+
 export async function checkConsentRequired(actionType) {
   try {
     const frameworkId = getFrameworkId();
-    const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
-    const userId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id');
-
-    if (!token) {
-      // Don't log as error - this is expected when user is logged out
-      // Just return without requiring consent (fail-open behavior)
-      console.warn('⚠️ [Consent] No access token found - skipping consent check');
-      return { required: false, config: null };
-    }
+    const userId = sessionStorage.getItem('user_id');
     
     console.log(`🔍 [Consent] Checking consent for action: ${actionType}, framework: ${frameworkId}`);
     console.log(`🔍 [Consent] API URL: ${API_BASE_URL}/api/consent/check/`);
@@ -51,12 +59,7 @@ export async function checkConsentRequired(actionType) {
     const response = await axios.post(
       `${API_BASE_URL}/api/consent/check/`,
       payload,
-      {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      }
+      buildConsentRequestConfig()
     );
 
     console.log('📡 [Consent] API Response Status:', response.status);
@@ -107,7 +110,6 @@ export async function checkConsentRequired(actionType) {
 export async function recordConsentAcceptance(userId, configId, actionType, ipAddress = null) {
   try {
     const frameworkId = getFrameworkId();
-    const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
 
     // If IP address not provided, let backend extract it from request
     // The backend will get it from request.META
@@ -121,12 +123,7 @@ export async function recordConsentAcceptance(userId, configId, actionType, ipAd
         ip_address: ipAddress, // Can be null, backend will extract from request
         user_agent: navigator.userAgent
       },
-      {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      }
+      buildConsentRequestConfig()
     );
 
     return response.data.status === 'success';
@@ -288,29 +285,24 @@ export function useConsent() {
  * @param {number} userId - User ID
  * @param {string} actionType - Action type
  * @param {string} reason - Optional reason for withdrawal
+ * @param {number|null} frameworkId - Optional framework override
  * @returns {Promise<Object>} - Withdrawal response
  */
-export async function withdrawConsent(userId, actionType, reason = null) {
+export async function withdrawConsent(userId, actionType, reason = null, frameworkId = null) {
   try {
-    const frameworkId = getFrameworkId();
-    const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
+    const fwId = frameworkId || getFrameworkId();
 
     const response = await axios.post(
       `${API_BASE_URL}/api/consent/withdraw/`,
       {
         user_id: userId,
         action_type: actionType,
-        framework_id: frameworkId,
+        framework_id: fwId,
         ip_address: null, // Can be set server-side if needed
         user_agent: navigator.userAgent,
         reason: reason
       },
-      {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      }
+      buildConsentRequestConfig()
     );
 
     return response.data;
@@ -330,7 +322,6 @@ export async function withdrawConsent(userId, actionType, reason = null) {
 export async function withdrawAllConsents(userId, frameworkId = null, reason = null) {
   try {
     const fwId = frameworkId || getFrameworkId();
-    const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
 
     const payload = {
       user_id: userId,
@@ -346,12 +337,7 @@ export async function withdrawAllConsents(userId, frameworkId = null, reason = n
     const response = await axios.post(
       `${API_BASE_URL}/api/consent/withdraw-all/`,
       payload,
-      {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      }
+      buildConsentRequestConfig()
     );
 
     return response.data;
@@ -370,7 +356,6 @@ export async function withdrawAllConsents(userId, frameworkId = null, reason = n
  */
 export async function getUserConsentWithdrawals(userId, frameworkId = null, actionType = null) {
   try {
-    const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
     const params = {};
 
     if (frameworkId) {
@@ -382,13 +367,7 @@ export async function getUserConsentWithdrawals(userId, frameworkId = null, acti
 
     const response = await axios.get(
       `${API_BASE_URL}/api/consent/withdrawals/${userId}/`,
-      {
-        params,
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      }
+      buildConsentRequestConfig({ params })
     );
 
     return response.data;
@@ -399,18 +378,49 @@ export async function getUserConsentWithdrawals(userId, frameworkId = null, acti
 }
 
 /**
+ * Get user's consent acceptance history
+ * @param {number} userId - User ID
+ * @param {number|null} frameworkId - Optional framework ID filter
+ * @param {string|null} actionType - Optional action type filter
+ * @returns {Promise<Object>} - Consent history
+ */
+export async function getUserConsentHistory(userId, frameworkId = null, actionType = null) {
+  try {
+    const params = {};
+
+    if (frameworkId) {
+      params.framework_id = frameworkId;
+    }
+    if (actionType) {
+      params.action_type = actionType;
+    }
+
+    const response = await axios.get(
+      `${API_BASE_URL}/api/consent/user-history/${userId}/`,
+      buildConsentRequestConfig({ params })
+    );
+
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching consent history:', error);
+    throw error;
+  }
+}
+
+/**
  * Check consent status for a user (including withdrawals)
  * @param {number} userId - User ID
- * @param {number} frameworkId - Framework ID
+ * @param {number|null} frameworkId - Optional framework ID
  * @param {string|null} actionType - Optional action type
  * @returns {Promise<Object>} - Consent status
  */
 export async function checkConsentStatus(userId, frameworkId, actionType = null) {
   try {
-    const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
-    const params = {
-      framework_id: frameworkId
-    };
+    const params = {};
+
+    if (frameworkId !== null && frameworkId !== undefined && frameworkId !== '') {
+      params.framework_id = frameworkId;
+    }
 
     if (actionType) {
       params.action_type = actionType;
@@ -418,13 +428,7 @@ export async function checkConsentStatus(userId, frameworkId, actionType = null)
 
     const response = await axios.get(
       `${API_BASE_URL}/api/consent/status/${userId}/`,
-      {
-        params,
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      }
+      buildConsentRequestConfig({ params })
     );
 
     return response.data;
@@ -439,6 +443,7 @@ export default {
   recordConsentAcceptance,
   withdrawConsent,
   withdrawAllConsents,
+  getUserConsentHistory,
   getUserConsentWithdrawals,
   checkConsentStatus,
   CONSENT_ACTIONS,

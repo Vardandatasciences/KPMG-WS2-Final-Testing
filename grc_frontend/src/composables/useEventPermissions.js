@@ -28,22 +28,10 @@ export function useEventPermissions() {
       console.error('Error fetching event permissions:', err)
       console.error('Error details:', err.response?.data || err.message)
       error.value = 'Failed to fetch permissions'
-      
-      // Set default permissions for GRC Administrator as fallback
-      // This ensures the user can still access the system even if permissions API fails
-      eventPermissions.value = {
-        view_all_event: true,
-        view_module_event: true,
-        create_event: true,
-        edit_event: true,
-        approve_event: true,
-        reject_event: true,
-        archive_event: true,
-        event_performance_analytics: true,
-        is_admin: true,
-        role: 'GRC Administrator'
-      }
-      accessibleModules.value = ['Compliance Management', 'Policy Management', 'Audit Management', 'Risk Management', 'Incident Management']
+      // Security: fail closed when permission lookup fails.
+      // UI should not auto-elevate to admin permissions.
+      eventPermissions.value = {}
+      accessibleModules.value = []
     } finally {
       isLoading.value = false
     }
@@ -82,6 +70,11 @@ export function useEventPermissions() {
     return eventPermissions.value.event_performance_analytics || eventPermissions.value.is_admin
   })
 
+  const canExportEvents = computed(() => {
+    // Export is treated as a view-scoped operation.
+    return canViewAllEvents.value || canViewModuleEvents.value
+  })
+
   const isAdmin = computed(() => {
     return eventPermissions.value.is_admin
   })
@@ -108,13 +101,13 @@ export function useEventPermissions() {
   const hasEventAccess = computed(() => {
     // If permissions haven't been loaded yet or there's an error, allow access temporarily
     // This prevents showing "Access Denied" while permissions are being fetched
-    if (isLoading.value || error.value) {
+    if (isLoading.value) {
       return true
     }
     
-    // If permissions object is empty (API call failed), allow access as fallback
+    // If permissions object is empty (API call failed), deny by default.
     if (Object.keys(eventPermissions.value).length === 0) {
-      return true
+      return false
     }
     
     return canViewAllEvents.value || canViewModuleEvents.value || canCreateEvents.value
@@ -180,6 +173,7 @@ export function useEventPermissions() {
     canRejectEvents,
     canArchiveEvents,
     canViewEventAnalytics,
+    canExportEvents,
     isAdmin,
     userRole,
     hasEventAccess,

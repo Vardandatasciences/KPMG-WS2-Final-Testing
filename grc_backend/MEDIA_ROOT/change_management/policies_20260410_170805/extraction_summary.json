@@ -1,0 +1,21 @@
+{
+  "framework_metadata": {
+    "framework_name": "Custom Policy Framework",
+    "current_version": "1.0",
+    "framework_description": "A comprehensive policy framework designed to establish governance, compliance, and operational standards for organizational activities. This framework provides structured guidance for policy development, implementation, and monitoring across various business functions.",
+    "category": "General Policy Framework",
+    "start_date": "2026-04-10",
+    "end_date": null,
+    "identifier_prefix": "POL"
+  },
+  "extraction_summary": {
+    "total_sections_processed": 1,
+    "total_policies": 3,
+    "total_subpolicies": 8,
+    "policy_type_distribution": {
+      "General": 3
+    },
+    "api_calls_made": 12,
+    "extraction_date": "2026-04-10T17:09:17.237430"
+  }
+}

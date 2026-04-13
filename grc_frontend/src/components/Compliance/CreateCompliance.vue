@@ -1261,8 +1261,8 @@ import { complianceService } from '@/services/api';
   import { CompliancePopups } from './utils/popupUtils';
   import CustomDropdown from '@/components/CustomDropdown.vue';
   import AccessUtils from '@/utils/accessUtils';
-  import axios from 'axios';
   import { API_ENDPOINTS } from '../../config/api.js';
+import apiService from '@/services/apiService.js';
 
 export default {
   name: 'CreateCompliance',
@@ -1557,11 +1557,11 @@ export default {
     async checkSelectedFrameworkFromSession() {
       try {
         console.log('🔍 DEBUG: Checking for selected framework from session in CreateCompliance...')
-        const response = await axios.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED)
-        console.log('📊 DEBUG: Selected framework response:', response.data)
+        const responseData = await apiService.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED)
+        console.log('📊 DEBUG: Selected framework response:', responseData)
         
-        if (response.data && response.data.success && response.data.frameworkId) {
-          const frameworkIdFromSession = response.data.frameworkId
+        if (responseData && responseData.success && responseData.frameworkId) {
+          const frameworkIdFromSession = responseData.frameworkId
           console.log('✅ DEBUG: Found selected framework in session:', frameworkIdFromSession)
           
           // Store the session framework ID for filtering
@@ -1599,16 +1599,16 @@ export default {
     async saveFrameworkToSession(frameworkId) {
       try {
         console.log('💾 DEBUG: Saving framework to session:', frameworkId)
-        const response = await axios.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, {
+        const responseData = await apiService.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, {
           frameworkId: frameworkId
         })
-        console.log('💾 DEBUG: Save framework response:', response.data)
+        console.log('💾 DEBUG: Save framework response:', responseData)
         
-        if (response.data && response.data.success) {
+        if (responseData && responseData.success) {
           this.sessionFrameworkId = frameworkId
           console.log('✅ DEBUG: Framework saved to session successfully')
         } else {
-          console.error('❌ DEBUG: Failed to save framework to session:', response.data)
+          console.error('❌ DEBUG: Failed to save framework to session:', responseData)
         }
       } catch (error) {
         console.error('❌ DEBUG: Error saving framework to session:', error)
@@ -2461,17 +2461,15 @@ export default {
         const currentUserId = storedUserId ? Number(storedUserId) : null;
 
         // Fetch reviewers filtered by RBAC permissions (ApproveCompliance) and exclude current user
-        const response = await axios.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
-          params: {
-            module: 'compliance',
-            current_user_id: currentUserId || ''
-          }
+        const responseData = await apiService.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
+          module: 'compliance',
+          current_user_id: currentUserId || ''
         });
-        console.log('Users API response:', response); // Debug log
+        console.log('Users API response:', responseData); // Debug log
         
-        if (Array.isArray(response.data)) {
+        if (Array.isArray(responseData)) {
           // Normalize user data
-          const allUsers = response.data.map(user => ({
+          const allUsers = responseData.map(user => ({
             UserId: user.UserId,
             UserName: user.UserName || `User ${user.UserId}`,
             email: user.Email || user.email || ''
@@ -2869,7 +2867,6 @@ export default {
           return;
         }
         this.loading = true;
-        const loggedInUserId = localStorage.getItem('user_id') || '';
         const createdCompliances = [];
         const errors = [];
         if (this.complianceList.length > 1) {
@@ -2877,8 +2874,6 @@ export default {
         }
         for (let idx = 0; idx < this.complianceList.length; idx++) {
           const compliance = this.complianceList[idx];
-          // Only set CreatedByName if user is logged in
-          compliance.CreatedByName = loggedInUserId || '';
           try {
             this.onMitigationStepChange(idx);
             if (!this.selectedSubPolicy?.id) {
@@ -2949,7 +2944,6 @@ export default {
               Status: 'Under Review',
               ComplianceVersion: "1.0",
               reviewer: compliance.reviewer_id, // Must be explicitly set
-              CreatedByName: compliance.CreatedByName, // Must be explicitly set
               Applicability: compliance.Applicability?.trim(),
               MaturityLevel: compliance.MaturityLevel || 'Initial',
               ActiveInactive: compliance.ActiveInactive || 'Active',

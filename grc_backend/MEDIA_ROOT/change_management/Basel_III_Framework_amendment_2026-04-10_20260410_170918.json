@@ -1,0 +1,173 @@
+{
+  "amendment_metadata": {
+    "framework_id": 336,
+    "framework_name": "Basel III Framework",
+    "amendment_date": "2026-04-10",
+    "processing_date": "2026-04-10T17:09:18.119601",
+    "framework_info": {
+      "framework_name": "Custom Policy Framework",
+      "current_version": "1.0",
+      "framework_description": "A comprehensive policy framework designed to establish governance, compliance, and operational standards for organizational activities. This framework provides structured guidance for policy development, implementation, and monitoring across various business functions.",
+      "category": "General Policy Framework",
+      "start_date": "2026-04-10",
+      "end_date": null
+    }
+  },
+  "extraction_summary": {
+    "total_sections": 1,
+    "total_policies": 3,
+    "total_subpolicies": 8,
+    "total_compliance_records": 0,
+    "policy_type_distribution": {
+      "General": 3
+    }
+  },
+  "sections": [
+    {
+      "section_info": {
+        "title": "New Division 1a of Part",
+        "level": 1,
+        "start_page": 1,
+        "end_page": 9,
+        "folder_path": "004-New_Division_1a_of_Part"
+      },
+      "policies": [
+        {
+          "policy_id": "POL-GEN-001",
+          "policy_title": "Personal Data Protection (Amendment) Act 2024",
+          "policy_description": "",
+          "policy_text": "",
+          "scope": "This policy applies to all organizational units, personnel, systems, and processes involved in personal data protection (amendment) act 2024. The scope covers all personal data, sensitive information, and privacy-related processes throughout the data lifecycle from collection to disposal. It applies to all systems that store, process, or transmit personal information, including backup systems and archived data. The policy encompasses all personnel who handle personal data and all third parties with access to such information.",
+          "objective": "The primary objective of this policy is to establish clear requirements and guidelines for personal data protection (amendment) act 2024, ensuring organizational compliance and operational effectiveness. Specific objectives include: (1) establishing clear expectations and requirements for organizational behavior; (2) ensuring consistent implementation of best practices across all applicable areas; (3) minimizing operational risks and compliance gaps; (4) promoting accountability and responsibility among all stakeholders; (5) enabling effective monitoring and continuous improvement; and (6) supporting overall organizational objectives and strategic goals.",
+          "policy_type": "General",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": [
+            {
+              "subpolicy_id": "POL-GEN-001.01",
+              "subpolicy_title": "Short title",
+              "subpolicy_description": "The Act may be cited as the Personal Data Protection (Amendment) Act 2024.",
+              "subpolicy_text": "",
+              "control": "This Act may be cited as the Personal Data Protection (Amendment) Act 2024.",
+              "ai_analysis": {
+                "extraction_rationale": "Identifies the official short title of the amendment act.",
+                "source_excerpt": "This Act may be cited as the Personal Data Protection (Amendment) Act 2024."
+              },
+              "compliance_records": []
+            },
+            {
+              "subpolicy_id": "POL-GEN-001.02",
+              "subpolicy_title": "Commencement",
+              "subpolicy_description": "The Act comes into operation on a date to be specified.",
+              "subpolicy_text": "",
+              "control": "This Act comes into operation on a date to be specified.",
+              "ai_analysis": {
+                "extraction_rationale": "Captures the commencement provision indicating when the Act takes effect.",
+                "source_excerpt": "This Act comes into operation on a date t"
+              },
+              "compliance_records": []
+            }
+          ]
+        },
+        {
+          "policy_id": "POL-GEN-002",
+          "policy_title": "Amendment of Personal Data Protection Act (Clause 9)",
+          "policy_description": "",
+          "policy_text": "",
+          "scope": "This policy applies to all organizational units, personnel, systems, and processes involved in amendment of personal data protection act (clause 9). The scope covers all personal data, sensitive information, and privacy-related processes throughout the data lifecycle from collection to disposal. It applies to all systems that store, process, or transmit personal information, including backup systems and archived data. The policy encompasses all personnel who handle personal data and all third parties with access to such information.",
+          "objective": "The primary objective of this policy is to establish clear requirements and guidelines for amendment of personal data protection act (clause 9), ensuring organizational compliance and operational effectiveness. Specific objectives include: (1) establishing clear expectations and requirements for organizational behavior; (2) ensuring consistent implementation of best practices across all applicable areas; (3) minimizing operational risks and compliance gaps; (4) promoting accountability and responsibility among all stakeholders; (5) enabling effective monitoring and continuous improvement; and (6) supporting overall organizational objectives and strategic goals.",
+          "policy_type": "General",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": [
+            {
+              "subpolicy_id": "POL-GEN-002.01",
+              "subpolicy_title": "Delete phrase after consulting the Minister",
+              "subpolicy_description": "Removal of the phrase “, after consulting the Minister,” from the amendment text.",
+              "subpolicy_text": "",
+              "control": "Delete the words “, after consulting the Minister,” from the amendment.",
+              "ai_analysis": {
+                "extraction_rationale": "Identifies the removal of the consulting phrase as a specific amendment requirement.",
+                "source_excerpt": "by deleting the words “, after consulting the Minister,”"
+              },
+              "compliance_records": []
+            },
+            {
+              "subpolicy_id": "POL-GEN-002.02",
+              "subpolicy_title": "Replace cheque authorization phrase",
+              "subpolicy_description": "Substitutes the phrase concerning cheques signed by authorized persons with a phrase authorized by the Commissioner.",
+              "subpolicy_text": "",
+              "control": "Replace the words “upon as far as practicable by cheques signed by such persons as may be authorized by the Minister.” with “in such manner as may be authorized by the Commissioner.”",
+              "ai_analysis": {
+                "extraction_rationale": "Captures the substitution of the cheque authorization language.",
+                "source_excerpt": "by substituting for the words “upon as far as practicable by cheques signed by such persons as may be authorized by the Minister.” the words “in such manner as may be authorized by the Commissioner.”"
+              },
+              "compliance_records": []
+            }
+          ]
+        },
+        {
+          "policy_id": "POL-GEN-003",
+          "policy_title": "Amendment of Section 129",
+          "policy_description": "",
+          "policy_text": "",
+          "scope": "This policy applies to all organizational units, personnel, systems, and processes involved in amendment of section 129. The scope encompasses all relevant organizational activities, systems, and personnel as determined by the policy requirements. It includes all operational environments and applies to all stakeholders who may be affected by or responsible for policy implementation.",
+          "objective": "The primary objective of this policy is to establish clear requirements and guidelines for amendment of section 129, ensuring organizational compliance and operational effectiveness. Specific objectives include: (1) establishing clear expectations and requirements for organizational behavior; (2) ensuring consistent implementation of best practices across all applicable areas; (3) minimizing operational risks and compliance gaps; (4) promoting accountability and responsibility among all stakeholders; (5) enabling effective monitoring and continuous improvement; and (6) supporting overall organizational objectives and strategic goals.",
+          "policy_type": "General",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": [
+            {
+              "subpolicy_id": "POL-GEN-003.01",
+              "subpolicy_title": "Delete subsection (1)",
+              "subpolicy_description": "Removal of subsection (1) from Section 129.",
+              "subpolicy_text": "",
+              "control": "Delete subsection (1) of Section 129.",
+              "ai_analysis": {
+                "extraction_rationale": "Specifies the deletion of subsection (1) as a required amendment.",
+                "source_excerpt": "by deleting subsection (1);"
+              },
+              "compliance_records": []
+            },
+            {
+              "subpolicy_id": "POL-GEN-003.02",
+              "subpolicy_title": "Substitute purpose phrase in subsection (2)(i)",
+              "subpolicy_description": "Replaces the phrase about Minister specifying with a data controller transfer phrase.",
+              "subpolicy_text": "",
+              "control": "Substitute for the words “For the purposes of subsection (1), the Minister may specify” the words “A data controller may transfer any personal data of a data subject to”.",
+              "ai_analysis": {
+                "extraction_rationale": "Captures the substitution of the purpose specification language.",
+                "source_excerpt": "by substituting for the words “For the purposes of subsection (1), the Minister may specify” the words “A data controller may transfer any personal data of a data subject to”."
+              },
+              "compliance_records": []
+            },
+            {
+              "subpolicy_id": "POL-GEN-003.03",
+              "subpolicy_title": "Delete restrictive phrase in paragraph (a)",
+              "subpolicy_description": "Removes the phrase “, or that serves the same purposes as this Act” from paragraph (a).",
+              "subpolicy_text": "",
+              "control": "Delete the words “, or that serves the same purposes as this Act” from paragraph (a).",
+              "ai_analysis": {
+                "extraction_rationale": "Identifies the removal of the restrictive clause.",
+                "source_excerpt": "in paragraph (a), by deleting the words “, or that serves the same purposes as this Act”."
+              },
+              "compliance_records": []
+            },
+            {
+              "subpolicy_id": "POL-GEN-003.04",
+              "subpolicy_title": "Substitute subsection reference in subsection (3)(i)",
+              "subpolicy_description": "Changes reference from subsection (1) to subsection (2) in subsection (3).",
+              "subpolicy_text": "",
+              "control": "Substitute for the words “subsection (1)” the words “subsection (2)”.",
+              "ai_analysis": {
+                "extraction_rationale": "Captures the change of reference to align with new subsection.",
+                "source_excerpt": "in subsection (3)- (i) by substituting for the words “subsection (1)” the words “subsection (2)”."
+              },
+              "compliance_records": []
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

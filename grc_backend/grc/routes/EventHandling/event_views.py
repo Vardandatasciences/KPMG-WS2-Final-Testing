@@ -1,16 +1,18 @@
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.authentication import SessionAuthentication
+from django.conf import settings
 from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_protect as csrf_exempt
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.utils.decorators import method_decorator
 from django.db.models import Q
 from django.db import models
+import logging
 from django.utils import timezone
-from datetime import timedelta
+from datetime import date, datetime as dt_datetime, timedelta
 import json
 
 def _format_datetime_ist(dt):
@@ -54,11 +56,13 @@ from ...utils.file_compression import decompress_if_needed
 from ...debug_utils import debug_print
 from ...utils.log_sanitize import sanitize_for_log
 from ...utils.csv_security import sanitize_export_filename
+from ...routes.Global.validation import SecureValidator, ValidationError as TrustedUrlValidationError
 # MULTI-TENANCY: Import tenant utilities for data isolation
 from ...tenant_utils import (
     require_tenant, tenant_filter, get_tenant_id_from_request,
     validate_tenant_access, get_tenant_aware_queryset
 )
+logger = logging.getLogger(__name__)
 
 # SECURITY: S3 download / Content-Disposition hardening (header injection, CRLF, reflection).
 _MAX_S3_DOWNLOAD_KEY_LEN = 2048
@@ -93,9 +97,424 @@ def _sanitize_reflected_error_detail(value, max_len=500):
     return s
 
 
+def _log_exception(exc, *, context: str, max_len: int = 800) -> None:
+    """Operator logging without full tracebacks (reduces secret/internal leakage via logs)."""
+    safe_msg = sanitize_for_log(exc, max_len=max_len)
+    # Always emit to backend logs so production/dev can diagnose 500s.
+    logger.error("[EventHandling:%s] %s", context, safe_msg)
+    debug_print(f"DEBUG: [{context}] {safe_msg}")
+
+
+def _validate_event_evidence_s3_url(url, *, field_label='evidence.s3_url'):
+    """
+    Allow-list evidence URLs before persisting (mitigates SSRF / malicious links in UI).
+    Uses the same TRUSTED_EVIDENCE_* settings as Risk/Incident modules.
+    """
+    if url is None or url == '':
+        return None
+    if not isinstance(url, str):
+        raise ValueError('Evidence URL must be a string.')
+    try:
+        validated = SecureValidator.validate_trusted_url(
+            url.strip(),
+            field_label,
+            allowed_hosts=getattr(settings, 'TRUSTED_EVIDENCE_URL_HOSTS', None) or [],
+            allowed_host_suffixes=getattr(settings, 'TRUSTED_EVIDENCE_URL_HOST_SUFFIXES', None) or [],
+            allow_http_hosts=getattr(settings, 'TRUSTED_EVIDENCE_URL_ALLOW_HTTP_HOSTS', None) or [],
+        )
+    except TrustedUrlValidationError as e:
+        raise ValueError(getattr(e, 'message', None) or str(e) or 'Evidence URL is not allowed.') from e
+    if not validated:
+        raise ValueError('Evidence URL is not allowed.')
+    return validated
+
+
+# Shared with upload_event_evidence / attach_evidence (type + size guards)
+_EVENT_EVIDENCE_ALLOWED_CONTENT_TYPES = frozenset({
+    'application/pdf',
+    'text/csv',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-excel',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'text/plain',
+})
+_EVENT_EVIDENCE_MAX_BYTES = 10 * 1024 * 1024
+
+_EVENT_ALLOWED_PRIORITIES = frozenset({'Critical', 'High', 'Medium', 'Low'})
+_EVENT_ALLOWED_RECURRENCE = frozenset({'Non-Recurring', 'Recurring'})
+_EVENT_LINKED_RECORD_TYPES = frozenset({
+    'policy', 'compliance', 'audit', 'risk', 'incident', 'subpolicy', 'Jira Issue',
+})
+_EVENT_MAX_TITLE_LEN = 2155
+_EVENT_MAX_MODULE_LEN = 255
+_EVENT_MAX_FRAMEWORK_NAME_LEN = 255
+_EVENT_MAX_LINKED_RECORD_NAME_LEN = 1000
+_EVENT_MAX_CATEGORY_LEN = 100
+_EVENT_SCHEMA_PRECHECK_DONE = False
+
+
+def _event_schema_maintenance_allowed():
+    """Schema DDL helpers only in DEBUG or when ALLOW_EVENT_SCHEMA_MAINTENANCE is set."""
+    if getattr(settings, 'DEBUG', False):
+        return True
+    return getattr(settings, 'ALLOW_EVENT_SCHEMA_MAINTENANCE', False)
+
+
+def _ensure_event_runtime_columns():
+    """
+    Best-effort compatibility for environments with partial migrations.
+    Adds newer Event columns if missing so create_event won't 500 on unknown columns.
+    """
+    global _EVENT_SCHEMA_PRECHECK_DONE
+    if _EVENT_SCHEMA_PRECHECK_DONE:
+        return
+    try:
+        from django.db import connection
+        ddl = (
+            "ALTER TABLE events ADD COLUMN EventTypeId INT NULL",
+            "ALTER TABLE events ADD COLUMN SubEventType VARCHAR(100) NULL",
+            "ALTER TABLE events ADD COLUMN DynamicFieldsData JSON NULL",
+            "ALTER TABLE events ADD COLUMN data_inventory JSON NULL",
+        )
+        with connection.cursor() as cursor:
+            for stmt in ddl:
+                try:
+                    cursor.execute(stmt)
+                except Exception:
+                    # Column may already exist or DB may enforce strict JSON version rules.
+                    # Keep best-effort behavior; create path still has explicit error handling.
+                    pass
+    except Exception:
+        pass
+    finally:
+        _EVENT_SCHEMA_PRECHECK_DONE = True
+
+
+def _normalize_event_priority(value):
+    if value is None or value == '':
+        return 'Medium'
+    s = str(value).strip()
+    if s not in _EVENT_ALLOWED_PRIORITIES:
+        allowed = ', '.join(sorted(_EVENT_ALLOWED_PRIORITIES))
+        raise ValueError(f'Priority must be one of: {allowed}.')
+    return s
+
+
+def _normalize_event_recurrence_type(value):
+    if value is None or value == '':
+        return 'Non-Recurring'
+    s = str(value).strip()
+    if s not in _EVENT_ALLOWED_RECURRENCE:
+        allowed = ', '.join(sorted(_EVENT_ALLOWED_RECURRENCE))
+        raise ValueError(f'Recurrence type must be one of: {allowed}.')
+    return s
+
+
+def _sanitize_optional_str_field(value, max_len, field_label):
+    if value is None or value == '':
+        return None
+    s = str(value).strip()
+    if len(s) > max_len:
+        raise ValueError(f'{field_label} must be at most {max_len} characters.')
+    return s
+
+
+def _normalize_linked_record_type(value):
+    if value is None or value == '':
+        return None
+    s = str(value).strip()
+    if s in _EVENT_LINKED_RECORD_TYPES:
+        return s
+    normalized = s.lower().replace('_', ' ')
+    head = normalized.split()[0] if normalized.split() else ''
+    head_map = {
+        'policy': 'policy',
+        'compliance': 'compliance',
+        'audit': 'audit',
+        'risk': 'risk',
+        'incident': 'incident',
+        'subpolicy': 'subpolicy',
+        'jira': 'Jira Issue',
+    }
+    if head in head_map:
+        return head_map[head]
+    allowed = ', '.join(sorted(_EVENT_LINKED_RECORD_TYPES))
+    raise ValueError(f'linked_record_type must be one of: {allowed}.')
+
+
+def _get_server_user_id(request):
+    """
+    Resolve the authenticated user identity from server-side auth context only.
+    Client-supplied user_id values in query/body are intentionally ignored.
+    """
+    user_id = RBACUtils.get_user_id_from_request(request)
+    return str(user_id) if user_id else None
+
+
+def _parse_server_user_id_int(request):
+    """Authenticated user id as int, or None if missing/invalid."""
+    raw = _get_server_user_id(request)
+    if raw is None:
+        return None
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def _event_access_context(request):
+    """
+    Tenant + RBAC context for object-level event checks.
+    Returns (tenant_id, user_id_int, permissions_dict, accessible_modules).
+    """
+    tenant_id = get_tenant_id_from_request(request)
+    user_id_int = _parse_server_user_id_int(request)
+    perms = RBACUtils.get_user_event_permissions(user_id_int) if user_id_int else {}
+    modules = RBACUtils.get_user_accessible_modules(user_id_int) if user_id_int else []
+    return tenant_id, user_id_int, perms, modules
+
+
+def _user_can_view_event_object(user_id_int, perms, accessible_modules, event):
+    """Whether the user may see or act on this event row (after tenant match)."""
+    if not user_id_int or not perms:
+        return False
+    if perms.get('is_admin') or perms.get('view_all_event'):
+        return True
+    if perms.get('view_module_event'):
+        mod = (event.Module or '').strip()
+        if not mod or not accessible_modules:
+            return False
+        return mod in accessible_modules
+    return False
+
+
+def _guard_event_object_access(request, event):
+    """
+    Enforce tenant isolation + RBAC module scope on a single Event instance.
+    Returns None if allowed, or (payload_dict, http_status) for the error response.
+    """
+    tenant_id, user_id_int, perms, modules = _event_access_context(request)
+    if not user_id_int:
+        return {'success': False, 'message': 'Authentication required'}, 401
+    if tenant_id is None:
+        return {'success': False, 'message': 'Event not found'}, 404
+    if getattr(event, 'tenant_id', None) != tenant_id:
+        return {'success': False, 'message': 'Event not found'}, 404
+    if not _user_can_view_event_object(user_id_int, perms, modules, event):
+        return {'success': False, 'message': 'Event not found'}, 404
+    return None
+
+
+def _apply_event_list_scope(qs, user_id_int):
+    """
+    Apply the same module-level visibility as list endpoints.
+    Fail closed: users without view_all and without usable view_module see nothing.
+    """
+    if not user_id_int:
+        return qs.none()
+    perms = RBACUtils.get_user_event_permissions(user_id_int)
+    modules = RBACUtils.get_user_accessible_modules(user_id_int)
+    if perms.get('is_admin') or perms.get('view_all_event'):
+        return qs
+    if perms.get('view_module_event') and modules:
+        return qs.filter(Module__in=modules)
+    return qs.none()
+
+
+def _get_event_for_tenant(tenant_id, event_id_raw, *, select_related=None, allow_generated_slug=True):
+    """
+    Load a single event by numeric EventId, or by EventId_Generated when allow_generated_slug=True.
+    Raises Event.DoesNotExist when not found or tenant_id is None.
+    """
+    if tenant_id is None:
+        raise Event.DoesNotExist
+    rel = select_related or (
+        'Owner', 'Reviewer', 'CreatedBy', 'FrameworkId', 'EventType'
+    )
+    if allow_generated_slug:
+        try:
+            eid = int(event_id_raw)
+            return Event.objects.select_related(*rel).get(EventId=eid, tenant_id=tenant_id)
+        except (ValueError, TypeError):
+            return Event.objects.select_related(*rel).get(
+                EventId_Generated=str(event_id_raw), tenant_id=tenant_id
+            )
+    try:
+        eid = int(event_id_raw)
+    except (ValueError, TypeError):
+        raise Event.DoesNotExist
+    return Event.objects.select_related(*rel).get(EventId=eid, tenant_id=tenant_id)
+
+
+def _export_row_event_identifier(row):
+    """Extract event id or generated code from a client export row (dict)."""
+    if not isinstance(row, dict):
+        return None
+    for key in ('id', 'EventId', 'event_id', 'Event ID'):
+        val = row.get(key)
+        if val is None or val == '' or val == 'N/A':
+            continue
+        return val
+    return None
+
+
+def _event_to_export_row_dict(event):
+    """Build export row dict aligned with frontend EventsList / EventsDashboard export keys."""
+    owner_disp = event.owner_name if hasattr(event, 'owner_name') else ''
+    rev_disp = event.reviewer_name if hasattr(event, 'reviewer_name') else ''
+    created = event.CreatedAt.strftime('%Y-%m-%d %H:%M') if event.CreatedAt else 'N/A'
+    updated = event.UpdatedAt.strftime('%Y-%m-%d %H:%M') if event.UpdatedAt else 'N/A'
+    return {
+        'Event ID': event.EventId,
+        'Event Title': event.EventTitle or 'N/A',
+        'Framework': event.FrameworkName or 'N/A',
+        'Module': event.Module or 'N/A',
+        'Category': event.Category or 'General',
+        'Owner': owner_disp or 'Not Assigned',
+        'Reviewer': rev_disp or 'Not Assigned',
+        'Status': event.Status or 'Pending Review',
+        'Priority': event.Priority or 'Medium',
+        'Created Date': created,
+        'Updated Date': updated,
+        'Description': (event.Description or 'No description')[:10000],
+    }
+
+
+# Event schedule / due-date rules (aligned with audit-style due date bounds)
+_EVENT_DATE_MAX_YEARS_AHEAD = 10
+
+
+def _parse_event_date_value(value, field_label):
+    """
+    Normalize API input to a datetime.date. None or blank -> None.
+    Accepts date, datetime, ISO / common locale strings.
+    """
+    if value is None or value == '':
+        return None
+    if isinstance(value, dt_datetime):
+        if timezone.is_aware(value):
+            return timezone.localtime(value).date()
+        return value.date()
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str):
+        v = value.strip()
+        if not v:
+            return None
+        for fmt in ('%Y-%m-%d', '%d/%m/%Y', '%d-%m-%Y', '%m/%d/%Y', '%m-%d-%Y'):
+            try:
+                return dt_datetime.strptime(v, fmt).date()
+            except ValueError:
+                continue
+        raise ValueError(f'{field_label} must be a valid date (e.g. YYYY-MM-DD).')
+    raise ValueError(f'{field_label} has an invalid type.')
+
+
+def _creation_ref_date(created_at):
+    """Calendar date an event was created (for comparing start/end to record creation)."""
+    def _current_date_safe():
+        now_dt = timezone.now()
+        return timezone.localtime(now_dt).date() if timezone.is_aware(now_dt) else now_dt.date()
+
+    if not created_at:
+        return _current_date_safe()
+    if timezone.is_aware(created_at):
+        return timezone.localtime(created_at).date()
+    if hasattr(created_at, 'date'):
+        return created_at.date()
+    return _current_date_safe()
+
+
+def _validate_event_start_end_dates(start_d, end_d, *, mode, created_at=None, is_template=False):
+    """
+    Validate start/end (due) dates: realistic upper bound, ordering, and not before creation day.
+    mode: 'create' uses today as creation reference; 'update' uses created_at.
+    Templates skip creation-day rules but keep ordering and max-future cap.
+    """
+    now_dt = timezone.now()
+    today = timezone.localtime(now_dt).date() if timezone.is_aware(now_dt) else now_dt.date()
+    max_d = today.replace(year=today.year + _EVENT_DATE_MAX_YEARS_AHEAD)
+
+    if is_template:
+        if start_d is not None and start_d > max_d:
+            return f'Start date cannot be more than {_EVENT_DATE_MAX_YEARS_AHEAD} years in the future.'
+        if end_d is not None and end_d > max_d:
+            return f'End date cannot be more than {_EVENT_DATE_MAX_YEARS_AHEAD} years in the future.'
+        if start_d is not None and end_d is not None and end_d < start_d:
+            return 'End date must be on or after start date.'
+        return None
+
+    ref = today if mode == 'create' else _creation_ref_date(created_at)
+
+    if start_d is not None:
+        if start_d > max_d:
+            return f'Start date cannot be more than {_EVENT_DATE_MAX_YEARS_AHEAD} years in the future.'
+        if start_d < ref:
+            return f'Start date cannot be before the event creation date ({ref.isoformat()}).'
+    if end_d is not None:
+        if end_d > max_d:
+            return f'End date (due date) cannot be more than {_EVENT_DATE_MAX_YEARS_AHEAD} years in the future.'
+        if end_d < ref:
+            return f'End date (due date) cannot be before the event creation date ({ref.isoformat()}).'
+    if start_d is not None and end_d is not None and end_d < start_d:
+        return 'End date must be on or after start date.'
+    return None
+
+
+# FK / record identifiers — reject negative, zero, non-integer, bool, and overflow-style values
+_EVENT_MAX_ID_VALUE = 2_147_483_647
+_MAX_SUBEVENT_TYPE_INDEX = 10_000
+_MAX_ADDITIONAL_EVENT_RECORDS = 100
+
+
+def _parse_optional_positive_int(value, field_label, *, max_value=_EVENT_MAX_ID_VALUE):
+    """
+    None or '' -> None. Otherwise integer >= 1 and <= max_value.
+    Rejects bool (subclass of int) and non-numeric strings.
+    """
+    if value is None or value == '':
+        return None
+    if isinstance(value, bool):
+        raise ValueError(f'{field_label} must be a valid positive integer.')
+    try:
+        v = int(value)
+    except (TypeError, ValueError):
+        raise ValueError(f'{field_label} must be a valid positive integer.')
+    if v < 1:
+        raise ValueError(f'{field_label} must be a positive integer.')
+    if v > max_value:
+        raise ValueError(f'{field_label} is out of allowed range.')
+    return v
+
+
+def _parse_required_positive_int(value, field_label, *, max_value=_EVENT_MAX_ID_VALUE):
+    if value is None or value == '':
+        raise ValueError(f'{field_label} is required.')
+    return _parse_optional_positive_int(value, field_label, max_value=max_value)
+
+
+def _parse_non_negative_int(value, field_label, *, max_value=_MAX_SUBEVENT_TYPE_INDEX):
+    """For sub-event type indices: 0 allowed, capped at max_value."""
+    if value is None or value == '':
+        return None
+    if isinstance(value, bool):
+        raise ValueError(f'{field_label} must be a valid integer.')
+    try:
+        v = int(value)
+    except (TypeError, ValueError):
+        raise ValueError(f'{field_label} must be a valid integer.')
+    if v < 0:
+        raise ValueError(f'{field_label} cannot be negative.')
+    if v > max_value:
+        raise ValueError(f'{field_label} is out of allowed range.')
+    return v
+
+
 # Simple test endpoint
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@authentication_classes([CsrfExemptSessionAuthentication])
+@permission_classes([IsAuthenticated])
 @csrf_exempt
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
@@ -112,7 +531,8 @@ def test_endpoint(request):
 
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@authentication_classes([CsrfExemptSessionAuthentication])
+@permission_classes([IsAuthenticated])
 @csrf_exempt
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
@@ -147,15 +567,16 @@ def get_user_event_permissions(request):
         })
         
     except Exception as e:
+        _log_exception(e, context='get_user_event_permissions')
         return Response({
             'success': False,
-            'message': f'Error fetching user permissions: {str(e)}'
+            'message': 'Error fetching user permissions. Please try again later.'
         }, status=500)
 
 
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication])
-@permission_classes([AllowAny])
+@permission_classes([EventViewAllPermission, EventViewModulePermission])
 @csrf_exempt
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
@@ -197,18 +618,16 @@ def get_frameworks_for_events(request):
             'frameworks': frameworks_list
         })
     except Exception as e:
-        debug_print(f"DEBUG: Error in get_frameworks_for_events: {str(e)}")
-        import traceback
-        debug_print(f"DEBUG: Traceback: {traceback.format_exc()}")
+        _log_exception(e, context='get_frameworks_for_events')
         return Response({
             'success': False,
-            'message': f'Error fetching frameworks: {str(e)}'
+            'message': 'Error fetching frameworks. Please try again later.'
         }, status=500)
 
 
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication])
-@permission_classes([AllowAny])
+@permission_classes([EventViewAllPermission, EventViewModulePermission])
 @csrf_exempt
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
@@ -243,121 +662,105 @@ def get_modules_for_events(request):
         })
         
     except Exception as e:
-        debug_print(f"DEBUG: Error in get_modules_for_events: {str(e)}")
-        import traceback
-        debug_print(f"DEBUG: Traceback: {traceback.format_exc()}")
+        _log_exception(e, context='get_modules_for_events')
         return Response({
             'success': False,
-            'message': f'Error fetching modules: {str(e)}'
+            'message': 'Error fetching modules. Please try again later.'
         }, status=500)
 
 
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication])
-@permission_classes([AllowAny])
+@permission_classes([EventViewAllPermission, EventViewModulePermission])
 @csrf_exempt
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_event_types_by_framework(request):
     """
-    Get event types based on framework selection
+    Get event types based on framework selection.
+    Prefer framework_id (authoritative FK) and fall back to framework_name matching.
     """
-    # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
 
     debug_print("DEBUG: get_event_types_by_framework called")
     try:
-        framework_name = request.GET.get('framework_name')
-        
-        debug_print(f"DEBUG: framework_name='{framework_name}' (length: {len(framework_name) if framework_name else 0})")
-        if framework_name:
-            debug_print(f"DEBUG: framework_name repr: {repr(framework_name)}")
-        
-        if not framework_name:
-            return Response({
-                'success': False,
-                'message': 'Framework name is required'
-            }, status=400)
-        
-        # Trim the framework name to remove any extra whitespace
-        framework_name = framework_name.strip()
-        debug_print(f"DEBUG: Trimmed framework_name='{framework_name}' (length: {len(framework_name)})")
-        
-        # Debug: Show all available framework names in EventType table
-        all_framework_names = EventType.objects.values_list('FrameworkName', flat=True).distinct()
-        debug_print(f"DEBUG: Available framework names in EventType table: {list(all_framework_names)}")
-        
-        # Debug: Show all EventType records
-        all_event_types = EventType.objects.all().values('eventtype_id', 'FrameworkName', 'eventtype')
-        debug_print(f"DEBUG: All EventType records: {list(all_event_types)}")
-        
-        # Fetch event types for the selected framework (include eventSubtype)
-        event_types = EventType.objects.filter(
-            FrameworkName=framework_name
-        ).values('eventtype_id', 'eventtype', 'eventSubtype')
-        
-        event_types_list = list(event_types)
-        debug_print(f"DEBUG: Found {len(event_types_list)} event types for framework '{framework_name}'")
-        
-        # If no exact match found, try to find by partial match or case-insensitive match
-        if len(event_types_list) == 0:
-            debug_print(f"DEBUG: No exact match found, trying case-insensitive search...")
-            event_types_ci = EventType.objects.filter(
-                FrameworkName__iexact=framework_name
-            ).values('eventtype_id', 'eventtype', 'eventSubtype')
-            
-            event_types_list = list(event_types_ci)
-            debug_print(f"DEBUG: Found {len(event_types_list)} event types with case-insensitive search")
-        
-        # If still no match, try to find by containing the framework name
-        if len(event_types_list) == 0:
-            debug_print(f"DEBUG: Still no match, trying partial match...")
-            event_types_partial = EventType.objects.filter(
-                FrameworkName__icontains=framework_name
-            ).values('eventtype_id', 'eventtype', 'eventSubtype')
-            
-            event_types_list = list(event_types_partial)
-            debug_print(f"DEBUG: Found {len(event_types_list)} event types with partial match")
-        
-        # If still no match, try to find by framework name containing the search term
-        if len(event_types_list) == 0:
-            debug_print(f"DEBUG: Trying reverse partial match...")
-            # Split the framework name and try to match parts
-            framework_parts = framework_name.split()
-            for part in framework_parts:
-                if len(part) > 3:  # Only try parts longer than 3 characters
-                    event_types_reverse = EventType.objects.filter(
-                        FrameworkName__icontains=part
-                    ).values('eventtype_id', 'eventtype', 'eventSubtype')
-                    
-                    if event_types_reverse.exists():
-                        event_types_list = list(event_types_reverse)
-                        debug_print(f"DEBUG: Found {len(event_types_list)} event types with reverse partial match for '{part}'")
+        framework_name = (request.GET.get('framework_name') or '').strip()
+        framework_id_raw = request.GET.get('framework_id')
+
+        framework_id = None
+        if framework_id_raw not in (None, ''):
+            try:
+                framework_id = _parse_required_positive_int(framework_id_raw, 'Framework ID')
+            except ValueError as ve:
+                return Response({
+                    'success': False,
+                    'message': str(ve)
+                }, status=400)
+
+        base_qs = EventType.objects.filter(FrameworkId__tenant_id=tenant_id)
+        event_types_list = []
+        search_used = None
+
+        # 1) Preferred path: exact FK match
+        if framework_id:
+            event_types_list = list(
+                base_qs.filter(FrameworkId=framework_id).values('eventtype_id', 'eventtype', 'eventSubtype')
+            )
+            search_used = f'framework_id={framework_id}'
+
+        # 2) Fallbacks for legacy/name-only clients
+        if not event_types_list and framework_name:
+            event_types_list = list(
+                base_qs.filter(FrameworkName=framework_name).values('eventtype_id', 'eventtype', 'eventSubtype')
+            )
+            search_used = f'framework_name={framework_name}'
+
+        if not event_types_list and framework_name:
+            event_types_list = list(
+                base_qs.filter(FrameworkName__iexact=framework_name).values('eventtype_id', 'eventtype', 'eventSubtype')
+            )
+            search_used = f'framework_name__iexact={framework_name}'
+
+        if not event_types_list and framework_name:
+            event_types_list = list(
+                base_qs.filter(FrameworkName__icontains=framework_name).values('eventtype_id', 'eventtype', 'eventSubtype')
+            )
+            search_used = f'framework_name__icontains={framework_name}'
+
+        if not event_types_list and framework_name:
+            for part in framework_name.split():
+                if len(part) > 3:
+                    partial = list(
+                        base_qs.filter(FrameworkName__icontains=part).values('eventtype_id', 'eventtype', 'eventSubtype')
+                    )
+                    if partial:
+                        event_types_list = partial
+                        search_used = f'framework_name__icontains(part)={part}'
                         break
-        
+
+        all_framework_names = list(base_qs.values_list('FrameworkName', flat=True).distinct())
         return Response({
             'success': True,
             'event_types': event_types_list,
             'framework_name': framework_name,
+            'framework_id': framework_id,
             'debug_info': {
-                'available_frameworks': list(all_framework_names),
-                'search_used': framework_name
+                'available_frameworks': all_framework_names,
+                'search_used': search_used
             }
         })
         
     except Exception as e:
-        debug_print(f"DEBUG: Exception in get_event_types_by_framework: {str(e)}")
-        import traceback
-        debug_print(f"DEBUG: Traceback: {traceback.format_exc()}")
+        _log_exception(e, context='get_event_types_by_framework')
         return Response({
             'success': False,
-            'message': f'Error fetching event types: {str(e)}'
+            'message': 'Error fetching event types. Please try again later.'
         }, status=500)
 
 
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication])
-@permission_classes([AllowAny])
+@permission_classes([EventEditPermission])
 @csrf_exempt
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
@@ -423,18 +826,16 @@ def create_event_type(request):
             'message': 'Invalid JSON data'
         }, status=400)
     except Exception as e:
-        debug_print(f"DEBUG: Exception in create_event_type: {str(e)}")
-        import traceback
-        debug_print(f"DEBUG: Traceback: {traceback.format_exc()}")
+        _log_exception(e, context='create_event_type')
         return Response({
             'success': False,
-            'message': f'Error creating event type: {str(e)}'
+            'message': 'Error creating event type. Please try again later.'
         }, status=500)
 
 
 @api_view(['PUT'])
 @authentication_classes([CsrfExemptSessionAuthentication])
-@permission_classes([AllowAny])
+@permission_classes([EventEditPermission])
 @csrf_exempt
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
@@ -491,18 +892,16 @@ def update_event_type_subtypes(request, event_type_id):
             'message': 'Invalid JSON data'
         }, status=400)
     except Exception as e:
-        debug_print(f"DEBUG: Exception in update_event_type_subtypes: {str(e)}")
-        import traceback
-        debug_print(f"DEBUG: Traceback: {traceback.format_exc()}")
+        _log_exception(e, context='update_event_type_subtypes')
         return Response({
             'success': False,
-            'message': f'Error updating event type sub-types: {str(e)}'
+            'message': 'Error updating event type sub-types. Please try again later.'
         }, status=500)
 
 
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication])
-@permission_classes([AllowAny])
+@permission_classes([EventEditPermission])
 @csrf_exempt
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
@@ -557,18 +956,16 @@ def create_module(request):
             'message': 'Invalid JSON data'
         }, status=400)
     except Exception as e:
-        debug_print(f"DEBUG: Exception in create_module: {str(e)}")
-        import traceback
-        debug_print(f"DEBUG: Traceback: {traceback.format_exc()}")
+        _log_exception(e, context='create_module')
         return Response({
             'success': False,
-            'message': f'Error creating module: {str(e)}'
+            'message': 'Error creating module. Please try again later.'
         }, status=500)
 
 
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication])
-@permission_classes([AllowAny])
+@permission_classes([EventViewAllPermission, EventViewModulePermission])
 @csrf_exempt
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
@@ -588,6 +985,14 @@ def get_records_by_module(request):
             return Response({
                 'success': False,
                 'message': 'Framework ID is required'
+            }, status=400)
+        
+        try:
+            framework_id = _parse_required_positive_int(framework_id, 'Framework ID')
+        except ValueError as ve:
+            return Response({
+                'success': False,
+                'message': str(ve)
             }, status=400)
         
         records = []
@@ -636,7 +1041,7 @@ def get_records_by_module(request):
                     debug_print(f"DEBUG: Found {policies.count()} policies (including inactive)")
                 
             except Exception as e:
-                debug_print(f"DEBUG: Error querying policies: {str(e)}")
+                _log_exception(e, context='get_records_by_module.policies')
                 policies = []
             
             records = [
@@ -768,17 +1173,16 @@ def get_records_by_module(request):
         })
         
     except Exception as e:
-        debug_print(f"DEBUG: Exception in get_records_by_module: {str(e)}")
-        import traceback
-        debug_print(f"DEBUG: Traceback: {traceback.format_exc()}")
+        _log_exception(e, context='get_records_by_module')
         return Response({
             'success': False,
-            'message': f'Error fetching records: {str(e)}'
+            'message': 'Error fetching records. Please try again later.'
         }, status=500)
 
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@authentication_classes([CsrfExemptSessionAuthentication])
+@permission_classes([EventViewAllPermission, EventViewModulePermission])
 @csrf_exempt
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
@@ -828,10 +1232,10 @@ def get_event_templates(request):
         })
         
     except Exception as e:
-        debug_print(f"DEBUG: Error in get_event_templates: {str(e)}")
+        _log_exception(e, context='get_event_templates')
         return Response({
             'success': False,
-            'message': f'Error fetching templates: {str(e)}'
+            'message': 'Error fetching templates. Please try again later.'
         }, status=500)
 
 
@@ -848,11 +1252,7 @@ def create_event(request):
     """
     debug_print("DEBUG: create_event called")
     debug_print(f"DEBUG: Request method: {request.method}")
-    debug_print(f"DEBUG: Request data: {request.data}")
-    debug_print(f"DEBUG: Request headers: {dict(request.headers)}")
-    debug_print(f"DEBUG: Request user: {getattr(request, 'user', 'No user')}")
-    debug_print(f"DEBUG: Request META: {request.META.get('HTTP_AUTHORIZATION', 'No auth header')}")
-    
+
     try:
         # MULTI-TENANCY: Extract tenant_id from request
         tenant_id = get_tenant_id_from_request(request)
@@ -865,31 +1265,24 @@ def create_event(request):
             except (json.JSONDecodeError, TypeError):
                 data = {}
         
-        debug_print(f"DEBUG: Parsed data: {data}")
+        debug_print(f"DEBUG: Parsed data keys: {list(data.keys()) if isinstance(data, dict) else 'n/a'}")
         
-        # Get user ID from request (should be available from JWT middleware)
-        user_id = data.get('user_id') or request.GET.get('user_id')
-        
-        # Try to get user_id from JWT token if not provided in request
-        if not user_id:
-            user_id = RBACUtils.get_user_id_from_request(request)
-        
-        debug_print(f"DEBUG: User ID: {user_id}")
-        
+        # Authenticated creator identity — never trust client-supplied user_id.
+        user_id = _parse_server_user_id_int(request)
         if not user_id:
             return Response({
                 'success': False,
-                'message': 'User ID is required'
-            }, status=400)
+                'message': 'Authentication required'
+            }, status=401)
         
         # Support multiple field name variations for event title:
         # 'title', 'name', 'EventTitle' (database field name)
         # Support multiple field name variations for category:
         # 'category', 'type'
         title = data.get('EventTitle') or data.get('title') or data.get('name')
-        category = data.get('category') or data.get('type')
+        category_raw = data.get('category') or data.get('type')
         
-        debug_print(f"DEBUG: Resolved title: {title}, category: {category}")
+        debug_print(f"DEBUG: Resolved title: {title}, category: {category_raw}")
         debug_print(f"DEBUG: Raw data keys: {list(data.keys())}")
         debug_print(f"DEBUG: EventTitle from data: {data.get('EventTitle')}")
         debug_print(f"DEBUG: title from data: {data.get('title')}")
@@ -901,19 +1294,44 @@ def create_event(request):
                 'success': False,
                 'message': 'Event title is required. Please provide "EventTitle", "title", or "name" field.'
             }, status=400)
+        title = str(title).strip()
+        if len(title) > _EVENT_MAX_TITLE_LEN:
+            return Response({
+                'success': False,
+                'message': f'Event title must be at most {_EVENT_MAX_TITLE_LEN} characters.'
+            }, status=400)
+        try:
+            if category_raw not in (None, ''):
+                category = _sanitize_optional_str_field(
+                    category_raw, _EVENT_MAX_CATEGORY_LEN, 'Category'
+                )
+            else:
+                category = None
+        except ValueError as ve:
+            return Response({
+                'success': False,
+                'message': str(ve)
+            }, status=400)
         
         # Get framework object if framework_id is provided
         framework_id = data.get('framework_id')
         framework_obj = None
-        if framework_id:
+        if framework_id not in (None, ''):
             try:
-                framework_obj = Framework.objects.get(FrameworkId=framework_id, tenant_id=tenant_id)
-                debug_print(f"DEBUG: Found framework: {framework_obj.FrameworkName}")
-            except Framework.DoesNotExist:
-                debug_print(f"DEBUG: Framework with ID {framework_id} not found")
+                fid = _parse_required_positive_int(framework_id, 'Framework ID')
+            except ValueError as ve:
                 return Response({
                     'success': False,
-                    'message': f'Framework with ID {framework_id} not found'
+                    'message': str(ve)
+                }, status=400)
+            try:
+                framework_obj = Framework.objects.get(FrameworkId=fid, tenant_id=tenant_id)
+                debug_print(f"DEBUG: Found framework: {framework_obj.FrameworkName}")
+            except Framework.DoesNotExist:
+                debug_print(f"DEBUG: Framework with ID {fid} not found")
+                return Response({
+                    'success': False,
+                    'message': f'Framework with ID {fid} not found'
                 }, status=400)
         
         # Get owner and reviewer user objects
@@ -922,12 +1340,23 @@ def create_event(request):
         
         # If owner_id is provided, use it; otherwise default to the logged-in user
         owner_id = data.get('owner_id')
-        if owner_id:
+        if owner_id not in (None, ''):
             try:
-                owner_obj = Users.objects.get(UserId=owner_id, tenant_id=tenant_id)
+                oid = _parse_required_positive_int(owner_id, 'Owner ID')
+            except ValueError as ve:
+                return Response({
+                    'success': False,
+                    'message': str(ve)
+                }, status=400)
+            try:
+                owner_obj = Users.objects.get(UserId=oid, tenant_id=tenant_id)
                 debug_print(f"DEBUG: Found owner: {owner_obj.FirstName} {owner_obj.LastName}")
             except Users.DoesNotExist:
-                debug_print(f"DEBUG: Owner with ID {owner_id} not found")
+                debug_print(f"DEBUG: Owner with ID {oid} not found")
+                return Response({
+                    'success': False,
+                    'message': 'Owner not found for this tenant.'
+                }, status=400)
         else:
             # Default to logged-in user if no owner is specified
             try:
@@ -936,44 +1365,95 @@ def create_event(request):
             except Users.DoesNotExist:
                 debug_print(f"DEBUG: Logged-in user with ID {user_id} not found")
         
-        if data.get('reviewer_id'):
+        if data.get('reviewer_id') not in (None, ''):
             try:
-                reviewer_obj = Users.objects.get(UserId=data.get('reviewer_id'), tenant_id=tenant_id)
+                rid = _parse_required_positive_int(data.get('reviewer_id'), 'Reviewer ID')
+            except ValueError as ve:
+                return Response({
+                    'success': False,
+                    'message': str(ve)
+                }, status=400)
+            try:
+                reviewer_obj = Users.objects.get(UserId=rid, tenant_id=tenant_id)
                 debug_print(f"DEBUG: Found reviewer: {reviewer_obj.FirstName} {reviewer_obj.LastName}")
             except Users.DoesNotExist:
-                debug_print(f"DEBUG: Reviewer with ID {data.get('reviewer_id')} not found")
+                debug_print(f"DEBUG: Reviewer with ID {rid} not found")
+                return Response({
+                    'success': False,
+                    'message': 'Reviewer not found for this tenant.'
+                }, status=400)
         
         # Determine initial status - always start with 'Under Review' for all events
         initial_status = 'Under Review'
         
-        # Handle date fields - convert empty strings to None
-        start_date = data.get('start_date')
-        end_date = data.get('end_date')
-        
-        # Convert empty strings to None for date fields
-        if start_date == '' or start_date is None:
-            start_date = None
-        if end_date == '' or end_date is None:
-            end_date = None
-        
-        # Handle LinkedRecordId - convert empty strings to None
+        # Linked record ID — optional FK-style integer, must be positive when provided
         linked_record_id = data.get('linked_record_id')
-        if linked_record_id == '' or linked_record_id is None:
+        if linked_record_id in ('', None):
             linked_record_id = None
+        else:
+            try:
+                linked_record_id = _parse_required_positive_int(linked_record_id, 'Linked record ID')
+            except ValueError as ve:
+                return Response({
+                    'success': False,
+                    'message': str(ve)
+                }, status=400)
+        
+        try:
+            recurrence_type = _normalize_event_recurrence_type(data.get('recurrence_type'))
+        except ValueError as ve:
+            return Response({
+                'success': False,
+                'message': str(ve)
+            }, status=400)
         
         # Handle frequency field for non-recurring events
         frequency = data.get('frequency')
-        if data.get('recurrence_type') == 'Non-Recurring':
+        if recurrence_type == 'Non-Recurring':
             frequency = None
+        elif frequency not in (None, ''):
+            try:
+                frequency = _sanitize_optional_str_field(frequency, 50, 'Frequency')
+            except ValueError as ve:
+                return Response({
+                    'success': False,
+                    'message': str(ve)
+                }, status=400)
         
-        # Handle template selection
+        # Handle template selection (before date validation — templates use relaxed rules)
         is_template = data.get('is_template', False)
-        # Convert string 'true'/'false' to boolean if needed
         if isinstance(is_template, str):
             is_template = is_template.lower() in ['true', '1', 'yes']
+        is_template_flag = bool(is_template)
+        is_template = 1 if is_template_flag else 0
         
-        # Ensure boolean is converted to 1/0 for database compatibility
-        is_template = 1 if is_template else 0
+        # Handle date fields: parse, validate vs creation day and realistic range
+        raw_start = data.get('start_date')
+        raw_end = data.get('end_date')
+        if raw_start == '' or raw_start is None:
+            raw_start = None
+        if raw_end == '' or raw_end is None:
+            raw_end = None
+        
+        try:
+            start_date = _parse_event_date_value(raw_start, 'Start date') if raw_start is not None else None
+            end_date = _parse_event_date_value(raw_end, 'End date') if raw_end is not None else None
+        except ValueError as ve:
+            return Response({
+                'success': False,
+                'message': str(ve)
+            }, status=400)
+        
+        date_err = _validate_event_start_end_dates(
+            start_date, end_date,
+            mode='create',
+            is_template=is_template_flag,
+        )
+        if date_err:
+            return Response({
+                'success': False,
+                'message': date_err
+            }, status=400)
         
         # All events should start with 'Under Review' status, including templates
         debug_print(f"DEBUG: Creating event with status 'Under Review', is_template: {is_template}")
@@ -999,16 +1479,29 @@ def create_event(request):
             # Already an array
             evidence_files = evidence_data
         
-        # Process evidence files and extract S3 URLs
+        # Process evidence files — validate each URL against TRUSTED_EVIDENCE_* allow-list
         if evidence_files:
             debug_print(f"DEBUG: Processing {len(evidence_files)} evidence files")
             for i, evidence_file in enumerate(evidence_files):
-                debug_print(f"DEBUG: Processing evidence file {i+1}: {evidence_file}")
-                if evidence_file.get('s3_url'):
-                    evidence_urls.append(evidence_file.get('s3_url'))
-                    debug_print(f"DEBUG: Added evidence URL: {evidence_file.get('s3_url')}")
-                else:
-                    debug_print(f"DEBUG: Skipping evidence file {i+1} - no s3_url")
+                if not isinstance(evidence_file, dict):
+                    return Response({
+                        'success': False,
+                        'message': 'Each evidence entry must be an object.',
+                    }, status=400)
+                raw_url = evidence_file.get('s3_url')
+                if not raw_url:
+                    continue
+                try:
+                    safe_url = _validate_event_evidence_s3_url(
+                        raw_url, field_label=f'evidence[{i}].s3_url'
+                    )
+                    if safe_url:
+                        evidence_urls.append(safe_url)
+                except ValueError as ve:
+                    return Response({
+                        'success': False,
+                        'message': _sanitize_reflected_error_detail(str(ve)),
+                    }, status=400)
         else:
             debug_print("DEBUG: No evidence files provided")
         
@@ -1020,50 +1513,74 @@ def create_event(request):
         # Get event type object if event_type_id is provided
         event_type_obj = None
         event_type_id = data.get('event_type_id')
-        if event_type_id:
+        if event_type_id not in (None, ''):
             try:
-                event_type_obj = EventType.objects.get(eventtype_id=event_type_id)
+                etid = _parse_required_positive_int(event_type_id, 'Event type ID')
+            except ValueError as ve:
+                return Response({
+                    'success': False,
+                    'message': str(ve)
+                }, status=400)
+            try:
+                event_type_obj = EventType.objects.get(eventtype_id=etid)
                 debug_print(f"DEBUG: Found event type: {event_type_obj.eventtype}")
             except EventType.DoesNotExist:
-                debug_print(f"DEBUG: Event type with ID {event_type_id} not found")
+                debug_print(f"DEBUG: Event type with ID {etid} not found")
+                return Response({
+                    'success': False,
+                    'message': f'Event type with ID {etid} not found'
+                }, status=400)
 
-        # Get sub-event type name if provided
+        # Sub-event type index (0-based); requires valid event_type and in-range index
         sub_event_type_name = None
-        sub_event_type_id = data.get('sub_event_type_id')
-        if sub_event_type_id is not None and event_type_obj and event_type_obj.eventSubtype:
+        sub_event_type_raw = data.get('sub_event_type_id')
+        if sub_event_type_raw is not None and sub_event_type_raw != '':
             try:
-                sub_event_type_id = int(sub_event_type_id)
-                
-                if isinstance(event_type_obj.eventSubtype, list):
-                    # Handle array format: ["Type 1", "Type 2", ...]
-                    if 0 <= sub_event_type_id < len(event_type_obj.eventSubtype):
-                        sub_event_type_name = event_type_obj.eventSubtype[sub_event_type_id]
-                        debug_print(f"DEBUG: Selected sub-event type (array): {sub_event_type_name}")
-                elif isinstance(event_type_obj.eventSubtype, dict):
-                    # Handle object format: {"key1": [...], "key2": [...], ...}
-                    sub_type_keys = list(event_type_obj.eventSubtype.keys())
-                    if 0 <= sub_event_type_id < len(sub_type_keys):
-                        selected_key = sub_type_keys[sub_event_type_id]
-                        
-                        # Create a mapping for better display names
-                        display_name_map = {
-                            'risk_register_updates': 'Risk Register Updates',
-                            'formal_risk_assessments': 'Formal Risk Assessments',
-                            'documented_risk_treatment_plans': 'Documented Risk Treatment Plans',
-                            'approval_records_of_risk_acceptance_or_residual_risk': 'Approval Records Of Risk Acceptance Or Residual Risk',
-                            'isms_policy_review': 'ISMS Policy Review',
-                            'management_review': 'Management Review Meeting',
-                            'resource_allocation': 'Resource Allocation Review',
-                            'performance_monitoring': 'Performance Monitoring',
-                            'continuous_improvement': 'Continuous Improvement Initiative'
-                        }
-                        
-                        # Use mapping or fallback to Title Case
-                        sub_event_type_name = display_name_map.get(selected_key, selected_key.replace('_', ' ').title())
-                        debug_print(f"DEBUG: Selected sub-event type (object): {sub_event_type_name} (key: {selected_key})")
-                        
-            except (ValueError, TypeError):
-                debug_print(f"DEBUG: Invalid sub_event_type_id: {sub_event_type_id}")
+                sub_idx = _parse_non_negative_int(sub_event_type_raw, 'Sub-event type index')
+            except ValueError as ve:
+                return Response({
+                    'success': False,
+                    'message': str(ve)
+                }, status=400)
+            if not event_type_obj:
+                return Response({
+                    'success': False,
+                    'message': 'sub_event_type_id requires a valid event_type_id.'
+                }, status=400)
+            if not event_type_obj.eventSubtype:
+                return Response({
+                    'success': False,
+                    'message': 'The selected event type has no sub-types configured.'
+                }, status=400)
+            resolved = False
+            if isinstance(event_type_obj.eventSubtype, list):
+                if sub_idx < len(event_type_obj.eventSubtype):
+                    sub_event_type_name = event_type_obj.eventSubtype[sub_idx]
+                    debug_print(f"DEBUG: Selected sub-event type (array): {sub_event_type_name}")
+                    resolved = True
+            elif isinstance(event_type_obj.eventSubtype, dict):
+                sub_type_keys = list(event_type_obj.eventSubtype.keys())
+                if sub_idx < len(sub_type_keys):
+                    selected_key = sub_type_keys[sub_idx]
+                    display_name_map = {
+                        'risk_register_updates': 'Risk Register Updates',
+                        'formal_risk_assessments': 'Formal Risk Assessments',
+                        'documented_risk_treatment_plans': 'Documented Risk Treatment Plans',
+                        'approval_records_of_risk_acceptance_or_residual_risk': 'Approval Records Of Risk Acceptance Or Residual Risk',
+                        'isms_policy_review': 'ISMS Policy Review',
+                        'management_review': 'Management Review Meeting',
+                        'resource_allocation': 'Resource Allocation Review',
+                        'performance_monitoring': 'Performance Monitoring',
+                        'continuous_improvement': 'Continuous Improvement Initiative'
+                    }
+                    sub_event_type_name = display_name_map.get(selected_key, selected_key.replace('_', ' ').title())
+                    debug_print(f"DEBUG: Selected sub-event type (object): {sub_event_type_name} (key: {selected_key})")
+                    resolved = True
+            if not resolved:
+                return Response({
+                    'success': False,
+                    'message': 'Sub-event type index is out of range for the selected event type.'
+                }, status=400)
 
         # Handle data_inventory - optional JSON field mapping field labels to data types
         data_inventory = None
@@ -1089,26 +1606,52 @@ def create_event(request):
                 debug_print(f"Warning: Invalid type for data_inventory, setting to None: {type(data_inventory_raw)}")
                 data_inventory = None
         
+        created_by_user = Users.objects.filter(UserId=user_id, tenant_id=tenant_id).first()
+        if not created_by_user:
+            return Response({
+                'success': False,
+                'message': 'Authenticated user profile was not found for this tenant.'
+            }, status=401)
+
+        try:
+            priority_val = _normalize_event_priority(data.get('priority'))
+            module_val = _sanitize_optional_str_field(
+                data.get('module'), _EVENT_MAX_MODULE_LEN, 'Module'
+            )
+            framework_name_val = _sanitize_optional_str_field(
+                data.get('framework_name'), _EVENT_MAX_FRAMEWORK_NAME_LEN, 'Framework name'
+            )
+            linked_rt_val = _normalize_linked_record_type(data.get('linked_record_type'))
+            linked_rn_val = _sanitize_optional_str_field(
+                data.get('linked_record_name'), _EVENT_MAX_LINKED_RECORD_NAME_LEN, 'Linked record name'
+            )
+        except ValueError as ve:
+            return Response({
+                'success': False,
+                'message': str(ve)
+            }, status=400)
+        
         # Extract data from request - match Django Event model field names exactly
         event_data = {
             'EventTitle': title,  # Use the resolved title (from 'title' or 'name')
             'Description': data.get('description'),
             'FrameworkId': framework_obj,
-            'FrameworkName': data.get('framework_name'),
-            'Module': data.get('module'),
-            'LinkedRecordType': data.get('linked_record_type'),
+            'FrameworkName': framework_name_val,
+            'Module': module_val,
+            'LinkedRecordType': linked_rt_val,
             'LinkedRecordId': linked_record_id,
-            'LinkedRecordName': data.get('linked_record_name'),
+            'LinkedRecordName': linked_rn_val,
             'Category': category,  # Use the resolved category (from 'category' or 'type')
             'EventType': event_type_obj,  # Save event type object in EventType field
             'SubEventType': sub_event_type_name,  # Save selected sub-event type name
-            'RecurrenceType': data.get('recurrence_type', 'Non-Recurring'),
+            'RecurrenceType': recurrence_type,
             'Frequency': frequency,
             'StartDate': start_date,
             'EndDate': end_date,
-            'Status': data.get('status', initial_status),
-            'Priority': data.get('priority', 'Medium'),
-            'CreatedBy': Users.objects.get(UserId=user_id, tenant_id=tenant_id) if user_id else None,
+            # Workflow status is server-controlled at creation (not client-supplied).
+            'Status': initial_status,
+            'Priority': priority_val,
+            'CreatedBy': created_by_user,
             'Owner': owner_obj,
             'Reviewer': reviewer_obj,
             'IsTemplate': is_template,
@@ -1120,6 +1663,9 @@ def create_event(request):
         debug_print(f"DEBUG: Event data to create: {event_data}")
         debug_print(f"DEBUG: Evidence field in event_data: {event_data.get('Evidence')}")
         debug_print(f"DEBUG: Evidence field type: {type(event_data.get('Evidence'))}")
+        
+        # Runtime compatibility: ensure recently-added Event columns exist.
+        _ensure_event_runtime_columns()
         
         # Check if events table exists
         try:
@@ -1145,40 +1691,103 @@ def create_event(request):
             # Handle additional records if any
             additional_records = data.get('additional_records', [])
             if additional_records:
+                if not isinstance(additional_records, list):
+                    return Response({
+                        'success': False,
+                        'message': 'additional_records must be a list.'
+                    }, status=400)
+                if len(additional_records) > _MAX_ADDITIONAL_EVENT_RECORDS:
+                    return Response({
+                        'success': False,
+                        'message': f'Cannot create more than {_MAX_ADDITIONAL_EVENT_RECORDS} additional records at once.'
+                    }, status=400)
                 debug_print(f"DEBUG: Creating {len(additional_records)} additional events")
                 
                 for i, additional_record in enumerate(additional_records):
+                    if not isinstance(additional_record, dict):
+                        return Response({
+                            'success': False,
+                            'message': 'Each additional record must be an object.'
+                        }, status=400)
                     # Get framework object for additional record
                     additional_framework_obj = None
-                    if additional_record.get('framework_id'):
+                    if additional_record.get('framework_id') not in (None, ''):
                         try:
-                            additional_framework_obj = Framework.objects.get(FrameworkId=additional_record['framework_id'], tenant_id=tenant_id)
+                            afid = _parse_required_positive_int(
+                                additional_record['framework_id'], 'Additional record framework ID'
+                            )
+                        except ValueError as ve:
+                            return Response({
+                                'success': False,
+                                'message': str(ve)
+                            }, status=400)
+                        try:
+                            additional_framework_obj = Framework.objects.get(FrameworkId=afid, tenant_id=tenant_id)
                             debug_print(f"DEBUG: Found additional framework: {additional_framework_obj.FrameworkName}")
                         except Framework.DoesNotExist:
-                            debug_print(f"DEBUG: Additional framework with ID {additional_record['framework_id']} not found")
-                            continue
+                            debug_print(f"DEBUG: Additional framework with ID {afid} not found")
+                            return Response({
+                                'success': False,
+                                'message': f'Additional record framework with ID {afid} not found'
+                            }, status=400)
+                    
+                    add_lrid = additional_record.get('linked_record_id')
+                    if add_lrid in (None, ''):
+                        add_lrid_parsed = None
+                    else:
+                        try:
+                            add_lrid_parsed = _parse_required_positive_int(add_lrid, 'Linked record ID')
+                        except ValueError as ve:
+                            return Response({
+                                'success': False,
+                                'message': str(ve)
+                            }, status=400)
                     
                     # Create event data for additional record
                     additional_record_name = additional_record.get('linked_record_name', f'Additional Record {i+1}')
+                    try:
+                        add_fw_name = _sanitize_optional_str_field(
+                            additional_record.get('framework_name'),
+                            _EVENT_MAX_FRAMEWORK_NAME_LEN,
+                            'Additional record framework name',
+                        )
+                        add_mod = _sanitize_optional_str_field(
+                            additional_record.get('module'),
+                            _EVENT_MAX_MODULE_LEN,
+                            'Additional record module',
+                        )
+                        add_lrt = _normalize_linked_record_type(
+                            additional_record.get('linked_record_type')
+                        )
+                        add_lrn = _sanitize_optional_str_field(
+                            additional_record.get('linked_record_name'),
+                            _EVENT_MAX_LINKED_RECORD_NAME_LEN,
+                            'Additional record linked record name',
+                        )
+                    except ValueError as ve:
+                        return Response({
+                            'success': False,
+                            'message': str(ve)
+                        }, status=400)
                     additional_event_data = {
                         'EventTitle': f"{title} - {additional_record_name}",
                         'Description': f"Additional record for event: {title} - {additional_record_name}",
                         'FrameworkId': additional_framework_obj,
-                        'FrameworkName': additional_record.get('framework_name'),
-                        'Module': additional_record.get('module'),
-                        'LinkedRecordType': additional_record.get('linked_record_type'),
-                        'LinkedRecordId': additional_record.get('linked_record_id'),
-                        'LinkedRecordName': additional_record.get('linked_record_name'),
+                        'FrameworkName': add_fw_name,
+                        'Module': add_mod,
+                        'LinkedRecordType': add_lrt,
+                        'LinkedRecordId': add_lrid_parsed,
+                        'LinkedRecordName': add_lrn,
                         'Category': category,  # Use resolved category (from 'category' or 'type')
                         'EventType': event_type_obj,  # Save event type object in EventType field
                         'SubEventType': sub_event_type_name,  # Save selected sub-event type name
-                        'RecurrenceType': data.get('recurrence_type', 'Non-Recurring'),
+                        'RecurrenceType': recurrence_type,
                         'Frequency': frequency,
                         'StartDate': start_date,
                         'EndDate': end_date,
-                        'Status': data.get('status', initial_status),
-                        'Priority': data.get('priority', 'Medium'),
-                        'CreatedBy': Users.objects.get(UserId=user_id, tenant_id=tenant_id) if user_id else None,
+                        'Status': initial_status,
+                        'Priority': priority_val,
+                        'CreatedBy': created_by_user,
                         'Owner': owner_obj,
                         'Reviewer': reviewer_obj,
                         'IsTemplate': is_template,
@@ -1208,8 +1817,11 @@ def create_event(request):
             # Send email notifications for event creation
             try:
                 from ...routes.Global.notification_service import NotificationService
+                from ...routes.Global.notifications import (
+                    send_event_aware_multi_channel,
+                    append_event_notification_in_app,
+                )
                 notification_service = NotificationService()
-                from ...routes.Global.notifications import notifications_storage
                 import uuid
                 from datetime import datetime as dt
                 
@@ -1273,7 +1885,13 @@ def create_event(request):
                                 'email_type': 'gmail',
                                 'template_data': template_data
                             }
-                            notification_service.send_multi_channel_notification(notification_data)
+                            send_event_aware_multi_channel(
+                                notification_service,
+                                notification_data,
+                                event_obj.EventId,
+                                recipient_user_id=recipient['user_id'],
+                                dedup_extra='',
+                            )
                             
                             # Create in-app notification
                             notification = {
@@ -1286,12 +1904,12 @@ def create_event(request):
                                 'status': {'isRead': False, 'readAt': None},
                                 'user_id': str(recipient['user_id'])
                             }
-                            notifications_storage.append(notification)
-                            if len(notifications_storage) > 100:
-                                notifications_storage.pop(0)
+                            append_event_notification_in_app(
+                                notification, event_obj.EventId, notification_type, dedup_extra=''
+                            )
                                 
                         except Exception as notify_error:
-                            debug_print(f"Error sending notification to {recipient.get('email', 'unknown')}: {str(notify_error)}")
+                            _log_exception(notify_error, context='create_event.notify_recipient')
                 
                 # Send notifications for primary event
                 send_event_notifications(event, is_assigned=(event.Owner is not None or event.Reviewer is not None))
@@ -1305,7 +1923,7 @@ def create_event(request):
                         pass
                         
             except Exception as notify_ex:
-                debug_print(f"Error sending event notifications: {str(notify_ex)}")
+                _log_exception(notify_ex, context='create_event.notify_batch')
                 # Don't fail event creation if notifications fail
             
             return Response({
@@ -1317,33 +1935,26 @@ def create_event(request):
                 'events': created_events
             })
         except Exception as db_error:
-            debug_print(f"DEBUG: Database error: {str(db_error)}")
+            debug_print(f"DEBUG: Database error: {sanitize_for_log(db_error, max_len=800)}")
             if "Unknown column" in str(db_error):
                 return Response({
                     'success': False,
-                    'message': 'Events table schema mismatch. Please run: python manage.py create_events_table',
-                    'error': str(db_error)
+                    'message': 'Events table schema mismatch. Please contact your administrator.',
                 }, status=500)
             else:
                 raise db_error
         
     except Exception as e:
-        import traceback
-        error_traceback = traceback.format_exc()
-        debug_print(f"DEBUG: Exception in create_event: {str(e)}")
-        debug_print(f"DEBUG: Traceback: {error_traceback}")
-        # Also log to console for visibility
-        print(f"[ERROR] create_event failed: {str(e)}")
-        print(f"[ERROR] Traceback:\n{error_traceback}")
+        _log_exception(e, context='create_event')
         return Response({
             'success': False,
-            'message': f'Error creating event: {str(e)}',
-            'error_details': str(e) if hasattr(e, '__str__') else 'Unknown error'
+            'message': 'Error creating event. Please try again later.'
         }, status=500)
 
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@authentication_classes([CsrfExemptSessionAuthentication])
+@permission_classes([EventViewAllPermission, EventViewModulePermission])
 @csrf_exempt
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
@@ -1355,38 +1966,23 @@ def get_events(request):
     tenant_id = get_tenant_id_from_request(request)
 
     try:
-        # Get user ID for RBAC filtering
-        user_id = RBACUtils.get_user_id_from_request(request)
-        if not user_id:
-            return Response({
-                'success': False,
-                'message': 'Authentication required'
-            }, status=401)
-        
         # Get filter parameters
         event_type = request.GET.get('type', '')
         module = request.GET.get('module', '')
         status = request.GET.get('status', '')
         
-        # Get user's accessible modules based on RBAC permissions
-        accessible_modules = RBACUtils.get_user_accessible_modules(user_id)
-        user_permissions = RBACUtils.get_user_event_permissions(user_id)
+        user_id_int = _parse_server_user_id_int(request)
+        if not user_id_int:
+            return Response({
+                'success': False,
+                'message': 'Authentication required'
+            }, status=401)
         
-        # Start with base query
+        # Start with base query — tenant isolation + object-level list scope
         events_query = Event.objects.select_related(
             'Owner', 'Reviewer', 'CreatedBy', 'FrameworkId', 'EventType'
-        ).filter(IsTemplate=False)
-        
-        # Apply module filtering based on user permissions
-        if not user_permissions.get('view_all_event', False) and user_permissions.get('view_module_event', False):
-            if accessible_modules:
-                events_query = events_query.filter(Module__in=accessible_modules)
-            else:
-                return Response({
-                    'success': True,
-                    'events': [],
-                    'message': 'No accessible modules found for user'
-                })
+        ).filter(tenant_id=tenant_id, IsTemplate=False)
+        events_query = _apply_event_list_scope(events_query, user_id_int)
         
         # Apply filters
         if event_type:
@@ -1451,13 +2047,15 @@ def get_events(request):
         })
         
     except Exception as e:
+        _log_exception(e, context='get_events')
         return Response({
             'success': False,
-            'message': f'Error fetching events: {str(e)}'
+            'message': 'Error fetching events. Please try again later.'
         }, status=500)
 
 
 @api_view(['GET'])
+@authentication_classes([CsrfExemptSessionAuthentication])
 @permission_classes([EventViewAllPermission, EventViewModulePermission])
 @csrf_exempt
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
@@ -1481,13 +2079,31 @@ def get_document_handling_events(request):
         
         debug_print(f"DEBUG: User ID: {user_id}")
         
+        user_id_int = _parse_server_user_id_int(request)
+        if not user_id_int:
+            return Response({
+                'success': False,
+                'message': 'Authentication required'
+            }, status=401)
+        
         # Get query parameters
-        limit = int(request.GET.get('limit', 50))
+        try:
+            limit = int(request.GET.get('limit', 50))
+        except (TypeError, ValueError):
+            limit = 50
+        limit = max(1, min(limit, 500))
         operation_type = request.GET.get('operation_type', '')
         status = request.GET.get('status', '')
         
-        # Get file operations from the file_operations table
-        file_operations_query = FileOperations.objects.all()
+        # Tenant-scoped file operations (framework belongs to tenant)
+        file_operations_query = FileOperations.objects.filter(FrameworkId__tenant_id=tenant_id)
+        perms = RBACUtils.get_user_event_permissions(user_id_int)
+        modlist = RBACUtils.get_user_accessible_modules(user_id_int)
+        if not (perms.get('is_admin') or perms.get('view_all_event')):
+            if perms.get('view_module_event') and modlist:
+                file_operations_query = file_operations_query.filter(module__in=modlist)
+            else:
+                file_operations_query = file_operations_query.none()
         
         # Apply filters
         if operation_type:
@@ -1554,15 +2170,16 @@ def get_document_handling_events(request):
         })
         
     except Exception as e:
-        debug_print(f"DEBUG: Error in get_document_handling_events: {str(e)}")
+        _log_exception(e, context='get_document_handling_events')
         return Response({
             'success': False,
-            'message': f'Error fetching document handling events: {str(e)}'
+            'message': 'Error fetching document handling events. Please try again later.'
         }, status=500)
 
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@authentication_classes([CsrfExemptSessionAuthentication])
+@permission_classes([EventViewAllPermission, EventViewModulePermission])
 @csrf_exempt
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
@@ -1577,9 +2194,8 @@ def get_events_list(request):
     try:
         import random
         
-        # Get user ID for RBAC filtering
-        user_id = RBACUtils.get_user_id_from_request(request)
-        if not user_id:
+        user_id_int = _parse_server_user_id_int(request)
+        if not user_id_int:
             return Response({
                 'success': False,
                 'message': 'Authentication required'
@@ -1603,9 +2219,7 @@ def get_events_list(request):
             debug_print(f"DEBUG: Fetched {len(available_frameworks)} frameworks from database: {list(available_frameworks)}")
             debug_print(f"DEBUG: Fetched {len(available_modules)} modules from database: {list(available_modules)}")
         except Exception as module_error:
-            debug_print(f"Error fetching frameworks/modules: {module_error}")
-            import traceback
-            traceback.print_exc()
+            _log_exception(module_error, context='get_events_list.frameworks_modules')
         
         # Fallback lists if database is empty
         if not available_frameworks:
@@ -1634,13 +2248,9 @@ def get_events_list(request):
         debug_print(f"DEBUG: Framework count: {len(available_frameworks)}")
         debug_print(f"DEBUG: Module count: {len(available_modules)}")
         
-        # Get user's accessible modules based on RBAC permissions
-        accessible_modules = RBACUtils.get_user_accessible_modules(user_id)
-        user_permissions = RBACUtils.get_user_event_permissions(user_id)
-        
         # Check if events table exists and has data
         try:
-            total_events = Event.objects.count()
+            total_events = Event.objects.filter(tenant_id=tenant_id).count()
             debug_print(f"DEBUG: Total events in database: {total_events}")
             
             # If no events exist, create some sample events for testing
@@ -1651,10 +2261,10 @@ def get_events_list(request):
                 
                 # Get the current user for sample events
                 try:
-                    current_user = Users.objects.get(UserId=user_id, tenant_id=tenant_id)
-                    debug_print(f"DEBUG: Using current user {user_id} for sample events")
+                    current_user = Users.objects.get(UserId=user_id_int, tenant_id=tenant_id)
+                    debug_print(f"DEBUG: Using current user {user_id_int} for sample events")
                 except Users.DoesNotExist:
-                    debug_print(f"DEBUG: Current user {user_id} not found, using first available user")
+                    debug_print(f"DEBUG: Current user {user_id_int} not found, using first available user")
                     current_user = Users.objects.first()
                     if not current_user:
                         debug_print("DEBUG: No users found in database")
@@ -1686,7 +2296,8 @@ def get_events_list(request):
                         'Owner': current_user,
                         'Reviewer': current_user,
                         'CreatedAt': timezone.now() - timedelta(days=2),
-                        'IsTemplate': False
+                        'IsTemplate': False,
+                        'tenant_id': tenant_id,
                     },
                     {
                         'EventTitle': 'Risk Assessment Update',
@@ -1701,7 +2312,8 @@ def get_events_list(request):
                         'Owner': current_user,
                         'Reviewer': current_user,
                         'CreatedAt': timezone.now() - timedelta(days=1),
-                        'IsTemplate': False
+                        'IsTemplate': False,
+                        'tenant_id': tenant_id,
                     },
                     {
                         'EventTitle': 'Audit Finding Resolution',
@@ -1716,7 +2328,8 @@ def get_events_list(request):
                         'Owner': current_user,
                         'Reviewer': current_user,
                         'CreatedAt': timezone.now() - timedelta(hours=6),
-                        'IsTemplate': False
+                        'IsTemplate': False,
+                        'tenant_id': tenant_id,
                     }
                 ]
                 
@@ -1733,13 +2346,14 @@ def get_events_list(request):
             debug_print(f"DEBUG: Error checking/creating events: {e}")
             return Response({
                 'success': False,
-                'message': f'Error accessing events table: {str(e)}'
+                'message': 'Error accessing events table. Please try again later.'
             }, status=500)
         
-        # Start with base query
+        # Start with base query (tenant isolation + RBAC list scope)
         events_query = Event.objects.select_related(
             'Owner', 'Reviewer', 'CreatedBy', 'FrameworkId', 'EventType'
-        )
+        ).filter(tenant_id=tenant_id)
+        events_query = _apply_event_list_scope(events_query, user_id_int)
         
         # Apply framework filtering from session (similar to Policy module)
         try:
@@ -1758,19 +2372,6 @@ def get_events_list(request):
         except Exception as e:
             debug_print(f"DEBUG: Error applying framework filter: {e}")
             # Continue without framework filtering on error
-        
-        # Apply module filtering based on user permissions
-        if not user_permissions.get('view_all_event', False) and user_permissions.get('view_module_event', False):
-            # User can only see events from their accessible modules
-            if accessible_modules:
-                events_query = events_query.filter(Module__in=accessible_modules)
-            else:
-                # User has view_module_event permission but no accessible modules
-                return Response({
-                    'success': True,
-                    'events': [],
-                    'message': 'No accessible modules found for user'
-                })
         
         events = events_query.values(
             'EventId', 'EventTitle', 'EventId_Generated', 'FrameworkName',
@@ -1831,9 +2432,10 @@ def get_events_list(request):
         })
         
     except Exception as e:
+        _log_exception(e, context='get_events_list')
         return Response({
             'success': False,
-            'message': f'Error fetching events: {str(e)}'
+            'message': 'Error fetching events. Please try again later.'
         }, status=500)
 
 
@@ -1850,7 +2452,12 @@ def export_events_to_s3(request):
     try:
         export_format = str(request.data.get('export_format', 'csv')).lower()
         events_data = request.data.get('events', [])
-        user_id = request.data.get('user_id') or RBACUtils.get_user_id_from_request(request) or 'anonymous'
+        user_id = _get_server_user_id(request)
+        if not user_id:
+            return Response({
+                'success': False,
+                'message': 'Authentication required'
+            }, status=401)
         raw_file_name = request.data.get('file_name') or f"events_export_{timezone.now().strftime('%Y%m%d_%H%M%S')}"
         file_name = sanitize_export_filename(raw_file_name, default='events_export')
 
@@ -1876,14 +2483,61 @@ def export_events_to_s3(request):
                 'message': 'No events available to export.'
             }, status=400)
 
+        # Security: bounded payload to reduce abuse and memory pressure.
+        max_export_rows = 5000
+        if len(events_data) > max_export_rows:
+            return Response({
+                'success': False,
+                'message': f'Export exceeds limit of {max_export_rows} rows.'
+            }, status=400)
+
+        # Security: accept only object rows; reject malformed payloads.
+        if any(not isinstance(row, dict) for row in events_data):
+            return Response({
+                'success': False,
+                'message': 'Invalid export payload format.'
+            }, status=400)
+
+        tenant_id = get_tenant_id_from_request(request)
+        resolved_rows = []
+        seen_ids = set()
+        for row in events_data:
+            key = _export_row_event_identifier(row)
+            if key is None:
+                return Response({
+                    'success': False,
+                    'message': 'Invalid export payload: each row must include an event identifier.'
+                }, status=400)
+            try:
+                event = _get_event_for_tenant(tenant_id, key, allow_generated_slug=True)
+            except Event.DoesNotExist:
+                return Response({
+                    'success': False,
+                    'message': 'Event not found'
+                }, status=404)
+            deny = _guard_event_object_access(request, event)
+            if deny:
+                payload, code = deny
+                return Response(payload, status=code)
+            if event.EventId in seen_ids:
+                continue
+            seen_ids.add(event.EventId)
+            resolved_rows.append(_event_to_export_row_dict(event))
+
+        if not resolved_rows:
+            return Response({
+                'success': False,
+                'message': 'No events available to export.'
+            }, status=400)
+
         export_result = s3_export_data(
-            data=events_data,
+            data=resolved_rows,
             file_format=normalized_format,
             user_id=str(user_id),
             options={
                 'file_name': file_name,
                 'module': 'events_list',
-                'record_count': len(events_data)
+                'record_count': len(resolved_rows)
             }
         )
 
@@ -1900,14 +2554,15 @@ def export_events_to_s3(request):
             'message': export_result.get('error', 'Export failed')
         }, status=500)
     except Exception as e:
-        debug_print(f"DEBUG: Error exporting events to S3: {str(e)}")
+        _log_exception(e, context='export_events_to_s3')
         return Response({
             'success': False,
-            'message': f'Error exporting events: {str(e)}'
+            'message': 'Error exporting events. Please try again later.'
         }, status=500)
 
 
 @api_view(['GET'])
+@authentication_classes([CsrfExemptSessionAuthentication])
 @permission_classes([EventViewAllPermission, EventViewModulePermission])
 @csrf_exempt
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
@@ -1921,13 +2576,22 @@ def get_event_details(request, event_id):
 
     try:
         debug_print(f"DEBUG: Fetching event details for ID: {event_id}")
-        event = Event.objects.select_related(
-            'Owner', 'Reviewer', 'CreatedBy', 'FrameworkId', 'EventType'
-        ).get(EventId=event_id)
+        try:
+            event = _get_event_for_tenant(tenant_id, event_id, allow_generated_slug=False)
+        except Event.DoesNotExist:
+            return Response({
+                'success': False,
+                'message': 'Event not found'
+            }, status=404)
+        deny = _guard_event_object_access(request, event)
+        if deny:
+            payload, code = deny
+            return Response(payload, status=code)
         debug_print(f"DEBUG: Found event: {event.EventTitle}")
         
         # Process evidence data from semicolon-separated string to array
-        evidence_string = event.Evidence or ""
+        _ev_raw = event.Evidence or ""
+        evidence_string = _ev_raw if isinstance(_ev_raw, str) else ""
         evidence_urls = evidence_string.split(';') if evidence_string else []
         evidence_urls = [url.strip() for url in evidence_urls if url.strip()]
         
@@ -2008,7 +2672,7 @@ def get_event_details(request, event_id):
             }
             debug_print(f"DEBUG: Event data built successfully")
         except Exception as e:
-            debug_print(f"DEBUG: Error building event data: {str(e)}")
+            _log_exception(e, context='get_event_details.build_event_data')
             raise e
         
         return Response({
@@ -2022,15 +2686,16 @@ def get_event_details(request, event_id):
             'message': 'Event not found'
         }, status=404)
     except Exception as e:
+        _log_exception(e, context='get_event_details')
         return Response({
             'success': False,
-            'message': f'Error fetching event details: {str(e)}'
+            'message': 'Error fetching event details. Please try again later.'
         }, status=500)
 
 
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 @csrf_exempt
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
@@ -2042,15 +2707,14 @@ def get_current_user(request):
         # MULTI-TENANCY: Extract tenant_id from request
         tenant_id = get_tenant_id_from_request(request)
         
-        # Get user from JWT token (assuming it's available in request)
-        user_id = request.GET.get('user_id')
-        if not user_id:
+        user_id_int = _parse_server_user_id_int(request)
+        if not user_id_int:
             return Response({
                 'success': False,
-                'message': 'User ID is required'
-            }, status=400)
+                'message': 'Authentication required'
+            }, status=401)
         
-        user = Users.objects.get(UserId=user_id, tenant_id=tenant_id)
+        user = Users.objects.get(UserId=user_id_int, tenant_id=tenant_id)
         
         # Decrypt encrypted fields using _plain properties
         firstname_plain = getattr(user, 'FirstName_plain', None) or getattr(user, 'FirstName', None)
@@ -2078,15 +2742,16 @@ def get_current_user(request):
             'message': 'User not found'
         }, status=404)
     except Exception as e:
+        _log_exception(e, context='get_current_user')
         return Response({
             'success': False,
-            'message': f'Error fetching user: {str(e)}'
+            'message': 'Error fetching user. Please try again later.'
         }, status=500)
 
 
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 @csrf_exempt
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
@@ -2104,7 +2769,7 @@ def test_dynamic_fields_endpoint(request):
 
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication])
-@permission_classes([AllowAny])
+@permission_classes([EventViewAllPermission, EventViewModulePermission])
 @csrf_exempt
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
@@ -2187,7 +2852,7 @@ def get_dynamic_fields_for_event(request):
                                 dynamic_fields = parse_event_subtype_config(sub_event_config, sub_event_type_name)
                                 
                         except (ValueError, IndexError, KeyError) as e:
-                            debug_print(f"DEBUG: Error processing sub-event type: {str(e)}")
+                            _log_exception(e, context='get_dynamic_fields.sub_event_type')
                             # Continue with empty dynamic fields if there's an error
                             pass
                     else:
@@ -2198,7 +2863,7 @@ def get_dynamic_fields_for_event(request):
                             dynamic_fields = parse_event_subtype_config(sub_event_config, first_key)
                             
             except Exception as e:
-                debug_print(f"DEBUG: Error parsing eventSubtype JSON: {str(e)}")
+                _log_exception(e, context='get_dynamic_fields.eventSubtype_json')
                 # Continue with empty dynamic fields if there's an error
                 pass
         
@@ -2228,12 +2893,10 @@ def get_dynamic_fields_for_event(request):
         })
         
     except Exception as e:
-        debug_print(f"DEBUG: Exception in get_dynamic_fields_for_event: {str(e)}")
-        import traceback
-        debug_print(f"DEBUG: Traceback: {traceback.format_exc()}")
+        _log_exception(e, context='get_dynamic_fields_for_event')
         return Response({
             'success': False,
-            'message': f'Error fetching dynamic fields: {str(e)}'
+            'message': 'Error fetching dynamic fields. Please try again later.'
         }, status=500)
 
 
@@ -2342,16 +3005,14 @@ def parse_event_subtype_config(sub_event_config, sub_event_type_name):
             debug_print(f"DEBUG: Field '{field_key}': {field_config.get('type', 'unknown')} - {field_config.get('label', 'No label')}")
         
     except Exception as e:
-        debug_print(f"DEBUG: Error parsing event subtype config: {str(e)}")
-        import traceback
-        debug_print(f"DEBUG: Traceback: {traceback.format_exc()}")
+        _log_exception(e, context='parse_event_subtype_config')
     
     return dynamic_fields
 
 
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication])
-@permission_classes([AllowAny])
+@permission_classes([EventViewAllPermission, EventViewModulePermission])
 @csrf_exempt
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
@@ -2363,15 +3024,16 @@ def get_users_for_reviewer(request):
         # MULTI-TENANCY: Extract tenant_id from request
         tenant_id = get_tenant_id_from_request(request)
         
-        current_user_id = request.GET.get('user_id')
+        current_user_id = _get_server_user_id(request)
         if not current_user_id:
             return Response({
                 'success': False,
-                'message': 'User ID is required'
-            }, status=400)
+                'message': 'Authentication required'
+            }, status=401)
         
         # Get all users except the current user, filtered by tenant
-        users = Users.objects.filter(tenant_id=tenant_id).exclude(UserId=current_user_id).values(
+        # Explicitly query default DB (grc2) to avoid cross-database routing ambiguity.
+        users = Users.objects.using('default').filter(tenant_id=tenant_id).exclude(UserId=current_user_id).values(
             'UserId', 'FirstName', 'LastName', 'Email', 'UserName'
         )
         
@@ -2392,14 +3054,16 @@ def get_users_for_reviewer(request):
         })
         
     except Exception as e:
+        _log_exception(e, context='get_users_for_reviewer')
         return Response({
             'success': False,
-            'message': f'Error fetching users: {str(e)}'
+            'message': 'Error fetching users. Please try again later.'
         }, status=500)
 
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@authentication_classes([CsrfExemptSessionAuthentication])
+@permission_classes([EventViewAllPermission, EventViewModulePermission])
 @csrf_exempt
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
@@ -2411,6 +3075,13 @@ def get_events_for_calendar(request):
     tenant_id = get_tenant_id_from_request(request)
 
     try:
+        user_id_int = _parse_server_user_id_int(request)
+        if not user_id_int:
+            return Response({
+                'success': False,
+                'message': 'Authentication required'
+            }, status=401)
+        
         # Get only recurring events for calendar - include ALL events
         events_query = Event.objects.filter(tenant_id=tenant_id, 
             RecurrenceType='Recurring',
@@ -2418,6 +3089,7 @@ def get_events_for_calendar(request):
         ).select_related(
             'Owner', 'Reviewer', 'FrameworkId'
         )
+        events_query = _apply_event_list_scope(events_query, user_id_int)
         
         # Apply framework filtering
         from ..Policy.framework_filter_helper import apply_framework_filter, get_framework_filter_info
@@ -2459,15 +3131,16 @@ def get_events_for_calendar(request):
         })
         
     except Exception as e:
+        _log_exception(e, context='get_events_for_calendar')
         return Response({
             'success': False,
-            'message': f'Error fetching calendar events: {str(e)}'
+            'message': 'Error fetching calendar events. Please try again later.'
         }, status=500)
 
 
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication])
-@permission_classes([AllowAny])
+@permission_classes([EventEditPermission])
 @csrf_exempt
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
@@ -2475,6 +3148,8 @@ def create_events_table(request):
     """
     Create the events table if it doesn't exist
     """
+    if not _event_schema_maintenance_allowed():
+        return Response({'success': False, 'message': 'Not found.'}, status=404)
     try:
         from django.db import connection
         
@@ -2552,14 +3227,16 @@ def create_events_table(request):
             })
             
     except Exception as e:
+        _log_exception(e, context='create_events_table')
         return Response({
             'success': False,
-            'message': f'Error creating events table: {str(e)}'
+            'message': 'Error creating events table. Please try again later.'
         }, status=500)
 
 
 @api_view(['POST'])
-@permission_classes([AllowAny])
+@authentication_classes([CsrfExemptSessionAuthentication])
+@permission_classes([EventEditPermission])
 @csrf_exempt
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
@@ -2567,6 +3244,8 @@ def fix_events_table_schema(request):
     """
     Fix the events table schema by adding missing columns
     """
+    if not _event_schema_maintenance_allowed():
+        return Response({'success': False, 'message': 'Not found.'}, status=404)
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
 
@@ -2625,14 +3304,16 @@ def fix_events_table_schema(request):
             })
             
     except Exception as e:
+        _log_exception(e, context='fix_events_table_schema')
         return Response({
             'success': False,
-            'message': f'Error fixing events table schema: {str(e)}'
+            'message': 'Error fixing events table schema. Please try again later.'
         }, status=500)
 
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@authentication_classes([CsrfExemptSessionAuthentication])
+@permission_classes([EventDashboardPermission])
 @csrf_exempt
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
@@ -2655,9 +3336,17 @@ def get_events_dashboard(request):
         
         debug_print(f"DEBUG: Dashboard filters - Framework: {framework_filter}, Module: {module_filter}, Category: {category_filter}, Owner: {owner_filter}")
         
+        user_id_int = _parse_server_user_id_int(request)
+        if not user_id_int:
+            return Response({
+                'success': False,
+                'message': 'Authentication required'
+            }, status=401)
+        
         # Build base query with filters - include ALL events (including RiskaVaire events)
         # Show all events in the dashboard for comprehensive view
         base_query = Event.objects.filter(tenant_id=tenant_id, IsTemplate=False)
+        base_query = _apply_event_list_scope(base_query, user_id_int)
         
         # Apply framework filtering using the standard framework filter helper
         from ..Policy.framework_filter_helper import apply_framework_filter, get_framework_filter_info
@@ -2839,18 +3528,16 @@ def get_events_dashboard(request):
         })
         
     except Exception as e:
-        debug_print(f"DEBUG: Error in get_events_dashboard: {str(e)}")
-        import traceback
-        debug_print(f"DEBUG: Traceback: {traceback.format_exc()}")
+        _log_exception(e, context='get_events_dashboard')
         return Response({
             'success': False,
-            'message': f'Error fetching dashboard data: {str(e)}'
+            'message': 'Error fetching dashboard data. Please try again later.'
         }, status=500)
 
 
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication])
-@permission_classes([AllowAny])
+@permission_classes([EventApprovePermission])
 @csrf_exempt
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
@@ -2863,14 +3550,14 @@ def approve_event(request, event_id):
         tenant_id = get_tenant_id_from_request(request)
         
         data = request.data
-        user_id = data.get('user_id') or request.GET.get('user_id')
         comments = data.get('comments', '')
         
-        if not user_id:
+        user_id_int = _parse_server_user_id_int(request)
+        if not user_id_int:
             return Response({
                 'success': False,
-                'message': 'User ID is required'
-            }, status=400)
+                'message': 'Authentication required'
+            }, status=401)
         
         # Get the event
         try:
@@ -2881,8 +3568,13 @@ def approve_event(request, event_id):
                 'message': 'Event not found'
             }, status=404)
         
+        deny = _guard_event_object_access(request, event)
+        if deny:
+            payload, code = deny
+            return Response(payload, status=code)
+        
         # Check if user is the reviewer
-        if event.Reviewer and event.Reviewer.UserId != int(user_id):
+        if event.Reviewer and event.Reviewer.UserId != user_id_int:
             return Response({
                 'success': False,
                 'message': 'Only the assigned reviewer can approve this event'
@@ -2906,16 +3598,21 @@ def approve_event(request, event_id):
             event.Comments = comments
         event.save()
         
+        status_dedup = str(event.Status or '')
+        
         # Send email notification for status change
         try:
             from ...routes.Global.notification_service import NotificationService
-            from ...routes.Global.notifications import notifications_storage
+            from ...routes.Global.notifications import (
+                send_event_aware_multi_channel,
+                append_event_notification_in_app,
+            )
             notification_service = NotificationService()
             import uuid
             from datetime import datetime as dt
             
             # Get actor name
-            actor = Users.objects.filter(tenant_id=tenant_id, UserId=user_id).first()
+            actor = Users.objects.filter(tenant_id=tenant_id, UserId=user_id_int).first()
             actor_name = actor.UserName if actor else 'System'
             
             # Collect recipients
@@ -2950,11 +3647,17 @@ def approve_event(request, event_id):
                             recipient['name'],
                             event.EventTitle,
                             old_status,
-                            'Approved',
+                            event.Status,
                             actor_name
                         ]
                     }
-                    notification_service.send_multi_channel_notification(notification_data)
+                    send_event_aware_multi_channel(
+                        notification_service,
+                        notification_data,
+                        event.EventId,
+                        recipient_user_id=recipient['user_id'],
+                        dedup_extra=status_dedup,
+                    )
                     
                     # In-app notification
                     notification = {
@@ -2967,13 +3670,13 @@ def approve_event(request, event_id):
                         'status': {'isRead': False, 'readAt': None},
                         'user_id': str(recipient['user_id'])
                     }
-                    notifications_storage.append(notification)
-                    if len(notifications_storage) > 100:
-                        notifications_storage.pop(0)
+                    append_event_notification_in_app(
+                        notification, event.EventId, 'eventStatusChanged', dedup_extra=status_dedup
+                    )
                 except Exception as notify_error:
-                    debug_print(f"Error sending notification: {str(notify_error)}")
+                    _log_exception(notify_error, context='approve_event.notify')
         except Exception as notify_ex:
-            debug_print(f"Error in notification service: {str(notify_ex)}")
+            _log_exception(notify_ex, context='approve_event.notify_service')
         
         return Response({
             'success': True,
@@ -2983,16 +3686,16 @@ def approve_event(request, event_id):
         })
         
     except Exception as e:
-        debug_print(f"DEBUG: Error in approve_event: {str(e)}")
+        _log_exception(e, context='approve_event')
         return Response({
             'success': False,
-            'message': f'Error approving event: {str(e)}'
+            'message': 'Error approving event. Please try again later.'
         }, status=500)
 
 
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication])
-@permission_classes([AllowAny])
+@permission_classes([EventRejectPermission])
 @csrf_exempt
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
@@ -3005,14 +3708,14 @@ def reject_event(request, event_id):
         tenant_id = get_tenant_id_from_request(request)
         
         data = request.data
-        user_id = data.get('user_id') or request.GET.get('user_id')
         comments = data.get('comments', '')
         
-        if not user_id:
+        user_id_int = _parse_server_user_id_int(request)
+        if not user_id_int:
             return Response({
                 'success': False,
-                'message': 'User ID is required'
-            }, status=400)
+                'message': 'Authentication required'
+            }, status=401)
         
         # Get the event
         try:
@@ -3023,8 +3726,13 @@ def reject_event(request, event_id):
                 'message': 'Event not found'
             }, status=404)
         
+        deny = _guard_event_object_access(request, event)
+        if deny:
+            payload, code = deny
+            return Response(payload, status=code)
+        
         # Check if user is the reviewer
-        if event.Reviewer and event.Reviewer.UserId != int(user_id):
+        if event.Reviewer and event.Reviewer.UserId != user_id_int:
             return Response({
                 'success': False,
                 'message': 'Only the assigned reviewer can reject this event'
@@ -3048,16 +3756,21 @@ def reject_event(request, event_id):
             event.Comments = comments
         event.save()
         
+        status_dedup = str(event.Status or '')
+        
         # Send email notification for status change
         try:
             from ...routes.Global.notification_service import NotificationService
-            from ...routes.Global.notifications import notifications_storage
+            from ...routes.Global.notifications import (
+                send_event_aware_multi_channel,
+                append_event_notification_in_app,
+            )
             notification_service = NotificationService()
             import uuid
             from datetime import datetime as dt
             
             # Get actor name
-            actor = Users.objects.filter(tenant_id=tenant_id, UserId=user_id).first()
+            actor = Users.objects.filter(tenant_id=tenant_id, UserId=user_id_int).first()
             actor_name = actor.UserName if actor else 'System'
             
             # Collect recipients
@@ -3092,11 +3805,17 @@ def reject_event(request, event_id):
                             recipient['name'],
                             event.EventTitle,
                             old_status,
-                            'Rejected',
+                            event.Status,
                             actor_name
                         ]
                     }
-                    notification_service.send_multi_channel_notification(notification_data)
+                    send_event_aware_multi_channel(
+                        notification_service,
+                        notification_data,
+                        event.EventId,
+                        recipient_user_id=recipient['user_id'],
+                        dedup_extra=status_dedup,
+                    )
                     
                     # In-app notification
                     notification = {
@@ -3109,13 +3828,13 @@ def reject_event(request, event_id):
                         'status': {'isRead': False, 'readAt': None},
                         'user_id': str(recipient['user_id'])
                     }
-                    notifications_storage.append(notification)
-                    if len(notifications_storage) > 100:
-                        notifications_storage.pop(0)
+                    append_event_notification_in_app(
+                        notification, event.EventId, 'eventStatusChanged', dedup_extra=status_dedup
+                    )
                 except Exception as notify_error:
-                    debug_print(f"Error sending notification: {str(notify_error)}")
+                    _log_exception(notify_error, context='reject_event.notify')
         except Exception as notify_ex:
-            debug_print(f"Error in notification service: {str(notify_ex)}")
+            _log_exception(notify_ex, context='reject_event.notify_service')
         
         return Response({
             'success': True,
@@ -3125,10 +3844,10 @@ def reject_event(request, event_id):
         })
         
     except Exception as e:
-        debug_print(f"DEBUG: Error in reject_event: {str(e)}")
+        _log_exception(e, context='reject_event')
         return Response({
             'success': False,
-            'message': f'Error rejecting event: {str(e)}'
+            'message': 'Error rejecting event. Please try again later.'
         }, status=500)
 
 
@@ -3141,14 +3860,23 @@ def reject_event(request, event_id):
 def update_event(request, event_id):
     """Update an event"""
     try:
-        data = request.data
-        user_id = data.get('user_id')
-        
-        if not user_id:
+        # MULTI-TENANCY: Extract tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+
+        # Parse request data - handle both DRF request.data and raw JSON
+        data = request.data if hasattr(request, 'data') else {}
+        if not data and request.body:
+            try:
+                data = json.loads(request.body)
+            except (json.JSONDecodeError, TypeError):
+                data = {}
+
+        user_id_int = _parse_server_user_id_int(request)
+        if not user_id_int:
             return Response({
                 'success': False,
-                'message': 'User ID is required'
-            }, status=400)
+                'message': 'Authentication required'
+            }, status=401)
         
         # Get the event
         try:
@@ -3159,42 +3887,96 @@ def update_event(request, event_id):
                 'message': 'Event not found'
             }, status=404)
         
-        # Check if user has permission to update (owner or reviewer)
-        # For now, allow any authenticated user to update events
-        # TODO: Implement proper permission checking based on business rules
-        debug_print(f"DEBUG: Event {event_id} - CreatedBy: {event.CreatedBy}, Reviewer: {event.Reviewer}, User: {user_id}")
+        deny = _guard_event_object_access(request, event)
+        if deny:
+            payload, code = deny
+            return Response(payload, status=code)
         
-        # Allow updating for now - can be restricted later
-        # if event.CreatedBy != int(user_id) and event.Reviewer != int(user_id):
-        #     return Response({
-        #         'success': False,
-        #         'message': 'You do not have permission to update this event'
-        #     }, status=403)
+        debug_print(f"DEBUG: Event {event_id} - CreatedBy: {event.CreatedBy}, Reviewer: {event.Reviewer}, User: {user_id_int}")
         
-        # Update event fields
-        if 'title' in data:
-            event.EventTitle = data['title']
+        # Update event fields (validated lengths / allow-listed enums)
+        if 'title' in data or 'EventTitle' in data or 'name' in data:
+            new_title = data.get('title') or data.get('EventTitle') or data.get('name')
+            new_title = str(new_title).strip() if new_title is not None else ''
+            if not new_title:
+                return Response({
+                    'success': False,
+                    'message': 'Event title cannot be empty.'
+                }, status=400)
+            if len(new_title) > _EVENT_MAX_TITLE_LEN:
+                return Response({
+                    'success': False,
+                    'message': f'Event title must be at most {_EVENT_MAX_TITLE_LEN} characters.'
+                }, status=400)
+            event.EventTitle = new_title
         if 'description' in data:
             event.Description = data['description']
-        if 'framework' in data:
-            event.FrameworkName = data['framework']
+        if 'framework' in data or 'framework_name' in data:
+            raw_fw = data['framework_name'] if 'framework_name' in data else data.get('framework')
+            try:
+                event.FrameworkName = _sanitize_optional_str_field(
+                    raw_fw, _EVENT_MAX_FRAMEWORK_NAME_LEN, 'Framework name'
+                )
+            except ValueError as ve:
+                return Response({
+                    'success': False,
+                    'message': str(ve)
+                }, status=400)
         if 'module' in data:
-            event.Module = data['module']
-        if 'category' in data:
-            event.Category = data['category']
+            try:
+                event.Module = _sanitize_optional_str_field(
+                    data['module'], _EVENT_MAX_MODULE_LEN, 'Module'
+                )
+            except ValueError as ve:
+                return Response({
+                    'success': False,
+                    'message': str(ve)
+                }, status=400)
+        if 'category' in data or 'type' in data:
+            raw_cat = data['category'] if 'category' in data else data.get('type')
+            try:
+                event.Category = _sanitize_optional_str_field(
+                    raw_cat, _EVENT_MAX_CATEGORY_LEN, 'Category'
+                )
+            except ValueError as ve:
+                return Response({
+                    'success': False,
+                    'message': str(ve)
+                }, status=400)
         if 'recurrence_type' in data:
-            event.RecurrenceType = data['recurrence_type']
+            try:
+                event.RecurrenceType = _normalize_event_recurrence_type(data['recurrence_type'])
+            except ValueError as ve:
+                return Response({
+                    'success': False,
+                    'message': str(ve)
+                }, status=400)
         if 'frequency' in data:
-            event.Frequency = data['frequency']
+            if event.RecurrenceType == 'Non-Recurring':
+                event.Frequency = None
+            else:
+                fv = data['frequency']
+                if fv in ('', None):
+                    event.Frequency = None
+                else:
+                    try:
+                        event.Frequency = _sanitize_optional_str_field(fv, 50, 'Frequency')
+                    except ValueError as ve:
+                        return Response({
+                            'success': False,
+                            'message': str(ve)
+                        }, status=400)
         if 'priority' in data:
-            event.Priority = data['priority']
+            try:
+                event.Priority = _normalize_event_priority(data['priority'])
+            except ValueError as ve:
+                return Response({
+                    'success': False,
+                    'message': str(ve)
+                }, status=400)
         
-        # Track status change for notifications
-        old_status = event.Status
-        status_changed = False
-        if 'status' in data and data['status'] != event.Status:
-            event.Status = data['status']
-            status_changed = True
+        # Status transitions must use approve/reject/archive (or other workflow) endpoints —
+        # do not accept client-supplied status on generic update (prevents privilege escalation).
         
         # Handle evidence updates
         if 'evidence' in data:
@@ -3222,12 +4004,25 @@ def update_event(request, event_id):
             if evidence_files:
                 debug_print(f"DEBUG: Processing {len(evidence_files)} evidence files")
                 for i, evidence_file in enumerate(evidence_files):
-                    debug_print(f"DEBUG: Processing evidence file {i+1}: {evidence_file}")
-                    if evidence_file.get('s3_url'):
-                        evidence_urls.append(evidence_file.get('s3_url'))
-                        debug_print(f"DEBUG: Added evidence URL: {evidence_file.get('s3_url')}")
-                    else:
-                        debug_print(f"DEBUG: Skipping evidence file {i+1} - no s3_url")
+                    if not isinstance(evidence_file, dict):
+                        return Response({
+                            'success': False,
+                            'message': 'Each evidence entry must be an object.',
+                        }, status=400)
+                    raw_url = evidence_file.get('s3_url')
+                    if not raw_url:
+                        continue
+                    try:
+                        safe_url = _validate_event_evidence_s3_url(
+                            raw_url, field_label=f'evidence[{i}].s3_url'
+                        )
+                        if safe_url:
+                            evidence_urls.append(safe_url)
+                    except ValueError as ve:
+                        return Response({
+                            'success': False,
+                            'message': _sanitize_reflected_error_detail(str(ve)),
+                        }, status=400)
             else:
                 debug_print("DEBUG: No evidence files provided")
             
@@ -3263,7 +4058,7 @@ def update_event(request, event_id):
                 else:
                     debug_print(f"DEBUG: Owner user not found for name: {owner_name}")
             except Exception as e:
-                debug_print(f"DEBUG: Error finding owner user: {str(e)}")
+                _log_exception(e, context='update_event.owner_lookup')
         
         # Handle reviewer assignment - convert name to Users instance
         if 'reviewer' in data and data['reviewer']:
@@ -3289,80 +4084,52 @@ def update_event(request, event_id):
                 else:
                     debug_print(f"DEBUG: Reviewer user not found for name: {reviewer_name}")
             except Exception as e:
-                debug_print(f"DEBUG: Error finding reviewer user: {str(e)}")
+                _log_exception(e, context='update_event.reviewer_lookup')
+        
+        if any(k in data for k in ('start_date', 'StartDate', 'end_date', 'EndDate')):
+            new_start = event.StartDate
+            new_end = event.EndDate
+            if 'start_date' in data or 'StartDate' in data:
+                rs = data['start_date'] if 'start_date' in data else data['StartDate']
+                if rs in ('', None):
+                    new_start = None
+                else:
+                    try:
+                        new_start = _parse_event_date_value(rs, 'Start date')
+                    except ValueError as ve:
+                        return Response({
+                            'success': False,
+                            'message': str(ve)
+                        }, status=400)
+            if 'end_date' in data or 'EndDate' in data:
+                re_val = data['end_date'] if 'end_date' in data else data['EndDate']
+                if re_val in ('', None):
+                    new_end = None
+                else:
+                    try:
+                        new_end = _parse_event_date_value(re_val, 'End date')
+                    except ValueError as ve:
+                        return Response({
+                            'success': False,
+                            'message': str(ve)
+                        }, status=400)
+            is_tpl = bool(getattr(event, 'IsTemplate', False))
+            date_err = _validate_event_start_end_dates(
+                new_start, new_end,
+                mode='update',
+                created_at=event.CreatedAt,
+                is_template=is_tpl,
+            )
+            if date_err:
+                return Response({
+                    'success': False,
+                    'message': date_err
+                }, status=400)
+            event.StartDate = new_start
+            event.EndDate = new_end
         
         event.UpdatedAt = timezone.now()
         event.save()
-        
-        # Send email notification if status changed
-        if status_changed:
-            try:
-                from ...routes.Global.notification_service import NotificationService
-                from ...routes.Global.notifications import notifications_storage
-                notification_service = NotificationService()
-                import uuid
-                from datetime import datetime as dt
-                
-                # Get actor name
-                actor = Users.objects.filter(tenant_id=tenant_id, UserId=user_id).first()
-                actor_name = actor.UserName if actor else 'System'
-                
-                # Collect recipients
-                recipients = []
-                if event.Owner and hasattr(event.Owner, 'Email') and event.Owner.Email:
-                    recipients.append({
-                        'email': event.Owner.Email,
-                        'name': event.Owner.UserName or event.Owner.Email.split('@')[0],
-                        'user_id': event.Owner.UserId
-                    })
-                if event.Reviewer and hasattr(event.Reviewer, 'Email') and event.Reviewer.Email:
-                    recipients.append({
-                        'email': event.Reviewer.Email,
-                        'name': event.Reviewer.UserName or event.Reviewer.Email.split('@')[0],
-                        'user_id': event.Reviewer.UserId
-                    })
-                if event.CreatedBy and hasattr(event.CreatedBy, 'Email') and event.CreatedBy.Email:
-                    recipients.append({
-                        'email': event.CreatedBy.Email,
-                        'name': event.CreatedBy.UserName or event.CreatedBy.Email.split('@')[0],
-                        'user_id': event.CreatedBy.UserId
-                    })
-                
-                # Send notifications
-                for recipient in recipients:
-                    try:
-                        notification_data = {
-                            'notification_type': 'eventStatusChanged',
-                            'email': recipient['email'],
-                            'email_type': 'gmail',
-                            'template_data': [
-                                recipient['name'],
-                                event.EventTitle,
-                                old_status,
-                                event.Status,
-                                actor_name
-                            ]
-                        }
-                        notification_service.send_multi_channel_notification(notification_data)
-                        
-                        # In-app notification
-                        notification = {
-                            'id': str(uuid.uuid4()),
-                            'title': 'Event Status Updated',
-                            'message': f'Event "{event.EventTitle}" status changed from {old_status} to {event.Status}.',
-                            'category': 'event',
-                            'priority': 'medium',
-                            'createdAt': dt.now().isoformat(),
-                            'status': {'isRead': False, 'readAt': None},
-                            'user_id': str(recipient['user_id'])
-                        }
-                        notifications_storage.append(notification)
-                        if len(notifications_storage) > 100:
-                            notifications_storage.pop(0)
-                    except Exception as notify_error:
-                        debug_print(f"Error sending notification: {str(notify_error)}")
-            except Exception as notify_ex:
-                debug_print(f"Error in notification service: {str(notify_ex)}")
         
         # Return the updated event data
         event_data = {
@@ -3378,6 +4145,8 @@ def update_event(request, event_id):
             'reviewer': event.reviewer_name if hasattr(event, 'reviewer_name') else '',
             'status': event.Status,
             'priority': event.Priority,
+            'start_date': event.StartDate.isoformat() if event.StartDate else None,
+            'end_date': event.EndDate.isoformat() if event.EndDate else None,
             'updated_at': event.UpdatedAt
         }
         
@@ -3389,10 +4158,10 @@ def update_event(request, event_id):
         })
         
     except Exception as e:
-        debug_print(f"DEBUG: Error in update_event: {str(e)}")
+        _log_exception(e, context='update_event')
         return Response({
             'success': False,
-            'message': f'Error updating event: {str(e)}'
+            'message': 'Error updating event. Please try again later.'
         }, status=500)
 
 
@@ -3408,63 +4177,125 @@ def archive_event(request, event_id):
         # MULTI-TENANCY: Extract tenant_id from request
         tenant_id = get_tenant_id_from_request(request)
         
-        data = request.data
-        user_id = data.get('user_id')
-        
-        if not user_id:
+        user_id_int = _parse_server_user_id_int(request)
+        if not user_id_int:
             return Response({
                 'success': False,
-                'message': 'User ID is required'
-            }, status=400)
+                'message': 'Authentication required'
+            }, status=401)
         
-        # Get the event - handle both integer ID and string event code
         try:
-            # Try to convert to integer first (if it's a numeric ID)
-            try:
-                event_id_int = int(event_id)
-                event = Event.objects.get(EventId=event_id_int, tenant_id=tenant_id)
-            except (ValueError, TypeError):
-                # If not an integer, treat it as EventId_Generated (e.g., "EVT-2026-4226")
-                event = Event.objects.get(EventId_Generated=str(event_id), tenant_id=tenant_id)
+            event = _get_event_for_tenant(tenant_id, event_id, allow_generated_slug=True)
         except Event.DoesNotExist:
             return Response({
                 'success': False,
-                'message': f'Event not found: {event_id}'
+                'message': 'Event not found'
             }, status=404)
         
-        # Check if user has permission to archive (owner or reviewer)
-        # For now, allow any authenticated user to archive events
-        # TODO: Implement proper permission checking based on business rules
-        debug_print(f"DEBUG: Event {event_id} - CreatedBy: {event.CreatedBy}, Reviewer: {event.Reviewer}, User: {user_id}")
+        deny = _guard_event_object_access(request, event)
+        if deny:
+            payload, code = deny
+            return Response(payload, status=code)
         
-        # Allow archiving for now - can be restricted later
-        # if event.CreatedBy != int(user_id) and event.Reviewer != int(user_id):
-        #     return Response({
-        #         'success': False,
-        #         'message': 'You do not have permission to archive this event'
-        #     }, status=403)
+        debug_print(f"DEBUG: Event {event_id} - CreatedBy: {event.CreatedBy}, Reviewer: {event.Reviewer}, User: {user_id_int}")
         
+        old_status = event.Status
         # Archive the event
         event.Status = 'Archived'
         event.UpdatedAt = timezone.now()
         event.save()
         
+        # Notify stakeholders of status change (same anti-spam rules as approve/reject/update)
+        try:
+            from ...routes.Global.notification_service import NotificationService
+            from ...routes.Global.notifications import (
+                send_event_aware_multi_channel,
+                append_event_notification_in_app,
+            )
+            notification_service = NotificationService()
+            import uuid
+            from datetime import datetime as dt
+
+            actor = Users.objects.filter(tenant_id=tenant_id, UserId=user_id_int).first()
+            actor_name = actor.UserName if actor else 'System'
+            status_dedup = str(event.Status or 'Archived')
+
+            recipients = []
+            if event.Owner and hasattr(event.Owner, 'Email') and event.Owner.Email:
+                recipients.append({
+                    'email': event.Owner.Email,
+                    'name': event.Owner.UserName or event.Owner.Email.split('@')[0],
+                    'user_id': event.Owner.UserId,
+                })
+            if event.Reviewer and hasattr(event.Reviewer, 'Email') and event.Reviewer.Email:
+                recipients.append({
+                    'email': event.Reviewer.Email,
+                    'name': event.Reviewer.UserName or event.Reviewer.Email.split('@')[0],
+                    'user_id': event.Reviewer.UserId,
+                })
+            if event.CreatedBy and hasattr(event.CreatedBy, 'Email') and event.CreatedBy.Email:
+                recipients.append({
+                    'email': event.CreatedBy.Email,
+                    'name': event.CreatedBy.UserName or event.CreatedBy.Email.split('@')[0],
+                    'user_id': event.CreatedBy.UserId,
+                })
+
+            for recipient in recipients:
+                try:
+                    notification_data = {
+                        'notification_type': 'eventStatusChanged',
+                        'email': recipient['email'],
+                        'email_type': 'gmail',
+                        'template_data': [
+                            recipient['name'],
+                            event.EventTitle,
+                            old_status,
+                            event.Status,
+                            actor_name,
+                        ],
+                    }
+                    send_event_aware_multi_channel(
+                        notification_service,
+                        notification_data,
+                        event.EventId,
+                        recipient_user_id=recipient['user_id'],
+                        dedup_extra=status_dedup,
+                    )
+                    notification = {
+                        'id': str(uuid.uuid4()),
+                        'title': 'Event Status Updated',
+                        'message': f'Event "{event.EventTitle}" was archived (status: {old_status} → {event.Status}).',
+                        'category': 'event',
+                        'priority': 'medium',
+                        'createdAt': dt.now().isoformat(),
+                        'status': {'isRead': False, 'readAt': None},
+                        'user_id': str(recipient['user_id']),
+                    }
+                    append_event_notification_in_app(
+                        notification, event.EventId, 'eventStatusChanged', dedup_extra=status_dedup
+                    )
+                except Exception as notify_error:
+                    _log_exception(notify_error, context='archive_event.notify')
+        except Exception as notify_ex:
+            _log_exception(notify_ex, context='archive_event.notify_service')
+        
         return Response({
             'success': True,
             'message': 'Event archived successfully',
-            'event_id': event.EventId
+            'event_id': event.EventId,
+            'new_status': event.Status,
         })
         
     except Exception as e:
-        debug_print(f"DEBUG: Error in archive_event: {str(e)}")
+        _log_exception(e, context='archive_event')
         return Response({
             'success': False,
-            'message': f'Error archiving event: {str(e)}'
+            'message': 'Error archiving event. Please try again later.'
         }, status=500)
 
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([EventViewAllPermission, EventViewModulePermission])
 @authentication_classes([CsrfExemptSessionAuthentication])
 @csrf_exempt
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
@@ -3474,6 +4305,13 @@ def get_archived_events(request):
     try:
         # MULTI-TENANCY: Extract tenant_id from request
         tenant_id = get_tenant_id_from_request(request)
+        
+        user_id_int = _parse_server_user_id_int(request)
+        if not user_id_int:
+            return Response({
+                'success': False,
+                'message': 'Authentication required'
+            }, status=401)
         
         # Get archived events that are NOT from integrations or Riskavaire
         archived_events_query = Event.objects.filter(tenant_id=tenant_id, 
@@ -3486,6 +4324,7 @@ def get_archived_events(request):
             models.Q(LinkedRecordType__icontains='Integration') |
             models.Q(LinkedRecordType__icontains='Riskavaire')
         )
+        archived_events_query = _apply_event_list_scope(archived_events_query, user_id_int)
         
         # Apply framework filtering
         from ..Policy.framework_filter_helper import apply_framework_filter, get_framework_filter_info
@@ -3543,15 +4382,15 @@ def get_archived_events(request):
         })
         
     except Exception as e:
-        debug_print(f"DEBUG: Error in get_archived_events: {str(e)}")
+        _log_exception(e, context='get_archived_events')
         return Response({
             'success': False,
-            'message': f'Error fetching archived events: {str(e)}'
+            'message': 'Error fetching archived events. Please try again later.'
         }, status=500)
 
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([EventViewAllPermission, EventViewModulePermission])
 @authentication_classes([CsrfExemptSessionAuthentication])
 @csrf_exempt
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
@@ -3561,6 +4400,13 @@ def get_archived_queue_items(request):
     try:
         # MULTI-TENANCY: Extract tenant_id from request
         tenant_id = get_tenant_id_from_request(request)
+        
+        user_id_int = _parse_server_user_id_int(request)
+        if not user_id_int:
+            return Response({
+                'success': False,
+                'message': 'Authentication required'
+            }, status=401)
         
         # Get archived events that are from integrations or Riskavaire
         archived_queue_items = Event.objects.filter(tenant_id=tenant_id, 
@@ -3572,7 +4418,8 @@ def get_archived_queue_items(request):
             models.Q(LinkedRecordType__icontains='Jira') |
             models.Q(LinkedRecordType__icontains='Integration') |
             models.Q(LinkedRecordType__icontains='Riskavaire')
-        ).order_by('-UpdatedAt')
+        )
+        archived_queue_items = _apply_event_list_scope(archived_queue_items, user_id_int).order_by('-UpdatedAt')
         
         queue_items_data = []
         for event in archived_queue_items:
@@ -3624,15 +4471,15 @@ def get_archived_queue_items(request):
         })
         
     except Exception as e:
-        debug_print(f"DEBUG: Error in get_archived_queue_items: {str(e)}")
+        _log_exception(e, context='get_archived_queue_items')
         return Response({
             'success': False,
-            'message': f'Error fetching archived queue items: {str(e)}'
+            'message': 'Error fetching archived queue items. Please try again later.'
         }, status=500)
 
 
 @api_view(['POST'])
-@permission_classes([AllowAny])
+@permission_classes([EventArchivePermission])
 @authentication_classes([CsrfExemptSessionAuthentication])
 @csrf_exempt
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
@@ -3643,29 +4490,25 @@ def unarchive_event(request, event_id):
         # MULTI-TENANCY: Extract tenant_id from request
         tenant_id = get_tenant_id_from_request(request)
         
-        data = request.data
-        user_id = data.get('user_id')
-        
-        if not user_id:
+        user_id_int = _parse_server_user_id_int(request)
+        if not user_id_int:
             return Response({
                 'success': False,
-                'message': 'User ID is required'
-            }, status=400)
+                'message': 'Authentication required'
+            }, status=401)
         
-        # Get the event - handle both integer ID and string event code
         try:
-            # Try to convert to integer first (if it's a numeric ID)
-            try:
-                event_id_int = int(event_id)
-                event = Event.objects.get(EventId=event_id_int, tenant_id=tenant_id)
-            except (ValueError, TypeError):
-                # If not an integer, treat it as EventId_Generated (e.g., "EVT-2026-4226")
-                event = Event.objects.get(EventId_Generated=str(event_id), tenant_id=tenant_id)
+            event = _get_event_for_tenant(tenant_id, event_id, allow_generated_slug=True)
         except Event.DoesNotExist:
             return Response({
                 'success': False,
-                'message': f'Event not found: {event_id}'
+                'message': 'Event not found'
             }, status=404)
+        
+        deny = _guard_event_object_access(request, event)
+        if deny:
+            payload, code = deny
+            return Response(payload, status=code)
         
         # Check if event is archived
         if event.Status != 'Archived':
@@ -3674,10 +4517,84 @@ def unarchive_event(request, event_id):
                 'message': 'Event is not archived'
             }, status=400)
         
+        old_status = event.Status
         # Update event status to Pending Review
         event.Status = 'Pending Review'
         event.UpdatedAt = timezone.now()
         event.save()
+
+        try:
+            from ...routes.Global.notification_service import NotificationService
+            from ...routes.Global.notifications import (
+                send_event_aware_multi_channel,
+                append_event_notification_in_app,
+            )
+            notification_service = NotificationService()
+            import uuid
+            from datetime import datetime as dt
+
+            actor = Users.objects.filter(tenant_id=tenant_id, UserId=user_id_int).first()
+            actor_name = actor.UserName if actor else 'System'
+            status_dedup = str(event.Status or 'Pending Review')
+
+            recipients = []
+            if event.Owner and hasattr(event.Owner, 'Email') and event.Owner.Email:
+                recipients.append({
+                    'email': event.Owner.Email,
+                    'name': event.Owner.UserName or event.Owner.Email.split('@')[0],
+                    'user_id': event.Owner.UserId,
+                })
+            if event.Reviewer and hasattr(event.Reviewer, 'Email') and event.Reviewer.Email:
+                recipients.append({
+                    'email': event.Reviewer.Email,
+                    'name': event.Reviewer.UserName or event.Reviewer.Email.split('@')[0],
+                    'user_id': event.Reviewer.UserId,
+                })
+            if event.CreatedBy and hasattr(event.CreatedBy, 'Email') and event.CreatedBy.Email:
+                recipients.append({
+                    'email': event.CreatedBy.Email,
+                    'name': event.CreatedBy.UserName or event.CreatedBy.Email.split('@')[0],
+                    'user_id': event.CreatedBy.UserId,
+                })
+
+            for recipient in recipients:
+                try:
+                    notification_data = {
+                        'notification_type': 'eventStatusChanged',
+                        'email': recipient['email'],
+                        'email_type': 'gmail',
+                        'template_data': [
+                            recipient['name'],
+                            event.EventTitle,
+                            old_status,
+                            event.Status,
+                            actor_name,
+                        ],
+                    }
+                    send_event_aware_multi_channel(
+                        notification_service,
+                        notification_data,
+                        event.EventId,
+                        recipient_user_id=recipient['user_id'],
+                        dedup_extra=status_dedup,
+                    )
+                    notification = {
+                        'id': str(uuid.uuid4()),
+                        'title': 'Event Status Updated',
+                        'message': f'Event "{event.EventTitle}" was unarchived (status: {old_status} → {event.Status}).',
+                        'category': 'event',
+                        'priority': 'medium',
+                        'createdAt': dt.now().isoformat(),
+                        'status': {'isRead': False, 'readAt': None},
+                        'user_id': str(recipient['user_id']),
+                    }
+                    append_event_notification_in_app(
+                        notification, event.EventId, 'eventStatusChanged', dedup_extra=status_dedup
+                    )
+                except Exception as notify_error:
+                    _log_exception(notify_error, context='unarchive_event.notify')
+        except Exception as notify_ex:
+            _log_exception(notify_ex, context='unarchive_event.notify_service')
         
         return Response({
             'success': True,
@@ -3687,15 +4604,15 @@ def unarchive_event(request, event_id):
         })
         
     except Exception as e:
-        debug_print(f"DEBUG: Error in unarchive_event: {str(e)}")
+        _log_exception(e, context='unarchive_event')
         return Response({
             'success': False,
-            'message': f'Error unarchiving event: {str(e)}'
+            'message': 'Error unarchiving event. Please try again later.'
         }, status=500)
 
 
 @api_view(['POST'])
-@permission_classes([AllowAny])
+@permission_classes([EventArchivePermission])
 @authentication_classes([CsrfExemptSessionAuthentication])
 @csrf_exempt
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
@@ -3706,14 +4623,12 @@ def delete_event_permanently(request, event_id):
         # MULTI-TENANCY: Extract tenant_id from request
         tenant_id = get_tenant_id_from_request(request)
 
-        data = request.data
-        user_id = data.get('user_id')
-        
-        if not user_id:
+        user_id_int = _parse_server_user_id_int(request)
+        if not user_id_int:
             return Response({
                 'success': False,
-                'message': 'User ID is required'
-            }, status=400)
+                'message': 'Authentication required'
+            }, status=401)
         
         # Get the event
         try:
@@ -3723,6 +4638,11 @@ def delete_event_permanently(request, event_id):
                 'success': False,
                 'message': 'Event not found'
             }, status=404)
+        
+        deny = _guard_event_object_access(request, event)
+        if deny:
+            payload, code = deny
+            return Response(payload, status=code)
         
         # Check if event is archived
         if event.Status != 'Archived':
@@ -3746,15 +4666,15 @@ def delete_event_permanently(request, event_id):
         })
         
     except Exception as e:
-        debug_print(f"DEBUG: Error in delete_event_permanently: {str(e)}")
+        _log_exception(e, context='delete_event_permanently')
         return Response({
             'success': False,
-            'message': f'Error deleting event: {str(e)}'
+            'message': 'Error deleting event. Please try again later.'
         }, status=500)
 
 
 @api_view(['POST'])
-@permission_classes([AllowAny])
+@permission_classes([EventEditPermission])
 @authentication_classes([CsrfExemptSessionAuthentication])
 @csrf_exempt
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
@@ -3762,14 +4682,13 @@ def delete_event_permanently(request, event_id):
 def attach_evidence(request, event_id):
     """Attach evidence to an event"""
     try:
-        data = request.data
-        user_id = data.get('user_id')
-        
-        if not user_id:
+        tenant_id = get_tenant_id_from_request(request)
+        user_id_int = _parse_server_user_id_int(request)
+        if not user_id_int:
             return Response({
                 'success': False,
-                'message': 'User ID is required'
-            }, status=400)
+                'message': 'Authentication required'
+            }, status=401)
         
         # Get the event
         try:
@@ -3780,25 +4699,32 @@ def attach_evidence(request, event_id):
                 'message': 'Event not found'
             }, status=404)
         
-        # Check if user has permission to attach evidence (owner or reviewer)
-        # For now, allow any authenticated user to attach evidence
-        # TODO: Implement proper permission checking based on business rules
-        debug_print(f"DEBUG: Event {event_id} - CreatedBy: {event.CreatedBy}, Reviewer: {event.Reviewer}, User: {user_id}")
+        deny = _guard_event_object_access(request, event)
+        if deny:
+            payload, code = deny
+            return Response(payload, status=code)
         
-        # Allow attaching evidence for now - can be restricted later
-        # if event.CreatedBy != int(user_id) and event.Reviewer != int(user_id):
-        #     return Response({
-        #         'success': False,
-        #         'message': 'You do not have permission to attach evidence to this event'
-        #     }, status=403)
+        debug_print(f"DEBUG: Event {event_id} - CreatedBy: {event.CreatedBy}, Reviewer: {event.Reviewer}, User: {user_id_int}")
         
-        # Handle file upload
+        # Handle file upload (same size/type policy as upload_event_evidence)
         if 'file' in request.FILES:
+            import os
             file = request.FILES['file']
-            # Here you would typically save the file and create an evidence record
-            # For now, we'll just update the event description to include evidence info
-            evidence_info = f"\n\nEvidence attached: {file.name} (uploaded by user {user_id})"
-            event.EventDescription = (event.EventDescription or '') + evidence_info
+            if file.size > _EVENT_EVIDENCE_MAX_BYTES:
+                return Response({
+                    'success': False,
+                    'message': 'File size exceeds 10MB limit'
+                }, status=400)
+            ct = file.content_type or ''
+            if ct not in _EVENT_EVIDENCE_ALLOWED_CONTENT_TYPES:
+                return Response({
+                    'success': False,
+                    'message': 'File type not supported. Allowed types: PDF, CSV, XLSX, DOC, TXT'
+                }, status=400)
+            safe_name = os.path.basename((file.name or 'upload').replace('\\', '/'))
+            safe_name = ''.join(c for c in safe_name if ord(c) >= 32 and ord(c) != 127)[:255] or 'upload'
+            evidence_info = f"\n\nEvidence attached: {safe_name} (uploaded by user {user_id_int})"
+            event.Description = (event.Description or '') + evidence_info
             event.UpdatedAt = timezone.now()
             event.save()
             
@@ -3806,7 +4732,7 @@ def attach_evidence(request, event_id):
                 'success': True,
                 'message': 'Evidence attached successfully',
                 'event_id': event.EventId,
-                'filename': file.name
+                'filename': safe_name
             })
         else:
             return Response({
@@ -3815,15 +4741,15 @@ def attach_evidence(request, event_id):
             }, status=400)
         
     except Exception as e:
-        debug_print(f"DEBUG: Error in attach_evidence: {str(e)}")
+        _log_exception(e, context='attach_evidence')
         return Response({
             'success': False,
-            'message': f'Error attaching evidence: {str(e)}'
+            'message': 'Error attaching evidence. Please try again later.'
         }, status=500)
 
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([EventEditPermission])
 @authentication_classes([CsrfExemptSessionAuthentication])
 @csrf_exempt
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
@@ -3832,6 +4758,8 @@ def test_integration_db_connection(request):
     """
     Test connection to the integration database and create it if it doesn't exist
     """
+    if not _event_schema_maintenance_allowed():
+        return Response({'success': False, 'message': 'Not found.'}, status=404)
     try:
         import mysql.connector
         from django.conf import settings
@@ -3891,14 +4819,15 @@ def test_integration_db_connection(request):
         })
         
     except Exception as e:
+        _log_exception(e, context='test_integration_db_connection')
         return Response({
             'success': False,
-            'message': f'Error setting up integration database: {str(e)}'
+            'message': 'Error setting up integration database. Please try again later.'
         }, status=500)
 
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([EventQueuePermission])
 @authentication_classes([CsrfExemptSessionAuthentication])
 @csrf_exempt
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
@@ -3922,7 +4851,7 @@ def get_integration_events(request):
             # Use Django ORM - this automatically decrypts encrypted fields via EncryptedFieldsMixin
             integration_records = IntegrationDataList.objects.only(
                 'id', 'heading', 'source', 'username', 'time', 'data', 'metadata', 'created_at', 'updated_at'
-            ).order_by('-created_at')[:100]
+            ).order_by('-id')[:100]
             
             debug_print(f"DEBUG: Django ORM query succeeded, got {len(integration_records)} records (decrypted)")
             
@@ -3936,21 +4865,19 @@ def get_integration_events(request):
                 debug_print(f"  - Is encrypted (heading): {isinstance(first_record.heading, str) and first_record.heading.startswith('gAAAAA') if first_record.heading else False}")
                     
         except Exception as query_error:
-            debug_print(f"DEBUG: Django ORM query failed: {str(query_error)}")
-            import traceback
-            debug_print(f"DEBUG: Traceback: {traceback.format_exc()}")
+            _log_exception(query_error, context='get_integration_events.orm')
             
-            # Fallback: try with a simpler query (no ordering)
+            # Fallback: retry with indexed ordering to avoid DB filesort pressure
             try:
                 integration_records = IntegrationDataList.objects.only(
                     'id', 'heading', 'source', 'username', 'time', 'data', 'metadata', 'created_at', 'updated_at'
-                )[:100]
-                debug_print(f"DEBUG: Fallback query (no ordering) succeeded, got {len(integration_records)} records")
+                ).order_by('-id')[:100]
+                debug_print(f"DEBUG: Fallback query (id ordering) succeeded, got {len(integration_records)} records")
             except Exception as fallback_error:
-                debug_print(f"DEBUG: Fallback query failed: {str(fallback_error)}")
+                _log_exception(fallback_error, context='get_integration_events.fallback')
                 return Response({
                     'success': False,
-                    'message': f'Failed to fetch integration data: {str(fallback_error)}',
+                    'message': 'Failed to fetch integration data. Please try again later.',
                     'events': []
                 }, status=500)
         
@@ -3991,7 +4918,7 @@ def get_integration_events(request):
                     heading = decrypt_data(heading)
                     debug_print(f"DEBUG: Decrypted heading for record {record.id}")
                 except Exception as e:
-                    debug_print(f"DEBUG: Failed to decrypt heading for record {record.id}: {str(e)}")
+                    _log_exception(e, context=f'get_integration_events.decrypt_heading.{record.id}')
             
             # Decrypt source
             source = record.source or ''
@@ -4000,7 +4927,7 @@ def get_integration_events(request):
                     source = decrypt_data(source)
                     debug_print(f"DEBUG: Decrypted source for record {record.id}: {source}")
                 except Exception as e:
-                    debug_print(f"DEBUG: Failed to decrypt source for record {record.id}: {str(e)}")
+                    _log_exception(e, context=f'get_integration_events.decrypt_source.{record.id}')
             
             # Decrypt username
             username = record.username or ''
@@ -4009,7 +4936,7 @@ def get_integration_events(request):
                     username = decrypt_data(username)
                     debug_print(f"DEBUG: Decrypted username for record {record.id}")
                 except Exception as e:
-                    debug_print(f"DEBUG: Failed to decrypt username for record {record.id}: {str(e)}")
+                    _log_exception(e, context=f'get_integration_events.decrypt_username.{record.id}')
             
             # Decrypt and parse data JSONField
             data = record.data or {}
@@ -4024,7 +4951,7 @@ def get_integration_events(request):
                         # Not encrypted, just parse JSON
                         data = json.loads(data)
                 except (json.JSONDecodeError, Exception) as e:
-                    debug_print(f"DEBUG: Warning - Could not parse data for record {record.id}: {str(e)}")
+                    _log_exception(e, context=f'get_integration_events.parse_data.{record.id}')
                     data = {}
             elif not isinstance(data, dict):
                 # If it's not a dict or string, make it empty dict
@@ -4043,7 +4970,7 @@ def get_integration_events(request):
                         # Not encrypted, just parse JSON
                         metadata = json.loads(metadata)
                 except (json.JSONDecodeError, Exception) as e:
-                    debug_print(f"DEBUG: Warning - Could not parse metadata for record {record.id}: {str(e)}")
+                    _log_exception(e, context=f'get_integration_events.parse_metadata.{record.id}')
                     metadata = {}
             elif not isinstance(metadata, dict):
                 # If it's not a dict or string, make it empty dict
@@ -4176,12 +5103,10 @@ def get_integration_events(request):
         })
         
     except Exception as e:
-        debug_print(f"DEBUG: Error in get_integration_events: {str(e)}")
-        import traceback
-        debug_print(f"DEBUG: Traceback: {traceback.format_exc()}")
+        _log_exception(e, context='get_integration_events')
         return Response({
             'success': False,
-            'message': f'Error fetching integration events: {str(e)}'
+            'message': 'Error fetching integration events. Please try again later.'
         }, status=500)
 
 
@@ -4229,7 +5154,7 @@ def determine_module_from_integration_data(record, data, metadata):
         all_modules = Module.objects.all().values_list('modulename', flat=True)
         module_names = [name.lower() for name in all_modules]
     except Exception as e:
-        debug_print(f"DEBUG: Error fetching modules from database: {str(e)}")
+        _log_exception(e, context='get_users_for_reviewer.modules')
         # Fallback to hardcoded modules if database fails
         module_names = ['policy management', 'compliance management', 'audit management', 'incident management', 'risk management']
 
@@ -4301,7 +5226,7 @@ def determine_category_from_integration_data(record, data, metadata):
 
 
 @api_view(['POST'])
-@permission_classes([AllowAny])
+@permission_classes([EventCreatePermission])
 @authentication_classes([CsrfExemptSessionAuthentication])
 @csrf_exempt
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
@@ -4311,16 +5236,16 @@ def create_event_from_integration(request):
     Create an event from an integration item (Jira issue, etc.)
     """
     try:
+        tenant_id = get_tenant_id_from_request(request)
         data = request.data
-        user_id = data.get('user_id')
-        integration_item_id = data.get('integration_item_id')
-        integration_type = data.get('integration_type', 'jira')
-        
+        user_id = _parse_server_user_id_int(request)
         if not user_id:
             return Response({
                 'success': False,
-                'message': 'User ID is required'
-            }, status=400)
+                'message': 'Authentication required'
+            }, status=401)
+        integration_item_id = data.get('integration_item_id')
+        integration_type = data.get('integration_type', 'jira')
         
         if not integration_item_id:
             return Response({
@@ -4371,7 +5296,7 @@ def create_event_from_integration(request):
                     
                     try:
                         # Get the user
-                        user = Users.objects.get(UserId=user_id, tenant_id=tenant_id) if user_id else None
+                        user = Users.objects.get(UserId=user_id, tenant_id=tenant_id)
                         
                         # Create event data from Jira issue
                         event_data = {
@@ -4395,6 +5320,8 @@ def create_event_from_integration(request):
                             'Reviewer': None,
                             'IsTemplate': False
                         }
+                        if tenant_id is not None:
+                            event_data['tenant_id'] = tenant_id
                         
                         # Create the archived event
                         archived_event = Event.objects.create(**event_data)
@@ -4408,19 +5335,20 @@ def create_event_from_integration(request):
                         })
                         
                     except Exception as event_error:
-                        debug_print(f"DEBUG: Error creating archived event: {str(event_error)}")
+                        debug_print(f"DEBUG: Error creating archived event: {sanitize_for_log(event_error, max_len=800)}")
                         # Still return success for the Jira archive even if event creation fails
                         return Response({
                             'success': True,
                             'message': 'Jira issue archived successfully (event creation failed)',
                             'action': 'archived',
-                            'warning': f'Event creation failed: {str(event_error)}'
+                            'warning': 'Event record could not be created. Please try again later.'
                         })
                 
             except mysql.connector.Error as db_error:
+                debug_print(f"DEBUG: Integration DB error: {sanitize_for_log(db_error, max_len=800)}")
                 return Response({
                     'success': False,
-                    'message': f'Failed to connect to integration database: {str(db_error)}'
+                    'message': 'Failed to connect to integration database. Please try again later.'
                 }, status=500)
             finally:
                 if 'cursor' in locals():
@@ -4451,11 +5379,13 @@ def create_event_from_integration(request):
                 'EndDate': None,
                 'Status': 'Pending Review',
                 'Priority': jira_issue['priority'] or 'Medium',
-                'CreatedBy': Users.objects.get(UserId=user_id, tenant_id=tenant_id) if user_id else None,
+                'CreatedBy': Users.objects.get(UserId=user_id, tenant_id=tenant_id),
                 'Owner': None,  # Can be set later
                 'Reviewer': None,  # Can be set later
                 'IsTemplate': False
             }
+            if tenant_id is not None:
+                event_data['tenant_id'] = tenant_id
             
             # Create the event
             event = Event.objects.create(**event_data)
@@ -4481,12 +5411,10 @@ def create_event_from_integration(request):
             }, status=400)
         
     except Exception as e:
-        debug_print(f"DEBUG: Error in create_event_from_integration: {str(e)}")
-        import traceback
-        debug_print(f"DEBUG: Traceback: {traceback.format_exc()}")
+        _log_exception(e, context='create_event_from_integration')
         return Response({
             'success': False,
-            'message': f'Error creating event from integration: {str(e)}'
+            'message': 'Error creating event from integration. Please try again later.'
         }, status=500)
 
 
@@ -4494,6 +5422,8 @@ def create_event_from_integration(request):
 
 @require_http_methods(["POST"])
 @csrf_exempt
+@require_tenant
+@tenant_filter
 def s3_upload_file(request):
     """Upload file to S3 via microservice"""
     try:
@@ -4502,20 +5432,14 @@ def s3_upload_file(request):
         debug_print(f"DEBUG: FILES: {list(request.FILES.keys())}")
         debug_print(f"DEBUG: POST: {list(request.POST.keys())}")
         
-        # Get user ID from request - try multiple sources
-        user_id = None
-        if hasattr(request, 'POST') and request.POST:
-            user_id = request.POST.get('user_id')
-        if not user_id and hasattr(request, 'GET') and request.GET:
-            user_id = request.GET.get('user_id')
-        
-        debug_print(f"DEBUG: User ID: {user_id}")
+        user_id = _get_server_user_id(request)
+        debug_print(f"DEBUG: User ID (server): {sanitize_for_log(user_id, max_len=64)}")
         
         if not user_id:
             return JsonResponse({
                 'success': False,
-                'message': 'User ID is required'
-            }, status=400)
+                'message': 'Authentication required'
+            }, status=401)
         
         # Check if file is provided
         if 'file' not in request.FILES:
@@ -4532,25 +5456,13 @@ def s3_upload_file(request):
         if hasattr(request, 'POST') and request.POST:
             custom_file_name = request.POST.get('custom_file_name')
         
-        # Validate file size (10MB limit)
-        if file.size > 10 * 1024 * 1024:
+        if file.size > _EVENT_EVIDENCE_MAX_BYTES:
             return JsonResponse({
                 'success': False,
                 'message': 'File size exceeds 10MB limit'
             }, status=400)
         
-        # Validate file type
-        allowed_types = [
-            'application/pdf',
-            'text/csv',
-            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'application/vnd.ms-excel',
-            'application/msword',
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            'text/plain'
-        ]
-        
-        if file.content_type not in allowed_types:
+        if (file.content_type or '') not in _EVENT_EVIDENCE_ALLOWED_CONTENT_TYPES:
             return JsonResponse({
                 'success': False,
                 'message': f'File type {file.content_type} not supported. Allowed types: PDF, CSV, XLSX, DOC, TXT'
@@ -4561,10 +5473,10 @@ def s3_upload_file(request):
             s3_client = create_direct_mysql_client()
             debug_print("DEBUG: S3 client created successfully")
         except Exception as e:
-            debug_print(f"DEBUG: Error creating S3 client: {str(e)}")
+            _log_exception(e, context='s3_upload_file.s3_client')
             return JsonResponse({
                 'success': False,
-                'message': f'Error initializing S3 client: {_sanitize_reflected_error_detail(str(e))}'
+                'message': 'Error initializing S3 client. Please try again later.'
             }, status=500)
         
         # Save file temporarily
@@ -4588,10 +5500,10 @@ def s3_upload_file(request):
                 file_ext = os.path.splitext(temp_file_path)[1]
                 debug_print(f"📦 Decompressed file: {compression_stats['ratio']}% reduction, saved {compression_stats['bandwidth_saved_kb']} KB")
         except Exception as e:
-            debug_print(f"DEBUG: Error creating temporary file: {str(e)}")
+            _log_exception(e, context='s3_upload_file.temp_file')
             return JsonResponse({
                 'success': False,
-                'message': f'Error saving file temporarily: {_sanitize_reflected_error_detail(str(e))}'
+                'message': 'Error saving file temporarily. Please try again later.'
             }, status=500)
         
         try:
@@ -4632,26 +5544,26 @@ def s3_upload_file(request):
                 pass
                 
     except Exception as e:
-        debug_print(f"DEBUG: Error in s3_upload_file: {str(e)}")
-        import traceback
-        debug_print(f"DEBUG: Traceback: {traceback.format_exc()}")
+        _log_exception(e, context='s3_upload_file')
         return JsonResponse({
             'success': False,
-            'message': f'Error uploading file: {_sanitize_reflected_error_detail(str(e))}'
+            'message': 'Error uploading file. Please try again later.'
         }, status=500)
 
 
 @require_http_methods(["GET"])
 @csrf_exempt
+@require_tenant
+@tenant_filter
 def s3_download_file(request, s3_key, file_name):
     """Download file from S3 via microservice"""
     try:
-        user_id = request.GET.get('user_id')
+        user_id = _get_server_user_id(request)
         if not user_id:
             return JsonResponse({
                 'success': False,
-                'message': 'User ID is required'
-            }, status=400)
+                'message': 'Authentication required'
+            }, status=401)
         
         # URL decode the parameters
         from urllib.parse import unquote
@@ -4684,10 +5596,13 @@ def s3_download_file(request, s3_key, file_name):
         debug_print(f"DEBUG: Connection test result: {connection_test}")
         
         if not connection_test.get('overall_success', False):
+            debug_print(
+                f"DEBUG: [s3_download_file] S3 unavailable: "
+                f"{sanitize_for_log(connection_test, max_len=400)}"
+            )
             return JsonResponse({
                 'success': False,
                 'message': 'S3 service is currently unavailable. Please try again later.',
-                'connection_status': connection_test
             }, status=503)
         
         # Download file
@@ -4709,29 +5624,22 @@ def s3_download_file(request, s3_key, file_name):
             response['Content-Disposition'] = f'attachment; filename="{decoded_file_name_safe}"'
             return response
         else:
-            # If download failed, try to provide more specific error information
             error_message = result.get('error', 'Download failed')
             error_message_safe = _sanitize_reflected_error_detail(error_message)
             debug_print(f"DEBUG: Download failed with error: {sanitize_for_log(error_message_safe, max_len=500)}")
             
-            # Check if it's a 404 error (file not found)
             if '404' in str(error_message_safe) or 'Not Found' in str(error_message_safe):
                 return JsonResponse({
                     'success': False,
-                    'message': 'File not found in S3. The file may have been deleted or the S3 key is incorrect.',
-                    'error_details': error_message_safe,
-                    's3_key': decoded_s3_key_safe,
-                    'file_name': decoded_file_name_safe
+                    'message': 'File not found or no longer available.',
                 }, status=404)
-            else:
-                return JsonResponse({
-                    'success': False,
-                    'message': f'Download failed: {error_message_safe}',
-                    'error_details': error_message_safe
-                }, status=500)
+            return JsonResponse({
+                'success': False,
+                'message': 'Download failed. Please try again later.',
+            }, status=500)
             
     except Exception as e:
-        debug_print(f"DEBUG: Error in s3_download_file: {sanitize_for_log(e, max_len=800)}")
+        _log_exception(e, context='s3_download_file')
         return JsonResponse({
             'success': False,
             'message': 'Error downloading file. Please try again later.',
@@ -4740,39 +5648,49 @@ def s3_download_file(request, s3_key, file_name):
 
 @require_http_methods(["GET"])
 @csrf_exempt
+@require_tenant
+@tenant_filter
 def s3_test_connection(request):
     """Test S3 microservice connection"""
     try:
+        if not _get_server_user_id(request):
+            return JsonResponse({
+                'success': False,
+                'message': 'Authentication required',
+            }, status=401)
         # Create S3 client
         s3_client = create_direct_mysql_client()
         
-        # Test connection
+        # Test connection — do not expose internal diagnostics to the client
         result = s3_client.test_connection()
+        ok = bool(isinstance(result, dict) and result.get('overall_success'))
         
         return JsonResponse({
             'success': True,
             'message': 'S3 connection test completed',
-            'connection_status': result
+            's3_available': ok,
         })
     except Exception as e:
-        debug_print(f"DEBUG: Error in s3_test_connection: {str(e)}")
+        _log_exception(e, context='s3_test_connection')
         return JsonResponse({
             'success': False,
-            'message': f'Error testing S3 connection: {_sanitize_reflected_error_detail(str(e))}'
+            'message': 'Error testing S3 connection. Please try again later.'
         }, status=500)
 
 
 @require_http_methods(["GET"])
 @csrf_exempt
+@require_tenant
+@tenant_filter
 def s3_check_file_exists(request, s3_key, file_name):
     """Check if file exists in S3"""
     try:
-        user_id = request.GET.get('user_id')
+        user_id = _get_server_user_id(request)
         if not user_id:
             return JsonResponse({
                 'success': False,
-                'message': 'User ID is required'
-            }, status=400)
+                'message': 'Authentication required'
+            }, status=401)
         
         # URL decode the parameters
         from urllib.parse import unquote
@@ -4801,8 +5719,7 @@ def s3_check_file_exists(request, s3_key, file_name):
         if not connection_test.get('overall_success', False):
             return JsonResponse({
                 'success': False,
-                'message': 'S3 service is currently unavailable',
-                'connection_status': connection_test
+                'message': 'S3 service is currently unavailable. Please try again later.',
             }, status=503)
         
         # For now, we'll assume the file exists if the connection is successful
@@ -4816,7 +5733,7 @@ def s3_check_file_exists(request, s3_key, file_name):
         })
         
     except Exception as e:
-        debug_print(f"DEBUG: Error in s3_check_file_exists: {sanitize_for_log(e, max_len=800)}")
+        _log_exception(e, context='s3_check_file_exists')
         return JsonResponse({
             'success': False,
             'message': 'Error checking file existence. Please try again later.',
@@ -4840,38 +5757,22 @@ def upload_event_evidence(request, event_id):
         debug_print(f"DEBUG: FILES: {list(request.FILES.keys())}")
         debug_print(f"DEBUG: POST: {list(request.POST.keys())}")
 
-        # MULTI-TENANCY: Extract tenant_id from request so we can
-        # safely filter Event objects. This mirrors the pattern
-        # used across other event handling views and prevents
-        # NameError for undefined tenant_id.
-        tenant_id = get_tenant_id_from_request(request)
-        
-        # Get user ID from request - try multiple sources
-        user_id = None
-        
-        # First try POST data (form-data)
-        if hasattr(request, 'POST') and request.POST:
-            user_id = request.POST.get('user_id')
-        
-        # Then try GET parameters (query string)
-        if not user_id and hasattr(request, 'GET') and request.GET:
-            user_id = request.GET.get('user_id')
-        
-        # Then try to extract from JWT token
-        if not user_id:
-            user_id = RBACUtils.get_user_id_from_request(request)
-        
-        # Also try request.data if it's a JSON request
-        if not user_id and hasattr(request, 'data'):
-            user_id = request.data.get('user_id')
+        # Resolve user identity from authenticated server context only.
+        user_id = _get_server_user_id(request)
         
         debug_print(f"DEBUG: User ID: {user_id}")
         
         if not user_id:
             return JsonResponse({
                 'success': False,
-                'message': 'User ID is required. Please provide it in the request body, query parameters, or ensure your JWT token is valid.'
-            }, status=400)
+                'message': 'Authentication required'
+            }, status=401)
+        
+        if tenant_id is None:
+            return JsonResponse({
+                'success': False,
+                'message': 'Event not found'
+            }, status=404)
         
         # Check if file is provided
         if 'file' not in request.FILES:
@@ -4888,37 +5789,23 @@ def upload_event_evidence(request, event_id):
         if hasattr(request, 'POST') and request.POST:
             custom_file_name = request.POST.get('custom_file_name')
         
-        # Validate file size (10MB limit)
-        if file.size > 10 * 1024 * 1024:
+        if file.size > _EVENT_EVIDENCE_MAX_BYTES:
             return JsonResponse({
                 'success': False,
                 'message': 'File size exceeds 10MB limit'
             }, status=400)
         
-        # Validate file type
-        allowed_types = [
-            'application/pdf',
-            'text/csv',
-            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'application/vnd.ms-excel',
-            'application/msword',
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            'text/plain'
-        ]
-        
-        if file.content_type not in allowed_types:
+        if (file.content_type or '') not in _EVENT_EVIDENCE_ALLOWED_CONTENT_TYPES:
             return JsonResponse({
                 'success': False,
                 'message': f'File type {file.content_type} not supported. Allowed types: PDF, CSV, XLSX, DOC, TXT'
             }, status=400)
         
-        # Check if event exists (scoped by tenant when available)
+        # Check if event exists (tenant-scoped)
         try:
-            if tenant_id is not None:
-                event = Event.objects.get(EventId=event_id, tenant_id=tenant_id)
-            else:
-                # Fallback for environments without multi-tenancy
-                event = Event.objects.get(EventId=event_id)
+            event = Event.objects.select_related(
+                'Owner', 'Reviewer', 'CreatedBy', 'FrameworkId', 'EventType'
+            ).get(EventId=event_id, tenant_id=tenant_id)
             debug_print(f"DEBUG: Found event: {event.EventTitle}")
         except Event.DoesNotExist:
             return JsonResponse({
@@ -4926,15 +5813,20 @@ def upload_event_evidence(request, event_id):
                 'message': 'Event not found'
             }, status=404)
         
+        deny = _guard_event_object_access(request, event)
+        if deny:
+            payload, code = deny
+            return JsonResponse(payload, status=code)
+        
         # Create S3 client
         try:
             s3_client = create_direct_mysql_client()
             debug_print("DEBUG: S3 client created successfully")
         except Exception as e:
-            debug_print(f"DEBUG: Error creating S3 client: {str(e)}")
+            _log_exception(e, context='upload_event_evidence.s3_client')
             return JsonResponse({
                 'success': False,
-                'message': f'Error initializing S3 client: {_sanitize_reflected_error_detail(str(e))}'
+                'message': 'Error initializing S3 client. Please try again later.'
             }, status=500)
         
         # Save file temporarily
@@ -4948,10 +5840,10 @@ def upload_event_evidence(request, event_id):
                 temp_file_path = temp_file.name
             debug_print(f"DEBUG: Temporary file created: {temp_file_path}")
         except Exception as e:
-            debug_print(f"DEBUG: Error creating temporary file: {str(e)}")
+            _log_exception(e, context='upload_event_evidence.temp_file')
             return JsonResponse({
                 'success': False,
-                'message': f'Error saving file temporarily: {_sanitize_reflected_error_detail(str(e))}'
+                'message': 'Error saving file temporarily. Please try again later.'
             }, status=500)
         
         try:
@@ -4972,6 +5864,13 @@ def upload_event_evidence(request, event_id):
                 s3_url = file_info.get('url')
                 s3_key = file_info.get('s3Key')
                 stored_name = file_info.get('storedName')
+                try:
+                    s3_url = _validate_event_evidence_s3_url(s3_url, field_label='upload.result.url')
+                except ValueError:
+                    return JsonResponse({
+                        'success': False,
+                        'message': 'Uploaded file URL failed security validation.',
+                    }, status=500)
                 
                 debug_print(f"DEBUG: S3 URL from result: {s3_url}")
                 debug_print(f"DEBUG: S3 Key from result: {s3_key}")
@@ -5032,23 +5931,37 @@ def upload_event_evidence(request, event_id):
                 pass
                 
     except Exception as e:
-        debug_print(f"DEBUG: Error in upload_event_evidence: {str(e)}")
-        import traceback
-        debug_print(f"DEBUG: Traceback: {traceback.format_exc()}")
+        _log_exception(e, context='upload_event_evidence')
         return JsonResponse({
             'success': False,
-            'message': f'Error uploading evidence file: {str(e)}'
+            'message': 'Error uploading evidence file. Please try again later.'
         }, status=500)
 
 
 @require_http_methods(["GET"])
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_event_evidence(request, event_id):
     """Get evidence files for a specific event with detailed information"""
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if tenant_id is None:
+            return JsonResponse({
+                'success': False,
+                'message': 'Event not found'
+            }, status=404)
+        if not _parse_server_user_id_int(request):
+            return JsonResponse({
+                'success': False,
+                'message': 'Authentication required'
+            }, status=401)
+        
         # Check if event exists
         try:
-            event = Event.objects.get(EventId=event_id, tenant_id=tenant_id)
+            event = Event.objects.select_related(
+                'Owner', 'Reviewer', 'CreatedBy', 'FrameworkId', 'EventType'
+            ).get(EventId=event_id, tenant_id=tenant_id)
             debug_print(f"DEBUG: Found event: {event.EventTitle}")
         except Event.DoesNotExist:
             return JsonResponse({
@@ -5056,8 +5969,14 @@ def get_event_evidence(request, event_id):
                 'message': 'Event not found'
             }, status=404)
         
+        deny = _guard_event_object_access(request, event)
+        if deny:
+            payload, code = deny
+            return JsonResponse(payload, status=code)
+        
         # Get evidence data from CharField
-        evidence_string = event.Evidence or ""
+        raw_ev = event.Evidence or ""
+        evidence_string = raw_ev if isinstance(raw_ev, str) else ""
         evidence_urls = evidence_string.split(';') if evidence_string else []
         
         # Process evidence URLs to extract filenames and create detailed evidence objects
@@ -5104,10 +6023,10 @@ def get_event_evidence(request, event_id):
         })
         
     except Exception as e:
-        debug_print(f"DEBUG: Error in get_event_evidence: {str(e)}")
+        _log_exception(e, context='get_event_evidence')
         return JsonResponse({
             'success': False,
-            'message': f'Error fetching event evidence: {str(e)}'
+            'message': 'Error fetching event evidence. Please try again later.'
         }, status=500)
 
 def resolve_file_operation_evidence(evidence_urls, event):
@@ -5174,7 +6093,7 @@ def resolve_file_operation_evidence(evidence_urls, event):
                                 'file_operation_id': file_op_id
                             })
                 except Exception as e:
-                    debug_print(f"DEBUG: Error resolving file operation {url}: {str(e)}")
+                    _log_exception(e, context='get_event_evidence.resolve_file_op')
                     # Fallback for error cases
                     evidence_objects.append({
                         'id': i + 1,
@@ -5224,7 +6143,7 @@ def resolve_file_operation_evidence(evidence_urls, event):
 
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication])
-@permission_classes([AllowAny])
+@permission_classes([EventViewAllPermission, EventViewModulePermission])
 @csrf_exempt
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
@@ -5234,24 +6153,23 @@ def get_event_evidence_details(request, event_id):
         # MULTI-TENANCY: Extract tenant_id from request
         tenant_id = get_tenant_id_from_request(request)
         
-        # Check if event exists - handle both integer ID and string event code
         try:
-            # Try to convert to integer first (if it's a numeric ID)
-            try:
-                event_id_int = int(event_id)
-                event = Event.objects.get(EventId=event_id_int, tenant_id=tenant_id)
-            except (ValueError, TypeError):
-                # If not an integer, treat it as EventId_Generated (e.g., "EVT-2026-4226")
-                event = Event.objects.get(EventId_Generated=str(event_id), tenant_id=tenant_id)
+            event = _get_event_for_tenant(tenant_id, event_id, allow_generated_slug=True)
             debug_print(f"DEBUG: Found event: {event.EventTitle}")
         except Event.DoesNotExist:
             return JsonResponse({
                 'success': False,
-                'message': f'Event not found: {event_id}'
+                'message': 'Event not found'
             }, status=404)
         
+        deny = _guard_event_object_access(request, event)
+        if deny:
+            payload, code = deny
+            return JsonResponse(payload, status=code)
+        
         # Get evidence data from CharField
-        evidence_string = event.Evidence or ""
+        raw_ev = event.Evidence or ""
+        evidence_string = raw_ev if isinstance(raw_ev, str) else ""
         evidence_urls = evidence_string.split(';') if evidence_string else []
         
         # Use the helper function to resolve file operation evidence
@@ -5265,28 +6183,50 @@ def get_event_evidence_details(request, event_id):
         })
         
     except Exception as e:
-        debug_print(f"DEBUG: Error in get_event_evidence_details: {str(e)}")
+        _log_exception(e, context='get_event_evidence_details')
         return JsonResponse({
             'success': False,
-            'message': f'Error fetching event evidence details: {str(e)}'
+            'message': 'Error fetching event evidence details. Please try again later.'
         }, status=500)
 
 @require_http_methods(["DELETE"])
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def delete_event_evidence(request, event_id, evidence_id):
     """Delete evidence file from an event"""
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if tenant_id is None:
+            return JsonResponse({
+                'success': False,
+                'message': 'Event not found'
+            }, status=404)
+        if not _parse_server_user_id_int(request):
+            return JsonResponse({
+                'success': False,
+                'message': 'Authentication required'
+            }, status=401)
+        
         # Get the event
         try:
-            event = Event.objects.get(EventId=event_id, IsDeleted=False)
+            event = Event.objects.select_related(
+                'Owner', 'Reviewer', 'CreatedBy', 'FrameworkId', 'EventType'
+            ).get(EventId=event_id, tenant_id=tenant_id)
         except Event.DoesNotExist:
             return JsonResponse({
                 'success': False,
                 'message': 'Event not found'
             }, status=404)
         
+        deny = _guard_event_object_access(request, event)
+        if deny:
+            payload, code = deny
+            return JsonResponse(payload, status=code)
+        
         # Get current evidence string
-        evidence_string = event.Evidence or ""
+        raw_ev = event.Evidence or ""
+        evidence_string = raw_ev if isinstance(raw_ev, str) else ""
         evidence_urls = evidence_string.split(';') if evidence_string else []
         
         # Find and remove evidence URL
@@ -5321,16 +6261,16 @@ def delete_event_evidence(request, event_id, evidence_id):
         })
         
     except Exception as e:
-        debug_print(f"DEBUG: Error in delete_event_evidence: {str(e)}")
+        _log_exception(e, context='delete_event_evidence')
         return JsonResponse({
             'success': False,
-            'message': f'Error deleting evidence: {str(e)}'
+            'message': 'Error deleting evidence. Please try again later.'
         }, status=500)
 
 
 @api_view(['POST'])
-@authentication_classes([])
-@permission_classes([AllowAny])
+@authentication_classes([CsrfExemptSessionAuthentication])
+@permission_classes([EventViewAllPermission, EventViewModulePermission])
 @csrf_exempt
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
@@ -5339,13 +6279,25 @@ def link_evidence_to_incident(request):
     Link multiple selected events as evidence to an incident
     """
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        user_id_int = _parse_server_user_id_int(request)
+        if not user_id_int:
+            return Response({
+                'success': False,
+                'message': 'Authentication required'
+            }, status=401)
+        if tenant_id is None:
+            return Response({
+                'success': False,
+                'message': 'Invalid tenant context'
+            }, status=400)
+        
         data = request.data
         incident_id = data.get('incident_id')
-        user_id = data.get('user_id')
         linked_events = data.get('linked_events', [])
         
         debug_print(f"DEBUG: Linking evidence to incident {incident_id}")
-        debug_print(f"DEBUG: User ID: {user_id}")
+        debug_print(f"DEBUG: User ID: {user_id_int}")
         debug_print(f"DEBUG: Linked events: {linked_events}")
         
         if not incident_id:
@@ -5353,11 +6305,13 @@ def link_evidence_to_incident(request):
                 'success': False,
                 'message': 'Incident ID is required'
             }, status=400)
-            
-        if not user_id:
+        
+        try:
+            incident_id = _parse_required_positive_int(incident_id, 'Incident ID')
+        except ValueError as ve:
             return Response({
                 'success': False,
-                'message': 'User ID is required'
+                'message': str(ve)
             }, status=400)
             
         if not linked_events or len(linked_events) == 0:
@@ -5382,27 +6336,47 @@ def link_evidence_to_incident(request):
                 
                 # Try to get Event ID from the event data
                 event_db_id = None
-                if event.get('linkedRecordId'):
-                    event_db_id = event.get('linkedRecordId')
-                elif event.get('id') and event.get('id').startswith('event_'):
+                if event.get('linkedRecordId') not in (None, ''):
                     try:
-                        event_db_id = int(event.get('id').replace('event_', ''))
+                        event_db_id = _parse_required_positive_int(
+                            event.get('linkedRecordId'), 'Linked event record ID'
+                        )
+                    except ValueError as ve:
+                        return Response({
+                            'success': False,
+                            'message': str(ve)
+                        }, status=400)
+                elif event.get('id') and str(event.get('id')).startswith('event_'):
+                    try:
+                        event_db_id = _parse_required_positive_int(
+                            str(event.get('id')).replace('event_', ''), 'Event ID'
+                        )
                     except ValueError:
-                        pass
+                        event_db_id = None
                 
                 # If we have an Event ID, fetch from database
                 if event_db_id:
                     try:
                         from ...models import Event
-                        db_event = Event.objects.get(EventId=event_db_id, tenant_id=tenant_id)
+                        db_event = Event.objects.select_related(
+                            'Owner', 'Reviewer', 'CreatedBy', 'FrameworkId', 'EventType'
+                        ).get(EventId=event_db_id, tenant_id=tenant_id)
+                        deny = _guard_event_object_access(request, db_event)
+                        if deny:
+                            payload, code = deny
+                            return Response(payload, status=code)
                         if db_event.Evidence:
                             # Split semicolon-separated evidence URLs from database
-                            event_evidence_data = [url.strip() for url in db_event.Evidence.split(';') if url.strip()]
+                            ev_raw = db_event.Evidence
+                            if isinstance(ev_raw, str):
+                                event_evidence_data = [url.strip() for url in ev_raw.split(';') if url.strip()]
+                            else:
+                                event_evidence_data = []
                             debug_print(f"DEBUG: Found database evidence for Event {event_db_id}: {event_evidence_data}")
                     except Event.DoesNotExist:
                         debug_print(f"DEBUG: Event {event_db_id} not found in database")
                     except Exception as e:
-                        debug_print(f"DEBUG: Error fetching Event {event_db_id}: {str(e)}")
+                        _log_exception(e, context='link_evidence.fetch_event')
                 
                 # Fallback to event data from request
                 if not event_evidence_data:
@@ -5459,11 +6433,21 @@ def link_evidence_to_incident(request):
             if event.get('source') == 'Document Handling System':
                 # Try to get file operation ID from the event data
                 file_operation_id = None
-                if event.get('linkedRecordId'):
-                    file_operation_id = event.get('linkedRecordId')
-                elif event.get('id') and event.get('id').startswith('file_op_'):
+                if event.get('linkedRecordId') not in (None, ''):
                     try:
-                        file_operation_id = int(event.get('id').replace('file_op_', ''))
+                        file_operation_id = _parse_required_positive_int(
+                            event.get('linkedRecordId'), 'File operation ID'
+                        )
+                    except ValueError as ve:
+                        return Response({
+                            'success': False,
+                            'message': str(ve)
+                        }, status=400)
+                elif event.get('id') and str(event.get('id')).startswith('file_op_'):
+                    try:
+                        file_operation_id = _parse_required_positive_int(
+                            str(event.get('id')).replace('file_op_', ''), 'File operation ID'
+                        )
                     except ValueError:
                         pass
                 
@@ -5508,7 +6492,7 @@ def link_evidence_to_incident(request):
                                     debug_print(f"DEBUG: Added Document Handling file: {filename} -> {s3_url}")
                     
                     except Exception as e:
-                        debug_print(f"DEBUG: Error fetching file operations for ID {file_operation_id}: {str(e)}")
+                        _log_exception(e, context='link_evidence.file_operation')
                 
                 # Alternative: Try to find file operations by event title/description if no direct ID
                 if not documents and event.get('title'):
@@ -5553,7 +6537,7 @@ def link_evidence_to_incident(request):
                                     debug_print(f"DEBUG: Added Document Handling file by search: {filename} -> {s3_url}")
                     
                     except Exception as e:
-                        debug_print(f"DEBUG: Error searching file operations by title: {str(e)}")
+                        _log_exception(e, context='link_evidence.file_op_search')
                 
                 # Last resort: Get recent Document Handling files if still no documents found
                 if not documents:
@@ -5597,7 +6581,7 @@ def link_evidence_to_incident(request):
                                     debug_print(f"DEBUG: Added recent Document Handling file: {filename} -> {s3_url}")
                     
                     except Exception as e:
-                        debug_print(f"DEBUG: Error getting recent file operations: {str(e)}")
+                        _log_exception(e, context='link_evidence.recent_file_ops')
                 
                 # Fallback: Check for file_data in event
                 if event.get('file_data'):
@@ -5682,10 +6666,10 @@ def link_evidence_to_incident(request):
             incident_approval.save()
             
         except Exception as e:
-            debug_print(f"DEBUG: Error accessing incident approval: {str(e)}")
+            _log_exception(e, context='link_evidence.incident_approval')
             return Response({
                 'success': False,
-                'message': f'Error accessing incident approval: {str(e)}'
+                'message': 'Error accessing incident approval. Please try again later.'
             }, status=500)
         
         debug_print(f"DEBUG: Successfully linked {len(evidence_data)} events to incident {incident_id}")
@@ -5699,16 +6683,16 @@ def link_evidence_to_incident(request):
         })
         
     except Exception as e:
-        debug_print(f"DEBUG: Error linking evidence to incident: {str(e)}")
+        _log_exception(e, context='link_evidence_to_incident')
         return Response({
             'success': False,
-            'message': f'Error linking evidence: {str(e)}'
+            'message': 'Error linking evidence. Please try again later.'
         }, status=500)
 
 
 @api_view(['GET'])
-@authentication_classes([])
-@permission_classes([AllowAny])
+@authentication_classes([CsrfExemptSessionAuthentication])
+@permission_classes([EventViewAllPermission, EventViewModulePermission])
 @csrf_exempt
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
@@ -5717,14 +6701,28 @@ def get_incident_linked_evidence(request, incident_id):
     Get linked evidence for a specific incident
     """
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if tenant_id is None:
+            return Response({
+                'success': False,
+                'message': 'Invalid tenant context'
+            }, status=400)
+        if not _parse_server_user_id_int(request):
+            return Response({
+                'success': False,
+                'message': 'Authentication required'
+            }, status=401)
+
         debug_print(f"DEBUG: Getting linked evidence for incident {incident_id}")
         
         # Import IncidentApproval model
         from ...models import IncidentApproval
         
         try:
-            # Use filter().first() to handle multiple records gracefully
-            incident_approval = IncidentApproval.objects.filter(IncidentId=incident_id).first()
+            incident_approval = IncidentApproval.objects.filter(
+                IncidentId=incident_id,
+                FrameworkId__tenant_id=tenant_id,
+            ).first()
             if not incident_approval:
                 # No approval row yet is normal (e.g. new incident); return empty evidence — not HTTP 404
                 # (404 makes browsers log failed requests and breaks clients that expect 200 + JSON).
@@ -5799,7 +6797,7 @@ def get_incident_linked_evidence(request, incident_id):
                         except Event.DoesNotExist:
                             debug_print(f"DEBUG: Event {event_db_id} not found in database")
                         except Exception as e:
-                            debug_print(f"DEBUG: Error fetching Event {event_db_id}: {str(e)}")
+                            _log_exception(e, context='get_incident_linked_evidence.fetch_event')
                 
                 # 2. Check for Document Handling file operations
                 if evidence.get('source') == 'Document Handling System':
@@ -5818,42 +6816,30 @@ def get_incident_linked_evidence(request, incident_id):
                     # If we have a file operation ID, fetch from database
                     if file_operation_id:
                         try:
-                            from django.db import connection
-                            with connection.cursor() as cursor:
-                                cursor.execute("""
-                                    SELECT stored_name, s3_url, s3_key, s3_bucket, file_type, 
-                                           original_name, content_type, export_format, file_size
-                                    FROM grc2.file_operations 
-                                    WHERE id = %s AND s3_url IS NOT NULL AND s3_url != ''
-                                """, [file_operation_id])
-                                
-                                file_ops = cursor.fetchall()
-                                debug_print(f"DEBUG: Found {len(file_ops)} file operations for ID {file_operation_id}")
-                                
-                                for file_op in file_ops:
-                                    stored_name, s3_url, s3_key, s3_bucket, file_type, original_name, content_type, export_format, file_size = file_op
-                                    
-                                    if s3_url and s3_url.strip():
-                                        filename = original_name or stored_name or 'Document Handling File'
-                                        
-                                        documents.append({
-                                            'type': 'file_operation',
-                                            'filename': filename,
-                                            'url': s3_url,
-                                            's3_url': s3_url,
-                                            's3_key': s3_key,
-                                            's3_bucket': s3_bucket,
-                                            'downloadable': True,
-                                            'source': 'Document Handling',
-                                            'file_type': file_type,
-                                            'content_type': content_type,
-                                            'export_format': export_format,
-                                            'file_size': file_size
-                                        })
-                                        debug_print(f"DEBUG: Added Document Handling file: {filename} -> {s3_url}")
-                        
+                            fo = FileOperations.objects.filter(
+                                id=file_operation_id,
+                                FrameworkId__tenant_id=tenant_id,
+                            ).exclude(s3_url__isnull=True).exclude(s3_url='').first()
+                            if fo and (fo.s3_url or '').strip():
+                                s3_url = fo.s3_url.strip()
+                                filename = fo.original_name or fo.stored_name or 'Document Handling File'
+                                documents.append({
+                                    'type': 'file_operation',
+                                    'filename': filename,
+                                    'url': s3_url,
+                                    's3_url': s3_url,
+                                    's3_key': fo.s3_key,
+                                    's3_bucket': fo.s3_bucket,
+                                    'downloadable': True,
+                                    'source': 'Document Handling',
+                                    'file_type': fo.file_type,
+                                    'content_type': fo.content_type,
+                                    'export_format': fo.export_format,
+                                    'file_size': fo.file_size,
+                                })
+                                debug_print(f"DEBUG: Added Document Handling file: {filename} -> {s3_url}")
                         except Exception as e:
-                            debug_print(f"DEBUG: Error fetching file operations for ID {file_operation_id}: {str(e)}")
+                            _log_exception(e, context='get_incident_linked_evidence.file_operation')
                 
                 # Create enhanced evidence item with fresh documents
                 enhanced_evidence = {
@@ -5871,27 +6857,25 @@ def get_incident_linked_evidence(request, incident_id):
                 'linked_evidence': enhanced_linked_evidence,
                 'count': len(enhanced_linked_evidence)
             })
-            
-        except IncidentApproval.DoesNotExist:
-            debug_print(f"DEBUG: No incident approval record found for incident {incident_id}")
+        
+        except Exception as inner_exc:
+            _log_exception(inner_exc, context='get_incident_linked_evidence.inner')
             return Response({
-                'success': True,
-                'incident_id': incident_id,
-                'linked_evidence': [],
-                'count': 0
-            })
+                'success': False,
+                'message': 'Error loading linked evidence. Please try again later.'
+            }, status=500)
         
     except Exception as e:
-        debug_print(f"DEBUG: Error getting linked evidence: {str(e)}")
+        _log_exception(e, context='get_incident_linked_evidence')
         return Response({
             'success': False,
-            'message': f'Error fetching linked evidence: {str(e)}'
+            'message': 'Error fetching linked evidence. Please try again later.'
         }, status=500)
 
 
 @api_view(['GET'])
-@authentication_classes([])
-@permission_classes([AllowAny])
+@authentication_classes([CsrfExemptSessionAuthentication])
+@permission_classes([EventViewAllPermission, EventViewModulePermission])
 @csrf_exempt
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
@@ -5900,14 +6884,23 @@ def download_linked_evidence_document(request, incident_id, evidence_id, documen
     Download a document from linked evidence
     """
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not _parse_server_user_id_int(request):
+            return JsonResponse({
+                'success': False,
+                'message': 'Authentication required'
+            }, status=401)
         debug_print(f"DEBUG: Download linked evidence document - incident: {incident_id}, evidence: {evidence_id}, document: {document_index}")
         
         # Import IncidentApproval model
         from ...models import IncidentApproval
         
         try:
-            # Use filter().first() to handle multiple records gracefully
-            incident_approval = IncidentApproval.objects.filter(IncidentId=incident_id).first()
+            # Tenant-scoped incident approval (via framework)
+            incident_approval = IncidentApproval.objects.filter(
+                IncidentId=incident_id,
+                FrameworkId__tenant_id=tenant_id,
+            ).first()
             if not incident_approval:
                 return JsonResponse({
                     'success': False,
@@ -5966,12 +6959,8 @@ def download_linked_evidence_document(request, incident_id, evidence_id, documen
                     except:
                         s3_key = filename
                 
-                # Redirect to S3 download endpoint
-                user_id_raw = request.GET.get('user_id', '1')
-                # SECURITY: normalize user_id for redirect query composition (avoid adding extra params / illegal chars)
-                user_id = user_id_raw if str(user_id_raw).isdigit() else '1'
-                # SECURITY: encode S3 key and filename fully (including '/' inside the key)
-                download_url = f"/api/s3/download/{quote(s3_key, safe='')}/{quote(filename, safe='')}/?user_id={user_id}"
+                # Redirect to S3 download — auth uses session in s3_download_file (no client user_id).
+                download_url = f"/api/s3/download/{quote(s3_key, safe='')}/{quote(filename, safe='')}/"
 
                 from django.http import HttpResponseRedirect
                 from grc.utils.url_validator import assert_safe_relative_redirect, UnsafeRedirectError
@@ -6005,12 +6994,7 @@ def download_linked_evidence_document(request, incident_id, evidence_id, documen
                     except:
                         s3_key = filename
                 
-                # Redirect to S3 download endpoint
-                user_id_raw = request.GET.get('user_id', '1')
-                # SECURITY: normalize user_id for redirect query composition (avoid adding extra params / illegal chars)
-                user_id = user_id_raw if str(user_id_raw).isdigit() else '1'
-                # SECURITY: encode S3 key and filename fully (including '/' inside the key)
-                download_url = f"/api/s3/download/{quote(s3_key, safe='')}/{quote(filename, safe='')}/?user_id={user_id}"
+                download_url = f"/api/s3/download/{quote(s3_key, safe='')}/{quote(filename, safe='')}/"
 
                 from django.http import HttpResponseRedirect
                 from grc.utils.url_validator import assert_safe_relative_redirect, UnsafeRedirectError
@@ -6042,27 +7026,29 @@ def download_linked_evidence_document(request, incident_id, evidence_id, documen
             }, status=404)
         
     except Exception as e:
-        debug_print(f"DEBUG: Error downloading linked evidence document: {str(e)}")
+        _log_exception(e, context='download_linked_evidence_document')
         return JsonResponse({
             'success': False,
-            'message': f'Error downloading document: {str(e)}'
+            'message': 'Error downloading document. Please try again later.'
         }, status=500)
 
 
 @require_http_methods(["DELETE"])
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def remove_event_evidence(request, event_id):
     """Remove evidence file from a specific event"""
     try:
-        data = request.data if hasattr(request, 'data') else {}
-        user_id = data.get('user_id') or request.GET.get('user_id')
-        file_index = data.get('file_index') or request.GET.get('file_index')
-        
-        if not user_id:
+        tenant_id = get_tenant_id_from_request(request)
+        if not _parse_server_user_id_int(request):
             return JsonResponse({
                 'success': False,
-                'message': 'User ID is required'
-            }, status=400)
+                'message': 'Authentication required'
+            }, status=401)
+        
+        data = request.data if hasattr(request, 'data') else {}
+        file_index = data.get('file_index') or request.GET.get('file_index')
         
         if file_index is None:
             return JsonResponse({
@@ -6080,7 +7066,9 @@ def remove_event_evidence(request, event_id):
         
         # Check if event exists
         try:
-            event = Event.objects.get(EventId=event_id, tenant_id=tenant_id)
+            event = Event.objects.select_related(
+                'Owner', 'Reviewer', 'CreatedBy', 'FrameworkId', 'EventType'
+            ).get(EventId=event_id, tenant_id=tenant_id)
             debug_print(f"DEBUG: Found event: {event.EventTitle}")
         except Event.DoesNotExist:
             return JsonResponse({
@@ -6088,9 +7076,14 @@ def remove_event_evidence(request, event_id):
                 'message': 'Event not found'
             }, status=404)
         
+        deny = _guard_event_object_access(request, event)
+        if deny:
+            payload, code = deny
+            return JsonResponse(payload, status=code)
+        
         # Get current evidence lists
         current_evidence = event.Evidence or []
-        current_s3_urls = event.S3EvidenceUrls or []
+        current_s3_urls = getattr(event, 'S3EvidenceUrls', None) or []
         
         # Check if file index is valid
         if file_index < 0 or file_index >= len(current_evidence):
@@ -6120,15 +7113,16 @@ def remove_event_evidence(request, event_id):
         })
         
     except Exception as e:
-        debug_print(f"DEBUG: Error in remove_event_evidence: {str(e)}")
+        _log_exception(e, context='remove_event_evidence')
         return JsonResponse({
             'success': False,
-            'message': f'Error removing evidence file: {str(e)}'
+            'message': 'Error removing evidence file. Please try again later.'
         }, status=500)
 
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@authentication_classes([CsrfExemptSessionAuthentication])
+@permission_classes([EventViewAllPermission, EventViewModulePermission])
 @csrf_exempt
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
@@ -6141,121 +7135,52 @@ def get_file_operations(request):
     tenant_id = get_tenant_id_from_request(request)
 
     try:
-        # Get query parameters
-        user_id = request.GET.get('user_id')
-        limit = int(request.GET.get('limit', 50))
-        operation_type = request.GET.get('operation_type')  # upload, download, export
-        status = request.GET.get('status')  # pending, processing, completed, failed
-        show_all = request.GET.get('show_all', 'false').lower() == 'true'  # Show all records regardless of user_id
-        
-        debug_print(f"DEBUG: get_file_operations called with user_id={user_id or 'None'}, limit={limit}, operation_type={operation_type}, status={status}, show_all={show_all}")
-        
-        # Check if FileOperations table exists and has data
-        total_records = FileOperations.objects.count()
-        debug_print(f"DEBUG: Total FileOperations records in database: {total_records}")
-        
-        # Build query
-        query = FileOperations.objects.all()
-        
-        # Store original query for fallback
-        original_query = FileOperations.objects.all()
-        
-        # Filter by user_id if provided and show_all is not enabled
-        if user_id and not show_all:
-            user_filtered_query = query.filter(user_id=user_id)
-            user_filtered_count = user_filtered_query.count()
-            debug_print(f"DEBUG: After user_id filter: {user_filtered_count} records")
-            
-            # If user filter returns no results, show all records
-            if user_filtered_count == 0:
-                debug_print(f"DEBUG: No records found for user_id={user_id}, showing all records instead")
-                query = original_query
+        if tenant_id is None:
+            return JsonResponse({
+                'success': False,
+                'message': 'Tenant context required',
+                'events': [],
+            }, status=400)
+
+        user_id_int = _parse_server_user_id_int(request)
+        if not user_id_int:
+            return JsonResponse({
+                'success': False,
+                'message': 'Authentication required',
+                'events': [],
+            }, status=401)
+
+        try:
+            limit = int(request.GET.get('limit', 50))
+        except (TypeError, ValueError):
+            limit = 50
+        limit = max(1, min(limit, 500))
+
+        operation_type = request.GET.get('operation_type')
+        status = request.GET.get('status')
+
+        perms = RBACUtils.get_user_event_permissions(user_id_int)
+        modlist = RBACUtils.get_user_accessible_modules(user_id_int)
+        view_all = bool(perms.get('is_admin') or perms.get('view_all_event'))
+
+        base = FileOperations.objects.filter(FrameworkId__tenant_id=tenant_id)
+        total_records = base.count()
+        query = base
+
+        if not view_all:
+            if perms.get('view_module_event') and modlist:
+                query = query.filter(module__in=modlist)
             else:
-                query = user_filtered_query
-        elif show_all or not user_id:
-            debug_print(f"DEBUG: show_all={show_all} or no user_id provided, showing all records")
-        
-        # Filter by operation type if specified
+                query = query.none()
+            query = query.filter(user_id=str(user_id_int))
         if operation_type:
             query = query.filter(operation_type=operation_type)
-            debug_print(f"DEBUG: After operation_type filter: {query.count()} records")
-            
-        # Filter by status if specified
         if status:
             query = query.filter(status=status)
-            debug_print(f"DEBUG: After status filter: {query.count()} records")
-        
-        # Apply limit and order by created_at descending
-        operations = query.order_by('-created_at')[:limit]
-        debug_print(f"DEBUG: Final operations count: {len(operations)}")
-        
-        # If no records found, let's check what's in the database
-        if len(operations) == 0:
-            sample_records = FileOperations.objects.all()[:5]
-            debug_print(f"DEBUG: Sample records from FileOperations table:")
-            for record in sample_records:
-                debug_print(f"  - ID: {record.id}, User: {record.user_id}, Operation: {record.operation_type}, File: {record.file_name}")
-            
-            # If no records exist at all, create some sample data for testing
-            if total_records == 0:
-                debug_print("DEBUG: Creating sample file operations for testing...")
-                try:
-                    # Create sample file operations
-                    sample_operations = [
-                        FileOperations.objects.create(
-                            operation_type='upload',
-                            module='Document Handling',
-                            user_id=str(user_id) if user_id else '3',
-                            file_name='sample_document.pdf',
-                            original_name='Sample Document.pdf',
-                            file_size=1024*500,  # 500KB
-                            file_type='pdf',
-                            content_type='application/pdf',
-                            status='completed',
-                            s3_url='https://example.com/sample.pdf',
-                            s3_key='uploads/sample_document.pdf'
-                        ),
-                        FileOperations.objects.create(
-                            operation_type='export',
-                            module='Compliance Management',
-                            user_id=str(user_id) if user_id else '3',
-                            file_name='compliance_report.xlsx',
-                            original_name='Compliance Report.xlsx',
-                            file_size=1024*750,  # 750KB
-                            file_type='xlsx',
-                            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                            status='completed',
-                            export_format='xlsx',
-                            record_count=150
-                        ),
-                        FileOperations.objects.create(
-                            operation_type='download',
-                            module='Policy Management',
-                            user_id=str(user_id) if user_id else '3',
-                            file_name='policy_template.docx',
-                            original_name='Policy Template.docx',
-                            file_size=1024*300,  # 300KB
-                            file_type='docx',
-                            content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                            status='completed',
-                            s3_url='https://example.com/policy_template.docx',
-                            s3_key='downloads/policy_template.docx'
-                        )
-                    ]
-                    debug_print(f"DEBUG: Created {len(sample_operations)} sample file operations")
-                    
-                    # Re-run the query with sample data
-                    query = FileOperations.objects.all()
-                    if user_id:
-                        query = query.filter(user_id=user_id)
-                    operations = query.order_by('-created_at')[:limit]
-                    debug_print(f"DEBUG: After creating samples, found {len(operations)} operations")
-                    
-                except Exception as create_error:
-                    debug_print(f"DEBUG: Error creating sample data: {str(create_error)}")
-                    import traceback
-                    debug_print(f"DEBUG: Sample creation traceback: {traceback.format_exc()}")
-        
+
+        operations = list(query.order_by('-created_at')[:limit])
+        debug_print(f"DEBUG: get_file_operations tenant={tenant_id} count={len(operations)} view_all={view_all}")
+
         # Transform operations to match event format for frontend
         transformed_operations = []
         for op in operations:
@@ -6322,11 +7247,9 @@ def get_file_operations(request):
         })
         
     except Exception as e:
-        debug_print(f"DEBUG: Error in get_file_operations: {str(e)}")
-        import traceback
-        debug_print(f"Full traceback: {traceback.format_exc()}")
+        _log_exception(e, context='get_file_operations')
         return JsonResponse({
             'success': False,
-            'message': f'Error retrieving file operations: {str(e)}',
+            'message': 'Error retrieving file operations. Please try again later.',
             'events': []
         }, status=500)

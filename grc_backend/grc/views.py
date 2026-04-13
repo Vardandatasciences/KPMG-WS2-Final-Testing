@@ -20,6 +20,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.authentication import SessionAuthentication, BasicAuthentication
 from rest_framework.response import Response
 from rest_framework import status
 from .models import Users
@@ -3199,7 +3200,6 @@ def policy_list(request):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
-@authentication_classes([])
 def list_users(request):
     raw_request = getattr(request, '_request', request)
     grc_user = getattr(raw_request, '_grc_user', None)
@@ -3326,34 +3326,20 @@ def update_user_status(request, user_id):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
+@authentication_classes([SessionAuthentication, BasicAuthentication])
 def get_user_role_simple(request):
     """
     Get user role and permissions from RBAC table
     Supports both session and JWT authentication
     """
     try:
-        # Try to get user_id from JWT token first
-        user_id = None
-        auth_header = request.headers.get('Authorization')
-        
-        if auth_header and auth_header.startswith('Bearer '):
-            token = auth_header.split(' ')[1]
-            try:
-                from .authentication import verify_jwt_token
-                payload = verify_jwt_token(token)
-                if payload and 'user_id' in payload:
-                    user_id = payload['user_id']
-            except Exception as e:
-                logger.warning(f"JWT token verification failed: {str(e)}")
-        
-        # Fallback to session if JWT not available
-        if not user_id:
-            user_id = request.session.get('user_id')
+        from .rbac.utils import RBACUtils
+        user_id = RBACUtils.get_user_id_from_request(request)
             
         if not user_id:
             return Response({
                 'success': False,
-                'error': 'No user ID found in JWT token or session'
+                'error': 'Authentication required'
             }, status=status.HTTP_401_UNAUTHORIZED)
 
         # Get RBAC record
@@ -3392,7 +3378,7 @@ def get_user_role_simple(request):
         logger.error(f"Error in get_user_role_simple: {str(e)}")
         return Response({
             'success': False,
-            'error': str(e)
+            'error': _CLIENT_SAFE_ERROR_MSG
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
