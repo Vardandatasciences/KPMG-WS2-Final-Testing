@@ -117,7 +117,7 @@
 </template>
 
 <script>
-import axios from 'axios';
+import apiService from '@/services/apiService.js';
 import { API_ENDPOINTS } from '../../config/api.js';
 import '../Risk/ViewRisk.css';
 import { PopupService, PopupModal } from '@/modules/popup';
@@ -143,12 +143,12 @@ export default {
         this.loading = true;
         this.error = null;
         const incidentId = this.$route.params.id;
-        const response = await axios.get(API_ENDPOINTS.AUDIT_FINDINGS_INCIDENT(incidentId));
+        const body = await apiService.get(API_ENDPOINTS.AUDIT_FINDINGS_INCIDENT(incidentId));
         
-        if (response.data.success) {
-          this.auditFinding = response.data.data;
+        if (body.success) {
+          this.auditFinding = body.data;
         } else {
-          throw new Error(response.data.message || 'Failed to fetch audit finding details');
+          throw new Error(body.message || 'Failed to fetch audit finding details');
         }
       } catch (error) {
         console.error('Failed to fetch audit finding details:', error);
@@ -192,31 +192,21 @@ export default {
     },
     async sendPushNotification(notificationData) {
       try {
-        const response = await fetch(API_ENDPOINTS.PUSH_NOTIFICATION, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(notificationData)
-        });
-        if (response.ok) {
-          console.log('Push notification sent successfully');
-        } else {
-          console.error('Failed to send push notification');
-        }
+        await apiService.post(API_ENDPOINTS.PUSH_NOTIFICATION, notificationData);
+        console.log('Push notification sent successfully');
       } catch (error) {
         console.error('Error sending push notification:', error);
       }
     },
     confirmSolve() {
-      axios.put(API_ENDPOINTS.INCIDENT_STATUS(this.auditFinding.IncidentId), {
+      apiService.put(API_ENDPOINTS.INCIDENT_STATUS(this.auditFinding.IncidentId), {
         status: 'Scheduled'
       })
-      .then(response => {
-        console.log('Incident escalated to risk - API response:', response.data);
+      .then((body) => {
+        console.log('Incident escalated to risk - API response:', body);
         
         // Check if the response indicates success
-        if (response.data.success) {
+        if (body.success) {
           this.auditFinding.Status = 'Scheduled';
           PopupService.success(`Incident ${this.auditFinding.IncidentId} escalated to Risk successfully!`);
           // Send push notification for successful escalation
@@ -224,16 +214,15 @@ export default {
             title: 'Audit Finding Escalated to Risk',
             message: `Audit finding "${this.auditFinding.IncidentTitle || 'Untitled Finding'}" (ID: ${this.auditFinding.IncidentId}) has been successfully escalated to the Risk module.`,
             category: 'audit_finding',
-            priority: 'high',
-            user_id: 'default_user'
+            priority: 'high'
           });
           setTimeout(() => {
             this.$router.push('/incident/incident');
           }, 2000);
         } else {
           // Handle unsuccessful response
-          console.error('API returned unsuccessful response:', response.data);
-          PopupService.error(response.data.message || 'Failed to escalate audit finding. Please try again.');
+          console.error('API returned unsuccessful response:', body);
+          PopupService.error(body.message || 'Failed to escalate audit finding. Please try again.');
         }
       })
       .catch(error => {
@@ -245,36 +234,34 @@ export default {
           title: 'Audit Finding Escalation Failed',
           message: `Failed to escalate audit finding "${this.auditFinding.IncidentTitle || 'Untitled Finding'}" (ID: ${this.auditFinding.IncidentId}) to Risk module.`,
           category: 'audit_finding',
-          priority: 'high',
-          user_id: 'default_user'
+          priority: 'high'
         });
       });
     },
     confirmReject() {
-      axios.put(API_ENDPOINTS.INCIDENT_STATUS(this.auditFinding.IncidentId), {
+      apiService.put(API_ENDPOINTS.INCIDENT_STATUS(this.auditFinding.IncidentId), {
         status: 'Rejected'
       })
-      .then(response => {
-        console.log('Incident rejected - API response:', response.data);
+      .then((body) => {
+        console.log('Incident rejected - API response:', body);
         
         // Check if the response indicates success
-        if (response.data.success) {
+        if (body.success) {
           this.auditFinding.Status = 'Rejected';
           PopupService.success(`Incident ${this.auditFinding.IncidentId} rejected successfully!`);
           this.sendPushNotification({
             title: 'Audit Finding Rejected',
             message: `Audit finding "${this.auditFinding.IncidentTitle || 'Untitled Finding'}" (ID: ${this.auditFinding.IncidentId}) has been rejected successfully.`,
             category: 'audit_finding',
-            priority: 'medium',
-            user_id: 'default_user'
+            priority: 'medium'
           });
           setTimeout(() => {
             this.$router.push('/incident/incident');
           }, 2000);
         } else {
           // Handle unsuccessful response
-          console.error('API returned unsuccessful response:', response.data);
-          PopupService.error(response.data.message || 'Failed to reject audit finding. Please try again.');
+          console.error('API returned unsuccessful response:', body);
+          PopupService.error(body.message || 'Failed to reject audit finding. Please try again.');
         }
       })
       .catch(error => {
@@ -286,8 +273,7 @@ export default {
           title: 'Audit Finding Rejection Failed',
           message: `Failed to reject audit finding "${this.auditFinding.IncidentTitle || 'Untitled Finding'}" (ID: ${this.auditFinding.IncidentId}).`,
           category: 'audit_finding',
-          priority: 'high',
-          user_id: 'default_user'
+          priority: 'high'
         });
       });
     }

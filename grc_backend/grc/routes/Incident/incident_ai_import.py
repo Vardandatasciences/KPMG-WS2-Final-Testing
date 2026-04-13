@@ -9,12 +9,14 @@ AI-Powered Incident Document Ingestion
 import os
 import re
 import json
+import math
 import time
+from decimal import Decimal
 from datetime import date, datetime
 from typing import Any, Optional
 
 from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_protect as csrf_exempt
+from django.views.decorators.csrf import csrf_exempt
 from rest_framework.decorators import api_view, permission_classes, parser_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.parsers import MultiPartParser, FormParser
@@ -96,6 +98,76 @@ INCIDENT_DB_FIELDS = [
     "PossibleDamage",
     "IncidentFormDetails",
 ]
+
+# Performance guardrails: infer only high-value missing fields to keep upload latency reasonable.
+# Remaining optional fields are filled using secure defaults.
+PRIORITY_AI_FIELDS = {
+    "IncidentTitle",
+    "Description",
+    "Mitigation",
+    "Origin",
+    "RiskCategory",
+    "IncidentCategory",
+    "RiskPriority",
+    "Status",
+    "Criticality",
+    "InitialImpactAssessment",
+    "ControlFailures",
+    "LessonsLearned",
+    "IncidentClassification",
+    "PossibleDamage",
+    "Comments",
+    "CostOfIncident",
+    "AffectedBusinessUnit",
+    "SystemsAssetsInvolved",
+    "RelevantPoliciesProceduresViolated",
+}
+MAX_AI_INFER_FIELDS_PER_INCIDENT = 3
+
+# Prefer one LLM call for multi-block docs under this size (avoids N× ~40s ingest latency).
+MULTI_INCIDENT_SINGLE_PASS_MAX_CHARS = 15000
+
+
+def make_json_safe(obj: Any) -> Any:
+    """
+    Recursively convert values so JsonResponse / json.dumps never fails and never emits NaN/Inf
+    (invalid in strict JSON; some clients surface that as HTTP 400 on parse).
+    """
+    if obj is None:
+        return None
+    if isinstance(obj, (str, int)):
+        return obj
+    if isinstance(obj, bool):
+        return obj
+    if isinstance(obj, float):
+        if math.isnan(obj) or math.isinf(obj):
+            return None
+        return obj
+    if isinstance(obj, Decimal):
+        try:
+            f = float(obj)
+            if math.isnan(f) or math.isinf(f):
+                return None
+            return f
+        except Exception:
+            return str(obj)
+    if isinstance(obj, (datetime, date)):
+        return obj.isoformat()
+    if isinstance(obj, bytes):
+        return obj.decode("utf-8", errors="replace")
+    if isinstance(obj, dict):
+        return {str(k): make_json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [make_json_safe(v) for v in obj]
+    if isinstance(obj, set):
+        return [make_json_safe(v) for v in obj]
+    try:
+        import numpy as np
+        if isinstance(obj, np.generic):
+            return make_json_safe(obj.item())
+    except ImportError:
+        pass
+    return str(obj)
 
 # Canonical choices / constraints to stabilize LLM outputs
 CRITICALITY_CHOICES = ["Low", "Medium", "High", "Critical"]
@@ -489,9 +561,36 @@ def parse_incidents_from_text(text: str, document_hash: str = None) -> list[dict
         if incident_count == 0:
             return []
         
-        # Step 2: Extract incidents (one ingestion per segment when multiple)
+        # Step 2: Extract incidents — prefer ONE ingest for multi-block small docs (much faster than N sequential calls).
         incidents = []
-        if incident_count >= 2:
+        if incident_count >= 2 and len(text) <= MULTI_INCIDENT_SINGLE_PASS_MAX_CHARS:
+            print(
+                f"[ROUTE-INCIDENT] Multi-block doc ({incident_count} blocks, {len(text)} chars): "
+                f"trying single-pass ingest (fast path)"
+            )
+            try:
+                single = ai_service.run_task(
+                    "incident.ingest_document",
+                    payload={"document_text": text},
+                    metadata={"document_hash": document_hash, "multi_incident": True},
+                )
+                if isinstance(single, list) and len(single) >= incident_count:
+                    incidents = single
+                    print(f"[ROUTE-INCIDENT] single-pass ingest OK: {len(incidents)} incident(s)")
+                elif isinstance(single, list) and len(single) > 0:
+                    print(
+                        f"[ROUTE-INCIDENT] single-pass returned {len(single)} incident(s), "
+                        f"expected ~{incident_count} — falling back to per-block ingest"
+                    )
+                    incidents = []
+                else:
+                    print("[ROUTE-INCIDENT] single-pass empty — falling back to per-block ingest")
+                    incidents = []
+            except Exception as ex:
+                print(f"[ROUTE-INCIDENT] single-pass ingest failed: {ex} — per-block fallback")
+                incidents = []
+
+        if incident_count >= 2 and len(incidents) == 0:
             for idx, segment in enumerate(segments, 1):
                 print(f"[ROUTE-INCIDENT] Extracting incident {idx}/{incident_count} from block ({len(segment)} chars)")
                 block_incidents = ai_service.run_task(
@@ -504,7 +603,8 @@ def parse_incidents_from_text(text: str, document_hash: str = None) -> list[dict
                 elif isinstance(block_incidents, dict):
                     incidents.append(block_incidents)
             print(f"[ROUTE-INCIDENT] incident.ingest_document (per-block) DONE: {len(incidents)} incident(s)")
-        else:
+
+        if incident_count == 1 and len(incidents) == 0:
             debug_print(f"🚀 Calling centralized AI service to extract incidents (single doc)...")
             incidents = ai_service.run_task(
                 "incident.ingest_document",
@@ -538,14 +638,26 @@ def parse_incidents_from_text(text: str, document_hash: str = None) -> list[dict
             print(f"[ROUTE-INCIDENT] FROM DOCUMENT ({len(from_doc)}): {', '.join(from_doc)}")
             print(f"[ROUTE-INCIDENT] AI MUST GENERATE ({len(missing_fields)}): {', '.join(missing_fields)}")
 
-            # Phase 2: Fill ALL missing fields with AI for this incident
+            # Phase 2: Fill only priority missing fields with AI for this incident.
+            # This keeps latency bounded for multi-incident uploads.
             if missing_fields:
                 # Use this incident's block as context when we split by "Incident N:"
                 if incident_count >= 2 and idx <= len(segments):
                     doc_ctx = segments[idx - 1][:8000]
                 else:
                     doc_ctx = text[:8000] if text else ""
-                for i, field in enumerate(missing_fields, 1):
+                prioritized_missing = [f for f in missing_fields if f in PRIORITY_AI_FIELDS]
+                deferred_missing = [f for f in missing_fields if f not in PRIORITY_AI_FIELDS]
+                if len(prioritized_missing) > MAX_AI_INFER_FIELDS_PER_INCIDENT:
+                    deferred_missing.extend(prioritized_missing[MAX_AI_INFER_FIELDS_PER_INCIDENT:])
+                    prioritized_missing = prioritized_missing[:MAX_AI_INFER_FIELDS_PER_INCIDENT]
+
+                print(
+                    f"[ROUTE-INCIDENT] AI FAST MODE: infer={len(prioritized_missing)}, "
+                    f"default={len(deferred_missing)}, cap={MAX_AI_INFER_FIELDS_PER_INCIDENT}"
+                )
+
+                for i, field in enumerate(prioritized_missing, 1):
                     print(f"[ROUTE-INCIDENT] Generating {i}/{len(missing_fields)}: {field} ...")
                     try:
                         value, meta = infer_single_field(field, item, doc_ctx, document_hash=document_hash)
@@ -572,6 +684,30 @@ def parse_incidents_from_text(text: str, document_hash: str = None) -> list[dict
                             fallback_meta = {"source": "DEFAULT", "confidence": 0.5, "rationale": "Empty"}
                         item[field] = fallback_val
                         item["_meta"]["per_field"][field] = fallback_meta
+
+                # Fill deferred optional fields quickly using defaults instead of extra AI calls.
+                for field in deferred_missing:
+                    fallback_val, fallback_meta = (None, {"source": "DEFAULT", "confidence": 0.5, "rationale": "Performance fast mode default"})
+                    if field in ("RepeatedNot", "ReopenedNot"):
+                        fallback_val = False
+                    elif field in ("Criticality", "RiskPriority"):
+                        fallback_val = "Medium"
+                    elif field == "Status":
+                        fallback_val = "New"
+                    elif field == "Origin":
+                        fallback_val = "MANUAL"
+                    elif field == "IncidentCategory":
+                        fallback_val = "Operational Failure"
+                    elif field == "RiskCategory":
+                        fallback_val = "Operational"
+                    elif field == "Mitigation":
+                        fallback_val = []
+                    elif field == "IncidentFormDetails":
+                        fallback_val = {}
+                    elif field in ("Comments", "Attachments", "InternalContacts", "ExternalPartiesInvolved", "RegulatoryBodies", "RelevantPoliciesProceduresViolated"):
+                        fallback_val = ""
+                    item[field] = fallback_val
+                    item["_meta"]["per_field"][field] = fallback_meta
 
             # Mark fields from initial ingest as EXTRACTED (from document), rest as AI_GENERATED
             for f in from_doc:
@@ -782,7 +918,7 @@ def upload_and_process_incident_document(request):
                 response_data['s3_url'] = s3_url
                 response_data['s3_key'] = s3_key
             
-            return JsonResponse(response_data)
+            return JsonResponse(make_json_safe(response_data))
         except Exception as process_error:
             if os.path.exists(file_path):
                 os.unlink(file_path)

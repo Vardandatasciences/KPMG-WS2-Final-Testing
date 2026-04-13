@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 from datetime import datetime
 import logging
 import traceback
+import hashlib
 
 # Load environment variables
 load_dotenv()
@@ -31,6 +32,12 @@ except ImportError:
     # Django is not installed
     DJANGO_AVAILABLE = False
     django_settings = None
+    cache = None
+else:
+    try:
+        from django.core.cache import cache
+    except Exception:
+        cache = None
 
 # Configure logger - only console output, no file logging
 logging.basicConfig(
@@ -2184,6 +2191,29 @@ class NotificationService:
         notification_type = notification_data.get('notification_type')
         if not notification_type:
             return {"success": False, "error": "Missing notification_type"}
+
+        # Spam protection: suppress duplicate notifications for the same recipient/template data
+        # within a short cooldown window. This is intentionally lightweight and opt-out via payload.
+        dedup_enabled = notification_data.get('dedup_enabled', True)
+        dedup_cache_key = None
+        dedup_ttl_seconds = int(getattr(django_settings, 'NOTIFICATION_DEDUP_SECONDS', 120)) if DJANGO_AVAILABLE and django_settings else 120
+        if dedup_enabled and cache is not None:
+            dedup_payload = {
+                'notification_type': notification_type,
+                'email': notification_data.get('email') or '',
+                'whatsapp_number': notification_data.get('whatsapp_number') or '',
+                'template_data': notification_data.get('template_data', [])
+            }
+            dedup_hash = hashlib.sha256(
+                json.dumps(dedup_payload, sort_keys=True, default=str).encode('utf-8')
+            ).hexdigest()
+            dedup_cache_key = f"notif_dedup:{dedup_hash}"
+            if cache.get(dedup_cache_key):
+                return {
+                    "success": True,
+                    "message": "Duplicate notification suppressed by cooldown",
+                    "details": {"suppressed": True, "notification_type": notification_type}
+                }
         
         # Send email if email details provided
         if notification_data.get('email') and notification_data.get('email_type'):
@@ -2244,6 +2274,10 @@ class NotificationService:
                 "error": "Failed to send notifications to all channels",
                 "details": results['errors']
             }
+
+        # Mark as sent for cooldown dedup only when at least one channel succeeded.
+        if dedup_cache_key and cache is not None and (results['email'] or results['whatsapp']):
+            cache.set(dedup_cache_key, 1, dedup_ttl_seconds)
         
         # Return success with results
         return {

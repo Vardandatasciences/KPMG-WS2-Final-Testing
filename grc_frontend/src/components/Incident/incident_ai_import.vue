@@ -636,7 +636,7 @@
 </template>
 
 <script>
-import axios from 'axios';
+import { axiosCompat as axios } from '@/services/apiServiceCompat.js';
 import { API_ENDPOINTS } from '@/config/api';
 
 export default {
@@ -840,7 +840,6 @@ export default {
 
       const formData = new FormData();
       formData.append('file', this.selectedFile);
-      formData.append('user_id', localStorage.getItem('user_id') || '1');
 
       try {
         // Update progress for upload start
@@ -856,10 +855,11 @@ export default {
           formData,
           {
             headers: {
-              'Content-Type': 'multipart/form-data',
-              'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+              'Content-Type': 'multipart/form-data'
             },
-            timeout: 300000,
+            // AI extraction can take longer on large/complex documents.
+            // Use a longer client timeout to avoid aborting while backend is still processing.
+            timeout: 900000,
             signal: controller.signal,
             onUploadProgress: (progressEvent) => {
               if (progressEvent.total) {
@@ -986,15 +986,30 @@ export default {
             title: 'Cancelled',
             text: 'AI incident processing was cancelled.'
           });
+        } else if (error.code === 'ECONNABORTED' || String(error.message || '').toLowerCase().includes('timeout')) {
+          this.isProcessing = false;
+          this.currentStep = 'upload';
+          this.clearProcessingState();
+
+          this.$notify({
+            type: 'warning',
+            title: 'Processing Taking Longer Than Expected',
+            text: 'The AI processing request timed out on the client side. Please retry with a smaller file or wait a moment and try again.'
+          });
         } else {
           this.isProcessing = false;
           this.currentStep = 'upload';
           this.clearProcessingState();
           
+          const apiErr =
+            error.response?.data?.message ||
+            error.response?.data?.detail ||
+            error.response?.data?.error ||
+            (typeof error.response?.data === 'string' ? error.response.data : null);
           this.$notify({
             type: 'error',
             title: 'Processing Failed',
-            text: error.response?.data?.message || error.message || 'Failed to process document. Please try again.'
+            text: apiErr || error.message || 'Failed to process document. Please try again.'
           });
         }
       }
@@ -1103,12 +1118,10 @@ export default {
         const response = await axios.post(
           API_ENDPOINTS.INCIDENT_AI_SAVE,
           {
-            incidents: cleanIncidents,
-            user_id: localStorage.getItem('user_id') || '1'
+            incidents: cleanIncidents
           },
           {
             headers: {
-              'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
               'Content-Type': 'application/json'
             }
           }
@@ -1328,7 +1341,6 @@ export default {
           },
           {
             headers: {
-              'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
               'Content-Type': 'application/json'
             }
           }

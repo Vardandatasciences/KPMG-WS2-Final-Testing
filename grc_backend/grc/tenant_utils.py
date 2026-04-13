@@ -126,18 +126,25 @@ def require_tenant(view_func):
                 except Exception:
                     pass
         
-        # Try JWT fallback if no user object (early auth stage)
+        # Try JWT fallback if no user object (early auth stage). Prefer HttpOnly cookie over Bearer.
         if not session_tenant_id:
+            cookie_tok = None
+            if hasattr(request, 'COOKIES'):
+                cookie_tok = request.COOKIES.get('access_token')
             auth_header = request.headers.get('Authorization', '') or request.META.get('HTTP_AUTHORIZATION', '')
-            if auth_header.startswith('Bearer '):
-                try:
-                    from .authentication import verify_jwt_token
-                    token = auth_header.split(' ', 1)[1]
-                    payload = verify_jwt_token(token)
+            header_tok = auth_header.split(' ', 1)[1].strip() if auth_header.startswith('Bearer ') else None
+            try:
+                from .authentication import verify_jwt_token
+                for raw in (cookie_tok, header_tok):
+                    if not raw:
+                        continue
+                    payload = verify_jwt_token(raw)
                     if payload:
                         session_tenant_id = payload.get('tenant_id') or payload.get('tenantId')
-                except Exception:
-                    pass
+                        if session_tenant_id:
+                            break
+            except Exception:
+                pass
 
         # 2. Extract Client-Supplied Tenant (for validation purposes)
         client_tenant_id = None
@@ -191,14 +198,7 @@ def require_tenant(view_func):
         
         # 4. Fail-Safe: No valid tenant context found
         logger.warning(f"[Tenant Utils] Tenant required but missing for {request.method} {request.path}")
-        return JsonResponse({
-            'error': 'Tenant context not found',
-            'detail': 'This endpoint requires tenant authentication'
-        }, status=403)
-        
-        # If tenant still not found, return error
         try:
-            logger.warning(f"[Tenant Utils] Tenant required but not found for {request.method} {request.path}")
             if request.method == 'POST' and hasattr(request, 'POST'):
                 logger.warning(
                     "[Tenant Utils] POST data when tenant missing: keys=%s user_id=%s",
@@ -207,19 +207,28 @@ def require_tenant(view_func):
                 )
         except Exception as log_err:
             logger.warning(f"[Tenant Utils] Error while logging missing tenant details: {log_err}")
-        # Check if we're using DRF (has .data attribute means DRF Request)
         if hasattr(request, 'data'):
             from rest_framework.response import Response
             return Response({
                 'error': 'Tenant context not found',
                 'detail': 'This endpoint requires tenant authentication'
             }, status=403)
-        else:
-            return JsonResponse({
-                'error': 'Tenant context not found',
-                'detail': 'This endpoint requires tenant authentication'
-            }, status=403)
-    
+        return JsonResponse({
+            'error': 'Tenant context not found',
+            'detail': 'This endpoint requires tenant authentication'
+        }, status=403)
+
+    # Preserve DRF attributes for @api_view (walk __wrapped__ — csrf_exempt etc. may sit in the chain)
+    _chain = []
+    _f = view_func
+    while _f is not None:
+        _chain.append(_f)
+        _f = getattr(_f, '__wrapped__', None)
+    for _attr in ('authentication_classes', 'permission_classes', 'schema'):
+        for _inner in _chain:
+            if hasattr(_inner, _attr):
+                setattr(wrapper, _attr, getattr(_inner, _attr))
+                break
     return wrapper
 
 

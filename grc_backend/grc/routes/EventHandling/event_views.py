@@ -5726,11 +5726,15 @@ def get_incident_linked_evidence(request, incident_id):
             # Use filter().first() to handle multiple records gracefully
             incident_approval = IncidentApproval.objects.filter(IncidentId=incident_id).first()
             if not incident_approval:
-                debug_print(f"DEBUG: No IncidentApproval found for incident {incident_id}")
+                # No approval row yet is normal (e.g. new incident); return empty evidence — not HTTP 404
+                # (404 makes browsers log failed requests and breaks clients that expect 200 + JSON).
+                debug_print(f"DEBUG: No IncidentApproval found for incident {incident_id} — returning empty linked_evidence")
                 return Response({
-                    'success': False,
-                    'message': 'Incident approval record not found'
-                }, status=404)
+                    'success': True,
+                    'incident_id': incident_id,
+                    'linked_evidence': [],
+                    'count': 0
+                })
             
             extracted_info = incident_approval.ExtractedInfo or {}
             linked_evidence = extracted_info.get('linked_evidence', [])

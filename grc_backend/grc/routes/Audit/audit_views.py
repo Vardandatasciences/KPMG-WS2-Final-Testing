@@ -37,6 +37,7 @@ from ...rbac.decorators import (
     audit_or_conduct_required,
     audit_manage_required
 )
+from ...throttles import AuditWriteThrottle
 from .framework_filter_helper import get_active_framework_filter, apply_framework_filter_to_audits, get_framework_sql_filter
 from ...debug_utils import debug_print
 
@@ -2709,6 +2710,7 @@ def upload_evidence(request, compliance_id):
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([AuditConductPermission])
+@throttle_classes([AuditWriteThrottle])
 @audit_conduct_required
 def submit_audit_findings(request, audit_id):
     """

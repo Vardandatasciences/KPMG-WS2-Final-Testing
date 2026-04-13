@@ -235,7 +235,8 @@ import {
   Legend
 } from 'chart.js'
 import '@fortawesome/fontawesome-free/css/all.min.css'
-import { incidentService } from '@/services/api'
+import apiService from '@/services/apiService.js'
+import { API_ENDPOINTS } from '@/config/api.js'
 import { PopupModal } from '@/modules/popup'
 import { AccessUtils } from '@/utils/accessUtils'
 import html2canvas from 'html2canvas'
@@ -281,9 +282,6 @@ export default {
       loadingFrameworks: false,
       isDownloading: false,
       dataSourceMessage: '', // Data source indicator
-      api: {
-        incidentService
-      },
       dashboardData: {
         status_counts: {
           scheduled: 0,
@@ -310,7 +308,8 @@ export default {
       recentIncidents: [],
       // Colorblindness support
       colorblindMode: null,
-      colorblindObserver: null
+      colorblindObserver: null,
+      isComponentAlive: false
     }
   },
   computed: {
@@ -399,6 +398,7 @@ export default {
   },
   async mounted() {
     console.log('🚀 [IncidentPerformanceDashboard] Component mounted');
+    this.isComponentAlive = true
 
     // Initialize colorblindness tracking
     this.initColorblindnessTracking()
@@ -411,15 +411,19 @@ export default {
     }
     document.addEventListener('click', this._exportDropdownClickOutside)
 
-    // Load dashboard and recent incidents immediately (do not block on framework/API calls)
-    this.fetchDashboardData()
+    // Recent incidents can load in parallel; resolve framework + selection first to avoid
+    // duplicate dashboard/chart API bursts (previously: fetchDashboardData + fetchSelectedFramework both fetched).
     this.fetchRecentIncidents()
-
-    // Load frameworks and selected framework in parallel without blocking initial render
-    this.fetchFrameworks()
-    this.fetchSelectedFramework()
+    try {
+      await this.fetchFrameworks()
+      await this.fetchSelectedFramework()
+    } catch (e) {
+      console.warn('[IncidentPerformanceDashboard] Framework load failed:', e)
+    }
+    await this.fetchDashboardData()
   },
   beforeUnmount() {
+    this.isComponentAlive = false
     document.removeEventListener('click', this._exportDropdownClickOutside)
     this.destroyAllCharts()
     // Clean up colorblindness observer
@@ -449,7 +453,7 @@ export default {
               // Re-render all charts with new colors
               this.$nextTick(() => {
                 console.log('🎨 [IncidentPerformanceDashboard] Re-rendering charts with new colorblindness mode:', this.colorblindMode)
-                this.updateAllCharts()
+                this.safeUpdateAllCharts()
               })
             }
           }
@@ -526,21 +530,30 @@ export default {
       try {
         this.loadingFrameworks = true
         console.log('🔍 Fetching frameworks...')
-        const response = await this.api.incidentService.getIncidentFrameworks()
-        console.log('✅ Frameworks API response:', response.data)
+        let responseData
+        try {
+          responseData = await apiService.get('/api/compliance/frameworks/public/', {}, { timeout: 30000, skipCache: true })
+        } catch (primaryError) {
+          console.warn('⚠️ Primary frameworks endpoint failed, trying approved-active fallback...', primaryError?.message || primaryError)
+          // Fallback endpoint used elsewhere in app and is more reliable under load.
+          responseData = await apiService.get('/api/frameworks/approved-active/', {}, { timeout: 30000, skipCache: true })
+        }
+        console.log('✅ Frameworks API response:', responseData)
         
         // Handle the API response format
         let frameworksData = []
-        if (response.data && response.data.success && response.data.frameworks) {
-          frameworksData = response.data.frameworks
-        } else if (response.data && response.data.success && Array.isArray(response.data.data)) {
-          frameworksData = response.data.data
-        } else if (response.data && Array.isArray(response.data)) {
-          frameworksData = response.data
-        } else if (response.data && response.data.frameworks) {
-          frameworksData = response.data.frameworks
+        if (responseData && responseData.success && responseData.frameworks) {
+          frameworksData = responseData.frameworks
+        } else if (responseData && responseData.success && Array.isArray(responseData.data)) {
+          frameworksData = responseData.data
+        } else if (responseData && responseData.success && Array.isArray(responseData.framework_data)) {
+          frameworksData = responseData.framework_data
+        } else if (responseData && Array.isArray(responseData)) {
+          frameworksData = responseData
+        } else if (responseData && responseData.frameworks) {
+          frameworksData = responseData.frameworks
         } else {
-          console.error('Unexpected frameworks response format:', response.data)
+          console.error('Unexpected frameworks response format:', responseData)
           this.frameworks = []
           this.loadingFrameworks = false
           return
@@ -574,32 +587,28 @@ export default {
     async fetchSelectedFramework() {
       try {
         console.log('🔍 Fetching selected framework from home page...')
-        const response = await this.api.incidentService.getSelectedFramework()
-        console.log('✅ Selected framework API response:', response.data)
+        const responseData = await apiService.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED)
+        console.log('✅ Selected framework API response:', responseData)
         
-        if (response.data && response.data.frameworkId) {
-          this.selectedFramework = response.data.frameworkId
+        if (responseData && responseData.frameworkId) {
+          this.selectedFramework = responseData.frameworkId
           console.log('✅ Set selected framework ID:', this.selectedFramework)
           
-          // Wait for frameworks to be loaded before refreshing data
           if (this.frameworks.length > 0) {
             await this.setSelectedFrameworkIfAvailable()
-            await this.fetchDashboardData()
           } else {
             console.log('⚠️ Frameworks not loaded yet, will refresh data after frameworks are loaded')
           }
         } else {
           console.log('⚠️ No framework selected or frameworkId not found in response')
-          // Try localStorage fallback
+          // UX-only fallback; server must authorize and scope data by tenant/session (never trust this ID for authz).
           const storedFrameworkId = localStorage.getItem('selectedFrameworkId') || localStorage.getItem('frameworkId')
           if (storedFrameworkId) {
             this.selectedFramework = storedFrameworkId
             console.log('✅ Using framework ID from localStorage:', this.selectedFramework)
             
-            // Wait for frameworks to be loaded before refreshing data
             if (this.frameworks.length > 0) {
               await this.setSelectedFrameworkIfAvailable()
-              await this.fetchDashboardData()
             }
           }
         }
@@ -611,10 +620,8 @@ export default {
           this.selectedFramework = storedFrameworkId
           console.log('✅ Using framework ID from localStorage as fallback:', this.selectedFramework)
           
-          // Wait for frameworks to be loaded before refreshing data
           if (this.frameworks.length > 0) {
             await this.setSelectedFrameworkIfAvailable()
-            await this.fetchDashboardData()
           }
         }
       }
@@ -627,13 +634,9 @@ export default {
         if (!frameworkExists) {
           console.warn('⚠️ Selected framework not found in frameworks list, clearing selection')
           this.selectedFramework = ''
-          // Load data for all frameworks since the selected one doesn't exist
-          await this.fetchDashboardData()
         } else {
           const selectedFrameworkName = this.frameworks.find(f => f.id == this.selectedFramework)?.name
           console.log('✅ Selected framework confirmed in frameworks list:', this.selectedFramework, '-', selectedFrameworkName)
-          // Refresh dashboard data with the confirmed framework
-          await this.fetchDashboardData()
         }
       } else if (!this.selectedFramework && this.frameworks.length > 0) {
         console.log('ℹ️ No framework selected, will load data for all frameworks')
@@ -703,9 +706,9 @@ export default {
         
         // Fallback: Fetch directly from API
         console.log('⚠️ [IncidentPerformanceDashboard] No cached incidents, fetching recent incidents from API...');
-        const response = await this.api.incidentService.getRecentIncidents(3)
-        if (response.data && response.data.success) {
-          this.recentIncidents = response.data.incidents.map(incident => {
+        const recentBody = await apiService.get('/api/incidents/recent/', { limit: 3 })
+        if (recentBody && recentBody.success) {
+          this.recentIncidents = recentBody.incidents.map(incident => {
             // Add status class
             let statusClass = '';
             if (incident.Status) {
@@ -860,7 +863,7 @@ export default {
             
             // Update charts
             await this.$nextTick();
-            this.updateAllCharts();
+            await this.safeUpdateAllCharts();
             
             console.log(`✅✅✅ [IncidentPerformanceDashboard] Dashboard loaded from cache - ${timeTaken}`);
             return;
@@ -917,7 +920,7 @@ export default {
           
           // Update charts immediately (no loading spinner!)
           await this.$nextTick();
-          this.updateAllCharts();
+          await this.safeUpdateAllCharts();
           
           const timeTaken2 = getTimeTaken();
           console.log(`✅ [IncidentPerformanceDashboard] Dashboard and charts loaded from cache - ${timeTaken2}`, {
@@ -961,8 +964,8 @@ export default {
           }
           
           console.log('Dashboard request with filters:', dashboardRequest)
-          dashboardResponse = await this.api.incidentService.getIncidentDashboard(dashboardRequest)
-          console.log('Incident Dashboard API Response:', dashboardResponse.data)
+          dashboardResponse = await apiService.get('/api/incidents/dashboard/', dashboardRequest)
+          console.log('Incident Dashboard API Response:', dashboardResponse)
         } catch (err) {
           console.error('Error fetching dashboard data:', err)
           if (AccessUtils.handleApiError(err)) {
@@ -981,8 +984,8 @@ export default {
 
         const [statusData, originData, categoryData, priorityData] = await Promise.all(chartPromises)
 
-        if (dashboardResponse.data && dashboardResponse.data.success) {
-          const summary = dashboardResponse.data.data?.summary || {}
+        if (dashboardResponse && dashboardResponse.success) {
+          const summary = dashboardResponse.data?.summary || {}
           console.log('Dashboard summary data:', summary)
           
           this.dashboardData = {
@@ -1010,9 +1013,9 @@ export default {
           
           // Wait for the next tick to ensure DOM is updated
           await this.$nextTick()
-          this.updateAllCharts()
+          await this.safeUpdateAllCharts()
         } else {
-          const errorMessage = dashboardResponse.data?.message || 'API request failed'
+          const errorMessage = dashboardResponse?.message || 'API request failed'
           const timeTakenError = getTimeTaken();
           console.error(`❌ API Error after ${timeTakenError}:`, errorMessage)
           throw new Error(errorMessage)
@@ -1055,7 +1058,7 @@ export default {
         this.dataSourceMessage = `❌ Error loading data - ${timeTakenError2}`;
         
         await this.$nextTick()
-        this.updateAllCharts()
+        await this.safeUpdateAllCharts()
       }
     },
     async fetchChartData(yAxis, chartType) {
@@ -1115,14 +1118,16 @@ export default {
         }
         
         console.log(`🔍 [IncidentPerformanceDashboard] Fetching ${yAxis} chart data from API (time range filter active or no cache)...`)
-        const response = await this.api.incidentService.getIncidentAnalytics(requestData)
-        
-        if (response.data && response.data.success && response.data.chartData) {
-          return response.data.chartData
-        } else {
-          console.warn(`No data received for ${yAxis} chart`)
-          return this.getDefaultChartData(chartType)
+        const payload = (await apiService.post('/api/incidents/dashboard/analytics/', requestData)) || {}
+        const chartPayload = payload.chartData || payload.chart_data
+        if (payload.success && chartPayload && (chartPayload.labels?.length || chartPayload.datasets?.length)) {
+          return chartPayload
         }
+        if (chartPayload && chartPayload.datasets) {
+          return chartPayload
+        }
+        console.warn(`No chart payload for ${yAxis}`, payload)
+        return this.getDefaultChartData(chartType)
       } catch (error) {
         console.error(`Error fetching ${yAxis} chart data:`, error)
         // Fallback to cache if API fails and we have cache
@@ -1162,6 +1167,25 @@ export default {
       this.updateChart('categoryChart', 'line', this.chartData.category, 'categoryChart')
       this.updateChart('priorityChart', 'bar', this.chartData.priority, 'priorityChart')
     },
+    async safeUpdateAllCharts(maxAttempts = 8, delayMs = 120) {
+      if (!this.isComponentAlive) return
+      const chartIds = ['statusChart', 'originChart', 'categoryChart', 'priorityChart']
+
+      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        if (!this.isComponentAlive) return
+        await this.$nextTick()
+        const root = this.$el
+        const allReady = chartIds.every((id) => (root && root.querySelector(`#${id}`)) || document.getElementById(id))
+        if (allReady) {
+          this.updateAllCharts()
+          return
+        }
+        await new Promise((resolve) => setTimeout(resolve, delayMs))
+      }
+
+      // Final attempt even if some canvases are missing; updateChart has per-chart guards.
+      if (this.isComponentAlive) this.updateAllCharts()
+    },
     updateChart(chartId, chartType, chartData, chartIdForColors = '') {
       try {
         // Destroy existing chart if it exists
@@ -1170,9 +1194,10 @@ export default {
         }
 
         // Get the canvas element
-        const canvas = document.getElementById(chartId)
+        const root = this.$el
+        const canvas = (root && root.querySelector(`#${chartId}`)) || document.getElementById(chartId)
         if (!canvas) {
-          console.error(`Chart canvas not found: ${chartId}`)
+          console.warn(`Chart canvas not found yet: ${chartId}`)
           return
         }
 
@@ -1517,10 +1542,10 @@ export default {
       console.log('sessionStorage selectedFrameworkId:', sessionStorage.getItem('selectedFrameworkId'))
       console.log('sessionStorage frameworkId:', sessionStorage.getItem('frameworkId'))
       
-      // Test API call
-      this.api.incidentService.getSelectedFramework()
-        .then(response => {
-          console.log('API Response:', response.data)
+      // Test API call (same transport as rest of app: cookies + CSRF on mutating methods)
+      apiService.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED)
+        .then((data) => {
+          console.log('API Response:', data)
         })
         .catch(error => {
           console.error('API Error:', error)

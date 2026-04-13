@@ -3334,57 +3334,44 @@ onMounted(() => {
     selectedFrameworkId.value = storeFramework;
     console.log('🔄 HomeView: Loaded framework from Vuex store:', storeFramework);
   }
-  // ==========================================
-  // NEW FEATURE: Prefetch ALL Risk Data on Home Page Load
-  // ==========================================
-  // This will fetch and cache all risk-related data in the background
-  // so that when the user navigates to risk pages, data loads instantly!
-  console.log('🚀 [HomeView] Starting risk data prefetch...');
-  
-  // Store the promise globally so other components can wait for it
-  const riskPrefetchPromise = riskDataService.fetchAllRiskData()
-    .then(() => {
-      risksData.value = riskDataService.getData('risks') || [];
-      riskCount.value = risksData.value.length;
-      console.log(`✅ [HomeView] Risk data prefetch complete - Total risks: ${riskCount.value}`);
-    })
-    .catch((error) => {
-      console.error('❌ [HomeView] Risk data prefetch failed:', error);
-      risksData.value = [];
-      riskCount.value = 0;
-    });
+  const accessToken = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
+  const userId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id');
+  const isLoggedIn = (sessionStorage.getItem('is_logged_in') || localStorage.getItem('is_logged_in')) === 'true';
+  const isAuthenticated = !!(accessToken && userId && isLoggedIn);
 
-  window.riskDataFetchPromise = riskPrefetchPromise;
-  
-  // ==========================================
-  // NEW FEATURE: Prefetch ALL Compliance Data on Home Page Load
-  // ==========================================
-  // This will fetch and cache all compliance-related data in the background
-  // so that when the user navigates to compliance pages, data loads instantly!
-  console.log('🚀 [HomeView] Starting compliance data prefetch...');
-  
-  // Store the promise globally so other components can wait for it
-  const compliancePrefetchPromise = complianceDataService.fetchAllComplianceData()
-    .then(() => {
-      const frameworks = complianceDataService.getData('frameworks') || [];
-      const compliances = complianceDataService.getData('compliances') || [];
-      console.log(`✅ [HomeView] Compliance data prefetch complete - Total frameworks: ${frameworks.length}, Total compliances: ${compliances.length}`);
-    })
-    .catch((error) => {
-      console.error('❌ [HomeView] Compliance data prefetch failed:', error);
-    });
+  // Only prefetch authenticated/private datasets when user session is valid.
+  // Prevents noisy 401 bursts and avoids triggering auth redirect loops from background calls.
+  if (isAuthenticated) {
+    console.log('🔐 [HomeView] Authenticated session detected - running full prefetch');
 
-  window.complianceDataFetchPromise = compliancePrefetchPromise;
+    console.log('🚀 [HomeView] Starting risk data prefetch...');
+    const riskPrefetchPromise = riskDataService.fetchAllRiskData()
+      .then(() => {
+        risksData.value = riskDataService.getData('risks') || [];
+        riskCount.value = risksData.value.length;
+        console.log(`✅ [HomeView] Risk data prefetch complete - Total risks: ${riskCount.value}`);
+      })
+      .catch((error) => {
+        console.error('❌ [HomeView] Risk data prefetch failed:', error);
+        risksData.value = [];
+        riskCount.value = 0;
+      });
+    window.riskDataFetchPromise = riskPrefetchPromise;
+
+    console.log('🚀 [HomeView] Starting compliance data prefetch...');
+    const compliancePrefetchPromise = complianceDataService.fetchAllComplianceData()
+      .then(() => {
+        const frameworks = complianceDataService.getData('frameworks') || [];
+        const compliances = complianceDataService.getData('compliances') || [];
+        console.log(`✅ [HomeView] Compliance data prefetch complete - Total frameworks: ${frameworks.length}, Total compliances: ${compliances.length}`);
+      })
+      .catch((error) => {
+        console.error('❌ [HomeView] Compliance data prefetch failed:', error);
+      });
+    window.complianceDataFetchPromise = compliancePrefetchPromise;
   
-  // ==========================================
-  // NEW FEATURE: Prefetch ALL Auditor Data on Home Page Load
-  // ==========================================
-  // This will fetch and cache all auditor-related data in the background
-  // so that when the user navigates to auditor pages, data loads instantly!
-  console.log('🚀 [HomeView] Starting auditor data prefetch...');
-  
-  // Store the promise globally so other components can wait for it
-  const auditorPrefetchPromise = auditorDataService.fetchAllAuditorData()
+    console.log('🚀 [HomeView] Starting auditor data prefetch...');
+    const auditorPrefetchPromise = auditorDataService.fetchAllAuditorData()
     .then(() => {
       const audits = auditorDataService.getData('audits') || [];
       const businessUnits = auditorDataService.getData('businessUnits') || [];
@@ -3394,17 +3381,10 @@ onMounted(() => {
       console.error('❌ [HomeView] Auditor data prefetch failed:', error);
     });
 
-  window.auditorDataFetchPromise = auditorPrefetchPromise;
+    window.auditorDataFetchPromise = auditorPrefetchPromise;
   
-  // ==========================================
-  // NEW FEATURE: Prefetch ALL Event Data on Home Page Load
-  // ==========================================
-  // This will fetch and cache all event-related data in the background
-  // so that when the user navigates to event pages, data loads instantly!
-  console.log('🚀 [HomeView] Starting event data prefetch...');
-  
-  // Store the promise globally so other components can wait for it
-  const eventPrefetchPromise = eventDataService.fetchAllEventData()
+    console.log('🚀 [HomeView] Starting event data prefetch...');
+    const eventPrefetchPromise = eventDataService.fetchAllEventData()
     .then(() => {
       const events = eventDataService.getData('events') || [];
       console.log(`✅ [HomeView] Event data prefetch complete - Total events: ${events.length}`);
@@ -3413,14 +3393,10 @@ onMounted(() => {
       console.error('❌ [HomeView] Event data prefetch failed:', error);
     });
 
-  window.eventDataFetchPromise = eventPrefetchPromise;
+    window.eventDataFetchPromise = eventPrefetchPromise;
   
-  // ==========================================
-  // NEW FEATURE: Prefetch ALL Policy Data on Home Page Load
-  // ==========================================
-  console.log('🚀 [HomeView] Starting policy data prefetch...');
-
-  const policyPrefetchPromise = policyDataService.fetchAllPolicyData()
+    console.log('🚀 [HomeView] Starting policy data prefetch...');
+    const policyPrefetchPromise = policyDataService.fetchAllPolicyData()
     .then(() => {
       const policyFrameworks = policyDataService.getAllPoliciesFrameworks() || [];
       console.log(`✅ [HomeView] Policy data prefetch complete - Total policy frameworks: ${policyFrameworks.length}`);
@@ -3429,14 +3405,10 @@ onMounted(() => {
       console.error('❌ [HomeView] Policy data prefetch failed:', error);
     });
 
-  window.policyDataFetchPromise = policyPrefetchPromise;
+    window.policyDataFetchPromise = policyPrefetchPromise;
   
-  // ==========================================
-  // NEW FEATURE: Prefetch ALL Tree Data on Home Page Load
-  // ==========================================
-  console.log('🚀 [HomeView] Starting tree data prefetch...');
-  
-  const treePrefetchPromise = treeDataService.fetchAllTreeData()
+    console.log('🚀 [HomeView] Starting tree data prefetch...');
+    const treePrefetchPromise = treeDataService.fetchAllTreeData()
     .then(() => {
       const frameworks = treeDataService.getData('frameworks') || [];
       console.log(`✅ [HomeView] Tree data prefetch complete - Total frameworks: ${frameworks.length}`);
@@ -3445,14 +3417,10 @@ onMounted(() => {
       console.error('❌ [HomeView] Tree data prefetch failed:', error);
     });
 
-  window.treeDataFetchPromise = treePrefetchPromise;
+    window.treeDataFetchPromise = treePrefetchPromise;
   
-  // ==========================================
-  // NEW FEATURE: Prefetch ALL Document Data on Home Page Load
-  // ==========================================
-  console.log('🚀 [HomeView] Starting document data prefetch...');
-  
-  const documentPrefetchPromise = documentDataService.fetchAllDocumentData()
+    console.log('🚀 [HomeView] Starting document data prefetch...');
+    const documentPrefetchPromise = documentDataService.fetchAllDocumentData()
     .then(() => {
       const documents = documentDataService.getData('documents') || [];
       console.log(`✅ [HomeView] Document data prefetch complete - Total documents: ${documents.length}`);
@@ -3461,14 +3429,10 @@ onMounted(() => {
       console.error('❌ [HomeView] Document data prefetch failed:', error);
     });
 
-  window.documentDataFetchPromise = documentPrefetchPromise;
+    window.documentDataFetchPromise = documentPrefetchPromise;
   
-  // ==========================================
-  // NEW FEATURE: Prefetch ALL Integrations Data on Home Page Load
-  // ==========================================
-  console.log('🚀 [HomeView] Starting integrations data prefetch...');
-  
-  const integrationsPrefetchPromise = integrationsDataService.fetchAllIntegrationData()
+    console.log('🚀 [HomeView] Starting integrations data prefetch...');
+    const integrationsPrefetchPromise = integrationsDataService.fetchAllIntegrationData()
     .then(() => {
       const applications = integrationsDataService.getData('applications') || [];
       console.log(`✅ [HomeView] Integrations data prefetch complete - Total applications: ${applications.length}`);
@@ -3477,14 +3441,10 @@ onMounted(() => {
       console.error('❌ [HomeView] Integrations data prefetch failed:', error);
     });
 
-  window.integrationsDataFetchPromise = integrationsPrefetchPromise;
-  
-  // ==========================================
-  // NEW FEATURE: Prefetch ALL Homepage Data on Home Page Load
-  // ==========================================
-  console.log('🚀 [HomeView] Starting homepage data prefetch...');
+    window.integrationsDataFetchPromise = integrationsPrefetchPromise;
 
-  const homepagePrefetchPromise = homepageDataService.fetchAllHomepageData()
+    console.log('🚀 [HomeView] Starting homepage data prefetch...');
+    const homepagePrefetchPromise = homepageDataService.fetchAllHomepageData()
     .then(() => {
       const approvedFrameworks = homepageDataService.getData('approvedFrameworks') || [];
       console.log(`✅ [HomeView] Homepage data prefetch complete - Total approved frameworks: ${approvedFrameworks.length}`);
@@ -3493,7 +3453,10 @@ onMounted(() => {
       console.error('❌ [HomeView] Homepage data prefetch failed:', error);
     });
 
-  window.homepageDataFetchPromise = homepagePrefetchPromise;
+    window.homepageDataFetchPromise = homepagePrefetchPromise;
+  } else {
+    console.log('ℹ️ [HomeView] Session not authenticated - skipping private prefetch calls');
+  }
   
   // Add click outside handler for popup
   document.addEventListener('click', (event) => {

@@ -1321,6 +1321,7 @@ def add_compliance_to_audit(request, audit_id):
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([AuditConductPermission])
+@throttle_classes([AuditWriteThrottle])
 @audit_conduct_required
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request

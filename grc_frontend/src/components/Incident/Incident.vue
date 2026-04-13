@@ -449,7 +449,7 @@
 </template>
 
 <script>
-import { axiosInstance } from '@/config/api.js';
+import { axiosCompat as axiosInstance } from '@/services/apiServiceCompat.js';
 import { API_ENDPOINTS } from '../../config/api.js';
 import incidentService from '../../services/incidentService.js';
 import './Incident.css';
@@ -531,6 +531,11 @@ export default {
       totalIncidentsCount: 0,
       // Data source indicator (cache vs API), similar to Risk pages
       dataSourceMessage: '',
+      // Measured duration of last incident list API fetch
+      lastIncidentFetchMs: null,
+      // Keep Incident List independent from global framework auto-sync.
+      // Users can still filter using this page's framework dropdown.
+      syncFrameworkFromGlobal: false,
       // Column menu and filter data
       activeFilterColumn: null,
       activeFilterColumnLabel: '',
@@ -589,7 +594,9 @@ export default {
       ],
       visibleColumnKeys: [],
       // DynamicTable columns configuration
-      tableColumns: []
+      tableColumns: [],
+      // Prevent duplicate network calls during initial page bootstrap
+      isBootstrapping: false
     }
   },
   computed: {
@@ -650,19 +657,10 @@ export default {
     }
   },
   watch: {
-    incidents: {
-      handler(newIncidents) {
-        console.log('Incidents array updated. Current statuses:', 
-          newIncidents.slice(0, 5).map(inc => ({ id: inc.IncidentId, status: inc.Status }))
-        );
-        console.log('Total incidents in array:', newIncidents.length);
-        console.log('All incident IDs:', newIncidents.map(inc => inc.IncidentId));
-      },
-      deep: true
-    },
     // Watch for framework changes from homepage/localStorage
     '$store.state.framework.selectedFrameworkId': {
       handler(newFrameworkId) {
+        if (!this.syncFrameworkFromGlobal) return;
         console.log('🔄 Framework changed in Vuex store:', newFrameworkId);
         if (newFrameworkId && newFrameworkId !== 'all') {
           const frameworkId = parseInt(newFrameworkId);
@@ -690,17 +688,6 @@ export default {
         }
       },
       immediate: false
-    },
-    // Refetch when filters change
-    selectedFramework() {
-      if (this.selectedFramework !== undefined) {
-        this.currentPage = 1;
-        if (Array.isArray(this.allIncidents) && this.allIncidents.length > 0) {
-          this.applyClientSideFiltersAndPaging();
-        } else {
-          this.fetchIncidents(1, this.pageSize);
-        }
-      }
     },
     searchQuery: {
       handler() {
@@ -749,23 +736,23 @@ export default {
   },
   async mounted() {
     console.log('🚀 [Incident.vue] Component mounted - fetching data IMMEDIATELY...');
+    this.isBootstrapping = true;
     
     // Initialize table columns (non-blocking)
     this.initializeTableColumns();
     this.loadCurrentUser();
     
-    // Fetch frameworks in parallel (non-blocking)
-    this.fetchFrameworks();
-    this.fetchSelectedFramework();
-    this.fetchBusinessUnits();
-    this.fetchBusinessCategories();
+    // Fetch metadata in background so incident list isn't blocked.
+    // Do NOT auto-apply global selected framework here; default to all incidents.
+    this.fetchFrameworks().catch(() => {});
     
     // Prefer cached incidents from IncidentService (loaded on login/home)
     // This mirrors the risk pages behavior: use cache first, then fallback.
     try {
-      const start = performance.now();
       const usedCache = await this.loadFromStoredData();
-      const elapsed = ((performance.now() - start) / 1000).toFixed(1);
+      const elapsed = usedCache
+        ? '0.0'
+        : ((Number(this.lastIncidentFetchMs) || 0) / 1000).toFixed(1);
       const count = this.totalIncidentsCount || (Array.isArray(this.incidents) ? this.incidents.length : 0);
       if (usedCache) {
         this.dataSourceMessage = `Loaded ${count} incidents from cache (prefetched on Home page) in ${elapsed}s`;
@@ -777,6 +764,8 @@ export default {
     } catch (e) {
       console.warn('⚠️ [Incident.vue] loadFromStoredData failed completely:', e);
       this.dataSourceMessage = 'Failed to load incidents. Please try again.';
+    } finally {
+      this.isBootstrapping = false;
     }
     
     // Listen for storage events to detect framework changes from other tabs/pages
@@ -1802,7 +1791,7 @@ export default {
       try {
         // Load incidents FIRST (most important)
         const storedIncidents = incidentService.getData('incidents');
-        console.log('🔍 [loadFromStoredData] Checking stored incidents:', {
+        console.log('🔍 [loadFromStoredData] Checking stored incidents cache:', {
           exists: !!storedIncidents,
           isArray: Array.isArray(storedIncidents),
           length: storedIncidents ? storedIncidents.length : 0,
@@ -1831,10 +1820,9 @@ export default {
           console.log(`✅ [loadFromStoredData] isLoadingIncidents set to false`);
           usedCache = true; // used cache
         } else {
-          console.error('❌ [loadFromStoredData] No stored incidents found in incidentService cache!');
-          console.error('❌ [loadFromStoredData] storedIncidents:', storedIncidents);
-          console.error('❌ [loadFromStoredData] Full service data:', incidentService.getAllData());
-          console.warn('⚠️ [loadFromStoredData] Falling back to FAST server-side pagination via fetchIncidents() (no full prefetch)...');
+          // Empty cache is an expected state on fresh session/reload.
+          // Treat this as normal flow and fetch first page from API.
+          console.info('ℹ️ [loadFromStoredData] Incident cache is empty. Loading first page from API...');
 
           // FAST FALLBACK: just fetch the first page from API using server-side pagination.
           // Do NOT prefetch ALL incidents here to avoid huge DB load.
@@ -1845,56 +1833,15 @@ export default {
           usedCache = false; // we used API, not cache
         }
         
-        // Load supporting data (non-blocking)
-        // Load business units
-        const storedBusinessUnits = incidentService.getData('incidentBusinessUnits');
-        if (storedBusinessUnits && Array.isArray(storedBusinessUnits)) {
-          this.businessUnits = storedBusinessUnits;
-          console.log(`📦 Loaded ${storedBusinessUnits.length} business units from storage`);
-        } else {
-          // Fetch in background (don't block)
-          this.fetchBusinessUnits().catch(() => {});
-        }
-        
-        // Load categories
-        const storedCategories = incidentService.getData('incidentCategories');
-        if (storedCategories && Array.isArray(storedCategories)) {
-          this.businessCategories = storedCategories;
-          console.log(`📦 Loaded ${storedCategories.length} categories from storage`);
-        } else {
-          // Fetch in background (don't block)
-          this.fetchBusinessCategories().catch(() => {});
-        }
-        
-        // Load users
-        const storedUsers = incidentService.getData('incidentUsers');
-        if (storedUsers && Array.isArray(storedUsers)) {
-          this.availableUsers = storedUsers.map(user => ({
-            id: user.UserId,
-            name: user.UserName,
-            role: user.role
-          }));
-          console.log(`📦 Loaded ${storedUsers.length} users from storage`);
-        } else {
-          // Fetch in background (don't block)
-          this.fetchUsers().catch(() => {});
-        }
-        
-        // Still need to fetch frameworks (not in incidentService) - do this in background
-        this.fetchFrameworks().then(() => {
-          this.fetchSelectedFramework().catch(() => {});
-        }).catch(() => {});
+        // Keep startup minimal: load only incident list at first paint.
+        // Reviewer/users are lazy-loaded only when assignment modal opens.
         
         console.log('✅ Critical data loaded from storage/API! Page should be visible now.');
         return usedCache;
       } catch (error) {
         console.error('❌ Error loading from stored data:', error);
-        // Fallback to API calls
-        await this.fetchFrameworks();
-        await this.fetchSelectedFramework();
+        // Fallback to incident list API only.
         await this.fetchIncidents(1, this.pageSize);
-        this.fetchBusinessUnits();
-        this.fetchBusinessCategories();
         return false; // error path, used API
       } finally {
         this.isLoadingIncidents = false;
@@ -1993,7 +1940,9 @@ export default {
       this.incidents = data.slice(start, end);
     },
     
-    async fetchIncidents(page = null, pageSize = null) {
+    async fetchIncidents(page = null, pageSize = null, options = {}) {
+      const startedAt = performance.now();
+      const minimalParamsOnly = options?.minimalParamsOnly === true;
       try {
         this.isLoadingIncidents = true;
         
@@ -2015,36 +1964,41 @@ export default {
         
         console.log('📤 [fetchIncidents] API call params:', params);
         
-        if (this.searchQuery && this.searchQuery.trim()) {
-          params.search = this.searchQuery.trim();
-        }
-        
-        if (this.sortField) {
-          params.sort_field = this.sortField;
-          params.sort_order = this.sortOrder;
-        }
+        if (!minimalParamsOnly) {
+          if (this.searchQuery && this.searchQuery.trim()) {
+            params.search = this.searchQuery.trim();
+          }
+          
+          if (this.sortField) {
+            params.sort_field = this.sortField;
+            params.sort_order = this.sortOrder;
+          }
 
-        // Add filter parameters
-        if (this.selectedFramework) {
-          params.framework_id = parseInt(this.selectedFramework);
-        }
-        if (this.selectedPolicy) {
-          params.policy_id = this.selectedPolicy;
-        }
-        if (this.selectedSubPolicy) {
-          params.subpolicy_id = this.selectedSubPolicy;
-        }
-        if (this.selectedPriority) {
-          params.priority = this.selectedPriority;
-        }
-        if (this.selectedBusinessUnit) {
-          params.business_unit = this.selectedBusinessUnit;
-        }
-        if (this.selectedBusinessCategory) {
-          params.business_category = this.selectedBusinessCategory;
-        }
-        if (this.selectedStatus) {
-          params.status = this.selectedStatus;
+          // Add filter parameters
+          if (this.selectedFramework !== undefined && this.selectedFramework !== null && this.selectedFramework !== '') {
+            const frameworkId = Number.parseInt(String(this.selectedFramework), 10);
+            if (Number.isInteger(frameworkId) && frameworkId > 0) {
+              params.framework_id = frameworkId;
+            }
+          }
+          if (this.selectedPolicy) {
+            params.policy_id = this.selectedPolicy;
+          }
+          if (this.selectedSubPolicy) {
+            params.subpolicy_id = this.selectedSubPolicy;
+          }
+          if (this.selectedPriority) {
+            params.priority = this.selectedPriority;
+          }
+          if (this.selectedBusinessUnit) {
+            params.business_unit = this.selectedBusinessUnit;
+          }
+          if (this.selectedBusinessCategory) {
+            params.business_category = this.selectedBusinessCategory;
+          }
+          if (this.selectedStatus) {
+            params.status = this.selectedStatus;
+          }
         }
         
         // Fetch only the current page from API
@@ -2060,9 +2014,22 @@ export default {
         let totalCount = 0;
         
         if (response.data?.incidents && Array.isArray(response.data.incidents)) {
+          // Shape: { incidents: [...], total_count: N }
           incidentsData = response.data.incidents;
           totalCount = response.data.total_count || incidentsData.length;
+        } else if (
+          response.data?.data?.incidents &&
+          Array.isArray(response.data.data.incidents)
+        ) {
+          // Shape: { success: true, data: { incidents: [...], total_count: N } }
+          incidentsData = response.data.data.incidents;
+          totalCount = response.data.data.total_count || incidentsData.length;
+        } else if (response.data?.data && Array.isArray(response.data.data)) {
+          // Shape: { success: true, data: [...] }
+          incidentsData = response.data.data;
+          totalCount = response.data.total_count || incidentsData.length;
         } else if (Array.isArray(response.data)) {
+          // Shape: [...]
           incidentsData = response.data;
           totalCount = incidentsData.length;
         }
@@ -2085,6 +2052,16 @@ export default {
         console.error('Error message:', error.message);
         console.error('Error code:', error.code);
         console.error('Error config:', error.config);
+
+        // Resiliency: backend validates query params strictly and can return 400
+        // for stale/invalid optional filters. Retry once with pagination-only params.
+        if (
+          error?.response?.status === 400 &&
+          !minimalParamsOnly
+        ) {
+          console.warn('⚠️ [fetchIncidents] 400 from list API, retrying with minimal pagination params only');
+          return await this.fetchIncidents(page, pageSize, { minimalParamsOnly: true });
+        }
         
         // Check if this is an access denied error first
         if (!AccessUtils.handleApiError(error, 'view incidents')) {
@@ -2106,6 +2083,7 @@ export default {
           PopupService.error(errorMessage);
         }
       } finally {
+        this.lastIncidentFetchMs = performance.now() - startedAt;
         this.isLoadingIncidents = false;
       }
     },
@@ -2259,17 +2237,15 @@ export default {
           const activeStatus = fw.status || fw.Status || fw.ActiveInactive || fw.activeInactive || '';
           const isActive = activeStatus === 'Active' || activeStatus === 'active' || activeStatus === 'ACTIVE';
           
-          if (!isActive) {
-            console.log(`🔍 Filtered out inactive framework: ${fw.name || fw.id} (status: ${activeStatus})`);
-          }
-          
           return isActive;
         });
         
         console.log(`Fetched frameworks: ${allFrameworks.length} total, ${this.frameworks.length} active`);
         console.log('Active frameworks:', this.frameworks);
       } catch (error) {
-        console.error('Error fetching frameworks:', error);
+        if (!AccessUtils.handleApiError(error, 'view frameworks')) {
+          console.error('Error fetching frameworks:', error);
+        }
         this.frameworks = [];
       }
     },
@@ -2298,7 +2274,9 @@ export default {
           }
         }
       } catch (frameworkError) {
-        console.warn('⚠️ Could not fetch selected framework:', frameworkError);
+        if (!AccessUtils.handleApiError(frameworkError, 'view selected framework')) {
+          console.warn('⚠️ Could not fetch selected framework:', frameworkError);
+        }
         // Try to get from localStorage as fallback
         const storedFrameworkId = localStorage.getItem('selectedFrameworkId') || localStorage.getItem('frameworkId');
         if (storedFrameworkId && storedFrameworkId !== '' && storedFrameworkId !== 'null') {
@@ -2379,7 +2357,9 @@ export default {
         }
         console.log('Fetched policies for framework:', this.selectedFramework, this.policies);
       } catch (error) {
-        console.error('Error fetching policies:', error);
+        if (!AccessUtils.handleApiError(error, 'view policies')) {
+          console.error('Error fetching policies:', error);
+        }
         this.policies = [];
       }
     },
@@ -2403,7 +2383,9 @@ export default {
         }
         console.log('Fetched subpolicies for policy:', this.selectedPolicy, this.subpolicies);
       } catch (error) {
-        console.error('Error fetching subpolicies:', error);
+        if (!AccessUtils.handleApiError(error, 'view subpolicies')) {
+          console.error('Error fetching subpolicies:', error);
+        }
         this.subpolicies = [];
       }
     },
@@ -2497,8 +2479,7 @@ export default {
       this.isExporting = true;
       this.isExportDropdownOpen = false;
 
-      // Request full export from backend (S3) using active filters.
-      const userId = localStorage.getItem('user_id') || 'anonymous';
+      // Request full export from backend (S3) using active filters. User identity must come from server session/JWT, not client-supplied user_id.
       const exportOptions = {
         filters: {
           search: this.searchQuery || '',
@@ -2517,7 +2498,6 @@ export default {
 
       axiosInstance.post(API_ENDPOINTS.INCIDENTS_EXPORT, {
         file_format: this.exportFormat,
-        user_id: userId,
         options: JSON.stringify(exportOptions)
       })
       .then(async (response) => {
@@ -2571,9 +2551,10 @@ export default {
     },
     async onFrameworkChange() {
       console.log('Framework changed to:', this.selectedFramework);
-      // Ensure selectedFramework is a number (from dropdown it might be a string)
-      if (this.selectedFramework) {
-        this.selectedFramework = parseInt(this.selectedFramework);
+      // Normalize framework ID from dropdown and ignore invalid values.
+      if (this.selectedFramework !== undefined && this.selectedFramework !== null && this.selectedFramework !== '') {
+        const frameworkId = Number.parseInt(String(this.selectedFramework), 10);
+        this.selectedFramework = Number.isInteger(frameworkId) && frameworkId > 0 ? frameworkId : '';
       }
       console.log('Framework after type conversion:', this.selectedFramework, typeof this.selectedFramework);
       this.selectedPolicy = '';
@@ -2581,10 +2562,9 @@ export default {
       this.policies = [];
       this.subpolicies = [];
       this.currentPage = 1; // Reset to first page
-      
-      if (this.selectedFramework) {
-        await this.fetchPolicies();
-      }
+
+      // Policy/subpolicy filters are currently not rendered in UI for this page.
+      // Skip policy tree calls to avoid unnecessary network usage and 401 noise.
       this.fetchIncidents();
     },
     async onPolicyChange() {
@@ -2640,6 +2620,7 @@ export default {
       this.fetchIncidents();
     },
     handleStorageChange(event) {
+      if (!this.syncFrameworkFromGlobal) return;
       // Listen for framework changes in localStorage (from homepage)
       if (event.key === 'selectedFrameworkId' || event.key === 'frameworkId') {
         // Prevent refresh if:
