@@ -143,11 +143,8 @@
           </div>
           <div class="kpi-card-body">
             <p class="kpi-card-title">Total Risks</p>
-            <p v-if="metrics.total > 0" class="kpi-card-value">
+            <p class="kpi-card-value" :class="{ 'kpi-card-value-empty': metrics.total === 0 }">
               {{ metrics.total }}
-            </p>
-            <p v-else class="kpi-card-value kpi-card-value-empty">
-              No data found
             </p>
             <p v-if="metrics.total > 0" class="kpi-card-subtitle">
               +12 this month
@@ -162,11 +159,8 @@
           </div>
           <div class="kpi-card-body">
             <p class="kpi-card-title">Accepted Risks</p>
-            <p v-if="metrics.accepted > 0" class="kpi-card-value">
+            <p class="kpi-card-value" :class="{ 'kpi-card-value-empty': metrics.accepted === 0 }">
               {{ metrics.accepted }}
-            </p>
-            <p v-else class="kpi-card-value kpi-card-value-empty">
-              No data found
             </p>
             <p v-if="metrics.accepted > 0" class="kpi-card-subtitle">
               +5 this month
@@ -181,11 +175,8 @@
           </div>
           <div class="kpi-card-body">
             <p class="kpi-card-title">Rejected Risks</p>
-            <p v-if="metrics.rejected > 0" class="kpi-card-value">
+            <p class="kpi-card-value" :class="{ 'kpi-card-value-empty': metrics.rejected === 0 }">
               {{ metrics.rejected }}
-            </p>
-            <p v-else class="kpi-card-value kpi-card-value-empty">
-              No data found
             </p>
             <p v-if="metrics.rejected > 0" class="kpi-card-subtitle">
               +3 this week
@@ -200,11 +191,8 @@
           </div>
           <div class="kpi-card-body">
             <p class="kpi-card-title">Mitigated Risks</p>
-            <p v-if="metrics.mitigated > 0" class="kpi-card-value">
+            <p class="kpi-card-value" :class="{ 'kpi-card-value-empty': metrics.mitigated === 0 }">
               {{ metrics.mitigated }}
-            </p>
-            <p v-else class="kpi-card-value kpi-card-value-empty">
-              No data found
             </p>
             <p v-if="metrics.mitigated > 0" class="kpi-card-subtitle">
               +8 this month
@@ -219,11 +207,8 @@
           </div>
           <div class="kpi-card-body">
             <p class="kpi-card-title">In Progress Risks</p>
-            <p v-if="metrics.inProgress > 0" class="kpi-card-value">
+            <p class="kpi-card-value" :class="{ 'kpi-card-value-empty': metrics.inProgress === 0 }">
               {{ metrics.inProgress }}
-            </p>
-            <p v-else class="kpi-card-value kpi-card-value-empty">
-              No data found
             </p>
             <p v-if="metrics.inProgress > 0" class="kpi-card-subtitle">
               +6 this week
@@ -500,14 +485,21 @@ import { useStore } from 'vuex'
 import { Chart, ArcElement, BarElement, CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend } from 'chart.js'
 import { Doughnut, Bar, Line as LineChart } from 'vue-chartjs'
 import '@fortawesome/fontawesome-free/css/all.min.css'
-import axios from 'axios'
 import AccessUtils from '@/utils/accessUtils'
 import { convertColorForColorblind as convertColorFromUtil } from '@/utils/colorblindness'
 import { API_ENDPOINTS } from '../../config/api.js'
+import apiService from '@/services/apiService.js'
 import html2canvas from 'html2canvas'
 import jsPDF from 'jspdf'
 import CustomDropdown from '../CustomDropdown.vue'
 import DashboardChartCard from '@/assets/css/DashboardChartCard.vue'
+
+const axios = {
+  get: (url, config = {}) =>
+    apiService.get(url, config?.params || {}, config).then((data) => ({ data, status: 200 })),
+  post: (url, data = {}, config = {}) =>
+    apiService.post(url, data, config).then((res) => ({ data: res, status: 200 }))
+}
 
 Chart.register(ArcElement, BarElement, CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend)
 
@@ -981,7 +973,7 @@ export default {
         if (response.data && response.data.success && response.data.data) {
           const summary = response.data.data.summary
         
-          // Update metrics (cards will show "No data found" if values are 0)
+          // Update metrics (cards show numeric counts, including 0)
           metrics.total = summary.total_count
           metrics.accepted = summary.accepted_count
           metrics.rejected = summary.rejected_count
@@ -1016,7 +1008,7 @@ export default {
           return
         }
         
-        // Set default values if API fails (cards will show "No data found")
+        // Set default values if API fails
         Object.assign(metrics, { 
           total: 0, 
           accepted: 0, 

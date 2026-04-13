@@ -28,9 +28,6 @@ def get_active_framework_filter(request) -> Optional[str]:
         # Fallback to session
         elif hasattr(request, 'session') and 'user_id' in request.session:
             user_id = str(request.session.get('user_id'))
-        # Fallback to localStorage user_id passed in headers
-        elif hasattr(request, 'headers') and 'X-User-Id' in request.headers:
-            user_id = request.headers.get('X-User-Id')
         # Fallback to Authorization header with JWT token
         elif hasattr(request, 'headers') and 'Authorization' in request.headers:
             auth_header = request.headers.get('Authorization')
@@ -45,10 +42,10 @@ def get_active_framework_filter(request) -> Optional[str]:
                 except Exception as jwt_error:
                     debug_print(f"⚠️ [RISK] JWT extraction failed: {str(jwt_error)}")
         
-        # If still no user_id, use default user for testing
+        # Never default to a synthetic user in production code.
         if not user_id:
-            user_id = '1'  # Default to user ID 1 for testing
-            debug_print(f"⚠️ [RISK] No user ID found - using default user ID: {user_id}")
+            debug_print("⚠️ [RISK] No authenticated user context for framework filter")
+            return None
         
         # Get framework from context
         framework_id = get_framework_context(user_id)

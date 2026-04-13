@@ -426,9 +426,21 @@
 
 <script>
 import './ViewInstance.css'
-import axios from 'axios'
 import { PopupModal, PopupService } from '@/modules/popup'
-import { API_ENDPOINTS, axiosInstance } from '../../config/api.js'
+import { API_ENDPOINTS } from '../../config/api.js'
+import apiService from '@/services/apiService.js'
+
+const axios = {
+  get: (url, config = {}) =>
+    apiService.get(url, config?.params || {}, config).then((data) => ({ data, status: 200 })),
+  put: (url, data = {}, config = {}) =>
+    apiService.put(url, data, config).then((res) => ({ data: res, status: 200 }))
+}
+
+const axiosInstance = {
+  post: (url, data = {}, config = {}) =>
+    apiService.post(url, data, config).then((res) => ({ data: res, status: 200 }))
+}
 
 export default {
   name: 'ViewInstance',
@@ -470,18 +482,8 @@ export default {
   methods: {
     async sendPushNotification(notificationData) {
       try {
-        const response = await fetch(API_ENDPOINTS.PUSH_NOTIFICATION, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(notificationData)
-        });
-        if (response.ok) {
-          console.log('Push notification sent successfully');
-        } else {
-          console.error('Failed to send push notification');
-        }
+        await apiService.post(API_ENDPOINTS.PUSH_NOTIFICATION, notificationData);
+        console.log('Push notification sent successfully');
       } catch (error) {
         console.error('Error sending push notification:', error);
       }
@@ -503,8 +505,7 @@ export default {
             title: 'Risk Instance Viewed',
             message: `Risk instance "${response.data.RiskId || 'Unknown Risk'}" has been viewed in the Risk module.`,
             category: 'risk',
-            priority: 'medium',
-            user_id: 'default_user'
+            priority: 'medium'
           });
         })
         .catch(error => {
@@ -515,8 +516,7 @@ export default {
             title: 'Risk Instance View Failed',
             message: `Failed to load risk instance details: ${error.response?.data?.error || error.message}`,
             category: 'risk',
-            priority: 'high',
-            user_id: 'default_user'
+            priority: 'high'
           });
           // Try alternative endpoint if the first one fails
           this.tryAlternativeEndpoint(instanceId)
@@ -557,8 +557,7 @@ export default {
           title: 'Risk Instance Updated',
           message: `Risk instance "${this.instance.RiskId}" has been successfully updated.`,
           category: 'risk',
-          priority: 'medium',
-          user_id: 'default_user'
+          priority: 'medium'
         })
         
       } catch (error) {
@@ -570,8 +569,7 @@ export default {
           title: 'Risk Instance Update Failed',
           message: `Failed to update risk instance: ${error.response?.data?.error || error.message}`,
           category: 'risk',
-          priority: 'high',
-          user_id: 'default_user'
+          priority: 'high'
         })
       } finally {
         this.isSaving = false
@@ -626,8 +624,7 @@ export default {
             title: 'Risk Instance Viewed',
             message: `Risk instance "${response.data.RiskId || 'Unknown Risk'}" has been viewed via alternative endpoint.`,
             category: 'risk',
-            priority: 'medium',
-            user_id: 'default_user'
+            priority: 'medium'
           });
         })
         .catch(error => {
@@ -638,8 +635,7 @@ export default {
             title: 'Risk Instance View Failed',
             message: `Failed to load risk instance details via alternative endpoint: ${error.response?.data?.error || error.message}`,
             category: 'risk',
-            priority: 'high',
-            user_id: 'default_user'
+            priority: 'high'
           });
         })
     },
@@ -977,18 +973,9 @@ export default {
       this.clearMessages()
       
       try {
-        // Get user ID from session or local storage
-        const userId = this.getCurrentUserId()
-        if (!userId) {
-          this.showError('User ID not found. Please log in again.')
-          this.submittingDelete = false
-          return
-        }
-        
         console.log('[Risk Instance Delete] Submitting deletion request...', {
           risk_instance_id: this.instance.RiskInstanceId,
-          risk_id: this.instance.RiskId,
-          user_id: userId
+          risk_id: this.instance.RiskId
         })
         
         // Submit ERASURE request
@@ -999,7 +986,6 @@ export default {
             info_type: 'risk_instance',
             risk_instance_id: this.instance.RiskInstanceId,
             risk_id: this.instance.RiskId,
-            user_id: userId,
             changes: {},  // No changes for deletion
             impact_analysis: {
               riskLevel: 'High',
@@ -1076,14 +1062,6 @@ export default {
           return
         }
         
-        // Get user ID from session or local storage
-        const userId = this.getCurrentUserId()
-        if (!userId) {
-          this.showError('User ID not found. Please log in again.')
-          this.submittingRectification = false
-          return
-        }
-        
         // Calculate lightweight impact analysis (non-blocking, fast)
         // Only include essential fields to reduce payload size and speed up submission
         const fullImpactAnalysis = this.calculateInstanceImpact(changes)
@@ -1099,7 +1077,6 @@ export default {
         console.log('[Risk Instance Rectification] Submitting request...', {
           risk_instance_id: this.instance.RiskInstanceId,
           risk_id: this.instance.RiskId,
-          user_id: userId,
           changes: Object.keys(changes)
         })
         
@@ -1110,7 +1087,6 @@ export default {
             info_type: 'risk_instance',
             risk_instance_id: this.instance.RiskInstanceId,
             risk_id: this.instance.RiskId,
-            user_id: userId,  // Include user_id in request body (backend fallback if JWT fails)
             changes: changes,
             impact_analysis: impactAnalysis
           },
@@ -1173,55 +1149,6 @@ export default {
       }
     },
     
-    getCurrentUserId() {
-      // Try to get user ID from various sources
-      try {
-        // First, try to get user_id directly from localStorage/sessionStorage
-        const userId = localStorage.getItem('user_id') || 
-                       localStorage.getItem('userId') ||
-                       sessionStorage.getItem('user_id') ||
-                       sessionStorage.getItem('userId')
-        
-        if (userId) {
-          console.log('Found user_id:', userId)
-          return userId
-        }
-        
-        // Check localStorage for user object
-        const storedUser = localStorage.getItem('user') || localStorage.getItem('current_user')
-        if (storedUser) {
-          const user = JSON.parse(storedUser)
-          const id = user.user_id || user.UserId || user.id
-          if (id) {
-            console.log('Found user ID from user object:', id)
-            return id
-          }
-        }
-        
-        // Check sessionStorage for user object
-        const sessionUser = sessionStorage.getItem('user') || sessionStorage.getItem('current_user')
-        if (sessionUser) {
-          const user = JSON.parse(sessionUser)
-          const id = user.user_id || user.UserId || user.id
-          if (id) {
-            console.log('Found user ID from session user object:', id)
-            return id
-          }
-        }
-        
-        // Try to get from RBAC context if available
-        if (window.rbacContext && window.rbacContext.user_id) {
-          console.log('Found user ID from RBAC context:', window.rbacContext.user_id)
-          return window.rbacContext.user_id
-        }
-        
-        console.error('No user ID found in any storage location')
-        return null
-      } catch (error) {
-        console.error('Error getting user ID:', error)
-        return null
-      }
-    }
   }
 }
 </script> 

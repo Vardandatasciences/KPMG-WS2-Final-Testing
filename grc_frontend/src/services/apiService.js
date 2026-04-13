@@ -58,7 +58,15 @@ apiClient.interceptors.request.use((config) => {
   // 1. Identity: Inject context
   const userId = localStorage.getItem('user_id');
 
-
+  // Multipart uploads: never send default application/json (axios default); DRF rejects with Unsupported media type.
+  if (
+    ['post', 'put', 'patch'].includes(config.method) &&
+    config.data instanceof FormData &&
+    config.headers
+  ) {
+    delete config.headers['Content-Type'];
+    delete config.headers['content-type'];
+  }
 
   if (userId) {
     if (config.method === 'get' && !config.params?.user_id) {

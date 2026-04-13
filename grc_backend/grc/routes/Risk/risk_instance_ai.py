@@ -21,11 +21,11 @@ from datetime import date, datetime
 from typing import Any, Optional
 
 import requests
+from django.db import close_old_connections
 from django.http import JsonResponse, HttpResponse, StreamingHttpResponse
-from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from rest_framework.decorators import api_view, permission_classes, parser_classes
-from rest_framework.permissions import AllowAny, IsAuthenticated
-from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 
 # RBAC imports
 from ...rbac.decorators import rbac_required
@@ -124,6 +124,29 @@ elif AI_PROVIDER == 'ollama':
     debug_print(f"   Default Model: {OLLAMA_MODEL_DEFAULT}")
     debug_print(f"   Fast Model: {OLLAMA_MODEL_FAST}")
     debug_print(f"   Complex Model: {OLLAMA_MODEL_COMPLEX}")
+
+
+def _json_safe_for_response(obj: Any) -> Any:
+    """Recursively normalize values for JsonResponse / json.dumps (numpy scalars, dates, bytes, etc.)."""
+    if obj is None:
+        return None
+    if isinstance(obj, (str, int, float, bool)):
+        return obj
+    if isinstance(obj, bytes):
+        return obj.decode("utf-8", errors="replace")
+    if isinstance(obj, (date, datetime)):
+        return obj.isoformat()
+    if isinstance(obj, dict):
+        return {str(k): _json_safe_for_response(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_json_safe_for_response(v) for v in obj]
+    if hasattr(obj, "item") and callable(getattr(obj, "item", None)):
+        try:
+            return _json_safe_for_response(obj.item())
+        except Exception:
+            pass
+    return str(obj)
+
 
 # RiskInstance DB fields (excluding auto-generated IDs: RiskInstanceId, UserId, ReportedBy, ReviewerId, IncidentId, ComplianceId, RiskId)
 RISK_INSTANCE_DB_FIELDS = [
@@ -552,10 +575,15 @@ def infer_single_field(
                 rationale = f"Extracted {field_name} from error response (low confidence)"
                 debug_print(f"   ⚠️  Extracted value from error message: {v}")
 
+    try:
+        confidence_safe = float(confidence)
+    except (TypeError, ValueError):
+        confidence_safe = 0.7
+
     # Create metadata for this field
     metadata = {
         "source": "AI_GENERATED",
-        "confidence": confidence,
+        "confidence": confidence_safe,
         "rationale": rationale,
         "provider": AI_PROVIDER,
         "model_used": model_used,
@@ -910,10 +938,9 @@ def parse_risk_instances_from_text(text: str, document_hash: str = None) -> list
 # DJANGO API ENDPOINTS
 # =========================
 @api_view(['POST'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 @parser_classes([MultiPartParser, FormParser])
-@csrf_exempt
-# rbac_required removed: path in JWT skip list; token parsing was returning 401. Allow upload for dev parity with ai-risk-doc-upload.
+@rbac_required(required_permission='create_risk')
 @rate_limit_decorator(requests_per_minute=10, requests_per_hour=100)  # Phase 3: Rate limiting
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
@@ -921,10 +948,7 @@ def upload_and_process_risk_instance_document(request):
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
     
-    debug_print(f"📤 Upload request for risk instance document")
-    debug_print(f"📤 Request data: {request.POST}")
-    debug_print(f"📤 Request files: {request.FILES}")
-    debug_print(f"📤 User ID: {request.POST.get('user_id', 'unknown')}")
+    debug_print("📤 Risk instance document upload request received")
 
     # CORS preflight is handled by django-cors-headers.
     if request.method == 'OPTIONS':
@@ -969,7 +993,9 @@ def upload_and_process_risk_instance_document(request):
         # Upload to S3 for backup and cloud storage
         s3_url = None
         s3_key = None
-        user_id = request.POST.get('user_id', '1')
+        user_id = str(getattr(request.user, "id", ""))
+        if not user_id:
+            return JsonResponse({'status': 'error', 'message': 'Authentication required'}, status=401)
         try:
             debug_print(f"☁️ Uploading file to S3...")
             s3_client = create_direct_mysql_client()
@@ -996,6 +1022,10 @@ def upload_and_process_risk_instance_document(request):
             debug_print(f"⚠️ S3 upload error (continuing with local file): {str(s3_error)}")
         
         debug_print(f"✅ File saved to: {file_path}")
+
+        # Preprocessing + AI can run for minutes; MySQL may drop idle Django connections (wait_timeout).
+        # Closing here avoids SessionMiddleware failing on session.save() with a dead connection at the end.
+        close_old_connections()
 
         try:
             # Step 1: Prepare document using centralized preprocessor (includes lemmatization)
@@ -1044,7 +1074,20 @@ def upload_and_process_risk_instance_document(request):
                 response_data["s3_url"] = s3_url
                 response_data["s3_key"] = s3_key
 
-            return JsonResponse(response_data)
+            close_old_connections()
+            return JsonResponse(_json_safe_for_response(response_data))
+        except ValueError as ve:
+            if os.path.exists(file_path):
+                try:
+                    os.unlink(file_path)
+                except OSError:
+                    pass
+            debug_print(f"❌ upload_and_process_risk_instance_document validation: {ve}")
+            close_old_connections()
+            return JsonResponse(
+                {'status': 'error', 'message': str(ve)},
+                status=400,
+            )
         except Exception as process_error:
             # Clean up the file if processing fails
             if os.path.exists(file_path):
@@ -1052,15 +1095,19 @@ def upload_and_process_risk_instance_document(request):
             raise process_error
 
     except Exception as e:
+        debug_print(f"❌ upload_and_process_risk_instance_document failed: {e}")
         import traceback
         traceback.print_exc()
-        return JsonResponse({'status': 'error', 'message': f'Error processing document: {str(e)}'}, status=500)
+        close_old_connections()
+        return JsonResponse(
+            {'status': 'error', 'message': 'Error processing document'},
+            status=500,
+        )
 
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
-@parser_classes([MultiPartParser, FormParser])
-@csrf_exempt
+@parser_classes([JSONParser, MultiPartParser, FormParser])
 @rbac_required(required_permission='create_risk')
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
@@ -1069,7 +1116,13 @@ def save_extracted_risk_instances(request):
     tenant_id = get_tenant_id_from_request(request)
     
     try:
-        data = json.loads(request.body or "{}")
+        # DRF/RBAC may consume the request stream before reaching here.
+        data = request.data if hasattr(request, "data") else None
+        if not isinstance(data, dict):
+            raw_body = getattr(request, "body", b"") or b"{}"
+            if isinstance(raw_body, bytes):
+                raw_body = raw_body.decode("utf-8", errors="ignore")
+            data = json.loads(raw_body or "{}")
         risk_instances_data = data.get('risk_instances', [])
         if not risk_instances_data:
             return JsonResponse({'status': 'error', 'message': 'No risk instances provided'}, status=400)
@@ -1117,6 +1170,28 @@ def save_extracted_risk_instances(request):
                         "assessment_date": date.today().isoformat()
                     }
                 
+                def _as_int(value, default, minimum, maximum, field_name):
+                    if value is None or value == "":
+                        return default
+                    try:
+                        parsed = int(value)
+                    except (TypeError, ValueError):
+                        raise ValueError(f"{field_name} must be a valid integer")
+                    if parsed < minimum or parsed > maximum:
+                        raise ValueError(f"{field_name} must be between {minimum} and {maximum}")
+                    return parsed
+
+                def _as_float(value, default, minimum, maximum, field_name):
+                    if value is None or value == "":
+                        return default
+                    try:
+                        parsed = float(value)
+                    except (TypeError, ValueError):
+                        raise ValueError(f"{field_name} must be a valid number")
+                    if parsed < minimum or parsed > maximum:
+                        raise ValueError(f"{field_name} must be between {minimum} and {maximum}")
+                    return parsed
+
                 kwargs = {
                     # not setting: RiskInstanceId (auto), RiskId, IncidentId, ComplianceId, UserId, ReviewerId, ReportedBy
                     'RiskTitle': r.get('RiskTitle', f'Risk Instance {idx+1}'),
@@ -1126,11 +1201,11 @@ def save_extracted_risk_instances(request):
                     'Criticality': r.get('Criticality', 'Medium'),
                     'Category': r.get('Category', ''),
                     'Origin': r.get('Origin', 'Internal'),
-                    'RiskLikelihood': int(r.get('RiskLikelihood') or 5),
-                    'RiskImpact': int(r.get('RiskImpact') or 5),
-                    'RiskExposureRating': float(r.get('RiskExposureRating') or 25.0),
-                    'RiskMultiplierX': float(r.get('RiskMultiplierX') or 1.0),
-                    'RiskMultiplierY': float(r.get('RiskMultiplierY') or 1.0),
+                    'RiskLikelihood': _as_int(r.get('RiskLikelihood'), 5, 1, 10, 'RiskLikelihood'),
+                    'RiskImpact': _as_int(r.get('RiskImpact'), 5, 1, 10, 'RiskImpact'),
+                    'RiskExposureRating': _as_float(r.get('RiskExposureRating'), 25.0, 0.0, 100.0, 'RiskExposureRating'),
+                    'RiskMultiplierX': _as_float(r.get('RiskMultiplierX'), 1.0, 0.1, 2.0, 'RiskMultiplierX'),
+                    'RiskMultiplierY': _as_float(r.get('RiskMultiplierY'), 1.0, 0.1, 2.0, 'RiskMultiplierY'),
                     'Appetite': r.get('Appetite', 'Medium'),
                     'RiskResponseType': r.get('RiskResponseType', 'Mitigate'),
                     'RiskResponseDescription': r.get('RiskResponseDescription', ''),
@@ -1138,11 +1213,15 @@ def save_extracted_risk_instances(request):
                     'RiskType': r.get('RiskType', 'Current'),
                     'RiskOwner': r.get('RiskOwner', ''),
                     'BusinessImpact': r.get('BusinessImpact', ''),
-                    'RiskStatus': r.get('RiskStatus', 'Not Assigned'),
-                    'MitigationStatus': r.get('MitigationStatus', 'Pending'),
+                    # Never trust client supplied workflow state fields
+                    'RiskStatus': 'Not Assigned',
+                    'MitigationStatus': 'Pending',
                     'ModifiedMitigations': modified_mitigations,
                     'RiskFormDetails': risk_form_details,
-                    'Reviewer': r.get('Reviewer', 'Pending Review'),
+                    'Reviewer': 'Pending Review',
+                    'UserId': request.user.id,
+                    'ReportedBy': request.user.id,
+                    'tenant_id': tenant_id,
                 }
                 risk_instance = RiskInstance.objects.create(**kwargs)
                 saved.append({'risk_instance_id': getattr(risk_instance, "RiskInstanceId", None), 'risk_title': risk_instance.RiskTitle})
@@ -1161,9 +1240,8 @@ def save_extracted_risk_instances(request):
     except json.JSONDecodeError:
         return JsonResponse({'status': 'error', 'message': 'Invalid JSON payload'}, status=400)
     except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return JsonResponse({'status': 'error', 'message': f'Error saving risk instances: {str(e)}'}, status=500)
+        debug_print(f"❌ save_extracted_risk_instances failed: {e}")
+        return JsonResponse({'status': 'error', 'message': 'Error saving risk instances'}, status=500)
 
 
 @api_view(['GET'])
@@ -1179,31 +1257,27 @@ def test_openai_connection_risk_instance(request):
         if not OPENAI_API_KEY:
             return JsonResponse({
                 'status': 'error',
-                'message': 'OPENAI_API_KEY is not set',
-                'model': OPENAI_MODEL,
-                'api_url': OPENAI_API_URL
+                'message': 'AI provider is not configured',
+                'model': OPENAI_MODEL
             }, status=500)
         
         out = call_openai_json('Return JSON: {"ok": true}')
         return JsonResponse({
             'status': 'success', 
             'openai_reply': out, 
-            'model': OPENAI_MODEL, 
-            'api_url': OPENAI_API_URL
+            'model': OPENAI_MODEL
         })
     except Exception as e:
         return JsonResponse({
             'status': 'error',
-            'message': f'OpenAI error: {e}',
-            'model': OPENAI_MODEL,
-            'api_url': OPENAI_API_URL
+            'message': 'AI provider connection failed',
+            'model': OPENAI_MODEL
         }, status=500)
 
 
 @api_view(['POST'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 @parser_classes([MultiPartParser, FormParser])
-@csrf_exempt
 @rbac_required(required_permission='create_risk')
 @rate_limit_decorator(requests_per_minute=5, requests_per_hour=50)  # Lower limits for streaming
 @require_tenant
@@ -1243,10 +1317,11 @@ def upload_and_process_risk_instance_document_streaming(request):
             for chunk in uploaded_file.chunks():
                 f.write(chunk)
 
-        # Prepare text
-        from ...utils.document_preprocessor import extract_text_from_file
+        close_old_connections()
+
+        # Prepare text (use module-local extract_text_from_file; not in document_preprocessor)
         from ...ai.processing.preprocessor import DocumentPreparationService
-        
+
         prep = DocumentPreparationService().prepare_text(
             extract_text_from_file(file_path, ext),
             max_length=8000,
@@ -1291,10 +1366,12 @@ def upload_and_process_risk_instance_document_streaming(request):
                 'timestamp': datetime.now().isoformat()
             })
 
+        close_old_connections()
+
         # Stream all collected events
         def event_stream():
             for event_data in events:
-                yield f"data: {json.dumps(event_data)}\n\n"
+                yield f"data: {json.dumps(_json_safe_for_response(event_data))}\n\n"
                 # Add small delay to simulate real-time streaming
                 import time
                 time.sleep(0.1)
@@ -1310,4 +1387,5 @@ def upload_and_process_risk_instance_document_streaming(request):
 
     except Exception as e:
         debug_print(f"❌ Error in streaming upload: {e}")
-        return JsonResponse({'status': 'error', 'message': f'Streaming upload failed: {str(e)}'}, status=500)
+        close_old_connections()
+        return JsonResponse({'status': 'error', 'message': 'Streaming upload failed'}, status=500)

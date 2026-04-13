@@ -140,7 +140,6 @@
 </template>
 
 <script>
-import axios from 'axios';
 import './RiskScoring.css';
 import '../../assets/css/main.css'; // Import main.css for button styles
 import { reactive } from 'vue';
@@ -148,7 +147,15 @@ import DynamicTable from '../DynamicTable.vue';
 // import Dynamicalsearch from '../Dynamicalsearch.vue';
 import { PopupModal } from '@/modules/popup';
 import { API_ENDPOINTS } from '../../config/api.js';
+import apiService from '@/services/apiService.js';
 import riskDataService from '@/services/riskService';
+
+const axios = {
+  get: (url, config = {}) =>
+    apiService.get(url, config?.params || {}, config).then((data) => ({ data, status: 200 })),
+  post: (url, data = {}, config = {}) =>
+    apiService.post(url, data, config).then((res) => ({ data: res, status: 200 }))
+};
 
 export default {
   name: 'RiskScoring',
@@ -390,18 +397,8 @@ export default {
     // Add push notification method
     async sendPushNotification(notificationData) {
       try {
-        const response = await fetch(API_ENDPOINTS.PUSH_NOTIFICATION, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(notificationData)
-        });
-        if (response.ok) {
-          console.log('Push notification sent successfully');
-        } else {
-          console.error('Failed to send push notification');
-        }
+        await apiService.post(API_ENDPOINTS.PUSH_NOTIFICATION, notificationData);
+        console.log('Push notification sent successfully');
       } catch (error) {
         console.error('Error sending push notification:', error);
       }
@@ -498,8 +495,7 @@ export default {
         title: 'Risk Scoring Details Viewed',
         message: `Risk scoring details for "${risk.RiskTitle || 'Untitled Risk'}" (ID: ${riskId}) have been viewed.`,
         category: 'risk',
-        priority: 'medium',
-        user_id: 'default_user'
+        priority: 'medium'
       });
       
       // Navigate to the scoring details page with the risk ID and action=view
@@ -539,8 +535,7 @@ export default {
             title: 'Risk Instances Loaded Successfully',
             message: `${this.riskInstances.length} risk instances have been loaded for scoring.`,
             category: 'risk',
-            priority: 'medium',
-            user_id: 'default_user'
+            priority: 'medium'
           });
         }
         this.dataSourceMessage = `Loaded ${this.riskInstances.length} risk instances ${source}`;
@@ -580,8 +575,7 @@ export default {
             title: 'Risk Instances Load Failed',
             message: `Failed to load risk instances: ${error.message}`,
             category: 'risk',
-            priority: 'high',
-            user_id: 'default_user'
+            priority: 'high'
           });
         })
         .finally(() => {
@@ -645,8 +639,7 @@ export default {
         title: 'Risk Instance Rejection Initiated',
         message: `Risk "${risk.RiskTitle || 'Untitled Risk'}" (ID: ${riskId}) is being rejected for scoring.`,
         category: 'risk',
-        priority: 'high',
-        user_id: 'default_user'
+        priority: 'high'
       });
       
       // Direct navigation without validation
@@ -666,8 +659,7 @@ export default {
         title: 'Risk Instance Acceptance Initiated',
         message: `Risk "${risk.RiskTitle || 'Untitled Risk'}" (ID: ${riskId}) is being accepted for scoring.`,
         category: 'risk',
-        priority: 'high',
-        user_id: 'default_user'
+        priority: 'high'
       });
       
       // Direct navigation without validation

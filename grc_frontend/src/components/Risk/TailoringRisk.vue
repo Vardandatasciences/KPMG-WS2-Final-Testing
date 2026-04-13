@@ -334,7 +334,6 @@
 
 <script>
 import { ref, computed, onMounted, watch } from 'vue';
-import axios from 'axios';
 import './TailoringRisk.css';
 import '@/assets/css/form.css';
 import '@/assets/css/dropdown.css';
@@ -342,6 +341,14 @@ import { useRoute } from 'vue-router';
 import { PopupModal } from '@/modules/popup';
 import { popupService } from '@/modules/popup';
 import { API_ENDPOINTS } from '@/config/api';
+import apiService from '@/services/apiService.js';
+
+const axios = {
+  get: (url, config = {}) =>
+    apiService.get(url, config?.params || {}, config).then((data) => ({ data, status: 200 })),
+  post: (url, data = {}, config = {}) =>
+    apiService.post(url, data, config).then((res) => ({ data: res, status: 200 }))
+};
 
 export default {
   name: 'TailoringRisk',
@@ -436,18 +443,8 @@ export default {
     // Methods
     const sendPushNotification = async (notificationData) => {
       try {
-        const response = await fetch(API_ENDPOINTS.PUSH_NOTIFICATION, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(notificationData)
-        });
-        if (response.ok) {
-          console.log('Push notification sent successfully');
-        } else {
-          console.error('Failed to send push notification');
-        }
+        await apiService.post(API_ENDPOINTS.PUSH_NOTIFICATION, notificationData);
+        console.log('Push notification sent successfully');
       } catch (error) {
         console.error('Error sending push notification:', error);
       }
@@ -591,8 +588,7 @@ export default {
           title: 'Risk Loading Failed',
           message: 'Failed to load risks from the database. Please check your connection and try again.',
           category: 'risk',
-          priority: 'high',
-          user_id: 'default_user'
+          priority: 'high'
         });
       }
     };
@@ -657,8 +653,7 @@ export default {
           title: 'Business Impact Addition Failed',
           message: `Failed to add new business impact: ${error.response?.data?.message || error.message}`,
           category: 'risk',
-          priority: 'medium',
-          user_id: 'default_user'
+          priority: 'medium'
         });
       }
     };
@@ -725,8 +720,7 @@ export default {
           title: 'Category Addition Failed',
           message: `Failed to add new category: ${error.response?.data?.message || error.message}`,
           category: 'risk',
-          priority: 'medium',
-          user_id: 'default_user'
+          priority: 'medium'
         });
       }
     };
@@ -841,8 +835,7 @@ export default {
             title: 'Risk Validation Errors',
             message: `Please fix the following validation errors: ${Object.keys(validationErrors).join(', ')}`,
             category: 'risk',
-            priority: 'medium',
-            user_id: 'default_user'
+            priority: 'medium'
           });
           return;
         }
@@ -867,8 +860,7 @@ export default {
           title: 'New Risk Instance Created',
           message: `A new risk instance "${riskData.RiskTitle || 'Untitled Risk'}" has been created in the Risk module.`,
           category: 'risk',
-          priority: 'high',
-          user_id: 'default_user'
+          priority: 'high'
         });
         
         // Reset the form after successful save
@@ -883,8 +875,7 @@ export default {
             title: 'Risk Creation Failed - Server Error',
             message: `Server validation error: ${error.response.data.detail}`,
             category: 'risk',
-            priority: 'high',
-            user_id: 'default_user'
+            priority: 'high'
           });
         } else {
           popupService.error('Failed to save risk: ' + error.message);
@@ -894,8 +885,7 @@ export default {
             title: 'Risk Creation Failed',
             message: `Failed to save risk: ${error.message}`,
             category: 'risk',
-            priority: 'high',
-            user_id: 'default_user'
+            priority: 'high'
           });
         }
       }

@@ -1,5 +1,5 @@
 from django.http import JsonResponse
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
@@ -10,6 +10,7 @@ from django.db import connection
 from ...debug_utils import debug_print
 from datetime import datetime
 import uuid
+from ...throttles import NotificationWriteThrottle
 
 # Simple in-memory storage for notifications (in production, use database)
 notifications_storage = []
@@ -144,6 +145,7 @@ def create_ai_audit_evidence_reminder_notification(audit_id, user_id, framework_
 @require_http_methods(["POST"])
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@throttle_classes([NotificationWriteThrottle])
 def push_notification(request):
     """
     Simple push notification function that can be called from any frontend operation
@@ -162,7 +164,7 @@ def push_notification(request):
         if not auth_user or not hasattr(auth_user, 'UserId'):
             return Response({'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
         user_id = str(auth_user.UserId)
-        
+
         # Create notification object
         notification = {
             'id': str(uuid.uuid4()),

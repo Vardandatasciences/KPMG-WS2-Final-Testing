@@ -593,12 +593,21 @@
 </template>
 
 <script>
-import axios from 'axios';
 import './ScoringDetails.css';
 import '@/assets/css/dropdown.css';
 import '@/assets/css/main.css';
 import { PopupModal } from '@/modules/popup';
 import { API_ENDPOINTS } from '@/config/api';
+import apiService from '@/services/apiService.js';
+
+const axios = {
+  get: (url, config = {}) =>
+    apiService.get(url, config?.params || {}, config).then((data) => ({ data, status: 200 })),
+  put: (url, data = {}, config = {}) =>
+    apiService.put(url, data, config).then((res) => ({ data: res, status: 200 })),
+  post: (url, data = {}, config = {}) =>
+    apiService.post(url, data, config).then((res) => ({ data: res, status: 200 }))
+};
 
 // Add sanitization utilities
 const sanitizeUtils = {
@@ -810,18 +819,8 @@ export default {
     // Add push notification method
     async sendPushNotification(notificationData) {
       try {
-        const response = await fetch(API_ENDPOINTS.PUSH_NOTIFICATION, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(notificationData)
-        });
-        if (response.ok) {
-          console.log('Push notification sent successfully');
-        } else {
-          console.error('Failed to send push notification');
-        }
+        await apiService.post(API_ENDPOINTS.PUSH_NOTIFICATION, notificationData);
+        console.log('Push notification sent successfully');
       } catch (error) {
         console.error('Error sending push notification:', error);
       }
@@ -996,8 +995,7 @@ export default {
           title: 'Risk Instance Validation Failed',
           message: `Validation errors found in risk instance "${this.editedRiskInstance.RiskTitle || 'Untitled Risk'}". Please fix the errors and try again.`,
           category: 'risk',
-          priority: 'medium',
-          user_id: 'default_user'
+          priority: 'medium'
         });
         return;
       }
@@ -1023,8 +1021,7 @@ export default {
           title: 'Risk Mitigation JSON Error',
           message: `Invalid JSON format in risk mitigation for risk "${this.editedRiskInstance.RiskTitle || 'Untitled Risk'}". Please check the format and try again.`,
           category: 'risk',
-          priority: 'medium',
-          user_id: 'default_user'
+          priority: 'medium'
         });
         this.submitting = false;
         return;
@@ -1065,8 +1062,7 @@ export default {
             title: 'Risk Instance Updated Successfully',
             message: `Risk instance "${this.editedRiskInstance.RiskTitle || 'Untitled Risk'}" has been updated successfully in the Risk module.`,
             category: 'risk',
-            priority: 'high',
-            user_id: 'default_user'
+            priority: 'high'
           });
         })
         .catch(error => {
@@ -1081,8 +1077,7 @@ export default {
             title: 'Risk Instance Update Failed',
             message: `Failed to update risk instance "${this.editedRiskInstance.RiskTitle || 'Untitled Risk'}": ${error.response?.data?.message || error.message}`,
             category: 'risk',
-            priority: 'high',
-            user_id: 'default_user'
+            priority: 'high'
           });
         });
     },
@@ -1138,8 +1133,7 @@ export default {
         title: 'Risk Mapping Feature',
         message: `Risk mapping functionality will be implemented for risk "${this.editedRiskInstance.RiskTitle || 'Untitled Risk'}".`,
         category: 'risk',
-        priority: 'low',
-        user_id: 'default_user'
+        priority: 'low'
       });
     },
     fillScoringFromSelectedRisk() {
@@ -1171,8 +1165,7 @@ export default {
             title: 'Risk Scoring Data Filled',
             message: `Risk scoring data has been filled from selected risk for "${this.editedRiskInstance.RiskTitle || 'Untitled Risk'}".`,
             category: 'risk',
-            priority: 'medium',
-            user_id: 'default_user'
+            priority: 'medium'
           });
         } else {
           this.$popup.error('Could not find the selected risk data.');
@@ -1182,8 +1175,7 @@ export default {
             title: 'Risk Data Not Found',
             message: `Could not find the selected risk data for risk "${this.editedRiskInstance.RiskTitle || 'Untitled Risk'}".`,
             category: 'risk',
-            priority: 'medium',
-            user_id: 'default_user'
+            priority: 'medium'
           });
         }
       } else {
@@ -1194,8 +1186,7 @@ export default {
           title: 'No Risk Selected',
           message: `Please select a risk first to fill scoring data for "${this.editedRiskInstance.RiskTitle || 'Untitled Risk'}".`,
           category: 'risk',
-          priority: 'low',
-          user_id: 'default_user'
+          priority: 'low'
         });
       }
     },
@@ -1320,8 +1311,7 @@ export default {
           title: 'Business Impact Addition Failed',
           message: `Failed to add new business impact "${this.newBusinessImpact}": ${error.response?.data?.message || error.message}`,
           category: 'risk',
-          priority: 'medium',
-          user_id: 'default_user'
+          priority: 'medium'
         });
       }
     },
@@ -1393,8 +1383,7 @@ export default {
           title: 'Category Addition Failed',
           message: `Failed to add new category "${this.newCategory}": ${error.response?.data?.message || error.message}`,
           category: 'risk',
-          priority: 'medium',
-          user_id: 'default_user'
+          priority: 'medium'
         });
       }
     },

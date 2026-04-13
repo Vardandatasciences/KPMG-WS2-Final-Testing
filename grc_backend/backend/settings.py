@@ -762,6 +762,12 @@ REST_FRAMEWORK = {
         # Rationale: legitimate users rarely create more than a few audits per session;
         # this blocks automated DoS/spam scripts while not impacting real usage.
         'audit_write': '10/minute',
+        # Notification write controls to mitigate alert spam.
+        'notification_write': '30/minute',
+        # Risk workflow write controls to prevent burst submission/assignment abuse.
+        'risk_assignment': '20/minute',
+        'risk_submission': '15/minute',
+        'risk_review': '20/minute',
     },
     # Allow larger request size
     'DEFAULT_PARSER_CLASSES': [

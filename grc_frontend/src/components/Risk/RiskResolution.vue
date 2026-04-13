@@ -203,7 +203,7 @@
               <button 
                 @click="assignRiskWithMitigations" 
                 class="btn btn-submit"
-                :disabled="viewOnlyMitigationModal || mitigationSteps.length === 0 || !mitigationDueDate || !selectedUsers[selectedRisk.RiskInstanceId] || !selectedReviewers[selectedRisk.RiskInstanceId]"
+                :disabled="loading || viewOnlyMitigationModal || mitigationSteps.length === 0 || !mitigationDueDate || !selectedUsers[selectedRisk.RiskInstanceId] || !selectedReviewers[selectedRisk.RiskInstanceId]"
               >
                 <i class="fas fa-user-plus"></i> Assign with Mitigations
               </button>
@@ -216,12 +216,21 @@
 </template>
 
 <script>
-import axios from 'axios';
 import CustomDropdown from '../CustomDropdown.vue';
 import CollapsibleTable from '../CollapsibleTable.vue';
 import { PopupModal } from '@/modules/popup';
 import { API_ENDPOINTS } from '../../config/api.js';
+import apiService from '@/services/apiService.js';
 import riskDataService from '@/services/riskService';
+
+const axios = {
+  get: (url, config = {}) =>
+    apiService.get(url, config?.params || {}, config).then((data) => ({ data, status: 200 })),
+  post: (url, data = {}, config = {}) =>
+    apiService.post(url, data, config).then((res) => ({ data: res, status: 200 })),
+  delete: (url, config = {}) =>
+    apiService.delete(url, config).then((res) => ({ data: res, status: 200 }))
+};
 
 export default {
   name: 'RiskResolution',
@@ -452,18 +461,8 @@ export default {
   methods: {
     async sendPushNotification(notificationData) {
       try {
-        const response = await fetch(API_ENDPOINTS.PUSH_NOTIFICATION, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(notificationData)
-        });
-        if (response.ok) {
-          console.log('Push notification sent successfully');
-        } else {
-          console.error('Failed to send push notification');
-        }
+        await apiService.post(API_ENDPOINTS.PUSH_NOTIFICATION, notificationData);
+        console.log('Push notification sent successfully');
       } catch (error) {
         console.error('Error sending push notification:', error);
       }
@@ -568,13 +567,10 @@ export default {
       this.initializeExpandedSections();
     },
     fetchUsers() {
-      // Get current user ID to exclude from reviewer list
-      const currentUserId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || ''
       // Fetch reviewers filtered by RBAC permissions (ApproveRisk) for risk module
       axios.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
         params: {
-          module: 'risk',
-          current_user_id: currentUserId
+          module: 'risk'
         }
       })
         .then(response => {
@@ -826,6 +822,11 @@ export default {
       const riskId = this.selectedRisk.RiskInstanceId;
       const userId = this.selectedUsers[riskId];
       const reviewerId = this.selectedReviewers[riskId];
+      const dueDateValidationError = this.validateMitigationDueDate(this.mitigationDueDate, this.selectedRisk?.CreatedAt);
+      if (dueDateValidationError) {
+        this.$popup.warning(dueDateValidationError);
+        return;
+      }
       
       // Convert IDs to numbers to ensure proper format
       // Handle null or undefined values
@@ -835,8 +836,7 @@ export default {
           title: 'Risk Assignment Warning',
           message: 'No user selected for risk assignment. Please select a user to assign this risk to.',
           category: 'risk',
-          priority: 'medium',
-          user_id: 'default_user'
+          priority: 'medium'
         });
         this.loading = false;
         return;
@@ -859,8 +859,7 @@ export default {
             title: 'Risk Assignment Validation Error',
             message: 'Please select a valid user to assign this risk to.',
             category: 'risk',
-            priority: 'medium',
-            user_id: 'default_user'
+            priority: 'medium'
           });
           return;
         }
@@ -870,8 +869,7 @@ export default {
             title: 'Risk Assignment Validation Error',
             message: 'Please select a valid reviewer for this risk.',
             category: 'risk',
-            priority: 'medium',
-            user_id: 'default_user'
+            priority: 'medium'
           });
           return;
         }
@@ -881,8 +879,7 @@ export default {
             title: 'Risk Assignment Validation Error',
             message: 'Please add at least one mitigation step for risk assignment.',
             category: 'risk',
-            priority: 'medium',
-            user_id: 'default_user'
+            priority: 'medium'
           });
           return;
         }
@@ -892,8 +889,7 @@ export default {
             title: 'Risk Assignment Validation Error',
             message: 'Please select a due date for mitigation completion.',
             category: 'risk',
-            priority: 'medium',
-            user_id: 'default_user'
+            priority: 'medium'
           });
           return;
         }
@@ -989,8 +985,7 @@ export default {
           title: 'Risk Assignment Successful',
           message: `Risk "${this.selectedRisk.RiskTitle || 'Risk #' + this.selectedRisk.RiskInstanceId}" has been successfully assigned with mitigation steps and reviewer.`,
           category: 'risk',
-          priority: 'high',
-          user_id: 'default_user'
+          priority: 'high'
         });
       })
       .catch(error => {
@@ -1018,8 +1013,7 @@ export default {
           title: 'Risk Assignment Failed',
           message: `Failed to assign risk "${this.selectedRisk.RiskTitle || 'Risk #' + this.selectedRisk.RiskInstanceId}": ${errorMessage}`,
           category: 'risk',
-          priority: 'high',
-          user_id: 'default_user'
+          priority: 'high'
         });
       });
     },
@@ -1062,6 +1056,24 @@ export default {
       const month = String(today.getMonth() + 1).padStart(2, '0');
       const day = String(today.getDate()).padStart(2, '0');
       return `${year}-${month}-${day}`;
+    },
+    validateMitigationDueDate(rawDueDate, createdAtRaw) {
+      if (!rawDueDate) return 'Please select a due date for mitigation completion.';
+      const dueDate = new Date(rawDueDate);
+      if (Number.isNaN(dueDate.getTime())) return 'Due date must be in YYYY-MM-DD format.';
+
+      const createdAt = createdAtRaw ? new Date(createdAtRaw) : new Date();
+      const baseline = Number.isNaN(createdAt.getTime()) ? new Date() : createdAt;
+      baseline.setHours(0, 0, 0, 0);
+      dueDate.setHours(0, 0, 0, 0);
+
+      if (dueDate < baseline) return 'Due date cannot be earlier than risk creation date.';
+
+      const maxAllowed = new Date(baseline);
+      maxAllowed.setFullYear(maxAllowed.getFullYear() + 10);
+      if (dueDate > maxAllowed) return 'Due date cannot be more than 10 years from creation date.';
+
+      return null;
     },
     isRiskRejected(risk) {
       // Helper method to check if a risk is rejected

@@ -26,37 +26,34 @@ export async function checkConsentRequired(actionType) {
     const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
     const userId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id');
 
+    // Backend consent check is AllowAny; cookie-first auth often has no token in storage (purged by apiService).
     if (!token) {
-      // Don't log as error - this is expected when user is logged out
-      // Just return without requiring consent (fail-open behavior)
-      console.warn('⚠️ [Consent] No access token found - skipping consent check');
-      return { required: false, config: null };
+      console.warn('⚠️ [Consent] No access token in storage — calling consent check without Bearer (session/cookies)');
     }
-    
+
     console.log(`🔍 [Consent] Checking consent for action: ${actionType}, framework: ${frameworkId}`);
     console.log(`🔍 [Consent] API URL: ${API_BASE_URL}/api/consent/check/`);
-    
+
     const payload = {
       action_type: actionType,
       framework_id: frameworkId
     };
-    
-    // Include user_id if available to check for active consent
+
     if (userId) {
       payload.user_id = userId;
     }
-    
+
     console.log(`🔍 [Consent] Request payload:`, payload);
+
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
 
     const response = await axios.post(
       `${API_BASE_URL}/api/consent/check/`,
       payload,
-      {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      }
+      { headers, withCredentials: true }
     );
 
     console.log('📡 [Consent] API Response Status:', response.status);

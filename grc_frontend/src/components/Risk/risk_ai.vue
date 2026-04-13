@@ -485,8 +485,13 @@
 </template>
 
 <script>
-import axios from 'axios';
 import { API_ENDPOINTS } from '../../config/api.js';
+import apiService from '@/services/apiService.js';
+
+const axios = {
+  post: (url, data = {}, config = {}) =>
+    apiService.post(url, data, config).then((res) => ({ data: res, status: 200 }))
+};
 
 export default {
   name: 'RiskRegisterAIDocumentUpload',
@@ -659,7 +664,6 @@ export default {
 
       const formData = new FormData();
       formData.append('file', this.selectedFile);
-      formData.append('user_id', localStorage.getItem('user_id') || '1');
 
       try {
         // Update progress for upload start
@@ -677,11 +681,9 @@ export default {
           formData,
           {
             headers: {
-              'Content-Type': 'multipart/form-data',
-              'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+              'Content-Type': 'multipart/form-data'
             },
             timeout: 300000, // 5 minutes
-            withCredentials: false,
             signal: controller.signal,
             onUploadProgress: (progressEvent) => {
               if (progressEvent.total) {
@@ -1021,12 +1023,7 @@ export default {
           API_ENDPOINTS.RISK_AI_SAVE || `${API_ENDPOINTS.RISK_AI_UPLOAD.replace('upload', 'save')}`,
           {
             risks: cleanRisks,
-            user_id: localStorage.getItem('user_id') || '1'
-          },
-          {
-            headers: {
-              'Authorization': `Bearer ${localStorage.getItem('access_token')}`
-            }
+            
           }
         );
 
@@ -1172,7 +1169,6 @@ export default {
           },
           {
             headers: {
-              'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
               'Content-Type': 'application/json'
             }
           }

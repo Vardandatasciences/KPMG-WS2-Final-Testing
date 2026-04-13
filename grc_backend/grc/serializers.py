@@ -554,6 +554,31 @@ class RiskSerializer(AutoDecryptingModelSerializer):
             'RiskLikelihood', 'RiskImpact', 'RiskExposureRating', 'RiskMultiplierX',
             'RiskMultiplierY', 'RiskMitigation', 'CreatedAt', 'FrameworkId', 'data_inventory'
         ]  # Explicitly list fields that exist in the model
+
+    def validate_RiskLikelihood(self, value):
+        if value is None:
+            return value
+        if not (1 <= int(value) <= 10):
+            raise serializers.ValidationError("RiskLikelihood must be between 1 and 10.")
+        return value
+
+    def validate_RiskImpact(self, value):
+        if value is None:
+            return value
+        if not (1 <= int(value) <= 10):
+            raise serializers.ValidationError("RiskImpact must be between 1 and 10.")
+        return value
+
+    def validate_RiskExposureRating(self, value):
+        if value is None:
+            return value
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError):
+            raise serializers.ValidationError("RiskExposureRating must be numeric.")
+        if numeric < 0 or numeric > 100:
+            raise serializers.ValidationError("RiskExposureRating must be between 0 and 100.")
+        return value
    
     def to_internal_value(self, data):
         # Convert the QueryDict or dict to a mutable dict
@@ -679,10 +704,56 @@ class RiskInstanceSerializer(AutoDecryptingModelSerializer):
     )
     # Data inventory field - stores JSON mapping field labels to data types
     data_inventory = serializers.JSONField(required=False, allow_null=True)
+    # Model has null=True but not blank=True; DRF would reject "". Allow empty from scoring/UI.
+    BusinessImpact = serializers.CharField(required=False, allow_blank=True, allow_null=True)
    
     class Meta:
         model = RiskInstance
         fields = '__all__'
+
+    def validate_RiskLikelihood(self, value):
+        if value is None:
+            return value
+        if not (1 <= int(value) <= 10):
+            raise serializers.ValidationError("RiskLikelihood must be between 1 and 10.")
+        return value
+
+    def validate_RiskImpact(self, value):
+        if value is None:
+            return value
+        if not (1 <= int(value) <= 10):
+            raise serializers.ValidationError("RiskImpact must be between 1 and 10.")
+        return value
+
+    def validate_RiskExposureRating(self, value):
+        if value is None:
+            return value
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError):
+            raise serializers.ValidationError("RiskExposureRating must be numeric.")
+        if numeric < 0 or numeric > 100:
+            raise serializers.ValidationError("RiskExposureRating must be between 0 and 100.")
+        return value
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        due_date = attrs.get('MitigationDueDate')
+        created_at = attrs.get('CreatedAt') or getattr(self.instance, 'CreatedAt', None)
+        if due_date:
+            due_date_val = due_date.date() if hasattr(due_date, 'date') else due_date
+            baseline = created_at.date() if hasattr(created_at, 'date') else created_at
+            if baseline and due_date_val < baseline:
+                raise serializers.ValidationError({
+                    'MitigationDueDate': 'Due date cannot be before creation date.'
+                })
+            if baseline:
+                from datetime import timedelta
+                if due_date_val > (baseline + timedelta(days=3650)):
+                    raise serializers.ValidationError({
+                        'MitigationDueDate': 'Due date cannot be more than 10 years from creation date.'
+                    })
+        return attrs
    
     def to_internal_value(self, data):
         # Convert the QueryDict or dict to a mutable dict
@@ -766,6 +837,10 @@ class RiskInstanceSerializer(AutoDecryptingModelSerializer):
         # Handle RiskFormDetails if it's present but empty
         if 'RiskFormDetails' in mutable_data and not mutable_data['RiskFormDetails']:
             mutable_data['RiskFormDetails'] = None
+
+        # BusinessImpact: UI may send ""; store as NULL when empty (model allows null)
+        if 'BusinessImpact' in mutable_data and mutable_data['BusinessImpact'] == '':
+            mutable_data['BusinessImpact'] = None
         
         # Handle data_inventory field - ensure it's a valid JSON object
         if 'data_inventory' in mutable_data:

@@ -23,10 +23,9 @@ from typing import Any, Optional
 
 import requests
 from django.http import JsonResponse, HttpResponse
-from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from rest_framework.decorators import api_view, permission_classes, parser_classes
-from rest_framework.permissions import IsAuthenticated, AllowAny
-from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 
 # RBAC imports
 from ...rbac.decorators import rbac_required
@@ -1158,9 +1157,8 @@ def parse_risks_from_text(text: str, document_hash: str = None) -> list[dict]:
 # DJANGO API ENDPOINTS
 # =========================
 @api_view(['POST'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 @parser_classes([MultiPartParser, FormParser])
-@csrf_exempt
 @rbac_required(required_permission='create_risk')
 @rate_limit_decorator(requests_per_minute=10, requests_per_hour=100)  # Phase 3: Rate limiting
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
@@ -1170,9 +1168,7 @@ def upload_and_process_risk_document(request):
     tenant_id = get_tenant_id_from_request(request)
     
     debug_print(f"📤 Upload request for risk document")
-    debug_print(f"📤 Request data: {request.POST}")
-    debug_print(f"📤 Request files: {request.FILES}")
-    debug_print(f"📤 User ID: {request.POST.get('user_id', 'unknown')}")
+    debug_print("📤 Risk document upload request received")
 
     # CORS preflight is handled by django-cors-headers.
     if request.method == 'OPTIONS':
@@ -1227,7 +1223,9 @@ def upload_and_process_risk_document(request):
         # Upload to S3 for backup and cloud storage
         s3_url = None
         s3_key = None
-        user_id = request.POST.get('user_id', '1')
+        user_id = str(getattr(request.user, "id", ""))
+        if not user_id:
+            return JsonResponse({'status': 'error', 'message': 'Authentication required'}, status=401)
         try:
             debug_print(f"☁️ Uploading file to S3...")
             s3_client = create_direct_mysql_client()
@@ -1314,15 +1312,13 @@ def upload_and_process_risk_document(request):
             raise process_error
 
     except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return JsonResponse({'status': 'error', 'message': f'Error processing document: {str(e)}'}, status=500)
+        debug_print(f"❌ upload_and_process_risk_document failed: {e}")
+        return JsonResponse({'status': 'error', 'message': 'Error processing document'}, status=500)
 
 
 @api_view(['POST'])
-@permission_classes([AllowAny])
-@parser_classes([MultiPartParser, FormParser])
-@csrf_exempt
+@permission_classes([IsAuthenticated])
+@parser_classes([JSONParser, MultiPartParser, FormParser])
 @rbac_required(required_permission='create_risk')
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
@@ -1331,7 +1327,13 @@ def save_extracted_risks(request):
     tenant_id = get_tenant_id_from_request(request)
     
     try:
-        data = json.loads(request.body or "{}")
+        # DRF/RBAC may already consume the request stream; prefer request.data.
+        data = request.data if hasattr(request, "data") else None
+        if not isinstance(data, dict):
+            raw_body = getattr(request, "body", b"") or b"{}"
+            if isinstance(raw_body, bytes):
+                raw_body = raw_body.decode("utf-8", errors="ignore")
+            data = json.loads(raw_body or "{}")
         risks_data = data.get('risks', [])
         if not risks_data:
             return JsonResponse({'status': 'error', 'message': 'No risks provided'}, status=400)
@@ -1341,23 +1343,51 @@ def save_extracted_risks(request):
 
         for idx, r in enumerate(risks_data):
             try:
+                def _as_int(value, default, minimum, maximum):
+                    try:
+                        parsed = int(value)
+                        return max(minimum, min(maximum, parsed))
+                    except (TypeError, ValueError):
+                        return default
+
+                def _as_float(value, default, minimum, maximum):
+                    try:
+                        parsed = float(value)
+                        return max(minimum, min(maximum, parsed))
+                    except (TypeError, ValueError):
+                        return default
+
+                criticality = r.get('Criticality', 'Medium')
+                if criticality not in CRITICALITY_CHOICES:
+                    criticality = 'Medium'
+
+                priority = r.get('RiskPriority', 'Medium')
+                if priority not in PRIORITY_CHOICES:
+                    priority = 'Medium'
+
+                risk_type = r.get('RiskType', 'Current')
+                if risk_type not in RISKTYPE_HINTS:
+                    risk_type = 'Current'
+
                 kwargs = {
                     # not setting: RiskId, ComplianceId, FrameworkId
                     'RiskTitle': r.get('RiskTitle', f'Risk {idx+1}'),
-                    'Criticality': r.get('Criticality', 'Medium'),
+                    'Criticality': criticality,
                     'PossibleDamage': r.get('PossibleDamage', ''),
                     'Category': r.get('Category', ''),
-                    'RiskType': r.get('RiskType', 'Current'),
+                    'RiskType': risk_type,
                     'BusinessImpact': r.get('BusinessImpact', ''),
                     'RiskDescription': r.get('RiskDescription', ''),
-                    'RiskLikelihood': int(r.get('RiskLikelihood') or 5),
-                    'RiskImpact': int(r.get('RiskImpact') or 5),
-                    'RiskExposureRating': float(r.get('RiskExposureRating') or 25.0),
-                    'RiskPriority': r.get('RiskPriority', 'Medium'),
+                    'RiskLikelihood': _as_int(r.get('RiskLikelihood'), 5, 1, 10),
+                    'RiskImpact': _as_int(r.get('RiskImpact'), 5, 1, 10),
+                    'RiskExposureRating': _as_float(r.get('RiskExposureRating'), 25.0, 0.0, 100.0),
+                    'RiskPriority': priority,
                     'RiskMitigation': r.get('RiskMitigation', ''),
-                    'CreatedAt': r.get('CreatedAt', date.today().isoformat()),
-                    'RiskMultiplierX': float(r.get('RiskMultiplierX') or 0.5),
-                    'RiskMultiplierY': float(r.get('RiskMultiplierY') or 0.5),
+                    # Never trust client supplied creation timestamp
+                    'CreatedAt': date.today().isoformat(),
+                    'RiskMultiplierX': _as_float(r.get('RiskMultiplierX'), 0.5, 0.1, 1.0),
+                    'RiskMultiplierY': _as_float(r.get('RiskMultiplierY'), 0.5, 0.1, 1.0),
+                    'tenant_id': tenant_id,
                 }
                 risk = Risk.objects.create(**kwargs)
                 saved.append({'risk_id': getattr(risk, "RiskId", None), 'risk_title': risk.RiskTitle})
@@ -1376,13 +1406,12 @@ def save_extracted_risks(request):
     except json.JSONDecodeError:
         return JsonResponse({'status': 'error', 'message': 'Invalid JSON payload'}, status=400)
     except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return JsonResponse({'status': 'error', 'message': f'Error saving risks: {str(e)}'}, status=500)
+        debug_print(f"❌ save_extracted_risks failed: {e}")
+        return JsonResponse({'status': 'error', 'message': 'Error saving risks'}, status=500)
 
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 @rbac_required(required_permission='view_all_risk')
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
@@ -1407,17 +1436,16 @@ def test_openai_connection(request):
             'api_url': OPENAI_API_URL
         })
     except Exception as e:
+        debug_print(f"❌ test_openai_connection failed: {e}")
         return JsonResponse({
-            'status': 'error', 
-            'message': f'OpenAI error: {e}', 
-            'model': OPENAI_MODEL, 
-            'api_url': OPENAI_API_URL
+            'status': 'error',
+            'message': 'AI provider connection failed',
+            'model': OPENAI_MODEL
         }, status=500)
 
 
 @api_view(['POST'])
-@permission_classes([AllowAny])
-@csrf_exempt
+@permission_classes([IsAuthenticated])
 @rbac_required(required_permission='create_risk')
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
@@ -1472,19 +1500,16 @@ def generate_risk_analysis(request):
             'message': 'Invalid JSON in request body'
         }, status=400)
     except Exception as e:
-        debug_print(f"❌ Error in risk analysis generation: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        debug_print(f"❌ Error in risk analysis generation: {e}")
         return JsonResponse({
-            'status': 'error', 
-            'message': f'Error generating risk analysis: {str(e)}'
+            'status': 'error',
+            'message': 'Error generating risk analysis'
         }, status=500)
 
 
 @api_view(['POST'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 @parser_classes([MultiPartParser, FormParser])
-@csrf_exempt
 @rbac_required(required_permission='create_risk')
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
@@ -1504,4 +1529,5 @@ def test_file_upload(request):
             'content_type': f.content_type
         })
     except Exception as e:
-        return JsonResponse({'status': 'error', 'message': f'Test upload error: {str(e)}'}, status=500)
+        debug_print(f"❌ test_file_upload failed: {e}")
+        return JsonResponse({'status': 'error', 'message': 'Test upload failed'}, status=500)

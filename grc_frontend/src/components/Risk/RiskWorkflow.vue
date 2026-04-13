@@ -1239,16 +1239,25 @@
 </template>
 
 <script>
-import { axiosInstance as axios } from '../../config/api.js';
 import './RiskWorkflow.css'; // Import the CSS file
 import CustomDropdown from '../CustomDropdown.vue';
 import CollapsibleTable from '../CollapsibleTable.vue';
 import PopupModal from '../../modules/popus/PopupModal.vue';
 import { PopupService } from '../../modules/popus/popupService';
 import { API_ENDPOINTS } from '../../config/api.js';
+import apiService from '@/services/apiService.js';
 import EvidenceAttachment from '../EventHandling/EvidenceAttachment.vue';
 import riskDataService from '@/services/riskService';
 import { safeEvidenceUrl } from '@/utils/trustedEvidenceUrl';
+
+const axios = {
+  get: (url, config = {}) =>
+    apiService.get(url, config?.params || {}, config).then((data) => ({ data, status: 200 })),
+  post: (url, data = {}, config = {}) =>
+    apiService.post(url, data, config).then((res) => ({ data: res, status: 200 })),
+  delete: (url, config = {}) =>
+    apiService.delete(url, config).then((res) => ({ data: res, status: 200 }))
+};
 
 export default {
   name: 'UserTasks',
@@ -2098,8 +2107,7 @@ export default {
           title: 'Mitigation Completed',
           message: `Mitigation for risk ${riskId} has been marked as completed successfully.`,
           category: 'risk',
-          priority: 'medium',
-          user_id: this.selectedUserId || 'default_user'
+          priority: 'medium'
         });
         PopupService.success('Mitigation marked as completed!', 'Success');
       })
@@ -2110,8 +2118,7 @@ export default {
           title: 'Mitigation Completion Failed',
           message: `Failed to mark mitigation for risk ${riskId} as completed: ${error.message}`,
           category: 'risk',
-          priority: 'high',
-          user_id: this.selectedUserId || 'default_user'
+          priority: 'high'
         });
         this.error = `Failed to update status: ${error.message}`;
         this.loading = false;
@@ -2273,8 +2280,7 @@ export default {
                             title: 'No Reviewer Assigned',
                             message: `No reviewer has been assigned to risk ${this.selectedRiskId}. Please contact your administrator.`,
                             category: 'risk',
-                            priority: 'high',
-                            user_id: this.selectedUserId || 'default_user'
+                            priority: 'high'
                           });
                           PopupService.warning('No reviewer has been assigned to this risk yet. Please contact your administrator.', 'No Reviewer Assigned');
                           this.selectedReviewer = '';
@@ -2481,8 +2487,7 @@ export default {
           title: 'Incomplete Questionnaire',
           message: `Please complete all questionnaire fields for risk ${this.selectedRiskId} before submitting.`,
           category: 'risk',
-          priority: 'medium',
-          user_id: this.selectedUserId || 'default_user'
+          priority: 'medium'
         });
         PopupService.warning('Please complete all questionnaire fields before submitting', 'Incomplete Form');
         return;
@@ -2513,8 +2518,7 @@ export default {
               title: 'No Reviewer Assigned',
               message: `No reviewer has been assigned to risk ${this.selectedRiskId}. Please contact your administrator.`,
               category: 'risk',
-              priority: 'high',
-              user_id: this.selectedUserId || 'default_user'
+              priority: 'high'
             });
             PopupService.warning('No reviewer has been assigned to this risk yet. Please contact your administrator.', 'No Reviewer Assigned');
             this.reviewerCheckAttempts = 0; // Reset for next attempt
@@ -2542,8 +2546,7 @@ export default {
                   title: 'No Reviewer Assigned',
                   message: `No reviewer has been assigned to risk ${this.selectedRiskId}. Please contact your administrator.`,
                   category: 'risk',
-                  priority: 'high',
-                  user_id: this.selectedUserId || 'default_user'
+                  priority: 'high'
                 });
                 PopupService.warning('No reviewer has been assigned to this risk yet. Please contact your administrator.', 'No Reviewer Assigned');
               }
@@ -2555,8 +2558,7 @@ export default {
                 title: 'No Reviewer Assigned',
                 message: `No reviewer has been assigned to risk ${this.selectedRiskId}. Please contact your administrator.`,
                 category: 'risk',
-                priority: 'high',
-                user_id: this.selectedUserId || 'default_user'
+                priority: 'high'
               });
               PopupService.warning('No reviewer has been assigned to this risk yet. Please contact your administrator.', 'No Reviewer Assigned');
             });
@@ -2621,7 +2623,6 @@ export default {
               axios.post(API_ENDPOINTS.ASSIGN_REVIEWER, {
         risk_id: this.selectedRiskId,
         reviewer_id: this.selectedReviewer,
-        user_id: this.selectedUserId,
         mitigations: mitigationData,
         risk_form_details: formDetailsWithTimestamp,
         create_approval_record: true // Explicitly set to true to create version entry in risk_approval table
@@ -2642,8 +2643,7 @@ export default {
           title: 'Risk Submitted for Review',
           message: `Risk ${this.selectedRiskId} has been submitted for review successfully.`,
           category: 'risk',
-          priority: 'medium',
-          user_id: this.selectedUserId || 'default_user'
+          priority: 'medium'
         });
         // Show success message
         PopupService.success('Risk submitted for review successfully!', 'Success');
@@ -2656,8 +2656,7 @@ export default {
           title: 'Risk Submission Failed',
           message: `Failed to submit risk ${this.selectedRiskId} for review: ${error.message}`,
           category: 'risk',
-          priority: 'high',
-          user_id: this.selectedUserId || 'default_user'
+          priority: 'high'
         });
         PopupService.error('Failed to submit for review. Please try again.', 'Submission Failed');
       });
@@ -2704,9 +2703,7 @@ export default {
         const statusBadge = mitigationElement.querySelector('.mitigation-status-badge');
         if (statusBadge) {
           statusBadge.className = `mitigation-status-badge ${approved ? 'approved' : 'rejected'}`;
-          statusBadge.innerHTML = approved ? 
-            '<i class="fas fa-check-circle"></i> Approved' : 
-            '<i class="fas fa-times-circle"></i> Rejected';
+          statusBadge.textContent = approved ? 'Approved' : 'Rejected';
         }
       }
     },
@@ -2751,8 +2748,7 @@ export default {
             title: `Risk ${approved ? 'Approved' : 'Rejected'}`,
             message: `Risk ${this.currentReviewTask.RiskInstanceId} has been ${approved ? 'approved' : 'rejected'} by reviewer.`,
             category: 'risk',
-            priority: 'high',
-            user_id: this.currentReviewTask.UserId || 'default_user'
+            priority: 'high'
           });
           
           // Show success message
@@ -2787,8 +2783,7 @@ export default {
             title: 'Review Submission Failed',
             message: `Failed to submit review for risk ${this.currentReviewTask.RiskInstanceId}: ${error.message}`,
             category: 'risk',
-            priority: 'high',
-            user_id: this.currentReviewTask.UserId || 'default_user'
+            priority: 'high'
           });
           PopupService.error('Failed to submit review. Please try again.', 'Review Failed');
         });
@@ -2800,8 +2795,7 @@ export default {
           title: 'Missing Remarks',
           message: `Please provide remarks for rejection of mitigation ${id} in risk ${this.currentReviewTask?.RiskInstanceId || this.selectedRiskId}.`,
           category: 'risk',
-          priority: 'medium',
-          user_id: this.selectedUserId || 'default_user'
+          priority: 'medium'
         });
         PopupService.warning('Please provide remarks for rejection', 'Missing Remarks');
         return;
@@ -2842,8 +2836,7 @@ export default {
           title: 'File Size Limit Exceeded',
           message: `File "${file.name}" exceeds the 5MB size limit for risk ${this.selectedRiskId}.`,
           category: 'risk',
-          priority: 'medium',
-          user_id: this.selectedUserId || 'default_user'
+          priority: 'medium'
         });
         PopupService.warning('File size exceeds 5MB limit', 'File Size Limit');
         event.target.value = '';
@@ -2897,8 +2890,7 @@ export default {
               title: 'File Upload Successful',
               message: `File "${file.name}" has been uploaded successfully for risk ${this.selectedRiskId}.`,
               category: 'risk',
-              priority: 'medium',
-              user_id: this.selectedUserId || 'default_user'
+              priority: 'medium'
             });
             
             // Optional: Add alert or notification
@@ -2911,8 +2903,7 @@ export default {
               title: 'File Upload Failed',
               message: `Failed to upload file "${file.name}" for risk ${this.selectedRiskId}: ${errorMessage}`,
               category: 'risk',
-              priority: 'high',
-              user_id: this.selectedUserId || 'default_user'
+              priority: 'high'
             });
             PopupService.error(`Error uploading file: ${errorMessage}`, 'Upload Failed');
           }
@@ -2935,8 +2926,7 @@ export default {
             title: 'File Upload Failed',
             message: `Failed to upload file "${file.name}" for risk ${this.selectedRiskId}: ${errorMessage}`,
             category: 'risk',
-            priority: 'high',
-            user_id: this.selectedUserId || 'default_user'
+            priority: 'high'
           });
           PopupService.error(`Error uploading file: ${errorMessage}`, 'Upload Failed');
         });
@@ -2957,8 +2947,7 @@ export default {
               title: 'File Removed Successfully',
               message: `File has been removed successfully from risk ${this.selectedRiskId}.`,
               category: 'risk',
-              priority: 'low',
-              user_id: this.selectedUserId || 'default_user'
+              priority: 'low'
             });
             
             // Clear file data from the step
@@ -2977,8 +2966,7 @@ export default {
               title: 'File Removal Warning',
               message: `File preview cleared but file may still exist on server for risk ${this.selectedRiskId}.`,
               category: 'risk',
-              priority: 'medium',
-              user_id: this.selectedUserId || 'default_user'
+              priority: 'medium'
             });
             PopupService.warning('Error removing file. The file preview will be cleared, but the file may still exist on the server.', 'File Removal Warning');
             
@@ -3022,8 +3010,7 @@ export default {
           title: 'Evidence Uploaded Successfully',
           message: `${uploadedFiles.length} file(s) uploaded successfully for risk mitigation step ${stepIndex + 1}.`,
           category: 'risk',
-          priority: 'low',
-          user_id: this.selectedUserId || 'default_user'
+          priority: 'low'
         });
         
         PopupService.success(`Successfully uploaded ${uploadedFiles.length} file(s) to step ${stepIndex + 1}`, 'Upload Complete');
@@ -3373,8 +3360,7 @@ export default {
           title: 'Missing Questionnaire Feedback',
           message: `Please provide feedback for the questionnaire in risk ${this.currentReviewTask?.RiskInstanceId || this.selectedRiskId}.`,
           category: 'risk',
-          priority: 'medium',
-          user_id: this.selectedUserId || 'default_user'
+          priority: 'medium'
         });
         PopupService.warning('Please provide feedback for the questionnaire', 'Missing Feedback');
         return;
@@ -3384,8 +3370,7 @@ export default {
         title: 'Questionnaire Feedback Saved',
         message: `Questionnaire feedback has been saved for risk ${this.currentReviewTask?.RiskInstanceId || this.selectedRiskId}.`,
         category: 'risk',
-        priority: 'medium',
-        user_id: this.selectedUserId || 'default_user'
+        priority: 'medium'
       });
       
       // Show confirmation to the user
@@ -3660,7 +3645,6 @@ export default {
         }
         
         // For other types of evidence, use the incident approach
-        const userId = localStorage.getItem('user_id') || '1';
         
         axios.get(API_ENDPOINTS.RISK_INSTANCE(this.selectedRiskId))
           .then(riskInstanceResponse => {
@@ -3668,7 +3652,7 @@ export default {
               const incidentId = riskInstanceResponse.data.IncidentId;
               
               // Create download URL using the incident ID
-              const downloadUrl = `/api/incidents/${incidentId}/linked-evidence/${evidenceId}/documents/${documentIndex}/download/?user_id=${userId}`;
+              const downloadUrl = `/api/incidents/${incidentId}/linked-evidence/${evidenceId}/documents/${documentIndex}/download/`;
               
               // Create a temporary link and click it to trigger download
               const link = document.createElement('a');
@@ -3935,8 +3919,7 @@ export default {
           title: 'Version Data Loading Failed',
           message: `Failed to load version data for risk ${this.currentReviewTask?.RiskInstanceId || this.selectedRiskId}. Please try again.`,
           category: 'risk',
-          priority: 'medium',
-          user_id: this.selectedUserId || 'default_user'
+          priority: 'medium'
         });
         PopupService.error('Failed to load version data. Please try again.', 'Version Loading Failed');
       } finally {

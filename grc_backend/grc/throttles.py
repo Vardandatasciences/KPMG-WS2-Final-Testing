@@ -34,3 +34,25 @@ class AuditWriteThrottle(UserRateThrottle):
             "scope": self.scope,
             "ident": ident,
         }
+
+
+class NotificationWriteThrottle(UserRateThrottle):
+    """
+    Limits notification push requests to reduce alert spam.
+
+    Rate is configured via REST_FRAMEWORK['DEFAULT_THROTTLE_RATES']['notification_write'].
+    """
+
+    scope = "notification_write"
+
+    def get_cache_key(self, request, view):
+        session_user_id = request.session.get("user_id") if hasattr(request, "session") else None
+        if session_user_id:
+            ident = str(session_user_id)
+        else:
+            ident = self.get_ident(request)
+
+        return self.cache_format % {
+            "scope": self.scope,
+            "ident": ident,
+        }

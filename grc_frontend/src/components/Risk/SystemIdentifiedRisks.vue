@@ -468,9 +468,18 @@
 </template>
 
 <script>
-import axios from 'axios';
 import { API_ENDPOINTS } from '../../config/api.js';
+import apiService from '@/services/apiService.js';
 import SystemRiskWorkflowModal from './SystemRiskWorkflowModal.vue';
+
+const axios = {
+  get: (url, config = {}) =>
+    apiService.get(url, config?.params || {}, config).then((data) => ({ data, status: 200 })),
+  post: (url, data = {}, config = {}) =>
+    apiService.post(url, data, config).then((res) => ({ data: res, status: 200 })),
+  put: (url, data = {}, config = {}) =>
+    apiService.put(url, data, config).then((res) => ({ data: res, status: 200 }))
+};
 
 export default {
   name: 'SystemIdentifiedRisks',
@@ -670,11 +679,7 @@ export default {
 
     async loadStats() {
       try {
-        const response = await axios.get(API_ENDPOINTS.SYSTEM_RISKS_STATS, {
-          headers: {
-            'Authorization': `Bearer ${sessionStorage.getItem('access_token') || sessionStorage.getItem('token') || sessionStorage.getItem('session_token') || sessionStorage.getItem('jwt_token') || localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
-          }
-        });
+        const response = await axios.get(API_ENDPOINTS.SYSTEM_RISKS_STATS);
         
         if (response.data.status === 'success') {
           // Backend returns snake_case keys; normalize to the camelCase used in computed props.
@@ -702,7 +707,6 @@ export default {
         
         const response = await axios.get(`${API_ENDPOINTS.SYSTEM_RISKS_LIST}?${params}`, {
           headers: {
-            'Authorization': `Bearer ${sessionStorage.getItem('access_token') || sessionStorage.getItem('token') || sessionStorage.getItem('session_token') || sessionStorage.getItem('jwt_token') || localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
           }
         });
         
@@ -767,7 +771,6 @@ export default {
       try {
         const response = await axios.get(API_ENDPOINTS.SYSTEM_RISKS_DETAIL(risk.id), {
           headers: {
-            'Authorization': `Bearer ${sessionStorage.getItem('access_token') || sessionStorage.getItem('token') || sessionStorage.getItem('session_token') || sessionStorage.getItem('jwt_token') || localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
           }
         });
         if (response?.data?.status === 'success') {
@@ -803,14 +806,11 @@ export default {
       this.loading = true;
       try {
         const tenantId = localStorage.getItem('tenant_id') || sessionStorage.getItem('tenant_id');
-        const userId = localStorage.getItem('user_id') || sessionStorage.getItem('user_id');
         const response = await axios.post(API_ENDPOINTS.SYSTEM_RISKS_RUN_SCAN_INCIDENT, {
           limit: 8,
-          tenant_id: tenantId,
-          user_id: userId
+          tenant_id: tenantId
         }, {
           headers: {
-            'Authorization': `Bearer ${sessionStorage.getItem('access_token') || sessionStorage.getItem('token') || sessionStorage.getItem('session_token') || sessionStorage.getItem('jwt_token') || localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
           }
         });
         
@@ -840,14 +840,11 @@ export default {
     async runRiskTestAnalysis() {
       try {
         const tenantId = localStorage.getItem('tenant_id') || sessionStorage.getItem('tenant_id');
-        const userId = localStorage.getItem('user_id') || sessionStorage.getItem('user_id');
         const response = await axios.post(API_ENDPOINTS.SYSTEM_RISKS_RUN_TEST_ANALYSIS, {
           limit: 100,
-          tenant_id: tenantId,
-          user_id: userId
+          tenant_id: tenantId
         }, {
           headers: {
-            'Authorization': `Bearer ${sessionStorage.getItem('access_token') || sessionStorage.getItem('token') || sessionStorage.getItem('session_token') || sessionStorage.getItem('jwt_token') || localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
           }
         });
 
@@ -878,7 +875,6 @@ export default {
         try {
           const response = await axios.get(API_ENDPOINTS.SYSTEM_RISKS_RUN_TEST_ANALYSIS_STATUS(this.testAnalysis.jobId), {
             headers: {
-              'Authorization': `Bearer ${sessionStorage.getItem('access_token') || sessionStorage.getItem('token') || sessionStorage.getItem('session_token') || sessionStorage.getItem('jwt_token') || localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
             }
           });
           const job = response?.data?.job || {};
@@ -938,7 +934,6 @@ export default {
       try {
         await axios.post(API_ENDPOINTS.SYSTEM_RISKS_RUN_TEST_ANALYSIS_CANCEL(this.testAnalysis.jobId), {}, {
           headers: {
-            'Authorization': `Bearer ${sessionStorage.getItem('access_token') || sessionStorage.getItem('token') || sessionStorage.getItem('session_token') || sessionStorage.getItem('jwt_token') || localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
           }
         });
         this.$notify?.({
@@ -961,7 +956,6 @@ export default {
       try {
         const response = await axios.get(API_ENDPOINTS.SYSTEM_RISKS_DETAIL(risk.id), {
           headers: {
-            'Authorization': `Bearer ${sessionStorage.getItem('access_token') || sessionStorage.getItem('token') || sessionStorage.getItem('session_token') || sessionStorage.getItem('jwt_token') || localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
           }
         });
         
@@ -1038,7 +1032,6 @@ export default {
           multiplier_y: this.reviewForm.multiplierY
         }, {
           headers: {
-            'Authorization': `Bearer ${sessionStorage.getItem('access_token') || sessionStorage.getItem('token') || sessionStorage.getItem('session_token') || sessionStorage.getItem('jwt_token') || localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
           }
         });
         
@@ -1084,7 +1077,6 @@ export default {
           multiplier_y: this.reviewForm.multiplierY
         }, {
           headers: {
-            'Authorization': `Bearer ${sessionStorage.getItem('access_token') || sessionStorage.getItem('token') || sessionStorage.getItem('session_token') || sessionStorage.getItem('jwt_token') || localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
           }
         });
         
@@ -1116,7 +1108,6 @@ export default {
           reason: reason
         }, {
           headers: {
-            'Authorization': `Bearer ${sessionStorage.getItem('access_token') || sessionStorage.getItem('token') || sessionStorage.getItem('session_token') || sessionStorage.getItem('jwt_token') || localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
           }
         });
         
@@ -1150,7 +1141,6 @@ export default {
           reason: reason
         }, {
           headers: {
-            'Authorization': `Bearer ${sessionStorage.getItem('access_token') || sessionStorage.getItem('token') || sessionStorage.getItem('session_token') || sessionStorage.getItem('jwt_token') || localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
           }
         });
         
@@ -1255,7 +1245,6 @@ export default {
           feedback: feedback || ''
         }, {
           headers: {
-            'Authorization': `Bearer ${sessionStorage.getItem('access_token') || sessionStorage.getItem('token') || sessionStorage.getItem('session_token') || sessionStorage.getItem('jwt_token') || localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
           }
         });
 
@@ -1305,7 +1294,6 @@ export default {
           feedback: feedback
         }, {
           headers: {
-            'Authorization': `Bearer ${sessionStorage.getItem('access_token') || sessionStorage.getItem('token') || sessionStorage.getItem('session_token') || sessionStorage.getItem('jwt_token') || localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
           }
         });
 
