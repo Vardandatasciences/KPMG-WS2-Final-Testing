@@ -385,13 +385,6 @@ SESSION_EXPIRE_AT_BROWSER_CLOSE = _env_bool("SESSION_EXPIRE_AT_BROWSER_CLOSE", F
 SESSION_COOKIE_DOMAIN = None  # Use default domain
 SESSION_COOKIE_PATH = '/'  # Session cookie available for entire site
 
-# Django cache (rate limits, login anomaly baselines). Use Redis in production if multiple workers.
-CACHES = {
-    "default": {
-        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
-        "LOCATION": "grc-default-locmem",
-    }
-}
 
 # CSRF cookie: Vue/axios reads csrftoken from document.cookie (see grc_frontend api.js xsrfCookieName).
 # Keep CSRF_COOKIE_HTTPONLY=False unless you serve the token via meta/header/API only.
