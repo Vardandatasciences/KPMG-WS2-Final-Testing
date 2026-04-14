@@ -150,6 +150,7 @@ CORS_ALLOWED_ORIGINS = [
     'https://riskavaire.vardaands.com',
     'https://grc-tprm.vardaands.com',
     'https://test-riskavaire.vardaands.com',
+    'htts://grc-riskavaire.vardaands.com'
 ]
 
 # File upload settings
