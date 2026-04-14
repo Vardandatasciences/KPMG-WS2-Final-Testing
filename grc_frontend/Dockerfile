@@ -95,8 +95,9 @@ RUN npm ci || echo "Parent deps skipped"
 WORKDIR /app/tprm_frontend
 RUN npm ci --legacy-peer-deps || npm ci
 
-# Copy TPRM source code
+# Copy TPRM source code and shared utilities from parent src
 WORKDIR /app
+COPY src/ ./src/
 COPY tprm_frontend/ ./tprm_frontend/
 
 # Build TPRM frontend
