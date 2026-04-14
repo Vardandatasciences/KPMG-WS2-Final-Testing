@@ -90,13 +90,23 @@ class UnifiedJWTAuthentication(BaseAuthentication):
             user_id = payload.get('user_id')
             username = payload.get('username')
             session_token = payload.get('jti')
+            tenant_id = payload.get('tenant_id')
             
-            logger.info(f"[Unified JWT Auth] Token decoded successfully, user_id: {user_id}, username: {username}")
+            logger.info(
+                f"[Unified JWT Auth] Token decoded successfully. User ID: {sanitize_for_log(user_id, 32)}, Tenant ID: {sanitize_for_log(tenant_id, 32)}"
+            )
             
             if not user_id:
                 logger.warning("[Unified JWT Auth] Token does not contain user_id")
                 raise AuthenticationFailed('Token does not contain user_id')
 
+            # MULTI-TENANCY: Propagate tenant context to request
+            if tenant_id:
+                request.tenant_id = tenant_id
+                # Set a minimal tenant object for legacy decorators
+                if not hasattr(request, 'tenant') or request.tenant is None:
+                    request.tenant = type('SimpleTenant', (), {'tenant_id': tenant_id, 'id': tenant_id})()
+            
             # Enforce single active session across devices/browsers.
             if not _is_session_token_valid(user_id, session_token):
                 logger.warning(

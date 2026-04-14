@@ -74,22 +74,32 @@ class JWTAuthentication(BaseAuthentication):
                 logger.warning("[TPRM Auth] No user_id in JWT payload")
                 raise AuthenticationFailed('Invalid token: missing user_id')
             
-            # Get tenant_id from User model and set it on request for multi-tenancy
-            try:
-                from mfa_auth.models import User
-                user_obj = User.objects.get(userid=user_id)
-                tenant_id = user_obj.tenant_id if hasattr(user_obj, 'tenant_id') else None
-                if tenant_id:
-                    request.tenant_id = tenant_id
-                    logger.info(f"[TPRM Auth] Set tenant_id {tenant_id} on request for user {user_id}")
-                else:
-                    logger.warning(f"[TPRM Auth] User {user_id} has no tenant_id")
-            except Exception as e:
-                logger.warning(f"[TPRM Auth] Could not fetch tenant_id for user {user_id}: {e}")
+            # MULTI-TENANCY: Get tenant_id from payload (most reliable) or fallback to User model
+            tenant_id = payload.get('tenant_id')
+            
+            if not tenant_id:
+                try:
+                    from mfa_auth.models import User
+                    user_obj = User.objects.get(userid=user_id)
+                    tenant_id = user_obj.tenant_id if hasattr(user_obj, 'tenant_id') else None
+                except Exception as e:
+                    logger.debug(f"[TPRM Auth] Could not fetch tenant_id from User model for user {user_id}: {e}")
+            
+            if tenant_id:
+                request.tenant_id = tenant_id
+                # Set a minimal tenant object for decorators that expect request.tenant
+                if not hasattr(request, 'tenant') or request.tenant is None:
+                    # Create a simple tenant-like object
+                    request.tenant = type('SimpleTenant', (), {'tenant_id': tenant_id, 'id': tenant_id})()
+                
+                # Security: Sanitize sensitive IDs for logging
+                sanitized_user = str(user_id)[:4] + "****" if user_id else "None"
+                sanitized_tenant = str(tenant_id)[:4] + "****" if tenant_id else "None"
+                logger.info(f"[TPRM Auth] Auth successful. User: {sanitized_user}, Tenant: {sanitized_tenant}")
+            else:
+                logger.warning(f"[TPRM Auth] User {user_id} has no tenant_id")
             
             user = SimpleUser(user_id, username)
-            logger.info(f"[TPRM Auth] Successfully authenticated user: {user}")
-            
             return (user, token)
             
         except jwt.ExpiredSignatureError:

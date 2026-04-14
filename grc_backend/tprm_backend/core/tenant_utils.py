@@ -80,17 +80,19 @@ def require_tenant(view_func):
         if not (has_tenant_obj or has_tenant_id):
             # Get user info for debugging
             user_id = getattr(request.user, 'userid', None) if hasattr(request, 'user') else None
+            user_obj_type = type(request.user).__name__ if hasattr(request, 'user') else "No user"
             auth_header = request.headers.get('Authorization', 'No auth header')
             
-            logger.warning(f"[Tenant Utils] Tenant required but not found for {request.method} {request.path}")
-            logger.warning(f"[Tenant Utils] User ID: {user_id}, Auth header present: {bool(auth_header and auth_header != 'No auth header')}")
-            logger.warning(f"[Tenant Utils] Request has tenant attr: {hasattr(request, 'tenant')}, Tenant value: {getattr(request, 'tenant', 'not set')}")
+            logger.warning(f"[Tenant Utils] 403 Forbidden: Tenant context missing for {request.method} {request.path}")
+            logger.warning(f"[Tenant Utils] Debug: UserID={user_id}, UserType={user_obj_type}, has_tenant={has_tenant_obj}, has_tenant_id={has_tenant_id}")
+            logger.warning(f"[Tenant Utils] Auth header present: {bool(auth_header and auth_header != 'No auth header')}")
             
             return JsonResponse({
                 'error': 'Tenant context not found',
                 'detail': 'This endpoint requires tenant authentication. Please ensure your JWT token includes tenant_id.',
                 'debug_info': {
                     'user_id': user_id,
+                    'user_type': user_obj_type,
                     'has_auth': bool(auth_header and auth_header != 'No auth header'),
                     'path': request.path
                 }
