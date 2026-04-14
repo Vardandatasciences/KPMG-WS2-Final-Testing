@@ -41,6 +41,8 @@ import shutil
 # Set up logger
 logger = logging.getLogger(__name__)
 
+from grc.jwt_auth import UnifiedJWTAuthentication
+
 from .models import (
     RFP, RFPEvaluationCriteria, CustomUser, S3Files, RFPAwardNotification, 
     RFPEvaluationScore, RFPTypeCustomFields, Vendor, VendorCapability, 
@@ -3426,6 +3428,12 @@ class VendorCredentialsView(APIView):
 @rbac_rfp_required('view_rfp')
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
+@csrf_exempt
+@api_view(['GET'])
+@authentication_classes([UnifiedJWTAuthentication])
+@permission_classes([IsAuthenticated])
+@require_tenant
+@tenant_filter
 def get_primary_contacts(request):
     """
     Get primary contacts for selected vendor IDs from vendor_contacts table
@@ -3541,6 +3549,12 @@ def get_primary_contacts(request):
 @rbac_rfp_required('view_rfp')
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
+@csrf_exempt
+@api_view(['GET'])
+@authentication_classes([UnifiedJWTAuthentication])
+@permission_classes([IsAuthenticated])
+@require_tenant
+@tenant_filter
 def get_invitations_by_rfp(request, rfp_id):
     """
     Get all vendor invitations for a specific RFP
@@ -4290,8 +4304,10 @@ def decline_invitation_with_ids(request, rfp_id, invitation_id):
 # VENDOR VIEWS (from views_vendor.py)
 # ============================================================================
 
-@authentication_classes([JWTAuthentication])
-@permission_classes([SimpleAuthenticatedPermission])
+@csrf_exempt
+@api_view(['GET', 'POST'])
+@authentication_classes([UnifiedJWTAuthentication])
+@permission_classes([IsAuthenticated])
 @rbac_rfp_required('view_rfp')
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
@@ -4418,6 +4434,13 @@ def vendor_selection(request, rfp_id):
 @rbac_rfp_required('create_rfp')
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
+@csrf_exempt
+@api_view(['GET', 'POST'])
+@authentication_classes([UnifiedJWTAuthentication])
+@permission_classes([IsAuthenticated])
+@rbac_rfp_required('edit_rfp')
+@require_tenant
+@tenant_filter
 def vendor_manual_entry(request, rfp_id):
     """
     View for manually adding a vendor
@@ -4869,6 +4892,12 @@ def vendor_invitation(request, rfp_id):
 @rbac_rfp_required('view_rfp')
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
+@csrf_exempt
+@api_view(['GET'])
+@authentication_classes([UnifiedJWTAuthentication])
+@permission_classes([IsAuthenticated])
+@require_tenant
+@tenant_filter
 def get_unmatched_vendors(request, rfp_id):
     """
     API endpoint to get unmatched vendors for an RFP
@@ -5826,7 +5855,9 @@ def get_vendor_primary_contact(request, vendor_id):
 
 
 @csrf_exempt
-@require_http_methods(["POST"])
+@api_view(['POST'])
+@authentication_classes([UnifiedJWTAuthentication])
+@permission_classes([IsAuthenticated])
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def calculate_vendor_match_scores(request, rfp_id):

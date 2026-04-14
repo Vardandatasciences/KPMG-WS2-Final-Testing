@@ -195,9 +195,10 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
             )
             return None
         
-        # Skip all TPRM API paths - let DRF authentication handle them.
-        # But first, if a valid HttpOnly cookie token exists and no Authorization header is present,
-        # copy it into the header so SimpleJWT/DRF can authenticate without JS-managed tokens.
+        # For TPRM API paths, we still want to process authentication here so that
+        # plain Django views (not just DRF views) get request.user and request.tenant.
+        # However, we inject the cookie token as an Authorization header if missing
+        # so that this middleware (and DRF downstream) can use it.
         if path.startswith('/api/tprm/') or path.startswith('/api/v1/vendor-'):
             try:
                 if not request.headers.get('Authorization'):
@@ -207,7 +208,8 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
             except Exception:
                 # Never block requests due to header injection failures.
                 pass
-            return None
+            # Removed: return None 
+            # We continue processing so request.user is populated.
         
         # Special handling for OAuth callback - exact match
         if path == '/oauth/callback' or path == '/oauth/callback/':
