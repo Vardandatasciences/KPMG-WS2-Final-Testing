@@ -8,9 +8,9 @@ services:
   backend:
     build: .
     image: 480940871468.dkr.ecr.ap-south-1.amazonaws.com/grc_tprm:latest
-    container_name: grc_backend
+    container_name: grc_backend_v2
     ports:
-      - "8000:8000"
+      - "8001:8000"
     volumes:
       - ${MEDIA_ROOT}:/app/MEDIA_ROOT
       - ${TEMP_MEDIA_ROOT}:/app/TEMP_MEDIA_ROOT

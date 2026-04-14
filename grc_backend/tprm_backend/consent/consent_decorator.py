@@ -7,6 +7,7 @@ from functools import wraps
 from rest_framework.response import Response
 from rest_framework import status as http_status
 from django.db import connections
+from django.http import HttpRequest
 import logging
 
 logger = logging.getLogger(__name__)
@@ -30,7 +31,22 @@ def require_consent(action_type):
     """
     def decorator(view_func):
         @wraps(view_func)
-        def wrapped_view(request, *args, **kwargs):
+        def wrapped_view(*args, **kwargs):
+            # Support both function-based and class-based views.
+            request = None
+            if args:
+                if isinstance(args[0], HttpRequest) or hasattr(args[0], "META"):
+                    request = args[0]
+                elif len(args) > 1 and (isinstance(args[1], HttpRequest) or hasattr(args[1], "META")):
+                    request = args[1]
+
+            if request is None:
+                logger.error("[TPRM Consent] Invalid decorator usage: request object not found.")
+                return Response({
+                    'status': 'error',
+                    'message': 'Invalid request context'
+                }, status=http_status.HTTP_400_BAD_REQUEST)
+
             try:
                 # Default framework_id for TPRM
                 framework_id = '1'
@@ -66,7 +82,7 @@ def require_consent(action_type):
                         # If consent is not enabled, allow the request
                         if not is_enabled:
                             logger.debug(f"[TPRM Consent] Consent not enabled for {action_type}. Allowing request.")
-                            return view_func(request, *args, **kwargs)
+                            return view_func(*args, **kwargs)
                         
                         # Consent is enabled - check if user has accepted
                         consent_accepted = request.data.get('consent_accepted', False) if request.method in ['POST', 'PUT'] else False
@@ -97,16 +113,19 @@ def require_consent(action_type):
                         
                         # Consent is properly accepted - allow the request
                         logger.info(f"[TPRM Consent] Consent verified for {action_type}. Proceeding with request.")
-                        return view_func(request, *args, **kwargs)
+                        return view_func(*args, **kwargs)
                     else:
                         # No consent configuration exists - allow the request (backward compatibility)
                         logger.debug(f"[TPRM Consent] No consent configuration found for {action_type}. Allowing request.")
-                        return view_func(request, *args, **kwargs)
+                        return view_func(*args, **kwargs)
             
             except Exception as e:
                 logger.error(f"[TPRM Consent] Error in consent decorator: {str(e)}")
                 # In case of error, allow the request to proceed (fail open for availability)
-                return view_func(request, *args, **kwargs)
+                return Response({
+                    'status': 'error',
+                    'message': 'Unable to validate consent'
+                }, status=http_status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         return wrapped_view
     return decorator

@@ -80,7 +80,7 @@
 </template>
 
 <script>
-import axios from 'axios';
+import apiService from '@/services/apiService.js';
 import { API_ENDPOINTS } from '../../config/api.js';
 
 export default {
@@ -146,26 +146,19 @@ export default {
     async loadUsers() {
       this.loading = true;
       try {
-        const currentUserId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || '';
         const usersEndpoint = API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION
           || API_ENDPOINTS.USERS_FOR_DROPDOWN
           || API_ENDPOINTS.USERS;
 
-        const response = await axios.get(usersEndpoint, {
-          params: {
-            module: 'risk',
-            current_user_id: currentUserId
-          },
-          headers: {
-            'Authorization': `Bearer ${sessionStorage.getItem('access_token') || sessionStorage.getItem('token') || sessionStorage.getItem('session_token') || sessionStorage.getItem('jwt_token') || localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
-          }
+        const responseData = await apiService.get(usersEndpoint, {
+          module: 'risk'
         });
 
         // Support multiple API response shapes:
         // 1) { status: 'success', data: [...] }
         // 2) { users: [...] }
         // 3) [ ... ]
-        const payload = response?.data;
+        const payload = responseData;
         const list = Array.isArray(payload)
           ? payload
           : (Array.isArray(payload?.data) ? payload.data : (Array.isArray(payload?.users) ? payload.users : []));
@@ -191,8 +184,7 @@ export default {
 
       this.submitting = true;
       try {
-        const response = await axios.post(API_ENDPOINTS.SYSTEM_RISKS_SEND_FOR_APPROVAL(this.riskData.id), {
-          user_id: this.selectedUser,
+        const responseData = await apiService.post(API_ENDPOINTS.SYSTEM_RISKS_SEND_FOR_APPROVAL(this.riskData.id), {
           reviewer_id: this.selectedReviewer,
           risk_data: {
             risk_title: this.riskData.title,
@@ -211,13 +203,9 @@ export default {
             multiplier_x: this.riskData.multiplierX,
             multiplier_y: this.riskData.multiplierY
           }
-        }, {
-          headers: {
-            'Authorization': `Bearer ${sessionStorage.getItem('access_token') || sessionStorage.getItem('token') || sessionStorage.getItem('session_token') || sessionStorage.getItem('jwt_token') || localStorage.getItem('access_token') || localStorage.getItem('token') || localStorage.getItem('session_token') || localStorage.getItem('jwt_token')}`
-          }
         });
 
-        if (response.data.status === 'success') {
+        if (responseData.status === 'success') {
           this.$notify?.({
             type: 'success',
             title: 'Success',

@@ -17,9 +17,8 @@ from typing import Any, Optional
 
 import requests
 from django.http import JsonResponse, HttpResponse
-from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from rest_framework.decorators import api_view, permission_classes, parser_classes
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser
 
 # RBAC imports
@@ -812,9 +811,8 @@ def parse_risks_from_text(text: str) -> list[dict]:
 # DJANGO API ENDPOINTS (Same interface as original)
 # =========================
 @api_view(['POST'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 @parser_classes([MultiPartParser, FormParser])
-@csrf_exempt
 @rbac_required(required_permission='create_risk')
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
@@ -886,9 +884,8 @@ debug_print(f"📤 Upload request for risk document (OPTIMIZED VERSION)")
             raise process_error
 
     except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return JsonResponse({'status': 'error', 'message': f'Error processing document: {str(e)}'}, status=500)
+        debug_print(f"❌ optimized upload_and_process_risk_document failed: {e}")
+        return JsonResponse({'status': 'error', 'message': 'Error processing document'}, status=500)
 
 
 

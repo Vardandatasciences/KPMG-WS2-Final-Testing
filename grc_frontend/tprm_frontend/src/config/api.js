@@ -9,9 +9,9 @@ const ENVIRONMENT = 'development';
 // API Base URLs for different environments
 const API_URLS = {
   // AWS: Use domain without port - nginx proxies /api/ to localhost:8000/api/
-  aws: 'https://riskavaire.vardaands.com/api/tprm',
-  local: 'http://127.0.0.1:8000/api/tprm',
-  development: 'http://localhost:8000/api/tprm'
+  aws: 'https://grc-riskavaire.vardaands.com/api/tprm',
+  local: 'http://127.0.0.1:8001/api/tprm',
+  development: 'http://localhost:8001/api/tprm'
 };
 
 // CRITICAL: Prevent webpack constant folding by using runtime evaluation

@@ -1267,6 +1267,8 @@ def jwt_login(request):
             'status': 'success',
             'message': 'Login successful',
             'license_verified': True,
+            'access_token': tokens['access'],
+            'refresh_token': tokens['refresh'],
             'access_token_expires': tokens['access_token_expires'].isoformat(),
             'refresh_token_expires': tokens['refresh_token_expires'].isoformat(),
              'consent_required': consent_required,
@@ -1397,6 +1399,8 @@ def jwt_refresh(request):
             response = Response({
                 'status': 'success',
                 'message': 'Token refreshed successfully',
+                'access_token': tokens['access'],
+                'refresh_token': tokens['refresh'],
                 'access_token_expires': tokens['access_token_expires'].isoformat(),
                 'refresh_token_expires': tokens['refresh_token_expires'].isoformat(),
                 'product_version': {

@@ -169,9 +169,17 @@ import './RiskRegisterList.css'
 import DynamicTable from '../DynamicTable.vue'
 // import Dynamicalsearch from '../Dynamicalsearch.vue'
 import { PopupModal } from '@/modules/popup'
-import { API_ENDPOINTS, axiosInstance } from '../../config/api.js'
+import { API_ENDPOINTS } from '../../config/api.js'
+import apiService from '@/services/apiService.js'
 import riskDataService from '@/services/riskService' // NEW: Use cached risk data
 import { getFrameworkIdForClient } from '@/utils/frameworkContextStorage.js'
+
+const axiosInstance = {
+  get: (url, config = {}) =>
+    apiService.get(url, config?.params || {}, config).then((data) => ({ data, status: 200 })),
+  post: (url, data = {}, config = {}) =>
+    apiService.post(url, data, config).then((res) => ({ data: res, status: 200 }))
+}
 
 export default {
   name: 'RiskRegisterList',
@@ -471,8 +479,7 @@ export default {
           title: 'Risk Register Updated',
           message: `Successfully loaded ${this.risks.length} risks from the Risk Register.`,
           category: 'risk',
-          priority: 'medium',
-          user_id: 'default_user'
+          priority: 'medium'
         })
       } catch (error) {
         console.error('Error fetching risks:', error)
@@ -484,8 +491,7 @@ export default {
           title: 'Risk Register Load Failed',
           message: `Failed to load risks from the Risk Register: ${error.response?.data?.error || error.message}`,
           category: 'risk',
-          priority: 'high',
-          user_id: 'default_user'
+          priority: 'high'
         })
       }
     },
@@ -542,7 +548,6 @@ export default {
         const payload = {
           export_format: this.selectedExportFormat,
           risk_data: exportData,
-          user_id: 'default_user',
           file_name: 'risk_register_export'
         };
         
@@ -563,9 +568,23 @@ export default {
         console.log(`📊 [FRONTEND] Response data:`, response.data);
         const result = response.data;
         if (result.success && result.file_url && result.file_name) {
+          let safeFileUrl = null;
+          try {
+            const parsedUrl = new URL(result.file_url, window.location.origin);
+            if (parsedUrl.protocol === 'https:' || parsedUrl.protocol === 'http:') {
+              safeFileUrl = parsedUrl.toString();
+            }
+          } catch (e) {
+            safeFileUrl = null;
+          }
+
+          if (!safeFileUrl) {
+            throw new Error('Unsafe export URL received from server');
+          }
+
           // Try to open the file URL in a new tab, fallback to download if it fails
           try {
-            const newWindow = window.open(result.file_url, '_blank', 'noopener,noreferrer');
+            const newWindow = window.open(safeFileUrl, '_blank', 'noopener,noreferrer');
             if (newWindow) {
               if (this.$popup) {
                 this.$popup.success('Export completed successfully! File opened in new tab.', 'Export Success');
@@ -574,7 +593,7 @@ export default {
               }
             } else {
               // Fallback to download if popup is blocked
-              const fileRes = await fetch(result.file_url);
+              const fileRes = await fetch(safeFileUrl);
               const blob = await fileRes.blob();
               const url = window.URL.createObjectURL(blob);
               const link = document.createElement('a');
@@ -632,28 +651,19 @@ export default {
           console.error(`❌ [FRONTEND] Request timeout - took longer than 180 seconds`);
         }
         
+        const safeExportError = 'Export failed. Please try again or contact support if the issue persists.';
         if (this.$popup) {
-          this.$popup.error('Export error: ' + error.message, 'Export Error');
+          this.$popup.error(safeExportError, 'Export Error');
         } else if (window.PopupService) {
-          window.PopupService.error('Export error: ' + error.message, 'Export Error');
+          window.PopupService.error(safeExportError, 'Export Error');
         }
       }
     },
     
     async sendPushNotification(notificationData) {
       try {
-        const response = await fetch(API_ENDPOINTS.PUSH_NOTIFICATION, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(notificationData)
-        });
-        if (response.ok) {
-          console.log('Push notification sent successfully');
-        } else {
-          console.error('Failed to send push notification');
-        }
+        await apiService.post(API_ENDPOINTS.PUSH_NOTIFICATION, notificationData);
+        console.log('Push notification sent successfully');
       } catch (error) {
         console.error('Error sending push notification:', error);
       }
@@ -694,8 +704,7 @@ export default {
         title: 'Risk Details Viewed',
         message: `Risk "${risk?.RiskTitle || 'Untitled Risk'}" (ID: ${riskId}) details have been viewed.`,
         category: 'risk',
-        priority: 'low',
-        user_id: 'default_user'
+        priority: 'low'
       })
       
       this.$router.push(`/view-risk/${riskId}`)
@@ -752,8 +761,7 @@ export default {
         title: 'Risk Register Refreshed',
         message: 'Risk Register data has been refreshed.',
         category: 'risk',
-        priority: 'medium',
-        user_id: 'default_user'
+        priority: 'medium'
       });
     },
   }

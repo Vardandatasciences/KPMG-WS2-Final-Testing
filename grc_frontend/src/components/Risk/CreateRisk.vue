@@ -1087,7 +1087,8 @@ import { useRouter, useRoute } from 'vue-router'
 import { SelectInput, NumberInput, TextInput, TextareaInput } from '@/components/inputs'
 import { PopupModal } from '@/modules/popup'
 import TailoringRisk from '@/components/Risk/TailoringRisk.vue'
-import { API_ENDPOINTS, axiosInstance } from '../../config/api.js'
+import { API_ENDPOINTS } from '../../config/api.js'
+import apiService from '@/services/apiService.js'
 import consentService from '@/services/consentService.js'
 import { CONSENT_ACTIONS } from '@/utils/consentManager.js'
 import riskDataService from '@/services/riskService'
@@ -1292,18 +1293,8 @@ export default {
     // Add sendPushNotification method
     async sendPushNotification(notificationData) {
       try {
-        const response = await fetch(API_ENDPOINTS.PUSH_NOTIFICATION, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(notificationData)
-        });
-        if (response.ok) {
-          console.log('Push notification sent successfully');
-        } else {
-          console.error('Failed to send push notification');
-        }
+        await apiService.post(API_ENDPOINTS.PUSH_NOTIFICATION, notificationData);
+        console.log('Push notification sent successfully');
       } catch (error) {
         console.error('Error sending push notification:', error);
       }
@@ -1336,14 +1327,10 @@ export default {
       try {
         const API_ENDPOINT = API_ENDPOINTS.COMPLIANCES_FOR_DROPDOWN(this.encodeQueryParam(this.complianceSearchQuery));
         
-        const response = await axiosInstance.get(API_ENDPOINT, {
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        });
+        const response = await apiService.get(API_ENDPOINT);
         
         // Sanitize the received data
-        this.compliances = response.data.map(compliance => ({
+        this.compliances = response.map(compliance => ({
           ...compliance,
           ComplianceItemDescription: this.sanitizeHTML(compliance.ComplianceItemDescription),
           PossibleDamage: this.sanitizeHTML(compliance.PossibleDamage)
@@ -1367,8 +1354,7 @@ export default {
           title: 'Compliance Data Fetch Failed',
           message: 'Failed to fetch compliance data for risk creation. Please try again.',
           category: 'risk',
-          priority: 'medium',
-          user_id: 'default_user'
+          priority: 'medium'
         });
       }
     },
@@ -1451,11 +1437,11 @@ export default {
       this.isLoadingSourceRisk = true
       
       // Fetch the source risk instance data
-              axiosInstance.get(API_ENDPOINTS.RISK_INSTANCE(this.sourceRiskId))
+              apiService.get(API_ENDPOINTS.RISK_INSTANCE(this.sourceRiskId))
         .then(response => {
-          console.log('Source risk data loaded:', response.data)
+          console.log('Source risk data loaded:', response)
           // Pre-fill form with relevant data from the source risk
-          const sourceRisk = response.data
+          const sourceRisk = response
           
           // Store the incident ID for later use
           this.incidentId = sourceRisk.IncidentId
@@ -1517,11 +1503,11 @@ export default {
       console.log(`Fetching incident data for ID: ${this.incidentId}`)
       
       // Fetch the incident data
-              axiosInstance.get(API_ENDPOINTS.INCIDENT(this.incidentId), {
+              apiService.get(API_ENDPOINTS.INCIDENT(this.incidentId), {}, {
         timeout: 80000 // Increased timeout to 80000ms to prevent timeout errors
       })
         .then(response => {
-          const incident = response.data
+          const incident = response
           console.log('Incident data loaded:', incident)
           
           // Set the AI input fields with incident data
@@ -1589,8 +1575,7 @@ export default {
           title: 'AI Analysis Warning',
           message: 'Please provide either a title or description for AI analysis.',
           category: 'risk',
-          priority: 'medium',
-          user_id: 'default_user'
+          priority: 'medium'
         });
         return;
       }
@@ -1606,28 +1591,28 @@ export default {
       console.log('Sending to AI analysis:', analysisData)
       
       // Call the backend API to analyze the incident
-              axiosInstance.post(API_ENDPOINTS.ANALYZE_INCIDENT, analysisData, {
+              apiService.post(API_ENDPOINTS.ANALYZE_INCIDENT, analysisData, {
         timeout: 80000 // Increased timeout to 80000ms to prevent timeout errors
       })
         .then(response => {
-          console.log('AI Analysis Response:', response.data)
-          console.log('AI Response Keys:', Object.keys(response.data))
+          console.log('AI Analysis Response:', response)
+          console.log('AI Response Keys:', Object.keys(response))
           console.log('Expected keys: criticality, possibleDamage, riskLikelihood, etc.')
 
           // Check if the response contains an error
-          if (response.data.error) {
-            throw new Error(response.data.error)
+          if (response.error) {
+            throw new Error(response.error)
           }
           
           // Validate that we received AI-generated content
-          if (response.data.riskLikelihoodJustification || response.data.riskImpactJustification) {
+          if (response.riskLikelihoodJustification || response.riskImpactJustification) {
             console.log('✅ Using AI-generated justifications')
           } else {
             console.log('⚠️ No AI justifications found, might be using fallback')
           }
           
           // Map the AI response to the risk form fields
-          this.mapAnalysisToForm(response.data)
+          this.mapAnalysisToForm(response)
           
           // Mark as generated so we show the form
           this.aiSuggestionGenerated = true
@@ -1658,8 +1643,7 @@ export default {
             title: 'AI Analysis Failed',
             message: `Failed to generate AI suggestion: ${errorMessage}`,
             category: 'risk',
-            priority: 'high',
-            user_id: 'default_user'
+            priority: 'high'
           });
           
           // Show error message with options
@@ -1983,9 +1967,9 @@ export default {
     // Business Impact Methods
     async fetchBusinessImpacts() {
       try {
-        const response = await axiosInstance.get(API_ENDPOINTS.BUSINESS_IMPACTS);
-        if (response.data.status === 'success') {
-          this.businessImpacts = response.data.data;
+        const response = await apiService.get(API_ENDPOINTS.BUSINESS_IMPACTS);
+        if (response.status === 'success') {
+          this.businessImpacts = response.data;
         }
       } catch (error) {
         console.error('Error fetching business impacts:', error);
@@ -2034,18 +2018,18 @@ export default {
       try {
         console.log('Adding new business impact:', this.newBusinessImpact);
         
-        const response = await axiosInstance.post(API_ENDPOINTS.ADD_BUSINESS_IMPACT, {
+        const response = await apiService.post(API_ENDPOINTS.ADD_BUSINESS_IMPACT, {
           value: this.newBusinessImpact.trim()
         });
         
-        if (response.data.status === 'success') {
-          console.log('Successfully added business impact:', response.data.data);
-          this.businessImpacts.push(response.data.data);
-          this.toggleBusinessImpact(response.data.data);
+        if (response.status === 'success') {
+          console.log('Successfully added business impact:', response.data);
+          this.businessImpacts.push(response.data);
+          this.toggleBusinessImpact(response.data);
           this.showAddImpactModal = false;
           this.newBusinessImpact = '';
         } else {
-          throw new Error('Failed to add business impact: ' + (response.data.message || 'Unknown error'));
+          throw new Error('Failed to add business impact: ' + (response.message || 'Unknown error'));
         }
       } catch (error) {
         console.error('Error adding new business impact:', error);
@@ -2056,8 +2040,7 @@ export default {
           title: 'Business Impact Addition Failed',
           message: `Failed to add new business impact: ${error.response?.data?.message || error.message}`,
           category: 'risk',
-          priority: 'medium',
-          user_id: 'default_user'
+          priority: 'medium'
         });
       }
     },
@@ -2065,9 +2048,9 @@ export default {
     // Category Methods
     async fetchCategories() {
       try {
-        const response = await axiosInstance.get(API_ENDPOINTS.RISK_CATEGORIES);
-        if (response.data.status === 'success') {
-          this.categories = response.data.data;
+        const response = await apiService.get(API_ENDPOINTS.RISK_CATEGORIES);
+        if (response.status === 'success') {
+          this.categories = response.data;
         }
       } catch (error) {
         console.error('Error fetching categories:', error);
@@ -2108,18 +2091,18 @@ export default {
       try {
         console.log('Adding new category:', this.newCategory);
         
-        const response = await axiosInstance.post(API_ENDPOINTS.ADD_RISK_CATEGORY, {
+        const response = await apiService.post(API_ENDPOINTS.ADD_RISK_CATEGORY, {
           value: this.newCategory.trim()
         });
         
-        if (response.data.status === 'success') {
-          console.log('Successfully added category:', response.data.data);
-          this.categories.push(response.data.data);
-          this.selectCategory(response.data.data);
+        if (response.status === 'success') {
+          console.log('Successfully added category:', response.data);
+          this.categories.push(response.data);
+          this.selectCategory(response.data);
           this.showAddCategoryModal = false;
           this.newCategory = '';
         } else {
-          throw new Error('Failed to add category: ' + (response.data.message || 'Unknown error'));
+          throw new Error('Failed to add category: ' + (response.message || 'Unknown error'));
         }
       } catch (error) {
         console.error('Error adding new category:', error);
@@ -2130,8 +2113,7 @@ export default {
           title: 'Category Addition Failed',
           message: `Failed to add new category: ${error.response?.data?.message || error.message}`,
           category: 'risk',
-          priority: 'medium',
-          user_id: 'default_user'
+          priority: 'medium'
         });
       }
     },
@@ -2289,19 +2271,15 @@ export default {
       try {
         console.log('Submitting risk data:', sanitizedRiskData);
         
-        const response = await axiosInstance.post(API_ENDPOINTS.RISKS, sanitizedRiskData, {
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        });
+        const response = await apiService.post(API_ENDPOINTS.RISKS, sanitizedRiskData);
 
-        console.log('Risk created successfully:', response.data);
+        console.log('Risk created successfully:', response);
 
         // Keep RiskRegisterList cache in sync so new risk appears without page reload.
         const createdRisk =
-          response?.data?.risk ||
-          response?.data?.data ||
-          (response?.data?.RiskId ? response.data : null);
+          response?.risk ||
+          response?.data ||
+          (response?.RiskId ? response : null);
         const cachedRisks = riskDataService.getData('risks');
         if (createdRisk && Array.isArray(cachedRisks)) {
           const exists = cachedRisks.some(r => r?.RiskId === createdRisk?.RiskId);
@@ -2321,8 +2299,7 @@ export default {
           title: 'New Risk Created Successfully',
           message: `A new risk "${sanitizedRiskData.RiskTitle || 'Untitled Risk'}" has been created successfully.`,
           category: 'risk',
-          priority: 'high',
-          user_id: 'default_user'
+          priority: 'high'
         });
       } catch (error) {
         console.error('Error creating risk:', error);
@@ -2341,8 +2318,7 @@ export default {
                 title: 'Risk Creation Error',
                 message: `Error in ${field}: ${error}`,
                 category: 'risk',
-                priority: 'high',
-                user_id: 'default_user'
+                priority: 'high'
               });
             });
           } else {
@@ -2353,8 +2329,7 @@ export default {
               title: 'Risk Creation Failed',
               message: 'Failed to create risk. Please try again.',
               category: 'risk',
-              priority: 'high',
-              user_id: 'default_user'
+              priority: 'high'
             });
           }
         }

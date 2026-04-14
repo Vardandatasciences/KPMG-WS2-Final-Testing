@@ -39,27 +39,46 @@ function buildConsentRequestConfig(extra = {}) {
 export async function checkConsentRequired(actionType) {
   try {
     const frameworkId = getFrameworkId();
+<<<<<<< HEAD
     const userId = sessionStorage.getItem('user_id');
     
+=======
+    const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
+    const userId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id');
+
+    // Backend consent check is AllowAny; cookie-first auth often has no token in storage (purged by apiService).
+    if (!token) {
+      console.warn('⚠️ [Consent] No access token in storage — calling consent check without Bearer (session/cookies)');
+    }
+
+>>>>>>> origin/aws_instance_krushini2
     console.log(`🔍 [Consent] Checking consent for action: ${actionType}, framework: ${frameworkId}`);
     console.log(`🔍 [Consent] API URL: ${API_BASE_URL}/api/consent/check/`);
-    
+
     const payload = {
       action_type: actionType,
       framework_id: frameworkId
     };
-    
-    // Include user_id if available to check for active consent
+
     if (userId) {
       payload.user_id = userId;
     }
-    
+
     console.log(`🔍 [Consent] Request payload:`, payload);
+
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
 
     const response = await axios.post(
       `${API_BASE_URL}/api/consent/check/`,
       payload,
+<<<<<<< HEAD
       buildConsentRequestConfig()
+=======
+      { headers, withCredentials: true }
+>>>>>>> origin/aws_instance_krushini2
     );
 
     console.log('📡 [Consent] API Response Status:', response.status);

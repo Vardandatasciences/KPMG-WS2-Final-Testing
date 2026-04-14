@@ -70,15 +70,22 @@ apiClient.interceptors.request.use((config) => {
   if (!config.background) {
     globalLoading.value = true;
   }
- 
-  // 1. Identity: Inject context (legacy compatibility)
-  // SECURITY: Never inject client user identifiers for compliance APIs.
+  // 1. Identity: Inject context
+  // SECURITY: Never inject client user identifiers for compliance APIs to maintain isolation.
   const requestUrl = String(config.url || '');
   const isComplianceApi = requestUrl.includes('/api/compliance') || requestUrl.includes('api/compliance');
   const userId = getSessionUserId();
- 
- 
- 
+
+  // Multipart uploads: never send default application/json (axios default); DRF rejects with Unsupported media type.
+  if (
+    ['post', 'put', 'patch'].includes(config.method) &&
+    config.data instanceof FormData &&
+    config.headers
+  ) {
+    delete config.headers['Content-Type'];
+    delete config.headers['content-type'];
+  }
+
   if (userId && !isComplianceApi) {
     if (config.method === 'get' && !config.params?.user_id) {
       config.params = { ...config.params, user_id: userId };

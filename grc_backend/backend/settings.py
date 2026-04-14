@@ -81,7 +81,7 @@ _default_secure_cookies = not DEBUG
 ALLOWED_HOSTS = [
     'localhost',
     '127.0.0.1',
-    'riskavaire.vardaands.com',  # Main production domain
+    'grc-riskavaire.vardaands.com',  # Main production domain
     'grc-tprm.vardaands.com',
     'grc-backend.vardaands.com',
     '15.207.108.158',
@@ -104,7 +104,7 @@ def _env_csv(name: str, default: str = "") -> list[str]:
 TRUSTED_EVIDENCE_URL_HOSTS = _env_csv(
     "TRUSTED_EVIDENCE_URL_HOSTS",
     # Default to your own app domains; extend via env for S3/CloudFront/custom storage.
-    "riskavaire.vardaands.com,grc-tprm.vardaands.com,grc-backend.vardaands.com",
+    "grc-riskavaire.vardaands.com,grc-tprm.vardaands.com,grc-backend.vardaands.com",
 )
 
 # Host suffixes allowed for evidence URLs (covers bucket.s3.<region>.amazonaws.com etc).
@@ -620,7 +620,7 @@ CORS_ALLOWED_ORIGINS = [
     "https://grc-backend.vardaands.com",
     "https://13.204.228.21:8000",
     "http://13.204.228.21:8000",
-    "https://riskavaire.vardaands.com",
+    "https://grc-riskavaire.vardaands.com",
 ] + _env_csv("CORS_ALLOWED_ORIGINS_EXTRA")
 
 # Support local dev ports without opening wildcard access.
@@ -637,7 +637,7 @@ CORS_ALLOWED_ORIGIN_REGEXES = [
 
 # CSRF settings
 CSRF_TRUSTED_ORIGINS = [
-    "https://riskavaire.vardaands.com",
+    "https://grc-riskavaire.vardaands.com",
     "https://test-riskavaire.vardaands.com",
     "http://localhost:3000",  # TPRM frontend development server
     "http://localhost:8081",  # Vue.js development server
@@ -772,6 +772,12 @@ REST_FRAMEWORK = {
         # Rationale: legitimate users rarely create more than a few audits per session;
         # this blocks automated DoS/spam scripts while not impacting real usage.
         'audit_write': '10/minute',
+        # Notification write controls to mitigate alert spam.
+        'notification_write': '30/minute',
+        # Risk workflow write controls to prevent burst submission/assignment abuse.
+        'risk_assignment': '20/minute',
+        'risk_submission': '15/minute',
+        'risk_review': '20/minute',
     },
     # Allow larger request size
     'DEFAULT_PARSER_CLASSES': [

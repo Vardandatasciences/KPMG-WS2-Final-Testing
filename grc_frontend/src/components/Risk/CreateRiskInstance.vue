@@ -1403,10 +1403,10 @@
 </template>
 
 <script>
-import axios from 'axios'
 import { PopupModal } from '@/modules/popup'
 import { API_ENDPOINTS, API_BASE_URL } from '../../config/api.js'
 import riskDataService from '@/services/riskService'
+import apiService from '@/services/apiService.js'
 import '@/assets/css/form.css'
 // Note: JWT authentication is handled automatically by axios interceptors in authService.js
 
@@ -1594,19 +1594,14 @@ export default {
       this.newInstance.IncidentId = this.$route.query.incidentId;
     }
 
-    // Check authentication status first
-    if (this.checkAuthenticationStatus()) {
-      console.log('🔐 Authentication verified, fetching data...');
-      // Fetch data from API
-      this.fetchRisks();
-      this.fetchUsers();
-      this.fetchCompliances();
-      this.fetchBusinessImpacts();
-      this.fetchCategories();
-    } else {
-      console.error('❌ Authentication failed, cannot fetch data');
-      this.$popup.error('Please log in to access this feature.');
-    }
+    // Do not hard-block page load based on local token storage.
+    // This app supports cookie-first auth where tokens may not exist in local/session storage.
+    console.log('🔐 Loading Create Risk Instance data...');
+    this.fetchRisks();
+    this.fetchUsers();
+    this.fetchCompliances();
+    this.fetchBusinessImpacts();
+    this.fetchCategories();
 
     // Add click event listener to close dropdowns when clicking outside
     document.addEventListener('click', this.closeRiskDropdown);
@@ -1641,16 +1636,29 @@ export default {
       const API_ENDPOINT = API_ENDPOINTS.RISKS_FOR_DROPDOWN;
       
       // Use axios with JWT authentication - the interceptor will automatically add the token
-      axios.get(API_ENDPOINT, {
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      })
+      apiService.get(API_ENDPOINT)
         .then(response => {
-          console.log('✅ Risks fetched successfully:', response.data);
-          // The risks-for-dropdown endpoint returns {success: true, risks: [...], filter_info: {...}}
-          const risksData = response.data?.risks || [];
-          this.risks = risksData.filter(risk => risk && risk.RiskId);
+          console.log('✅ Risks fetched successfully:', response);
+          // Accept both response formats:
+          // 1) { success: true, risks: [...] }
+          // 2) [...] (legacy/plain array)
+          const rawRisks = Array.isArray(response)
+            ? response
+            : (response?.risks || (Array.isArray(response?.data) ? response.data : response?.data?.risks) || []);
+
+          // Normalize RiskId key variants to avoid empty dropdown due to payload shape differences.
+          const normalizedRisks = rawRisks
+            .filter(risk => risk && typeof risk === 'object')
+            .map(risk => {
+              const normalizedRiskId = risk.RiskId ?? risk.risk_id ?? risk.riskId ?? risk.RiskID ?? null;
+              return {
+                ...risk,
+                RiskId: normalizedRiskId
+              };
+            })
+            .filter(risk => risk.RiskId !== null && risk.RiskId !== undefined && `${risk.RiskId}`.trim() !== '');
+
+          this.risks = normalizedRisks;
           this.filteredRisks = [...this.risks];
           this.loadingRisks = false;
           
@@ -1781,12 +1789,7 @@ export default {
       }
       
       const endpoints = [
-        API_ENDPOINTS.RISK_INSTANCES, // Use centralized endpoint
-        'http://127.0.0.1:8000/api/risk-instances/', // Fallback endpoint
-        'http://localhost:8080/api/risk-instances/',
-        'http://localhost:8080/risk-instances/',
-        'http://127.0.0.1:8000/risk-instances/',
-        'http://15.207.108.158:8000/risk-instances/'
+        API_ENDPOINTS.RISK_INSTANCES
       ];
       
       this.testResults.push('Testing API endpoints in order of priority...');
@@ -1802,20 +1805,15 @@ export default {
         const endpoint = endpoints[index];
         this.testResults.push(`Testing: ${endpoint}`);
         
-        // Get JWT token for authentication
-        const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
         const headers = {
           'Content-Type': 'application/json',
         };
         
-        if (token) {
-          headers['Authorization'] = `Bearer ${token}`;
-        }
-        
-        axios.get(endpoint, { headers })
+        apiService.get(endpoint, {}, { headers })
         .then(response => {
           this.testResults.push(`✅ ${endpoint} - Connected successfully`);
-          this.testResults.push(`Found ${response.data.length || 0} risk instances in the database`);
+          const resultData = Array.isArray(response) ? response : (response?.data || []);
+          this.testResults.push(`Found ${resultData.length || 0} risk instances in the database`);
           testEndpoint(index + 1);
         })
         .catch(error => {
@@ -2034,9 +2032,9 @@ export default {
         headers['X-CSRF-TOKEN'] = csrfToken;
       }
 
-      // Set default user ID if not already set
+      // Do not force a client-side default user id. Backend derives actor identity.
       if (!submissionData.UserId) {
-        submissionData.UserId = 1; // Default user ID
+        delete submissionData.UserId;
       }
 
       // Create data inventory JSON mapping field labels to data types
@@ -2075,17 +2073,35 @@ export default {
       // Add data_inventory to submission data
       submissionData.data_inventory = dataInventory;
 
-      axios.post(API_ENDPOINTS.CREATE_RISK_INSTANCE, submissionData, { 
+      // Align with backend @require_consent('create_risk'): include proof when consent is enabled
+      let consentConfig = null;
+      try {
+        const { checkConsentRequired, CONSENT_ACTIONS } = await import('@/utils/consentManager.js');
+        const consentCheck = await checkConsentRequired(CONSENT_ACTIONS.CREATE_RISK);
+        if (consentCheck.required && consentCheck.config) {
+          consentConfig = consentCheck.config;
+        }
+      } catch (error) {
+        console.error('Error getting consent config for risk instance:', error);
+      }
+      if (consentConfig) {
+        const { getFrameworkIdForClient } = await import('@/utils/frameworkContextStorage.js');
+        submissionData.consent_accepted = true;
+        submissionData.consent_config_id = consentConfig.config_id;
+        submissionData.framework_id = consentConfig.framework_id || getFrameworkIdForClient();
+      }
+
+      apiService.post(API_ENDPOINTS.CREATE_RISK_INSTANCE, submissionData, { 
         headers
       })
         .then(response => {
-          console.log('Risk instance created successfully:', response.data);
+          console.log('Risk instance created successfully:', response);
 
           // Keep RiskInstances cache in sync so the new item is visible without manual reload.
           const createdInstance =
-            response?.data?.risk_instance ||
-            response?.data?.data ||
-            (response?.data?.RiskInstanceId ? response.data : null);
+            response?.risk_instance ||
+            response?.data ||
+            (response?.RiskInstanceId ? response : null);
           const cachedInstances = riskDataService.getData('riskInstances');
           if (createdInstance && Array.isArray(cachedInstances)) {
             const exists = cachedInstances.some(i => i?.RiskInstanceId === createdInstance?.RiskInstanceId);
@@ -2188,15 +2204,11 @@ export default {
       const API_ENDPOINT = API_ENDPOINTS.USERS_FOR_DROPDOWN;
       
       // Use axios with JWT authentication - the interceptor will automatically add the token
-      axios.get(API_ENDPOINT, {
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      })
+      apiService.get(API_ENDPOINT)
         .then(response => {
-          console.log('✅ Users fetched successfully:', response.data);
-          this.users = response.data;
-          this.filteredUsers = [...response.data];
+          console.log('✅ Users fetched successfully:', response);
+          this.users = Array.isArray(response) ? response : (response?.data || []);
+          this.filteredUsers = [...this.users];
           this.loadingUsers = false;
         })
         .catch(error => {
@@ -2252,15 +2264,11 @@ export default {
       const API_ENDPOINT = API_ENDPOINTS.ALL_COMPLIANCES_FOR_DROPDOWN;
       
       // Use axios with JWT authentication - the interceptor will automatically add the token
-      axios.get(API_ENDPOINT, {
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      })
+      apiService.get(API_ENDPOINT)
         .then(response => {
-          console.log('✅ Compliances fetched successfully:', response.data);
-          this.compliances = response.data;
-          this.filteredCompliances = [...response.data];
+          console.log('✅ Compliances fetched successfully:', response);
+          this.compliances = Array.isArray(response) ? response : (response?.data || []);
+          this.filteredCompliances = [...this.compliances];
           this.loadingCompliances = false;
         })
         .catch(error => {
@@ -2316,15 +2324,11 @@ export default {
       try {
         console.log('🔍 Fetching business impacts...');
         // Use axios with JWT authentication - the interceptor will automatically add the token
-        const response = await axios.get(API_ENDPOINTS.BUSINESS_IMPACTS, {
-          headers: {
-            'Content-Type': 'application/json',
-          }
-        });
+        const response = await apiService.get(API_ENDPOINTS.BUSINESS_IMPACTS);
         
-        console.log('✅ Business impacts fetched successfully:', response.data);
-        if (response.data.status === 'success') {
-          this.businessImpacts = response.data.data;
+        console.log('✅ Business impacts fetched successfully:', response);
+        if (response.status === 'success') {
+          this.businessImpacts = response.data;
         }
       } catch (error) {
         console.error('❌ Error fetching business impacts:', error);
@@ -2385,22 +2389,18 @@ export default {
       try {
         console.log('Adding new business impact:', this.newBusinessImpact);
         
-        const response = await axios.post(API_ENDPOINTS.ADD_BUSINESS_IMPACT, {
+        const response = await apiService.post(API_ENDPOINTS.ADD_BUSINESS_IMPACT, {
           value: this.newBusinessImpact.trim()
-        }, {
-          headers: {
-            'Content-Type': 'application/json',
-          }
         });
         
-        if (response.data.status === 'success') {
-          console.log('Successfully added business impact:', response.data.data);
-          this.businessImpacts.push(response.data.data);
-          this.toggleBusinessImpact(response.data.data);
+        if (response.status === 'success') {
+          console.log('Successfully added business impact:', response.data);
+          this.businessImpacts.push(response.data);
+          this.toggleBusinessImpact(response.data);
           this.showAddImpactModal = false;
           this.newBusinessImpact = '';
         } else {
-          throw new Error('Failed to add business impact: ' + (response.data.message || 'Unknown error'));
+          throw new Error('Failed to add business impact: ' + (response.message || 'Unknown error'));
         }
       } catch (error) {
         console.error('Error adding new business impact:', error);
@@ -2413,15 +2413,11 @@ export default {
       try {
         console.log('🔍 Fetching risk categories...');
         // Use axios with JWT authentication - the interceptor will automatically add the token
-        const response = await axios.get(API_ENDPOINTS.RISK_CATEGORIES, {
-          headers: {
-            'Content-Type': 'application/json',
-          }
-        });
+        const response = await apiService.get(API_ENDPOINTS.RISK_CATEGORIES);
         
-        console.log('✅ Risk categories fetched successfully:', response.data);
-        if (response.data.status === 'success') {
-          this.categories = response.data.data;
+        console.log('✅ Risk categories fetched successfully:', response);
+        if (response.status === 'success') {
+          this.categories = response.data;
         }
       } catch (error) {
         console.error('❌ Error fetching categories:', error);
@@ -2463,22 +2459,18 @@ export default {
       try {
         console.log('Adding new category:', this.newCategory);
         
-        const response = await axios.post(API_ENDPOINTS.ADD_RISK_CATEGORY, {
+        const response = await apiService.post(API_ENDPOINTS.ADD_RISK_CATEGORY, {
           value: this.newCategory.trim()
-        }, {
-          headers: {
-            'Content-Type': 'application/json',
-          }
         });
         
-        if (response.data.status === 'success') {
-          console.log('Successfully added category:', response.data.data);
-          this.categories.push(response.data.data);
-          this.selectCategory(response.data.data);
+        if (response.status === 'success') {
+          console.log('Successfully added category:', response.data);
+          this.categories.push(response.data);
+          this.selectCategory(response.data);
           this.showAddCategoryModal = false;
           this.newCategory = '';
         } else {
-          throw new Error('Failed to add category: ' + (response.data.message || 'Unknown error'));
+          throw new Error('Failed to add category: ' + (response.message || 'Unknown error'));
         }
       } catch (error) {
         console.error('Error adding new category:', error);
@@ -2523,29 +2515,20 @@ export default {
           title: 'New Risk Instance Created',
           message: `A new risk instance "${riskData.RiskTitle || 'Untitled Risk'}" has been created in the Risk module.`,
           category: 'risk',
-          priority: 'high',
-          user_id: 'default_user' // You can replace this with actual user ID
+          priority: 'high'
         };
  
-        const response = await axios.post(API_ENDPOINTS.PUSH_NOTIFICATION, notificationData, {
-          headers: {
-            'Content-Type': 'application/json',
-          }
-        });
- 
-        if (response.ok) {
-          console.log('Push notification sent successfully');
-        } else {
-          console.error('Failed to send push notification');
-        }
+        await apiService.post(API_ENDPOINTS.PUSH_NOTIFICATION, notificationData);
+        console.log('Push notification sent successfully');
       } catch (error) {
         console.error('Error sending push notification:', error);
       }
     },
     checkAuthenticationStatus() {
-      // Check JWT authentication status
-      const accessToken = sessionStorage.getItem('access_token') || sessionStorage.getItem('session_token') || localStorage.getItem('access_token') || localStorage.getItem('session_token');
-      const refreshToken = sessionStorage.getItem('refresh_token') || localStorage.getItem('refresh_token');
+      // Cookie-first auth can be valid even when local/session tokens are absent.
+      // Keep this check non-blocking and let API responses decide authorization.
+      const accessToken = null;
+      const refreshToken = null;
       // Check for 'current_user' (used by authService) or 'user' (legacy)
       const currentUser = sessionStorage.getItem('current_user') || localStorage.getItem('current_user');
       const legacyUser = localStorage.getItem('user');
@@ -2561,25 +2544,11 @@ export default {
       console.log('User ID:', userId || 'Missing');
       console.log('Is Authenticated:', isAuthenticated);
       
-      if (!accessToken) {
-        console.error('❌ No JWT access token found. User needs to log in.');
-        this.$popup.error('Authentication required. Please log in.');
-        // Optionally redirect to login
-        // this.$router.push('/login');
-        return false;
+      if (!accessToken && !refreshToken && !user && !userId && !isAuthenticated) {
+        console.warn('⚠️ No local auth markers found; proceeding with cookie-based session check via API.');
+      } else {
+        console.log('✅ Local auth markers found (or partial markers present).');
       }
-      
-      // Accept either current_user or user_id as valid authentication
-      if (!user && !userId) {
-        console.error('❌ No user data found. User needs to log in.');
-        console.error('Checked keys: current_user, user, user_id');
-        this.$popup.error('User session expired. Please log in again.');
-        // Optionally redirect to login
-        // this.$router.push('/login');
-        return false;
-      }
-      
-      console.log('✅ Authentication status: OK');
       return true;
     },
     
@@ -2588,13 +2557,9 @@ export default {
         console.log('🔐 Testing JWT authentication...');
         
         // Test with the test-connection endpoint which is specifically for testing auth
-        const response = await axios.get(`${API_BASE_URL}/api/test-connection/`, {
-          headers: {
-            'Content-Type': 'application/json',
-          }
-        });
+        const response = await apiService.get(`${API_BASE_URL}/api/test-connection/`);
         
-        console.log('✅ JWT authentication test successful:', response.data);
+        console.log('✅ JWT authentication test successful:', response);
         this.$popup.success('JWT authentication is working correctly!');
         return true;
       } catch (error) {

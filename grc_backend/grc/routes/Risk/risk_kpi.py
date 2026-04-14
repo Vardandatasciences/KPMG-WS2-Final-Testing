@@ -13,22 +13,20 @@ from django.utils import timezone
 from django.db.models import Sum, Avg, Count, F, ExpressionWrapper, DurationField, FloatField, Q, Case, When, Value
 from django.db.models.functions import Cast
 from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from django.views.decorators.http import require_http_methods
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import AllowAny
 from rest_framework.authentication import SessionAuthentication, BasicAuthentication
 
 # RBAC imports
-from ...rbac.permissions import RiskAnalyticsPermission, RiskViewPermission
+from ...rbac.permissions import RiskAnalyticsPermission, RiskViewPermission, RiskEditPermission
 from ...rbac.decorators import rbac_required
 
-# DRF Session auth variant that skips CSRF enforcement for API clients
+# DRF Session auth with CSRF enforcement.
 class CsrfExemptSessionAuthentication(SessionAuthentication):
     def enforce_csrf(self, request):
-        return
+        return super().enforce_csrf(request)
 
 # MULTI-TENANCY: Import tenant utilities for data isolation
 from ...tenant_utils import (
@@ -41,6 +39,16 @@ from ...models import RiskInstance, Risk, Incident, Compliance, BusinessUnit, Us
 from ...debug_utils import debug_print
 
 logger = logging.getLogger(__name__)
+
+
+def _get_authenticated_user_id(request):
+    if request.user and request.user.is_authenticated:
+        return request.user.id
+    return None
+
+
+def _safe_uploaded_name(name):
+    return os.path.basename(str(name or "")).replace("\\", "_").replace("/", "_")
 
 # Strict server-side allow-list for risk/incident KPI category filters (finding 17 — no raw client strings in SQL/ORM).
 RISK_KPI_CATEGORY_SLUG_TO_DB = {
@@ -284,7 +292,7 @@ def risk_kpi_data(request):
         
         # Return fallback data in case of error
         return JsonResponse({
-            'error': str(e),
+            'error': 'Internal server error',
             'activeRisks': 0,
             'riskExposure': 0,
             'riskRecurrence': 0,
@@ -400,7 +408,7 @@ def risk_exposure_trend(request):
         import traceback
         #printtraceback.format_exc())
         return JsonResponse({
-            'error': str(e),
+            'error': 'Internal server error',
             'current': 0,
             'months': [],
             'trendData': [],
@@ -516,7 +524,7 @@ def risk_reduction_trend(request):
         import traceback
         #printtraceback.format_exc())
         return JsonResponse({
-            'error': str(e),
+            'error': 'Internal server error',
             'startCount': 45,
             'newCount': 15,
             'mitigatedCount': 25,
@@ -618,7 +626,7 @@ def high_criticality_risks(request):
         import traceback
         #printtraceback.format_exc())
         return JsonResponse({
-            'error': str(e),
+            'error': 'Internal server error',
             'count': 0,
             'highCount': 0,
             'criticalCount': 0,
@@ -756,7 +764,7 @@ def risk_identification_rate(request):
         
         # Return fallback data in case of error
         return JsonResponse({
-            'error': str(e),
+            'error': 'Internal server error',
             'current': 88,
             'dailyAverage': 4.2,
             'percentageChange': 3.5,
@@ -912,7 +920,7 @@ def due_mitigation(request):
         
         # Return fallback data in case of error
         return Response({
-            'error': str(e),
+            'error': 'Internal server error',
             'overduePercentage': 22,
             'completedPercentage': 50,
             'pendingPercentage': 28,
@@ -1030,7 +1038,7 @@ def classification_accuracy(request):
         
         # Return fallback data in case of error
         return Response({
-            'error': str(e),
+            'error': 'Internal server error',
             'accuracy': 85,
             'percentageChange': 0,
             'categoryAccuracy': {
@@ -1127,7 +1135,7 @@ def improvement_initiatives(request):
     except Exception as e:
         #printf"ERROR in improvement_initiatives: {e}")
         return JsonResponse({
-            "error": str(e)
+            "error": "Internal server error"
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
@@ -1530,7 +1538,7 @@ def risk_severity(request):
         
         # Return fallback data in case of error
         return Response({
-            'error': str(e),
+            'error': 'Internal server error',
             'severityDistribution': {
                 'Low': 20,
                 'Medium': 40,
@@ -1898,7 +1906,7 @@ def risk_assessment_frequency(request):
         
         # Return fallback data in case of error
         return Response({
-            'error': str(e),
+            'error': 'Internal server error',
             'avgReviewFrequency': 60,
             'categoryFrequencies': {
                 'Security': 45, 'Operational': 60, 'Compliance': 30,
@@ -2039,7 +2047,7 @@ def risk_register_update_frequency(request):
         
         # Return fallback data
         return JsonResponse({
-            'error': str(e),
+            'error': 'Internal server error',
             'avgUpdateFrequency': 10,  # The value from your SQL screenshot
             'months': ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
             'monthlyUpdates': [28, 32, 35, 30, 33, 29],
@@ -2146,7 +2154,7 @@ def risk_recurrence_probability(request):
     except Exception as e:
         #printf"ERROR in risk_recurrence_probability: {e}")
         return JsonResponse({
-            "error": str(e)
+            "error": "Internal server error"
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
@@ -2243,7 +2251,7 @@ def active_risks_kpi(request):
         import traceback
         #printtraceback.format_exc())
         return JsonResponse({
-            'error': str(e),
+            'error': 'Internal server error',
             'current': 0,
             'months': [],
             'trendData': [],
@@ -2393,7 +2401,7 @@ def mitigation_completion_rate(request):
     except Exception as e:
         #printf"Error in mitigation_completion_rate: {e}")
         return JsonResponse({
-            "error": str(e)
+            "error": "Internal server error"
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
@@ -2526,7 +2534,7 @@ def avg_remediation_time(request):
         import traceback
         #printtraceback.format_exc())
         return JsonResponse({
-            'error': str(e),
+            'error': 'Internal server error',
             'current': 35,
             'months': ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
             'trendData': [38, 36, 35, 37, 34, 35],
@@ -2678,7 +2686,7 @@ def recurrence_rate(request):
         #printtraceback.format_exc())
         # Return default or error fallback data
         return JsonResponse({
-            'error': str(e),
+            'error': 'Internal server error',
             'recurrenceRate': 6.5,
             'oneTimeRate': 93.5,
             'totalRisks': 200,
@@ -3091,7 +3099,7 @@ def mitigation_cost(request):
         
         # Return fallback data in case of error
         return Response({
-            'error': str(e),
+            'error': 'Internal server error',
             'totalCost': 184,
             'avgCost': 31,
             'highestCost': 42,
@@ -3301,7 +3309,7 @@ def risk_tolerance_thresholds(request):
         
         # Return fallback data in case of error
         return Response({
-            'error': str(e),
+            'error': 'Internal server error',
             'overallStatus': 'Within Limits',
             'toleranceThresholds': {
                 'Security': {'max_exposure': 80, 'current_exposure': 0, 'unit': 'score', 'percentage': 0, 'status': 'Normal'},
@@ -3316,8 +3324,8 @@ def risk_tolerance_thresholds(request):
 
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
-# @rbac_required(required_permission='risk_performance_analytics')
+@permission_classes([RiskAnalyticsPermission])
+@rbac_required(required_permission='risk_performance_analytics')
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def risk_appetite(request):
@@ -3391,10 +3399,12 @@ def risk_appetite(request):
             }
         }, status=200)  # Still return 200 for fallback data
 
-@csrf_exempt
 @require_http_methods(["POST", "OPTIONS"])
-#@permission_classes([AllowAny])
+@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@permission_classes([RiskEditPermission])
 @rbac_required(required_permission='create_risk')
+@require_tenant
+@tenant_filter
 def upload_risk_evidence(request):
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
@@ -3420,11 +3430,30 @@ def upload_risk_evidence(request):
             }, status=400)
         
         uploaded_file = request.FILES['file']
-        user_id = request.POST.get('userId', request.POST.get('user_id', 'default-user'))
+        user_id = _get_authenticated_user_id(request)
+        if not user_id:
+            return JsonResponse({'success': False, 'error': 'Authentication required'}, status=401)
         risk_id = request.POST.get('riskId', request.POST.get('risk_id', ''))
         category = request.POST.get('category', 'risk-evidence')
         mitigation_number = request.POST.get('mitigationNumber', request.POST.get('mitigation_number', '1'))
-        file_name = request.POST.get('fileName', uploaded_file.name)
+        file_name = _safe_uploaded_name(request.POST.get('fileName', uploaded_file.name))
+        if not str(category).replace("-", "").replace("_", "").isalnum():
+            return JsonResponse({'success': False, 'error': 'Invalid category value'}, status=400)
+        try:
+            mitigation_number_int = int(mitigation_number)
+            if mitigation_number_int < 1 or mitigation_number_int > 1000:
+                raise ValueError("out of range")
+        except (TypeError, ValueError):
+            return JsonResponse({'success': False, 'error': 'Invalid mitigation number'}, status=400)
+
+        try:
+            risk_id_int = int(risk_id)
+        except (TypeError, ValueError):
+            return JsonResponse({'success': False, 'error': 'Invalid risk id'}, status=400)
+
+        risk_instance = RiskInstance.objects.filter(RiskInstanceId=risk_id_int, tenant_id=tenant_id).first()
+        if not risk_instance:
+            return JsonResponse({'success': False, 'error': 'Risk not found for tenant'}, status=404)
         
         #printf"[DEBUG] upload_risk_evidence: File: {file_name}, User: {user_id}, Risk: {risk_id}")
         #printf"[DEBUG] upload_risk_evidence: File size: {uploaded_file.size} bytes")
@@ -3482,7 +3511,7 @@ def upload_risk_evidence(request):
             
             # Generate unique file name to avoid conflicts
             timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-            unique_file_name = f"risk_{risk_id}_mitigation_{mitigation_number}_{timestamp}_{file_name}"
+            unique_file_name = f"risk_{risk_id_int}_mitigation_{mitigation_number_int}_{timestamp}_{file_name}"
             
             #printf"[DEBUG] upload_risk_evidence: Generated unique filename: {unique_file_name}")
             
@@ -3490,7 +3519,7 @@ def upload_risk_evidence(request):
             #printf"[DEBUG] upload_risk_evidence: Starting S3 upload...")
             upload_result = s3_client.upload(
                 file_path=temp_file_path,
-                user_id=user_id,
+                    user_id=str(user_id),
                 custom_file_name=unique_file_name
             )
             
@@ -3512,8 +3541,8 @@ def upload_risk_evidence(request):
                     EntityId=risk_id,
                     LogLevel='INFO',
                     AdditionalInfo={
-                        'risk_id': risk_id,
-                        'mitigation_number': mitigation_number,
+                        'risk_id': risk_id_int,
+                        'mitigation_number': mitigation_number_int,
                         'file_name': file_name,
                         'file_size': uploaded_file.size,
                         's3_response': upload_result
@@ -3532,8 +3561,8 @@ def upload_risk_evidence(request):
                         'size': uploaded_file.size,
                         'contentType': uploaded_file.content_type,
                         'uploadedAt': datetime.datetime.now().isoformat(),
-                        'riskId': risk_id,
-                        'mitigationNumber': mitigation_number,
+                        'riskId': risk_id_int,
+                        'mitigationNumber': mitigation_number_int,
                         'category': category
                     },
                     'operation_id': upload_result.get('operation_id'),
@@ -3573,8 +3602,11 @@ def upload_risk_evidence(request):
 
 
 @api_view(['DELETE'])
-#@permission_classes([AllowAny])
+@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@permission_classes([RiskEditPermission])
 @rbac_required(required_permission='edit_risk')
+@require_tenant
+@tenant_filter
 def delete_risk_evidence(request, file_id):
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
@@ -3590,7 +3622,9 @@ def delete_risk_evidence(request, file_id):
         # For now, we'll return success and log the deletion request
         # You may need to implement the delete functionality in s3_functions.py
         
-        user_id = request.data.get('user_id', 'default-user')
+        user_id = _get_authenticated_user_id(request)
+        if not user_id:
+            return Response({'success': False, 'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
         
         # Log the deletion attempt
         from ...models import GRCLog
@@ -3617,8 +3651,10 @@ def delete_risk_evidence(request, file_id):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
-# @rbac_required(required_permission='risk_performance_analytics')
+@permission_classes([RiskAnalyticsPermission])
+@rbac_required(required_permission='risk_performance_analytics')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_incident_names_for_risk_scoring(request):
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
@@ -3632,9 +3668,9 @@ def get_incident_names_for_risk_scoring(request):
                     i.IncidentTitle
                 FROM incidents i
                 INNER JOIN risk_instance ri ON i.IncidentId = ri.IncidentId
-                WHERE i.IncidentTitle IS NOT NULL AND i.IncidentTitle != ''
+                WHERE ri.TenantId = %s AND i.IncidentTitle IS NOT NULL AND i.IncidentTitle != ''
                 ORDER BY i.IncidentTitle
-            """)
+            """, [tenant_id])
             
             incidents = []
             for row in cursor.fetchall():
@@ -3656,8 +3692,10 @@ def get_incident_names_for_risk_scoring(request):
         }, status=500)
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
-# @rbac_required(required_permission='risk_performance_analytics')
+@permission_classes([RiskAnalyticsPermission])
+@rbac_required(required_permission='risk_performance_analytics')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_compliance_names_for_risk_scoring(request):
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
@@ -3671,9 +3709,9 @@ def get_compliance_names_for_risk_scoring(request):
                     c.ComplianceTitle
                 FROM compliance c
                 INNER JOIN risk_instance ri ON c.ComplianceId = ri.ComplianceId
-                WHERE c.ComplianceTitle IS NOT NULL AND c.ComplianceTitle != ''
+                WHERE ri.TenantId = %s AND c.ComplianceTitle IS NOT NULL AND c.ComplianceTitle != ''
                 ORDER BY c.ComplianceTitle
-            """)
+            """, [tenant_id])
             
             compliances = []
             for row in cursor.fetchall():
@@ -3695,8 +3733,10 @@ def get_compliance_names_for_risk_scoring(request):
         }, status=500)
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
-# @rbac_required(required_permission='risk_performance_analytics')
+@permission_classes([RiskAnalyticsPermission])
+@rbac_required(required_permission='risk_performance_analytics')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_business_units_for_risk_scoring(request):
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
@@ -3713,9 +3753,9 @@ def get_business_units_for_risk_scoring(request):
                 INNER JOIN department d ON bu.BusinessUnitId = d.BusinessUnitId
                 INNER JOIN users u ON d.DepartmentId = u.DepartmentId
                 INNER JOIN risk_instance ri ON u.UserId = ri.UserId
-                WHERE bu.IsActive = 1
+                WHERE bu.IsActive = 1 AND ri.TenantId = %s
                 ORDER BY bu.Name
-            """)
+            """, [tenant_id])
             
             business_units = []
             for row in cursor.fetchall():

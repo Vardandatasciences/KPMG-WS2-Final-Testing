@@ -178,13 +178,13 @@
 </template>
 
 <script>
-import axios from 'axios'
 import DynamicTable from '../DynamicTable.vue'
 // import Dynamicalsearch from '../Dynamicalsearch.vue'
 import { PopupModal } from '@/modules/popup'
 import AccessUtils from '@/utils/accessUtils'
-import { API_ENDPOINTS, axiosInstance } from '../../config/api.js'
+import { API_ENDPOINTS } from '../../config/api.js'
 import riskDataService from '@/services/riskService'
+import apiService from '@/services/apiService.js'
 import './RiskInstances.css'
 import { openUrlInNewTabSafe } from '@/utils/safeExternalNavigation'
 import { getFrameworkIdForClient } from '@/utils/frameworkContextStorage.js'
@@ -549,8 +549,8 @@ export default {
           this.dataSourceMessage = `Loaded ${this.instances.length} risk instances from cache (prefetched on Home page)`
         } else {
           console.log('⚠️ [RiskInstances] No cached data found, fetching from API...')
-          const response = await axios.get(API_ENDPOINTS.RISK_INSTANCES)
-          this.instances = response.data
+          const response = await apiService.get(API_ENDPOINTS.RISK_INSTANCES)
+          this.instances = Array.isArray(response) ? response : (response?.data || [])
           this.dataSourceMessage = `Loaded ${this.instances.length} risk instances directly from API (cache unavailable)`
 
           // Update cache so subsequent pages benefit
@@ -590,8 +590,8 @@ export default {
         const params = { module_key: 'risk' }
         params.framework_id = getFrameworkIdForClient()
 
-        const response = await axiosInstance.get('/api/retention/page-configs/', { params })
-        const configs = this.normalizeRetentionConfigs(response.data?.data || response.data || {})
+        const response = await apiService.get('/api/retention/page-configs/', params)
+        const configs = this.normalizeRetentionConfigs(response?.data || response || {})
         const cfg = configs[pageKey] || {}
         const enabled = cfg.checklist_status ?? cfg.enabled ?? cfg.ChecklistStatus ?? true
         this.riskInstanceRetentionEnabled = !!enabled
@@ -615,8 +615,8 @@ export default {
     async tryAlternativeEndpoint() {
       try {
         console.log('🔁 [RiskInstances] Trying alternative endpoint...')
-        const response = await axios.get(API_ENDPOINTS.RISK_INSTANCES)
-        this.instances = response.data
+        const response = await apiService.get(API_ENDPOINTS.RISK_INSTANCES)
+        this.instances = Array.isArray(response) ? response : (response?.data || [])
         this.dataSourceMessage = `Loaded ${this.instances.length} risk instances directly from API (alternative path)`
         riskDataService.setData('riskInstances', this.instances)
         console.log('✅ [RiskInstances] Alternative fetch succeeded')
@@ -661,15 +661,10 @@ export default {
           title: 'Risk Instance Update',
           message: riskData.message || `Risk instance "${riskData.RiskDescription || 'Untitled Risk'}" has been updated in the Risk module.`,
           category: 'risk',
-          priority: 'high',
-          user_id: 'default_user' // You can replace this with actual user ID
+          priority: 'high'
         };
-        const response = await axios.post(API_ENDPOINTS.PUSH_NOTIFICATION, notificationData);
-        if (response.status === 200) {
-          console.log('Push notification sent successfully');
-        } else {
-          console.error('Failed to send push notification');
-        }
+        await apiService.post(API_ENDPOINTS.PUSH_NOTIFICATION, notificationData);
+        console.log('Push notification sent successfully');
       } catch (error) {
         console.error('Error sending push notification:', error);
       }
@@ -713,9 +708,10 @@ export default {
         ReviewerId: parseInt(this.newInstance.ReviewerId) || null
       }
       
-              axios.post(API_ENDPOINTS.CREATE_RISK_INSTANCE, formData)
+              apiService.post(API_ENDPOINTS.CREATE_RISK_INSTANCE, formData)
         .then(response => {
-          this.instances.push(response.data)
+          const createdInstance = response?.risk_instance || response?.data || response
+          this.instances.push(createdInstance)
           
           this.newInstance = {
             RiskId: null,
@@ -786,16 +782,14 @@ export default {
         const payload = {
           export_format: this.selectedExportFormat,
           risk_data: exportData,
-          user_id: 'default_user',
           file_name: 'risk_instances_export'
         };
         // Increase timeout for long-running exports
-        const response = await axios.post(
+        const result = await apiService.post(
           API_ENDPOINTS.EXPORT_RISK_REGISTER,
           payload,
           { timeout: 180000 } // 3 minutes
         );
-        const result = response.data;
         if (result.success && result.file_url) {
           const opened = openUrlInNewTabSafe(result.file_url)
           if (opened) {
@@ -817,10 +811,11 @@ export default {
           }
         }
       } catch (error) {
+        const safeExportError = 'Export failed. Please try again or contact support if the issue persists.';
         if (this.$popup) {
-          this.$popup.error('Export error: ' + error.message, 'Export Error');
+          this.$popup.error(safeExportError, 'Export Error');
         } else if (window.PopupService) {
-          window.PopupService.error('Export error: ' + error.message, 'Export Error');
+          window.PopupService.error(safeExportError, 'Export Error');
         }
       }
     }

@@ -125,9 +125,7 @@ def get_all_versions(request, risk_id):
             })
     except Exception as e:
         debug_print(f"ERROR in get_all_versions: {e}")
-        import traceback
-        traceback.print_exc()
-        return Response({'error': str(e)}, status=500)
+        return Response({'error': 'Internal server error'}, status=500)
 
 @api_view(['GET'])
 @permission_classes([RiskViewPermission])  # RBAC: Require RiskViewPermission for viewing specific risk version
@@ -301,6 +299,6 @@ def get_version_comparison(request, risk_id, version1, version2):
         traceback.print_exc()
         return JsonResponse({
             'success': False,
-            'error': str(e),
+            'error': 'Internal server error',
             'comparison': None
         }, status=500)

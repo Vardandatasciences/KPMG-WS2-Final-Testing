@@ -1,16 +1,14 @@
 from ...routes.Global.s3_fucntions import export_data, _sanitize_export_payload
-from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from rest_framework.decorators import api_view, permission_classes, authentication_classes, throttle_classes
 from rest_framework.throttling import ScopedRateThrottle
-from rest_framework.permissions import AllowAny
 from django.http import JsonResponse, HttpResponse
 from rest_framework.authentication import SessionAuthentication, BasicAuthentication
+from ...jwt_auth import UnifiedJWTAuthentication
 import json
 import logging
 import tempfile
 import os
 from pathlib import Path
-from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from django.views import View
 from django.utils.decorators import method_decorator
 
@@ -51,14 +49,13 @@ from ...routes.Consent import require_consent
 from ...debug_utils import debug_print
 from ...utils.csv_security import sanitize_csv_dataset
 
-# DRF Session auth variant that skips CSRF enforcement for API clients
+# DRF Session auth variant that skips CSRF enforcement for SPA/API clients (same as incident/compliance).
 class CsrfExemptSessionAuthentication(SessionAuthentication):
     def enforce_csrf(self, request):
         return
 
 
 
-@csrf_exempt
 @api_view(['POST', 'OPTIONS'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([RiskViewPermission])  # RBAC: Require RiskViewPermission for exporting risk register
@@ -88,8 +85,10 @@ def export_risk_register_v2(request):
             
         export_format = data.get('export_format', 'json')
         risk_data = _sanitize_export_payload(data.get('risk_data', []))
-        user_id = data.get('user_id', 'default_user')
-        file_name = data.get('file_name', 'risk_register_export')
+        user_id = _get_authenticated_user_id(request)
+        if not user_id:
+            return JsonResponse({'success': False, 'error': 'Authentication required'}, status=401)
+        file_name = _safe_uploaded_name(data.get('file_name', 'risk_register_export'))
         # Keep risk export aligned with incident export (direct S3 upload by default).
         # Async/Celery export should run only when explicitly requested by client.
         use_async = bool(data.get('use_async', False))
@@ -234,19 +233,21 @@ def export_risk_register_v2(request):
             debug_print(f"\n{'='*80}")
             debug_print(f"❌ [ROUTE] ERROR - Total time: {total_route_time:.2f} seconds")
             debug_print(f"{'='*80}\n")
-            return JsonResponse({
-                "success": False, 
-                "error": f"Export failed: {str(export_error)}"
-            }, status=500)
+            return JsonResponse(
+                {
+                    "success": False,
+                    "error": "Export failed due to an internal server error",
+                },
+                status=500,
+            )
                 
     except Exception as e:
         debug_print(f"❌ Export endpoint error: {str(e)}")
         import traceback
         traceback.print_exc()
-        return JsonResponse({"success": False, "error": "An internal error occurred"}, status=500)
+        return JsonResponse({"success": False, "error": "Internal server error"}, status=500)
 
 
-@csrf_exempt
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([ComplianceViewPermission])  # RBAC: Require RiskViewPermission for exporting compliance management
@@ -261,7 +262,9 @@ def export_compliance_management(request):
         data = json.loads(request.body.decode('utf-8')) if request.body else request.data
         export_format = data.get('export_format', 'json')
         compliance_data = _sanitize_export_payload(data.get('compliance_data', []))
-        user_id = data.get('user_id', 'default_user')
+        user_id = _get_authenticated_user_id(request)
+        if not user_id:
+            return JsonResponse({'success': False, 'error': 'Authentication required'}, status=401)
         file_name = data.get('file_name', 'compliance_management_export')
         
         # Simple export logic without external service dependency
@@ -298,14 +301,17 @@ def export_compliance_management(request):
                     }
                 )
                 return JsonResponse(result)
-            except Exception as export_error:
-                return JsonResponse({
-                    "success": False, 
-                    "error": f"Export format '{export_format}' not supported. Error: {str(export_error)}"
-                }, status=400)
+            except Exception:
+                return JsonResponse(
+                    {
+                        "success": False,
+                        "error": f"Export format '{export_format}' not supported",
+                    },
+                    status=400,
+                )
                 
     except Exception as e:
-        return JsonResponse({"success": False, "error": "An internal error occurred"}, status=500)
+        return JsonResponse({"success": False, "error": "Internal server error"}, status=500)
 
 
 
@@ -313,7 +319,7 @@ from django.shortcuts import render
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
-from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
+from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.authentication import SessionAuthentication, BasicAuthentication
 from django.contrib.auth import authenticate
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -350,6 +356,7 @@ from django.db import connection
 from dateutil.relativedelta import relativedelta
 from django.db import models
 from django.db.models.functions import Cast
+from django.core.cache import cache
 import decimal
 from decimal import Decimal
 import requests
@@ -366,6 +373,95 @@ def decimal_to_float(obj):
         return [decimal_to_float(i) for i in obj]
     else:
         return obj
+
+ALLOWED_RISK_STATUS_UPDATES = {
+    "Not Assigned",
+    "Assigned",
+    "Approved",
+    "Rejected",
+    "Revision Required by Reviewer",
+    "Revision Required by User",
+}
+ALLOWED_MITIGATION_STATUS_UPDATES = {
+    choice[0] for choice in RiskInstance.MITIGATION_STATUS_CHOICES
+}
+MAX_MITIGATION_DUE_DAYS = 3650
+NOTIFICATION_COOLDOWN_SECONDS = 300
+
+
+def _get_tenant_scoped_risk_instance(risk_id, tenant_id):
+    """Resolve risk instance with strict tenant scoping to prevent IDOR/BOLA."""
+    return RiskInstance.objects.get(RiskInstanceId=risk_id, tenant_id=tenant_id)
+
+
+def _get_authenticated_user_id(request):
+    """Never trust client-supplied user identifiers."""
+    if request.user and request.user.is_authenticated:
+        return request.user.id
+    return None
+
+
+def _coerce_bool(value):
+    """Strict boolean parsing for API payloads."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "1", "yes", "y"}:
+            return True
+        if normalized in {"false", "0", "no", "n"}:
+            return False
+    return None
+
+
+def _safe_uploaded_name(name):
+    """Prevent path traversal via client-controlled file names."""
+    return os.path.basename(str(name or "")).replace("\\", "_").replace("/", "_")
+
+
+def _parse_optional_int(value):
+    if value in (None, "", "all"):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _parse_and_validate_mitigation_due_date(due_date_raw, created_at=None):
+    """Validate mitigation due date against creation date and realistic ranges."""
+    if not due_date_raw:
+        return None
+
+    try:
+        parsed_due_date = datetime.strptime(str(due_date_raw), "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        raise ValueError("Due date must be in YYYY-MM-DD format")
+
+    baseline_date = timezone.now().date()
+    if created_at is not None:
+        baseline_date = created_at.date() if hasattr(created_at, "date") else created_at
+
+    if parsed_due_date < baseline_date:
+        raise ValueError("Due date cannot be earlier than record creation date")
+
+    max_allowed = baseline_date + timedelta(days=MAX_MITIGATION_DUE_DAYS)
+    if parsed_due_date > max_allowed:
+        raise ValueError(
+            f"Due date cannot be more than {MAX_MITIGATION_DUE_DAYS} days from record creation date"
+        )
+
+    return parsed_due_date
+
+
+def _allow_notification_send(dedupe_key, cooldown_seconds=NOTIFICATION_COOLDOWN_SECONDS):
+    """Return False when duplicate notification is attempted within cooldown."""
+    if cache.get(dedupe_key):
+        return False
+    cache.set(dedupe_key, True, timeout=cooldown_seconds)
+    return True
 
 
 LOGGING_SERVICE_URL = None  # Disabled external logging service
@@ -443,7 +539,6 @@ def send_log(module, actionType, description=None, userId=None, userName=None,
         return None
 
 
-@csrf_exempt
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([RiskViewPermission])  # RBAC: Require RiskViewPermission for login
@@ -499,7 +594,6 @@ def login(request):
             'message': 'Authentication error'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-@csrf_exempt
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([RiskCreatePermission])  # RBAC: Require RiskCreatePermission for user registration
@@ -590,12 +684,15 @@ def get_compliance_by_incident(request, incident_id):
     )
     
     try:
-        # Find the incident - MULTI-TENANCY: Enforce tenant isolation
+        # Find the incident
         incident = Incident.objects.get(IncidentId=incident_id, tenant_id=tenant_id)
         
         # Find related compliance(s) where ComplianceId matches the incident's ComplianceId
         if incident.ComplianceId:
-            compliance = Compliance.objects.filter(ComplianceId=incident.ComplianceId).first()
+            compliance = Compliance.objects.filter(
+                ComplianceId=incident.ComplianceId,
+                tenant_id=tenant_id,
+            ).first()
             if compliance:
                 serializer = ComplianceSerializer(compliance)
                 return Response(serializer.data)
@@ -623,7 +720,7 @@ def get_risks_by_incident(request, incident_id):
     )
     
     try:
-        # Find the incident - MULTI-TENANCY: Enforce tenant isolation
+        # Find the incident
         incident = Incident.objects.get(IncidentId=incident_id, tenant_id=tenant_id)
         
         # Get compliance ID from the incident
@@ -631,7 +728,7 @@ def get_risks_by_incident(request, incident_id):
         
         if compliance_id:
             # Find all risks with the same compliance ID
-            risks = Risk.objects.filter(ComplianceId=compliance_id)
+            risks = Risk.objects.filter(ComplianceId=compliance_id, tenant_id=tenant_id)
             
             if risks.exists():
                 serializer = RiskSerializer(risks, many=True)
@@ -644,7 +741,7 @@ def get_risks_by_incident(request, incident_id):
 class RiskViewSet(viewsets.ModelViewSet):
     queryset = Risk.objects.all()
     serializer_class = RiskSerializer
-    authentication_classes = [CsrfExemptSessionAuthentication, BasicAuthentication]
+    authentication_classes = [UnifiedJWTAuthentication, CsrfExemptSessionAuthentication, BasicAuthentication]
     
     # MULTI-TENANCY: Override get_queryset to filter by tenant
     def get_queryset(self):
@@ -787,9 +884,14 @@ class RiskViewSet(viewsets.ModelViewSet):
         )
         return super().retrieve(request, pk)
     
-    @csrf_exempt
     @require_consent('create_risk')
     def create(self, request):
+        if not request.user or not request.user.is_authenticated:
+            return Response({
+                "status": "error",
+                "message": "Authentication required"
+            }, status=401)
+
         # MULTI-TENANCY: Extract and add tenant_id to request data
         tenant_id = get_tenant_id_from_request(request)
         
@@ -805,6 +907,9 @@ class RiskViewSet(viewsets.ModelViewSet):
         
         # MULTI-TENANCY: Add tenant_id to request data
         request.data['tenant_id'] = tenant_id
+        # SECURITY: Never trust client-supplied ownership fields.
+        request.data['UserId'] = request.user.id
+        request.data['user_id'] = request.user.id
         
         if framework_id:
             # Add framework ID if one is selected
@@ -1055,7 +1160,7 @@ class ComplianceViewSet(viewsets.ModelViewSet):
 class RiskInstanceViewSet(viewsets.ModelViewSet):
     queryset = RiskInstance.objects.all()
     serializer_class = RiskInstanceSerializer
-    authentication_classes = [CsrfExemptSessionAuthentication, BasicAuthentication]
+    authentication_classes = [UnifiedJWTAuthentication, CsrfExemptSessionAuthentication, BasicAuthentication]
    
     # MULTI-TENANCY: Override get_queryset to filter by tenant
     def get_queryset(self):
@@ -1092,7 +1197,7 @@ class RiskInstanceViewSet(viewsets.ModelViewSet):
             debug_print(f"Error in RiskInstanceViewSet.list: {e}")
             import traceback
             traceback.print_exc()
-            return Response({"error": "An internal error occurred"}, status=500)
+            return Response({"error": "Internal server error"}, status=500)
    
     def retrieve(self, request, *args, **kwargs):
         """Retrieve a single risk instance by ID"""
@@ -1146,7 +1251,7 @@ class RiskInstanceViewSet(viewsets.ModelViewSet):
             debug_print(f"Error retrieving risk instance: {e}")
             import traceback
             traceback.print_exc()
-            return Response({"error": "An internal error occurred"}, status=500)
+            return Response({"error": "Internal server error"}, status=500)
    
     def create(self, request, *args, **kwargs):
         # MULTI-TENANCY: Extract tenant_id from request
@@ -1236,9 +1341,8 @@ class RiskInstanceViewSet(viewsets.ModelViewSet):
             debug_print(f"Error creating risk instance: {e}")
             import traceback
             traceback.print_exc()
-            return Response({"error": "An internal error occurred"}, status=500)
+            return Response({"error": "Internal server error"}, status=500)
  
-    @csrf_exempt
     def update(self, request, *args, **kwargs):
         # Log the update operation
         instance = self.get_object()
@@ -1274,7 +1378,7 @@ class RiskInstanceViewSet(viewsets.ModelViewSet):
             debug_print(f"Error updating risk instance {instance.RiskInstanceId}: {e}")
             import traceback
             traceback.print_exc()
-            return Response({"error": "An internal error occurred"}, status=400)
+            return Response({"error": "Invalid request"}, status=400)
    
     def destroy(self, request, *args, **kwargs):
         # Log the delete operation
@@ -1292,7 +1396,6 @@ class RiskInstanceViewSet(viewsets.ModelViewSet):
         return super().destroy(request, *args, **kwargs)
  
 
-@csrf_exempt
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @rbac_required(required_permission='create_risk')
@@ -1589,7 +1692,7 @@ def get_users(request):
         entityType="User"
     )
     
-    users = Users.objects.all()
+    users = Users.objects.filter(tenant_id=tenant_id)
     serializer = UserSerializer(users, many=True)
     return Response(serializer.data)
 
@@ -1696,12 +1799,12 @@ def risk_workflow(request):
             logLevel="ERROR"
         )
         debug_print(f"Error in risk_workflow view: {e}")
-        return Response({"error": "An internal error occurred"}, status=500)
+        return Response({"error": "Internal server error"}, status=500)
 
-@csrf_exempt
 @api_view(['POST'])
-@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@authentication_classes([UnifiedJWTAuthentication, CsrfExemptSessionAuthentication, BasicAuthentication])
 @rbac_required(required_permission='assign_risk')
+@throttle_classes([ScopedRateThrottle])
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def assign_risk_instance(request):
@@ -1710,8 +1813,9 @@ def assign_risk_instance(request):
     tenant_id = get_tenant_id_from_request(request)
     
     risk_id = request.data.get('risk_id')
-    # Try to get user_id from either field name (UserId or user_id)
-    user_id = request.data.get('UserId') or request.data.get('user_id')
+    # Assignee comes from payload (UserId). Acting user is the authenticated principal (never from body).
+    assignee_id = request.data.get('UserId')
+    acting_user_id = _get_authenticated_user_id(request)
     mitigations = request.data.get('mitigations')
     due_date = request.data.get('due_date')
     risk_form_details = request.data.get('risk_form_details')
@@ -1720,15 +1824,21 @@ def assign_risk_instance(request):
     send_log(
         module="Risk",
         actionType="ASSIGN",
-        description=f"Assigning risk {risk_id} to user {user_id}",
-        userId=request.user.id if request.user.is_authenticated else None,
+        description=f"Assigning risk {risk_id} to user {assignee_id}",
+        userId=acting_user_id,
         userName=request.user.username if request.user.is_authenticated else None,
         entityType="RiskInstance",
-        additionalInfo={"risk_id": risk_id, "assigned_to": user_id}
+        additionalInfo={"risk_id": risk_id, "assigned_to": assignee_id, "performed_by": acting_user_id}
     )
     
-    if not risk_id or not user_id:
-        return Response({'error': 'Risk ID and User ID are required'}, status=400)
+    try:
+        risk_id = int(risk_id)
+        assignee_id = int(assignee_id)
+    except (TypeError, ValueError):
+        return Response({'error': 'Risk ID and assignee UserId must be valid integers'}, status=400)
+
+    if not risk_id or not assignee_id:
+        return Response({'error': 'Risk ID and UserId (assignee) are required'}, status=400)
 
     # Framework-level mitigation: sanitize/validate evidence URLs in mitigations
     if mitigations:
@@ -1747,13 +1857,13 @@ def assign_risk_instance(request):
     
     try:
         # Get the risk instance
-        risk_instance = RiskInstance.objects.get(RiskInstanceId=risk_id)
+        risk_instance = _get_tenant_scoped_risk_instance(risk_id, tenant_id)
         
         # For custom users we don't use Django ORM
         # Just validate the user exists
         from django.db import connection
         with connection.cursor() as cursor:
-            cursor.execute("SELECT UserId, UserName FROM users WHERE UserId = %s", [user_id])
+            cursor.execute("SELECT UserId, UserName FROM grc2.users WHERE UserId = %s", [assignee_id])
             user = cursor.fetchone()
         
         if not user:
@@ -1761,7 +1871,7 @@ def assign_risk_instance(request):
         
         # Update risk instance with assigned user
         risk_instance.RiskOwner = user[1]  # UserName
-        risk_instance.UserId = user_id
+        risk_instance.UserId = assignee_id
         risk_instance.RiskStatus = 'Assigned'  # Update to assigned status when admin assigns
         
         # Set form details if provided
@@ -1770,12 +1880,13 @@ def assign_risk_instance(request):
         
         # Set mitigation due date if provided
         if due_date:
-            from datetime import datetime
             try:
-                # Just use the date string directly, don't convert to datetime
-                risk_instance.MitigationDueDate = due_date
-            except ValueError:
-                debug_print(f"Invalid date format: {due_date}")
+                risk_instance.MitigationDueDate = _parse_and_validate_mitigation_due_date(
+                    due_date,
+                    created_at=risk_instance.CreatedAt,
+                )
+            except ValueError as date_error:
+                return Response({'error': str(date_error)}, status=400)
         
         # Save mitigations if provided
         if mitigations:
@@ -1796,11 +1907,11 @@ def assign_risk_instance(request):
             send_log(
                 module="Risk",
                 actionType="ASSIGN",
-                description=f"Successfully assigned risk {risk_id} to user {user_id}",
-                userId=request.user.id if request.user.is_authenticated else None,
+                description=f"Successfully assigned risk {risk_id} to user {assignee_id}",
+                userId=acting_user_id,
                 userName=request.user.username if request.user.is_authenticated else None,
                 entityType="RiskInstance",
-                additionalInfo={"risk_id": risk_id, "assigned_to": user_id}
+                additionalInfo={"risk_id": risk_id, "assigned_to": assignee_id, "performed_by": acting_user_id}
             )
             return Response({'success': True})
         else:
@@ -1808,18 +1919,20 @@ def assign_risk_instance(request):
                 module="Risk",
                 actionType="ASSIGN",
                 description=f"Failed to assign risk {risk_id}: {str(e)}",
-                userId=request.user.id if request.user.is_authenticated else None,
+                userId=acting_user_id,
                 userName=request.user.username if request.user.is_authenticated else None,
                 entityType="RiskInstance",
                 logLevel="ERROR",
-                additionalInfo={"risk_id": risk_id, "assigned_to": user_id}
+                additionalInfo={"risk_id": risk_id, "assigned_to": assignee_id, "performed_by": acting_user_id}
             )
-            return Response({'error': 'An internal error occurred'}, status=500)
+            return Response({'error': 'Internal server error'}, status=500)
     except RiskInstance.DoesNotExist:
         return Response({'error': 'Risk instance not found'}, status=404)
     except Exception as e:
         debug_print(f"Error assigning risk: {e}")
-        return Response({'error': 'An internal error occurred'}, status=500)
+        return Response({'error': 'Internal server error'}, status=500)
+
+assign_risk_instance.throttle_scope = 'risk_assignment'
 
 @api_view(['GET'])
 @rbac_required(required_permission='view_all_risk')
@@ -1840,29 +1953,24 @@ def get_custom_users(request):
     )
     
     try:
-        # Using raw SQL query to fetch from your custom table
-        from django.db import connection
-        with connection.cursor() as cursor:
-            cursor.execute("SELECT * FROM users")
-            columns = [col[0] for col in cursor.description]
-            users = [
-                dict(zip(columns, row))
-                for row in cursor.fetchall()
-            ]
-            
-            # Map the field names for compatibility
-            for user in users:
-                # Add user_id field for compatibility with frontend
-                if 'UserId' in user and 'user_id' not in user:
-                    user['user_id'] = user['UserId']
-                # Add UserName field for compatibility with frontend
-                if 'UserName' in user and 'user_name' not in user:
-                    user['user_name'] = user['UserName']
-                    
+        # Tenant-scoped + least-privilege fields only; never expose full user records.
+        users_qs = Users.objects.filter(tenant_id=tenant_id).values('UserId', 'UserName', 'Email', 'IsActive')
+        users = []
+        for user in users_qs:
+            users.append(
+                {
+                    'UserId': user.get('UserId'),
+                    'user_id': user.get('UserId'),
+                    'UserName': user.get('UserName'),
+                    'user_name': user.get('UserName'),
+                    'Email': user.get('Email'),
+                    'IsActive': user.get('IsActive'),
+                }
+            )
         return Response(users)
     except Exception as e:
         debug_print(f"Error fetching custom users: {e}")
-        return Response({"error": "An internal error occurred"}, status=500)
+        return Response({"error": "Internal server error"}, status=500)
 
 @api_view(['GET'])
 @rbac_required(required_permission='view_all_risk')
@@ -1884,29 +1992,31 @@ def get_custom_user(request, user_id):
     )
     
     try:
-        # Using raw SQL query to fetch from your custom table
-        from django.db import connection
-        with connection.cursor() as cursor:
-            # MULTI-TENANCY: Remove hardcoded DB name and enforce tenant isolation
-            cursor.execute("SELECT * FROM users WHERE UserId = %s AND TenantId = %s", [user_id, tenant_id])
-            columns = [col[0] for col in cursor.description]
-            row = cursor.fetchone()
-            
-            if not row:
-                return Response({"error": "User not found or access denied"}, status=404)
-                
-            user = dict(zip(columns, row))
-            
-            # Map the field names for compatibility
-            if 'UserId' in user and 'user_id' not in user:
-                user['user_id'] = user['UserId']
-            if 'UserName' in user and 'user_name' not in user:
-                user['user_name'] = user['UserName']
-                    
-        return Response(user)
+        try:
+            user_id_int = int(user_id)
+        except (TypeError, ValueError):
+            return Response({"error": "Invalid user ID"}, status=400)
+
+        user = (
+            Users.objects.filter(tenant_id=tenant_id, UserId=user_id_int)
+            .values('UserId', 'UserName', 'Email', 'IsActive')
+            .first()
+        )
+        if not user:
+            return Response({"error": f"User with ID {user_id} not found"}, status=404)
+
+        user_payload = {
+            'UserId': user.get('UserId'),
+            'user_id': user.get('UserId'),
+            'UserName': user.get('UserName'),
+            'user_name': user.get('UserName'),
+            'Email': user.get('Email'),
+            'IsActive': user.get('IsActive'),
+        }
+        return Response(user_payload)
     except Exception as e:
         debug_print(f"Error fetching custom user {user_id}: {e}")
-        return Response({"error": "An internal error occurred while fetching user data"}, status=500)
+        return Response({"error": "Internal server error"}, status=500)
 
 @api_view(['GET'])
 @rbac_required(required_permission='view_all_risk')
@@ -1935,12 +2045,23 @@ def risk_instances_view(request):
         available_business_units = []
         
         with connection.cursor() as cursor:
-            # Fetch all departments
-            cursor.execute("SELECT DepartmentName FROM department WHERE DepartmentName IS NOT NULL AND DepartmentName != ''")
+            # DB column is TenantId (see Department.tenant db_column), not tenant_id
+            cursor.execute(
+                "SELECT DepartmentName FROM department WHERE TenantId = %s AND DepartmentName IS NOT NULL AND DepartmentName != ''",
+                [tenant_id]
+            )
             available_departments = [row[0] for row in cursor.fetchall()]
-            
-            # Fetch all business units
-            cursor.execute("SELECT Name FROM businessunits WHERE Name IS NOT NULL AND Name != ''")
+
+            # businessunits has no TenantId; scope via departments for this tenant
+            cursor.execute(
+                """
+                SELECT DISTINCT bu.Name
+                FROM businessunits bu
+                INNER JOIN department d ON d.BusinessUnitId = bu.BusinessUnitId
+                WHERE d.TenantId = %s AND bu.Name IS NOT NULL AND bu.Name != ''
+                """,
+                [tenant_id]
+            )
             available_business_units = [row[0] for row in cursor.fetchall()]
         
         # Fallback lists if database is empty
@@ -2100,7 +2221,7 @@ def risk_instances_view(request):
         debug_print(f"Error fetching risk instances: {e}")
         import traceback
         traceback.print_exc()
-        return Response({"error": "An internal error occurred"}, status=500)
+        return Response({"error": "Internal server error"}, status=500)
 
 @api_view(['GET'])
 @rbac_required(required_permission='view_all_risk')
@@ -2270,7 +2391,6 @@ def get_user_risks(request, user_id):
         # Return empty list instead of error
         return Response([])
 
-@csrf_exempt
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @rbac_required(required_permission='edit_risk')
@@ -2297,10 +2417,18 @@ def update_risk_status(request):
     
     if not risk_id or not status:
         return Response({'error': 'Risk ID and status are required'}, status=400)
+
+    try:
+        risk_id = int(risk_id)
+    except (TypeError, ValueError):
+        return Response({'error': 'Risk ID must be a valid integer'}, status=400)
+
+    if status not in ALLOWED_RISK_STATUS_UPDATES:
+        return Response({'error': 'Invalid risk status update value'}, status=400)
     
     try:
         # Get the risk instance
-        risk_instance = RiskInstance.objects.get(RiskInstanceId=risk_id)
+        risk_instance = _get_tenant_scoped_risk_instance(risk_id, tenant_id)
         
         # Update the status
         risk_instance.RiskStatus = status
@@ -2314,7 +2442,7 @@ def update_risk_status(request):
         return Response({'error': 'Risk instance not found'}, status=404)
     except Exception as e:
         debug_print(f"Error updating risk status: {e}")
-        return Response({'error': 'An internal error occurred'}, status=500)
+        return Response({'error': 'Internal server error'}, status=500)
 
 @api_view(['GET'])
 @rbac_required(required_permission='view_all_risk')
@@ -2337,7 +2465,7 @@ def get_risk_mitigations(request, risk_id):
     
     try:
         # Get the risk instance
-        risk_instance = RiskInstance.objects.get(RiskInstanceId=risk_id)
+        risk_instance = _get_tenant_scoped_risk_instance(risk_id, tenant_id)
         
         # Get decrypted RiskMitigation value
         # Try to get decrypted value using _plain property
@@ -2455,7 +2583,6 @@ def get_risk_mitigations(request, risk_id):
             "status": "Error"
         }], status=500)
 
-@csrf_exempt
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @rbac_required(required_permission='approve_risk')
@@ -2468,7 +2595,8 @@ def update_mitigation_approval(request):
     
     approval_id = request.data.get('approval_id')
     mitigation_id = request.data.get('mitigation_id')
-    approved = request.data.get('approved')
+    approved_raw = request.data.get('approved')
+    approved = _coerce_bool(approved_raw)
     remarks = request.data.get('remarks', '')
     
     send_log(
@@ -2483,6 +2611,8 @@ def update_mitigation_approval(request):
     
     if not approval_id or not mitigation_id:
         return Response({'error': 'Approval ID and mitigation ID are required'}, status=400)
+    if approved is None:
+        return Response({'error': 'approved must be a boolean value'}, status=400)
     
     try:
         # Get the latest approval record by RiskInstanceId
@@ -2511,6 +2641,11 @@ def update_mitigation_approval(request):
             
             import json
             extracted_info, user_id, approver_id, current_version = row[0], row[1], row[2], row[3]
+            actor_user_id = _get_authenticated_user_id(request)
+            if actor_user_id is None:
+                return Response({'error': 'Authentication required'}, status=401)
+            if approver_id and int(approver_id) != int(actor_user_id):
+                return Response({'error': 'You are not allowed to approve this mitigation'}, status=403)
             extracted_info_dict = json.loads(extracted_info)
             
             # Create a working copy to modify
@@ -2551,7 +2686,7 @@ def update_mitigation_approval(request):
                 return Response({'error': 'Mitigation ID not found in approval record'}, status=404)
     except Exception as e:
         debug_print(f"Error updating mitigation approval: {e}")
-        return Response({'error': 'An internal error occurred'}, status=500)
+        return Response({'error': 'Internal server error'}, status=500)
 
 
 def get_reviewer_id(reviewer_name):
@@ -2573,10 +2708,10 @@ def get_reviewer_id(reviewer_name):
         return None
 
         
-@csrf_exempt
 @api_view(['POST'])
-@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@authentication_classes([UnifiedJWTAuthentication, CsrfExemptSessionAuthentication, BasicAuthentication])
 @rbac_required(required_permission='assign_risk')
+@throttle_classes([ScopedRateThrottle])
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def assign_reviewer(request):
@@ -2600,7 +2735,7 @@ def assign_reviewer(request):
 
     debug_print(f"Received reviewer_id: {reviewer_id}, Type: {type(reviewer_id)}")
     # Try to get user_id from either field name (UserId or user_id)
-    user_id = request.data.get('UserId') or request.data.get('user_id')
+    user_id = _get_authenticated_user_id(request)
     
     # Normalize empty strings to None
     if user_id == '' or user_id is None:
@@ -2610,7 +2745,9 @@ def assign_reviewer(request):
     
     mitigations = request.data.get('mitigations')  # Get mitigation data with status
     risk_form_details = request.data.get('risk_form_details', None)  # Get form details
-    create_approval_record = request.data.get('create_approval_record', False)  # Flag to determine if we should create approval record
+    create_approval_record = _coerce_bool(request.data.get('create_approval_record', False))
+    if create_approval_record is None:
+        create_approval_record = False
     
     debug_print(f"🔵 [ASSIGN REVIEWER] Called with risk_id={risk_id}, user_id={user_id}, reviewer_id={reviewer_id}, create_approval_record={create_approval_record}")
     
@@ -2622,7 +2759,7 @@ def assign_reviewer(request):
         return Response({'error': 'Reviewer ID is required. Please select a reviewer before submitting.'}, status=400)
     
     if not user_id:
-        return Response({'error': 'User ID is required'}, status=400)
+        return Response({'error': 'Authentication required'}, status=401)
 
     # Enforce maker–checker: creator cannot be their own approver/reviewer
     try:
@@ -2672,7 +2809,7 @@ def assign_reviewer(request):
     
     try:
         # Get the risk instance
-        risk_instance = RiskInstance.objects.get(RiskInstanceId=risk_id)
+        risk_instance = _get_tenant_scoped_risk_instance(risk_id, tenant_id)
         
         # Update form details if provided
         if risk_form_details:
@@ -2739,7 +2876,7 @@ def assign_reviewer(request):
                 UPDATE risk_instance
                 SET ReviewerId = %s
                 WHERE RiskInstanceId = %s
-            """, [reviewer_id, risk_id])
+            """, [reviewer_id_value, risk_id])
         
         # Only create approval record if explicitly requested (from workflow submission)
         debug_print(f"🔵 [ASSIGN REVIEWER] Checking create_approval_record flag: {create_approval_record} (type: {type(create_approval_record)})")
@@ -2901,8 +3038,12 @@ def assign_reviewer(request):
                     ]
                 }
                 
-                notification_result = notification_service.send_multi_channel_notification(notification_data)
-                debug_print(f"Notification result: {notification_result}")
+                notification_key = f"risk-review-notify:{tenant_id}:{risk_id}:{reviewer_id}:{version}"
+                if _allow_notification_send(notification_key):
+                    notification_result = notification_service.send_multi_channel_notification(notification_data)
+                    debug_print(f"Notification result: {notification_result}")
+                else:
+                    debug_print(f"Skipping duplicate risk review notification for key={notification_key}")
             except Exception as e:
                 debug_print(f"Error sending notification: {e}")
         else:
@@ -2916,7 +3057,9 @@ def assign_reviewer(request):
         debug_print(f"Error assigning reviewer: {e}")
         # Add traceback for more detailed error information
         traceback.print_exc()
-        return Response({'error': 'An internal error occurred'}, status=500)
+        return Response({'error': 'Internal server error'}, status=500)
+
+assign_reviewer.throttle_scope = 'risk_submission'
 
 @api_view(['GET'])
 @rbac_required(required_permission='evaluate_assigned_risk')
@@ -3123,10 +3266,10 @@ def get_reviewer_tasks(request, user_id):
         # Return empty list instead of error for frontend compatibility
         return Response([])
 
-@csrf_exempt
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @rbac_required(required_permission='evaluate_assigned_risk')
+@throttle_classes([ScopedRateThrottle])
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def complete_review(request):
@@ -3144,7 +3287,7 @@ def complete_review(request):
         
         approval_id = request.data.get('approval_id')  # This is RiskInstanceId
         risk_id = request.data.get('risk_id')
-        approved = request.data.get('approved')
+        approved = _coerce_bool(request.data.get('approved'))
         mitigations = request.data.get('mitigations', {})  # Get all mitigations
         risk_form_details = request.data.get('risk_form_details', {})  # Get form details, default to empty dict
 
@@ -3169,6 +3312,8 @@ def complete_review(request):
         if not risk_id:
             debug_print("Missing risk_id in request data")
             return Response({'error': 'Risk ID is required'}, status=400)
+        if approved is None:
+            return Response({'error': 'approved must be a boolean value'}, status=400)
             
         # Set approval_id to risk_id if it's missing
         if not approval_id:
@@ -3176,7 +3321,7 @@ def complete_review(request):
         
         try:
             # Get the risk instance to update statuses
-            risk_instance = RiskInstance.objects.get(RiskInstanceId=risk_id)
+            risk_instance = _get_tenant_scoped_risk_instance(risk_id, tenant_id)
         except RiskInstance.DoesNotExist:
             debug_print(f"Risk instance with ID {risk_id} not found")
             return Response({'error': 'Risk instance not found'}, status=404)
@@ -3235,6 +3380,11 @@ def complete_review(request):
                     return Response({'error': 'Approval record not found'}, status=404)
                     
                 extracted_info, user_id, approver_id, current_version = row[0], row[1], row[2], row[3]
+                actor_user_id = _get_authenticated_user_id(request)
+                if actor_user_id is None:
+                    return Response({'error': 'Authentication required'}, status=401)
+                if approver_id and int(approver_id) != int(actor_user_id):
+                    return Response({'error': 'You are not allowed to complete review for this risk'}, status=403)
                 
                 # Determine the next R version
                 cursor.execute("""
@@ -3318,7 +3468,7 @@ def complete_review(request):
                     new_version,
                     json.dumps(new_json),
                     user_id,
-                    approver_id,
+                    actor_user_id,
                     "Approved" if approved else "Rejected",
                     framework_id  # Add framework ID (can be None)
                 ])
@@ -3377,7 +3527,9 @@ def complete_review(request):
     except Exception as e:
         debug_print(f"Error completing review: {e}")
         traceback.print_exc()
-        return Response({'error': 'An internal error occurred'}, status=500)
+        return Response({'error': 'Internal server error'}, status=500)
+
+complete_review.throttle_scope = 'risk_review'
 
 @api_view(['GET'])
 @rbac_required(required_permission='view_all_risk')
@@ -3477,7 +3629,6 @@ def get_user_notifications(request, user_id):
         # Return empty array with 200 status
         return Response([])
 
-@csrf_exempt
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @rbac_required(required_permission='edit_risk')
@@ -3510,10 +3661,12 @@ def update_mitigation_status(request):
     
     if not status:
         return Response({'error': 'Status is required'}, status=400)
+    if status not in ALLOWED_MITIGATION_STATUS_UPDATES:
+        return Response({'error': 'Invalid mitigation status update value'}, status=400)
     
     try:
         # Get the risk instance
-        risk_instance = RiskInstance.objects.get(RiskInstanceId=risk_id)
+        risk_instance = _get_tenant_scoped_risk_instance(risk_id, tenant_id)
         
         # Update the mitigation status
         risk_instance.MitigationStatus = status
@@ -3535,7 +3688,7 @@ def update_mitigation_status(request):
         return Response({'error': 'Risk instance not found'}, status=404)
     except Exception as e:
         debug_print(f"Error updating mitigation status: {e}")
-        return Response({'error': 'An internal error occurred'}, status=500)
+        return Response({'error': 'Internal server error'}, status=500)
 
 @api_view(['GET'])
 @rbac_required(required_permission='view_all_risk')
@@ -3587,7 +3740,7 @@ def get_reviewer_comments(request, risk_id):
     except Exception as e:
         debug_print(f"Error fetching reviewer comments: {e}")
         traceback.print_exc()
-        return Response({"error": "An internal error occurred"}, status=500)
+        return Response({"error": "Internal server error"}, status=500)
 
 @api_view(['GET'])
 @rbac_required(required_permission='view_all_risk')
@@ -3784,7 +3937,6 @@ def get_assigned_reviewer(request, risk_id):
             'risk_id': risk_id
         }, status=200)
 
-@csrf_exempt
 @api_view(['PUT'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @rbac_required(required_permission='edit_risk')
@@ -3827,7 +3979,7 @@ def update_risk_mitigation(request, risk_id):
         return Response({'error': 'Risk instance not found'}, status=404)
     except Exception as e:
         debug_print(f"Error updating modified mitigation: {e}")
-        return Response({'error': 'An internal error occurred'}, status=500)
+        return Response({'error': 'Internal server error'}, status=500)
 
 @api_view(['GET'])
 @rbac_required(required_permission='view_all_risk')
@@ -3862,7 +4014,7 @@ def get_risk_form_details(request, risk_id):
         return Response({"error": "Risk instance not found"}, status=404)
     except Exception as e:
         debug_print(f"Error fetching risk form details: {e}")
-        return Response({"error": "An internal error occurred"}, status=500)
+        return Response({"error": "Internal server error"}, status=500)
 
 class GRCLogList(generics.ListCreateAPIView):
     queryset = GRCLog.objects.all().order_by('-Timestamp')
@@ -4070,7 +4222,7 @@ def get_system_logs(request):
         logger.error(traceback.format_exc())
         return Response({
             'success': False,
-            'error': 'An internal error occurred',
+            'error': 'Internal server error',
             'data': [],
             'total_count': 0
         }, status=500)
@@ -4131,7 +4283,6 @@ def _apply_system_log_filters_from_params(request, queryset, is_admin: bool):
     return queryset
 
 
-@csrf_exempt
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([SystemLogsPermission])
@@ -4228,7 +4379,7 @@ def export_system_logs(request):
         logger.error(traceback.format_exc())
         return Response({
             'success': False,
-            'error': 'An internal error occurred'
+            'error': 'Internal server error'
         }, status=500)
 
 @api_view(['GET'])
@@ -4367,7 +4518,7 @@ def generate_test_notification(request, user_id):
         traceback.print_exc()
         return Response({
             "success": False,
-            "message": f"Error creating test notification: {str(e)}"
+            "message": "Internal server error"
         }, status=500)
 
 
@@ -4377,10 +4528,10 @@ def generate_test_notification(request, user_id):
 
 
 
-@csrf_exempt
 @api_view(['GET', 'POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
-@permission_classes([AllowAny])  # Temporarily allow all users for testing
+@permission_classes([RiskViewPermission])
+@rbac_required(required_permission='view_all_risk')
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_all_risks_for_dropdown(request):
@@ -4562,7 +4713,7 @@ def get_all_risks_for_dropdown(request):
         debug_print(f"Error fetching risks for dropdown: {e}")
         debug_print(f"Full traceback: {error_traceback}")
         return Response({
-            "error": "An internal error occurred",
+            "error": "Internal server error",
             "success": False
         }, status=500)
 
@@ -4593,7 +4744,7 @@ def get_all_compliances_for_dropdown(request, query=None):
         return Response(compliance_data)
     except Exception as e:
         debug_print(f"Error fetching compliances for dropdown: {e}")
-        return Response({"error": "An internal error occurred"}, status=500)
+        return Response({"error": "Internal server error"}, status=500)
 
 @api_view(['GET'])
 @permission_classes([RiskViewPermission])  # RBAC: Require RiskViewPermission for viewing users dropdown
@@ -4623,7 +4774,7 @@ def get_users_for_dropdown(request):
         return Response(user_data)
     except Exception as e:
         debug_print(f"Error fetching users for dropdown: {e}")
-        return Response({"error": "An internal error occurred"}, status=500)
+        return Response({"error": "Internal server error"}, status=500)
 
 @api_view(['GET'])
 @permission_classes([RiskViewPermission])  # RBAC: Require RiskViewPermission for viewing business impacts
@@ -4648,7 +4799,6 @@ def get_business_impacts(request):
             'message': 'An internal server error occurred.'
         }, status=500)
 
-@csrf_exempt
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @rbac_required(required_permission='create_risk')
@@ -4801,10 +4951,9 @@ def get_risk_categories(request):
         logger.error(f'Error fetching risk categories for tenant {tenant_id}: {str(e)}')
         return Response({
             'status': 'error',
-            'message': f'Failed to fetch risk categories: {str(e)}'
+            'message': 'Failed to fetch risk categories'
         }, status=500)
 
-@csrf_exempt
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @rbac_required(required_permission='create_risk')
@@ -4857,8 +5006,8 @@ def get_risk_heatmap_data(request):
         debug_print("=== FETCHING RISK HEATMAP DATA ===")
         
         # Get filter parameters
-        framework_id = request.GET.get('framework_id')
-        policy_id = request.GET.get('policy_id')
+        framework_id = _parse_optional_int(request.GET.get('framework_id'))
+        policy_id = _parse_optional_int(request.GET.get('policy_id'))
         time_range = request.GET.get('timeRange', 'all')
         category = request.GET.get('category', 'all')
         priority = request.GET.get('priority', 'all')
@@ -4873,17 +5022,17 @@ def get_risk_heatmap_data(request):
         )
         
         # Apply framework filter - RiskInstance has direct ForeignKey to Framework
-        if framework_id and framework_id != 'all':
+        if framework_id is not None:
             queryset = queryset.filter(FrameworkId=framework_id)
             debug_print(f"Applied framework filter: {framework_id}")
         
         # Apply policy filter - Need to filter through ComplianceId
-        if policy_id and policy_id != 'all':
+        if policy_id is not None:
             from ...models import Policy, SubPolicy, Compliance
             try:
-                policy = Policy.objects.get(PolicyId=policy_id)
-                subpolicy_ids = SubPolicy.objects.filter(PolicyId=policy).values_list('SubPolicyId', flat=True)
-                compliance_ids = Compliance.objects.filter(SubPolicyId__in=subpolicy_ids).values_list('ComplianceId', flat=True)
+                policy = Policy.objects.get(tenant_id=tenant_id, PolicyId=policy_id)
+                subpolicy_ids = SubPolicy.objects.filter(tenant_id=tenant_id, PolicyId=policy).values_list('SubPolicyId', flat=True)
+                compliance_ids = Compliance.objects.filter(tenant_id=tenant_id, SubPolicyId__in=subpolicy_ids).values_list('ComplianceId', flat=True)
                 queryset = queryset.filter(ComplianceId__in=compliance_ids)
                 debug_print(f"Applied policy filter: {policy.PolicyName}")
             except Policy.DoesNotExist:
@@ -4950,7 +5099,7 @@ def get_risk_heatmap_data(request):
         })
     except Exception as e:
         debug_print(f"Error generating risk heatmap data: {e}")
-        return Response({"error": "An internal error occurred"}, status=500)
+        return Response({"error": "Internal server error"}, status=500)
 
 
 @api_view(['GET'])
@@ -4969,32 +5118,33 @@ def get_risks_by_heatmap_coordinates(request, impact, likelihood):
         debug_print(f"Impact: {impact}, Likelihood: {likelihood}")
         
         # Get filter parameters
-        framework_id = request.GET.get('framework_id')
-        policy_id = request.GET.get('policy_id')
+        framework_id = _parse_optional_int(request.GET.get('framework_id'))
+        policy_id = _parse_optional_int(request.GET.get('policy_id'))
         time_range = request.GET.get('timeRange', 'all')
         category = request.GET.get('category', 'all')
         priority = request.GET.get('priority', 'all')
         
         debug_print(f"Filters - Framework: {framework_id}, Policy: {policy_id}, Time: {time_range}, Category: {category}, Priority: {priority}")
         
-        # Start with base queryset
+        # Start with base queryset (tenant-scoped to prevent cross-tenant data access)
         queryset = RiskInstance.objects.filter(
+            tenant_id=tenant_id,
             RiskImpact=impact,
             RiskLikelihood=likelihood
         )
         
         # Apply framework filter - RiskInstance has direct ForeignKey to Framework
-        if framework_id and framework_id != 'all':
+        if framework_id is not None:
             queryset = queryset.filter(FrameworkId=framework_id)
             debug_print(f"Applied framework filter: {framework_id}")
         
         # Apply policy filter - Need to filter through ComplianceId
-        if policy_id and policy_id != 'all':
+        if policy_id is not None:
             from ...models import Policy, SubPolicy, Compliance
             try:
-                policy = Policy.objects.get(PolicyId=policy_id)
-                subpolicy_ids = SubPolicy.objects.filter(PolicyId=policy).values_list('SubPolicyId', flat=True)
-                compliance_ids = Compliance.objects.filter(SubPolicyId__in=subpolicy_ids).values_list('ComplianceId', flat=True)
+                policy = Policy.objects.get(tenant_id=tenant_id, PolicyId=policy_id)
+                subpolicy_ids = SubPolicy.objects.filter(tenant_id=tenant_id, PolicyId=policy).values_list('SubPolicyId', flat=True)
+                compliance_ids = Compliance.objects.filter(tenant_id=tenant_id, SubPolicyId__in=subpolicy_ids).values_list('ComplianceId', flat=True)
                 queryset = queryset.filter(ComplianceId__in=compliance_ids)
                 debug_print(f"Applied policy filter: {policy.PolicyName}")
             except Policy.DoesNotExist:
@@ -5048,7 +5198,7 @@ def get_risks_by_heatmap_coordinates(request, impact, likelihood):
         return Response({
             'status': 'error',
             'message': f'Error fetching risks for Impact {impact}, Likelihood {likelihood}',
-            'error': 'An internal error occurred'
+            'error': 'Internal server error'
         }, status=500)
  
 @api_view(['GET'])
@@ -5068,8 +5218,8 @@ def risk_trend_over_time(request):
         debug_print(f"   - Query Params: {request.GET}")
        
         # Get filter parameters
-        framework_id = request.GET.get('framework_id')
-        policy_id = request.GET.get('policy_id')
+        framework_id = _parse_optional_int(request.GET.get('framework_id'))
+        policy_id = _parse_optional_int(request.GET.get('policy_id'))
         time_range = request.GET.get('timeRange', '6months')
         category = request.GET.get('category', 'all')
         priority = request.GET.get('priority', 'all')
@@ -5099,15 +5249,17 @@ def risk_trend_over_time(request):
        
         # Base queryset for new risks
         new_risks_queryset = RiskInstance.objects.filter(
+            tenant_id=tenant_id,
             CreatedAt__gte=start_date,
             CreatedAt__lte=today
         )
         debug_print("\n3. Initial Query Counts:")
-        debug_print(f"   - Total Risk Instances: {RiskInstance.objects.all().count()}")
+        debug_print(f"   - Total Risk Instances (tenant): {RiskInstance.objects.filter(tenant_id=tenant_id).count()}")
         debug_print(f"   - Filtered by Date Range: {new_risks_queryset.count()}")
        
         # Base queryset for mitigated risks
         mitigated_risks_queryset = RiskInstance.objects.filter(
+            tenant_id=tenant_id,
             MitigationStatus=RiskInstance.MITIGATION_COMPLETED,
             MitigationCompletedDate__isnull=False,
             MitigationCompletedDate__gte=start_date,
@@ -5116,7 +5268,7 @@ def risk_trend_over_time(request):
         debug_print(f"   - Total Mitigated Risks: {mitigated_risks_queryset.count()}")
        
         # Apply framework filter - RiskInstance has direct ForeignKey to Framework
-        if framework_id and framework_id != 'all':
+        if framework_id is not None:
             new_risks_queryset = new_risks_queryset.filter(FrameworkId=framework_id)
             mitigated_risks_queryset = mitigated_risks_queryset.filter(FrameworkId=framework_id)
             debug_print(f"\n4. Framework Filter Applied: {framework_id}")
@@ -5124,12 +5276,12 @@ def risk_trend_over_time(request):
             debug_print(f"   - Filtered Mitigated Risks Count: {mitigated_risks_queryset.count()}")
         
         # Apply policy filter - Need to filter through ComplianceId
-        if policy_id and policy_id != 'all':
+        if policy_id is not None:
             from ...models import Policy, SubPolicy, Compliance
             try:
-                policy = Policy.objects.get(PolicyId=policy_id)
-                subpolicy_ids = SubPolicy.objects.filter(PolicyId=policy).values_list('SubPolicyId', flat=True)
-                compliance_ids = Compliance.objects.filter(SubPolicyId__in=subpolicy_ids).values_list('ComplianceId', flat=True)
+                policy = Policy.objects.get(tenant_id=tenant_id, PolicyId=policy_id)
+                subpolicy_ids = SubPolicy.objects.filter(tenant_id=tenant_id, PolicyId=policy).values_list('SubPolicyId', flat=True)
+                compliance_ids = Compliance.objects.filter(tenant_id=tenant_id, SubPolicyId__in=subpolicy_ids).values_list('ComplianceId', flat=True)
                 new_risks_queryset = new_risks_queryset.filter(ComplianceId__in=compliance_ids)
                 mitigated_risks_queryset = mitigated_risks_queryset.filter(ComplianceId__in=compliance_ids)
                 debug_print(f"\n5. Policy Filter Applied: {policy.PolicyName}")
@@ -5141,7 +5293,7 @@ def risk_trend_over_time(request):
         # Apply category filter if specified
         if category and category.lower() != 'all':
             try:
-                category_obj = CategoryBusinessUnit.objects.get(id=category)
+                category_obj = CategoryBusinessUnit.objects.get(id=category, tenant_id=tenant_id)
                 db_category = category_obj.value
                 debug_print(f"\n6. Category Filter Applied: {db_category}")
                 new_risks_queryset = new_risks_queryset.filter(Category__iexact=db_category)
@@ -5219,7 +5371,7 @@ def risk_trend_over_time(request):
         debug_print(f"   - Mitigated Risks Change: {mitigated_risks_change}%")
        
         # Get available categories
-        categories = CategoryBusinessUnit.objects.filter(source='risk').values('id', 'value')
+        categories = CategoryBusinessUnit.objects.filter(source='risk', tenant_id=tenant_id).values('id', 'value')
         debug_print(f"\n7. Available Categories: {list(categories)}")
        
         response_data = {
@@ -5249,7 +5401,7 @@ def risk_trend_over_time(request):
         debug_print("Traceback:")
         debug_print(traceback.format_exc())
         return JsonResponse({
-            'error': 'An internal error occurred'
+            'error': 'Internal server error'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
  
 @api_view(['GET'])
@@ -5278,9 +5430,9 @@ def get_risks_by_category(request, category):
                 LEFT JOIN users u ON ri.UserId = u.UserId
                 LEFT JOIN department d ON u.DepartmentId = d.DepartmentId
                 LEFT JOIN businessunits bu ON d.BusinessUnitId = bu.BusinessUnitId
-                WHERE ri.Category = %s
+                WHERE ri.Category = %s AND ri.TenantId = %s
                 ORDER BY ri.CreatedAt DESC
-            """, [category])
+            """, [category, tenant_id])
             
             columns = [col[0] for col in cursor.description]
             risk_instances_data = []
@@ -5347,7 +5499,7 @@ def get_risks_by_category(request, category):
         return Response({
             'status': 'error',
             'message': f'Error fetching risks for category {category}',
-            'error': 'An internal error occurred'
+            'error': 'Internal server error'
         }, status=500)
 
 
@@ -5679,7 +5831,7 @@ def custom_risk_analysis(request):
         debug_print(f"Error in custom_risk_analysis: {str(e)}")
         traceback.print_exc()
         return JsonResponse({
-            'error': 'An internal error occurred',
+            'error': 'Internal server error',
             'message': 'An error occurred while processing risk analysis data'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -5851,8 +6003,8 @@ def risk_metrics_by_category(request):
     tenant_id = get_tenant_id_from_request(request)
     
     # Get filter parameters
-    framework_id = request.GET.get('framework_id')
-    policy_id = request.GET.get('policy_id')
+    framework_id = _parse_optional_int(request.GET.get('framework_id'))
+    policy_id = _parse_optional_int(request.GET.get('policy_id'))
     time_range = request.GET.get('timeRange', 'all')
     category_filter = request.GET.get('category', 'all')
     priority_filter = request.GET.get('priority', 'all')
@@ -5861,14 +6013,17 @@ def risk_metrics_by_category(request):
    
     # First, get all available categories from the categoryunit table
     from ...models import CategoryBusinessUnit
-    available_categories = CategoryBusinessUnit.objects.filter(source='RiskCategory').values_list('value', flat=True)
+    available_categories = CategoryBusinessUnit.objects.filter(
+        source='RiskCategory',
+        tenant_id=tenant_id
+    ).values_list('value', flat=True)
    
     # Fetch all risk instances
-    queryset = RiskInstance.objects.all()
+    queryset = RiskInstance.objects.filter(tenant_id=tenant_id)
     # debug_print(f"Starting with all risk instances for category metrics: {queryset.count()} risks")
     
     # Apply framework filter - RiskInstance has direct ForeignKey to Framework
-    if framework_id and framework_id != 'all':
+    if framework_id is not None:
         queryset = queryset.filter(FrameworkId=framework_id)
         # debug_print(f"Applied framework filter: {framework_id}, count: {queryset.count()}")
     else:
@@ -5876,12 +6031,12 @@ def risk_metrics_by_category(request):
         debug_print(f"No framework filter applied for category metrics (All Frameworks selected), found {queryset.count()} risks")
     
     # Apply policy filter - Need to filter through ComplianceId
-    if policy_id and policy_id != 'all':
+    if policy_id is not None:
         from ...models import Policy, SubPolicy, Compliance
         try:
-            policy = Policy.objects.get(PolicyId=policy_id)
-            subpolicy_ids = SubPolicy.objects.filter(PolicyId=policy).values_list('SubPolicyId', flat=True)
-            compliance_ids = Compliance.objects.filter(SubPolicyId__in=subpolicy_ids).values_list('ComplianceId', flat=True)
+            policy = Policy.objects.get(tenant_id=tenant_id, PolicyId=policy_id)
+            subpolicy_ids = SubPolicy.objects.filter(tenant_id=tenant_id, PolicyId=policy).values_list('SubPolicyId', flat=True)
+            compliance_ids = Compliance.objects.filter(tenant_id=tenant_id, SubPolicyId__in=subpolicy_ids).values_list('ComplianceId', flat=True)
             queryset = queryset.filter(ComplianceId__in=compliance_ids)
             debug_print(f"Applied policy filter: {policy.PolicyName}, count: {queryset.count()}")
         except Policy.DoesNotExist:
@@ -5977,7 +6132,10 @@ def get_risk_categories_for_dropdown(request):
     
     try:
         from ...models import CategoryBusinessUnit
-        categories = CategoryBusinessUnit.objects.filter(source='RiskCategory').order_by('value')
+        categories = CategoryBusinessUnit.objects.filter(
+            source='RiskCategory',
+            tenant_id=tenant_id
+        ).order_by('value')
        
         category_data = []
         for category in categories:
@@ -5996,16 +6154,21 @@ def get_risk_categories_for_dropdown(request):
             'message': 'An internal server error occurred.'
         }, status=500)
  
-@csrf_exempt
 @api_view(['POST'])
 @permission_classes([RiskCreatePermission])
-@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@authentication_classes([UnifiedJWTAuthentication, CsrfExemptSessionAuthentication, BasicAuthentication])
 # @rbac_required(required_permission='create_risk')  # Temporarily disabled for development
 @require_consent('create_risk')
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def create_risk_instance(request):
     """Create a new risk instance - function-based view to avoid CSRF issues"""
+    if not request.user or not request.user.is_authenticated:
+        return Response({
+            "status": "error",
+            "message": "Authentication required"
+        }, status=401)
+
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
     try:
@@ -6025,6 +6188,9 @@ def create_risk_instance(request):
         
         # Create a mutable copy of the data
         mutable_data = request.data.copy() if hasattr(request.data, 'copy') else dict(request.data)
+        # SECURITY: bind creator identity to authenticated user, not client payload.
+        mutable_data['UserId'] = request.user.id
+        mutable_data['user_id'] = request.user.id
 
         # Add framework ID from session/context
         from .framework_filter_helper import get_active_framework_filter
@@ -6076,10 +6242,9 @@ def create_risk_instance(request):
             logLevel="ERROR"
         )
         
-        return Response({"error": "An internal error occurred"}, status=500)
+        return Response({"error": "Internal server error"}, status=500)
 
 
-@csrf_exempt
 @require_consent('upload_risk')
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
@@ -6105,11 +6270,8 @@ def upload_risk_evidence_file(request):
         debug_print(f"FILES data: {request.FILES}")
         debug_print(f"Request method: {request.method}")
         
-        # Get user info for logging from POST data (FormData); fallback to session identity
-        user_id = request.POST.get('user_id')
-        if not user_id:
-            from ...rbac.utils import RBACUtils
-            user_id = RBACUtils.get_user_id_from_request(request)
+        # Get user info for logging from POST data (FormData)
+        user_id = _get_authenticated_user_id(request)
         risk_instance_id = request.POST.get('risk_instance_id')
         
         if not request.FILES:
@@ -6118,6 +6280,16 @@ def upload_risk_evidence_file(request):
                 'error': 'No files provided'
             }, status=400)
         
+        if not user_id:
+            return JsonResponse({'success': False, 'error': 'Authentication required'}, status=401)
+
+        try:
+            risk_instance_id = int(risk_instance_id)
+        except (TypeError, ValueError):
+            return JsonResponse({'success': False, 'error': 'Invalid risk instance id'}, status=400)
+
+        _get_tenant_scoped_risk_instance(risk_instance_id, tenant_id)
+
         uploaded_files = []
         handler = SecureFileUploadHandler()
         
@@ -6127,7 +6299,7 @@ def upload_risk_evidence_file(request):
                 debug_print(f"Processing file: {file.name}, Size: {file.size}, Type: {file.content_type}")
                 
                 # Extract file extension
-                file_name = file.name
+                file_name = _safe_uploaded_name(file.name)
                 file_ext = Path(file_name).suffix.lower()
                 
                 # File size check
@@ -6219,7 +6391,7 @@ def upload_risk_evidence_file(request):
                     
                     # Create file data structure similar to incident format
                     file_data = {
-                        'fileName': file.name,
+                        'fileName': _safe_uploaded_name(file.name),
                         'aws-file_link': file_info.get('url', ''),
                         's3_key': file_info.get('s3_key', ''),
                         'stored_name': file_info.get('stored_name', ''),
@@ -6269,10 +6441,10 @@ def upload_risk_evidence_file(request):
         }, status=500)
 
 
-@csrf_exempt
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
-@permission_classes([AllowAny])  # Temporarily allow all for debugging
+@permission_classes([RiskEditPermission])
+@rbac_required(required_permission='edit_risk')
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def link_evidence_to_risk(request):
@@ -6294,7 +6466,8 @@ def link_evidence_to_risk(request):
         debug_print(f"DEBUG: Parsed data from request.data: {data}")
         
         risk_instance_id = data.get('risk_instance_id')
-        user_id = data.get('user_id')
+        # Never trust client-supplied user ID.
+        user_id = request.user.id if request.user and request.user.is_authenticated else None
         linked_events = data.get('linked_events', [])
         
         debug_print(f"DEBUG: Linking evidence to risk instance {risk_instance_id}")
@@ -6307,18 +6480,18 @@ def link_evidence_to_risk(request):
             return JsonResponse({
                 'success': False,
                 'message': 'Risk instance ID is required. Please ensure you are uploading from a valid risk workflow.',
-                'debug_info': {
-                    'received_data': data,
-                    'risk_instance_id': risk_instance_id,
-                    'user_id': user_id
-                }
             }, status=400)
             
         if not user_id:
-            return JsonResponse({
-                'success': False,
-                'message': 'User ID is required'
-            }, status=400)
+            return JsonResponse({'success': False, 'message': 'Authentication required'}, status=401)
+
+        try:
+            risk_instance_id = int(risk_instance_id)
+        except (TypeError, ValueError):
+            return JsonResponse({'success': False, 'message': 'Invalid risk instance ID'}, status=400)
+
+        # Enforce tenant ownership before linking any evidence.
+        _get_tenant_scoped_risk_instance(risk_instance_id, tenant_id)
             
         if not linked_events or len(linked_events) == 0:
             return JsonResponse({
@@ -6350,7 +6523,7 @@ def link_evidence_to_risk(request):
                 if event_db_id:
                     try:
                         from ...models import Event
-                        db_event = Event.objects.get(EventId=event_db_id)
+                        db_event = Event.objects.get(EventId=event_db_id, tenant_id=tenant_id)
                         if db_event.Evidence:
                             # Split semicolon-separated evidence URLs from database
                             event_evidence_data = [url.strip() for url in db_event.Evidence.split(';') if url.strip()]
@@ -6387,6 +6560,19 @@ def link_evidence_to_risk(request):
                         continue
                     
                     if evidence_url and evidence_url.strip():
+                        try:
+                            from django.conf import settings
+                            from ..Global.validation import sanitize_mitigation_evidence_urls, ValidationError as GlobalValidationError
+                            sanitized_payload = sanitize_mitigation_evidence_urls(
+                                {"mitigations": {"event": {"aws-file_link": evidence_url}}},
+                                allowed_hosts=getattr(settings, "TRUSTED_EVIDENCE_URL_HOSTS", []),
+                                allowed_host_suffixes=getattr(settings, "TRUSTED_EVIDENCE_URL_HOST_SUFFIXES", []),
+                                allow_http_hosts=getattr(settings, "TRUSTED_EVIDENCE_URL_ALLOW_HTTP_HOSTS", []),
+                            )
+                            evidence_url = sanitized_payload["mitigations"]["event"]["aws-file_link"]
+                        except GlobalValidationError:
+                            # Drop untrusted URL instead of persisting unsafe references.
+                            continue
                         # Extract filename from URL
                         filename = "Document"
                         try:
@@ -6451,7 +6637,7 @@ def link_evidence_to_risk(request):
             module="Risk Evidence Linking",
             actionType="EVIDENCE_LINKING_ERROR",
             description=f"Error linking evidence to risk instance: {str(e)}",
-            userId=request.data.get('user_id') if hasattr(request, 'data') else None,
+            userId=_get_authenticated_user_id(request),
             ipAddress=get_client_ip(request),
             logLevel='ERROR',
             additionalInfo={
@@ -6464,20 +6650,13 @@ def link_evidence_to_risk(request):
         
         return JsonResponse({
             'success': False,
-            'error': f'Failed to link evidence: An internal server error occurred',
-            'error_type': str(type(e)),
-            'debug_info': {
-                'request_method': request.method,
-                'content_type': request.content_type,
-                'has_data': hasattr(request, 'data') and request.data is not None
-            }
+            'error': 'Failed to link evidence due to an internal server error',
         }, status=500)
 
 
-@csrf_exempt
 @api_view(['GET', 'POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def test_link_evidence_endpoint(request):
@@ -6495,24 +6674,16 @@ def test_link_evidence_endpoint(request):
                 'method': 'GET'
             })
         
-        # For POST requests, just echo back the data
-        data = request.data
-        if not data:
-            try:
-                import json
-                data = json.loads(request.body.decode('utf-8'))
-            except:
-                data = {}
-        
+        # For POST requests, return safe metadata only (do not reflect untrusted payload).
         return JsonResponse({
             'success': True,
             'message': 'Link evidence endpoint received data',
-            'received_data': data,
+            'received_fields': sorted(list(request.data.keys())) if hasattr(request, 'data') and request.data else [],
             'method': 'POST'
         })
         
     except Exception as e:
         return JsonResponse({
             'success': False,
-            'error': 'An internal error occurred'
+            'error': 'Internal server error'
         }, status=500)

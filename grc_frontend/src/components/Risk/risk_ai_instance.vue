@@ -581,8 +581,13 @@
 </template>
 
 <script>
-import axios from 'axios';
 import { API_ENDPOINTS } from '../../config/api.js';
+import apiService from '@/services/apiService.js';
+
+const axios = {
+  post: (url, data = {}, config = {}) =>
+    apiService.post(url, data, config).then((res) => ({ data: res, status: 200 }))
+};
 
 export default {
   name: 'RiskInstanceAIDocumentUpload',
@@ -759,15 +764,12 @@ export default {
 
       const formData = new FormData();
       formData.append('file', this.selectedFile);
-      formData.append('user_id', localStorage.getItem('user_id') || '1');
 
       try {
         // Use fetch for better SSE support
         // Note: Do NOT send Accept: text/event-stream - DRF content negotiation rejects it (406).
         // Server returns text/event-stream anyway; omit Accept so DRF allows the request.
-        const headers = {
-          'Authorization': `Bearer ${localStorage.getItem('access_token')}`
-        };
+        const headers = {};
         const response = await fetch(API_ENDPOINTS.RISK_INSTANCE_AI_UPLOAD_STREAM, {
           method: 'POST',
           body: formData,
@@ -837,7 +839,6 @@ export default {
       // Original non-streaming method as fallback
       const formData = new FormData();
       formData.append('file', this.selectedFile);
-      formData.append('user_id', localStorage.getItem('user_id') || '1');
 
       // Create AbortController for this upload so we can cancel it
       const controller = new AbortController();
@@ -849,12 +850,10 @@ export default {
         API_ENDPOINTS.RISK_INSTANCE_AI_UPLOAD,
         formData,
         {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-            'Authorization': `Bearer ${localStorage.getItem('access_token')}`
-          },
-          timeout: 300000, // 5 minutes
-          withCredentials: false,
+          // Do not set Content-Type for FormData — the client must send the multipart boundary.
+          // AI extraction can take several minutes for larger documents.
+          // Keep this high to avoid client-side abort before backend completes.
+          timeout: 900000, // 15 minutes
           signal: controller.signal,
           onUploadProgress: (progressEvent) => {
             if (progressEvent.total) {
@@ -1015,11 +1014,14 @@ export default {
           this.isProcessing = false;
           this.currentStep = 'upload';
           this.clearProcessingState();
+          const isTimeout = error?.code === 'ECONNABORTED' || `${error?.message || ''}`.toLowerCase().includes('timeout');
           
           this.$notify({
             type: 'error',
             title: 'Processing Failed',
-            text: error.response?.data?.message || error.message || 'Failed to process document. Please try again.'
+            text: isTimeout
+              ? 'AI processing took too long and timed out. Please retry with a smaller document or try again; timeout has been increased for future attempts.'
+              : (error.response?.data?.message || error.message || 'Failed to process document. Please try again.')
           });
         }
       }
@@ -1337,13 +1339,7 @@ export default {
         const response = await axios.post(
           API_ENDPOINTS.RISK_INSTANCE_AI_SAVE,
           {
-            risk_instances: cleanRiskInstances,
-            user_id: localStorage.getItem('user_id') || '1'
-          },
-          {
-            headers: {
-              'Authorization': `Bearer ${localStorage.getItem('access_token')}`
-            }
+            risk_instances: cleanRiskInstances
           }
         );
 
