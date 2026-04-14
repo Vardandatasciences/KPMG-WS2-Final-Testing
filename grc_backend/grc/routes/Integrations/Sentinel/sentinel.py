@@ -82,7 +82,7 @@ class SentinelOAuthService:
         use_local = getattr(settings, 'USE_LOCAL_DEVELOPMENT', True)  # Default to True (local dev)
         default_redirect_uri = (
             'http://localhost:8000/auth/sentinel/callback' if use_local
-            else 'https://grc-backend.vardaands.com/auth/sentinel/callback'
+            else 'https://grc-riskavaire.vardaands.com/auth/sentinel/callback'
         )
         
         # Get redirect URI from environment or settings

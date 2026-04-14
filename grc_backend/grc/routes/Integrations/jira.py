@@ -514,7 +514,7 @@ def jira_oauth(request):
             redirect_uri = str(redirect_uri).strip().strip("'\"")
             # Fallback if somehow empty
             if not redirect_uri:
-                redirect_uri = 'https://grc-backend.vardaands.com/api/jira/oauth-callback'
+                redirect_uri = 'https://grc-riskavaire.vardaands.com/api/jira/oauth-callback'
         
         # CRITICAL: Strip quotes from all parameters (they might be stored with quotes in env vars)
         def clean_value(value):

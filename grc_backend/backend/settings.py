@@ -104,7 +104,7 @@ def _env_csv(name: str, default: str = "") -> list[str]:
 TRUSTED_EVIDENCE_URL_HOSTS = _env_csv(
     "TRUSTED_EVIDENCE_URL_HOSTS",
     # Default to your own app domains; extend via env for S3/CloudFront/custom storage.
-    "grc-riskavaire.vardaands.com,grc-tprm.vardaands.com,grc-backend.vardaands.com",
+    "grc-riskavaire.vardaands.com,grc-tprm.vardaands.com",
 )
 
 # Host suffixes allowed for evidence URLs (covers bucket.s3.<region>.amazonaws.com etc).
