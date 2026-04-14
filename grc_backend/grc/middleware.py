@@ -975,8 +975,8 @@ class EnterpriseSecurityHeadersMiddleware(MiddlewareMixin):
         directives.append("default-src 'self'")
         
         # script-src: Where JavaScript can be loaded from
-        # Hardened: disallow inline scripts and dynamic code evaluation
-        directives.append("script-src 'self'")
+        # Hardened: disallow inline scripts but allow dynamic code evaluation for Vue runtime
+        directives.append("script-src 'self' 'unsafe-eval'")
         
         # style-src: Where CSS can be loaded from
         # Allow same-origin styles and inline styles (needed for dynamic styles)

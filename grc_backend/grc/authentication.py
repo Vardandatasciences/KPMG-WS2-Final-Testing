@@ -655,14 +655,14 @@ def verify_jwt_token(token, check_session=False):
             audience=getattr(settings, 'JWT_AUDIENCE', None),
         )
         
-        # Session check DISABLED: RS256 JWT signature is cryptographically sufficient.
-        # Cache-based session invalidation caused 401s because django_cache table
-        # does not exist on the remote DB. Re-enable with Redis if needed.
-        # if check_session:
-        #     user_id = payload.get('user_id')
-        #     session_token = payload.get('jti')
-        #     if user_id and not _is_session_token_valid(user_id, session_token):
-        #         return None
+        # Session check: Enforce single active session using the centralized cache.
+        # Now that the django_cache table exists, we can safely re-enable this.
+        if check_session:
+            user_id = payload.get('user_id')
+            session_token = payload.get('jti')
+            if user_id and not _is_session_token_valid(user_id, session_token):
+                logger.warning(f"[AUTH] Session token {session_token} is no longer valid for user {user_id}")
+                return None
         
         return payload
     except jwt.ExpiredSignatureError:
