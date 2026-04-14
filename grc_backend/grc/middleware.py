@@ -880,7 +880,8 @@ class EnterpriseSecurityHeadersMiddleware(MiddlewareMixin):
         # 2. X-Frame-Options: Prevent clickjacking attacks
         # =====================================================================
         # Prevents page from being embedded in iframes (clickjacking protection)
-        response['X-Frame-Options'] = 'DENY'
+        # Changed from 'DENY' to 'SAMEORIGIN' to allow framing within the same domain (e.g., GRC framing TPRM)
+        response['X-Frame-Options'] = 'SAMEORIGIN'
         
         # =====================================================================
         # 3. X-XSS-Protection: Enable browser XSS filter
@@ -1016,8 +1017,8 @@ class EnterpriseSecurityHeadersMiddleware(MiddlewareMixin):
         directives.append(f"frame-src {' '.join(sorted(set(frame_sources)))}")
         
         # frame-ancestors: Where this page can be embedded
-        # Deny all (prevent embedding in iframes)
-        directives.append("frame-ancestors 'none'")
+        # Changed from 'none' to "'self'" to allow framing within the same domain
+        directives.append("frame-ancestors 'self'")
         
         # object-src: Where plugins can be loaded from
         # Deny all (prevent Flash, Java applets, etc.)
