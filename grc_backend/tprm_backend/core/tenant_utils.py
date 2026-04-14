@@ -73,7 +73,11 @@ def require_tenant(view_func):
     """
     @wraps(view_func)
     def wrapper(request, *args, **kwargs):
-        if not hasattr(request, 'tenant') or request.tenant is None:
+        # Check for either the tenant object or the tenant_id in the request
+        has_tenant_obj = hasattr(request, 'tenant') and request.tenant is not None
+        has_tenant_id = hasattr(request, 'tenant_id') and request.tenant_id is not None
+        
+        if not (has_tenant_obj or has_tenant_id):
             # Get user info for debugging
             user_id = getattr(request.user, 'userid', None) if hasattr(request, 'user') else None
             auth_header = request.headers.get('Authorization', 'No auth header')
@@ -115,6 +119,9 @@ def tenant_filter(view_func):
         # Add tenant_id to request for easy access
         if hasattr(request, 'tenant') and request.tenant:
             request.tenant_id = request.tenant.tenant_id
+        elif hasattr(request, 'tenant_id') and request.tenant_id:
+            # tenant_id already exists, keep it
+            pass
         else:
             # Try to get tenant from user if available
             tenant_id = None

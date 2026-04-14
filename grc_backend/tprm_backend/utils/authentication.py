@@ -23,6 +23,9 @@ class SimpleUser:
         self.pk = userid  # Add pk attribute for DRF throttling and other features
         self.username = username
         self.is_authenticated = True
+        self.is_anonymous = False
+        self.is_staff = False
+        self.is_superuser = False
         
     def __str__(self):
         return f"User({self.username}, id={self.userid})"

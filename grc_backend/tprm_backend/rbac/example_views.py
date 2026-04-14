@@ -74,6 +74,10 @@ class JWTAuthentication(BaseAuthentication):
                             self.email = mfa_user.email
                             self.first_name = getattr(mfa_user, 'first_name', '')
                             self.last_name = getattr(mfa_user, 'last_name', '')
+                            self.is_authenticated = True
+                            self.is_anonymous = False
+                            self.is_staff = False
+                            self.is_superuser = False
                             self.mfa_user = mfa_user
                     
                     simple_user = SimpleUser(mfa_user)
