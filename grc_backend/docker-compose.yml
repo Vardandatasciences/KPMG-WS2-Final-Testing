@@ -1,23 +1,42 @@
 # Server: clone repo, create .env, then:
+
 #   docker compose build --no-cache
+
 #   docker compose up -d
-
+ 
 version: '3.8'
-
+ 
 services:
+
   backend:
+
     build: .
+
     image: 480940871468.dkr.ecr.ap-south-1.amazonaws.com/grc_tprm:latest
-    container_name: grc_backend_v2
+
+    container_name: grc_backend
+
     ports:
-      - "8001:8000"
+
+      - "8000:8000"
+
     volumes:
+
       - ${MEDIA_ROOT}:/app/MEDIA_ROOT
+
       - ${TEMP_MEDIA_ROOT}:/app/TEMP_MEDIA_ROOT
+
       - ${REPORTS}:/app/Reports
+
     env_file:
+
       - ${ENV_FILE}
+
     environment:
+
       - PYTHONUNBUFFERED=1
+
       - DJANGO_SETTINGS_MODULE=backend.settings
+
     restart: unless-stopped
+ 

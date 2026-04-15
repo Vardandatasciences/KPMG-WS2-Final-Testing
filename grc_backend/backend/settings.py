@@ -757,8 +757,8 @@ REST_FRAMEWORK = {
         'rest_framework.throttling.ScopedRateThrottle',
     ],
     'DEFAULT_THROTTLE_RATES': {
-        'user': '1000/day',
-        'anon': '500/day',
+        'user': '10000/hour',
+        'anon': '2000/hour',
         # Scoped throttle for incident exports to mitigate DoS by high request volume
         'export_incidents': '20/hour',
         # Audit write operations: max 10 creates per minute per authenticated user

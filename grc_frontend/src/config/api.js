@@ -1,12 +1,10 @@
 // API Configuration - Centralized URL Management
-import { clearLegacyClientJwtKeys } from '../utils/legacyAuthStorage.js';
-
 // Change this variable to switch between different environments
- 
+
 // Environment Configuration
 const ENVIRONMENT = 'aws';
 // Options: 'aws', 'local', 'development'
- 
+
 // API Base URLs for different environments
 // In development/local use '' so requests go through vue devServer proxy (vue.config.js)
 // and avoid CORS + "Network Error" when backend is at http://127.0.0.1:8000
@@ -32,7 +30,7 @@ const getApiBaseUrl = () => {
   // Default fallback
   return API_URLS.aws;
 };
- 
+
 // Get the current API base URL based on environment
 // Using function call prevents webpack from inlining the wrong value
 export const API_BASE_URL = getApiBaseUrl();
@@ -44,8 +42,8 @@ export const RECAPTCHA_SITE_KEY = process.env.VUE_APP_RECAPTCHA_SITE_KEY || '6Le
 // MFA Configuration
 // Set VUE_APP_MFA_ENABLED=true to enable Multi-Factor Authentication, false to disable
 // Default: true (enabled)
-export const MFA_ENABLED = process.env.VUE_APP_MFA_ENABLED !== undefined 
-  ? process.env.VUE_APP_MFA_ENABLED === 'true' 
+export const MFA_ENABLED = process.env.VUE_APP_MFA_ENABLED !== undefined
+  ? process.env.VUE_APP_MFA_ENABLED === 'true'
   : true; // Default to enabled if not specified
 
 // Session Timeout Configuration (frontend popup / idle warning)
@@ -53,7 +51,7 @@ export const MFA_ENABLED = process.env.VUE_APP_MFA_ENABLED !== undefined
 const DEFAULT_SESSION_TIMEOUT_SECONDS = 21600; // 6h
 const DEFAULT_SESSION_WARNING_SECONDS = 300; // 5 min before expiry
 
-function parseEnvSeconds (envKey, fallback) {
+function parseEnvSeconds(envKey, fallback) {
   const raw = process.env[envKey]
   if (raw === undefined || raw === '') return fallback
   const n = parseInt(String(raw), 10)
@@ -78,10 +76,10 @@ export const SESSION_WARNING_SECONDS = parseEnvSeconds(
 // If true: Automatically checks all frameworks for updates (respects 7-day throttle)
 // If false: Manual mode - user must go to Framework Comparison page and click "Check the updates"
 // Default: false (manual mode)
-export const AUTO_CHECK_FRAMEWORKS = process.env.VUE_APP_AUTO_CHECK_FRAMEWORKS !== undefined 
-  ? process.env.VUE_APP_AUTO_CHECK_FRAMEWORKS === 'true' 
+export const AUTO_CHECK_FRAMEWORKS = process.env.VUE_APP_AUTO_CHECK_FRAMEWORKS !== undefined
+  ? process.env.VUE_APP_AUTO_CHECK_FRAMEWORKS === 'true'
   : false; // Default to false (manual mode) if not specified
- 
+
 // API endpoints with base URL
 export const API_ENDPOINTS = {
   // Authentication
@@ -93,8 +91,8 @@ export const API_ENDPOINTS = {
   UPDATE_PASSWORD: `${API_BASE_URL}/api/update-password/`,
   GET_USER_EMAIL: `${API_BASE_URL}/api/get-user-email/`,
   TEST_SESSION_AUTH: `${API_BASE_URL}/api/test-session-auth/`,
-   PRODUCT_VERSION: `${API_BASE_URL}/api/product-version/`,
- 
+  PRODUCT_VERSION: `${API_BASE_URL}/api/product-version/`,
+
   // User Management
   USER_PROFILE: (userId) => `${API_BASE_URL}/api/user-profile/${userId}/`,
   USER_BUSINESS_INFO: (userId) => `${API_BASE_URL}/api/user-business-info/${userId}/`,
@@ -102,27 +100,27 @@ export const API_ENDPOINTS = {
   USER_ROLE: `${API_BASE_URL}/api/user-role/`,
   USERS_FOR_DROPDOWN: `${API_BASE_URL}/api/rbac/users-for-dropdown/`,
   USERS_FOR_REVIEWER_SELECTION: `${API_BASE_URL}/api/users-for-reviewer-selection/`,
-  
+
   // Data Subject Requests (includes ACCESS type requests)
   DATA_SUBJECT_REQUESTS: (userId) => `${API_BASE_URL}/api/data-subject-requests/${userId}/`,
   CREATE_DATA_SUBJECT_REQUEST: `${API_BASE_URL}/api/data-subject-requests/create/`,
   UPDATE_DATA_SUBJECT_REQUEST_STATUS: (requestId) => `${API_BASE_URL}/api/data-subject-requests/${requestId}/update-status/`,
-  
+
   // TPRM Access Requests
   TPRM_ACCESS_REQUESTS: (userId) => `${API_BASE_URL}/api/tprm/rbac/access-requests/${userId}/`,
   TPRM_UPDATE_ACCESS_REQUEST_STATUS: (requestId) => `${API_BASE_URL}/api/tprm/rbac/access-requests/${requestId}/update-status/`,
-  
+
   // Profile Edit OTP
   PROFILE_EDIT_OTP_SEND: `${API_BASE_URL}/api/profile-edit-otp/send/`,
   PROFILE_EDIT_OTP_VERIFY: `${API_BASE_URL}/api/profile-edit-otp/verify/`,
   PROFILE_EDIT_OTP_CHECK: `${API_BASE_URL}/api/profile-edit-otp/check/`,
-  
+
   // Portability OTP
   PORTABILITY_OTP_SEND: `${API_BASE_URL}/api/portability-otp/send/`,
   PORTABILITY_OTP_VERIFY: `${API_BASE_URL}/api/portability-otp/verify/`,
   PORTABILITY_OTP_CHECK: `${API_BASE_URL}/api/portability-otp/check/`,
   EXPORT_USER_DATA_PORTABILITY: `${API_BASE_URL}/api/export-user-data-portability/`,
- 
+
   // Notifications - FIXED: Proper function implementation
   GET_NOTIFICATIONS: (userId = null) => {
     const user = userId || localStorage.getItem('user_id') || 'default_user';
@@ -131,7 +129,7 @@ export const API_ENDPOINTS = {
   MARK_AS_READ: `${API_BASE_URL}/api/mark-as-read/`,
   MARK_ALL_AS_READ: `${API_BASE_URL}/api/mark-all-as-read/`,
   PUSH_NOTIFICATION: `${API_BASE_URL}/api/push-notification/`,
-  
+
   // System Logs
   SYSTEM_LOGS: `${API_BASE_URL}/api/system-logs/`,
   SYSTEM_LOGS_EXPORT: `${API_BASE_URL}/api/system-logs/export/`,
@@ -148,7 +146,7 @@ export const API_ENDPOINTS = {
     const queryParam = frameworkId ? `?framework_id=${frameworkId}` : '';
     return `${API_BASE_URL}/api/data-analysis${queryParam}`;
   },
-  
+
   // AI-Powered Privacy Analysis
   AI_PRIVACY_ANALYSIS: (frameworkId = null) => {
     const queryParam = frameworkId ? `?framework_id=${frameworkId}` : '';
@@ -197,12 +195,12 @@ export const API_ENDPOINTS = {
   GET_ACKNOWLEDGEMENT_REPORT: (acknowledgementRequestId) => `${API_BASE_URL}/api/policy-acknowledgements/report/${acknowledgementRequestId}/`,
   GET_USERS_FOR_ACKNOWLEDGEMENT: `${API_BASE_URL}/api/policy-acknowledgements/users/`,
   CANCEL_ACKNOWLEDGEMENT_REQUEST: (acknowledgementRequestId) => `${API_BASE_URL}/api/policy-acknowledgements/cancel/${acknowledgementRequestId}/`,
-  
+
   // Public Policy Acknowledgement (no authentication required)
   GET_ACKNOWLEDGEMENT_BY_TOKEN: (token) => `${API_BASE_URL}/api/policy-acknowledgements/public/${token}/`,
   ACKNOWLEDGE_POLICY_BY_TOKEN: (token) => `${API_BASE_URL}/api/policy-acknowledgements/public/${token}/acknowledge/`,
   GET_POLICY_DOCUMENT_BY_TOKEN: (token) => `${API_BASE_URL}/api/policy-acknowledgements/public/${token}/document/`,
- 
+
   // Subpolicies
   SUBPOLICIES: (subpolicyId) => `${API_BASE_URL}/api/subpolicies/${subpolicyId}/`,
   SUBPOLICY_VERSION: (subpolicyId) => `${API_BASE_URL}/api/subpolicies/${subpolicyId}/version/`,
@@ -210,10 +208,10 @@ export const API_ENDPOINTS = {
   SUBPOLICY_REJECT: (subpolicyId) => `${API_BASE_URL}/api/subpolicies/${subpolicyId}/reject/`,
   SUBPOLICY_RESUBMIT: (subpolicyId) => `${API_BASE_URL}/api/subpolicies/${subpolicyId}/resubmit/`,
   SUBPOLICY_REVIEW: (subpolicyId) => `${API_BASE_URL}/api/subpolicies/${subpolicyId}/review/`,
- 
+
   // Framework Management
   FRAMEWORK_EXPLORER: `${API_BASE_URL}/api/framework-explorer/`,
-  
+
   // Domain Management
   GET_DOMAINS_WITH_FRAMEWORKS: `${API_BASE_URL}/api/domains/`,
   UPDATE_FRAMEWORK_DOMAIN: `${API_BASE_URL}/api/domains/update-framework/`,
@@ -228,7 +226,7 @@ export const API_ENDPOINTS = {
   POLICY_FRAMEWORK_VERSION_POLICIES: (versionId) => `${API_BASE_URL}/api/all-policies/framework-versions/${versionId}/policies/`,
   FRAMEWORK_ADD_POLICIES: (frameworkId) => `${API_BASE_URL}/api/frameworks/${frameworkId}/policies/`,
   POLICY_VERSION_SUBPOLICIES: (versionId) => `${API_BASE_URL}/api/all-policies/policy-versions/${versionId}/subpolicies/`,
- 
+
   UPLOAD_FRAMEWORK: `${API_BASE_URL}/api/upload-framework/`,
   CREATE_CHECKED_STRUCTURE: `${API_BASE_URL}/api/create-checked-structure/`,
   SAVE_SINGLE_POLICY: `${API_BASE_URL}/api/save-single-policy/`,
@@ -239,7 +237,7 @@ export const API_ENDPOINTS = {
   GENERATE_COMPLIANCES_FOR_CHECKED_SECTIONS: `${API_BASE_URL}/api/generate-compliances-for-checked-sections/`,
   GET_CHECKED_SECTIONS_WITH_COMPLIANCE: `${API_BASE_URL}/api/get-checked-sections-with-compliance/`,
   SAVE_EDITED_FRAMEWORK_TO_DATABASE: `${API_BASE_URL}/api/save-edited-framework-to-database/`,
- 
+
   // ========================================================================
   // AI-POWERED UPLOAD FRAMEWORK - NEW API (Primary - Use These)
   // ========================================================================
@@ -248,7 +246,7 @@ export const API_ENDPOINTS = {
   AI_GET_STATUS: (taskId) => `${API_BASE_URL}/api/ai-upload/status/${taskId}/`,
   AI_GET_DATA: (userid) => `${API_BASE_URL}/api/ai-upload/data/${userid}/`,
   AI_LIST_FOLDERS: `${API_BASE_URL}/api/ai-upload/list-folders/`,
-  
+
   // Default data loader from TEMP_MEDIA_ROOT
   AI_LIST_FRAMEWORKS: `${API_BASE_URL}/api/ai-upload/list-frameworks/`,
   AI_LOAD_DEFAULT_DATA: `${API_BASE_URL}/api/ai-upload/load-default-data/`,
@@ -259,7 +257,7 @@ export const API_ENDPOINTS = {
   },
   AI_GET_POLICIES_FOR_SECTION: (sectionFolder) => `${API_BASE_URL}/api/ai-upload/policies/${sectionFolder}/`,
   AI_GET_SUBPOLICIES_FOR_POLICY: (sectionFolder, policyId) => `${API_BASE_URL}/api/ai-upload/subpolicies/${sectionFolder}/${policyId}/`,
-  
+
   // ========================================================================
   // Framework Upload and Processing (Legacy - Kept for backward compatibility)
   // ========================================================================
@@ -270,7 +268,7 @@ export const API_ENDPOINTS = {
   FRAMEWORK_GET_SECTIONS: (taskId) => `${API_BASE_URL}/api/get-sections/${taskId}/`,
   FRAMEWORK_GET_SECTIONS_BY_USER: (userid) => `${API_BASE_URL}/api/get-sections-by-user/${userid}/`,
   FRAMEWORK_LIST_USER_FOLDERS: `${API_BASE_URL}/api/list-user-folders/`,
-  
+
   // Checked Sections Management
   CHECKED_SECTIONS_SAVE: `${API_BASE_URL}/api/checked-sections/save-selected-sections/`,
   CHECKED_SECTIONS_GET: (userId) => `${API_BASE_URL}/api/checked-sections/get-checked-sections/${userId}/`,
@@ -278,10 +276,10 @@ export const API_ENDPOINTS = {
   CHECKED_SECTIONS_PROCESS_PDFS: `${API_BASE_URL}/api/checked-sections/process-pdfs/`,
   CHECKED_SECTIONS_GET_FORM_DATA: `${API_BASE_URL}/api/checked-sections/get-extracted-policies-form-data/`,
   CHECKED_SECTIONS_PDF: (userId, sectionFolder, controlId) => `${API_BASE_URL}/api/checked-sections/pdf/${userId}/${sectionFolder}/${controlId}/`,
- 
+
   // Policy Documents
   UPLOAD_POLICY_DOCUMENT: `${API_BASE_URL}/api/upload-policy-document/`,
- 
+
   // Status Change Requests
   FRAMEWORK_STATUS_CHANGE_REQUESTS: `${API_BASE_URL}/api/framework-status-change-requests/`,
   FRAMEWORK_STATUS_CHANGE_REQUESTS_USER: (userId) => `${API_BASE_URL}/api/framework-status-change-requests/user/${userId}/`,
@@ -289,14 +287,14 @@ export const API_ENDPOINTS = {
   POLICY_STATUS_CHANGE_REQUESTS: `${API_BASE_URL}/api/policy-status-change-requests/`,
   POLICY_STATUS_CHANGE_REQUESTS_USER: (userId) => `${API_BASE_URL}/api/policy-status-change-requests/user/${userId}/`,
   POLICY_STATUS_CHANGE_REQUESTS_REVIEWER: (userId) => `${API_BASE_URL}/api/policy-status-change-requests/reviewer/${userId}/`,
- 
+
   // Policy Categories
   POLICY_CATEGORIES: `${API_BASE_URL}/api/policy-categories/`,
-  
+
   // Tailoring & Templating
   TAILORING_CREATE_FRAMEWORK: `${API_BASE_URL}/api/tailoring/create-framework/`,
   TAILORING_CREATE_POLICY: `${API_BASE_URL}/api/tailoring/create-policy/`,
- 
+
   // Frameworks
   FRAMEWORKS: `${API_BASE_URL}/api/frameworks/`,
   FRAMEWORK_GET_POLICIES: (frameworkId) => `${API_BASE_URL}/api/frameworks/${frameworkId}/get-policies/`,
@@ -305,7 +303,7 @@ export const API_ENDPOINTS = {
   FRAMEWORK_SET_SELECTED: `${API_BASE_URL}/api/frameworks/set-selected/`,
   FRAMEWORK_GET_SELECTED: `${API_BASE_URL}/api/frameworks/get-selected/`,
   FRAMEWORK_POLICIES_RECURSIVE: (frameworkId) => `${API_BASE_URL}/api/frameworks/${frameworkId}/policies-recursive/`,
-  
+
   // Audit Frameworks (for audit assignment)
   AUDIT_FRAMEWORKS: `${API_BASE_URL}/api/audit/frameworks/`,
   AUDIT_POLICIES: `${API_BASE_URL}/api/audit/policies/`,
@@ -314,53 +312,53 @@ export const API_ENDPOINTS = {
   FRAMEWORK_RESUBMIT_APPROVAL: (frameworkId) => `${API_BASE_URL}/api/frameworks/${frameworkId}/resubmit-approval/`,
   FRAMEWORK_APPROVE_FINAL: (frameworkId) => `${API_BASE_URL}/api/frameworks/${frameworkId}/approve-final/`,
   FRAMEWORKS_REJECTED: `${API_BASE_URL}/api/frameworks/rejected/`,
- 
+
   // Framework Approvals
   FRAMEWORK_APPROVALS: `${API_BASE_URL}/api/frameworks/approvals/`,  // Get all framework approvals
   FRAMEWORK_APPROVALS_USER: (userId) => `${API_BASE_URL}/api/framework-approvals/user/${userId}/`,  // Frameworks created by user
   FRAMEWORK_APPROVALS_REVIEWER: (userId) => `${API_BASE_URL}/api/framework-approvals/reviewer/${userId}/`,  // Frameworks where user is reviewer
   FRAMEWORK_APPROVALS_LATEST: (frameworkId) => `${API_BASE_URL}/api/framework-approvals/latest/${frameworkId}/`,
- 
+
   // Framework Policy Approvals
   FRAMEWORK_POLICY_APPROVE_REJECT: (frameworkId, policyId) => `${API_BASE_URL}/api/frameworks/${frameworkId}/policies/${policyId}/approve-reject/`,
   FRAMEWORK_POLICY_SUBPOLICY_APPROVE_REJECT: (frameworkId, policyId, subpolicyId) => `${API_BASE_URL}/api/frameworks/${frameworkId}/policies/${policyId}/subpolicies/${subpolicyId}/approve-reject/`,
- 
+
   // Policy Subpolicies
   POLICY_GET_SUBPOLICIES: (policyId) => `${API_BASE_URL}/api/policies/${policyId}/get-subpolicies/`,
   POLICY_DETAILS: (policyId) => `${API_BASE_URL}/api/policies/${policyId}/details/`,
- 
+
   // Policy Users
   POLICY_USERS: `${API_BASE_URL}/api/policy-users/`,
- 
+
   // Departments
   DEPARTMENTS: `${API_BASE_URL}/api/departments/`,
- 
+
   // Compliance
   // Correct paths for compliance approvals (match backend routes in grc.urls)
   COMPLIANCE_APPROVALS: (approvalId) => `${API_BASE_URL}/api/compliance/compliance-approvals/${approvalId}/review/`,
   COMPLIANCE_APPROVALS_RESUBMIT: (approvalId) => `${API_BASE_URL}/api/compliance/compliance-approvals/resubmit/${approvalId}/`,
- 
+
   // Compliance Management - Complete set of endpoints
   COMPLIANCE_FRAMEWORKS: `${API_BASE_URL}/api/compliance/frameworks/`,
   COMPLIANCE_POLICIES: (frameworkId) => `${API_BASE_URL}/api/compliance/frameworks/${frameworkId}/policies/list/`,
   COMPLIANCE_SUBPOLICIES: (policyId) => `${API_BASE_URL}/api/compliance/policies/${policyId}/subpolicies/`,
   COMPLIANCE_SUBPOLICY_COMPLIANCES: (subpolicyId) => `${API_BASE_URL}/api/compliance/all-policies/subpolicies/${subpolicyId}/compliances/`,
   COMPLIANCE_VIEW_BY_TYPE: (type, id) => `${API_BASE_URL}/api/compliance/view/${type}/${id}/`,
- 
+
   // Compliance CRUD operations
   COMPLIANCE_CREATE: `${API_BASE_URL}/api/compliance-create/`,
   COMPLIANCE_GET: (complianceId) => `${API_BASE_URL}/api/compliance/${complianceId}/`,
   COMPLIANCE_UPDATE: (complianceId) => `${API_BASE_URL}/api/compliance_edit/${complianceId}/edit/`,
   COMPLIANCE_CLONE: (complianceId) => `${API_BASE_URL}/api/clone-compliance/${complianceId}/clone/`,
   COMPLIANCE_DELETE: (complianceId) => `${API_BASE_URL}/api/compliance/${complianceId}/`,
- 
+
   // Compliance versioning and status
   // Use the canonical toggle-version endpoint exposed by the backend
   COMPLIANCE_TOGGLE_VERSION: (complianceId) => `${API_BASE_URL}/api/compliance/${complianceId}/toggle-version/`,
   COMPLIANCE_DEACTIVATE: (complianceId) => `${API_BASE_URL}/api/compliance/${complianceId}/deactivate/`,
   COMPLIANCE_DEACTIVATION_APPROVE: (approvalId) => `${API_BASE_URL}/api/compliance/deactivation/${approvalId}/approve/`,
   COMPLIANCE_DEACTIVATION_REJECT: (approvalId) => `${API_BASE_URL}/api/compliance/deactivation/${approvalId}/reject/`,
- 
+
   // Compliance dashboard and analytics
   COMPLIANCE_USER_DASHBOARD: `${API_BASE_URL}/api/compliance/dashboard-with-filters/`,
   COMPLIANCE_KPI_DASHBOARD: `${API_BASE_URL}/api/compliance/kpi-dashboard/`,
@@ -375,28 +373,28 @@ export const API_ENDPOINTS = {
   COMPLIANCE_REMEDIATION_COST: `${API_BASE_URL}/api/compliance/kpi-dashboard/analytics/remediation-cost/`,
   COMPLIANCE_NON_COMPLIANT_INCIDENTS: `${API_BASE_URL}/api/compliance/kpi-dashboard/analytics/non-compliant-incidents/`,
   COMPLIANCE_ONTIME_MITIGATION_PERCENTAGE: `${API_BASE_URL}/api/compliance/kpi-dashboard/analytics/ontime-mitigation/`,
- 
+
   // Compliance approvals
   COMPLIANCE_POLICY_APPROVALS_REVIEWER: `${API_BASE_URL}/api/compliance/policy-approvals-compliance/reviewer/`,
   COMPLIANCE_REJECTED_APPROVALS: (reviewerId) => `${API_BASE_URL}/api/compliance/policy-approvals-compliance/rejected/${reviewerId}/`,
   COMPLIANCE_APPROVALS_USER: (userId) => `${API_BASE_URL}/api/compliance-approvals/user/${userId}/`,
   COMPLIANCE_APPROVALS_REVIEWER: (userId) => `${API_BASE_URL}/api/compliance-approvals/reviewer/${userId}/`,
- 
+
   // Compliance audit
   COMPLIANCE_AUDIT_INFO: (complianceId) => `${API_BASE_URL}/api/compliance/compliance/${complianceId}/audit-info/`,
- 
+
   // Compliance export
   COMPLIANCE_EXPORT: `${API_BASE_URL}/api/compliance/export/`,
   // EXPORT_COMPLIANCE_MANAGEMENT: `${API_BASE_URL}/api/export/compliance-management/`,
   EXPORT_COMPLIANCE_MANAGEMENT: `${API_BASE_URL}/api/export-compliance-register/`,
- 
+
   // Category Business Units
   CATEGORY_BUSINESS_UNITS: `${API_BASE_URL}/api/category-business-units/`,
   CATEGORY_BUSINESS_UNITS_ADD: `${API_BASE_URL}/api/category-business-units/add/`,
- 
+
   // Compliance users
   COMPLIANCE_USERS: `${API_BASE_URL}/api/compliance-users/`,
- 
+
   // Legacy endpoints (keeping for backward compatibility)
   COMPLIANCE_EDIT: (id) => `${API_BASE_URL}/compliance_edit/${id}/edit/`,
   COMPLIANCE_CLONE_LEGACY: (id) => `${API_BASE_URL}/compliance/${id}/clone/`,
@@ -410,19 +408,19 @@ export const API_ENDPOINTS = {
   CREATE_BASELINE_VERSION: `${API_BASE_URL}/api/compliance/baselines/create-version/`,
   CREATE_SINGLE_BASELINE_VERSION: `${API_BASE_URL}/api/compliance/baselines/create-single-version/`,
   SET_ACTIVE_BASELINE: (frameworkId, level, version) => `${API_BASE_URL}/api/compliance/baselines/${frameworkId}/${level}/${version}/set-active/`,
- 
- 
+
+
   // Audit Reports (corrected paths)
   AUDIT_REPORTS_CHECK: `${API_BASE_URL}/api/audit-reports/check/`,
   AUDIT_REPORTS_DETAILS: `${API_BASE_URL}/api/audit-reports/details/`,
- 
+
   // Entities
   ENTITIES: `${API_BASE_URL}/api/entities/`,
   DEPARTMENTS_SAVE: `${API_BASE_URL}/api/departments/save/`,
- 
+
   // KPI and Dashboard
   POLICY_KPIS: `${API_BASE_URL}/api/policy-kpis/`,
- 
+
   // Risk Management
   RISK_INSTANCES: `${API_BASE_URL}/api/risk-instances/`,
   RISK_INSTANCE: (instanceId) => `${API_BASE_URL}/api/risk-instances/${instanceId}/`,
@@ -451,7 +449,7 @@ export const API_ENDPOINTS = {
   ANALYZE_INCIDENT: `${API_BASE_URL}/api/analyze-incident/`,
   COMPLIANCES_FOR_DROPDOWN: (query = '') => `${API_BASE_URL}/api/compliances-for-dropdown/${query}`,
   ALL_COMPLIANCES_FOR_DROPDOWN: `${API_BASE_URL}/api/compliances-for-dropdown/`,
- 
+
   // Risk Dashboard and Analytics
   RISK_METRICS: (params = '') => `${API_BASE_URL}/api/risk/metrics${params ? `?${params}` : ''}`,
   RISK_CATEGORIES_DROPDOWN: `${API_BASE_URL}/api/risk/categories-for-dropdown/`,
@@ -463,7 +461,7 @@ export const API_ENDPOINTS = {
   RISK_BY_HEATMAP_COORDINATES: (impact, likelihood) => `${API_BASE_URL}/api/risk/heatmap/coordinates/${impact}/${likelihood}/`,
   RISK_CUSTOM_ANALYSIS: (params = '') => `${API_BASE_URL}/api/risk/custom-analysis/${params ? `?${params}` : ''}`,
   RISK_BY_CATEGORY: (category, params = '') => `${API_BASE_URL}/api/risk/by-category/${category}${params ? `?${params}` : ''}`,
- 
+
   // Risk KPI and Performance
   RISK_KPI_DATA: `${API_BASE_URL}/api/risk/kpi-data/`,
   RISK_ACTIVE_RISKS_KPI: `${API_BASE_URL}/api/risk/active-risks-kpi/`,
@@ -480,18 +478,18 @@ export const API_ENDPOINTS = {
   RISK_ASSESSMENT_FREQUENCY: `${API_BASE_URL}/api/risk/assessment-frequency/`,
   RISK_ASSESSMENT_CONSENSUS: `${API_BASE_URL}/api/risk/assessment-consensus/`,
   RISK_IDENTIFICATION_RATE_KPI: (params = '') => `${API_BASE_URL}/api/risk/identification-rate/${params ? `?${params}` : ''}`,
- 
+
   // Risk Workflow and Evidence
   UPLOAD_RISK_EVIDENCE: `${API_BASE_URL}/api/upload-risk-evidence/`,
   DELETE_RISK_EVIDENCE: (fileId) => `${API_BASE_URL}/api/delete-risk-evidence/${fileId}/`,
- 
+
   // Risk Export
   EXPORT_RISK_REGISTER: `${API_BASE_URL}/api/export-risk-register/`,
-  
+
   // Risk Departments and Business Units
   RISK_DEPARTMENTS: `${API_BASE_URL}/api/risk-departments/`,
   RISK_BUSINESS_UNITS: `${API_BASE_URL}/api/risk-business-units/`,
-  
+
   // Risk Scoring endpoints
   RISK_SCORING_INCIDENT_NAMES: `${API_BASE_URL}/api/risk-scoring/incident-names/`,
   RISK_SCORING_COMPLIANCE_NAMES: `${API_BASE_URL}/api/risk-scoring/compliance-names/`,
@@ -547,7 +545,7 @@ export const API_ENDPOINTS = {
 
   // Current User
   CURRENT_USER: `${API_BASE_URL}/api/current-user/`,
- 
+
   // Incidents
   INCIDENTS: `${API_BASE_URL}/api/incidents/`,
   INCIDENT: (incidentId) => `${API_BASE_URL}/api/incidents/${incidentId}/`,
@@ -558,12 +556,12 @@ export const API_ENDPOINTS = {
   INCIDENTS_EXPORT: `${API_BASE_URL}/api/incidents/export/`,
   SUBMIT_INCIDENT_ASSESSMENT: `${API_BASE_URL}/api/submit-incident-assessment/`,
   SUBMIT_AUDIT_FINDING_ASSESSMENT: `${API_BASE_URL}/api/submit-audit-finding-assessment/`,
- 
+
   // Incident Management
   INCIDENT_CREATE: `${API_BASE_URL}/api/incidents/create/`,
   INCIDENT_COMPLIANCES: `${API_BASE_URL}/api/incident-compliances/`,
   INCIDENT_COUNTS: `${API_BASE_URL}/api/incidents/counts/`,
- 
+
   // Incident Dashboard and Analytics
   INCIDENT_MTTD: `${API_BASE_URL}/api/incident/mttd/`,
   INCIDENT_MTTR: `${API_BASE_URL}/api/incident/mttr/`,
@@ -583,7 +581,7 @@ export const API_ENDPOINTS = {
   INCIDENT_ESCALATION_RATE: `${API_BASE_URL}/api/incident/escalation-rate/`,
   INCIDENT_COST: `${API_BASE_URL}/api/incident/cost/`,
   INCIDENT_REPEAT_RATE: `${API_BASE_URL}/api/incident/repeat-rate/`,
- 
+
   // Incident User Tasks
   USER_INCIDENTS: (userId) => `${API_BASE_URL}/api/user-incidents/${userId}/`,
   USER_AUDIT_FINDINGS: (userId) => `${API_BASE_URL}/api/user-audit-findings/${userId}/`,
@@ -596,19 +594,19 @@ export const API_ENDPOINTS = {
   COMPLETE_INCIDENT_REVIEW: `${API_BASE_URL}/api/complete-incident-review/`,
   COMPLETE_AUDIT_FINDING_REVIEW: `${API_BASE_URL}/api/complete-audit-finding-review/`,
   UPLOAD_FILE: `${API_BASE_URL}/api/upload-file/`,
- 
+
   // Audit Findings
   AUDIT_FINDINGS: `${API_BASE_URL}/api/audit-findings/`,
   AUDIT_FINDINGS_EXPORT: `${API_BASE_URL}/api/audit-findings/export/`,
   AUDIT_FINDINGS_INCIDENT: (incidentId) => `${API_BASE_URL}/api/audit-findings/incident/${incidentId}/`,
- 
+
   // Categories and Business Units
   CATEGORIES: `${API_BASE_URL}/api/categories/`,
   CATEGORIES_ADD: `${API_BASE_URL}/api/categories/add/`,
   INCIDENT_CATEGORIES: `${API_BASE_URL}/api/incident-categories/`,
   INCIDENT_CATEGORIES_ADD: `${API_BASE_URL}/api/incident-categories/add/`,
   BUSINESS_UNITS_ADD: `${API_BASE_URL}/api/business-units/add/`,
- 
+
   // Users
   USERS: `${API_BASE_URL}/api/users/`,
 
@@ -619,7 +617,7 @@ export const API_ENDPOINTS = {
   EXTERNAL_APPLICATION_DETAILS: (applicationId) => `${API_BASE_URL}/api/external-applications/${applicationId}/`,
   EXTERNAL_APPLICATIONS_REFRESH_STATUS: `${API_BASE_URL}/api/external-applications/refresh-status/`,
   EXTERNAL_APPLICATION_SYNC_LOGS: (applicationId) => `${API_BASE_URL}/api/external-applications/${applicationId}/sync-logs/`,
-  
+
   // BambooHR Integration
   BAMBOOHR_OAUTH: `${API_BASE_URL}/api/bamboohr/oauth/`,
   BAMBOOHR_OAUTH_CALLBACK: `${API_BASE_URL}/api/bamboohr/oauth-callback/`,
@@ -630,8 +628,8 @@ export const API_ENDPOINTS = {
   BAMBOOHR_SYNC_DATA: `${API_BASE_URL}/api/bamboohr/sync-data/`,
   BAMBOOHR_STORED_DATA: `${API_BASE_URL}/api/bamboohr/stored-data/`,
   BAMBOOHR_ADD_USER: `${API_BASE_URL}/api/bamboohr/add-user/`,
-  
-// Jira Integration
+
+  // Jira Integration
   // Jira Integration - Updated for Python backend
   JIRA_OAUTH: `${API_BASE_URL}/api/jira/oauth/`,
   JIRA_OAUTH_CALLBACK: `${API_BASE_URL}/api/jira/oauth-callback/`,
@@ -639,7 +637,7 @@ export const API_ENDPOINTS = {
   JIRA_PROJECT_DETAILS: `${API_BASE_URL}/api/jira/project-details/`,
   JIRA_RESOURCES: `${API_BASE_URL}/api/jira/resources/`,
   JIRA_STORED_DATA: `${API_BASE_URL}/api/jira/stored-data/`,
-  
+
   // Legacy Jira endpoints (for backward compatibility)
   JIRA_DISCONNECT: `${API_BASE_URL}/api/jira/disconnect/`,
   JIRA_CONNECTION_STATUS: `${API_BASE_URL}/api/jira/connection-status/`,
@@ -657,20 +655,20 @@ export const API_ENDPOINTS = {
   STREAMLINE_SAVE_TASK_ACTION: `${API_BASE_URL}/api/streamline/save-task-action/`,
   STREAMLINE_SAVE_PROJECT_TASKS: `${API_BASE_URL}/api/streamline/save-project-tasks/`,
   STREAMLINE_USER_TASK_ACTIONS: `${API_BASE_URL}/api/streamline/user-task-actions/`,
-  
+
   // Jira endpoints
   JIRA_PROJECT_ISSUES: `${API_BASE_URL}/api/jira/project-issues/`,
 
   // Audit Finding Mitigations and Review Data
   // AUDIT_FINDING_MITIGATIONS: (id) => `${API_BASE_URL}/api/audit-finding-mitigations/${id}/`,
   // AUDIT_FINDING_REVIEW_DATA: (id) => `${API_BASE_URL}/api/audit-finding-review-data/${id}/`,
- 
+
   // Complete Review Endpoints
   // COMPLETE_AUDIT_FINDING_REVIEW: `${API_BASE_URL}/api/complete-audit-finding-review/`,
- 
+
   // Upload File
   // UPLOAD_FILE: `${API_BASE_URL}/api/upload-file/`,
- 
+
   // Audit
   AUDITS: (auditId) => `${API_BASE_URL}/api/audits/${auditId}/`,
   AUDIT_TASK_DETAILS: (auditId) => `${API_BASE_URL}/api/audits/${auditId}/task-details/`,
@@ -723,7 +721,7 @@ export const API_ENDPOINTS = {
   COMPLIANCE_MAPPING_REQUIREMENTS: (policyId) => `${API_BASE_URL}/api/compliance-mapping/requirements/${policyId}/`,
   GENERATE_AUDIT_REPORT: (auditId) => `${API_BASE_URL}/api/generate-audit-report/${auditId}/`,
 
-  
+
   // Compliance
 
   //COMPLIANCE_CLONE: (id) => `${API_BASE_URL}/compliance/${id}/clone/`,
@@ -732,7 +730,7 @@ export const API_ENDPOINTS = {
 
 
 
- 
+
   // Auditor Dashboard and Analytics
   AUDIT_COMPLETION_RATE: `${API_BASE_URL}/api/dashboard/audit-completion-rate/`,
   AUDIT_TOTAL_AUDITS: `${API_BASE_URL}/api/dashboard/total-audits/`,
@@ -746,7 +744,7 @@ export const API_ENDPOINTS = {
   AUDIT_CATEGORY_DISTRIBUTION: `${API_BASE_URL}/api/dashboard/category-distribution/`,
   AUDIT_STATUS_DISTRIBUTION: `${API_BASE_URL}/api/dashboard/status-distribution/`,
   AUDIT_RECENT_ACTIVITIES: `${API_BASE_URL}/api/dashboard/recent-audit-activities/`,
- 
+
   // Auditor Management
   AUDIT_MY_AUDITS: `${API_BASE_URL}/api/my-audits/`,
   AUDIT_STATUS: (auditId) => `${API_BASE_URL}/api/audits/${auditId}/status/`,
@@ -754,7 +752,7 @@ export const API_ENDPOINTS = {
   AUDIT_FINDINGS_BULK_UPDATE: `${API_BASE_URL}/api/audit-findings/bulk-update/`,
   AUDIT_FINDINGS_DETAILS: (auditFindingId) => `${API_BASE_URL}/audit-findings-details/${auditFindingId}/`,
   AUDIT_REPORT: (auditId) => `${API_BASE_URL}/api/audit-report/${auditId}/`,
- 
+
   // Audit Reports Management
   AUDIT_REPORTS: `${API_BASE_URL}/api/audit-reports/`,
   AUDIT_REPORT_VERSIONS: (auditId) => `${API_BASE_URL}/api/audit-reports/${auditId}/versions/`,
@@ -762,24 +760,24 @@ export const API_ENDPOINTS = {
   AUDIT_REPORT_VERSION_S3_LINK: (auditId, version) => `${API_BASE_URL}/api/audit-reports/${auditId}/versions/${version}/s3-link/`,
   // AI Audit manual run (used from Events calendar)
   RUN_AI_AUDIT_FOR_AUDIT: (auditId) => `${API_BASE_URL}/api/ai-audit/${auditId}/run-schedules/`,
- 
+
   // Audit Creation and Assignment
   AUDIT_CREATE: `${API_BASE_URL}/api/create-audit/`,
   AUDIT_COMPLIANCE_COUNT: `${API_BASE_URL}/api/compliance-count/`,
   AUDIT_COMPLIANCES_FOR_SCOPE: `${API_BASE_URL}/api/audit/compliances-for-scope/`,
- 
+
   // Evidence Upload
   UPLOAD_EVIDENCE_S3: `${API_BASE_URL}/api/upload-evidence-s3/`,
- 
+
   // Business Units
   BUSINESS_UNITS: `${API_BASE_URL}/api/business-units/`,
- 
+
   // Evidence Upload
   UPLOAD_EVIDENCE: (complianceId) => `${API_BASE_URL}/upload-evidence/${complianceId}/`,
- 
+
   // S3 Upload (separate service)
   S3_UPLOAD: 'http://localhost:3001/api/upload',
- 
+
   // KPI and Performance Analysis
   KPI_AUDIT_COMPLETION: (period) => `${API_BASE_URL}/api/kpi/audit-completion/?period=${period}`,
   KPI_AUDIT_CYCLE_TIME: (frameworkId = '') => `${API_BASE_URL}/api/kpi/audit-cycle-time/${frameworkId ? `?framework_id=${frameworkId}` : ''}`,
@@ -819,8 +817,8 @@ export const API_ENDPOINTS = {
   COMPANY_SUBFOLDERS_CREATE: (folderId) => `${API_BASE_URL}/api/company-folders/${folderId}/subfolders/create/`,
   COMPANY_SUBFOLDER_DELETE: (folderId, subfolderId) => `${API_BASE_URL}/api/company-folders/${folderId}/subfolders/${subfolderId}/`,
   DOCUMENT_DELETE: (docId) => `${API_BASE_URL}/api/documents/${docId}/delete/`,
- 
- 
+
+
   // Microsoft Sentinel Integration
   SENTINEL_STATUS: `${API_BASE_URL}/api/sentinel/status/`,
   SENTINEL_INCIDENTS: `${API_BASE_URL}/api/sentinel/incidents/`,
@@ -846,15 +844,15 @@ export const API_ENDPOINTS = {
   CHANGE_MGMT_FRAMEWORKS_WITH_AMENDMENTS: `${API_BASE_URL}/api/change-management/frameworks-with-amendments/`,
   CHANGE_MGMT_FRAMEWORK_AMENDMENTS: (frameworkId) => `${API_BASE_URL}/api/change-management/framework/${frameworkId}/amendments/`,
   CHANGE_MGMT_FRAMEWORK_ORIGIN: (frameworkId) => `${API_BASE_URL}/api/change-management/framework/${frameworkId}/origin/`,
-  CHANGE_MGMT_FRAMEWORK_TARGET: (frameworkId, amendmentId = null) => 
-    amendmentId 
+  CHANGE_MGMT_FRAMEWORK_TARGET: (frameworkId, amendmentId = null) =>
+    amendmentId
       ? `${API_BASE_URL}/api/change-management/framework/${frameworkId}/target/${amendmentId}/`
       : `${API_BASE_URL}/api/change-management/framework/${frameworkId}/target/`,
   CHANGE_MGMT_FRAMEWORK_SUMMARY: (frameworkId) => `${API_BASE_URL}/api/change-management/framework/${frameworkId}/summary/`,
   CHANGE_MGMT_FIND_MATCHES: (frameworkId) => `${API_BASE_URL}/api/change-management/framework/${frameworkId}/find-matches/`,
   CHANGE_MGMT_BATCH_MATCH: (frameworkId) => `${API_BASE_URL}/api/change-management/framework/${frameworkId}/batch-match/`,
   CHANGE_MGMT_MIGRATION_OVERVIEW: (frameworkId) => `${API_BASE_URL}/api/change-management/framework/${frameworkId}/migration-overview/`,
-   CHANGE_MGMT_GAP_ANALYSIS: (frameworkId) => `${API_BASE_URL}/api/change-management/framework/${frameworkId}/gap-analysis/`,
+  CHANGE_MGMT_GAP_ANALYSIS: (frameworkId) => `${API_BASE_URL}/api/change-management/framework/${frameworkId}/gap-analysis/`,
   CHANGE_MGMT_MATCH_COMPLIANCES: (frameworkId) => `${API_BASE_URL}/api/change-management/framework/${frameworkId}/match-compliances/`,
   CHANGE_MGMT_ADD_COMPLIANCE: (frameworkId) => `${API_BASE_URL}/api/change-management/framework/${frameworkId}/add-compliance/`,
   CHANGE_MGMT_CHECK_UPDATES: (frameworkId) => `${API_BASE_URL}/api/change-management/framework/${frameworkId}/check-updates/`,
@@ -865,7 +863,7 @@ export const API_ENDPOINTS = {
   CHANGE_MGMT_START_ANALYSIS: (frameworkId) => `${API_BASE_URL}/api/change-management/framework/${frameworkId}/start-analysis/`,
   CHANGE_MGMT_CANCEL_ANALYSIS: (frameworkId) => `${API_BASE_URL}/api/change-management/framework/${frameworkId}/cancel-analysis/`
 };
- 
+
 // Axios instance configuration with JWT authentication
 export const createAxiosInstance = (baseURL = API_BASE_URL) => {
   const axios = require('axios');
@@ -906,18 +904,9 @@ export const createAxiosInstance = (baseURL = API_BASE_URL) => {
     xsrfHeaderName: 'X-CSRFToken'
   });
 
-  // Cookie-first auth: strip legacy Bearer + storage keys on every request (all createAxiosInstance users).
+  // Cookie-first auth: rely on HttpOnly cookies (no JS-accessible tokens).
   instance.interceptors.request.use(
     async (config) => {
-      clearLegacyClientJwtKeys();
-      try {
-        if (config.headers) {
-          delete config.headers.Authorization;
-          if (config.headers.common) delete config.headers.common.Authorization;
-        }
-      } catch {
-        /* ignore */
-      }
       const method = (config.method || 'get').toLowerCase();
       const unsafeMethods = ['post', 'put', 'patch', 'delete'];
       if (unsafeMethods.includes(method)) {
@@ -937,15 +926,15 @@ export const createAxiosInstance = (baseURL = API_BASE_URL) => {
 
   return instance;
 };
- 
+
 // Default axios instance
 export const axiosInstance = createAxiosInstance();
- 
+
 // Console log for debugging
 console.log(`🔧 API Configuration: Using ${ENVIRONMENT} environment`);
 console.log(`🌐 Base URL: ${API_BASE_URL}`);
 console.log(`🔐 MFA Status: ${MFA_ENABLED ? 'ENABLED' : 'DISABLED'}`);
- 
+
 export default {
   API_BASE_URL,
   API_ENDPOINTS,
