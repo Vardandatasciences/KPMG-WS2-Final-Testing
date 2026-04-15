@@ -17,6 +17,7 @@ import './assets/css/dropdown.css'
 import './assets/css/darktheme.css'
 import './assets/css/Colourblindness.css'
 import { API_BASE_URL } from './config/api.js'
+import { clearLegacyClientJwtKeys } from './utils/legacyAuthStorage.js'
 
 // Create Vuetify instance
 const vuetify = createVuetify({
@@ -36,8 +37,23 @@ axios.defaults.timeout = 120000  // 2 minutes timeout (increased for long-runnin
 axios.defaults.withCredentials = true
 console.log('🍪 Axios configured to send cookies with requests (withCredentials: true)')
 
-// Cookie-first auth: do not inject Authorization headers from browser storage.
-console.log('✅ GLOBAL Axios request flow uses HttpOnly cookies only');
+// Cookie-first: strip any per-call Authorization and legacy storage (raw `axios.get` usage).
+axios.interceptors.request.use(
+  (config) => {
+    clearLegacyClientJwtKeys()
+    try {
+      if (config.headers) {
+        delete config.headers.Authorization
+        if (config.headers.common) delete config.headers.common.Authorization
+      }
+    } catch {
+      /* ignore */
+    }
+    return config
+  },
+  (error) => Promise.reject(error)
+)
+console.log('✅ Global axios: HttpOnly cookies only; no Bearer from storage')
 
 // Initialize auth service (cookie-first, no token storage)
 import './services/authService.js'
