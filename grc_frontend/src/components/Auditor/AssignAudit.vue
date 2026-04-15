@@ -2329,6 +2329,20 @@ export default {
         return isValid;
       });
 
+      // Maker-Checker Integrity: Auditor and Reviewer must be different
+      const allMembersHaveDifferentUsers = this.teamMembers.every((member, index) => {
+        if (this.auditData.type === 'AI') return true; // Reviewer only for AI
+        if (member.auditor && member.reviewer && member.auditor === member.reviewer) {
+          console.warn(`❌ Maker-Checker violation for member ${index}: Auditor and Reviewer are the same user (${member.auditor})`);
+          return false;
+        }
+        return true;
+      });
+
+      if (!allMembersHaveDifferentUsers) {
+        return false;
+      }
+
       console.log('🎯 Final canAssign result:', hasValidTeamMember);
       return hasValidTeamMember;
     },
@@ -2554,7 +2568,7 @@ export default {
           // Also fetch compliances for current framework scope
           try {
             const scopeData = await apiService.get(API_ENDPOINTS.AUDIT_COMPLIANCES_FOR_SCOPE, {
-              framework: fwId
+              framework_id: fwId
             });
             this.allFrameworkCompliances = scopeData;
             console.log(`✅ [AssignAudit] Fetched ${this.allFrameworkCompliances.length} framework-level compliances`);
@@ -2603,6 +2617,21 @@ export default {
       this.complianceTypeToAdd = '';
     },
     addCustomComplianceLabel() {
+      if (!this.auditData.framework) {
+        this.$popup?.warning('Please select a framework first.');
+        return;
+      }
+      
+      // Check if policy and sub-policy are selected (required for custom compliance mapping in DB)
+      if (!this.auditData.policy || !this.auditData.subPolicy) {
+        if (this.auditData.type === 'AI') {
+          this.$popup?.warning('Custom compliance names cannot be added during AI audit assignment as policy selection happens in the next step. You can add them later on the AI Audit Upload page.');
+        } else {
+          this.$popup?.warning('Please select a Policy and Sub Policy before adding new compliance names.');
+        }
+        return;
+      }
+
       const q = (this.complianceTypeToAdd || '').trim();
       if (!q) return;
       if (!this.auditData.manuallyAddedComplianceLabels) this.auditData.manuallyAddedComplianceLabels = [];
@@ -2822,10 +2851,12 @@ export default {
       
       // Update team members with selected policy (only for non-AI audits)
       // AI audits don't require policy selection here - it happens in AI Audit Upload page
+      // Update team members with selected policy (only for non-AI audits)
+      // AI audits don't require policy selection here - it happens in AI Audit Upload page
       if (this.auditData.type !== 'AI') {
         this.teamMembers.forEach(member => {
-          member.assignedPolicy = this.auditData.policy;
-          member.assignedSubPolicy = this.auditData.subPolicy || '';
+          member.assignedPolicy = policyId;
+          member.assignedSubPolicy = '';
         });
       }
     },
@@ -2970,6 +3001,15 @@ export default {
           
           if (validTeamMembers.length === 0) {
             this.$popup.error('Please select at least one auditor before assigning the audit.');
+            return;
+          }
+
+          // Maker-Checker Integrity Check
+          const makerCheckerViolation = validTeamMembers.some(member => 
+            member.auditor && member.reviewer && member.auditor === member.reviewer
+          );
+          if (makerCheckerViolation) {
+            this.$popup.error('Maker-Checker Integrity Violation: Auditor and Reviewer must be different users.');
             return;
           }
         }
