@@ -16,30 +16,102 @@ While implementing the fix, check and preserve all related security controls:
 
 ---
 
-# Security Compliance Status (Last Updated: 2026-04-10)
+A. Authentication, login, OTP, SSO, and session security
+All APIs are authenticated by default unless explicitly intended to be public.
+Public endpoints are documented, justified, and reviewed.
+OTP verification is validated only on the backend.
+OTP is bound to user, session, expiry, and attempt count.
+Google SSO and any other SSO flow do not expose tokens in URL/query string/hash in an unsafe way.
+Session tokens are never passed in query strings.
+Access tokens, refresh tokens, and session tokens are not stored in localStorage or sessionStorage.
+Sensitive auth state is moved to Secure, HttpOnly cookies or safe server-side session handling.
+Cookies consistently use HttpOnly, Secure, and appropriate SameSite settings.
+Session identifiers are regenerated after login.
+Session lifetime, browser-close expiry, and persistence are reviewed.
+Concurrent session policy is implemented or actively monitored.
+Session hijack resistance is improved with device binding/fingerprinting where appropriate.
+All login, logout, password reset, OTP, and session events are audited.
+JWT signing uses hardened algorithms such as RS256/ES256 where required.
+JWT issuer, audience, expiry, revocation, blacklist, and rotation are enforced.
+Refresh token rotation is implemented consistently.
+MFA is mandatory for administrators.
+MFA is mandatory for external or vendor users where policy requires.
+MFA cannot be silently disabled in production through unsafe configuration.
+Role-based MFA policies are defined and enforced.
+Stronger MFA options are available where email OTP alone is insufficient.
+Failed login monitoring includes anomaly detection.
+Suspicious login, geolocation anomaly, or risky sign-in alerting is enabled.
+B. Authorization, RBAC, ABAC, object-level access, and workflow control
+Every sensitive endpoint validates whether the requester is allowed to view or modify the target object.
+User profile, user permission, approval, audit, policy, risk, event, and report APIs enforce object-level authorization.
+IDs from request parameters are never trusted by themselves.
+Low-privileged users cannot retrieve other users’ or admin details by changing IDs.
+Permission-changing APIs validate actor privileges on the server side.
+Standard users cannot promote themselves or change privileged roles.
+Admin APIs are not exposed with permissive settings.
+Bulk permission updates verify actor privileges server-side.
+“My approvals” and similar APIs derive the acting user from session/token, not from query parameters.
+Approval-related fields such as reviewer_id, approved_by, status, and approver assignments are server-controlled.
+Creator cannot approve their own record.
+Maker-checker flow is enforced consistently across framework, policy, approval, vendor, and RFP flows.
+Approval state changes happen only through verified workflow actions.
+Session-scoped UI state (for example selected framework via `POST /api/frameworks/set-selected/`) resolves the acting user from the authenticated JWT and server session only; a client-supplied `userId` or `user_id` in the body cannot switch context to another user and is rejected when it does not match the authenticated actor.
+Sensitive object access is logged with actor, time, old value, and new value.
+All RBAC and object-level endpoints are re-tested for IDOR/BOLA after fixes.
+C. Input validation, business validation, and safe error handling
+All user input is validated on the backend, not only in UI.
+All numeric fields have logical min/max range validation.
+Negative values are rejected where not valid, including SLA thresholds and compliance values.
+Financial, compliance, and score metrics are range validated.
+Due dates cannot be before created date or unrealistically far in the future.
+Workflow state fields cannot be altered directly by client input unless explicitly allowed.
+RFP evaluation and similar business forms validate input types and ranges.
+Invalid inputs return safe generic errors only.
+Stack traces and verbose debug errors are hidden in production.
+Production error handling is centralized and sanitized.
+D. Frontend rendering, XSS, template safety, and browser-side trust
+innerHTML, v-html, and equivalent unsafe rendering are removed for untrusted data.
+User-controlled content is output-encoded before display.
+Rich text content is sanitized with strict allow-listing if rich HTML must be supported.
+Backend-generated HTML uses safe templating/escaping.
+Integration outputs are sanitized before rendering.
+localStorage or browser-stored values are treated as untrusted input.
+Debug HTML/token test pages are removed from production.
+DOM insertion uses safe binding or textContent by default.
+Stored XSS risks in vendor/onboarding/invite/response flows are removed.
 
-This report summarizes the compliance posture of the **Audit**, **Risk**, and **Incident** modules against the 12-point GRC security checklist.
 
-## 1. Authentication & Authorization
-- **Object-Level Authorization (BOLA/IDOR)**: ✅ **COMPLIANT**. All routes in `grc/routes/Audit/`, `grc/routes/Incident/`, and `grc/routes/Risk/` utilize `@require_tenant` and `@tenant_filter`. Raw SQL queries explicitly enforce `TenantId` filtering.
-- **Role-Based Access Control (RBAC)**: ✅ **COMPLIANT**. RBAC decorators (e.g., `@audit_assign_required`, `@audit_conduct_required`) are verified and consistently applied to session-authenticated and JWT-authenticated routes.
-
-## 2. Input & Business Logic Validation
-- **Date Range Hardening**: ✅ **COMPLIANT**.
-    - **Audit/Risk/Incident Due Dates**: Mandatory [0, +10 years] range enforced.
-    - **Incident Occurrence**: Mandatory [-20 years, 0] range enforced to prevent future-dating.
-- **Numeric Validation**: ✅ **COMPLIANT**. Centralized `SecureValidator.validate_numeric_input` enforced for all primary IDs (Audit, Incident, Risk, Framework, Policy) and numeric query parameters. Negative or non-integer values are rejected with 400 Bad Request.
-- **Rate Limiting**: ✅ **COMPLIANT**. `ScopedRateThrottle` (AuditWriteThrottle/IncidentWriteThrottle) is active on all bulk submission and creation endpoints.
-
-## 3. Data Protection & Export
-- **CSV Formula Injection**: ✅ **COMPLIANT**. Incident and Audit exports utilize `sanitize_csv_dataset` to neutralize potential Excel/Sheets formula payloads (starting with `=`, `+`, `-`, `@`).
-- **Encryption at Rest**: ✅ **COMPLIANT**. Comprehensive audit completed; all models containing PII or sensitive business data (Users, Audit, Risk, Incident, Tenant, CompanyFolder) now inherit from `EncryptedFieldsMixin`.
-- **XSS Prevention (v-html)**: ✅ **HARDENED**. Frontend components (`AuditReportView.vue`, `CollapsibleTable.vue`, `OrganizationalControls.vue`) utilize `DOMParser`-based sanitization or explicit character escaping before rendering dynamic content.
-
-## 4. Operational Integrity
-- **Maker-Checker Integrity**: ✅ **COMPLIANT**. Logic enforced in `assign_audit.py` and `incident_views.py` to ensure that assigned auditors/assignees cannot be the same as the reviewer, preventing self-approval and privilege escalation.
-- **Notification Spam Protection**: ✅ **COMPLIANT**. `NotificationService` implements a 5-minute deduplication window for automated alerts and triggers.
-- **Information Leakage**: ✅ **COMPLIANT**. Generic 400/500 error messages implemented across Audit and Incident modules; raw exception strings (`str(e)`) are logged to safe internal loggers only.
-
----
-**Current Status**: **12/12 Points COMPLIANT**. The GRC system meets the required security hardening standards for the Audit, Risk, and Incident modules.
+. API security, integrations, SSRF, redirect safety, and outbound control
+Redirect URI validation is strict and exact-match based.
+Open redirect risks in callbacks, invites, and integration flows are removed.
+Base URLs and redirect targets are server-controlled or allow-listed.
+Query string reflection is blocked or safely encoded.
+Response headers never reflect raw user input.
+Sensitive APIs use replay-resistant controls such as nonce/request signing where appropriate.
+API governance for versioning and deprecation is documented.
+REST API versioning is introduced where required.
+Outbound URLs from client input are never fetched directly server-side.
+Outbound destinations are allow-listed.
+Internal/private IPs and metadata services are blocked.
+Dangerous URL schemes like file://, ftp://, gopher:// are blocked.
+DNS/IP resolution checks are performed before outbound requests where needed.
+Egress filtering exists for backend services.
+API abuse/anomaly monitoring is implemented.
+API logs feed into alerting/SIEM.
+Integrations sanitize all external inputs like file URLs, next links, project IDs, cloud IDs, and callback parameters.
+H. Secrets, keys, cryptography, and secure configuration
+No hardcoded secrets remain in frontend, backend, scripts, or config files.
+No fallback weak session secret remains.
+App fails safely when required secrets are missing.
+All database, API, cloud, and third-party credentials are stored in environment variables or secret manager.
+All exposed credentials are rotated.
+Repository history is reviewed for leaked secrets.
+Test users do not rely on hardcoded passwords.
+Password history/reuse logic does not log sensitive hash material unsafely.
+Data encryption uses modern authenticated encryption where possible.
+AES-GCM or equivalent is preferred over CBC for new implementations.
+Shared secret exposure risk is reduced.
+Crypto choices align with regulatory/compliance requirements.
+Key rotation and key lifecycle are documented and implemented.
+JWT signing and cryptographic controls are reviewed for stronger asymmetric methods where required.
+I. Infr

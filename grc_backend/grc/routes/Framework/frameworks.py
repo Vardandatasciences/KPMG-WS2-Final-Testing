@@ -4039,8 +4039,34 @@ def get_approved_active_frameworks(request):
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
+
+def _resolve_authenticated_user_id_for_framework(request):
+    """
+    Actor user id from JWT (request.user) or server-side session only.
+    Does not trust client-supplied userId in the body by itself (IDOR prevention; aligns with security policy).
+    """
+    user = getattr(request, 'user', None)
+    if user is not None and getattr(user, 'is_authenticated', False):
+        pk = getattr(user, 'pk', None) or getattr(user, 'id', None)
+        if pk is not None:
+            try:
+                return int(pk)
+            except (TypeError, ValueError):
+                pass
+    sess = getattr(request, 'session', None)
+    if sess is not None:
+        for key in ('grc_user_id', 'user_id'):
+            raw = sess.get(key)
+            if raw is not None and raw != '':
+                try:
+                    return int(raw)
+                except (TypeError, ValueError):
+                    continue
+    return None
+
+
 @api_view(['POST'])
-@permission_classes([AllowAny])  # Allow all users to set framework in session
+@permission_classes([AllowAny])  # Auth via JWT cookie/session; unauthenticated requests rejected below
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def set_selected_framework(request):
@@ -4049,29 +4075,50 @@ def set_selected_framework(request):
     - If frameworkId is provided: Filter by that framework
     - If frameworkId is None: Show all frameworks (no filter)
     MULTI-TENANCY: Validates framework belongs to user's tenant
+    User identity is taken from authentication/session, not trusted from the request body alone.
     """
     try:
         tenant_id = get_tenant_id_from_request(request)
         from ...framework_context import set_framework_context, clear_framework_context
         
         framework_id = request.data.get('frameworkId')
-        user_id = request.data.get('userId')
+        actor_user_id = _resolve_authenticated_user_id_for_framework(request)
+
+        # Optional legacy body fields — if present, must match authenticated actor (anti-tamper)
+        client_claim = None
+        if request.data:
+            client_claim = request.data.get('userId')
+            if client_claim is None:
+                client_claim = request.data.get('user_id')
+        if client_claim is not None and client_claim != '':
+            try:
+                client_claim = int(client_claim)
+            except (TypeError, ValueError):
+                return Response(
+                    {'success': False, 'error': 'Invalid user identifier'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if actor_user_id is not None and int(client_claim) != int(actor_user_id):
+                return Response(
+                    {'success': False, 'error': 'Forbidden'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+        user_id = actor_user_id
+        if user_id is None:
+            debug_print("❌ DEBUG: No authenticated user for set_selected_framework")
+            return Response(
+                {
+                    'success': False,
+                    'error': 'Authentication required',
+                },
+                status=status.HTTP_401_UNAUTHORIZED
+            )
         
         debug_print(f"🔍 DEBUG: set_selected_framework called")
         debug_print(f"📊 DEBUG: frameworkId = {framework_id}")
-        debug_print(f"👤 DEBUG: userId = {user_id}")
+        debug_print(f"👤 DEBUG: resolved user_id = {user_id}")
         debug_print(f"📝 DEBUG: request.data = {request.data}")
-        
-        # User ID is required
-        if not user_id:
-            debug_print("❌ DEBUG: No userId provided")
-            return Response(
-                {
-                    "success": False,
-                    "error": "User ID is required"
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )
         
         # If framework_id is None, it means "All" is selected - clear the filter
         if framework_id is None:

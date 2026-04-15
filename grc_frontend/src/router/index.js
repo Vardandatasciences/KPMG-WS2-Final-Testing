@@ -112,31 +112,41 @@ function hasShellAuthFlags() {
 const SESSION_VERIFY_TIMEOUT_MS = 12000
 
 async function ensureCookieSessionValid() {
+  let verifyResult = null
   try {
     const authService = (await import('@/services/authService.js')).default
     const verifyPromise = authService.validateSession()
     const timeoutPromise = new Promise((_, reject) => {
       setTimeout(() => reject(new Error('session verify timeout')), SESSION_VERIFY_TIMEOUT_MS)
     })
-    const result = await Promise.race([verifyPromise, timeoutPromise])
-    if (result && result.success) {
+    verifyResult = await Promise.race([verifyPromise, timeoutPromise])
+    if (verifyResult && verifyResult.success) {
       sessionStorage.setItem('cookie_session_validated', 'true')
       return true
     }
   } catch (e) {
-    // fall through (network error, 401, or timeout)
+    // Transient failures (timeout/network) should not force logout.
+    console.warn('⚠️ Session verify transient failure; keeping shell auth state:', e?.message || e)
+    return hasShellAuthFlags()
   }
-  sessionStorage.removeItem('cookie_session_validated')
-  try {
-    const authService = (await import('@/services/authService.js')).default
-    authService.clearAuthData()
-  } catch (e) {
-    // ignore
-    localStorage.removeItem('is_logged_in')
-    localStorage.removeItem('isAuthenticated')
-    localStorage.removeItem('user_id')
+
+  // Only clear auth if backend explicitly says the session is unauthorized.
+  if (verifyResult && verifyResult.isAuthError === true) {
+    sessionStorage.removeItem('cookie_session_validated')
+    try {
+      const authService = (await import('@/services/authService.js')).default
+      authService.clearAuthData()
+    } catch (e) {
+      // ignore
+      localStorage.removeItem('is_logged_in')
+      localStorage.removeItem('isAuthenticated')
+      localStorage.removeItem('user_id')
+    }
+    return false
   }
-  return false
+
+  // For non-auth backend errors, keep local shell flags to avoid login-page flicker/race.
+  return hasShellAuthFlags()
 }
 
 function scrubSensitiveParamsFromUrl() {

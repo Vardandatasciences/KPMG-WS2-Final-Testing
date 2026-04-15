@@ -344,13 +344,19 @@ export default {
       const response = await authApi.get('/jwt/verify/')
       return {
         success: true,
-        user: response.data.user
+        user: response.data.user,
+        statusCode: response.status,
+        isAuthError: false
       }
     } catch (error) {
       console.error('Session validation error:', error)
+      const statusCode = error?.response?.status || null
+      const isAuthError = statusCode === 401 || statusCode === 403
       return {
         success: false,
-        error: error.response?.data?.message || 'Session validation failed'
+        error: error.response?.data?.message || 'Session validation failed',
+        statusCode,
+        isAuthError
       }
     }
   },
