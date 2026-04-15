@@ -467,9 +467,9 @@ const fetchUsers = async () => {
     const url = getTprmApiUrl('rfp-approval/users/')
     console.log('🔍 Fetching users from URL:', url)
     
-    // Try direct fetch first
     const response = await fetch(url, {
       method: 'GET',
+      credentials: 'include',
       headers: {
         ...getAuthHeaders(),
         'Content-Type': 'application/json',
@@ -793,6 +793,7 @@ const handleEvaluateProposal = async (approval: any) => {
           console.log('🔍 DEBUG: Fetching RFP ID from approval request using backend endpoint...')
           const rfpIdResponse = await fetch(getTprmApiUrl(`rfp-approval/get-rfp-id-from-approval/${approval.approval_id}/`), {
             method: 'GET',
+            credentials: 'include',
             headers: getAuthHeaders()
           })
           if (rfpIdResponse.ok) {
@@ -883,6 +884,7 @@ const handleEvaluateProposal = async (approval: any) => {
          
          const response = await fetch(endpoint, {
            method: 'GET',
+           credentials: 'include',
            headers: getAuthHeaders()
          })
          
@@ -1102,29 +1104,6 @@ onMounted(async () => {
   console.log('🚀 MyApprovals component mounted')
   console.log('🔧 API Config:', API_CONFIG)
   console.log('🔧 API Endpoints:', API_ENDPOINTS)
-  
-  // Test API connectivity first
-  try {
-    console.log('🧪 Testing API connectivity...')
-    const testUrl = getTprmApiUrl('rfp-approval/users/')
-    console.log('🧪 Testing URL:', testUrl)
-    const testResponse = await fetch(testUrl, {
-      method: 'GET',
-      headers: getAuthHeaders()
-    })
-    console.log('🧪 Test response status:', testResponse.status)
-    console.log('🧪 Test response headers:', Object.fromEntries(testResponse.headers.entries()))
-    
-    if (testResponse.ok) {
-      const testData = await testResponse.json()
-      console.log('🧪 Test data received:', testData)
-      console.log('🧪 Test data length:', testData.length)
-    } else {
-      console.error('🧪 Test failed with status:', testResponse.status)
-    }
-  } catch (testError) {
-    console.error('🧪 Test connectivity failed:', testError)
-  }
   
   console.log('🔄 Calling fetchUsers...')
   await fetchUsers()

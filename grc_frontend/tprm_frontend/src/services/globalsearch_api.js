@@ -1,10 +1,19 @@
 import axios from 'axios'
 import { getTprmApiBaseUrl } from '@/utils/backendEnv'
 
+// Global search (history, query, analytics) can exceed 10s on cold DB or large tenants.
+const GLOBAL_SEARCH_TIMEOUT_MS = parseInt(
+  import.meta.env.VITE_GLOBAL_SEARCH_TIMEOUT_MS || '120000',
+  10
+)
+
 // Create axios instance with default configuration
+// withCredentials is required so requests from the TPRM dev origin (e.g. :3000)
+// include GRC HttpOnly session cookies on http://localhost:8000 (same browser, cross-origin).
 const api = axios.create({
   baseURL: getTprmApiBaseUrl(),
-  timeout: 10000,
+  timeout: GLOBAL_SEARCH_TIMEOUT_MS,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -13,6 +22,12 @@ const api = axios.create({
 // Add request interceptor to prevent infinite retries
 api.interceptors.request.use(
   (config) => {
+    // Cookie-first: avoid stale Bearer from storage blocking HttpOnly cookie auth (see UnifiedJWTAuthentication).
+    try {
+      delete config.headers.Authorization
+    } catch {
+      /* ignore */
+    }
     return config
   },
   (error) => {

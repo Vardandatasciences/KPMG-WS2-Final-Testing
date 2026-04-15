@@ -1028,59 +1028,28 @@ const getRfpStatusClass = (status) => {
 // API functions to fetch real data
 const fetchRfpProposalCount = async (rfpId) => {
   try {
-    console.log(`🔍 Fetching proposal count for RFP ${rfpId}...`)
-    
-    // Get authentication headers
     const { getAuthHeaders, buildApiUrl } = useRfpApi()
-    
-    // Use the correct endpoint structure
-    const response = await fetch(buildApiUrl(`/rfp-responses-list/?rfp_id=${rfpId}&t=${Date.now()}`), {
+    const response = await fetch(buildApiUrl(`/rfp-responses-list/?rfp_id=${rfpId}`), {
       method: 'GET',
-      headers: getAuthHeaders()
+      headers: getAuthHeaders(),
+      credentials: 'include',
     })
-    console.log(`📡 API Response status: ${response.status}`)
-    
+
     if (!response.ok) {
-      console.warn(`⚠️ API returned ${response.status} for RFP ${rfpId}`)
-      throw new Error(`API returned ${response.status}`)
+      console.warn(`[Phase7] Proposal count unavailable for RFP ${rfpId}: HTTP ${response.status}`)
+      return 0
     }
-    
+
     const data = await response.json()
-    console.log(`📊 Raw API response for RFP ${rfpId}:`, data)
-    
-    // Handle the actual API response structure: {success: true, responses: [...], total_count: X}
+
     if (data && typeof data === 'object') {
-      // Check if it's the expected API response structure
-      if (data.success === true && data.total_count !== undefined) {
-        console.log(`✅ Got total_count from API response: ${data.total_count}`)
-        return data.total_count
-      }
-      
-      // Check if it has responses array
-      if (data.responses && Array.isArray(data.responses)) {
-        console.log(`📋 Got responses array with ${data.responses.length} items`)
-        
-        // Log first few items to understand structure
-        if (data.responses.length > 0) {
-          console.log(`📝 Sample response item:`, data.responses[0])
-        }
-        
-        // Count ALL responses (the API already filters for SUBMITTED status)
-        console.log(`🔢 Total responses from API: ${data.responses.length}`)
-        return data.responses.length
-      }
-      
-      // Check for other count fields
-      if (data.count !== undefined) {
-        console.log(`✅ Got count field: ${data.count}`)
-        return data.count
-      }
+      if (data.success === true && data.total_count !== undefined) return data.total_count
+      if (data.responses && Array.isArray(data.responses)) return data.responses.length
+      if (data.count !== undefined) return data.count
     }
-    
+
     // If the API returns an array directly
     if (Array.isArray(data)) {
-      console.log(`📋 Got direct array with ${data.length} items`)
-      
       // Log first few items to understand structure
       if (data.length > 0) {
         console.log(`📝 Sample response item:`, data[0])
@@ -1091,24 +1060,12 @@ const fetchRfpProposalCount = async (rfpId) => {
     }
     
     // If the API returns a count directly
-    if (typeof data === 'number') {
-      console.log(`✅ Got direct count: ${data}`)
-      return data
-    }
-    
-    console.log(`⚠️ Unexpected data format for RFP ${rfpId}:`, typeof data, data)
+    if (typeof data === 'number') return data
+
     return 0
   } catch (err) {
-    console.error(`❌ Error fetching proposal count for RFP ${rfpId}:`, err)
-    console.error(`🔍 Error details:`, {
-      message: err.message,
-      stack: err.stack,
-      name: err.name
-    })
-    // Return random count for fallback data
-    const fallbackCount = Math.floor(Math.random() * 8) + 1
-    console.log(`🎲 Using fallback count: ${fallbackCount}`)
-    return fallbackCount
+    console.warn(`[Phase7] Error fetching proposal count for RFP ${rfpId}:`, err.message)
+    return 0
   }
 }
 
@@ -1138,33 +1095,9 @@ const fetchAvailableRfps = async () => {
         proposal_count: 0 // Will be updated below
       }))
     } else {
-      console.warn('Unexpected API response format:', data)
+      console.warn('[Phase7] Unexpected API response format for RFP list:', data)
       availableRfps.value = []
     }
-    
-     // Fetch proposal counts for each RFP
-     if (availableRfps.value.length > 0) {
-       const proposalCountPromises = availableRfps.value.map(async (rfp) => {
-         try {
-           const count = await fetchRfpProposalCount(rfp.id)
-           rfpProposalCounts.value[rfp.id] = count
-           rfp.proposal_count = count
-           console.log(`RFP ${rfp.id} (${rfp.title}): ${count} proposals`)
-           console.log(`Updated rfpProposalCounts[${rfp.id}] = ${count}`)
-           return count
-         } catch (err) {
-           console.warn(`Failed to fetch proposal count for RFP ${rfp.id}:`, err)
-           // Set a fallback count
-           const fallbackCount = rfp.proposal_count || Math.floor(Math.random() * 8) + 1
-           rfpProposalCounts.value[rfp.id] = fallbackCount
-           rfp.proposal_count = fallbackCount
-           return fallbackCount
-         }
-       })
-       
-       await Promise.all(proposalCountPromises)
-       console.log('All proposal counts loaded:', rfpProposalCounts.value)
-     }
   } catch (err) {
     console.error('Error loading RFPs:', err)
     error.value = 'Failed to load RFPs. Please check if the backend is running.'
@@ -1223,9 +1156,10 @@ const fetchComparisonData = async (rfpId) => {
     const { getAuthHeaders, buildApiUrl } = useRfpApi()
     
     // Use the correct endpoint for RFP responses
-    const response = await fetch(buildApiUrl(`/rfp-responses-list/?rfp_id=${rfpId}&t=${Date.now()}`), {
+    const response = await fetch(buildApiUrl(`/rfp-responses-list/?rfp_id=${rfpId}`), {
       method: 'GET',
-      headers: getAuthHeaders()
+      headers: getAuthHeaders(),
+      credentials: 'include',
     })
     const data = await response.json()
 
@@ -1256,9 +1190,10 @@ const fetchComparisonData = async (rfpId) => {
       // Note: This is optional data - if the API fails, we continue without it
       // Use the ViewSet endpoint that accepts rfp_id as query parameter (works with integer IDs)
       try {
-        const criteriaResponse = await fetch(buildApiUrl(`/evaluation-criteria/?rfp_id=${rfpId}&t=${Date.now()}`), {
+        const criteriaResponse = await fetch(buildApiUrl(`/evaluation-criteria/?rfp_id=${rfpId}`), {
           method: 'GET',
-          headers: getAuthHeaders()
+          headers: getAuthHeaders(),
+          credentials: 'include',
         })
         
         if (criteriaResponse.ok) {
@@ -1305,9 +1240,10 @@ const fetchComparisonData = async (rfpId) => {
       
       if (responseIds) {
         try {
-          const scoresResponse = await fetch(buildApiUrl(`/rfp-evaluation-scores/?response_ids=${responseIds}&t=${Date.now()}`), {
+          const scoresResponse = await fetch(buildApiUrl(`/rfp-evaluation-scores/?response_ids=${responseIds}`), {
             method: 'GET',
-            headers: getAuthHeaders()
+            headers: getAuthHeaders(),
+            credentials: 'include',
           })
           if (scoresResponse.ok) {
             const scoresData = await scoresResponse.json()
@@ -1857,9 +1793,10 @@ const fetchCommitteeMembers = async () => {
     // Get authentication headers
     const { getAuthHeaders, buildApiUrl } = useRfpApi()
     
-    const response = await fetch(buildApiUrl(`/users/?t=${Date.now()}`), {
+    const response = await fetch(buildApiUrl(`/users/`), {
       method: 'GET',
-      headers: getAuthHeaders()
+      headers: getAuthHeaders(),
+      credentials: 'include',
     })
     const data = await response.json()
     
@@ -2121,7 +2058,8 @@ const rfpHandleCommitteeAssignment = async () => {
     // First, check if a committee already exists for this RFP
     const existingCommitteeResponse = await fetch(buildApiUrl(`/rfp/${selectedRfpId.value}/committee/get/`), {
       method: 'GET',
-      headers: getAuthHeaders()
+      headers: getAuthHeaders(),
+      credentials: 'include',
     })
     if (existingCommitteeResponse.ok) {
       const existingCommitteeData = await existingCommitteeResponse.json()
@@ -2158,6 +2096,7 @@ const rfpHandleCommitteeAssignment = async () => {
         'Content-Type': 'application/json',
         ...getAuthHeaders()
       },
+      credentials: 'include',
       body: JSON.stringify(committeeData)
     })
     
@@ -2186,7 +2125,8 @@ const loadCommitteeStatus = async (rfpId) => {
     
     const response = await fetch(buildApiUrl(`/rfp/${rfpId}/committee/get/`), {
       method: 'GET',
-      headers: getAuthHeaders()
+      headers: getAuthHeaders(),
+      credentials: 'include',
     })
     if (response.ok) {
       const committeeData = await response.json()

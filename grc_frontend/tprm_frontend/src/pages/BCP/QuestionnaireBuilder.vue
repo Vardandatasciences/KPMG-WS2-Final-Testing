@@ -232,6 +232,32 @@ const { showSuccess, showError, showWarning, showInfo } = useNotifications()
 
 const reviewComment = ref('')
 
+const getCurrentUserId = () => {
+  const sessionId = sessionStorage.getItem('user_id')
+  const localId = localStorage.getItem('user_id')
+  const rawId = sessionId || localId
+  const parsed = Number(rawId)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+const getCreatorUserId = (questionnaireData: any) => {
+  if (!questionnaireData) return null
+  const rawCreatorId =
+    questionnaireData.created_by_user_id ??
+    questionnaireData.created_by ??
+    questionnaireData.creator_user_id ??
+    questionnaireData.owner_id ??
+    questionnaireData.ownerId
+  const parsed = Number(rawCreatorId)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+const getBackendErrorMessage = (error: any) => {
+  const data = error?.response?.data
+  if (typeof data === 'string') return data
+  return data?.message || data?.error || data?.detail || error?.message || 'Unknown error'
+}
+
 // Review View questionnaire dropdown data
 const availableQuestionnaires = ref([])
 const selectedQuestionnaireId = ref('')
@@ -248,6 +274,20 @@ const submitReviewComment = async () => {
       has_comment: !!reviewComment.value.trim()
     })
     PopupService.warning('Please select a questionnaire and enter a review comment.', 'Missing Information')
+    return
+  }
+
+  const creatorId = getCreatorUserId(selectedQuestionnaireData.value)
+  const currentUserId = getCurrentUserId()
+  if (Number.isFinite(creatorId) && Number.isFinite(currentUserId) && creatorId === currentUserId) {
+    const selfReviewMessage = 'Self-review is not allowed. Please assign a different reviewer.'
+    await showWarning('Review Not Allowed', selfReviewMessage, {
+      action: 'self_review_blocked_client_side',
+      questionnaire_id: selectedQuestionnaireId.value,
+      creator_user_id: creatorId,
+      reviewer_user_id: currentUserId
+    })
+    PopupService.warning(selfReviewMessage, 'Review Not Allowed')
     return
   }
 
@@ -290,17 +330,31 @@ const submitReviewComment = async () => {
     router.push('/bcp/my-approvals')
     
   } catch (error) {
-    console.error('Error submitting review comment:', error)
-    
+    const status = error?.response?.status
+    const backendMessage = getBackendErrorMessage(error)
+    const isSelfReview403 = status === 403 && /self-review is not allowed/i.test(backendMessage)
+
+    if (isSelfReview403) {
+      console.warn('Review blocked by maker-checker policy:', backendMessage)
+    } else {
+      console.error('Error submitting review comment:', error)
+    }
+    const userMessage = backendMessage || 'Error submitting review comment. Please try again.'
+
     // Show error notification
-    await showError('Submission Failed', 'Error submitting review comment. Please try again.', {
+    await showError(status === 403 ? 'Review Not Allowed' : 'Submission Failed', userMessage, {
       action: 'review_submission_failed',
       questionnaire_id: selectedQuestionnaireId.value,
-      error_message: error.response?.data?.message || error.message || 'Unknown error'
+      http_status: status,
+      error_message: backendMessage || error.message || 'Unknown error'
     })
-    
+
     // Show error popup
-    PopupService.error('Error submitting review comment. Please try again.', 'Submission Failed')
+    if (status === 403) {
+      PopupService.warning(userMessage, 'Review Not Allowed')
+    } else {
+      PopupService.error(userMessage, 'Submission Failed')
+    }
   } finally {
     isSubmittingReview.value = false
   }
@@ -358,8 +412,10 @@ const selectQuestionnaire = async (questionnaire: any) => {
     // Fetch detailed questionnaire data
     const response = await questionnaireApi.getQuestionnaireDetail(questionnaire.questionnaire_id)
     console.log('Questionnaire details response:', response)
-    
-    selectedQuestionnaireData.value = response.data || response
+
+    // Merge list row and detail payload so identity fields remain available for maker-checker guard.
+    const detailData = response.data || response
+    selectedQuestionnaireData.value = { ...questionnaire, ...detailData }
     console.log('Selected questionnaire data:', selectedQuestionnaireData.value)
   } catch (error) {
     console.error('Error fetching questionnaire details:', error)

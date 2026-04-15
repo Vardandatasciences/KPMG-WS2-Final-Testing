@@ -7,7 +7,7 @@ const API_ORIGIN = getApiOrigin()
 // Create axios instance with base configuration
 const apiClient = axios.create({
   baseURL: API_ORIGIN,
-  timeout: 10000,
+  timeout: 30000,
   withCredentials: true, // Important for session cookies
   headers: {
     'Content-Type': 'application/json',

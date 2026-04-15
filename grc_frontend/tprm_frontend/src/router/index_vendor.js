@@ -136,7 +136,7 @@ const vendor_router = createRouter({
 
 // Navigation guard with MFA authentication and RBAC
 vendor_router.beforeEach(async (to, from, next) => {
-  const isAuthenticated = authService.isAuthenticated()
+  const isAuthenticated = await authService.resolveAuthenticationStatus()
   const publicRoutes = ['/login', '/otp-verification', '/access-denied']
   const isPublicRoute = publicRoutes.includes(to.path)
   

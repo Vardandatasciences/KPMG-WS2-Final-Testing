@@ -239,18 +239,13 @@ const authModule = {
         commit('SET_LOADING', true)
         commit('CLEAR_ERROR')
        
-        // Check if we have a token
-        if (!authService.isAuthenticated()) {
-          commit('CLEAR_AUTH')
-          return { success: false, error: 'No authentication found' }
-        }
-       
         console.log('Auth module: Validating session')
-       
+
         const result = await authService.validateSession()
        
         if (result.success) {
           const token = authService.getSessionToken()
+          sessionStorage.setItem('tprm_cookie_session_validated', 'true')
           commit('SET_AUTH', {
             user: result.user,
             token: token

@@ -192,14 +192,24 @@ export default {
         localStorage.getItem('isAuthenticated') === 'true' ||
         localStorage.getItem('is_logged_in') === 'true'
 
+      const userId =
+        sessionStorage.getItem('user_id') ||
+        sessionStorage.getItem('userId') ||
+        localStorage.getItem('user_id') ||
+        localStorage.getItem('userId')
+
       return {
         type: 'GRC_AUTH_SYNC',
         authMode: 'cookie',
         user: parsedUser,
         isAuthenticated,
-        userId: localStorage.getItem('user_id'),
-        tenantId: localStorage.getItem('tenant_id'),
-        tenantName: localStorage.getItem('tenant_name')
+        userId,
+        tenantId:
+          sessionStorage.getItem('tenant_id') ||
+          localStorage.getItem('tenant_id'),
+        tenantName:
+          sessionStorage.getItem('tenant_name') ||
+          localStorage.getItem('tenant_name')
       }
     }
 

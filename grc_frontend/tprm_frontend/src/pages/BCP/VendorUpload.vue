@@ -817,6 +817,24 @@ export default {
         return
       }
 
+      // Validate each document before sending to backend to avoid avoidable 400 responses.
+      for (let index = 0; index < documents.value.length; index++) {
+        const doc = documents.value[index]
+        const docNo = index + 1
+        if (!doc?.planType || !String(doc.planType).trim()) {
+          PopupService.warning(`Plan type is required for document ${docNo}.`, 'Missing Plan Type')
+          return
+        }
+        if (!doc?.planName || !String(doc.planName).trim()) {
+          PopupService.warning(`Plan name is required for document ${docNo}.`, 'Missing Plan Name')
+          return
+        }
+        if (!doc?.file) {
+          PopupService.warning(`File is missing for document ${docNo}. Please re-attach it.`, 'Missing File')
+          return
+        }
+      }
+
       try {
         // Create FormData for file upload
         const formData = new FormData()
@@ -913,10 +931,15 @@ export default {
         }
       } catch (error) {
         console.error('Error submitting documents:', error)
-        PopupService.error('Error submitting documents. Please try again.', 'Submission Failed')
+        const backendMessage =
+          error?.response?.data?.message ||
+          error?.response?.data?.error ||
+          error?.message ||
+          'Error submitting documents. Please try again.'
+        PopupService.error(backendMessage, 'Submission Failed')
         // Create error notification
         await notificationService.createPlanUploadNotification('plan_upload_failed', {
-          error: error.message || 'Unknown error'
+          error: backendMessage
         })
       }
     }
@@ -981,9 +1004,47 @@ export default {
     }
 
     const createMockFile = (fileName, fileType) => {
-      // Create a mock file object for testing
-      const mockFile = new File(['Mock file content for ' + fileName], fileName, { type: fileType })
-      return mockFile
+      // Create test files that pass backend magic-byte validation.
+      // Backend validates file signatures (not just extension/MIME), so PDF mocks
+      // must contain a real PDF header/body/trailer.
+      if (fileType === 'application/pdf') {
+        const minimalPdf = `%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 144] /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 55 >>
+stream
+BT
+/F1 12 Tf
+50 100 Td
+(Mock BCP/DRP document) Tj
+ET
+endstream
+endobj
+xref
+0 5
+0000000000 65535 f 
+0000000010 00000 n 
+0000000060 00000 n 
+0000000117 00000 n 
+0000000207 00000 n 
+trailer
+<< /Root 1 0 R /Size 5 >>
+startxref
+320
+%%EOF`
+        return new File([minimalPdf], fileName, { type: fileType })
+      }
+
+      // Fallback for other mock types used in future tests.
+      return new File([`Mock file content for ${fileName}`], fileName, { type: fileType })
     }
 
     const loadMockData = () => {

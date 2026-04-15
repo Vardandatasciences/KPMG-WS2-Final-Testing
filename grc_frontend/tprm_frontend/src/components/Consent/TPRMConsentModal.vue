@@ -71,13 +71,13 @@
 </template>
 
 <script>
-import { ref, computed, defineExpose } from 'vue';
+import { ref, computed } from 'vue';
 import { recordTPRMConsentAcceptance, getTPRMActionLabel } from '@/utils/tprmConsentManager.js';
 
 export default {
   name: 'TPRMConsentModal',
   
-  setup() {
+  setup(_, { expose }) {
     const isVisible = ref(false);
     const hasAgreed = ref(false);
     const isProcessing = ref(false);
@@ -172,7 +172,7 @@ export default {
     };
 
     // Expose the show method for parent component access
-    defineExpose({
+    expose({
       show
     });
 

@@ -232,6 +232,7 @@ urlpatterns = [
     # TPRM RFP Management APIs
     path('api/tprm/rfp/', include('tprm_backend.rfp.urls')),
     path('api/tprm/v1/', include('tprm_backend.rfp.urls')),  # Frontend compatibility for /api/tprm/v1/
+    path('api/tprm/v1/', include('tprm_backend.rfp.rfi.urls')),  # RFI endpoints under /api/tprm/v1/
     path('api/tprm/rfp-approval/', include('tprm_backend.rfp_approval.urls')),
     path('api/tprm/rfp-risk-analysis/', include('tprm_backend.rfp_risk_analysis.urls')),
     

@@ -12,7 +12,7 @@ const API_URLS = {
   // AWS: Use domain without port - nginx proxies /api/ to localhost:8000/api/
   aws: 'https://grc-riskavaire.vardaands.com',
   local: '',
-  development: 'http://localhost:8001'
+  development: 'http://localhost:8000'
 };
 
 // CRITICAL: Prevent webpack constant folding by using runtime evaluation

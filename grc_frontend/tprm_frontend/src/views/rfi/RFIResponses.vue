@@ -667,6 +667,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
+
+const http = axios.create({ withCredentials: true })
 import { rfpUseToast } from '@/composables/rfpUseToast'
 import { useRfpApi } from '@/composables/useRfpApi'
 import { getTprmApiV1BaseUrl } from '@/utils/backendEnv'
@@ -751,7 +753,7 @@ async function fetchRFIList() {
     
     // Fetch all pages if pagination is enabled
     while (nextUrl) {
-      const response = await axios.get(nextUrl, { headers: getAuthHeaders() })
+      const response = await http.get(nextUrl, { headers: getAuthHeaders() })
       console.log('[RFIResponses] RFI list response:', {
         status: response.status,
         hasData: !!response.data,
@@ -903,7 +905,7 @@ async function viewResponse(responseId: number) {
   selectedResponse.value = null
   
   try {
-    const response = await axios.get(`${API_BASE_URL}/rfi-responses/${responseId}/`, {
+    const response = await http.get(`${API_BASE_URL}/rfi-responses/${responseId}/`, {
       headers: getAuthHeaders()
     })
     selectedResponse.value = response.data

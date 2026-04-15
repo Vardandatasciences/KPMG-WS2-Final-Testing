@@ -215,7 +215,13 @@ const loadSearchHistory = async () => {
       hasMore.value = response.next !== null
     }
   } catch (error) {
-    console.error('Failed to load search history:', error)
+    if (error?.code === 'ECONNABORTED') {
+      console.warn(
+        'Search history request timed out. Open Search History again or raise VITE_GLOBAL_SEARCH_TIMEOUT_MS if your API is slow.'
+      )
+    } else {
+      console.error('Failed to load search history:', error)
+    }
   } finally {
     isLoading.value = false
   }

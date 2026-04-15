@@ -42,6 +42,95 @@ class APIService {
     this.notificationsURL = NOTIFICATIONS_API_URL;
     this.bcpdrpURL = BCPDRP_API_URL;
     this.riskAnalysisURL = RISK_ANALYSIS_API_URL;
+
+    // Generic per-endpoint cache registry:
+    // key => { data, cachedAt, inFlight, throttleUntil }
+    this._slaListCache = {};
+    this.SLA_LIST_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+    // Hydrate from sessionStorage on startup so cold loads after page refresh still hit cache
+    try {
+      const stored = sessionStorage.getItem('tprm_sla_list_cache');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed && typeof parsed === 'object') {
+          this._slaListCache = parsed;
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  /**
+   * Generic cached SLA list request.
+   * - Deduplicates concurrent calls across all pages.
+   * - Returns stale cache when throttled (429), respecting the Retry-After.
+   * - Persists cache to sessionStorage so page refreshes reuse it within TTL.
+   */
+  async _cachedSlaRequest(cacheKey, endpoint, { forceRefresh = false, resultKey = null } = {}) {
+    const now = Date.now();
+    const entry = this._slaListCache[cacheKey] || {};
+    const isFresh = Array.isArray(entry.data) && now - (entry.cachedAt || 0) < this.SLA_LIST_CACHE_TTL_MS;
+
+    if (!forceRefresh && isFresh) return entry.data;
+    if (!forceRefresh && entry.inFlight) return entry.inFlight;
+    if (!forceRefresh && now < (entry.throttleUntil || 0)) {
+      console.warn(`[APIService] ${cacheKey} throttle backoff active. Returning cached data.`);
+      return Array.isArray(entry.data) ? entry.data : [];
+    }
+
+    const request = (async () => {
+      try {
+        const response = await this.slaRequest(endpoint, { suppressErrorStatuses: [429] });
+        const raw = resultKey ? response?.[resultKey] : (response?.results ?? response);
+        const normalized = Array.isArray(raw) ? raw : [];
+
+        this._slaListCache[cacheKey] = {
+          ...this._slaListCache[cacheKey],
+          data: normalized,
+          cachedAt: Date.now(),
+          inFlight: null,
+          throttleUntil: 0,
+        };
+
+        try {
+          // Strip inFlight before persisting (non-serializable Promise)
+          const toStore = {};
+          for (const [k, v] of Object.entries(this._slaListCache)) {
+            toStore[k] = { data: v.data, cachedAt: v.cachedAt, throttleUntil: v.throttleUntil || 0 };
+          }
+          sessionStorage.setItem('tprm_sla_list_cache', JSON.stringify(toStore));
+        } catch {
+          /* ignore storage errors */
+        }
+
+        return normalized;
+      } catch (error) {
+        const status = error?.response?.status;
+        if (status === 429) {
+          const detail = String(
+            error?.response?.data?.detail ||
+            error?.response?.data?.message ||
+            error?.message || ''
+          );
+          const match = detail.match(/available in\s+(\d+)\s+second/i);
+          const waitSec = match ? Number(match[1]) : 120;
+          this._slaListCache[cacheKey] = {
+            ...this._slaListCache[cacheKey],
+            inFlight: null,
+            throttleUntil: Date.now() + Math.max(waitSec, 30) * 1000,
+          };
+          console.warn(`[APIService] ${cacheKey} throttled by backend. Backing off ${Math.max(waitSec, 30)}s. Stale cache returned.`);
+          return Array.isArray(this._slaListCache[cacheKey]?.data) ? this._slaListCache[cacheKey].data : [];
+        }
+        this._slaListCache[cacheKey] = { ...this._slaListCache[cacheKey], inFlight: null };
+        throw error;
+      }
+    })();
+
+    this._slaListCache[cacheKey] = { ...this._slaListCache[cacheKey], inFlight: request };
+    return request;
   }
 
   async request(endpoint, options = {}) {
@@ -121,7 +210,11 @@ class APIService {
     const url = `${this.slaURL}${endpoint}`;
     clearLegacyClientJwtKeys();
 
-    const { headers: optionHeaders = {}, ...restFetchOptions } = options
+    const {
+      headers: optionHeaders = {},
+      suppressErrorStatuses = [],
+      ...restFetchOptions
+    } = options
     const config = {
       ...restFetchOptions,
       credentials: 'include',
@@ -197,7 +290,13 @@ class APIService {
       
       return await response.json();
     } catch (error) {
-      console.error('SLA API request failed:', error);
+      const status = error?.response?.status
+      if (status === 429) {
+        // 429 Too Many Requests - backend throttle hit. Suppress noise; callers handle gracefully.
+        console.warn('[APIService] SLA request throttled (429):', endpoint);
+      } else if (!suppressErrorStatuses.includes(status)) {
+        console.error('SLA API request failed:', error);
+      }
       throw error;
     }
   }
@@ -347,9 +446,8 @@ class APIService {
   }
 
   // Vendor endpoints
-  async getVendors() {
-    const response = await this.slaRequest('/vendors/');
-    return response.results || response;
+  async getVendors(options = {}) {
+    return this._cachedSlaRequest('vendors', '/vendors/', options);
   }
 
   async getVendor(id) {
@@ -377,9 +475,8 @@ class APIService {
   }
 
   // Contract endpoints
-  async getContracts() {
-    const response = await this.slaRequest('/contracts/');
-    return response.results || response;
+  async getContracts(options = {}) {
+    return this._cachedSlaRequest('contracts', '/contracts/', options);
   }
 
   async getContract(id) {
@@ -519,7 +616,10 @@ class APIService {
 
   // Analytics endpoints
   async getDashboardStats() {
-    return this.slaRequest('/dashboard-stats/');
+    // Optional analytics on SLA page; suppress expected backend 500 console noise.
+    return this.slaRequest('/dashboard-stats/', {
+      suppressErrorStatuses: [500]
+    });
   }
 
   async getComplianceSummary() {

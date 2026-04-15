@@ -28,16 +28,14 @@ const useRFPStore = defineStore('rfp', {
     },
 
     async fetchRFPs() {
-      // MULTI-TENANCY: Check if tenant_id has changed, clear store if so
-      const currentTenantId = localStorage.getItem('tenant_id')
+      // MULTI-TENANCY: check sessionStorage first (populated by GRC parent), fall back to localStorage
+      const currentTenantId = sessionStorage.getItem('tenant_id') || localStorage.getItem('tenant_id')
       const storedTenantId = sessionStorage.getItem('rfp_store_tenant_id')
-      
+
       if (storedTenantId && storedTenantId !== currentTenantId) {
-        console.log(`[RFP Store] Tenant changed from ${storedTenantId} to ${currentTenantId}, clearing store`)
         this.clearStore()
       }
-      
-      // Store current tenant_id for next check
+
       if (currentTenantId) {
         sessionStorage.setItem('rfp_store_tenant_id', currentTenantId)
       }
@@ -46,23 +44,10 @@ const useRFPStore = defineStore('rfp', {
       try {
         const { fetchRFPs } = useRfpApi()
         
-        // Fetch RFPs from the Django backend API with authentication
         const data = await fetchRFPs()
-        
-        console.log('[RFP Store] Fetched RFPs - Full response:', data)
-        console.log('[RFP Store] Fetched RFPs:', {
-          count: data?.results?.length || 0,
-          tenant_id: currentTenantId,
-          hasResults: !!data?.results,
-          isArray: Array.isArray(data),
-          dataType: typeof data,
-          dataKeys: data && typeof data === 'object' ? Object.keys(data) : null
-        })
-        
-        // Check if response is router URLs (error case)
+
+        // Guard against misconfigured endpoint returning router URL strings
         if (data && typeof data === 'object' && data.rfps && typeof data.rfps === 'string' && data.rfps.includes('http')) {
-          console.error('[RFP Store] ❌ Received router URLs instead of RFP data. This means the API endpoint is wrong.')
-          console.error('[RFP Store] Response:', data)
           throw new Error('Invalid API endpoint - received router URLs instead of RFP data. Please check the API URL configuration.')
         }
         

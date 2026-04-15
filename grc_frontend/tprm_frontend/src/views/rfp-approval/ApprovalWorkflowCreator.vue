@@ -764,7 +764,7 @@ const addCommitteeEvaluationStages = async () => {
   try {
     // Get RFP ID from URL or localStorage
     const urlParams = new URLSearchParams(window.location.search)
-    const rfpId = urlParams.get('rfp_id') || localStorage.getItem('current_rfp_id')
+    const rfpId = urlParams.get('rfp_id') || sessionStorage.getItem('current_rfp_id') || localStorage.getItem('current_rfp_id')
     
     if (!rfpId) {
       console.error('No RFP ID found for committee evaluation')
@@ -1041,20 +1041,19 @@ const submitWorkflow = async () => {
           ...getAuthHeaders(),
           'Content-Type': 'application/json',
           'Accept': 'application/json'
-        }
+        },
+        withCredentials: true,
       })
     } catch (primaryError) {
-      // Try fallback endpoint if primary fails
-      console.warn('Primary endpoint failed, trying fallback:', primaryError)
       try {
         const fallbackUrl = getTprmApiUrl('approval/workflows/')
-        console.log('Trying fallback URL:', fallbackUrl)
         response = await axios.post(fallbackUrl, submitData, {
           headers: {
             ...getAuthHeaders(),
             'Content-Type': 'application/json',
             'Accept': 'application/json'
-          }
+          },
+          withCredentials: true,
         })
       } catch (fallbackError) {
         // Re-throw the original error if fallback also fails
@@ -1147,30 +1146,22 @@ const fetchUsers = async () => {
       url += `?workflow_type=${workflowType}`
     }
     
-    console.log('Fetching users for workflow type:', workflowType)
-    console.log('Users endpoint URL:', url)
     const response = await axios.get(url, {
-      headers: getAuthHeaders()
+      headers: getAuthHeaders(),
+      withCredentials: true,
     })
     users.value = response.data
-    console.log('Fetched users from backend:', users.value)
-    console.log(`✅ Successfully fetched ${users.value?.length || 0} users`)
   } catch (error) {
-    console.error('Error fetching users:', error)
-    // Try fallback endpoint if primary fails
     try {
-      console.log('Trying fallback endpoint: approval/users/')
       const fallbackUrl = getTprmApiUrl('approval/users/')
       const fallbackResponse = await axios.get(fallbackUrl, {
-        headers: getAuthHeaders()
+        headers: getAuthHeaders(),
+        withCredentials: true,
       })
       users.value = fallbackResponse.data
-      console.log('✅ Fetched users from fallback endpoint:', users.value)
     } catch (fallbackError) {
-      console.error('Fallback endpoint also failed:', fallbackError)
-      // Fallback to empty array if API fails
+      console.warn('[ApprovalWorkflow] Could not load users (both endpoints returned 401). Cookies may not be set yet.')
       users.value = []
-      console.warn('⚠️ No users available - using empty array')
     }
   } finally {
     loadingUsers.value = false
@@ -1179,11 +1170,10 @@ const fetchUsers = async () => {
 
 const fetchRFPFromDatabase = async (rfpId: string) => {
   try {
-    console.log('Fetching RFP data from database for ID:', rfpId)
     const response = await axios.get(getTprmApiUrl(`v1/rfps/${rfpId}/`), {
-      headers: getAuthHeaders()
+      headers: getAuthHeaders(),
+      withCredentials: true,
     })
-    console.log('Fetched RFP data from database:', response.data)
     
     if (response.data) {
       // Update rfpRequestData with fresh data from database
@@ -1251,9 +1241,9 @@ const fetchEvaluationCriteria = async (rfpNumber: string, rfpId?: string | numbe
     }
     
     const response = await axios.get(url, {
-      headers: getAuthHeaders()
+      headers: getAuthHeaders(),
+      withCredentials: true,
     })
-    console.log('Fetched evaluation criteria:', response.data)
     
     if (response.data && response.data.success) {
       // Check if there's a warning (RFP not found but returning empty criteria)
@@ -1350,13 +1340,10 @@ onMounted(async () => {
     addCommitteeEvaluationStages()
   }
   
-  // Load RFP data from the previous page
-  const rfpData = localStorage.getItem('rfp_for_approval_workflow')
-  const currentRfpId = localStorage.getItem('current_rfp_id')
-  const proposalDataStr = localStorage.getItem('proposal_for_evaluation')
-  console.log('Raw localStorage data:', rfpData)
-  console.log('Current RFP ID:', currentRfpId)
-  console.log('Proposal data:', proposalDataStr)
+  // Load RFP data from the previous page — check sessionStorage first (GRC iframe), then localStorage
+  const rfpData = sessionStorage.getItem('rfp_for_approval_workflow') || localStorage.getItem('rfp_for_approval_workflow')
+  const currentRfpId = sessionStorage.getItem('current_rfp_id') || localStorage.getItem('current_rfp_id')
+  const proposalDataStr = sessionStorage.getItem('proposal_for_evaluation') || localStorage.getItem('proposal_for_evaluation')
   
   // Load proposal data if available
   if (proposalDataStr) {
@@ -1468,10 +1455,10 @@ const checkAutoApproveStatus = async (rfpData: any) => {
       // Fetch current status to verify
       try {
         const response = await axios.get(getTprmApiUrl(`v1/rfps/${rfpId}/`), {
-          headers: getAuthHeaders()
+          headers: getAuthHeaders(),
+          withCredentials: true,
         })
-        
-        // If already approved, redirect
+
         if (response.data.status === 'APPROVED') {
           showWarning('RFP Already Approved', 'This RFP has been auto-approved and does not require an approval workflow.')
           setTimeout(() => {
@@ -1479,19 +1466,17 @@ const checkAutoApproveStatus = async (rfpData: any) => {
           }, 2000)
           return
         }
-        
-        // If auto-approve is enabled but not yet approved, auto-approve it now
+
         if (response.data.status !== 'APPROVED' && response.data.auto_approve) {
-          console.log('🔄 Auto-approving RFP now...')
           try {
-            // Call the approve endpoint to auto-approve
             await axios.post(getTprmApiUrl(`v1/rfps/${rfpId}/approve/`), {}, {
-              headers: getAuthHeaders()
+              headers: getAuthHeaders(),
+              withCredentials: true,
             })
-            
-            // Verify it was approved
+
             const verifyResponse = await axios.get(getTprmApiUrl(`v1/rfps/${rfpId}/`), {
-              headers: getAuthHeaders()
+              headers: getAuthHeaders(),
+              withCredentials: true,
             })
             
             if (verifyResponse.data.status === 'APPROVED') {

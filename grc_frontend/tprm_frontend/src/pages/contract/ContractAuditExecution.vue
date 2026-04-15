@@ -866,11 +866,11 @@ const loadAuditData = async () => {
     const auditResponse = await contractAuditApi.getContractAudit(auditId)
     const auditData = auditResponse.success ? auditResponse.data : null
     console.log('Full audit data received:', auditData)
-    console.log('Audit contract_id field:', auditData.contract_id)
-    console.log('Audit contract field:', auditData.contract)
-    console.log('Audit contract object:', auditData.contract)
-    console.log('Audit contract_id type:', typeof auditData.contract_id)
-    console.log('Audit contract type:', typeof auditData.contract)
+    if (!auditData) {
+      console.warn('Audit not found or failed to load (auditId:', auditId, ')')
+      audit.value = null
+      return
+    }
     audit.value = auditData
     
     // Note: contract_title is already included in the audit response from the API

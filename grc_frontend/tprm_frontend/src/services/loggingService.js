@@ -93,8 +93,10 @@ class LoggingService {
         }
       });
 
-      // Get JWT token from localStorage
-      const token = localStorage.getItem('session_token');
+      // Cookie-first: prefer sessionStorage token if available, then localStorage fallback.
+      const token =
+        sessionStorage.getItem('session_token') ||
+        localStorage.getItem('session_token');
 
       // Skip logging if no session token or on public/standalone pages
       const isPublicPage = typeof document !== 'undefined' && (
@@ -106,7 +108,8 @@ class LoggingService {
         if (isPublicPage) {
           console.debug('[LoggingService] Public page detected; skipping log submission.');
         } else {
-          console.warn('[LoggingService] No session token found; skipping log submission.');
+          // Expected in cookie-first auth flows where tokens are intentionally not kept in storage.
+          console.debug('[LoggingService] No session token in browser storage; skipping bearer-based log submission.');
         }
         return null;
       }
