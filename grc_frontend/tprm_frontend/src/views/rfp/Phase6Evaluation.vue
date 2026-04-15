@@ -615,6 +615,7 @@ const loadRFPProposals = async () => {
     const proposalsResponse = await fetch(`${API_BASE_URL}/rfp-responses-list/?rfp_id=${selectedRFP.value}`, {
       method: 'GET',
       headers: getAuthHeaders(),
+      credentials: 'include',
     })
     if (!proposalsResponse.ok) {
       throw new Error(`HTTP error! status: ${proposalsResponse.status}`)
@@ -779,6 +780,7 @@ const assignEvaluator = async (proposal) => {
     const response = await fetch(`${API_BASE_URL}/rfp-responses-detail/${proposal.response_id}/`, {
       method: 'GET',
       headers: getAuthHeaders(),
+      credentials: 'include',
     })
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`)
@@ -859,6 +861,7 @@ onMounted(async () => {
       const response = await fetch(`${API_BASE_URL}/users/rfp_responses/${response_id}/`, {
         method: 'GET',
         headers: getAuthHeaders(),
+        credentials: 'include',
       });
       if (!response.ok) {
         throw new Error('Failed to fetch proposal data');

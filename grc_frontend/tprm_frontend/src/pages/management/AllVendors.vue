@@ -502,47 +502,8 @@ export default {
       })
     }
 
-    // Test backend connectivity before fetching vendors
-    const testBackendConnection = async () => {
-      console.log('[AllVendors] 🧪 Testing backend connection...')
-      try {
-        // Test 1: Check if test endpoint exists
-        const testResponse = await axios.get('/api/v1/management/test/')
-        console.log('[AllVendors] ✅ Test endpoint works:', testResponse.data)
-        
-        // Test 2: Check if health endpoint exists (if available)
-        try {
-          const healthResponse = await axios.get('/api/v1/management/health/')
-          console.log('[AllVendors] ✅ Health endpoint works:', healthResponse.data)
-        } catch (healthErr) {
-          console.warn('[AllVendors] ⚠️ Health endpoint not available (this is OK):', healthErr.response?.status)
-        }
-        
-        return true
-      } catch (testErr) {
-        console.error('[AllVendors] ❌ Backend test failed:', testErr)
-        if (testErr.response?.status === 404) {
-          console.error('[AllVendors] 🚨 CRITICAL: Backend routes are NOT loaded!')
-          console.error('[AllVendors] 💡 ACTION REQUIRED: Restart Django server')
-          error.value = 'Backend routes not loaded. Please restart Django server (python manage.py runserver)'
-        }
-        return false
-      }
-    }
-
     onMounted(async () => {
-      console.log('[AllVendors] 🚀 Component mounted, starting initialization...')
-      
-      // First test backend connection
-      const backendOk = await testBackendConnection()
-      
-      if (backendOk) {
-        // Backend is accessible, fetch vendors
-        await fetchVendors()
-      } else {
-        // Backend test failed, show error
-        loading.value = false
-      }
+      await fetchVendors()
       openDetailFromRoute()
     })
 

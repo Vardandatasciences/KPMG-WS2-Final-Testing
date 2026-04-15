@@ -98,6 +98,9 @@ export default {
       }
     }
   },
+  data() {
+    return { comment: '', selectedValue: '' }
+  },
   methods: {
     sanitizeIcon(value) {
       if (!value || typeof value !== 'string') return '';
@@ -131,12 +134,7 @@ export default {
         div.textContent = String(value);
         return div.innerHTML;
       }
-    }
-  },
-  data() {
-    return { comment: '', selectedValue: '' }
-  },
-  methods: {
+    },
     onClose() {
       this.onAction('close');
     },

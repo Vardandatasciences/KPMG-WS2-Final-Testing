@@ -965,12 +965,13 @@ const loadAuditData = async () => {
       while (nextPage) {
         console.log(`Fetching questionnaires page ${pageCount + 1}...`)
         try {
-          // Extract page number from next URL
+          // Cookie-first auth: keep using HttpOnly session cookies for paginated next links.
           const response = await fetch(nextPage, {
-            headers: {
-              'Authorization': `Bearer ${localStorage.getItem('access_token')}`
-            }
+            credentials: 'include',
           })
+          if (!response.ok) {
+            throw new Error(`Failed to fetch questionnaires page: HTTP ${response.status}`)
+          }
           const nextPageData = await response.json()
           
           if (nextPageData.results && Array.isArray(nextPageData.results)) {

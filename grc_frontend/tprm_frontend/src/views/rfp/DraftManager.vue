@@ -195,6 +195,8 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import Button from '@/components_rfp/Button.vue'
+
+const http = axios.create({ withCredentials: true })
 import PopupModal from '@/popup/PopupModal.vue'
 import { PopupService } from '@/popup/popupService'
 import loggingService from '@/services/loggingService'
@@ -219,7 +221,7 @@ const loadServerDrafts = async () => {
     console.log('📥 Fetching draft RFPs from database...')
     
     // Fetch RFPs with DRAFT status from the database
-    const response = await axios.get(`${API_BASE_URL}/rfps/`, {
+    const response = await http.get(`${API_BASE_URL}/rfps/`, {
       params: {
         status: 'DRAFT'
       },
@@ -339,7 +341,7 @@ const editDraft = async (draft: any) => {
     try {
       // Fetch full RFP details including evaluation criteria
       console.log('📥 Fetching full RFP details for editing...')
-      const response = await axios.get(`${API_BASE_URL}/rfps/${draft.id}/`, {
+      const response = await http.get(`${API_BASE_URL}/rfps/${draft.id}/`, {
         headers: getAuthHeaders()
       })
       const fullRfpData = response.data
@@ -369,7 +371,7 @@ const publishDraft = async (draft: any) => {
   } else {
     // For server drafts, update status to IN_REVIEW
     try {
-      const response = await axios.patch(`${API_BASE_URL}/rfps/${draft.id}/`, {
+      const response = await http.patch(`${API_BASE_URL}/rfps/${draft.id}/`, {
         status: 'IN_REVIEW'
       }, {
         headers: getAuthHeaders()
@@ -409,7 +411,7 @@ const deleteDraft = async (draft: any) => {
       'Confirm Deletion',
       async () => {
         try {
-          await axios.delete(`${API_BASE_URL}/rfps/${draft.id}/`, {
+          await http.delete(`${API_BASE_URL}/rfps/${draft.id}/`, {
             headers: getAuthHeaders()
           })
           

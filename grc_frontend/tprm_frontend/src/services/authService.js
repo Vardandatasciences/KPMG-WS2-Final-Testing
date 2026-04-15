@@ -30,6 +30,9 @@ const clearSensitive = () => {
   sessionStorage.removeItem('tprm_cookie_session_validated')
 }
 
+// Coalesce concurrent jwt/verify calls (router + guards + App.vue often run together).
+let validateSessionInFlight = null
+
 // Request interceptor to add token
 authApi.interceptors.request.use(
   (config) => {
@@ -157,26 +160,71 @@ export default {
   },
 
   /**
-   * Validate current session
+   * Validate current session (deduped; cookie-first against shared GRC JWT).
+   * On 401, attempts one cookie-based refresh so short-lived access cookies recover without a full reload.
    */
   async validateSession() {
-    try {
-      // Validate against the shared GRC JWT endpoint so TPRM iframe
-      // can use the same HttpOnly cookie session.
-      const response = await axios.get(`${getApiOrigin()}/api/jwt/verify/`, {
+    if (validateSessionInFlight) {
+      return validateSessionInFlight
+    }
+    const origin = getApiOrigin()
+    const verify = () =>
+      axios.get(`${origin}/api/jwt/verify/`, {
         withCredentials: true,
       })
-      return {
-        success: true,
-        user: response.data.user,
+
+    validateSessionInFlight = (async () => {
+      try {
+        const response = await verify()
+        return {
+          success: true,
+          user: response.data.user,
+        }
+      } catch (error) {
+        const status = error.response?.status
+        if (status === 401) {
+          try {
+            await axios.post(`${origin}/api/jwt/refresh/`, {}, { withCredentials: true })
+            const response = await verify()
+            return {
+              success: true,
+              user: response.data.user,
+            }
+          } catch {
+            // Refresh could not establish a session (e.g. logged in elsewhere).
+          }
+          console.debug(
+            '[TPRM Auth] jwt/verify returned 401 after refresh attempt — session missing, expired, or rotated'
+          )
+        } else {
+          console.error('Session validation error:', error)
+        }
+        return {
+          success: false,
+          error: error.response?.data?.message || 'Session validation failed',
+        }
+      } finally {
+        validateSessionInFlight = null
       }
-    } catch (error) {
-      console.error('Session validation error:', error)
-      return {
-        success: false,
-        error: error.response?.data?.message || 'Session validation failed'
-      }
+    })()
+
+    return validateSessionInFlight
+  },
+
+  /**
+   * Awaitable auth check for router/guards (avoids treating a Promise as a boolean).
+   */
+  async resolveAuthenticationStatus() {
+    if (sessionStorage.getItem('tprm_cookie_session_validated') === 'true') {
+      return true
     }
+    const res = await this.validateSession()
+    if (res && res.success) {
+      sessionStorage.setItem('tprm_cookie_session_validated', 'true')
+      return true
+    }
+    clearSensitive()
+    return false
   },
 
   /**
@@ -288,7 +336,7 @@ export default {
       return true
     }
 
-    // Return a promise (routers updated to await this)
+    // Return a promise — prefer resolveAuthenticationStatus() in async guards
     return this.validateSession()
       .then((res) => {
         if (res && res.success) {

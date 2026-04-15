@@ -1128,59 +1128,37 @@ export default {
       this.error = null;
 
       try {
-        console.log(`🔍 Fetching screening results for vendor ID: ${this.selectedVendorId}`);
-        // Use getApiV1Url since backend is at /api/v1/vendor-core/ not /api/tprm/v1/vendor-core/
-        const response = await apiClient.get(getApiV1Url(`vendor-core/screening-results/vendor_screening_results/?vendor_id=${this.selectedVendorId}`));
-        
-        console.log('📡 API Response:', response.data);
-        
+        const response = await apiClient.get(
+          getApiV1Url(`vendor-core/screening-results/vendor_screening_results/?vendor_id=${this.selectedVendorId}`)
+        );
+
         if (response.data.status === 'success') {
           const results = response.data.data;
-          console.log(`🎯 Found ${results.length} screening results:`, results);
-          
-          // Get vendor info from filtered vendors first, then fall back to all vendors
-          const vendor = this.filteredVendors.find(v => v.id == this.selectedVendorId) || 
+          const vendor = this.filteredVendors.find(v => v.id == this.selectedVendorId) ||
                         this.uniqueVendors.find(v => v.id == this.selectedVendorId);
-          console.log('👤 Found vendor:', vendor);
-          
+
           this.selectedVendor = vendor;
           this.vendorScreeningResults = results;
-          this.selectedScreening = null; // Reset selected screening
+          this.selectedScreening = null;
           this.matches = [];
-          
-          console.log('✅ Selected vendor:', this.selectedVendor);
-          console.log('📊 Vendor screening results:', this.vendorScreeningResults);
-          
-          // Show success message if screening results found
-          if (results.length > 0) {
-            console.log(`🎉 SUCCESS: ${results.length} screening results loaded for ${vendor?.company_name}`);
-            
-            // Log each screening result for debugging
-            results.forEach(result => {
-              console.log(`   📋 ${result.screening_type}: ${result.status} (${result.total_matches} matches)`);
-            });
-          } else {
-            console.log(`⚠️ No screening results found for vendor ${vendor?.company_name} (ID: ${this.selectedVendorId})`);
-            console.log('💡 This might be because:');
-            console.log('   1. Vendor was just registered and screening is still in progress');
-            console.log('   2. Screening failed during registration');
-            console.log('   3. Vendor was created without triggering screening');
+
+          if (results.length === 0) {
+            console.warn('[VendorScreening] No screening results found for vendor', this.selectedVendorId);
           }
         } else {
-          console.error('❌ API returned error status:', response.data);
+          console.warn('[VendorScreening] API returned non-success status:', response.data?.status);
           this.error = 'Failed to fetch screening results for vendor';
         }
       } catch (error) {
-        console.error('🚨 Error fetching vendor screening results:', error);
-        console.error('🔍 Error details:', error.response?.data);
-        this.error = `Network error: ${error.message}`;
-        
-        // Additional debugging info
-        if (error.response?.status === 404) {
-          console.log('💡 404 Error - This usually means the vendor has no screening results yet');
-        } else if (error.response?.status === 500) {
-          console.log('💡 500 Error - This indicates a server-side issue');
+        const status = error.response?.status;
+        if (status === 404) {
+          this.error = 'No screening results found for this vendor yet.';
+        } else if (status === 500) {
+          this.error = 'Server error while loading screening results. Please try again.';
+        } else {
+          this.error = 'Failed to load screening results. Please check your connection.';
         }
+        console.warn('[VendorScreening] Error fetching screening results:', status || error.message);
       } finally {
         this.loading = false;
       }
@@ -1471,13 +1449,7 @@ export default {
 
   async mounted() {
     await loggingService.logPageView('Vendor', 'Vendor External Screening');
-    console.log('Component mounted, fetching vendors...');
     await this.fetchVendors();
-    console.log('Vendors loaded:', this.vendors.length);
-    console.log('Unique vendors:', this.uniqueVendors.length);
-    // Don't auto-fetch screening results, let user select vendor first
-    
-    // Add click outside listener to close dropdown
     document.addEventListener('click', this.handleClickOutside);
   },
   

@@ -961,6 +961,8 @@ import { useRouter } from 'vue-router'
 import { InfoIcon, TrendingUp } from 'lucide-vue-next'
 import axios from 'axios'
 import { useRfpApi } from '@/composables/useRfpApi'
+
+const http = axios.create({ withCredentials: true })
 import { useNotifications } from '@/composables/useNotifications'
 import loggingService from '@/services/loggingService'
 import jsPDF from 'jspdf'
@@ -1035,7 +1037,7 @@ const fetchKPISummary = async () => {
     
     console.log(`📊 Fetching KPI summary from: ${API_BASE_URL}/kpi/summary/`)
     
-    const response = await axios.get(`${API_BASE_URL}/kpi/summary/`, {
+    const response = await http.get(`${API_BASE_URL}/kpi/summary/`, {
       headers: getAuthHeaders()
     })
     
@@ -1146,7 +1148,7 @@ const fetchRFPCreationRate = async (timeline = '6M') => {
   try {
     console.log(`📊 Fetching RFP creation rate for timeline: ${timeline}`)
     
-    const response = await axios.get(`${API_BASE_URL}/kpi/creation-rate/`, {
+    const response = await http.get(`${API_BASE_URL}/kpi/creation-rate/`, {
       params: { timeline },
       headers: getAuthHeaders()
     })
@@ -1245,7 +1247,7 @@ const fetchRFPApprovalTime = async (timeline = '6M') => {
   try {
     console.log(`📊 Fetching RFP approval time data for timeline: ${timeline}`)
     
-    const response = await axios.get(`${API_BASE_URL}/kpi/approval-time/`, {
+    const response = await http.get(`${API_BASE_URL}/kpi/approval-time/`, {
       params: { timeline },
       headers: getAuthHeaders()
     })
@@ -1301,7 +1303,7 @@ const fetchFirstTimeApprovalRate = async () => {
   try {
     console.log(`📊 Fetching First-Time Approval Rate data`)
     
-    const response = await axios.get(`${API_BASE_URL}/kpi/first-time-approval-rate/`, {
+    const response = await http.get(`${API_BASE_URL}/kpi/first-time-approval-rate/`, {
       headers: getAuthHeaders()
     })
     
@@ -1350,7 +1352,7 @@ const fetchApprovalStagePerformance = async () => {
   try {
     console.log(`📊 Fetching Approval Stage Performance data`)
     
-    const response = await axios.get(`${API_BASE_URL}/kpi/approval-stage-performance/`, {
+    const response = await http.get(`${API_BASE_URL}/kpi/approval-stage-performance/`, {
       headers: getAuthHeaders()
     })
     
@@ -1423,7 +1425,7 @@ const fetchRFPLifecycleTime = async () => {
   try {
     console.log(`📊 Fetching RFP Lifecycle Time data`)
     
-    const response = await axios.get(`${API_BASE_URL}/kpi/lifecycle-time/`, {
+    const response = await http.get(`${API_BASE_URL}/kpi/lifecycle-time/`, {
       headers: getAuthHeaders()
     })
     
@@ -1553,7 +1555,7 @@ const fetchNewVsExistingVendors = async () => {
   try {
     console.log(`📊 Fetching New vs Existing Vendors data`)
     
-    const response = await axios.get(`${API_BASE_URL}/kpi/new-vs-existing-vendors/`, {
+    const response = await http.get(`${API_BASE_URL}/kpi/new-vs-existing-vendors/`, {
       headers: getAuthHeaders()
     })
     
@@ -1618,7 +1620,7 @@ const fetchReviewerWorkload = async () => {
   try {
     console.log(`📊 Fetching Reviewer Workload data`)
     
-    const response = await axios.get(`${API_BASE_URL}/kpi/reviewer-workload/`, {
+    const response = await http.get(`${API_BASE_URL}/kpi/reviewer-workload/`, {
       params: { timeline: '6M' },
       headers: getAuthHeaders()
     })
@@ -1697,7 +1699,7 @@ const fetchCompletionTime = async () => {
   try {
     console.log(`📊 Fetching Completion Time data`)
     
-    const response = await axios.get(`${API_BASE_URL}/kpi/evaluator-completion-time/`, {
+    const response = await http.get(`${API_BASE_URL}/kpi/evaluator-completion-time/`, {
       headers: getAuthHeaders()
     })
     
@@ -1759,7 +1761,7 @@ const fetchEvaluatorConsistency = async () => {
   try {
     console.log(`📊 Fetching Evaluator Consistency data`)
     
-    const response = await axios.get(`${API_BASE_URL}/kpi/evaluator-consistency/`, {
+    const response = await http.get(`${API_BASE_URL}/kpi/evaluator-consistency/`, {
       headers: getAuthHeaders()
     })
     
@@ -1843,7 +1845,7 @@ const fetchVendorResponseRate = async () => {
   try {
     console.log(`📊 Fetching Vendor Response Rate data`)
     
-    const response = await axios.get(`${API_BASE_URL}/kpi/vendor-response-rate/`, {
+    const response = await http.get(`${API_BASE_URL}/kpi/vendor-response-rate/`, {
       headers: getAuthHeaders()
     })
     
@@ -1932,7 +1934,7 @@ const fetchCategoryPerformance = async () => {
   try {
     console.log(`📊 Fetching Category Performance data from: ${API_BASE_URL}/kpi/category-performance/`)
     
-    const response = await axios.get(`${API_BASE_URL}/kpi/category-performance/`, {
+    const response = await http.get(`${API_BASE_URL}/kpi/category-performance/`, {
       headers: getAuthHeaders()
     })
     
@@ -2023,7 +2025,7 @@ const fetchAwardAcceptanceRate = async () => {
   try {
     console.log(`📊 Fetching Award Acceptance Rate data`)
     
-    const response = await axios.get(`${API_BASE_URL}/kpi/award-acceptance-rate/`, {
+    const response = await http.get(`${API_BASE_URL}/kpi/award-acceptance-rate/`, {
       headers: getAuthHeaders()
     })
     
@@ -2092,7 +2094,7 @@ const fetchVendorConversionFunnel = async () => {
   try {
     console.log(`📊 Fetching Vendor Conversion Funnel data`)
     
-    const response = await axios.get(`${API_BASE_URL}/kpi/vendor-conversion-funnel/`, {
+    const response = await http.get(`${API_BASE_URL}/kpi/vendor-conversion-funnel/`, {
       headers: getAuthHeaders()
     })
     
@@ -2169,7 +2171,7 @@ const fetchConsensusQuality = async () => {
   try {
     console.log(`📊 Fetching Consensus Quality data`)
     
-    const response = await axios.get(`${API_BASE_URL}/kpi/consensus-quality/`, {
+    const response = await http.get(`${API_BASE_URL}/kpi/consensus-quality/`, {
       headers: getAuthHeaders()
     })
     
@@ -2238,7 +2240,7 @@ const fetchScoreDistribution = async () => {
   try {
     console.log(`📊 Fetching Score Distribution data`)
     
-    const response = await axios.get(`${API_BASE_URL}/kpi/score-distribution/`, {
+    const response = await http.get(`${API_BASE_URL}/kpi/score-distribution/`, {
       headers: getAuthHeaders()
     })
     
@@ -2327,7 +2329,7 @@ const fetchCriteriaEffectiveness = async () => {
   try {
     console.log(`📊 Fetching Criteria Effectiveness data`)
     
-    const response = await axios.get(`${API_BASE_URL}/kpi/criteria-effectiveness/`, {
+    const response = await http.get(`${API_BASE_URL}/kpi/criteria-effectiveness/`, {
       headers: getAuthHeaders()
     })
     
@@ -2376,7 +2378,7 @@ const fetchBudgetVariance = async () => {
   try {
     console.log(`📊 Fetching Budget Variance data`)
     
-    const response = await axios.get(`${API_BASE_URL}/kpi/budget-variance/`, {
+    const response = await http.get(`${API_BASE_URL}/kpi/budget-variance/`, {
       headers: getAuthHeaders()
     })
     
@@ -2455,7 +2457,7 @@ const fetchPriceSpread = async () => {
   try {
     console.log(`📊 Fetching Price Spread data`)
     
-    const response = await axios.get(`${API_BASE_URL}/kpi/price-spread/`, {
+    const response = await http.get(`${API_BASE_URL}/kpi/price-spread/`, {
       params: { timeline: '6M' },
       headers: getAuthHeaders()
     })
@@ -2566,7 +2568,7 @@ const fetchProcessFunnel = async () => {
   try {
     console.log(`📊 Fetching Process Funnel data`)
     
-    const response = await axios.get(`${API_BASE_URL}/kpi/process-funnel/`, {
+    const response = await http.get(`${API_BASE_URL}/kpi/process-funnel/`, {
       params: { timeline: '6M' },
       headers: getAuthHeaders()
     })

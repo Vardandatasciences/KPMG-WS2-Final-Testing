@@ -236,7 +236,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, nextTick } from 'vue'
 import loggingService from '@/services/loggingService'
 import contractsApi from '@/services/contractsApi'
 import { 
@@ -432,8 +432,7 @@ const fetchAmendmentsKPI = async () => {
       }))
     }
   } catch (error) {
-    console.error('Error fetching amendments KPI:', error)
-    // Fallback to empty data if API fails
+    console.warn('[KPI] AmendmentsKPI unavailable, showing empty state.')
     amendmentsData.value = []
   }
 }
@@ -483,8 +482,7 @@ const fetchContractsExpiringSoonKPI = async () => {
       console.log(`  🔢 Sum Check: ${response.data.statistics.total_future_expiring} + ${response.data.statistics.already_expired} + ${response.data.statistics.no_end_date} = ${response.data.statistics.total_future_expiring + response.data.statistics.already_expired + response.data.statistics.no_end_date}`)
     }
   } catch (error) {
-    console.error('❌ Error fetching contracts expiring soon KPI:', error)
-    // Keep default data if API fails
+    console.warn('[KPI] ContractsExpiringSoonKPI unavailable, showing empty state.')
   }
 }
 
@@ -503,8 +501,7 @@ const fetchAvgValueByTypeKPI = async () => {
       console.log('📈 Statistics:', avgValueStatistics.value)
     }
   } catch (error) {
-    console.error('❌ Error fetching average contract value by type KPI:', error)
-    // Keep empty data if API fails
+    console.warn('[KPI] AvgValueByTypeKPI unavailable, showing empty state.')
   }
 }
 
@@ -528,8 +525,7 @@ const fetchBusinessCriticalityKPI = async () => {
       console.log(`  🎯 Total contracts: ${criticalityStatistics.value.total_contracts}`)
     }
   } catch (error) {
-    console.error('❌ Error fetching business criticality KPI:', error)
-    // Keep empty data if API fails
+    console.warn('[KPI] BusinessCriticalityKPI unavailable, showing empty state.')
   }
 }
 
@@ -552,8 +548,7 @@ const fetchTotalLiabilityKPI = async () => {
       console.log(`  ❓ Contracts without Liability: ${liabilityData.value.contracts_without_liability}`)
     }
   } catch (error) {
-    console.error('❌ Error fetching total liability exposure KPI:', error)
-    // Keep default data if API fails
+    console.warn('[KPI] TotalLiabilityKPI unavailable, showing empty state.')
   }
 }
 
@@ -579,8 +574,7 @@ const fetchContractRiskExposureKPI = async () => {
       console.log(`  📊 Avg Risks per Contract: ${riskExposureStatistics.value.average_risks_per_contract}`)
     }
   } catch (error) {
-    console.error('❌ Error fetching contract risk exposure KPI:', error)
-    // Keep default data if API fails
+    console.warn('[KPI] ContractRiskExposureKPI unavailable, showing empty state.')
   }
 }
 
@@ -610,8 +604,7 @@ const fetchEarlyTerminationRateKPI = async () => {
       console.log(`  📉 Lowest Rate: ${terminationRateStatistics.value.lowest_rate_type}`)
     }
   } catch (error) {
-    console.error('❌ Error fetching early termination rate KPI:', error)
-    // Keep default data if API fails
+    console.warn('[KPI] EarlyTerminationRateKPI unavailable, showing empty state.')
   }
 }
 
@@ -637,13 +630,13 @@ const fetchTimeToApproveContractKPI = async () => {
       console.log(`  📈 Months with Data: ${timeToApproveStatistics.value.months_with_data}`)
     }
   } catch (error) {
-    console.error('❌ Error fetching time to approve contract KPI:', error)
-    // Keep default data if API fails
+    console.warn('[KPI] TimeToApproveKPI unavailable, showing empty state.')
   }
 }
 
 // Chart creation functions
 const createRiskExposureChart = () => {
+  if (!riskExposureChart.value) return
   const ctx = riskExposureChart.value.getContext('2d')
   new Chart(ctx, {
     type: 'bar',
@@ -690,6 +683,7 @@ const createRiskExposureChart = () => {
 }
 
 const createComplianceChart = () => {
+  if (!complianceChart.value) return
   const ctx = complianceChart.value.getContext('2d')
   new Chart(ctx, {
     type: 'doughnut',
@@ -727,6 +721,7 @@ const createComplianceChart = () => {
 }
 
 const createVendorPerformanceChart = () => {
+  if (!vendorPerformanceChart.value) return
   const ctx = vendorPerformanceChart.value.getContext('2d')
   new Chart(ctx, {
     type: 'radar',
@@ -782,6 +777,7 @@ const createVendorPerformanceChart = () => {
 }
 
 const createAmendmentsChart = () => {
+  if (!amendmentsChart.value) return
   const ctx = amendmentsChart.value.getContext('2d')
   new Chart(ctx, {
     type: 'bar',
@@ -828,6 +824,7 @@ const createAmendmentsChart = () => {
 }
 
 const createTimeToFinalizeChart = () => {
+  if (!timeToFinalizeChart.value) return
   const ctx = timeToFinalizeChart.value.getContext('2d')
   new Chart(ctx, {
     type: 'line',
@@ -880,6 +877,7 @@ const createTimeToFinalizeChart = () => {
 }
 
 const createContractsExpiringChart = () => {
+  if (!contractsExpiringChart.value) return
   const ctx = contractsExpiringChart.value.getContext('2d')
   new Chart(ctx, {
     type: 'bar',
@@ -994,6 +992,7 @@ const createBusinessCriticalityChart = () => {
 }
 
 const createTerminationRateChart = () => {
+  if (!terminationRateChart.value) return
   const ctx = terminationRateChart.value.getContext('2d')
   new Chart(ctx, {
     type: 'bar',
@@ -1242,7 +1241,9 @@ onMounted(async () => {
   await fetchEarlyTerminationRateKPI()
   await fetchTimeToApproveContractKPI()
   
-  // Create all charts
+  // Wait for the DOM to reflect the fetched data before drawing charts
+  await nextTick()
+
   createRiskExposureChart()
   createComplianceChart()
   createVendorPerformanceChart()

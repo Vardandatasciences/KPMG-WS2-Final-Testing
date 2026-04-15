@@ -830,7 +830,8 @@ const loadAvailableRfps = async () => {
     const { getAuthHeaders } = useRfpApi()
     const response = await fetch(`${API_BASE_URL}/rfps/`, {
       method: 'GET',
-      headers: getAuthHeaders()
+      headers: getAuthHeaders(),
+      credentials: 'include',
     })
     if (response.ok) {
       const data = await response.json()
@@ -861,6 +862,7 @@ const loadConsensusData = async () => {
     const committeeResponse = await fetch(`${API_BASE_URL}/rfp/${rfpId}/committee/get/`, {
       method: 'GET',
       headers: getAuthHeaders(),
+      credentials: 'include',
     })
     if (committeeResponse.ok) {
       const committeeData = await committeeResponse.json()
@@ -880,7 +882,8 @@ const loadConsensusData = async () => {
     // Load proposals
     const proposalsResponse = await fetch(`${API_BASE_URL}/rfp-responses-list/?rfp_id=${rfpId}`, {
       method: 'GET',
-      headers: getAuthHeaders()
+      headers: getAuthHeaders(),
+      credentials: 'include',
     })
     if (proposalsResponse.ok) {
       const proposalsData = await proposalsResponse.json()
@@ -1001,7 +1004,8 @@ const loadConsensusData = async () => {
     // Load committee evaluations
     const evaluationsResponse = await fetch(`${API_BASE_URL}/rfp/${rfpId}/final-evaluations/`, {
       method: 'GET',
-      headers: getAuthHeaders()
+      headers: getAuthHeaders(),
+      credentials: 'include',
     })
     if (evaluationsResponse.ok) {
       const evaluationsData = await evaluationsResponse.json()
@@ -1137,7 +1141,8 @@ const loadNotifications = async () => {
     const { getAuthHeaders } = useRfpApi()
     const response = await fetch(`${API_BASE_URL}/rfp/${rfpId}/award-notification/`, {
       method: 'GET',
-      headers: getAuthHeaders()
+      headers: getAuthHeaders(),
+      credentials: 'include',
     })
     if (response.ok) {
       const data = await response.json()
@@ -1210,6 +1215,7 @@ const sendAwardNotification = async () => {
         'Content-Type': 'application/json',
         ...getAuthHeaders()
       },
+      credentials: 'include',
       body: JSON.stringify(payload)
     })
     
@@ -1275,6 +1281,7 @@ const sendParticipantNotifications = async () => {
           'Content-Type': 'application/json',
           ...getAuthHeaders()
         },
+        credentials: 'include',
         body: JSON.stringify({
           response_id: participant.response_id,
           vendor_email: participantEmail,
@@ -1322,7 +1329,8 @@ const createVendorCredentials = async (notificationId) => {
       headers: {
         'Content-Type': 'application/json',
         ...getAuthHeaders()
-      }
+      },
+      credentials: 'include',
     })
    
     const data = await response.json()

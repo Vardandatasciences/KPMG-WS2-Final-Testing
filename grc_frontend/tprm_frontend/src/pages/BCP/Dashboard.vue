@@ -2430,16 +2430,7 @@ watch(() => dashboardData.value?.temporal_metrics, (newTemporalMetrics) => {
 // Load data on component mount
 onMounted(async () => {
   console.log('🔍 DEBUG: Dashboard component mounted')
-  
-  // Test API connectivity first
-  try {
-    console.log('🔍 DEBUG: Testing API connectivity...')
-    const connectivityTest = await testApiConnection()
-    console.log('🔍 DEBUG: API connectivity test result:', connectivityTest)
-  } catch (testError) {
-    console.error('❌ DEBUG: API connectivity test failed:', testError)
-  }
-  
+
   await loggingService.logBCPView()
   await loadDashboardData()
   

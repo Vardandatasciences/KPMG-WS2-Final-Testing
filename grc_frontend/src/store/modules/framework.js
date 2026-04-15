@@ -65,7 +65,7 @@ export default {
         const response = await axios.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, {
           frameworkId: frameworkId,
           userId: userId
-        })
+        }, { withCredentials: true })
         
         if (response.data && response.data.success) {
           console.log('✅ Framework saved to backend session successfully')
@@ -91,7 +91,8 @@ export default {
         console.log('🔄 Loading framework from session for user:', userId)
         
         const response = await axios.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED, {
-          params: { userId }
+          params: { userId },
+          withCredentials: true,
         })
         
         console.log('📥 Backend response:', response.data)
@@ -139,7 +140,7 @@ export default {
         const response = await axios.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, {
           frameworkId: null,
           userId: userId
-        })
+        }, { withCredentials: true })
         
         if (response.data && response.data.success) {
           console.log('✅ Framework cleared from backend session successfully')

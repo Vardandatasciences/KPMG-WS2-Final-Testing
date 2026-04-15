@@ -2212,6 +2212,9 @@
 import { ref, reactive, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import axios from 'axios'
+
+// Pre-configured axios instance that always sends cookies (cookie-first auth in GRC iframe)
+const http = axios.create({ withCredentials: true })
 import { useNotifications } from '@/composables/useNotifications'
 import notificationService from '@/services/notificationService'
 import loggingService from '@/services/loggingService'
@@ -2806,7 +2809,7 @@ const fetchRfpTypes = async () => {
     loadingRfpTypes.value = true
     console.log('📡 Fetching RFP types from API...')
     
-    const response = await axios.get(`${API_BASE_URL}/rfp-types/types/`, {
+    const response = await http.get(`${API_BASE_URL}/rfp-types/types/`, {
       headers: getAuthHeaders()
     })
     
@@ -2904,7 +2907,7 @@ const fetchCustomFields = async (rfpType: string) => {
     loadingCustomFields.value = true
     console.log('📡 Fetching custom fields for RFP type:', rfpType)
     
-    const response = await axios.get(`${API_BASE_URL}/rfp-types/custom_fields/?rfp_type=${encodeURIComponent(rfpType)}`, {
+    const response = await http.get(`${API_BASE_URL}/rfp-types/custom_fields/?rfp_type=${encodeURIComponent(rfpType)}`, {
       headers: getAuthHeaders()
     })
     
@@ -3596,7 +3599,7 @@ onMounted(async () => {
         // Fetch document details for each document ID
         const documentPromises = draftData.documents.map(async (docId) => {
           try {
-            const docResponse = await axios.get(`${API_BASE_URL}/s3-files/${docId}/`, {
+            const docResponse = await http.get(`${API_BASE_URL}/s3-files/${docId}/`, {
               headers: getAuthHeaders()
             })
             console.log(`✅ Fetched document ${docId}:`, docResponse.data)
@@ -3783,13 +3786,13 @@ const removeDocument = async (index) => {
           // Remove from RFP's documents array
           const rfpId = localStorage.getItem('current_rfp_id')
           if (rfpId) {
-            const rfpResponse = await axios.get(`${API_BASE_URL}/rfps/${rfpId}/`, {
+            const rfpResponse = await http.get(`${API_BASE_URL}/rfps/${rfpId}/`, {
               headers: getAuthHeaders()
             })
             const currentDocuments = rfpResponse.data.documents || []
             const updatedDocuments = currentDocuments.filter(id => id !== doc.s3Id)
-            
-            await axios.post(`${API_BASE_URL}/rfps/${rfpId}/update-documents/`, {
+
+            await http.post(`${API_BASE_URL}/rfps/${rfpId}/update-documents/`, {
               documents: updatedDocuments
             }, {
               headers: getAuthHeaders()
@@ -3821,7 +3824,7 @@ const downloadDocument = async (doc) => {
     console.log('📥 Downloading document:', doc.s3Id, doc.fileName)
     
     // Fetch document details to get the S3 URL
-    const docDetails = await axios.get(`${API_BASE_URL}/s3-files/${doc.s3Id}/`, {
+    const docDetails = await http.get(`${API_BASE_URL}/s3-files/${doc.s3Id}/`, {
       headers: getAuthHeaders()
     })
     console.log('📋 Document details fetched:', docDetails.data)
@@ -3866,7 +3869,7 @@ const downloadDocument = async (doc) => {
       
       console.log('📥 Requesting download via backend:', { s3_key: s3Key, file_name: fileName })
       
-      const response = await axios.post(`${API_BASE_URL}/s3/download/`, {
+      const response = await http.post(`${API_BASE_URL}/s3/download/`, {
         s3_key: s3Key,
         file_name: fileName,
         user_id: '1'
@@ -3948,7 +3951,7 @@ const saveSingleDocument = async (index: number) => {
     // Upload to S3 via backend API
     const authHeaders = getAuthHeaders()
     delete authHeaders['Content-Type']  // Remove any Content-Type to let axios set it for FormData
-    const uploadResponse = await axios.post(`${API_BASE_URL}/upload-document/`, uploadFormData, {
+    const uploadResponse = await http.post(`${API_BASE_URL}/upload-document/`, uploadFormData, {
       headers: authHeaders,
       timeout: 60000 // 60 second timeout for large files
     })
@@ -3964,17 +3967,15 @@ const saveSingleDocument = async (index: number) => {
 
       // Get current RFP documents and add the new one
       try {
-        const rfpResponse = await axios.get(`${API_BASE_URL}/rfps/${rfpId}`, {
+        const rfpResponse = await http.get(`${API_BASE_URL}/rfps/${rfpId}`, {
           headers: getAuthHeaders()
         })
         const currentDocuments = rfpResponse.data.documents || []
-        
-        // Add new document ID if not already present
+
         if (!currentDocuments.includes(uploadResponse.data.document_id)) {
           const updatedDocuments = [...currentDocuments, uploadResponse.data.document_id]
-          
-          // Update RFP with new document list
-          await axios.post(`${API_BASE_URL}/rfps/${rfpId}/update-documents/`, {
+
+          await http.post(`${API_BASE_URL}/rfps/${rfpId}/update-documents/`, {
             documents: updatedDocuments
           }, {
             headers: getAuthHeaders()
@@ -4098,10 +4099,10 @@ const mergeDocuments = async (documentIds = null) => {
     console.log(`🔄 Merging ${numericIds.length} documents in order${rfpId ? ` for RFP ${rfpId}` : ' (standalone)'}:`, numericIds)
 
     // Use standalone merge endpoint (works without RFP ID)
-    const mergeResponse = await axios.post(`${API_BASE_URL}/merge-documents/`, {
+    const mergeResponse = await http.post(`${API_BASE_URL}/merge-documents/`, {
       document_ids: numericIds,
-      document_order: numericIds, // Use the current order
-      rfp_id: rfpId || null, // Optional
+      document_order: numericIds,
+      rfp_id: rfpId || null,
       user_id: '1'
     }, {
       headers: getAuthHeaders(),
@@ -4115,7 +4116,7 @@ const mergeDocuments = async (documentIds = null) => {
       
       // Fetch full document details from API
       try {
-        const docResponse = await axios.get(`${API_BASE_URL}/s3-files/${mergeResponse.data.merged_document_id}/`, {
+        const docResponse = await http.get(`${API_BASE_URL}/s3-files/${mergeResponse.data.merged_document_id}/`, {
           headers: getAuthHeaders()
         })
         
@@ -4163,7 +4164,7 @@ const mergeDocuments = async (documentIds = null) => {
       // Add merged document to RFP's documents list (if RFP exists)
       if (rfpId) {
         try {
-          const rfpResponse = await axios.get(`${API_BASE_URL}/rfps/${rfpId}`, {
+          const rfpResponse = await http.get(`${API_BASE_URL}/rfps/${rfpId}`, {
             headers: getAuthHeaders()
           })
           const currentDocuments = rfpResponse.data.documents || []
@@ -4172,7 +4173,7 @@ const mergeDocuments = async (documentIds = null) => {
           if (!currentDocuments.includes(mergeResponse.data.merged_document_id)) {
             const updatedDocuments = [...currentDocuments, mergeResponse.data.merged_document_id]
             
-            await axios.post(`${API_BASE_URL}/rfps/${rfpId}/update-documents/`, {
+            await http.post(`${API_BASE_URL}/rfps/${rfpId}/update-documents/`, {
               documents: updatedDocuments
             }, {
               headers: getAuthHeaders()
@@ -4256,7 +4257,7 @@ const mergeDocumentsFromFiles = async (docs) => {
     const authHeaders = getAuthHeaders()
     delete authHeaders['Content-Type']  // Remove any Content-Type to let axios set it for FormData
     
-    const mergeResponse = await axios.post(`${API_BASE_URL}/merge-documents/`, mergeFormData, {
+    const mergeResponse = await http.post(`${API_BASE_URL}/merge-documents/`, mergeFormData, {
       headers: authHeaders,
       timeout: 120000
     })
@@ -4268,7 +4269,7 @@ const mergeDocumentsFromFiles = async (docs) => {
       
       // Fetch full document details from API
       try {
-        const docResponse = await axios.get(`${API_BASE_URL}/s3-files/${mergeResponse.data.merged_document_id}/`, {
+        const docResponse = await http.get(`${API_BASE_URL}/s3-files/${mergeResponse.data.merged_document_id}/`, {
           headers: getAuthHeaders()
         })
         
@@ -4472,7 +4473,7 @@ const saveAllDocuments = async () => {
         // Upload to S3 via backend API
         const authHeaders = getAuthHeaders()
         delete authHeaders['Content-Type']  // Remove any Content-Type to let axios set it for FormData
-        const uploadResponse = await axios.post(`${API_BASE_URL}/upload-document/`, uploadFormData, {
+        const uploadResponse = await http.post(`${API_BASE_URL}/upload-document/`, uploadFormData, {
           headers: authHeaders,
           timeout: 60000
         })
@@ -4513,13 +4514,13 @@ const saveAllDocuments = async () => {
     if (documentIds.length > 0) {
       try {
         console.log('🔄 Updating RFP with document IDs...')
-        const rfpResponse = await axios.get(`${API_BASE_URL}/rfps/${rfpId}`, {
+        const rfpResponse = await http.get(`${API_BASE_URL}/rfps/${rfpId}`, {
           headers: getAuthHeaders()
         })
         const currentDocuments = rfpResponse.data.documents || []
         const updatedDocuments = [...new Set([...currentDocuments, ...documentIds])]
         
-        await axios.post(`${API_BASE_URL}/rfps/${rfpId}/update-documents/`, {
+        await http.post(`${API_BASE_URL}/rfps/${rfpId}/update-documents/`, {
           documents: updatedDocuments
         }, {
           headers: getAuthHeaders()
@@ -4946,7 +4947,7 @@ const handleSaveDraft = async () => {
     if (isUpdate) {
       try {
         console.log(`Verifying RFP ${existingRfpId} exists...`)
-        await axios.get(`${API_BASE_URL}/rfps/${existingRfpId}/`, {
+        await http.get(`${API_BASE_URL}/rfps/${existingRfpId}/`, {
           headers: getAuthHeaders()
         })
         console.log(`✅ RFP ${existingRfpId} exists - will update`)
@@ -5185,7 +5186,7 @@ const handleSaveDraft = async () => {
         console.log(`📤 Sending PATCH request to /api/v1/rfps/${existingRfpId}/`)
         console.log('📤 With data:', JSON.stringify(rfpData, null, 2))
         
-        response = await axios.patch(`${API_BASE_URL}/rfps/${existingRfpId}/`, rfpData, {
+        response = await http.patch(`${API_BASE_URL}/rfps/${existingRfpId}/`, rfpData, {
           headers: {
             ...getAuthHeaders(),
             'Content-Type': 'application/json',
@@ -5206,7 +5207,7 @@ const handleSaveDraft = async () => {
       
     } else {
       // Create new draft - evaluation_criteria will be saved separately after RFP creation
-      response = await axios.post(`${API_BASE_URL}/rfps/`, rfpData, {
+      response = await http.post(`${API_BASE_URL}/rfps/`, rfpData, {
         headers: {
           ...getAuthHeaders(),
           'Content-Type': 'application/json',
@@ -5240,7 +5241,7 @@ const handleSaveDraft = async () => {
         // For updates, delete existing criteria first (to replace them with new ones)
         if (isUpdate) {
           try {
-            const existingCriteriaResponse = await axios.get(`${API_BASE_URL}/evaluation-criteria/?rfp=${savedRfpId}`, {
+            const existingCriteriaResponse = await http.get(`${API_BASE_URL}/evaluation-criteria/?rfp=${savedRfpId}`, {
               headers: getAuthHeaders()
             })
             const existingCriteria = existingCriteriaResponse.data.results || existingCriteriaResponse.data || []
@@ -5249,7 +5250,7 @@ const handleSaveDraft = async () => {
             for (const criterion of existingCriteria) {
               const criteriaId = criterion.criteria_id || criterion.id
               if (criteriaId) {
-                await axios.delete(`${API_BASE_URL}/evaluation-criteria/${criteriaId}/`, {
+                await http.delete(`${API_BASE_URL}/evaluation-criteria/${criteriaId}/`, {
                   headers: getAuthHeaders()
                 })
               }
@@ -5288,7 +5289,7 @@ const handleSaveDraft = async () => {
             console.log('📤 Creating evaluation criterion:', criteriaPayload.criteria_name)
             console.log('📋 Criterion payload:', JSON.stringify(criteriaPayload, null, 2))
             
-            const criteriaResponse = await axios.post(`${API_BASE_URL}/evaluation-criteria/`, criteriaPayload, {
+            const criteriaResponse = await http.post(`${API_BASE_URL}/evaluation-criteria/`, criteriaPayload, {
               headers: {
                 ...getAuthHeaders(),
                 'Content-Type': 'application/json',
@@ -5365,7 +5366,7 @@ const handleSaveDraft = async () => {
           
           const authHeaders = getAuthHeaders()
           delete authHeaders['Content-Type']  // Remove any Content-Type to let axios set it for FormData
-          const uploadResponse = await axios.post(`${API_BASE_URL}/upload-document/`, uploadFormData, {
+          const uploadResponse = await http.post(`${API_BASE_URL}/upload-document/`, uploadFormData, {
             headers: authHeaders,
             timeout: 60000
           })
@@ -5402,7 +5403,7 @@ const handleSaveDraft = async () => {
       // Step 3: Update RFP's documents field with all document IDs
       if (allDocumentIds.length > 0) {
         try {
-          const updateResponse = await axios.post(`${API_BASE_URL}/rfps/${savedRfpId}/update-documents/`, {
+          const updateResponse = await http.post(`${API_BASE_URL}/rfps/${savedRfpId}/update-documents/`, {
             documents: allDocumentIds
           }, {
             headers: getAuthHeaders()
@@ -5478,7 +5479,7 @@ const handleSaveDraft = async () => {
           }))
         }
       }
-      await axios.post(respondUrl, payload, { headers: getAuthHeaders() })
+      await http.post(respondUrl, payload, { headers: getAuthHeaders() })
       console.log('✅ Change request completed and workflow resumed from same stage')
     }
   } catch (crErr) {
@@ -5514,7 +5515,7 @@ const handleSaveDraft = async () => {
           user_role: 'Creator'
         }
         
-        await axios.post(`${API_BASE_URL}/rfps/${savedRfpId}/edit_with_versioning/`, versioningPayload, {
+        await http.post(`${API_BASE_URL}/rfps/${savedRfpId}/edit_with_versioning/`, versioningPayload, {
           headers: getAuthHeaders()
         })
         console.log('✅ RFP version recorded in rfp_version_history successfully')
@@ -5549,7 +5550,7 @@ const handleSaveDraft = async () => {
     
     // Verify the RFP was saved by fetching it and check criteria
     try {
-      const verifyResponse = await axios.get(`${API_BASE_URL}/rfps/${savedRfpId}`, {
+      const verifyResponse = await http.get(`${API_BASE_URL}/rfps/${savedRfpId}`, {
         headers: getAuthHeaders()
       })
       console.log('Verification: RFP exists in database:', verifyResponse.data)
@@ -5701,7 +5702,7 @@ const proceedToApprovalWorkflowAction = async (consentConfig) => {
     // Verify auto-approve status from saved RFP
     let rfpAutoApprove = shouldAutoApprove
     try {
-      const rfpCheckResponse = await axios.get(`${API_BASE_URL}/rfps/${rfpId}/`, {
+      const rfpCheckResponse = await http.get(`${API_BASE_URL}/rfps/${rfpId}/`, {
         headers: getAuthHeaders()
       })
       rfpAutoApprove = Boolean(rfpCheckResponse.data.auto_approve || rfpCheckResponse.data.autoApprove || shouldAutoApprove)
@@ -5719,14 +5720,14 @@ const proceedToApprovalWorkflowAction = async (consentConfig) => {
       
       try {
         // Use the approve endpoint which now handles auto-approve from any status (except CANCELLED/ARCHIVED)
-        const approveResponse = await axios.post(`${API_BASE_URL}/rfps/${rfpId}/approve/`, {}, {
+        const approveResponse = await http.post(`${API_BASE_URL}/rfps/${rfpId}/approve/`, {}, {
           headers: getAuthHeaders()
         })
         
         console.log('✅ RFP auto-approved successfully:', approveResponse.data)
         
         // Verify the status was updated correctly
-        const verifyResponse = await axios.get(`${API_BASE_URL}/rfps/${rfpId}/`, {
+        const verifyResponse = await http.get(`${API_BASE_URL}/rfps/${rfpId}/`, {
           headers: getAuthHeaders()
         })
         console.log('✅ Verified RFP status after approval:', verifyResponse.data.status)
@@ -5736,7 +5737,7 @@ const proceedToApprovalWorkflowAction = async (consentConfig) => {
         // Ensure approval_workflow_id is null for auto-approved RFPs
         if (verifyResponse.data.approval_workflow_id) {
           console.log('⚠️ approval_workflow_id is not null, clearing it...')
-          await axios.patch(`${API_BASE_URL}/rfps/${rfpId}/`, {
+          await http.patch(`${API_BASE_URL}/rfps/${rfpId}/`, {
             approval_workflow_id: null
           }, {
             headers: getAuthHeaders()
@@ -5767,7 +5768,7 @@ const proceedToApprovalWorkflowAction = async (consentConfig) => {
           // If approve endpoint fails, try direct PATCH as fallback
           try {
             console.log('⚠️ Trying fallback: direct status update to APPROVED')
-            const fallbackResponse = await axios.patch(`${API_BASE_URL}/rfps/${rfpId}/`, {
+            const fallbackResponse = await http.patch(`${API_BASE_URL}/rfps/${rfpId}/`, {
               status: 'APPROVED',
               approved_by: 1,
               approval_workflow_id: null // Ensure no approval workflow is assigned
@@ -5777,7 +5778,7 @@ const proceedToApprovalWorkflowAction = async (consentConfig) => {
             console.log('✅ Fallback successful - RFP status set to APPROVED via PATCH')
             
             // Verify the status was updated correctly
-            const verifyResponse = await axios.get(`${API_BASE_URL}/rfps/${rfpId}/`, {
+            const verifyResponse = await http.get(`${API_BASE_URL}/rfps/${rfpId}/`, {
               headers: getAuthHeaders()
             })
             console.log('✅ Verified RFP status after fallback:', verifyResponse.data.status)
@@ -5853,7 +5854,7 @@ const proceedToApprovalWorkflowAction = async (consentConfig) => {
             // Upload to S3 via backend API
             const authHeaders = getAuthHeaders()
             delete authHeaders['Content-Type']  // Remove any Content-Type to let axios set it for FormData
-            const uploadResponse = await axios.post(`${API_BASE_URL}/upload-document/`, formData, {
+            const uploadResponse = await http.post(`${API_BASE_URL}/upload-document/`, formData, {
               headers: authHeaders,
               timeout: 60000 // 60 second timeout for large files
             })
@@ -5887,7 +5888,7 @@ const proceedToApprovalWorkflowAction = async (consentConfig) => {
           console.log(`💾 Updating RFP ${rfpId} with ${documentIds.length} document IDs...`)
           
           try {
-            const updateResponse = await axios.post(`${API_BASE_URL}/rfps/${rfpId}/update-documents/`, {
+            const updateResponse = await http.post(`${API_BASE_URL}/rfps/${rfpId}/update-documents/`, {
               documents: documentIds
             }, {
               headers: getAuthHeaders()
@@ -6002,7 +6003,7 @@ const proceedToApprovalWorkflowAction = async (consentConfig) => {
         console.log('🔄 Creating revision version for RFP after change request:', rfpId)
         
         // Get the latest version number
-        const versionHistoryResponse = await axios.get(getTprmApiUrl(`rfp-approval/approval-request-versions/${rfpId}/`), {
+        const versionHistoryResponse = await http.get(getTprmApiUrl(`rfp-approval/approval-request-versions/${rfpId}/`), {
           headers: getAuthHeaders()
         })
         
@@ -6026,7 +6027,7 @@ const proceedToApprovalWorkflowAction = async (consentConfig) => {
           is_approved: false
         }
         
-        const versionResponse = await axios.post(getTprmApiUrl('rfp-approval/approval-request-versions/'), versionData, {
+        const versionResponse = await http.post(getTprmApiUrl('rfp-approval/approval-request-versions/'), versionData, {
           headers: getAuthHeaders()
         })
         
@@ -6056,7 +6057,7 @@ const proceedToApprovalWorkflowAction = async (consentConfig) => {
           is_approved: false
         }
         
-        const versionResponse = await axios.post(getTprmApiUrl('rfp-approval/approval-request-versions/'), versionData, {
+        const versionResponse = await http.post(getTprmApiUrl('rfp-approval/approval-request-versions/'), versionData, {
           headers: getAuthHeaders()
         })
         
@@ -6717,7 +6718,7 @@ const generateDocument = async (format: 'word' | 'pdf') => {
     console.log('Generating document with data:', rfpData)
     
     // Call the document generation API (using Django backend)
-    const response = await axios.post(`${API_BASE_URL}/generate-document/`, {
+    const response = await http.post(`${API_BASE_URL}/generate-document/`, {
       rfp_number: rfpData.rfpNumber,
       rfp_title: rfpData.title,
       description: rfpData.description,
@@ -7010,7 +7011,7 @@ const loadRFPForChangeRequest = async (rfpId) => {
           const rfpIdForQuery = dataToUse?.rfp_id || dataToUse?.id || rfpId
           console.log(`📡 Fetching criteria directly for rfp_id=${rfpIdForQuery}`)
           
-          const criteriaResponse = await axios.get(`${API_BASE_URL}/evaluation-criteria/?rfp=${rfpIdForQuery}`, {
+          const criteriaResponse = await http.get(`${API_BASE_URL}/evaluation-criteria/?rfp=${rfpIdForQuery}`, {
             headers: getAuthHeaders()
           })
           
@@ -7102,7 +7103,7 @@ const loadRFPForChangeRequest = async (rfpId) => {
           // Otherwise, fetch from API
           try {
             console.log(`📥 Fetching document ${docId} from API...`)
-            const docResponse = await axios.get(`${API_BASE_URL}/s3-files/${docId}/`, {
+            const docResponse = await http.get(`${API_BASE_URL}/s3-files/${docId}/`, {
               headers: getAuthHeaders()
             })
             
@@ -7230,7 +7231,7 @@ const previewDocument = async () => {
     }
     
     // Call the document generation API for preview (PDF only) - using Django backend
-    const response = await axios.post(`${API_BASE_URL}/generate-document/`, {
+    const response = await http.post(`${API_BASE_URL}/generate-document/`, {
       rfp_number: rfpData.rfpNumber,
       rfp_title: rfpData.title,
       description: rfpData.description,

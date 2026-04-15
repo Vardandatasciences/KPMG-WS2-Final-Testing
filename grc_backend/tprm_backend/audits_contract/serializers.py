@@ -201,17 +201,25 @@ class ContractAuditSerializer(AutoDecryptingModelSerializer):
             'created_at', 'updated_at'
         ]
         read_only_fields = ['audit_id', 'created_at', 'updated_at']
-    
+
     def get_contract_title(self, obj):
         """Get contract title from related contract."""
-        if obj.contract:
-            return obj.contract.contract_title
+        try:
+            contract = obj.contract
+            if contract:
+                return contract.contract_title
+        except Exception:
+            pass
         return None
-    
+
     def get_contract_id(self, obj):
         """Get contract ID from related contract."""
-        if obj.contract:
-            return obj.contract.contract_id
+        try:
+            contract = obj.contract
+            if contract:
+                return contract.contract_id
+        except Exception:
+            pass
         return None
 
 
@@ -313,16 +321,24 @@ class ContractAuditListSerializer(AutoDecryptingModelSerializer):
     
     def get_contract_title(self, obj):
         """Get contract title from related contract."""
-        if obj.contract:
-            return obj.contract.contract_title
+        try:
+            contract = obj.contract
+            if contract:
+                return contract.contract_title
+        except Exception:
+            pass
         return None
-    
+
     def get_contract_id(self, obj):
         """Get contract ID from related contract."""
-        if obj.contract:
-            return obj.contract.contract_id
+        try:
+            contract = obj.contract
+            if contract:
+                return contract.contract_id
+        except Exception:
+            pass
         return None
-    
+
     def get_auditor_name(self, obj):
         """Get auditor name from user ID."""
         if obj.auditor_id:

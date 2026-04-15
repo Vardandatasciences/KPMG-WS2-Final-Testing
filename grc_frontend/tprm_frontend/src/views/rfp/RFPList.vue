@@ -949,51 +949,25 @@ const formatBudget = (min, max) => {
 
 // formatFileSize function removed - not needed for RFP payload only view
 
-// Test backend connectivity
-const testBackendConnection = async () => {
-  try {
-    const { getAuthHeaders } = useRfpApi()
-    const response = await fetch(getTprmApiUrl('rfp/rfps/'), {
-      method: 'GET',
-      headers: getAuthHeaders(),
-    })
-    console.log('Backend connection test:', response.status, response.statusText)
-    return response.ok
-  } catch (error) {
-    console.error('Backend connection failed:', error)
-    return false
-  }
-}
-
 // Lifecycle
 onMounted(async () => {
   await loggingService.logPageView('RFP', 'RFP List')
   loading.value = true
   try {
-    // MULTI-TENANCY: Check if tenant_id has changed and clear store if needed
-    const currentTenantId = localStorage.getItem('tenant_id')
+    // MULTI-TENANCY: check sessionStorage first (set by GRC parent), fall back to localStorage
+    const currentTenantId = sessionStorage.getItem('tenant_id') || localStorage.getItem('tenant_id')
     const storedTenantId = sessionStorage.getItem('rfp_list_tenant_id')
-    
+
     if (storedTenantId && storedTenantId !== currentTenantId) {
-      console.log(`[RFPList] Tenant changed from ${storedTenantId} to ${currentTenantId}, clearing store`)
       rfpStore.clearStore()
     }
-    
-    // Store current tenant_id for next check
+
     if (currentTenantId) {
       sessionStorage.setItem('rfp_list_tenant_id', currentTenantId)
-      console.log(`[RFPList] Loading RFPs for tenant_id: ${currentTenantId}`)
     } else {
-      console.warn('[RFPList] ⚠️ No tenant_id found in localStorage')
+      console.warn('[RFPList] No tenant_id found in sessionStorage or localStorage')
     }
-    
-    // Test backend connection first
-    const isBackendAvailable = await testBackendConnection()
-    if (!isBackendAvailable) {
-      toastError('Backend server is not available. Please ensure the Django server is running on port 8000.')
-      return
-    }
-    
+
     await rfpStore.fetchRFPs()
     
     // Check for edit parameters in URL

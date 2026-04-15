@@ -797,7 +797,11 @@ async function handleResponse<T>(response: Response): Promise<T> {
 
 // Helper to get auth headers
 const getAuthHeaders = () => {
-  const token = localStorage.getItem('session_token')
+  const token =
+    sessionStorage.getItem('session_token') ||
+    sessionStorage.getItem('access_token') ||
+    localStorage.getItem('session_token') ||
+    localStorage.getItem('access_token')
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   }
@@ -855,18 +859,47 @@ const api = {
 
   // Get modules
   async getModules(): Promise<Module[]> {
-    const response = await fetch(`${API_BASE_URL}/risk-analysis/modules/`, {
-      method: 'GET',
-      headers: getAuthHeaders(),
-      credentials: 'include',
-    });
-    const data = await handleResponse<{ results: Module[]; count: number } | Module[]>(response);
-    console.log('Modules API response:', data); // Debug log
-    // Handle both paginated and non-paginated responses
-    if (data && typeof data === 'object' && 'results' in data) {
-      return (data as { results: Module[]; count: number }).results;
+    // Newer backend exposes entities via /entity-dropdown/?action=entities
+    // while some deployments still keep /modules/. Support both without breaking UI.
+    const primaryUrl = `${API_BASE_URL}/risk-analysis/entity-dropdown/?action=entities`
+    const legacyUrl = `${API_BASE_URL}/risk-analysis/modules/`
+
+    const parseModules = (data: any): Module[] => {
+      if (Array.isArray(data)) return data as Module[]
+      if (data && Array.isArray(data.results)) return data.results as Module[]
+      if (data && Array.isArray(data.entities)) {
+        return (data.entities as any[]).map((entity) => ({
+          id: entity.id ?? entity.value ?? entity.name,
+          name: entity.display_name ?? entity.name ?? String(entity),
+          description: entity.description ?? ''
+        }))
+      }
+      return []
     }
-    return data as Module[];
+
+    try {
+      const response = await fetch(primaryUrl, {
+        method: 'GET',
+        headers: getAuthHeaders(),
+        credentials: 'include',
+      });
+      const data = await handleResponse<any>(response);
+      const mapped = parseModules(data)
+      console.log('Modules API response (entity-dropdown):', mapped)
+      return mapped
+    } catch (error: any) {
+      // Fallback for older backend route.
+      if (error?.status && error.status !== 404) throw error
+      const response = await fetch(legacyUrl, {
+        method: 'GET',
+        headers: getAuthHeaders(),
+        credentials: 'include',
+      });
+      const data = await handleResponse<any>(response);
+      const mapped = parseModules(data)
+      console.log('Modules API response (legacy modules):', mapped)
+      return mapped
+    }
   },
 
 };

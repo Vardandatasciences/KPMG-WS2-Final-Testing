@@ -488,6 +488,31 @@ const getRiskVariant = (risk) => {
   }
 }
 
+const normalizeContractNumber = (value) => String(value || '').trim().toLowerCase()
+
+const isDuplicateContractNumber = async (contractNumber) => {
+  const normalizedTarget = normalizeContractNumber(contractNumber)
+  if (!normalizedTarget) return false
+
+  try {
+    const response = await contractsApi.getContracts({ page: 1, page_size: 200 })
+    const contracts =
+      response?.results ||
+      response?.data?.results ||
+      response?.contracts ||
+      response?.data?.contracts ||
+      []
+
+    if (!Array.isArray(contracts)) return false
+
+    return contracts.some((item) => normalizeContractNumber(item?.contract_number) === normalizedTarget)
+  } catch (error) {
+    // Do not block submission if duplicate pre-check cannot run.
+    console.warn('Contract number duplicate pre-check failed, continuing with submit:', error?.message || error)
+    return false
+  }
+}
+
 // Trigger risk analysis in the background (non-blocking)
 const triggerRiskAnalysis = async (contractId) => {
   try {
@@ -534,6 +559,13 @@ const handleSubmit = async () => {
   errors.value = {}
   
   try {
+    const contractNumber = contractData.value?.contract_number
+    const duplicateExists = await isDuplicateContractNumber(contractNumber)
+    if (duplicateExists) {
+      errors.value.general = `contract_number: vendor contract with this contract number already exists.`
+      return
+    }
+
     if (isSubcontract.value) {
       // Handle subcontract submission
       const parentContractId = contractData.value.parent_contract_id

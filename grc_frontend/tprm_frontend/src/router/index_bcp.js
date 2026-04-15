@@ -106,8 +106,8 @@ const router = createRouter({
 })
 
 // Navigation guard with MFA authentication
-router.beforeEach((to, from, next) => {
-  const isAuthenticated = authService.isAuthenticated()
+router.beforeEach(async (to, from, next) => {
+  const isAuthenticated = await authService.resolveAuthenticationStatus()
   const requiresAuth = to.matched.some(record => record.meta.requiresAuth)
   const publicRoutes = ['/login', '/otp-verification']
   const isPublicRoute = publicRoutes.includes(to.path)

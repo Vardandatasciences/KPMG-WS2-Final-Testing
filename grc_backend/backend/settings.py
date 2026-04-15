@@ -751,6 +751,9 @@ REST_FRAMEWORK = {
     # Framework-level: sanitize API exception responses and avoid stack trace leakage.
     'EXCEPTION_HANDLER': 'tprm_backend.utils.vendor_exception_handler.vendor_custom_exception_handler',
     # Throttling configuration
+    # Default user/anon limits are set high enough for normal multi-page navigation
+    # during development and production use. Scoped throttles remain tight on
+    # sensitive write operations (exports, audit writes, risk workflows).
     'DEFAULT_THROTTLE_CLASSES': [
         'rest_framework.throttling.UserRateThrottle',
         'rest_framework.throttling.AnonRateThrottle',

@@ -966,17 +966,16 @@ router.beforeEach(async (to, from, next) => {
 
   // Check if we're in an iframe (embedded in GRC)
   const isInIframe = window.self !== window.top
-  
+
+  const isAuthenticated = await authService.resolveAuthenticationStatus()
+
   // If in iframe and not authenticated, request auth sync from parent (non-blocking)
-  if (isInIframe && !authService.isAuthenticated()) {
+  if (isInIframe && !isAuthenticated) {
     console.log('[Router Guard] In iframe, requesting auth sync from parent (non-blocking)...')
-    // Request auth from parent
     if (window.parent && window.parent !== window) {
       window.parent.postMessage({ type: 'TPRM_AUTH_REQUEST' }, getParentPostMessageTargetOrigin())
     }
   }
-  
-  const isAuthenticated = authService.isAuthenticated()
   const requiresAuth = to.matched.some(record => record.meta.requiresAuth !== false)
   const requiredPermission = to.meta.permission
   const requiredPermissions = to.meta.permissions

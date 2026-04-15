@@ -10,6 +10,32 @@ import { api } from './api'
 const CONTRACTS_API_BASE = '/contracts'
 
 class ContractsApiService {
+  formatValidationError(data) {
+    if (!data) return ''
+    if (typeof data === 'string') return data
+
+    const messages = []
+    const source = data?.errors && typeof data.errors === 'object' ? data.errors : data
+
+    Object.entries(source).forEach(([field, value]) => {
+      if (Array.isArray(value)) {
+        value.forEach((item) => {
+          if (typeof item === 'string' && item.trim()) {
+            messages.push(`${field}: ${item}`)
+          }
+        })
+      } else if (typeof value === 'string' && value.trim()) {
+        messages.push(`${field}: ${value}`)
+      }
+    })
+
+    if (messages.length === 0 && typeof data?.detail === 'string' && data.detail.trim()) {
+      messages.push(data.detail.trim())
+    }
+
+    return messages.join(' ')
+  }
+
   /**
    * Get all contracts with filtering and pagination
    * @param {Object} params - Query parameters
@@ -278,6 +304,22 @@ class ContractsApiService {
   }
 
   /**
+   * Shared KPI error handler: KPI endpoints are read-only analytics widgets.
+   * A 500 means the backend has no/incomplete data — return a safe empty envelope
+   * so the dashboard renders with zero-state instead of crashing.
+   */
+  _handleKpiError(label, error) {
+    const status = error?.response?.status
+    if (status >= 500) {
+      console.warn(`[ContractsKPI] ${label} unavailable (${status}). Showing empty state.`)
+      return { success: false, data: null }
+    }
+    // For auth/network errors, still surface them so callers know.
+    console.warn(`[ContractsKPI] ${label} failed (${status ?? 'network'}):`, error?.message)
+    return { success: false, data: null }
+  }
+
+  /**
    * Get contract amendments KPI data
    * @param {number} limit - Number of top contracts to retrieve (default 10)
    * @returns {Promise} API response
@@ -289,8 +331,7 @@ class ContractsApiService {
       })
       return response.data
     } catch (error) {
-      console.error('Error fetching contract amendments KPI:', error)
-      throw this.handleError(error)
+      return this._handleKpiError('AmendmentsKPI', error)
     }
   }
 
@@ -304,8 +345,7 @@ class ContractsApiService {
       const response = await api.get(`${CONTRACTS_API_BASE}/contracts/kpi/expiring-soon/`)
       return response.data
     } catch (error) {
-      console.error('Error fetching contracts expiring soon KPI:', error)
-      throw this.handleError(error)
+      return this._handleKpiError('ContractsExpiringSoonKPI', error)
     }
   }
 
@@ -319,8 +359,7 @@ class ContractsApiService {
       const response = await api.get(`${CONTRACTS_API_BASE}/contracts/kpi/avg-value-by-type/`)
       return response.data
     } catch (error) {
-      console.error('Error fetching average contract value by type KPI:', error)
-      throw this.handleError(error)
+      return this._handleKpiError('AvgValueByTypeKPI', error)
     }
   }
 
@@ -334,8 +373,7 @@ class ContractsApiService {
       const response = await api.get(`${CONTRACTS_API_BASE}/contracts/kpi/business-criticality/`)
       return response.data
     } catch (error) {
-      console.error('Error fetching business criticality KPI:', error)
-      throw this.handleError(error)
+      return this._handleKpiError('BusinessCriticalityKPI', error)
     }
   }
 
@@ -349,8 +387,7 @@ class ContractsApiService {
       const response = await api.get(`${CONTRACTS_API_BASE}/contracts/kpi/total-liability/`)
       return response.data
     } catch (error) {
-      console.error('Error fetching total liability exposure KPI:', error)
-      throw this.handleError(error)
+      return this._handleKpiError('TotalLiabilityKPI', error)
     }
   }
 
@@ -364,8 +401,7 @@ class ContractsApiService {
       const response = await api.get(`${CONTRACTS_API_BASE}/contracts/kpi/risk-exposure/`)
       return response.data
     } catch (error) {
-      console.error('Error fetching contract risk exposure KPI:', error)
-      throw this.handleError(error)
+      return this._handleKpiError('ContractRiskExposureKPI', error)
     }
   }
 
@@ -379,8 +415,7 @@ class ContractsApiService {
       const response = await api.get(`${CONTRACTS_API_BASE}/contracts/kpi/early-termination-rate/`)
       return response.data
     } catch (error) {
-      console.error('Error fetching early termination rate KPI:', error)
-      throw this.handleError(error)
+      return this._handleKpiError('EarlyTerminationRateKPI', error)
     }
   }
 
@@ -396,8 +431,7 @@ class ContractsApiService {
       const response = await api.get(`${CONTRACTS_API_BASE}/contracts/kpi/time-to-approve/`, { params })
       return response.data
     } catch (error) {
-      console.error('Error fetching time to approve contract KPI:', error)
-      throw this.handleError(error)
+      return this._handleKpiError('TimeToApproveKPI', error)
     }
   }
 
@@ -1543,19 +1577,20 @@ class ContractsApiService {
     if (error.response) {
       // Server responded with error status
       const { status, data } = error.response
+      const validationMessage = this.formatValidationError(data)
       
       if (status === 401) {
         return new Error('Authentication required. Please log in.')
       } else if (status === 403) {
-        return new Error('You do not have permission to perform this action.')
+        return new Error(data?.message || data?.error || validationMessage || 'You do not have permission to perform this action.')
       } else if (status === 404) {
         return new Error('The requested resource was not found.')
       } else if (status === 429) {
         return new Error('Too many requests. Please try again later.')
       } else if (status >= 500) {
-        return new Error('Server error. Please try again later.')
+        return new Error(data?.message || data?.error || 'Server error. Please try again later.')
       } else {
-        return new Error(data.message || data.error || 'An error occurred.')
+        return new Error(data?.message || data?.error || validationMessage || 'An error occurred.')
       }
     } else if (error.request) {
       // Network error

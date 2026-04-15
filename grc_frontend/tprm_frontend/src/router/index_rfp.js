@@ -353,7 +353,7 @@ const router = createRouter({
 
 // Navigation guard with MFA authentication, RBAC permissions, and document title
 router.beforeEach(async (to, from, next) => {
-  const isAuthenticated = authService.isAuthenticated()
+  const isAuthenticated = await authService.resolveAuthenticationStatus()
   const publicRoutes = [
     '/login', 
     '/otp-verification', 

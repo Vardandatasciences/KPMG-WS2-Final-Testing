@@ -307,6 +307,14 @@ const auditFindings = ref([])
 const staticQuestionnaires = ref([])
 const loading = ref(true)
 
+// Normalize API responses that can come as array, paginated object, or { data: [...] } shape.
+const toArray = (payload) => {
+  if (Array.isArray(payload)) return payload
+  if (payload && Array.isArray(payload.results)) return payload.results
+  if (payload && Array.isArray(payload.data)) return payload.data
+  return []
+}
+
 // Filter state
 const selectedDateRange = ref('all')
 const selectedStatus = ref('all')
@@ -323,19 +331,19 @@ const loadReportsData = async () => {
     
     // Load audits
     const auditsData = await apiService.getAudits()
-    allAudits.value = auditsData.results || auditsData || []
+    allAudits.value = toArray(auditsData)
     
     // Load SLAs
     const slasData = await apiService.getAvailableSLAs()
-    availableSLAs.value = slasData || []
+    availableSLAs.value = toArray(slasData)
     
     // Load users
     const usersData = await apiService.getAvailableUsers()
-    availableUsers.value = usersData || []
+    availableUsers.value = toArray(usersData)
     
     // Load static questionnaires
     const questionnairesData = await apiService.getStaticQuestionnaires()
-    staticQuestionnaires.value = questionnairesData.results || questionnairesData || []
+    staticQuestionnaires.value = toArray(questionnairesData)
     
   } catch (error) {
     console.error('Error loading reports data:', error)
@@ -356,7 +364,9 @@ const loadReportsData = async () => {
 }
 
 // Computed properties
-const auditors = computed(() => availableUsers.value.filter(user => user.role === 'auditor'))
+const auditors = computed(() => {
+  return toArray(availableUsers.value).filter(user => user.role === 'auditor')
+})
 
 const completedAudits = computed(() => {
   return filteredAudits.value.filter(audit => audit.status === 'completed')

@@ -10,7 +10,7 @@ import json
 import time
 from datetime import datetime, timedelta
 from decimal import Decimal
-from django.db import transaction, connection
+from django.db import transaction, connection, connections
 from django.db.models import Q, Count, Sum, Avg, Max, Case, When, IntegerField, CharField, Value
 from django.utils import timezone
 from django.conf import settings
@@ -2079,8 +2079,8 @@ def contract_risk_exposure_kpi(request):
                 )
             )
         else:
-            # Use raw SQL as fallback
-            with connection.cursor() as cursor:
+            # Use raw SQL as fallback - risk_tprm lives in the tprm_integration database
+            with connections['tprm_integration'].cursor() as cursor:
                 cursor.execute("""
                     SELECT 
                         `row`,
@@ -2176,7 +2176,7 @@ def contract_risk_exposure_kpi(request):
         else:
             if tenant_contract_ids:
                 placeholders = ','.join(['%s'] * len(tenant_contract_ids))
-                with connection.cursor() as cursor:
+                with connections['tprm_integration'].cursor() as cursor:
                     cursor.execute(
                         f"SELECT COUNT(*) FROM risk_tprm WHERE entity = 'contract_module' AND `row` IN ({placeholders})",
                         tenant_contract_ids

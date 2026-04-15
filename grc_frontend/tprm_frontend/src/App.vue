@@ -93,6 +93,7 @@ onMounted(() => {
         localStorage.removeItem('access_token')
         localStorage.removeItem('refresh_token')
         localStorage.removeItem('session_token')
+        sessionStorage.removeItem('tprm_cookie_session_validated')
 
         let userPayload = event.data.user
         if (userPayload) {
@@ -109,7 +110,9 @@ onMounted(() => {
             localStorage.setItem('tenant_name', userPayload.tenant_name)
           }
         } else if (event.data.isAuthenticated && event.data.userId) {
-          localStorage.setItem('user_id', String(event.data.userId))
+          const uidStr = String(event.data.userId)
+          sessionStorage.setItem('user_id', uidStr)
+          localStorage.setItem('user_id', uidStr)
           userPayload = {
             UserId: event.data.userId,
             user_id: event.data.userId,
@@ -217,7 +220,7 @@ onMounted(() => {
     setTimeout(async () => {
       try {
         const authService = (await import('@/services/authService')).default
-        const ok = await authService.isAuthenticated()
+        const ok = await authService.resolveAuthenticationStatus()
         if (!ok) {
           console.log('[TPRM App] No valid cookie session, requesting auth again...')
           if (window.parent && window.parent !== window) {

@@ -627,8 +627,10 @@
 <script setup lang="ts">
 import './PlanSubmissionOcr.css'
 import { ref, computed, onMounted, watch, reactive } from 'vue'
+import axios from 'axios'
 import http from '../../api/http.js'
 import api from '../../services/api_bcp.js'
+import { getApiOrigin } from '@/utils/backendEnv'
 import { useNotifications } from '@/composables/useNotifications'
 import { PopupService } from '@/popup/popupService'
 import notificationService from '@/services/notificationService'
@@ -845,8 +847,8 @@ const selectPlan = async (plan) => {
 
 const loadExistingExtractedData = async (planId: number) => {
   try {
-    // Try to fetch existing extracted data
-    const response = await api.plans.get(planId)
+    // Fetch OCR plan detail endpoint (includes extracted OCR payload when present).
+    const response = await api.ocr.planDetail(planId)
     const plan = (response as any).plan || (response as any).data?.plan
     
     if (plan?.ocr_extracted_data) {
@@ -1718,16 +1720,50 @@ const saveExtractedData = async () => {
     console.log('Data to save (filtered, only fields in fieldDefinitions):', dataToSave)
     console.log(`Saving ${Object.keys(dataToSave).length - 1} fields (excluding plan_id)`)
     
-    // Use the OCR microservice extraction endpoint - OCR endpoints are at /api/tprm/ocr/
-    // Use the http instance since it already has the correct baseURL (/api/tprm)
-    const endpoint = `ocr/plans/${selectedPlan.value.plan_id}/extract/`
-    
+    // Use same auth strategy as runOCR: cookie-first + CSRF, with optional Bearer fallback.
+    const readCookie = (name: string): string | null => {
+      if (typeof document === 'undefined' || !document.cookie) return null
+      const cookies = document.cookie.split('; ')
+      const match = cookies.find((c) => c.startsWith(`${name}=`))
+      return match ? decodeURIComponent(match.split('=').slice(1).join('=')) : null
+    }
+
+    const authToken =
+      sessionStorage.getItem('access_token') ||
+      sessionStorage.getItem('session_token') ||
+      localStorage.getItem('access_token') ||
+      localStorage.getItem('session_token')
+
+    const endpoint = `${getApiOrigin()}/api/tprm/ocr/plans/${selectedPlan.value.plan_id}/extract/`
+    const payload = { extracted_data: dataToSave }
+
+    const postExtract = async (includeBearer: boolean) => {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest'
+      }
+      const csrfToken = readCookie('csrftoken')
+      if (csrfToken) headers['X-CSRFToken'] = csrfToken
+      if (includeBearer && authToken) headers.Authorization = `Bearer ${authToken}`
+      return axios.post(endpoint, payload, {
+        timeout: 0,
+        withCredentials: true,
+        headers
+      })
+    }
+
     // Send unified payload with all fields (including custom fields)
-    const response = await http.post(endpoint, {
-      extracted_data: dataToSave
-    }, {
-      timeout: 0 // No timeout - let save complete naturally
-    })
+    let response
+    try {
+      response = await postExtract(true)
+    } catch (extractErr) {
+      if (extractErr?.response?.status === 403 && authToken) {
+        console.warn('[PlanSubmissionOcr] Extract save returned 403 with Bearer, retrying cookie-only')
+        response = await postExtract(false)
+      } else {
+        throw extractErr
+      }
+    }
     
     // Check for risk generation info in response (backend may put it in .data or top-level)
     let successMessage = 'Extracted information has been saved successfully.'
@@ -1783,7 +1819,11 @@ const saveExtractedData = async () => {
       }, 1000)
     }
   } catch (err) {
-    PopupService.error(`Error saving data: ${err.message}`, 'Save Failed')
+    if (err?.response?.status === 403) {
+      PopupService.warning('You do not have permission to save OCR extracted data for this plan.', 'Permission Denied')
+    } else {
+      PopupService.error(`Error saving data: ${err.message}`, 'Save Failed')
+    }
     console.error('Error saving extracted data:', err)
   } finally {
     saving.value = false
@@ -1798,7 +1838,7 @@ const markPlanComplete = async () => {
 
   saving.value = true
   try {
-    await http.patch(`/api/bcpdrp/ocr/plans/${selectedPlan.value.plan_id}/status/`, {
+    await http.patch(`/bcpdrp/ocr/plans/${selectedPlan.value.plan_id}/status/`, {
       status: 'OCR_COMPLETED'
     })
     
@@ -1832,19 +1872,71 @@ const runOCR = async () => {
   try {
     console.log('Running OCR for plan:', selectedPlan.value.plan_id)
     
-    // Use OCR microservice endpoint - OCR endpoints are at /api/tprm/ocr/
-    // Use the http instance since it already has the correct baseURL (/api/tprm)
-    const endpoint = `ocr/plans/${selectedPlan.value.plan_id}/run/`
+    // Prefer TPRM-mounted OCR endpoint in this deployment; keep fallback for /api/ocr installs.
+    const preferredEndpoint = `${getApiOrigin()}/api/tprm/ocr/plans/${selectedPlan.value.plan_id}/run/`
+    const fallbackEndpoint = `${getApiOrigin()}/api/ocr/plans/${selectedPlan.value.plan_id}/run/`
     
     showInfo('OCR processing started. This may take 1-2 minutes for AI extraction...')
     PopupService.success('OCR processing started. This may take 1-2 minutes for AI extraction...', 'Processing')
     
-    const response = await http.post(endpoint, {
+    // OCR endpoints in some deployments are guarded by stricter middleware that expects
+    // either cookie session and/or Bearer token. Keep cookie-first, but include Bearer
+    // when present to avoid 403 on middleware-enforced routes.
+    const authToken =
+      sessionStorage.getItem('access_token') ||
+      sessionStorage.getItem('session_token') ||
+      localStorage.getItem('access_token') ||
+      localStorage.getItem('session_token')
+
+    const payload = {
       plan_id: selectedPlan.value.plan_id,
       plan_type: selectedPlan.value.plan_type
-    }, {
-      timeout: 0 // No timeout - let OCR processing complete naturally
-    })
+    }
+
+    const readCookie = (name: string): string | null => {
+      if (typeof document === 'undefined' || !document.cookie) return null
+      const cookies = document.cookie.split('; ')
+      const match = cookies.find((c) => c.startsWith(`${name}=`))
+      return match ? decodeURIComponent(match.split('=').slice(1).join('=')) : null
+    }
+
+    const postOcrRun = async (url: string, includeBearer: boolean) => {
+      const ocrHeaders: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest'
+      }
+      const csrfToken = readCookie('csrftoken')
+      if (csrfToken) {
+        ocrHeaders['X-CSRFToken'] = csrfToken
+      }
+      if (includeBearer && authToken) {
+        ocrHeaders.Authorization = `Bearer ${authToken}`
+      }
+      const raw = await axios.post(url, payload, {
+        timeout: 0,
+        withCredentials: true,
+        headers: ocrHeaders
+      })
+      // Normalize response shape to match existing downstream usage.
+      return raw?.data?.success ? { data: (raw.data.data ?? raw.data) } : { data: raw.data }
+    }
+
+    let response
+    try {
+      response = await postOcrRun(preferredEndpoint, true)
+    } catch (primaryErr) {
+      // Some environments reject stale/rotated Bearer with 403 even when cookie session is valid.
+      // Retry once with cookie-only before trying route fallback.
+      if (primaryErr?.response?.status === 403 && authToken) {
+        console.warn('[PlanSubmissionOcr] OCR returned 403 with Bearer, retrying cookie-only')
+        response = await postOcrRun(preferredEndpoint, false)
+      } else if (primaryErr?.response?.status === 404) {
+        console.warn('[PlanSubmissionOcr] Preferred OCR endpoint not found, retrying fallback route')
+        response = await postOcrRun(fallbackEndpoint, true)
+      } else {
+        throw primaryErr
+      }
+    }
     
     console.log('OCR processing completed:', response)
     console.log('Response data:', response.data)
@@ -1911,7 +2003,16 @@ const runOCR = async () => {
     
   } catch (err) {
     console.error('Error running OCR:', err)
-    showError(`Error running OCR: ${err.response?.data?.message || err.message || 'Unknown error'}`)
+    if (err?.response?.status === 403) {
+      const permissionMsg =
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
+        'You do not have permission to run OCR for this plan.'
+      showError(permissionMsg)
+      PopupService.warning(permissionMsg, 'Permission Denied')
+    } else {
+      showError(`Error running OCR: ${err.response?.data?.message || err.message || 'Unknown error'}`)
+    }
   } finally {
     isRunningOCR.value = false
   }

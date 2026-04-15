@@ -297,6 +297,8 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
+
+const http = axios.create({ withCredentials: true })
 import { rfpUseToast } from '@/composables/rfpUseToast'
 import { useRfpApi } from '@/composables/useRfpApi'
 import { getTprmApiV1BaseUrl } from '@/utils/backendEnv'
@@ -386,7 +388,7 @@ const fetchRFIs = async () => {
     
     // Fetch all pages if pagination is enabled
     while (nextUrl) {
-      const response = await axios.get(nextUrl, {
+      const response = await http.get(nextUrl, {
         headers: getAuthHeaders()
       })
       
@@ -449,7 +451,7 @@ const fetchRFIs = async () => {
 
 const fetchRFITypes = async () => {
   try {
-    const response = await axios.get(`${API_BASE_URL}/rfi-types/types/`, {
+    const response = await http.get(`${API_BASE_URL}/rfi-types/types/`, {
       headers: getAuthHeaders()
     })
     
@@ -482,7 +484,7 @@ const viewRFI = async (rfi) => {
   rfiFullDetails.value = null
   
   try {
-    const response = await axios.get(`${API_BASE_URL}/rfis/${rfi.rfi_id}/`, {
+    const response = await http.get(`${API_BASE_URL}/rfis/${rfi.rfi_id}/`, {
       headers: getAuthHeaders()
     })
     

@@ -582,6 +582,8 @@
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import axios from 'axios'
+
+const http = axios.create({ withCredentials: true })
 import Card from '@/components_rfp/ui/Card.vue'
 import CardHeader from '@/components_rfp/ui/CardHeader.vue'
 import CardTitle from '@/components_rfp/ui/CardTitle.vue'
@@ -743,7 +745,7 @@ const isFormValid = computed(() => {
 const fetchRfiTypes = async () => {
   try {
     loadingRfiTypes.value = true
-    const response = await axios.get(`${API_BASE_URL}/rfi-types/types/`, {
+    const response = await http.get(`${API_BASE_URL}/rfi-types/types/`, {
       headers: getAuthHeaders()
     })
     if (response.data && response.data.success && response.data.rfi_types && response.data.rfi_types.length > 0) {
@@ -983,11 +985,11 @@ const handleSaveDraft = async () => {
     
     let response
     if (isUpdate) {
-      response = await axios.patch(`${API_BASE_URL}/rfis/${existingRfiId}/`, rfiData, {
+      response = await http.patch(`${API_BASE_URL}/rfis/${existingRfiId}/`, rfiData, {
         headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' }
       })
     } else {
-      response = await axios.post(`${API_BASE_URL}/rfis/`, rfiData, {
+      response = await http.post(`${API_BASE_URL}/rfis/`, rfiData, {
         headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' }
       })
     }
@@ -1004,7 +1006,7 @@ const handleSaveDraft = async () => {
       try {
         // Delete existing criteria first (if updating)
         if (isUpdate) {
-          await axios.delete(`${API_BASE_URL}/rfi-evaluation-criteria/`, {
+          await http.delete(`${API_BASE_URL}/rfi-evaluation-criteria/`, {
             headers: getAuthHeaders(),
             params: { rfi_id: savedRfiId }
           }).catch(() => {}) // Ignore if no criteria exist
@@ -1013,7 +1015,7 @@ const handleSaveDraft = async () => {
         // Save new criteria
         for (const criterion of criteria.value) {
           if (criterion.name && criterion.description) {
-            await axios.post(`${API_BASE_URL}/rfi-evaluation-criteria/`, {
+            await http.post(`${API_BASE_URL}/rfi-evaluation-criteria/`, {
               rfi_id: savedRfiId,
               criteria_name: criterion.name,
               criteria_description: criterion.description,
@@ -1062,14 +1064,14 @@ const handleProceedToApprovalWorkflow = async () => {
       console.log('✅ Auto-approve enabled - bypassing approval workflow and directly approving RFI')
       
       // Call the approve endpoint
-      const approveResponse = await axios.post(`${API_BASE_URL}/rfis/${existingRfiId}/approve/`, {}, {
+      const approveResponse = await http.post(`${API_BASE_URL}/rfis/${existingRfiId}/approve/`, {}, {
         headers: getAuthHeaders()
       })
       
       console.log('✅ RFI auto-approved successfully:', approveResponse.data)
       
       // Verify the status was updated correctly
-      const verifyResponse = await axios.get(`${API_BASE_URL}/rfis/${existingRfiId}/`, {
+      const verifyResponse = await http.get(`${API_BASE_URL}/rfis/${existingRfiId}/`, {
         headers: getAuthHeaders()
       })
       console.log('✅ Verified RFI status after approval:', verifyResponse.data.status)
@@ -1079,7 +1081,7 @@ const handleProceedToApprovalWorkflow = async () => {
       // Ensure approval_workflow_id is null for auto-approved RFIs
       if (verifyResponse.data.approval_workflow_id) {
         console.log('⚠️ approval_workflow_id is not null, clearing it...')
-        await axios.patch(`${API_BASE_URL}/rfis/${existingRfiId}/`, {
+        await http.patch(`${API_BASE_URL}/rfis/${existingRfiId}/`, {
           approval_workflow_id: null
         }, {
           headers: getAuthHeaders()
@@ -1108,7 +1110,7 @@ const handleProceedToApprovalWorkflow = async () => {
         // If approve endpoint fails, try direct PATCH as fallback
         try {
           console.log('⚠️ Trying fallback: direct status update to APPROVED')
-          const fallbackResponse = await axios.patch(`${API_BASE_URL}/rfis/${existingRfiId}/`, {
+          const fallbackResponse = await http.patch(`${API_BASE_URL}/rfis/${existingRfiId}/`, {
             status: 'APPROVED',
             approved_by: 1,
             approval_workflow_id: null
@@ -1118,7 +1120,7 @@ const handleProceedToApprovalWorkflow = async () => {
           console.log('✅ Fallback successful - RFI status set to APPROVED via PATCH')
           
           // Verify the status was updated correctly
-          const verifyResponse = await axios.get(`${API_BASE_URL}/rfis/${existingRfiId}/`, {
+          const verifyResponse = await http.get(`${API_BASE_URL}/rfis/${existingRfiId}/`, {
             headers: getAuthHeaders()
           })
           console.log('✅ Verified RFI status after fallback:', verifyResponse.data.status)
