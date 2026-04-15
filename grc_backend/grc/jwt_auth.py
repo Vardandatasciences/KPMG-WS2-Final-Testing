@@ -55,12 +55,29 @@ class UnifiedJWTAuthentication(BaseAuthentication):
         if not candidates:
             return None
 
+        def _detail_str(exc):
+            d = getattr(exc, 'detail', exc)
+            if isinstance(d, (list, tuple)):
+                return ' '.join(str(x) for x in d)
+            return str(d)
+
         last_auth_error = None
         for token, source in candidates:
             try:
                 return self._authenticate_token(request, token, source, _is_session_token_valid)
             except AuthenticationFailed as e:
                 last_auth_error = e
+                detail_lower = _detail_str(e).lower()
+                # Cookie matched a JWT but server session cache no longer accepts this jti (re-login, rotation).
+                # Falling back to Authorization almost always retries an *older* Bearer from JS storage and
+                # surfaces as confusing 403s; fail fast with the cookie result instead.
+                if source == 'cookie' and (
+                    'session invalidated' in detail_lower or 'newer login' in detail_lower
+                ):
+                    logger.info(
+                        "[Unified JWT Auth] Cookie rejected for session mismatch; not trying Authorization header"
+                    )
+                    raise
                 logger.info(
                     "[Unified JWT Auth] Token from %s rejected: %s; trying next credential if any",
                     source,

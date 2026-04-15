@@ -1,5 +1,8 @@
 <template>
   <div id="app">
+    <div v-if="showSessionReconnectBanner" class="session-reconnect-banner">
+      Reconnecting session...
+    </div>
     <div v-if="isAuthenticated" class="app-container">
       <!-- Show Sidebar on all pages including home -->
       <Sidebar />
@@ -48,7 +51,8 @@ export default {
   data() {
     return {
       isAuthenticated: false,
-      hasExplicitlyLoggedIn: false
+      hasExplicitlyLoggedIn: false,
+      showSessionReconnectBanner: false
     }
   },
   created() {
@@ -148,12 +152,22 @@ export default {
             cookieSessionValid = !!(result && result.success)
             if (cookieSessionValid) {
               sessionStorage.setItem('cookie_session_validated', 'true')
+              this.showSessionReconnectBanner = false
             } else {
-              sessionStorage.removeItem('cookie_session_validated')
+              // Keep shell authenticated on transient backend/network errors.
+              // Only force logout path on explicit auth failure (401/403).
+              if (result && result.isAuthError === true) {
+                sessionStorage.removeItem('cookie_session_validated')
+                this.showSessionReconnectBanner = false
+              } else {
+                cookieSessionValid = true
+                this.showSessionReconnectBanner = true
+              }
             }
           } catch (error) {
-            cookieSessionValid = false
-            sessionStorage.removeItem('cookie_session_validated')
+            // Transient verify failures should not flash login UI while user is active.
+            cookieSessionValid = true
+            this.showSessionReconnectBanner = true
           }
         }
       }
@@ -179,6 +193,11 @@ export default {
       // Hard safety: never render login page inside authenticated shell.
       if (this.isAuthenticated && this.isLoginRoute(this.$route?.path)) {
         this.$router.replace('/home').catch(() => {})
+      }
+
+      // Hide banner once authenticated path is healthy again.
+      if (this.isAuthenticated && cookieSessionValid && sessionStorage.getItem('cookie_session_validated') === 'true') {
+        this.showSessionReconnectBanner = false
       }
     },
    
@@ -309,6 +328,21 @@ body {
 /* :deep() is for scoped SFC styles only; here it can produce invalid CSS */
 .login-container .login-page {
   min-height: 100vh;
+}
+
+.session-reconnect-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 9999;
+  background: #fff4e5;
+  color: #8a5300;
+  border-bottom: 1px solid #ffd8a8;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
 }
 </style>
  

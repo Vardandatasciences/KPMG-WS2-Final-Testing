@@ -880,6 +880,210 @@ def get_all_frameworks_data(request):
             total_stats['inactiveAudits'] += inactive_audits
             total_stats['completedAudits'] += completed_audits
         
+        # Module metrics (same shape as get_homepage_data) for unified dashboard cards
+        fw_ids = list(all_frameworks.values_list('FrameworkId', flat=True))
+        if not fw_ids:
+            module_metrics_payload = {
+                'policy': {
+                    'activePolicies': 0,
+                    'approvalRate': 0,
+                    'totalPolicies': 0,
+                    'avgApprovalTime': 0,
+                },
+                'compliance': {
+                    'activeCompliances': 0,
+                    'inactiveCompliances': 0,
+                    'totalCompliances': 0,
+                    'approvalRate': 0,
+                    'totalFindings': 0,
+                    'underReview': 0,
+                },
+                'risk': {
+                    'totalRisks': 0,
+                    'total': 0,
+                    'active': 0,
+                    'inactive': 0,
+                    'acceptedRisks': 0,
+                    'accepted': 0,
+                    'mitigatedRisks': 0,
+                    'mitigated': 0,
+                    'inProgressRisks': 0,
+                    'inProgress': 0,
+                },
+                'incident': {
+                    'totalIncidents': 0,
+                    'total': 0,
+                    'active': 0,
+                    'inactive': 0,
+                    'resolved': 0,
+                    'mttd': 0,
+                    'mttr': 0,
+                    'closureRate': 0,
+                },
+                'audit': {
+                    'completionRate': 0,
+                    'totalAudits': 0,
+                    'active': 0,
+                    'inactive': 0,
+                    'openAudits': 0,
+                    'completedAudits': 0,
+                },
+            }
+        else:
+            agg_fw = Q(FrameworkId__in=fw_ids)
+            policies_qs_m = Policy.objects.filter(agg_fw)
+            active_policies_qs_m = policies_qs_m.filter(ActiveInactive='Active')
+            total_policies_m = active_policies_qs_m.count()
+            active_policies_mod = active_policies_qs_m.filter(Status='Approved').count()
+
+            policy_approvals_m = PolicyApproval.objects.filter(PolicyId__FrameworkId__in=fw_ids)
+            total_approvals_m = policy_approvals_m.count()
+            approved_count_m = policy_approvals_m.filter(ApprovedNot=True).count()
+            approval_rate_m = round((approved_count_m / total_approvals_m * 100), 1) if total_approvals_m > 0 else 0
+
+            recent_approvals_m = policy_approvals_m.filter(
+                ApprovedNot=True,
+                ApprovedDate__isnull=False,
+            ).order_by('-ApprovedDate')[:50]
+            avg_approval_time_m = 7 if recent_approvals_m.exists() else 0
+
+            policy_metrics = {
+                'activePolicies': active_policies_mod,
+                'approvalRate': approval_rate_m,
+                'totalPolicies': total_policies_m,
+                'avgApprovalTime': avg_approval_time_m,
+            }
+
+            compliances_qs_m = Compliance.objects.filter(agg_fw)
+            total_compliances_all_m = compliances_qs_m.count()
+            active_compliances_m = compliances_qs_m.filter(
+                Status='Approved',
+                ActiveInactive='Active',
+            ).count()
+            inactive_compliances_m = compliances_qs_m.filter(ActiveInactive='Inactive').count()
+
+            compliance_approvals_m = ComplianceApproval.objects.filter(FrameworkId__in=fw_ids)
+            total_comp_approvals_m = compliance_approvals_m.count()
+            approved_comp_count_m = compliance_approvals_m.filter(ApprovedNot=True).count()
+            compliance_approval_rate_m = round(
+                (approved_comp_count_m / total_comp_approvals_m * 100), 1
+            ) if total_comp_approvals_m > 0 else 0
+
+            total_findings_m = compliances_qs_m.count()
+            under_review_m = compliances_qs_m.filter(Status='Under Review').count()
+
+            compliance_metrics = {
+                'activeCompliances': active_compliances_m,
+                'inactiveCompliances': inactive_compliances_m,
+                'totalCompliances': total_compliances_all_m,
+                'approvalRate': compliance_approval_rate_m,
+                'totalFindings': total_findings_m,
+                'underReview': under_review_m,
+            }
+
+            risk_instances_qs_m = RiskInstance.objects.filter(agg_fw)
+            total_risks_m = risk_instances_qs_m.count()
+            accepted_risks_m = risk_instances_qs_m.filter(RiskStatus='Approved').count()
+            mitigated_risks_m = risk_instances_qs_m.filter(MitigationStatus='Completed').count()
+            in_progress_risks_m = risk_instances_qs_m.filter(MitigationStatus='Work In Progress').count()
+            active_risks_m = (
+                risk_instances_qs_m.filter(ActiveInactive='Active').count()
+                if hasattr(RiskInstance, 'ActiveInactive')
+                else total_risks_m
+            )
+            inactive_risks_m = (
+                total_risks_m - active_risks_m if hasattr(RiskInstance, 'ActiveInactive') else 0
+            )
+
+            risk_metrics = {
+                'totalRisks': total_risks_m,
+                'total': total_risks_m,
+                'active': active_risks_m,
+                'inactive': inactive_risks_m,
+                'acceptedRisks': accepted_risks_m,
+                'accepted': accepted_risks_m,
+                'mitigatedRisks': mitigated_risks_m,
+                'mitigated': mitigated_risks_m,
+                'inProgressRisks': in_progress_risks_m,
+                'inProgress': in_progress_risks_m,
+            }
+
+            incidents_qs_m = Incident.objects.filter(agg_fw)
+            total_incidents_m = incidents_qs_m.count()
+            active_incidents_m = (
+                incidents_qs_m.filter(ActiveInactive='Active').count()
+                if hasattr(Incident, 'ActiveInactive')
+                else total_incidents_m
+            )
+            inactive_incidents_m = (
+                total_incidents_m - active_incidents_m if hasattr(Incident, 'ActiveInactive') else 0
+            )
+
+            mttd_m = 0
+            incidents_with_detection_m = incidents_qs_m.filter(
+                IdentifiedAt__isnull=False,
+                Date__isnull=False,
+            )
+            if incidents_with_detection_m.exists():
+                mttd_m = 24
+
+            mttr_m = 0
+            resolved_incidents_m = incidents_qs_m.filter(
+                Status='Completed',
+                MitigationCompletedDate__isnull=False,
+            )
+            if resolved_incidents_m.exists():
+                mttr_m = 72
+
+            completed_incidents_m = incidents_qs_m.filter(Status='Completed').count()
+            closure_rate_m = (
+                round((completed_incidents_m / total_incidents_m * 100), 1) if total_incidents_m > 0 else 0
+            )
+
+            incident_metrics = {
+                'totalIncidents': total_incidents_m,
+                'total': total_incidents_m,
+                'active': active_incidents_m,
+                'inactive': inactive_incidents_m,
+                'resolved': completed_incidents_m,
+                'mttd': mttd_m,
+                'mttr': mttr_m,
+                'closureRate': closure_rate_m,
+            }
+
+            audits_qs_m = Audit.objects.filter(agg_fw)
+            total_audits_m = audits_qs_m.count()
+            completed_audits_m = audits_qs_m.filter(Status='Completed').count()
+            open_audits_m = audits_qs_m.exclude(Status__in=['Completed', 'Cancelled']).count()
+            active_audits_m = (
+                audits_qs_m.filter(ActiveInactive='Active').count()
+                if hasattr(Audit, 'ActiveInactive')
+                else total_audits_m
+            )
+            inactive_audits_m = (
+                total_audits_m - active_audits_m if hasattr(Audit, 'ActiveInactive') else 0
+            )
+            completion_rate_m = (
+                round((completed_audits_m / total_audits_m * 100), 1) if total_audits_m > 0 else 0
+            )
+
+            audit_metrics = {
+                'completionRate': completion_rate_m,
+                'totalAudits': total_audits_m,
+                'active': active_audits_m,
+                'inactive': inactive_audits_m,
+                'openAudits': open_audits_m,
+                'completedAudits': completed_audits_m,
+            }
+
+            module_metrics_payload = {
+                'policy': policy_metrics,
+                'compliance': compliance_metrics,
+                'risk': risk_metrics,
+                'incident': incident_metrics,
+                'audit': audit_metrics,
+            }
+
         # Get aggregated policy data for donut chart
         all_policies_qs = Policy.objects.all()
         active_policies_qs = all_policies_qs.filter(ActiveInactive='Active')
@@ -982,6 +1186,7 @@ def get_all_frameworks_data(request):
             },
             'policies': policy_data,  # NEW: Add policy data for donut chart
             'frameworks': all_frameworks_list,
+            'moduleMetrics': module_metrics_payload,
             'timestamp': timezone.now().isoformat()
         }
         

@@ -78,6 +78,7 @@ from ...rbac.decorators import (
 )
 
 import logging
+import threading
 
 # Set up logger for policy RBAC
 logger = logging.getLogger(__name__)
@@ -2769,13 +2770,13 @@ def submit_policy_review(request, approval_id):
             traceback.print_exc()
             # Continue with the response even if status update fails
        
-        # Send notification to submitter about approval or rejection
+        # Send notification to submitter without blocking API response.
+        # External email/whatsapp providers can be slow and cause upstream 504 timeouts.
         try:
-            from ...routes.Global.notification_service import NotificationService
-            notification_service = NotificationService()
             submitter = Users.objects.get(UserId=new_approval.UserId, tenant_id=tenant_id)
             reviewer = Users.objects.get(UserId=new_approval.ReviewerId, tenant_id=tenant_id)
             now_str = date.today().isoformat()
+
             if is_approved:
                 notification_data = {
                     'notification_type': 'policyApproved',
@@ -2801,9 +2802,20 @@ def submit_policy_review(request, approval_id):
                         rejection_reason
                     ]
                 }
-            notification_service.send_multi_channel_notification(notification_data)
+
+            def _send_policy_review_notification_async(payload):
+                try:
+                    NotificationService().send_multi_channel_notification(payload)
+                except Exception as async_notify_ex:
+                    debug_print(f"DEBUG: Async policy review notification failed: {async_notify_ex}")
+
+            threading.Thread(
+                target=_send_policy_review_notification_async,
+                args=(notification_data,),
+                daemon=True
+            ).start()
         except Exception as notify_ex:
-            debug_print(f"DEBUG: Error sending policy approval/rejection notification: {notify_ex}")
+            debug_print(f"DEBUG: Error preparing policy approval/rejection notification: {notify_ex}")
         
         # Log successful policy review submission
         send_log(

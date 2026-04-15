@@ -163,24 +163,8 @@ api.interceptors.request.use((config) => {
     config.url.includes('/api/cookie/preferences/') ||
     config.url.includes('/cookie/preferences/')
   );
+  // Auth: createAxiosInstance (config/api.js) already strips Bearer + legacy storage keys.
 
-  // Cookie-first auth: never attach Bearer from JS storage — stale tokens override fresh HttpOnly cookies
-  // in UnifiedJWTAuthentication (cookie tried first; if it fails, header is tried next).
-  clearLegacyClientJwtKeys();
-  try {
-    if (config.headers && typeof config.headers === 'object') {
-      delete config.headers.Authorization;
-      delete config.headers.common?.Authorization;
-    }
-  } catch {
-    /* ignore */
-  }
-  if (isCookiePreferencesEndpoint) {
-    console.log(`🍪 [API] Cookie preferences — using cookies only: ${config.method?.toUpperCase()} ${config.url}`);
-  } else {
-    console.log(`🔗 [API] Cookie-first auth (no Bearer from storage): ${config.method?.toUpperCase()} ${config.url}`);
-  }
- 
   // CRITICAL: Add user_id to request if available (legacy compatibility).
   // SECURITY: Never inject client user identifiers for compliance APIs.
   const requestUrl = String(config.url || '');

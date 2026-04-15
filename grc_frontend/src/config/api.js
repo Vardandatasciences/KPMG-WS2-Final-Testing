@@ -1,8 +1,10 @@
 // API Configuration - Centralized URL Management
+import { clearLegacyClientJwtKeys } from '../utils/legacyAuthStorage.js';
+
 // Change this variable to switch between different environments
  
 // Environment Configuration
-const ENVIRONMENT = 'development';
+const ENVIRONMENT = 'aws';
 // Options: 'aws', 'local', 'development'
  
 // API Base URLs for different environments
@@ -904,9 +906,18 @@ export const createAxiosInstance = (baseURL = API_BASE_URL) => {
     xsrfHeaderName: 'X-CSRFToken'
   });
 
-  // Cookie-first auth: rely on HttpOnly cookies (no JS-accessible tokens).
+  // Cookie-first auth: strip legacy Bearer + storage keys on every request (all createAxiosInstance users).
   instance.interceptors.request.use(
     async (config) => {
+      clearLegacyClientJwtKeys();
+      try {
+        if (config.headers) {
+          delete config.headers.Authorization;
+          if (config.headers.common) delete config.headers.common.Authorization;
+        }
+      } catch {
+        /* ignore */
+      }
       const method = (config.method || 'get').toLowerCase();
       const unsafeMethods = ['post', 'put', 'patch', 'delete'];
       if (unsafeMethods.includes(method)) {
