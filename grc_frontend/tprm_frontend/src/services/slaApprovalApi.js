@@ -1,5 +1,6 @@
 import apiService from './api'
 import { getTprmApiUrl } from '@/utils/backendEnv'
+import { clearLegacyClientJwtKeys } from '@/utils/legacyAuthStorage.js'
 
 class SLAApprovalApiService {
   constructor() {
@@ -8,34 +9,33 @@ class SLAApprovalApiService {
 
   async slaApprovalRequest(endpoint, options = {}) {
     try {
-      // Get JWT token from localStorage (try multiple possible keys)
-      const token = localStorage.getItem('session_token') || 
-                    localStorage.getItem('access_token') ||
-                    localStorage.getItem('jwt_token')
-      
+      clearLegacyClientJwtKeys()
+
+      const { headers: optHeaders = {}, ...restOptions } = options
       const headers = {
         'Content-Type': 'application/json',
-        ...options.headers
+        ...optHeaders
       }
-      
-      // Add Authorization header if token exists
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`
+      try {
+        delete headers.Authorization
+      } catch {
+        /* ignore */
       }
       
       // Construct full URL
       const fullUrl = `${this.baseURL}${endpoint}`
       console.log('[SLA Approval API] Request:', {
-        method: options.method || 'GET',
+        method: restOptions.method || 'GET',
         url: fullUrl,
-        hasToken: !!token,
+        cookieAuth: true,
         endpoint,
         baseURL: this.baseURL
       })
       
       const response = await fetch(fullUrl, {
-        headers: headers,
-        ...options
+        ...restOptions,
+        headers,
+        credentials: 'include'
       })
 
       if (!response.ok) {
@@ -242,16 +242,14 @@ class SLAApprovalApiService {
     const queryString = queryParams.toString()
     const endpoint = queryString ? `/api/slas/?${queryString}` : '/api/slas/?approval_status=PENDING'
     
-    const token = localStorage.getItem('session_token')
+    clearLegacyClientJwtKeys()
     const headers = {
       'Content-Type': 'application/json'
     }
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`
-    }
     
     return fetch(endpoint, {
-      headers: headers
+      headers: headers,
+      credentials: 'include'
     }).then(response => {
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`)

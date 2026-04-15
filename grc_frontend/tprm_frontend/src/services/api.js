@@ -4,22 +4,15 @@
 import { getTprmApiBaseUrl, getApiOrigin } from '@/utils/backendEnv'
 import axios from 'axios'
 import { getParentPostMessageTargetOrigin } from '@/utils/parentPostMessageOrigin.js'
+import { clearLegacyClientJwtKeys } from '@/utils/legacyAuthStorage.js'
 
-// Cookie-first auth: tokens live in HttpOnly cookies (not readable by JS).
-// Keep migration cleanup for any legacy stored tokens.
+// Cookie-first auth: never send Bearer from Web Storage (stale jti vs HttpOnly cookie session).
 const clearLegacyTokens = () => {
-  ;['session_token', 'access_token', 'refresh_token', 'current_user'].forEach((k) => {
+  clearLegacyClientJwtKeys()
+  ;['refresh_token', 'current_user'].forEach((k) => {
     sessionStorage.removeItem(k)
     localStorage.removeItem(k)
   })
-}
-
-const getAuthToken = () => {
-  return sessionStorage.getItem('access_token') || 
-         sessionStorage.getItem('session_token') ||
-         localStorage.getItem('session_token') ||
-         localStorage.getItem('auth_token') || 
-         localStorage.getItem('access_token')
 }
 
 const clearSensitiveAuth = () => {
@@ -53,17 +46,22 @@ class APIService {
 
   async request(endpoint, options = {}) {
     const url = `${this.baseURL}${endpoint}`;
-    const token = getAuthToken();
-    
+    clearLegacyClientJwtKeys();
+
+    const { headers: optionHeaders = {}, ...restFetchOptions } = options
     let config = {
+      ...restFetchOptions,
+      credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
-        ...(token && { 'Authorization': `Bearer ${token}` }),
-        ...options.headers,
+        ...optionHeaders,
       },
-      credentials: 'include',
-      ...options,
-    };
+    }
+    try {
+      delete config.headers.Authorization
+    } catch {
+      /* ignore */
+    }
 
     try {
       let response = await fetch(url, config);
@@ -74,12 +72,11 @@ class APIService {
         const refreshed = await this.refreshTokenIfNeeded();
         
         if (refreshed) {
-          config = {
-            ...config,
-            headers: {
-              ...config.headers,
-            }
-          };
+          try {
+            delete config.headers.Authorization
+          } catch {
+            /* ignore */
+          }
           response = await fetch(url, config);
         }
       }
@@ -122,17 +119,22 @@ class APIService {
 
   async slaRequest(endpoint, options = {}) {
     const url = `${this.slaURL}${endpoint}`;
-    const token = getAuthToken();
-    
+    clearLegacyClientJwtKeys();
+
+    const { headers: optionHeaders = {}, ...restFetchOptions } = options
     const config = {
+      ...restFetchOptions,
+      credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
-        ...(token && { 'Authorization': `Bearer ${token}` }),
-        ...options.headers,
+        ...optionHeaders,
       },
-      credentials: 'include',
-      ...options,
-    };
+    }
+    try {
+      delete config.headers.Authorization
+    } catch {
+      /* ignore */
+    }
 
     try {
       const response = await fetch(url, config);
@@ -203,17 +205,22 @@ class APIService {
   async auditsRequest(endpoint, options = {}) {
     const { allow404 = false, ...fetchOptions } = options;
     const url = `${this.auditsURL}${endpoint}`;
-    const token = getAuthToken();
-    
+    clearLegacyClientJwtKeys();
+
+    const { headers: optionHeaders = {}, ...restFetchOptions } = fetchOptions
     const config = {
+      ...restFetchOptions,
+      credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
-        ...(token && { 'Authorization': `Bearer ${token}` }),
-        ...fetchOptions.headers,
+        ...optionHeaders,
       },
-      credentials: 'include',
-      ...fetchOptions,
-    };
+    }
+    try {
+      delete config.headers.Authorization
+    } catch {
+      /* ignore */
+    }
 
     try {
       const response = await fetch(url, config);
@@ -262,17 +269,22 @@ class APIService {
 
   async notificationsRequest(endpoint, options = {}) {
     const url = `${this.notificationsURL}${endpoint}`;
-    const token = getAuthToken();
-    
+    clearLegacyClientJwtKeys();
+
+    const { headers: optionHeaders = {}, ...restFetchOptions } = options
     let config = {
+      ...restFetchOptions,
+      credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
-        ...(token && { 'Authorization': `Bearer ${token}` }),
-        ...options.headers,
+        ...optionHeaders,
       },
-      credentials: 'include',
-      ...options,
-    };
+    }
+    try {
+      delete config.headers.Authorization
+    } catch {
+      /* ignore */
+    }
 
     try {
       let response = await fetch(url, config);
@@ -283,12 +295,11 @@ class APIService {
         const refreshed = await this.refreshTokenIfNeeded();
         
         if (refreshed) {
-          config = {
-            ...config,
-            headers: {
-              ...config.headers,
-            }
-          };
+          try {
+            delete config.headers.Authorization
+          } catch {
+            /* ignore */
+          }
           response = await fetch(url, config);
         }
       }
@@ -1678,18 +1689,20 @@ const apiService = new APIService();
 // Export axios instance for contract modules
 export const api = axios.create({
   baseURL: getTprmApiBaseUrl(),
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
 })
 
-// Add request interceptor to inject JWT token
+// Cookie-first: do not attach Bearer from storage (stale session jti).
 api.interceptors.request.use(
   (config) => {
-    // Standard token retrieval: check sessionStorage first (populated by GRC parent)
-    const token = getAuthToken()
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
+    clearLegacyClientJwtKeys()
+    try {
+      delete config.headers.Authorization
+    } catch {
+      /* ignore */
     }
     return config
   },
@@ -1720,7 +1733,15 @@ api.interceptors.response.use(
     } else if (error.response?.status === 403) {
       // Permission denied - RBAC check failed
       const errorData = error.response?.data || {}
-      const errorMessage = errorData.error || errorData.message || 'You do not have permission to access this resource.'
+      const detailRaw = errorData.detail
+      const detailStr = typeof detailRaw === 'string' ? detailRaw : (Array.isArray(detailRaw) ? detailRaw.join(' ') : '')
+      const errorMessage = errorData.error || errorData.message || detailStr || 'You do not have permission to access this resource.'
+      if (
+        String(detailStr || errorMessage).toLowerCase().includes('session invalidated') ||
+        String(detailStr || errorMessage).toLowerCase().includes('newer login')
+      ) {
+        clearSensitiveAuth()
+      }
       const errorCode = errorData.code || '403'
       
       console.warn('[Axios Interceptor] 403 Forbidden:', errorMessage, error.config?.url)

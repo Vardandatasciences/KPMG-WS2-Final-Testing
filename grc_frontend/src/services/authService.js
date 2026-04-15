@@ -1,5 +1,6 @@
 import { API_BASE_URL, createAxiosInstance } from '../config/api.js'
 import { navigateTopLevelToGoogleOAuth } from '../utils/safeExternalNavigation'
+import { clearLegacyClientJwtKeys } from '../utils/legacyAuthStorage.js'
  
 const TOKEN_STORAGE_KEYS = [
   'session_token',
@@ -23,7 +24,7 @@ const getFromStorage = (keys) => {
   return { key: null, value: null }
 }
 
-const SENSITIVE_KEYS = ['session_token', 'token', 'access_token', 'jwt_token', 'refresh_token', 'current_user']
+const SENSITIVE_KEYS = ['session_token', 'token', 'access_token', 'jwt_token', 'auth_token', 'refresh_token', 'current_user']
 
 const setSensitive = (key, value) => {
   sessionStorage.setItem(key, value)
@@ -36,6 +37,7 @@ const removeSensitive = (key) => {
 }
 
 // Purge legacy JWT/session secrets from Web Storage (cookie-first auth; no tokens in JS storage).
+clearLegacyClientJwtKeys()
 SENSITIVE_KEYS.forEach((k) => {
   localStorage.removeItem(k)
   sessionStorage.removeItem(k)
@@ -310,6 +312,7 @@ export default {
    * Clear all authentication data
    */
   clearAuthData() {
+    clearLegacyClientJwtKeys()
     removeSensitive('session_token')
     removeSensitive('access_token')
     removeSensitive('refresh_token')

@@ -10,6 +10,7 @@ import { rfpSanitizeString } from './rfpUtils.js'
 
 import { getTprmApiV1BaseUrl } from '@/utils/backendEnv'
 import { getParentPostMessageTargetOrigin } from '@/utils/parentPostMessageOrigin.js'
+import { clearLegacyClientJwtKeys } from '@/utils/legacyAuthStorage.js'
 
 // Default configuration
 const defaultConfig = {
@@ -45,17 +46,13 @@ class RfpApiClient {
     // Request interceptor for security
     this.client.interceptors.request.use(
       (config) => {
-        // Standard token retrieval: check sessionStorage first (populated by GRC parent)
-        const token = this.authToken || 
-                      sessionStorage.getItem('access_token') || 
-                      sessionStorage.getItem('session_token') ||
-                      sessionStorage.getItem('accessToken') ||
-                      localStorage.getItem('access_token') || 
-                      localStorage.getItem('session_token') ||
-                      localStorage.getItem('authToken')
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`
-      }
+        clearLegacyClientJwtKeys()
+        this.authToken = null
+        try {
+          delete config.headers.Authorization
+        } catch {
+          /* ignore */
+        }
 
         // Sanitize request data
         if (config.data) {

@@ -1,6 +1,7 @@
 import axios from 'axios'
 import { getTprmApiBaseUrl } from '@/utils/backendEnv'
 import { getParentPostMessageTargetOrigin } from '@/utils/parentPostMessageOrigin.js'
+import { clearLegacyClientJwtKeys } from '@/utils/legacyAuthStorage.js'
 
 // Create axios instance with base configuration
 const http = axios.create({
@@ -12,17 +13,14 @@ const http = axios.create({
   },
 })
 
-// Request interceptor to add JWT token
+// Cookie-first: HttpOnly cookies only; do not attach Bearer from storage.
 http.interceptors.request.use(
   (config) => {
-    // Add JWT token - read from sessionStorage (received from GRC parent via postMessage)
-    // We keep this for backward compatibility and cross-app communication, 
-    // but the browser will now also automatically send HttpOnly cookies.
-    const token = sessionStorage.getItem('access_token') ||
-                  sessionStorage.getItem('session_token') ||
-                  localStorage.getItem('session_token')
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
+    clearLegacyClientJwtKeys()
+    try {
+      delete config.headers.Authorization
+    } catch {
+      /* ignore */
     }
     
     // For FormData requests, let the browser set the Content-Type header

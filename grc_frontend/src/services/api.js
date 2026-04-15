@@ -1,22 +1,15 @@
 import { API_BASE_URL, API_ENDPOINTS, createAxiosInstance } from '../config/api.js';
+import { clearLegacyClientJwtKeys } from '../utils/legacyAuthStorage.js';
  
 // Use centralized axios instance configuration (includes withCredentials: true)
 const api = createAxiosInstance(API_BASE_URL);
 
-const JWT_SEGMENT_RE = /^[A-Za-z0-9\-_]+$/;
-
-function normalizeAndValidateJwt(rawToken) {
-  if (!rawToken || typeof rawToken !== 'string') return null;
-  const trimmed = rawToken.trim();
-  if (!trimmed) return null;
-  const withoutPrefix = trimmed.replace(/^Bearer\s+/i, '');
-  if (!withoutPrefix || ['null', 'undefined', '[object object]'].includes(withoutPrefix.toLowerCase())) {
-    return null;
-  }
-  const parts = withoutPrefix.split('.');
-  if (parts.length !== 3) return null;
-  if (!parts.every((p) => p && JWT_SEGMENT_RE.test(p))) return null;
-  return withoutPrefix;
+function authErrorText(data) {
+  if (!data || typeof data !== 'object') return '';
+  const d = data.detail;
+  if (typeof d === 'string') return d;
+  if (Array.isArray(d)) return d.map((x) => (x && typeof x === 'object' ? JSON.stringify(x) : String(x))).join(' ');
+  return String(data.message || data.error || '');
 }
  
 // Add response interceptor for error handling
@@ -33,6 +26,7 @@ api.interceptors.response.use(
       if (isSessionExpired) {
         console.warn('⏰ [API] Session expired - logging out user');
         
+        clearLegacyClientJwtKeys();
         // Clear session-scoped auth data
         sessionStorage.removeItem('access_token');
         sessionStorage.removeItem('refresh_token');
@@ -90,6 +84,24 @@ api.interceptors.response.use(
       const networkError = new Error('Network error: Unable to connect to the server. Please check your connection and ensure the backend server is running.');
       networkError.isNetworkError = true;
       return Promise.reject(networkError);
+    }
+
+    // 403 from UnifiedJWTAuthentication: stale Bearer vs cookie session (jti mismatch)
+    if (error.response && error.response.status === 403) {
+      const responseData = error.response.data || {};
+      const text = authErrorText(responseData).toLowerCase();
+      if (
+        text.includes('session invalidated') ||
+        text.includes('newer login') ||
+        text.includes('authentication credentials were not provided')
+      ) {
+        clearLegacyClientJwtKeys();
+        try {
+          delete error.config?.headers?.Authorization;
+        } catch {
+          /* ignore */
+        }
+      }
     }
     
     console.error('API Error:', error);
@@ -151,38 +163,22 @@ api.interceptors.request.use((config) => {
     config.url.includes('/api/cookie/preferences/') ||
     config.url.includes('/cookie/preferences/')
   );
-  
-  // Get JWT token from session storage only (avoid localStorage for sensitive tokens).
-  const rawToken = sessionStorage.getItem('access_token') ||
-                   sessionStorage.getItem('token') ||
-                   sessionStorage.getItem('session_token');
-  const token = normalizeAndValidateJwt(rawToken);
 
-  // ALWAYS send JWT token if available, even for cookie preferences endpoints
-  // Prioritize secure HttpOnly cookies: if no valid token in storage, 
-  // the browser will automatically send cookies via withCredentials.
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-    if (isCookiePreferencesEndpoint) {
-      console.log(`🍪 [API] Cookie preferences endpoint - including JWT token: ${config.method?.toUpperCase()} ${config.url}`);
-    } else {
-      console.log(`🔐 [API] Adding valid JWT token to request: ${config.method?.toUpperCase()} ${config.url}`);
+  // Cookie-first auth: never attach Bearer from JS storage — stale tokens override fresh HttpOnly cookies
+  // in UnifiedJWTAuthentication (cookie tried first; if it fails, header is tried next).
+  clearLegacyClientJwtKeys();
+  try {
+    if (config.headers && typeof config.headers === 'object') {
+      delete config.headers.Authorization;
+      delete config.headers.common?.Authorization;
     }
+  } catch {
+    /* ignore */
+  }
+  if (isCookiePreferencesEndpoint) {
+    console.log(`🍪 [API] Cookie preferences — using cookies only: ${config.method?.toUpperCase()} ${config.url}`);
   } else {
-    // If token is malformed, we log it but don't send it, letting backend fall back to cookies
-    if (rawToken) {
-      console.warn(`⚠️ [API] Invalid JWT token suppressed for ${config.method?.toUpperCase()} ${config.url}`);
-      // Prevent repeated malformed JWT attempts in this session.
-      sessionStorage.removeItem('access_token');
-      sessionStorage.removeItem('token');
-      sessionStorage.removeItem('session_token');
-    }
-    
-    if (isCookiePreferencesEndpoint) {
-      console.log(`🍪 [API] Cookie preferences endpoint - relying on cookies for user identification`);
-    } else {
-      console.log(`🔗 [API] No valid token in storage; relying on secure cookies for: ${config.method?.toUpperCase()} ${config.url}`);
-    }
+    console.log(`🔗 [API] Cookie-first auth (no Bearer from storage): ${config.method?.toUpperCase()} ${config.url}`);
   }
  
   // CRITICAL: Add user_id to request if available (legacy compatibility).
@@ -298,16 +294,6 @@ api.interceptors.request.use((config) => {
       config.data.user_id = parsedUserId;
     }
     
-    // Also ensure JWT token is set
-    const finalRawToken = sessionStorage.getItem('access_token') ||
-                          sessionStorage.getItem('token') ||
-                          sessionStorage.getItem('session_token');
-    const finalToken = normalizeAndValidateJwt(finalRawToken);
-    
-    if (finalToken && !config.headers.Authorization) {
-      config.headers.Authorization = `Bearer ${finalToken}`;
-      console.log(`🍪 [API] Final check: Added JWT token to headers`);
-    }
   }
   
   // Log outgoing requests AFTER all modifications

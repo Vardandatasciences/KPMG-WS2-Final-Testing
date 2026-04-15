@@ -1,6 +1,7 @@
 import axios from 'axios'
 import { getApiOrigin } from '@/utils/backendEnv.js'
 import { getParentPostMessageTargetOrigin } from '@/utils/parentPostMessageOrigin.js'
+import { clearLegacyClientJwtKeys } from '@/utils/legacyAuthStorage.js'
 
 const API_ORIGIN = getApiOrigin()
 // Create axios instance with base configuration
@@ -13,15 +14,15 @@ const apiClient = axios.create({
   }
 })
 
-// Request interceptor
+// Request interceptor — cookie-first; never attach stale Bearer from storage
 apiClient.interceptors.request.use(
   (config) => {
     console.log(`Making ${config.method?.toUpperCase()} request to: ${config.url}`)
-    
-    const token = sessionStorage.getItem('access_token') ||
-                  sessionStorage.getItem('session_token')
-    if (token && !config.headers.Authorization) {
-      config.headers.Authorization = `Bearer ${token}`
+    clearLegacyClientJwtKeys()
+    try {
+      delete config.headers.Authorization
+    } catch {
+      /* ignore */
     }
     
     // For FormData requests, let the browser set the Content-Type header
