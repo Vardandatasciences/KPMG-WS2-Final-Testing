@@ -593,12 +593,19 @@ export default {
     const fetchFrameworks = async () => {
       try {
         loadingFrameworks.value = true
-        const accessToken = sessionStorage.getItem('access_token') || localStorage.getItem('access_token')
+        const isLoggedIn = (sessionStorage.getItem('is_logged_in') || localStorage.getItem('is_logged_in')) === 'true'
+        const hasAuthFlag = (sessionStorage.getItem('isAuthenticated') || localStorage.getItem('isAuthenticated')) === 'true'
+        
+        if (!isLoggedIn && !hasAuthFlag) {
+          console.log('[AI Privacy] User not authenticated - skipping frameworks fetch')
+          return
+        }
+
         const response = await axios.get(`${API_BASE_URL}/api/frameworks/`, {
           headers: {
-            'Authorization': `Bearer ${accessToken}`,
             'Content-Type': 'application/json'
-          }
+          },
+          withCredentials: true
         })
 
         if (Array.isArray(response.data)) {
@@ -935,12 +942,9 @@ export default {
         params.append('include_ai', 'true')
 
         const url = `${API_BASE_URL}/api/export-privacy-report/?${params.toString()}`
-        const accessToken = sessionStorage.getItem('access_token') || localStorage.getItem('access_token')
 
         const response = await axios.get(url, {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`
-          },
+          withCredentials: true,
           responseType: 'blob'
         })
 

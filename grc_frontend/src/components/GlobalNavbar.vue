@@ -34,8 +34,7 @@
 
 <script>
 import logo from '../assets/RiskaVaire.png'
-import axios from 'axios'
-import { API_ENDPOINTS } from '../config/api.js'
+import { API_ENDPOINTS, axiosInstance } from '../config/api.js'
 import authService from '../services/authService.js'
 
 export default {
@@ -81,18 +80,16 @@ export default {
     },
     async fetchUnreadCount() {
       try {
-        const accessToken = sessionStorage.getItem('access_token') || localStorage.getItem('access_token')
         const userId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id')
+        const isLoggedIn = (sessionStorage.getItem('is_logged_in') || localStorage.getItem('is_logged_in')) === 'true'
+        const hasAuthFlag = (sessionStorage.getItem('isAuthenticated') || localStorage.getItem('isAuthenticated')) === 'true'
         
-        if (!accessToken || !userId) {
+        if (!userId || (!isLoggedIn && !hasAuthFlag)) {
           return
         }
         
-        const response = await axios.get(API_ENDPOINTS.GET_NOTIFICATIONS(userId), {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json'
-          },
+        // Use axiosInstance (configured with withCredentials: true) instead of raw axios
+        const response = await axiosInstance.get(API_ENDPOINTS.GET_NOTIFICATIONS(userId), {
           timeout: 5000
         })
         

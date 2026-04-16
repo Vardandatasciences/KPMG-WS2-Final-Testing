@@ -417,15 +417,15 @@ class RiskAvaireEventTrigger:
         """
         try:
             event_titles = {
-                "audit_finding": f"Audit Finding: {audit.AuditTitle}",
-                "audit_overdue": f"Audit Overdue: {audit.AuditTitle}",
-                "audit_approved": f"Audit Approved: {audit.AuditTitle}",
-                "audit_rejected": f"Audit Rejected: {audit.AuditTitle}",
-                "audit_scheduled": f"Audit Scheduled: {audit.AuditTitle}"
+                "audit_finding": f"Audit Finding: {audit.Title}",
+                "audit_overdue": f"Audit Overdue: {audit.Title}",
+                "audit_approved": f"Audit Approved: {audit.Title}",
+                "audit_rejected": f"Audit Rejected: {audit.Title}",
+                "audit_scheduled": f"Audit Scheduled: {audit.Title}"
             }
             
             event_descriptions = {
-                "audit_finding": f"Audit finding identified: {audit.AuditDescription}",
+                "audit_finding": f"Audit finding identified: {audit.Objective}",
                 "audit_overdue": f"Audit is overdue for completion",
                 "audit_approved": f"Audit has been approved",
                 "audit_rejected": f"Audit has been rejected and requires attention",
@@ -433,11 +433,11 @@ class RiskAvaireEventTrigger:
             }
             
             event_data = {
-                'EventTitle': event_titles.get(trigger_type, f"Audit Event: {audit.AuditTitle}"),
-                'Description': event_descriptions.get(trigger_type, f"Audit-related event: {audit.AuditDescription}"),
+                'EventTitle': event_titles.get(trigger_type, f"Audit Event: {audit.Title}"),
+                'Description': event_descriptions.get(trigger_type, f"Audit-related event: {audit.Objective}"),
                 'LinkedRecordType': 'audit',
                 'LinkedRecordId': audit.AuditId,
-                'LinkedRecordName': audit.AuditTitle,
+                'LinkedRecordName': audit.Title,
                 'Category': 'Audit Management',
                 'Priority': 'High',  # Audit findings are typically high priority
                 'Status': 'Pending Review',

@@ -139,7 +139,9 @@ export default {
       // Cookie-first auth: use shell flags + backend session verification.
       const userId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id')
       const isLoggedIn = (sessionStorage.getItem('is_logged_in') || localStorage.getItem('is_logged_in')) === 'true'
-      const hasAuthData = !!(userId && isLoggedIn)
+      const hasAuthFlag = (sessionStorage.getItem('isAuthenticated') || localStorage.getItem('isAuthenticated')) === 'true'
+      
+      const hasAuthData = !!(userId && (isLoggedIn || hasAuthFlag))
       let cookieSessionValid = false
 
       if (hasAuthData) {

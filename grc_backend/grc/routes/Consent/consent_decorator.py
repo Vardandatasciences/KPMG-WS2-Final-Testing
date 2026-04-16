@@ -86,52 +86,53 @@ def require_consent(action_type):
                     return view_func(*args, **kwargs)
                 
                 # Check if consent is required for this action
+                consent_required = False
+                consent_config = None
+                
                 try:
                     consent_config = ConsentConfiguration.objects.get(
                         action_type=action_type,
                         framework_id=framework_id
                     )
-                    
-                    # If consent is not enabled, allow the request
-                    if not consent_config.is_enabled:
-                        logger.debug(f"[Consent] Consent not enabled for {action_type}. Allowing request.")
-                        return view_func(*args, **kwargs)
-                    
-                    # Consent is enabled - check if user has accepted
-                    consent_accepted = get_request_data(request, 'consent_accepted', False) if request.method in ['POST', 'PUT'] else False
-                    consent_config_id = get_request_data(request, 'consent_config_id') if request.method in ['POST', 'PUT'] else None
-                    
-                    if not consent_accepted or not consent_config_id:
-                        logger.warning(f"[Consent] Consent required but not provided for {action_type}")
-                        return Response({
-                            'status': 'error',
-                            'error': 'CONSENT_REQUIRED',
-                            'message': 'Consent is required for this action',
-                            'consent_required': True,
-                            'consent_config': {
-                                'config_id': consent_config.config_id,
-                                'action_type': consent_config.action_type,
-                                'action_label': consent_config.action_label,
-                                'consent_text': consent_config.consent_text
-                            }
-                        }, status=http_status.HTTP_403_FORBIDDEN)
-                    
-                    # Verify the consent_config_id matches
-                    if int(consent_config_id) != consent_config.config_id:
-                        logger.error(f"[Consent] Consent config ID mismatch for {action_type}")
-                        return Response({
-                            'status': 'error',
-                            'message': 'Invalid consent configuration'
-                        }, status=http_status.HTTP_400_BAD_REQUEST)
-                    
-                    # Consent is properly accepted - allow the request
-                    logger.info(f"[Consent] Consent verified for {action_type}. Proceeding with request.")
+                    if consent_config.is_enabled:
+                        consent_required = True
+                except ConsentConfiguration.DoesNotExist:
+                    # No consent configuration exists - allow the request
+                    logger.debug(f"[Consent] No consent configuration found for {action_type}. Allowing request.")
+                
+                if not consent_required:
                     return view_func(*args, **kwargs)
                 
-                except ConsentConfiguration.DoesNotExist:
-                    # No consent configuration exists - allow the request (backward compatibility)
-                    logger.debug(f"[Consent] No consent configuration found for {action_type}. Allowing request.")
-                    return view_func(*args, **kwargs)
+                # Consent is enabled - check if user has accepted
+                consent_accepted = get_request_data(request, 'consent_accepted', False) if request.method in ['POST', 'PUT'] else False
+                consent_config_id = get_request_data(request, 'consent_config_id') if request.method in ['POST', 'PUT'] else None
+                
+                if not consent_accepted or not consent_config_id:
+                    logger.warning(f"[Consent] Consent required but not provided for {action_type}")
+                    return Response({
+                        'status': 'error',
+                        'error': 'CONSENT_REQUIRED',
+                        'message': 'Consent is required for this action',
+                        'consent_required': True,
+                        'consent_config': {
+                            'config_id': consent_config.config_id,
+                            'action_type': consent_config.action_type,
+                            'action_label': consent_config.action_label,
+                            'consent_text': consent_config.consent_text
+                        }
+                    }, status=http_status.HTTP_403_FORBIDDEN)
+                
+                # Verify the consent_config_id matches
+                if int(consent_config_id) != consent_config.config_id:
+                    logger.error(f"[Consent] Consent config ID mismatch for {action_type}")
+                    return Response({
+                        'status': 'error',
+                        'message': 'Invalid consent configuration'
+                    }, status=http_status.HTTP_400_BAD_REQUEST)
+                
+                # Consent is properly accepted - allow the request
+                logger.info(f"[Consent] Consent verified for {action_type}. Proceeding with request.")
+                return view_func(*args, **kwargs)
             
             except Exception as e:
                 logger.error(f"[Consent] Error in consent decorator: {str(e)}")

@@ -858,13 +858,13 @@ const router = createRouter({
 // Navigation guard
 router.beforeEach(async (to, from, next) => {
   console.log('🔐 Router guard checking:', { to: to.path, from: from.path })
- 
-  // Check if user is authenticated
+  // Check if user is authenticated via session flags (Cookie-first model)
   const accessToken = sessionStorage.getItem('access_token') || localStorage.getItem('access_token')
   const userId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id')
   const isLoggedIn = (sessionStorage.getItem('is_logged_in') || localStorage.getItem('is_logged_in')) === 'true'
- 
-  // Check token validity
+  const hasAuthFlag = (sessionStorage.getItem('isAuthenticated') || localStorage.getItem('isAuthenticated')) === 'true'
+
+  // Token validity check (for legacy support)
   let isTokenValid = true
   if (accessToken) {
     try {
@@ -872,20 +872,22 @@ router.beforeEach(async (to, from, next) => {
       const currentTime = Math.floor(Date.now() / 1000)
       isTokenValid = tokenPayload.exp && tokenPayload.exp > currentTime
     } catch (error) {
-      console.warn('⚠️ Invalid token format in router guard:', error)
       isTokenValid = false
     }
   }
- 
-  // User is authenticated if they have valid auth data, even if token is expired (will be refreshed)
-  const hasAuthData = !!(accessToken && userId && isLoggedIn)
-  const isAuthenticated = hasAuthData && (isTokenValid || accessToken) // Allow expired tokens for now
- 
+
+  // User is authenticated if:
+  // 1. They have legacy auth data (token + userId + isLoggedIn)
+  // 2. OR they have the new cookie-first flags (userId + isLoggedIn/hasAuthFlag)
+  const hasAuthDataLegacy = !!(accessToken && userId && isLoggedIn)
+  const hasAuthDataCookie = !!(userId && (isLoggedIn || hasAuthFlag))
+  const isAuthenticated = hasAuthDataLegacy || hasAuthDataCookie
+
   console.log('🔐 Authentication status:', {
     hasToken: !!accessToken,
     hasUserId: !!userId,
     isLoggedIn: isLoggedIn,
-    isTokenValid: isTokenValid,
+    hasAuthFlag: hasAuthFlag,
     isAuthenticated: isAuthenticated
   })
  

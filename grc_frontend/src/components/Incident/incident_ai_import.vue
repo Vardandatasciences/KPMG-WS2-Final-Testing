@@ -774,14 +774,18 @@ export default {
 
     resumeProcessingIfNeeded() {
       if (this.currentStep === 'processing' && this.isProcessing) {
-        console.log('🔄 Resuming incident AI processing from step:', this.currentProcessingStep);
-        // Continue from where it left off - progress will update naturally
+        console.warn('⚠️ Incident AI processing was interrupted by a page refresh. Resetting to upload step as the request cannot be resumed.');
+        this.isProcessing = false;
+        this.currentStep = 'upload';
+        this.processingProgress = 0;
+        this.clearProcessingState();
         this.$notify({
-          type: 'info',
-          title: 'Resuming',
-          text: `Resuming incident AI processing from ${this.processingProgress}% (${this.currentProcessingPhase})`
+          type: 'warning',
+          title: 'Upload Interrupted',
+          text: 'The page was refreshed while processing. Please re-upload your document.'
         });
       } else if (this.currentStep === 'review' && this.extractedIncidents.length > 0) {
+
         console.log('🔄 Incident AI review data restored');
         this.$notify({
           type: 'info',
@@ -857,25 +861,26 @@ export default {
             headers: {
               'Content-Type': 'multipart/form-data'
             },
-            // AI extraction can take longer on large/complex documents.
-            // Use a longer client timeout to avoid aborting while backend is still processing.
-            timeout: 900000,
-            signal: controller.signal,
             onUploadProgress: (progressEvent) => {
-              if (progressEvent.total) {
-                const uploadPercent = Math.round((progressEvent.loaded * 30) / progressEvent.total); // 0-30% for upload
-                this.updateProgressWithPhase(10 + uploadPercent, 'upload', 'Uploading document...');
-                // When upload is essentially done, start a smooth AI phase progress
-                if (uploadPercent >= 30 && !this.aiProgressTimer) {
-                  this.startAIPhaseProgress();
-                }
+              const uploadPercent = Math.round((progressEvent.loaded * 30) / progressEvent.total);
+              const totalProgress = 10 + uploadPercent;
+              console.log(`📤 Upload progress: ${totalProgress}%`);
+              this.updateProgressWithPhase(totalProgress, 'uploading', 'Transferring document to server...');
+              
+              // If upload is done, start the estimated AI progress timer while we wait for the POST to resolve
+              if (uploadPercent >= 30) {
+                this.startAIPhaseProgress();
               }
-            }
+            },
+            timeout: 900000,
+            signal: controller.signal
           }
         );
 
-        // Ensure AI phase is active while backend is processing
-        this.updateProgressWithPhase(Math.max(this.processingProgress, 40), 'ai', 'AI analyzing and generating incident fields...');
+        console.log('✅ Backend processing complete. Rendering results...');
+        this.stopAIPhaseProgress();
+
+
 
         // Backend processing is complete at this point
         this.stopAIPhaseProgress();
@@ -1211,21 +1216,45 @@ export default {
       this.saveProcessingState();
     },
 
-    startAIPhaseProgress() {
-      // Smoothly increase progress during AI processing, up to 90%
+     startAIPhaseProgress() {
+      // Smoothly increase progress during AI processing with a decay function
+      // This ensures the bar keeps moving but slows down as it approaches 99%
       if (this.aiProgressTimer) return;
+      console.log('⏱️ Starting AI phase progress timer (decay mode)');
       this.aiProgressTimer = setInterval(() => {
         if (!this.isProcessing) {
           this.stopAIPhaseProgress();
           return;
         }
-        if (this.processingProgress < 90) {
-          this.processingProgress += 1;
-        } else {
-          this.stopAIPhaseProgress();
+        
+        // Progress decay logic
+        let increment = 0;
+        if (this.processingProgress < 70) {
+          increment = 0.8;
+        } else if (this.processingProgress < 85) {
+          increment = 0.4;
+        } else if (this.processingProgress < 95) {
+          increment = 0.15;
+        } else if (this.processingProgress < 98.5) {
+          increment = 0.05;
+        }
+        
+        if (increment > 0) {
+          this.processingProgress += increment;
+          // Every 10 seconds of "stuck" progress, update the status to reassure the user
+          if (Math.floor(this.processingProgress * 10) % 50 === 0) {
+             const details = [
+               "LLM is cross-referencing incident data...",
+               "Performing deep enrichment for each incident...",
+               "Normalizing extracted records...",
+               "This may take a minute for large documents..."
+             ];
+             this.currentProcessingStep = details[Math.floor(Math.random() * details.length)];
+          }
         }
       }, 1000);
     },
+
 
     stopAIPhaseProgress() {
       if (this.aiProgressTimer) {

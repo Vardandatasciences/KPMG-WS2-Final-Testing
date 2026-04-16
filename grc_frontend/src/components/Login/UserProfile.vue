@@ -3363,7 +3363,6 @@ export default {
        try {
          const { API_BASE_URL } = await import('../../config/api.js');
          const axios = (await import('axios')).default;
-        const accessToken = sessionStorage.getItem('access_token');
 
          const response = await axios.put(
            `${API_BASE_URL}/api/user-permissions/${this.selectedUserId}/update/`,
@@ -3372,8 +3371,8 @@ export default {
              role: this.selectedUserRole
            },
            {
+             withCredentials: true,
              headers: {
-               'Authorization': `Bearer ${accessToken}`,
                'Content-Type': 'application/json'
              }
            }
@@ -3418,16 +3417,10 @@ export default {
        this.allUsersSuccess = null;
        
        try {
-        const accessToken = sessionStorage.getItem('access_token');
          const headers = {
            'Content-Type': 'application/json',
            'X-Requested-With': 'XMLHttpRequest'
          };
-         
-         if (accessToken) {
-           headers['Authorization'] = `Bearer ${accessToken}`;
-         }
-         
          const response = await fetch('/api/users/', {
            method: 'GET',
            headers: headers,
@@ -3467,16 +3460,10 @@ export default {
        user.IsActive = newStatus;
        
        try {
-        const accessToken = sessionStorage.getItem('access_token');
          const headers = {
            'Content-Type': 'application/json',
            'X-Requested-With': 'XMLHttpRequest'
          };
-         
-         if (accessToken) {
-           headers['Authorization'] = `Bearer ${accessToken}`;
-         }
-         
          const response = await fetch(`/api/users/${user.UserId}/status/`, {
            method: 'PATCH',
            headers: headers,
@@ -3549,33 +3536,17 @@ export default {
             console.log('Request data:', newUser);
             console.log('Access token present in session:', !!sessionStorage.getItem('access_token'));
             
-            // Try with JWT first, then fallback to session-based auth
-            let response;
-            const accessToken = sessionStorage.getItem('access_token');
-            
-            if (accessToken) {
-              console.log('Using JWT authentication');
-              response = await fetch('/api/register/', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${accessToken}`,
-                  'X-Requested-With': 'XMLHttpRequest'
-                },
-                body: JSON.stringify(newUser)
-              });
-            } else {
-              console.log('Using session-based authentication');
-              response = await fetch('/api/register/', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'X-Requested-With': 'XMLHttpRequest'
-                },
-                credentials: 'include', // Include cookies for session auth
-                body: JSON.stringify(newUser)
-              });
-            }
+            // Rely on session-based auth (Cookies)
+            console.log('Using cookie-based authentication');
+            const response = await fetch('/api/register/', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+              },
+              credentials: 'include', // Include cookies for session auth
+              body: JSON.stringify(newUser)
+            });
 
             console.log('Response status:', response.status);
             console.log('Response headers:', response.headers);
@@ -4362,14 +4333,9 @@ export default {
       },
  
       getConsentAuthHeaders() {
-        const token = sessionStorage.getItem('access_token');
         const headers = {
           'Content-Type': 'application/json'
         };
-        // Avoid sending malformed Authorization headers such as "Bearer null".
-        if (token && token.split('.').length === 3) {
-          headers['Authorization'] = `Bearer ${token}`;
-        }
         return headers;
       },
 

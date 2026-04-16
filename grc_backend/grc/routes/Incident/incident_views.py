@@ -3122,7 +3122,6 @@ def unchecked_audit_findings(request):
     return Response(serializer.data)
 
 @api_view(['GET'])
-@authentication_classes([])
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def list_users(request):

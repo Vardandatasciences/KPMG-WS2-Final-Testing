@@ -10,12 +10,12 @@
   },
   "extraction_summary": {
     "total_sections_processed": 1,
-    "total_policies": 3,
-    "total_subpolicies": 7,
+    "total_policies": 1,
+    "total_subpolicies": 3,
     "policy_type_distribution": {
-      "General": 3
+      "General": 1
     },
     "api_calls_made": 21,
-    "extraction_date": "2026-03-18T17:55:13.462644"
+    "extraction_date": "2026-04-16T09:56:42.574536"
   }
 }

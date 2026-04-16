@@ -24,7 +24,6 @@ const getFromStorage = (keys) => {
   return { key: null, value: null }
 }
 
-const SENSITIVE_KEYS = ['session_token', 'token', 'access_token', 'jwt_token', 'auth_token', 'refresh_token', 'current_user']
 
 const setSensitive = (key, value) => {
   sessionStorage.setItem(key, value)
@@ -38,7 +37,9 @@ const removeSensitive = (key) => {
 
 // Purge legacy JWT/session secrets from Web Storage (cookie-first auth; no tokens in JS storage).
 clearLegacyClientJwtKeys()
-SENSITIVE_KEYS.forEach((k) => {
+// Only purge the actual tokens, keeping non-sensitive flags and user profile for context.
+const TOKENS_TO_PURGE = ['session_token', 'token', 'access_token', 'jwt_token', 'auth_token', 'refresh_token']
+TOKENS_TO_PURGE.forEach((k) => {
   localStorage.removeItem(k)
   sessionStorage.removeItem(k)
 })
@@ -442,9 +443,12 @@ export default {
    * Check if user is authenticated
    */
   isAuthenticated() {
-    const user = this.getCurrentUser()
-    const grcAuthFlag = localStorage.getItem('isAuthenticated') === 'true' || localStorage.getItem('is_logged_in') === 'true'
-    return grcAuthFlag && !!user
+    const userId = localStorage.getItem('user_id') || sessionStorage.getItem('user_id')
+    const grcAuthFlag = localStorage.getItem('isAuthenticated') === 'true' || 
+                        localStorage.getItem('is_logged_in') === 'true' ||
+                        sessionStorage.getItem('isAuthenticated') === 'true' ||
+                        sessionStorage.getItem('is_logged_in') === 'true'
+    return !!(userId && grcAuthFlag)
   },
  
   /**

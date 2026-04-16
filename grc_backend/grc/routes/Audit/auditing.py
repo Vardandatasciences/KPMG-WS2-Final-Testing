@@ -7,6 +7,7 @@ from django.db import connection
 import json,datetime
 import json
 import datetime
+import traceback
 from datetime import date
 from rest_framework.decorators import api_view, permission_classes, authentication_classes, parser_classes
 from rest_framework.response import Response
@@ -831,20 +832,32 @@ def save_audit_version(request, audit_id):
                 debug_print(f"DEBUG: Compliance {compliance_id} data: {compliance_data}")
                 
                 # Convert numeric status to text for compliance_status field
-                status_value = compliance_data.get('compliance_status') or compliance_data.get('status', '')
-                debug_print(f"DEBUG: Compliance {compliance_id} - status_value: '{status_value}' (type: {type(status_value)})")
+                # Handle potential type mismatches (string vs number)
+                status_raw = compliance_data.get('status')
+                status_text_raw = compliance_data.get('compliance_status')
                 
-                compliance_status_text = status_value
+                # If status is missing but text is present, try to map it
+                if (status_raw is None or status_raw == '') and status_text_raw:
+                    text_to_status = {
+                        'Not Compliant': '0',
+                        'Partially Compliant': '1',
+                        'Fully Compliant': '2',
+                        'Not Applicable': '3'
+                    }
+                    status_value = text_to_status.get(status_text_raw, '0')
+                else:
+                    status_value = str(status_raw) if status_raw is not None else '0'
                 
-                # If status is numeric string, convert to text
-                if status_value == '0':
-                    compliance_status_text = 'Not Compliant'
-                elif status_value == '1':
-                    compliance_status_text = 'Partially Compliant'
-                elif status_value == '2':
-                    compliance_status_text = 'Fully Compliant'
-                elif status_value == '3':
-                    compliance_status_text = 'Not Applicable'
+                debug_print(f"DEBUG: Compliance {compliance_id} - status_value: '{status_value}'")
+                
+                # Map numeric value to display text for the version JSON
+                status_to_text = {
+                    '0': 'Not Compliant',
+                    '1': 'Partially Compliant',
+                    '2': 'Fully Compliant',
+                    '3': 'Not Applicable'
+                }
+                compliance_status_text = status_to_text.get(status_value, 'Not Compliant')
                 
                 debug_print(f"DEBUG: Compliance {compliance_id} - compliance_status_text: '{compliance_status_text}'")
                 
@@ -1079,9 +1092,14 @@ def save_audit_version(request, audit_id):
             return response
             
     except Exception as e:
-        debug_print(f"Error in save_audit_version: {str(e)}")
+        import traceback
+        error_message = str(e)
+        error_traceback = traceback.format_exc()
+        debug_print(f"Error in save_audit_version: {error_message}")
+        debug_print(f"Full traceback: {error_traceback}")
+        
         response = JsonResponse({
-            'error': error_message,
+            'error': f"Failed to save audit version: {error_message}",
             'error_type': e.__class__.__name__ if hasattr(e, '__class__') else 'Unknown',
             'traceback': error_traceback  # Included for debugging - shows exact line in browser Network tab
         }, status=500)
@@ -1216,9 +1234,16 @@ def send_audit_for_review(request, audit_id):
             return response
             
     except Exception as e:
-        debug_print(f"Error in send_audit_for_review: {str(e)}")
+        import traceback
+        error_message = str(e)
+        error_traceback = traceback.format_exc()
+        debug_print(f"Error in send_audit_for_review: {error_message}")
+        debug_print(f"Full traceback: {error_traceback}")
+        
         response = JsonResponse({
-            'error': str(e)
+            'error': f"Failed to send audit for review: {error_message}",
+            'error_type': e.__class__.__name__ if hasattr(e, '__class__') else 'Unknown',
+            'traceback': error_traceback
         }, status=500)
         
         return response

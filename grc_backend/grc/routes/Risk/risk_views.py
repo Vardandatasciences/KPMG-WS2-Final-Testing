@@ -6288,7 +6288,29 @@ def upload_risk_evidence_file(request):
         except (TypeError, ValueError):
             return JsonResponse({'success': False, 'error': 'Invalid risk instance id'}, status=400)
 
-        _get_tenant_scoped_risk_instance(risk_instance_id, tenant_id)
+        if tenant_id is None:
+            return JsonResponse({'success': False, 'error': 'Invalid tenant context'}, status=400)
+
+        # Resolve risk instance in a tenant-safe way when available. Some user-task
+        # flows pass an incident-linked id before a concrete risk instance is resolvable.
+        risk_instance = RiskInstance.objects.filter(
+            RiskInstanceId=risk_instance_id,
+            tenant_id=tenant_id
+        ).first()
+        if not risk_instance:
+            risk_instance = RiskInstance.objects.filter(
+                IncidentId=risk_instance_id,
+                tenant_id=tenant_id
+            ).order_by('-RiskInstanceId').first()
+
+        resolved_risk_instance_id = (
+            risk_instance.RiskInstanceId if risk_instance else risk_instance_id
+        )
+        if not risk_instance:
+            debug_print(
+                f"WARNING: No tenant-scoped RiskInstance resolved for id {risk_instance_id}; "
+                f"continuing upload with fallback identifier {resolved_risk_instance_id}"
+            )
 
         uploaded_files = []
         handler = SecureFileUploadHandler()
@@ -6363,7 +6385,7 @@ def upload_risk_evidence_file(request):
                     # Generate unique file name to avoid conflicts
                     from datetime import datetime
                     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                    unique_file_name = f"risk_evidence_{risk_instance_id}_{timestamp}_{file_name}"
+                    unique_file_name = f"risk_evidence_{resolved_risk_instance_id}_{timestamp}_{file_name}"
                     
                     debug_print(f"DEBUG: Generated unique filename: {unique_file_name}")
                     
@@ -6407,10 +6429,10 @@ def upload_risk_evidence_file(request):
                     send_log(
                         module="Risk",
                         actionType="FILE_UPLOAD",
-                        description=f"Uploaded evidence file: {file.name} for risk {risk_instance_id}",
+                        description=f"Uploaded evidence file: {file.name} for risk {resolved_risk_instance_id}",
                         userId=user_id,
                         entityType="RiskInstance",
-                        entityId=risk_instance_id,
+                        entityId=resolved_risk_instance_id,
                         additionalInfo={"file_name": file.name, "file_size": file.size}
                     )
                 else:

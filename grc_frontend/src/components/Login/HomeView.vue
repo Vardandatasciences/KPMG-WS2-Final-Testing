@@ -3241,11 +3241,11 @@ const selectAllFrameworks = async () => {
 // Fetch all dashboard metrics
 const fetchAllDashboardMetrics = async () => {
   try {
-    // Check if user is authenticated
-    const accessToken = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
+    // Check if user is authenticated (rely on flags and userId, not accessToken, for cookie-first auth)
     const userId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id');
     const isLoggedIn = (sessionStorage.getItem('is_logged_in') || localStorage.getItem('is_logged_in')) === 'true';
-    const isAuthenticated = !!(accessToken && userId && isLoggedIn);
+    const hasAuthFlag = (sessionStorage.getItem('isAuthenticated') || localStorage.getItem('isAuthenticated')) === 'true';
+    const isAuthenticated = !!(userId && (isLoggedIn || hasAuthFlag));
    
     console.log('🚀 DEBUG: Starting to fetch all dashboard metrics...', { isAuthenticated });
    
@@ -3334,10 +3334,11 @@ onMounted(() => {
     selectedFrameworkId.value = storeFramework;
     console.log('🔄 HomeView: Loaded framework from Vuex store:', storeFramework);
   }
-  const accessToken = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
+  // Evaluate session status (rely on flags and userId, not accessToken, for cookie-first auth)
   const userId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id');
   const isLoggedIn = (sessionStorage.getItem('is_logged_in') || localStorage.getItem('is_logged_in')) === 'true';
-  const isAuthenticated = !!(accessToken && userId && isLoggedIn);
+  const hasAuthFlag = (sessionStorage.getItem('isAuthenticated') || localStorage.getItem('isAuthenticated')) === 'true';
+  const isAuthenticated = !!(userId && (isLoggedIn || hasAuthFlag));
 
   // Only prefetch authenticated/private datasets when user session is valid.
   // Prevents noisy 401 bursts and avoids triggering auth redirect loops from background calls.

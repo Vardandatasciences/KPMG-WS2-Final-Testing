@@ -122,7 +122,8 @@ PRIORITY_AI_FIELDS = {
     "SystemsAssetsInvolved",
     "RelevantPoliciesProceduresViolated",
 }
-MAX_AI_INFER_FIELDS_PER_INCIDENT = 3
+MAX_AI_INFER_FIELDS_PER_INCIDENT = 10  # Increased from 3 to allow more thorough per-incident enrichment
+
 
 # Prefer one LLM call for multi-block docs under this size (avoids N× ~40s ingest latency).
 MULTI_INCIDENT_SINGLE_PASS_MAX_CHARS = 15000
@@ -602,7 +603,8 @@ def parse_incidents_from_text(text: str, document_hash: str = None) -> list[dict
                     incidents.extend(block_incidents)
                 elif isinstance(block_incidents, dict):
                     incidents.append(block_incidents)
-            print(f"[ROUTE-INCIDENT] incident.ingest_document (per-block) DONE: {len(incidents)} incident(s)")
+            print(f"[ROUTE-INCIDENT] incident.ingest_document (per-block) DONE: {len(incidents)} incident(s) found in {incident_count} blocks")
+
 
         if incident_count == 1 and len(incidents) == 0:
             debug_print(f"🚀 Calling centralized AI service to extract incidents (single doc)...")
@@ -633,10 +635,29 @@ def parse_incidents_from_text(text: str, document_hash: str = None) -> list[dict
 
             # Print: fields IN document (from ingest) vs fields AI NEEDS to generate
             empty_vals = (None, "", [], {})
-            from_doc = [f for f in INCIDENT_DB_FIELDS if item.get(f) not in empty_vals]
-            missing_fields = [f for f in INCIDENT_DB_FIELDS if item.get(f) in empty_vals]
-            print(f"[ROUTE-INCIDENT] FROM DOCUMENT ({len(from_doc)}): {', '.join(from_doc)}")
-            print(f"[ROUTE-INCIDENT] AI MUST GENERATE ({len(missing_fields)}): {', '.join(missing_fields)}")
+            from_doc = [f for f in INCIDENT_DB_FIELDS if inc.get(f) not in empty_vals]
+            missing_fields = [f for f in INCIDENT_DB_FIELDS if inc.get(f) in empty_vals]
+            
+            # THOROUGH MODE: Even if fields were found, we re-infer some critical ones if confidence is low or if they look generic
+            critical_fields = ["IncidentTitle", "Description", "Criticality", "RiskPriority"]
+            force_re_infer = []
+            for cf in critical_fields:
+                if cf in from_doc:
+                    val = str(inc.get(cf, "")).lower()
+                    # If the extracted value is too short or generic, force a second pass
+                    if len(val) < 10 or val in ("incident", "new", "medium", "unknown"):
+                        force_re_infer.append(cf)
+            
+            if force_re_infer:
+                print(f"[ROUTE-INCIDENT] FORCING RE-INFERENCE for low-quality fields: {', '.join(force_re_infer)}")
+                # Move these from from_doc to missing_fields so the loop below picks them up
+                for f in force_re_infer:
+                    if f in from_doc: from_doc.remove(f)
+                    if f not in missing_fields: missing_fields.append(f)
+
+            print(f"[ROUTE-INCIDENT] FROM DOCUMENT ({len(from_doc)}): {', '.join(from_doc[:10])}...")
+            print(f"[ROUTE-INCIDENT] AI WILL PROCESS ({len(missing_fields)}): {', '.join(missing_fields[:10])}...")
+
 
             # Phase 2: Fill only priority missing fields with AI for this incident.
             # This keeps latency bounded for multi-incident uploads.
@@ -658,9 +679,10 @@ def parse_incidents_from_text(text: str, document_hash: str = None) -> list[dict
                 )
 
                 for i, field in enumerate(prioritized_missing, 1):
-                    print(f"[ROUTE-INCIDENT] Generating {i}/{len(missing_fields)}: {field} ...")
+                    print(f"[ROUTE-INCIDENT] [Incident {idx}] Generating {i}/{len(prioritized_missing)}: {field} ...")
                     try:
                         value, meta = infer_single_field(field, item, doc_ctx, document_hash=document_hash)
+
                         item[field] = value
                         item["_meta"]["per_field"][field] = meta
                         val_preview = str(value)[:60] + "..." if value is not None and len(str(value)) > 60 else str(value)

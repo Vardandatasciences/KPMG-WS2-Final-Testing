@@ -105,19 +105,25 @@ def validate_compliance_status(value):
     # Allow empty/None status - means user hasn't selected yet
     if value is None or value == '':
         return ''
+    
+    # Convert to string to handle numeric '0' etc.
+    str_value = str(value)
     allowed_statuses = ['0', '1', '2', '3']  # Not Compliant, Partially Compliant, Fully Compliant, Not Applicable
-    if value not in allowed_statuses:
+    if str_value not in allowed_statuses:
         raise ValidationError("Invalid compliance status")
-    return value
+    return str_value
 
 def validate_major_minor(value):
     """Validate major/minor finding type"""
     if value is None or value == '':
         return ''
+    
+    # Convert to string to handle numeric '0' etc.
+    str_value = str(value)
     allowed_values = ['0', '1']  # Minor, Major
-    if value not in allowed_values:
+    if str_value not in allowed_values:
         raise ValidationError("Invalid finding type")
-    return value
+    return str_value
 
 def validate_severity_rating(value):
     """Validate severity rating"""

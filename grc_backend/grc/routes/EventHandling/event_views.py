@@ -6632,7 +6632,7 @@ def link_evidence_to_incident(request):
                 'documents': documents,  # Add extracted documents
                 'document_count': len(documents),
                 'linked_at': timezone.now().isoformat(),
-                'linked_by': user_id,
+                'linked_by': user_id_int,
                 'type': 'linked_evidence'
             }
             evidence_data.append(evidence_item)

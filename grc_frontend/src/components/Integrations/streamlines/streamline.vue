@@ -267,16 +267,21 @@ export default {
         console.log('📊 Loading user projects for user ID:', currentUserId.value)
         console.log('📊 API Endpoint:', API_ENDPOINTS.STREAMLINE_USER_PROJECTS)
         
-        // Get authentication token
-        const accessToken = sessionStorage.getItem('access_token') || localStorage.getItem('access_token')
-        console.log('📊 Access Token:', accessToken ? 'Found' : 'Not found')
+        // Rely on session flags for authentication state (tokens are HttpOnly/purged)
+        const isLoggedIn = (sessionStorage.getItem('is_logged_in') || localStorage.getItem('is_logged_in')) === 'true'
+        const hasAuthFlag = (sessionStorage.getItem('isAuthenticated') || localStorage.getItem('isAuthenticated')) === 'true'
         
-        // Call the real API endpoint
+        if (!isLoggedIn && !hasAuthFlag) {
+          console.log('📊 User not authenticated - skipping projects fetch')
+          loading.value = false
+          return
+        }
+        
+        // Call the real API endpoint without manual Authorization header - handled via HttpOnly cookies
         const response = await fetch(`${API_ENDPOINTS.STREAMLINE_USER_PROJECTS}?user_id=${currentUserId.value}`, {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${accessToken}`,
             'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || ''
           },
           credentials: 'include'
@@ -443,15 +448,11 @@ export default {
         console.log('📋 Loading tasks for project:', project.project_name)
         console.log('📋 Project key:', project.project_key, 'Project ID:', project.project_id)
         
-        // Get authentication token
-        const accessToken = sessionStorage.getItem('access_token') || localStorage.getItem('access_token')
-        
-        // Call Jira API to fetch issues/tasks
+        // Call Jira API to fetch issues/tasks without manual Authorization header
         const response = await fetch(API_ENDPOINTS.JIRA_PROJECT_ISSUES, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${accessToken}`,
             'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || ''
           },
           credentials: 'include',
@@ -518,15 +519,11 @@ export default {
         
         console.log(`💾 Saving ${tasks.length} tasks to database for project:`, project.project_name)
         
-        // Get authentication token
-        const accessToken = sessionStorage.getItem('access_token') || localStorage.getItem('access_token')
-        
-        // Call Streamline API to save tasks
+        // Call Streamline API to save tasks without manual Authorization header
         const response = await fetch(API_ENDPOINTS.STREAMLINE_SAVE_PROJECT_TASKS, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${accessToken}`,
             'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || ''
           },
           credentials: 'include',
@@ -624,15 +621,11 @@ export default {
         
         console.log('📤 Saving task action:', payload)
         
-        // Get authentication token
-        const accessToken = sessionStorage.getItem('access_token') || localStorage.getItem('access_token')
-        
-        // Call the real API endpoint
+        // Call the real API endpoint without manual Authorization header
         const response = await fetch(API_ENDPOINTS.STREAMLINE_SAVE_TASK_ACTION, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${accessToken}`,
             'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || ''
           },
           credentials: 'include',

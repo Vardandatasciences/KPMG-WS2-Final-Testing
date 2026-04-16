@@ -14,14 +14,16 @@ class CsrfExemptSessionAuthentication(SessionAuthentication):
         return
 from ...serializers import FrameworkSerializer, PolicySerializer, UserSerializer, PolicyAllocationSerializer
 from django.db import connection
-from django.utils import timezone
+import os
+import datetime
+import traceback
 import json
 import random
-from django.http import HttpResponse
 import io
+from django.http import HttpResponse
 from docx import Document
 from docx.shared import Inches, Pt
-import os,datetime
+from django.utils import timezone
 from ...routes.Global.notification_service import NotificationService
 from ...rbac.permissions import (
     AuditViewPermission, AuditConductPermission, AuditReviewPermission,
@@ -941,7 +943,7 @@ def update_audit_status(request, audit_id):
                         'template_data': [
                             'Administrator',  # Generic placeholder for the reviewer name
                             audit.Title,
-                            audit.AssignedTo.get_full_name() if hasattr(audit.AssignedTo, 'get_full_name') else audit.AssignedTo.username,
+                            audit.Assignee.get_full_name() if hasattr(audit.Assignee, 'get_full_name') else audit.Assignee.username,
                             (timezone.now() + timezone.timedelta(days=5)).strftime('%Y-%m-%d')  # Set review due date 5 days from now
                         ]
                     }
@@ -959,7 +961,7 @@ def update_audit_status(request, audit_id):
             # Send notification to auditor that their audit is under review
             try:
                 # Get auditor details from the audit
-                auditor = audit.AssignedTo
+                auditor = audit.Assignee
                 if auditor and hasattr(auditor, 'email'):
                     notification_data = {
                         'notification_type': 'auditCompleted',
@@ -986,7 +988,7 @@ def update_audit_status(request, audit_id):
             # Send notification to relevant stakeholders that audit is completed
             try:
                 # Get auditor details from the audit
-                auditor = audit.AssignedTo
+                auditor = audit.Assignee
                 if auditor and hasattr(auditor, 'email'):
                     notification_data = {
                         'notification_type': 'auditReviewed',
@@ -1010,7 +1012,7 @@ def update_audit_status(request, audit_id):
         elif new_status == 'Rejected' and old_status != 'Rejected':
             try:
                 # Get auditor details from the audit
-                auditor = audit.AssignedTo
+                auditor = audit.Assignee
                 if auditor and hasattr(auditor, 'email'):
                     notification_data = {
                         'notification_type': 'auditReviewed',
@@ -1034,7 +1036,7 @@ def update_audit_status(request, audit_id):
         elif old_status != new_status and new_status not in ['Under review', 'Completed', 'Ready for review', 'Rejected']:
             try:
                 # Get auditor details from the audit
-                auditor = audit.AssignedTo
+                auditor = audit.Assignee
                 if auditor and hasattr(auditor, 'email'):
                     notification_data = {
                         'notification_type': 'policyStatusChange',
@@ -5742,21 +5744,29 @@ def save_audit_version(request, audit_id):
             debug_print(f"DEBUG: Finding {'created' if created else 'already exists'}")
             
             # Convert status values
-            status_value = data.get('compliance_status')
-            if status_value == 'Not Compliant':
+            status_text = data.get('compliance_status')
+            status_code = data.get('status')
+            
+            if status_code is not None and str(status_code) in ['0', '1', '2', '3']:
+                check_value = str(status_code)
+            elif status_text == 'Not Compliant':
                 check_value = '0'
-            elif status_value == 'Partially Compliant':
+            elif status_text == 'Partially Compliant':
                 check_value = '1'
-            elif status_value == 'Fully Compliant':
+            elif status_text == 'Fully Compliant':
                 check_value = '2'
-            elif status_value == 'Not Applicable':
+            elif status_text == 'Not Applicable':
                 check_value = '3'
             else:
                 check_value = '0'  # Default to Not Compliant
                 
             # Convert criticality values
             criticality = data.get('criticality', '').strip().lower() if data.get('criticality') else ''
-            if criticality == 'minor':
+            major_minor_code = data.get('major_minor')
+            
+            if major_minor_code is not None and str(major_minor_code) in ['0', '1', '2']:
+                major_minor = str(major_minor_code)
+            elif criticality == 'minor':
                 major_minor = '0'  # Minor: 0
             elif criticality == 'major':
                 major_minor = '1'  # Major: 1
@@ -5919,10 +5929,15 @@ def save_audit_version(request, audit_id):
         debug_print(f"ERROR: Audit not found for ID {audit_id}")
         return Response({'error': 'Audit not found'}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
-        debug_print(f"ERROR in save_audit_version: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return Response({'error': 'An internal error occurred'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        error_message = str(e)
+        error_traceback = traceback.format_exc()
+        debug_print(f"ERROR in save_audit_version: {error_message}")
+        debug_print(f"Full traceback: {error_traceback}")
+        return Response({
+            'error': f'Failed to save audit version: {error_message}',
+            'error_type': e.__class__.__name__ if hasattr(e, '__class__') else 'Unknown',
+            'traceback': error_traceback
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
 @csrf_exempt
 @api_view(['GET'])

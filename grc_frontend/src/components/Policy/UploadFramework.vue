@@ -1908,12 +1908,12 @@ export default {
       // Poll less frequently to avoid spamming backend (5s) and stop if idle for too long
       progressInterval = setInterval(async () => {
         try {
-          // Check if user is still authenticated
-          const isAuthenticated = (sessionStorage.getItem('isAuthenticated') || localStorage.getItem('isAuthenticated')) === 'true'
-          const accessToken = sessionStorage.getItem('access_token') || localStorage.getItem('access_token')
+          // Check if user is still authenticated (rely on flags, not tokens, for cookie-first auth)
+          const isAuthenticated = (sessionStorage.getItem('isAuthenticated') || localStorage.getItem('isAuthenticated')) === 'true' || 
+                                 (sessionStorage.getItem('is_logged_in') || localStorage.getItem('is_logged_in')) === 'true'
           
-          if (!isAuthenticated || !accessToken) {
-            console.log('User not authenticated - stopping progress polling')
+          if (!isAuthenticated) {
+            console.log('User not authenticated (session flags missing) - stopping progress polling')
             clearInterval(progressInterval)
             return
           }

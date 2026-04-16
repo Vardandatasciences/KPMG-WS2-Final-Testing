@@ -95,10 +95,15 @@
         this.isTokenValid = isTokenValid
         this.tokenExpired = tokenExpired
         this.tokenExpiresAt = tokenExpiresAt
-       
-        // Match the same logic as App.vue
-        const hasAuthData = !!(accessToken && userId && isLoggedIn)
-        this.isAuthenticated = hasAuthData && (isTokenValid || tokenExpired)
+        
+        // Match the legacy token check
+        const hasAuthDataLegacy = !!(accessToken && userId && isLoggedIn)
+        
+        // NEW: Cookie-first check (UserId + Login Flags)
+        const hasAuthFlags = !!(userId && (isLoggedIn || (sessionStorage.getItem('isAuthenticated') || localStorage.getItem('isAuthenticated')) === 'true'))
+        
+        // The effective auth status
+        this.isAuthenticated = hasAuthDataLegacy || hasAuthFlags
         this.sidebarWillRender = this.isAuthenticated
        
         // Try to get hasExplicitlyLoggedIn from the app component
