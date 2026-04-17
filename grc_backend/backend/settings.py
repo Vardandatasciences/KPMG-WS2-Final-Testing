@@ -81,7 +81,7 @@ _default_secure_cookies = not DEBUG
 ALLOWED_HOSTS = [
     'localhost',
     '127.0.0.1',
-    'grc-riskavaire.vardaands.com',  # Main production domain
+    'riskavaire.vardaands.com',  # Main production domain
     'grc-tprm.vardaands.com',
     'grc-backend.vardaands.com',
     '15.207.108.158',
@@ -104,7 +104,7 @@ def _env_csv(name: str, default: str = "") -> list[str]:
 TRUSTED_EVIDENCE_URL_HOSTS = _env_csv(
     "TRUSTED_EVIDENCE_URL_HOSTS",
     # Default to your own app domains; extend via env for S3/CloudFront/custom storage.
-    "grc-riskavaire.vardaands.com,grc-tprm.vardaands.com",
+    "riskavaire.vardaands.com,grc-tprm.vardaands.com",
 )
 
 # Host suffixes allowed for evidence URLs (covers bucket.s3.<region>.amazonaws.com etc).
@@ -613,7 +613,7 @@ CORS_ALLOWED_ORIGINS = [
     "https://grc-backend.vardaands.com",
     "https://13.204.228.21:8000",
     "http://13.204.228.21:8000",
-    "https://grc-riskavaire.vardaands.com",
+    "https://riskavaire.vardaands.com",
 ] + _env_csv("CORS_ALLOWED_ORIGINS_EXTRA")
 
 # Support local dev ports without opening wildcard access.
@@ -630,7 +630,7 @@ CORS_ALLOWED_ORIGIN_REGEXES = [
 
 # CSRF settings
 CSRF_TRUSTED_ORIGINS = [
-    "https://grc-riskavaire.vardaands.com",
+    "https://riskavaire.vardaands.com",
     "https://test-riskavaire.vardaands.com",
     "http://localhost:3000",  # TPRM frontend development server
     "http://localhost:8081",  # Vue.js development server

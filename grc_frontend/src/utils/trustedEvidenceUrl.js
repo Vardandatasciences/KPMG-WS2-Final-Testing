@@ -27,7 +27,6 @@ export function isTrustedEvidenceUrl(rawUrl) {
     'riskavaire.vardaands.com',
     'test-riskavaire.vardaands.com',
     'grc-tprm.vardaands.com',
-    'grc-riskavaire.vardaands.com',
   ]);
 
   const allowSuffixes = ['amazonaws.com', 'cloudfront.net'];

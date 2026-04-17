@@ -44,7 +44,7 @@ services:
       context: ../grc_frontend
       dockerfile: Dockerfile
       # Do not pass empty VUE_APP_* / VITE_* args — that used to override .env.production and embed 127.0.0.1:8000.
-      # To override: docker compose build --build-arg VUE_APP_API_BASE_URL=https://grc-riskavaire.vardaands.com frontend
+      # To override: docker compose build --build-arg VUE_APP_API_BASE_URL=https://riskavaire.vardaands.com frontend
     container_name: grc_tprm_frontend_v2
     ports:
       # Host :80 is often already used by system nginx. Default 8080; proxy from host nginx, or set FRONTEND_HTTP_PORT=80 if unused.

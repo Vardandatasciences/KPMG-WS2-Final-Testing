@@ -50,7 +50,7 @@ RUN echo "=== Checking api.js configuration ===" && \
     echo "DEV URL: $DEV_URL" && \
     if [ "$ENV_VALUE" = "aws" ]; then \
       echo "✓ Environment is set to 'aws'" && \
-      if echo "$AWS_URL" | grep -q "grc-riskavaire.vardaands.com"; then \
+      if echo "$AWS_URL" | grep -q "riskavaire.vardaands.com"; then \
         echo "✓ AWS URL is correct: $AWS_URL"; \
       else \
         echo "❌ ERROR: AWS URL is incorrect: $AWS_URL"; \
@@ -67,15 +67,15 @@ RUN npm run build -- --no-cache || npm run build
 # Verify the built files contain the correct API URL
 RUN echo "=== Verifying built API configuration ===" && \
     echo "Searching for AWS URL in built files..." && \
-    find dist -name "*.js" -type f -exec grep -l "grc-riskavaire.vardaands.com" {} \; | head -3 && \
+    find dist -name "*.js" -type f -exec grep -l "riskavaire.vardaands.com" {} \; | head -3 && \
     echo "Searching for development URL (should NOT be present)..." && \
     (find dist -name "*.js" -type f -exec grep -l "127.0.0.1:8000" {} \; | head -3 && echo "WARNING: Found development URL in built files!" || echo "✓ No development URL found (good!)") && \
     echo "=== Sample of built API config ===" && \
-    find dist -name "*.js" -type f | head -1 | xargs grep -o "grc-riskavaire.vardaands.com\|127.0.0.1:8000" | head -5 || echo "Could not find API URL in built files"
+    find dist -name "*.js" -type f | head -1 | xargs grep -o "riskavaire.vardaands.com\|127.0.0.1:8000" | head -5 || echo "Could not find API URL in built files"
 
 # Verify the built files contain the correct API URL
 RUN echo "=== Verifying built API configuration ===" && \
-    find dist -name "*.js" -type f | head -1 | xargs grep -o "grc-riskavaire.vardaands.com\|127.0.0.1:8000" | head -5 || echo "Could not verify API URL in built files"
+    find dist -name "*.js" -type f | head -1 | xargs grep -o "riskavaire.vardaands.com\|127.0.0.1:8000" | head -5 || echo "Could not verify API URL in built files"
 
 # ============================================
 # STAGE 2: Build TPRM Frontend

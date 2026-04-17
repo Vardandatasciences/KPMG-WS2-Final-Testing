@@ -669,7 +669,7 @@ def bamboohr_oauth(request):
         else:
             redirect_uri = clean_value(redirect_uri)
             if not redirect_uri:
-                redirect_uri = 'https://grc-riskavaire.vardaands.com/api/bamboohr/oauth-callback/'
+                redirect_uri = 'https://riskavaire.vardaands.com/api/bamboohr/oauth-callback/'
         
         logger.info(f"BambooHR OAuth - USE_LOCAL_DEVELOPMENT: {use_local_dev}, Redirect URI: {redirect_uri}")
         logger.info(f"BambooHR OAuth - Client ID: {client_id[:10]}... (length: {len(client_id)})")
