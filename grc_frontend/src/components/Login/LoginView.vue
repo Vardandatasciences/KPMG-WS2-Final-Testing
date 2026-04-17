@@ -590,11 +590,10 @@ const login = async () => {
         showConsentForm.value = true
       } else {
         console.log('✅ Consent already accepted - proceeding to post-login route')
+        await navigateAfterLogin()
         if (window.onSuccessfulLogin) {
           window.onSuccessfulLogin()
         }
-        window.dispatchEvent(new Event('authChanged'))
-        await navigateAfterLogin()
       }
     } else {
       // Extract error message from result
@@ -735,12 +734,11 @@ const determineVendorFlag = async () => {
 const handleConsentAccepted = async () => {
   console.log('✅ Consent accepted - proceeding after login')
   showConsentForm.value = false
+  await navigateAfterLogin()
   // Call the global login success handler
   if (window.onSuccessfulLogin) {
     window.onSuccessfulLogin()
   }
-  window.dispatchEvent(new Event('authChanged'))
-  await navigateAfterLogin()
 }
 
 const handleConsentDeclined = () => {
@@ -798,11 +796,10 @@ const verifyOtp = async () => {
       } else {
         console.log('✅ Consent already accepted - proceeding to post-login route')
         showMfaStep.value = false
+        await navigateAfterLogin()
         if (window.onSuccessfulLogin) {
           window.onSuccessfulLogin()
         }
-        window.dispatchEvent(new Event('authChanged'))
-        await navigateAfterLogin()
       }
     } else {
       errorMessage.value = 'Invalid verification code. Please try again.'

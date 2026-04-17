@@ -104,7 +104,15 @@ api.interceptors.response.use(
       }
     }
     
-    console.error('API Error:', error);
+    // Avoid console noise: this endpoint uses server session only; 401 is common before
+    // cookies/session are ready or when storage is stale vs session.
+    const url = String(error.config?.url || '');
+    const silent401ReviewerQueue =
+      error.response?.status === 401 &&
+      url.includes('policy-approvals-compliance/reviewer');
+    if (!silent401ReviewerQueue) {
+      console.error('API Error:', error);
+    }
    
     // Add more detailed logging for other errors
     if (error.code === 'ERR_NETWORK') {
@@ -573,7 +581,7 @@ export const complianceService = {
       cloneData.SubPolicy = cloneData.target_subpolicy_id;
     }
    
-    return api.post(API_ENDPOINTS.COMPLIANCE_CLONE(complianceId), cloneData)
+    return api.post(API_ENDPOINTS.COMPLIANCE_CLONE(complianceId), cloneData, { timeout: 60000 })
       .then(response => {
         console.log('Compliance clone response:', response.data);
         return response;
@@ -620,7 +628,8 @@ export const complianceService = {
         throw error;
       });
   },
-  resubmitComplianceApproval: (approvalId, data) => api.put(API_ENDPOINTS.COMPLIANCE_APPROVALS_RESUBMIT(approvalId), data),
+  resubmitComplianceApproval: (approvalId, data) =>
+    api.put(API_ENDPOINTS.COMPLIANCE_APPROVALS_RESUBMIT(approvalId), data, { timeout: 60000 }),
  
   // User endpoints
   getUsers: () => api.get(API_ENDPOINTS.COMPLIANCE_USERS),

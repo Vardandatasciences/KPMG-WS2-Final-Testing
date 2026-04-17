@@ -11,6 +11,7 @@ from django.shortcuts import get_object_or_404
 from django.db.models import Q, Count
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
+from django.conf import settings
 from datetime import datetime, date
 import secrets
 import os
@@ -37,6 +38,26 @@ def get_client_ip(request):
     else:
         ip = request.META.get('REMOTE_ADDR')
     return ip
+
+
+def get_acknowledgement_frontend_url(request):
+    """
+    Resolve frontend base URL for acknowledgement links.
+    Deployment can override with ACKNOWLEDGEMENT_FRONTEND_URL without changing local behavior.
+    """
+    candidates = [
+        os.getenv('ACKNOWLEDGEMENT_FRONTEND_URL'),
+        getattr(settings, 'ACKNOWLEDGEMENT_FRONTEND_URL', None),
+        os.getenv('FRONTEND_URL'),
+        getattr(settings, 'FRONTEND_URL', None),
+    ]
+
+    for candidate in candidates:
+        if candidate and str(candidate).strip():
+            return str(candidate).rstrip('/')
+
+    # Keep current local default when no deployment config is provided.
+    return 'http://localhost:8080'
 
 
 def mark_acknowledgement_notification_as_read(user_id, policy_name, acknowledgement_request_id=None):
@@ -304,8 +325,8 @@ def create_acknowledgement_request(request):
                 from ...routes.Global.notification_service import NotificationService
                 notification_service = NotificationService()
                 
-                # Get frontend URL from environment variable or use default
-                frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:8080')
+                # Use deployment-aware frontend URL (supports ACKNOWLEDGEMENT_FRONTEND_URL override).
+                frontend_url = get_acknowledgement_frontend_url(request)
                 
                 # Send notification to each assigned user
                 for user_ack in user_acks:

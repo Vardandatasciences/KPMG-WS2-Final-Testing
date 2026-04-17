@@ -1961,6 +1961,7 @@
 <script>
 
 import { ref, watch, onMounted, onActivated, nextTick, computed, reactive } from 'vue'
+import { useStore } from 'vuex'
 import apiService from '@/services/apiService'
 import { useRouter, useRoute } from 'vue-router'
 import { PopupService, PopupModal } from '@/modules/popus'
@@ -1976,6 +1977,7 @@ export default {
   },
   setup() {
     const selectedSubPolicyIdx = ref([]) // <-- Declare this at the very top!
+    const store = useStore()
     const router = useRouter()
     const route = useRoute()
     const selectedFramework = ref('')
@@ -2312,6 +2314,15 @@ export default {
         
         // Set flag to prevent watcher from saving during load
         isLoadingFramework.value = true
+
+        // Respect the in-app Vuex selection first.
+        // When Home has "All Frameworks" selected, Create Policy should not auto-pick any framework.
+        const storeFrameworkId = store.state.framework?.selectedFrameworkId
+        if (!storeFrameworkId || storeFrameworkId === 'all') {
+          console.log('ℹ️ DEBUG: Vuex indicates All Frameworks is active - clearing Create Policy selection')
+          selectedFramework.value = ''
+          return
+        }
         
         const data = await apiService.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED)
         console.log('📊 DEBUG: Selected framework response:', data)
@@ -2411,6 +2422,18 @@ export default {
         }
       }
     })
+
+    watch(
+      () => store.state.framework?.selectedFrameworkId,
+      (newFrameworkId) => {
+        if (newFrameworkId === 'all' || !newFrameworkId) {
+          if (selectedFramework.value !== '') {
+            console.log('🔄 DEBUG: Vuex framework reset to All Frameworks - clearing Create Policy dropdown')
+            selectedFramework.value = ''
+          }
+        }
+      }
+    )
 
     const handleCreateFramework = async () => {
       // Validate framework name using the real-time validation

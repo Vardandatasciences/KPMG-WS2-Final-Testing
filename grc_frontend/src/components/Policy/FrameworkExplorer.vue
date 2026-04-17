@@ -905,7 +905,7 @@ const togglePolicyStatus = async (policy, versionId, frameworkId) => {
       try {
         // Fetch reviewers filtered by RBAC permissions (ApprovePolicy)
         const reviewers = await apiService.get('/api/users-for-reviewer-selection/', {
-          params: { module: 'policy' }
+          module: 'policy'
         })
         
         if (reviewers.length === 0) {
@@ -1067,7 +1067,7 @@ const toggleStatus = async (fw) => {
       try {
         // Fetch reviewers filtered by RBAC permissions (ApproveFramework)
         const reviewers = await apiService.get('/api/users-for-reviewer-selection/', {
-          params: { module: 'framework' }
+          module: 'framework'
         });
         
         if (reviewers.length === 0) {

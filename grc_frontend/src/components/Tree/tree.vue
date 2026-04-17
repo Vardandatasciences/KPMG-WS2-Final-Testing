@@ -354,6 +354,7 @@ import { API_ENDPOINTS } from '../../config/api.js'
 import axios from 'axios'
 import CustomDropdown from '../CustomDropdown.vue'
 import '@/assets/css/dropdown.css'
+import { getExplicitFrameworkId } from '@/utils/frameworkContextStorage.js'
 
 export default {
   name: 'TreeView',
@@ -505,8 +506,8 @@ export default {
 
       // 2) Fallback to localStorage (set by Home selection)
       try {
-        const stored = localStorage.getItem('selectedFrameworkId') || localStorage.getItem('frameworkId')
-        if (stored && stored !== '' && stored !== 'null') {
+        const stored = getExplicitFrameworkId()
+        if (stored) {
           this.selectedFramework = parseInt(stored)
           const fw = this.frameworks.find(f => f.FrameworkId === this.selectedFramework)
           this.selectedFrameworkName = fw ? fw.FrameworkName : (localStorage.getItem('framework_name') || '')

@@ -496,6 +496,7 @@ import { SessionUtils } from '@/utils/accessUtils';
 import incidentService from '../../services/incidentService.js';
 import DynamicTable from '@/components/DynamicTable.vue';
 import { openDownloadInNewTabWithAnchorFallback } from '@/utils/safeExternalNavigation';
+import { getExplicitFrameworkId } from '@/utils/frameworkContextStorage.js';
 
 export default {
   name: 'AuditFindings',
@@ -1568,8 +1569,8 @@ export default {
         } else {
           console.log('⚠️ No framework selected or frameworkId not found in response');
           // Try localStorage fallback
-          const storedFrameworkId = localStorage.getItem('selectedFrameworkId') || localStorage.getItem('frameworkId');
-          if (storedFrameworkId && storedFrameworkId !== 'null' && storedFrameworkId !== 'all') {
+          const storedFrameworkId = getExplicitFrameworkId();
+          if (storedFrameworkId) {
             selectedFramework.value = parseInt(storedFrameworkId);
             console.log('✅ Using framework ID from localStorage:', selectedFramework.value);
           } else {
@@ -1579,8 +1580,8 @@ export default {
       } catch (error) {
         console.warn('⚠️ Could not fetch selected framework:', error);
         // Try localStorage fallback
-        const storedFrameworkId = localStorage.getItem('selectedFrameworkId') || localStorage.getItem('frameworkId');
-        if (storedFrameworkId && storedFrameworkId !== 'null' && storedFrameworkId !== 'all') {
+        const storedFrameworkId = getExplicitFrameworkId();
+        if (storedFrameworkId) {
           selectedFramework.value = parseInt(storedFrameworkId);
           console.log('✅ Using framework ID from localStorage as fallback:', selectedFramework.value);
         } else {

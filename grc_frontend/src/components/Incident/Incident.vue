@@ -456,6 +456,7 @@ import './Incident.css';
 import { PopupService } from '@/modules/popup';
 import { AccessUtils, SessionUtils } from '@/utils/accessUtils';
 import { openDownloadInNewTabWithAnchorFallback } from '@/utils/safeExternalNavigation';
+import { getExplicitFrameworkId } from '@/utils/frameworkContextStorage.js';
 // import DynamicSearchBar from '@/components/Dynamicalsearch.vue';
 import DynamicTable from '@/components/DynamicTable.vue';
 import CustomDropdown from '@/components/CustomDropdown.vue';
@@ -2263,8 +2264,8 @@ export default {
         } else {
           console.log('⚠️ No framework selected or frameworkId not found in response');
           // Try to get from localStorage as fallback
-          const storedFrameworkId = localStorage.getItem('selectedFrameworkId') || localStorage.getItem('frameworkId');
-          if (storedFrameworkId && storedFrameworkId !== '' && storedFrameworkId !== 'null') {
+          const storedFrameworkId = getExplicitFrameworkId();
+          if (storedFrameworkId) {
             this.selectedFramework = parseInt(storedFrameworkId);
             console.log('✅ Using framework ID from localStorage:', this.selectedFramework);
           } else {
@@ -2278,8 +2279,8 @@ export default {
           console.warn('⚠️ Could not fetch selected framework:', frameworkError);
         }
         // Try to get from localStorage as fallback
-        const storedFrameworkId = localStorage.getItem('selectedFrameworkId') || localStorage.getItem('frameworkId');
-        if (storedFrameworkId && storedFrameworkId !== '' && storedFrameworkId !== 'null') {
+        const storedFrameworkId = getExplicitFrameworkId();
+        if (storedFrameworkId) {
           this.selectedFramework = parseInt(storedFrameworkId);
           console.log('✅ Using framework ID from localStorage as fallback:', this.selectedFramework);
         } else {

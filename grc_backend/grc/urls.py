@@ -1019,6 +1019,8 @@ policy_urlpatterns += [
 
     path('policy-approvals/<int:approval_id>/approve-status-change/', approve_policy_status_change, name='approve-policy-status-change'),
 
+    path('framework-approvals/<int:approval_id>/approve-status-change/', approve_framework_status_change, name='approve-framework-status-change'),
+
     path('policy-status-change-requests/', get_policy_status_change_requests, name='get-policy-status-change-requests'),
 
     path('policy-status-change-requests/user/<int:user_id>/', get_policy_status_change_requests_by_user, name='get-policy-status-change-requests-by-user'),

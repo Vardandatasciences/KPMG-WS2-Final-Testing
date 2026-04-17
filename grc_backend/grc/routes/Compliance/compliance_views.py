@@ -2290,6 +2290,35 @@ def submit_compliance_review(request, approval_id):
                 'success': False,
                 'message': 'Self-approval is not allowed. Please assign a different reviewer.'
             }, status=status.HTTP_403_FORBIDDEN)
+
+        # Always review against a pending user submission (uN with ApprovedNot=None).
+        is_pending_user_submission = (
+            bool(approval.Version)
+            and str(approval.Version).startswith('u')
+            and approval.ApprovedNot is None
+        )
+        if not is_pending_user_submission:
+            pending_u_approval = ComplianceApproval.objects.filter(
+                Identifier=approval.Identifier,
+                ReviewerId=approval_reviewer_id_int,
+                Version__startswith='u',
+                ApprovedNot=None
+            ).order_by('-ApprovalId').first()
+            if pending_u_approval:
+                approval = pending_u_approval
+                try:
+                    approval_reviewer_id_int = int(approval.ReviewerId) if approval.ReviewerId is not None else None
+                    approval_creator_id_int = int(approval.UserId) if approval.UserId is not None else None
+                except (TypeError, ValueError):
+                    return Response({
+                        'success': False,
+                        'message': 'Invalid approval user/reviewer data. Please contact an administrator.'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+            else:
+                return Response({
+                    'success': False,
+                    'message': 'No pending user submission found to review.'
+                }, status=status.HTTP_409_CONFLICT)
         
         if 'ApprovedNot' in request.data:
             approved_not = request.data.get('ApprovedNot')
@@ -2311,141 +2340,79 @@ def submit_compliance_review(request, approval_id):
         debug_print(f"Remarks: {remarks}")
         
         extracted_data = approval.ExtractedData if isinstance(approval.ExtractedData, dict) else {}
-        # --- Ensure compliance_approval is saved in ExtractedData for both approvals and rejections ---
         if 'compliance_approval' not in extracted_data:
             extracted_data['compliance_approval'] = {}
-        
-        # Update the original approval record's ExtractedData but keep ApprovedNot as NULL
-        # This ensures the user version remains pending while the reviewer version gets the approval status
+
         if approved_not is False:
-            # For rejections, save remarks and set approved to false in ExtractedData only
-            extracted_data['compliance_approval']['remarks'] = remarks
-            extracted_data['compliance_approval']['approved'] = False
-            
-            debug_print(f"Saved rejection remarks for compliance review: {remarks}")
-            debug_print(f"Updated ExtractedData compliance_approval: {extracted_data['compliance_approval']}")
-        else:
-            # For approvals, set approved to true and clear any previous remarks in ExtractedData only
-            extracted_data['compliance_approval']['approved'] = True
-            extracted_data['compliance_approval']['remarks'] = ''
-            
-            debug_print(f"Saved approval status for compliance review")
-            debug_print(f"Updated ExtractedData compliance_approval: {extracted_data['compliance_approval']}")
-            
-        # Update ExtractedData but keep ApprovedNot as NULL for user version
-        approval.ExtractedData = extracted_data
-        approval.save()
-        debug_print(f"Updated original approval record ExtractedData")
-        
-        current_version = approval.Version
-        # Resolve creator/reviewer from the user edit being reviewed (the specific u*),
-        # not necessarily from the very first u1 submission
-        all_versions = ComplianceApproval.objects.filter(Identifier=approval.Identifier)
-        if approval.Version and approval.Version.startswith('u'):
-            # The provided approval is the user-submitted edit under review
-            original_user_id = approval.UserId
-            original_reviewer_id = approval.ReviewerId
-        else:
-            # Fallback: use the latest user-submitted version for this Identifier
-            latest_user_version = all_versions.filter(Version__startswith='u').order_by('-ApprovalId').first()
-            original_user_id = latest_user_version.UserId if latest_user_version else approval.UserId
-            original_reviewer_id = latest_user_version.ReviewerId if latest_user_version else approval.ReviewerId
-        
-        debug_print(f"Version info - Current: {current_version}, Original User ID: {original_user_id}, Original Reviewer ID: {original_reviewer_id}")
-        
-        # Create a new approval record for both approvals and rejections
-        # This ensures proper versioning with "r" versions for reviewer actions
-        highest_r_version = 0
-        for pa in all_versions:
-            if pa.Version and pa.Version.startswith('r'):
-                try:
-                    version_num = int(pa.Version[1:])
-                    if version_num > highest_r_version:
-                        highest_r_version = version_num
-                except ValueError:
-                    continue
-        new_version = f"r{highest_r_version + 1}"
-        
-        debug_print(f"Creating new reviewer version: {new_version}")
-        
-        # --- Ensure compliance_approval is properly set in new reviewer version ---
-        if 'compliance_approval' not in extracted_data:
-            extracted_data['compliance_approval'] = {}
-        
-        if approved_not is False:
-            # For rejections, save remarks and set approved to false
             extracted_data['compliance_approval']['remarks'] = remarks
             extracted_data['compliance_approval']['approved'] = False
             extracted_data['Status'] = 'Rejected'
+            debug_print(f"Saved rejection remarks for compliance review: {remarks}")
         else:
-            # For approvals, set approved to true and clear any previous remarks
             extracted_data['compliance_approval']['approved'] = True
             extracted_data['compliance_approval']['remarks'] = ''
             extracted_data['Status'] = 'Approved'
-        
-        # Create new reviewer version for both approvals and rejections
-        try:
-            debug_print(f"Creating new approval with data:")
-            debug_print(f"  Identifier: {approval.Identifier}")
-            debug_print(f"  UserId: {original_user_id}")
-            debug_print(f"  ReviewerId: {original_reviewer_id}")
-            debug_print(f"  ApprovedNot: {approved_not}")
-            debug_print(f"  Version: {new_version}")
-            debug_print(f"  PolicyId: {approval.PolicyId}")
-            debug_print(f"  FrameworkId: {approval.FrameworkId_id}")
-            
-            # Validate required fields
-            if not approval.Identifier:
-                raise ValueError("Identifier is required")
-            if not original_user_id:
-                raise ValueError("UserId is required")
-            if not original_reviewer_id:
-                raise ValueError("ReviewerId is required")
-            if not new_version:
-                raise ValueError("Version is required")
-            
-            # Prepare creation data
-            creation_data = {
-                'Identifier': approval.Identifier,
-                'ExtractedData': extracted_data,
-                'UserId': original_user_id,
-                'ReviewerId': original_reviewer_id,
-                'ApprovedNot': approved_not,
-                'Version': new_version,
-                'ApprovalDueDate': approval.ApprovalDueDate,
-                'PolicyId': approval.PolicyId,
-            }
-            
-            # Only add FrameworkId if it's not None and is a valid integer
-            if approval.FrameworkId_id is not None:
-                try:
-                    # Ensure FrameworkId is a valid integer
-                    framework_id = int(approval.FrameworkId_id)
-                    # Use _id suffix to assign the foreign key ID directly
-                    creation_data['FrameworkId_id'] = framework_id
-                    debug_print(f"  Adding FrameworkId_id: {framework_id}")
-                except (ValueError, TypeError) as e:
-                    debug_print(f"  Warning: Invalid FrameworkId '{approval.FrameworkId_id}', skipping: {e}")
-                    # Don't add FrameworkId if it's invalid
-            else:
-                debug_print(f"  FrameworkId is None, not adding to creation data")
-            
-            debug_print(f"Final creation data keys: {list(creation_data.keys())}")
-            
-            new_approval = ComplianceApproval.objects.create(**creation_data)
-            debug_print(f"✅ Successfully created new approval record with ID: {new_approval.ApprovalId}")
-        except Exception as create_error:
-            debug_print(f"❌ ERROR creating ComplianceApproval: {str(create_error)}")
-            debug_print(f"Error type: {type(create_error)}")
-            import traceback
-            traceback.print_exc()
-            raise create_error
-        
-        # Set approval date on the new reviewer version
+            debug_print("Saved approval status for compliance review")
+
+        # Map reviewer version directly to the reviewed user version: u1->r1, u2->r2, ...
+        u_version_number = None
+        if approval.Version and approval.Version.startswith('u'):
+            try:
+                u_version_number = int(approval.Version[1:])
+            except (TypeError, ValueError):
+                u_version_number = None
+
+        if u_version_number is None:
+            all_versions = ComplianceApproval.objects.filter(Identifier=approval.Identifier)
+            highest_r_version = 0
+            for pa in all_versions:
+                if pa.Version and pa.Version.startswith('r'):
+                    try:
+                        version_num = int(pa.Version[1:])
+                        if version_num > highest_r_version:
+                            highest_r_version = version_num
+                    except ValueError:
+                        continue
+            reviewer_version = f"r{highest_r_version + 1}"
+        else:
+            reviewer_version = f"r{u_version_number}"
+
+        existing_reviewer_version = ComplianceApproval.objects.filter(
+            Identifier=approval.Identifier,
+            ReviewerId=approval_reviewer_id_int,
+            Version=reviewer_version
+        ).order_by('-ApprovalId').first()
+        if existing_reviewer_version:
+            return Response({
+                'success': False,
+                'message': f'Review for {reviewer_version} already exists.'
+            }, status=status.HTTP_409_CONFLICT)
+
+        # Close the pending user submission so it disappears from reviewer pending queue.
+        approval.ExtractedData = extracted_data
+        approval.ApprovedNot = approved_not
+        approval.ApprovedDate = datetime.date.today()
+        approval.save(update_fields=['ExtractedData', 'ApprovedNot', 'ApprovedDate'])
+
+        # Create reviewer decision record (history row).
+        new_approval = ComplianceApproval.objects.create(
+            Identifier=approval.Identifier,
+            ExtractedData=extracted_data,
+            UserId=approval.UserId,
+            ReviewerId=approval.ReviewerId,
+            ApprovedNot=approved_not,
+            Version=reviewer_version,
+            ApprovalDueDate=approval.ApprovalDueDate,
+            PolicyId=approval.PolicyId,
+            FrameworkId_id=approval.FrameworkId_id
+        )
         new_approval.ApprovedDate = datetime.date.today()
-        new_approval.save()
-        
-        debug_print(f"Created new reviewer approval record with ID {new_approval.ApprovalId}, Version: {new_version}, Status: {'Approved' if approved_not else 'Rejected'}")
+        new_approval.save(update_fields=['ApprovedDate'])
+
+        debug_print(
+            f"Created reviewer approval record {new_approval.ApprovalId} "
+            f"with Version: {reviewer_version}, Status: {'Approved' if approved_not else 'Rejected'}"
+        )
         
         # ===== CRITICAL: UPDATE THE ACTUAL COMPLIANCE RECORD =====
         if 'SubPolicy' in extracted_data or approval.Identifier:
@@ -2657,7 +2624,7 @@ def submit_compliance_review(request, approval_id):
             'message': 'Review submitted successfully',
             'approved': approved_not,
             'approval_id': new_approval.ApprovalId,
-            'version': new_version
+            'version': new_approval.Version
         }
         
         debug_print(f"✅ REVIEW SUBMISSION COMPLETE")
@@ -2683,6 +2650,7 @@ def submit_compliance_review(request, approval_id):
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def resubmit_compliance_approval(request, approval_id):
+    tenant_id = get_tenant_id_from_request(request)
     try:
         # Use only() to fetch only needed fields for faster query
         approval = ComplianceApproval.objects.only(
@@ -2792,14 +2760,15 @@ def resubmit_compliance_approval(request, approval_id):
             
             # If still missing, fetch from Compliance table (only once)
             if ('Impact' not in extracted_data or not extracted_data['Impact']) or ('Probability' not in extracted_data or not extracted_data['Probability']):
-                try:
-                    compliance_for_fields = Compliance.objects.only('Impact', 'Probability').get(Identifier=approval.Identifier)
+                compliance_for_fields = Compliance.objects.only('Impact', 'Probability').filter(
+                    Identifier=approval.Identifier,
+                    tenant_id=tenant_id,
+                ).order_by('-ComplianceId').first()
+                if compliance_for_fields:
                     if 'Impact' not in extracted_data or not extracted_data['Impact']:
                         extracted_data['Impact'] = compliance_for_fields.Impact
                     if 'Probability' not in extracted_data or not extracted_data['Probability']:
                         extracted_data['Probability'] = compliance_for_fields.Probability
-                except Compliance.DoesNotExist:
-                    pass
         
         extracted_data['Status'] = 'Under Review'
         extracted_data['ActiveInactive'] = 'Inactive'
@@ -2878,12 +2847,33 @@ def resubmit_compliance_approval(request, approval_id):
         threading.Thread(target=update_compliance_async, daemon=True).start()
         
         return Response(response_data)
-    except PolicyApproval.DoesNotExist:
-        return Response({'error': 'Policy approval not found'}, status=status.HTTP_404_NOT_FOUND)
+    except ComplianceApproval.DoesNotExist:
+        return Response({'error': 'Compliance approval not found'}, status=status.HTTP_404_NOT_FOUND)
+    except DatabaseError as e:
+        debug_print(f"Database error in resubmit_compliance_approval: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return Response({
+            'success': False,
+            'error': 'database_unavailable',
+            'message': (
+                'Cannot reach the database server. Check DATABASE_* in .env, VPN/network access, '
+                'and that MySQL is running. The configured host must resolve and accept connections.'
+            ),
+        }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
     except Exception as e:
         debug_print("Error in resubmit_compliance_approval:", str(e))
         import traceback
         traceback.print_exc()
+        err_l = str(e).lower()
+        if '2003' in str(e) or "can't connect" in err_l or 'getaddrinfo' in err_l:
+            return Response({
+                'success': False,
+                'error': 'database_unavailable',
+                'message': (
+                    'Cannot reach the database server. Verify MySQL host connectivity and DATABASE settings.'
+                ),
+            }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         return Response({'error': 'Invalid request data'}, status=status.HTTP_400_BAD_REQUEST)
  
 @api_view(['GET'])
@@ -3157,7 +3147,62 @@ def get_policy_approvals_by_reviewer(request):
                     approval_dict['ChangedFields'] = compute_changed_fields(approval.ExtractedData, previous_extracted_data)
                     approvals.append(approval_dict)
             else:
-                # Fallback to previous logic if no pending user version exists
+                # No u* row for THIS reviewer_id. Do NOT insert rows from a GET — that used to create a
+                # second u1 with ReviewerId = query param when the real assignment was a different reviewer.
+                any_pending_u = ComplianceApproval.objects.filter(
+                    Identifier=compliance.Identifier,
+                    Version__startswith='u',
+                    ApprovedNot=None,
+                    FrameworkId__tenant_id=tenant_id,
+                ).order_by('-ApprovalId').first()
+                if any_pending_u:
+                    try:
+                        assigned = int(any_pending_u.ReviewerId) if any_pending_u.ReviewerId is not None else None
+                        viewer = int(reviewer_id) if reviewer_id is not None else None
+                    except (TypeError, ValueError):
+                        assigned, viewer = None, None
+                    if assigned is not None and viewer is not None and assigned != viewer:
+                        # Pending work exists but for another reviewer — skip (no duplicate creation).
+                        continue
+                    # Same reviewer but primary query missed (edge case): return this row read-only.
+                    if assigned == viewer:
+                        approval = any_pending_u
+                        extracted_data = approval.ExtractedData or {}
+                        if approval.ExtractedData:
+                            if 'Impact' not in approval.ExtractedData or not approval.ExtractedData['Impact']:
+                                approval.ExtractedData['Impact'] = compliance.Impact
+                            if 'Probability' not in approval.ExtractedData or not approval.ExtractedData['Probability']:
+                                approval.ExtractedData['Probability'] = compliance.Probability
+                            if 'CreatedByName' not in approval.ExtractedData or not approval.ExtractedData.get('CreatedByName'):
+                                user_name = get_user_name_by_id(approval.UserId)
+                                if user_name:
+                                    approval.ExtractedData['CreatedByName'] = user_name
+                        else:
+                            approval.ExtractedData = {}
+                            user_name = get_user_name_by_id(approval.UserId)
+                            if user_name:
+                                approval.ExtractedData['CreatedByName'] = user_name
+                        approval_dict = {
+                            'ApprovalId': approval.ApprovalId,
+                            'Identifier': approval.Identifier,
+                            'ExtractedData': approval.ExtractedData,
+                            'UserId': approval.UserId,
+                            'ReviewerId': approval.ReviewerId,
+                            'ApprovedNot': approval.ApprovedNot,
+                            'Version': approval.Version,
+                            'ApprovedDate': approval.ApprovedDate.strftime('%Y-%m-%d %H:%M:%S') if approval.ApprovedDate and hasattr(approval.ApprovedDate, 'strftime') else None,
+                            'ApprovalDueDate': approval.ApprovalDueDate.strftime('%Y-%m-%d') if approval.ApprovalDueDate and hasattr(approval.ApprovalDueDate, 'strftime') else None,
+                            'FrameworkId': approval.FrameworkId_id if approval.FrameworkId_id else (approval.FrameworkId.FrameworkId if approval.FrameworkId else None),
+                            'FrameworkId_id': approval.FrameworkId_id if approval.FrameworkId_id else (approval.FrameworkId.FrameworkId if approval.FrameworkId else None),
+                            'PolicyId': approval.PolicyId_id if approval.PolicyId_id else (approval.PolicyId.PolicyId if approval.PolicyId else None)
+                        }
+                        previous_extracted_data = get_previous_extracted_data(approval)
+                        approval_dict['PreviousExtractedData'] = previous_extracted_data
+                        approval_dict['ChangedFields'] = compute_changed_fields(approval.ExtractedData, previous_extracted_data)
+                        approvals.append(approval_dict)
+                        continue
+
+                # Fallback: latest approval for this reviewer (historical / edge cases), read-only.
                 latest_approval = ComplianceApproval.objects.filter(
                     Identifier=compliance.Identifier,
                     ReviewerId=reviewer_id,
@@ -3210,106 +3255,11 @@ def get_policy_approvals_by_reviewer(request):
                         approval_dict['ChangedFields'] = compute_changed_fields(latest_approval.ExtractedData, previous_extracted_data)
                         approvals.append(approval_dict)
                     else:
-                        # Get user name for creator
-                        creator_name = compliance.CreatedByName
-                        if not creator_name and creator_id:
-                            creator_name = get_user_name_by_id(creator_id)
-                        if not creator_name:
-                            creator_name = 'Unknown User'
-                        
-                        extracted_data = {
-                            'type': 'compliance',
-                            'ComplianceItemDescription': compliance.ComplianceItemDescription,
-                            'IsRisk': compliance.IsRisk,
-                            'PossibleDamage': compliance.PossibleDamage,
-                            'mitigation': compliance.mitigation,
-                            'Criticality': compliance.Criticality,
-                            'MandatoryOptional': compliance.MandatoryOptional,
-                            'ManualAutomatic': compliance.ManualAutomatic,
-                            'Impact': compliance.Impact,
-                            'Probability': compliance.Probability,
-                            'MaturityLevel': compliance.MaturityLevel,
-                            'ActiveInactive': compliance.ActiveInactive,
-                            'PermanentTemporary': compliance.PermanentTemporary,
-                            'Status': compliance.Status,
-                            'ComplianceVersion': compliance.ComplianceVersion,
-                            'CreatedByName': creator_name,
-                            'CreatedByDate': compliance.CreatedByDate.isoformat() if compliance.CreatedByDate else None,
-                            'SubPolicy': compliance.SubPolicy.SubPolicyId if compliance.SubPolicy else None,
-                            'compliance_approval': {
-                                'approved': None,
-                                'remarks': '',
-                                'ApprovalDueDate': None
-                            }
-                        }
-                        
-                        # Debug logging for Impact and Probability fields
-                        #debug_print(f"DEBUG: Creating new approval for compliance {compliance.Identifier}")
-                        #debug_print(f"DEBUG: Compliance Impact: {compliance.Impact}, Probability: {compliance.Probability}")
-                        #debug_print(f"DEBUG: ExtractedData Impact: {extracted_data.get('Impact')}, Probability: {extracted_data.get('Probability')}")
-                        from datetime import datetime, timedelta
-                        default_due_date = datetime.now().date() + timedelta(days=7)
-                        
-                        # Check for existing compliance approval to prevent duplicates
-                        existing_approval = ComplianceApproval.objects.filter(
-                            Identifier=compliance.Identifier,
-                            UserId=creator_id,
-                            ReviewerId=reviewer_id,
-                            Version="u1",
-                            ApprovedNot=None,  # Only check for pending approvals
-                            FrameworkId__tenant_id=tenant_id  # MULTI-TENANCY: Filter by tenant
-                        ).first()
-                        
-                        if existing_approval:
-                            debug_print(f"DEBUG: ⚠️ Duplicate prevention: Compliance approval already exists for Identifier {compliance.Identifier} with ApprovalId: {existing_approval.ApprovalId}")
-                            debug_print(f"  - Skipping duplicate creation")
-                            new_approval = existing_approval
-                        else:
-                            # Get PolicyId and FrameworkId from compliance
-                            policy_id = None
-                            framework_id = None
-                            if compliance.SubPolicy and compliance.SubPolicy.PolicyId:
-                                policy_id = compliance.SubPolicy.PolicyId
-                                if hasattr(policy_id, 'FrameworkId_id') and policy_id.FrameworkId_id is not None:
-                                    framework_id = policy_id.FrameworkId_id
-                            
-                            # Create ComplianceApproval (NOT PolicyApproval) for compliance items
-                            creation_data = {
-                                'Identifier': compliance.Identifier,
-                                'ExtractedData': extracted_data,
-                                'UserId': creator_id,
-                                'ReviewerId': reviewer_id,
-                                'ApprovedNot': None,
-                                'Version': "u1",
-                                'ApprovalDueDate': default_due_date
-                            }
-                            
-                            # Add PolicyId and FrameworkId if available
-                            if policy_id:
-                                creation_data['PolicyId'] = policy_id
-                            if framework_id:
-                                creation_data['FrameworkId_id'] = framework_id
-                            
-                            new_approval = ComplianceApproval.objects.create(**creation_data)
-                            debug_print(f"DEBUG: ✅ Created new ComplianceApproval for Identifier {compliance.Identifier} with ApprovalId: {new_approval.ApprovalId}")
-                        approval_dict = {
-                            'ApprovalId': new_approval.ApprovalId,
-                            'Identifier': new_approval.Identifier,
-                            'ExtractedData': extracted_data,
-                            'UserId': new_approval.UserId,
-                            'ReviewerId': new_approval.ReviewerId,
-                            'ApprovedNot': new_approval.ApprovedNot,
-                            'Version': new_approval.Version,
-                            'ApprovedDate': None,
-                            'ApprovalDueDate': new_approval.ApprovalDueDate.strftime('%Y-%m-%d') if new_approval.ApprovalDueDate else None,
-                            'FrameworkId': new_approval.FrameworkId_id if new_approval.FrameworkId_id else (new_approval.FrameworkId.FrameworkId if new_approval.FrameworkId else None),
-                            'FrameworkId_id': new_approval.FrameworkId_id if new_approval.FrameworkId_id else (new_approval.FrameworkId.FrameworkId if new_approval.FrameworkId else None),
-                            'PolicyId': new_approval.PolicyId_id if new_approval.PolicyId_id else (new_approval.PolicyId.PolicyId if new_approval.PolicyId else None)
-                        }
-                        previous_extracted_data = get_previous_extracted_data(new_approval)
-                        approval_dict['PreviousExtractedData'] = previous_extracted_data
-                        approval_dict['ChangedFields'] = compute_changed_fields(extracted_data, previous_extracted_data)
-                        approvals.append(approval_dict)
+                        # Missing approval row: do not create from GET (create_compliance / resubmit own that data).
+                        debug_print(
+                            f"DEBUG: No ComplianceApproval row for identifier {compliance.Identifier} "
+                            f"for reviewer {reviewer_id}; skipping synthetic create (read-only list)."
+                        )
         
         # Process direct approvals that weren't found through Compliance query
         # This catches newly created approvals that might not have a matching Compliance record yet
@@ -8203,22 +8153,88 @@ def clone_compliance(request, compliance_id):
         new_compliance.save()
         # debug_print(f"Generated identifier: {identifier}")
         
-        # Get reviewer ID from request
-        # Resolve reviewer from payload only; do not default to 1
+        # Get reviewer ID from request (same rules as create_compliance — tailoring/clone only)
         reviewer_id = data.get('reviewer_id') or data.get('reviewer')
         if not reviewer_id:
             return Response({'success': False, 'message': 'ReviewerId is required'}, status=status.HTTP_400_BAD_REQUEST)
-        debug_print(f"Using reviewer ID: {reviewer_id}")
+        
+        # Resolve effective creator user id from JWT/session (before maker–checker)
+        try:
+            effective_user_id = RBACUtils.get_user_id_from_request(request)
+        except Exception:
+            effective_user_id = None
+        if not effective_user_id and hasattr(request, 'user') and getattr(request.user, 'UserId', None):
+            effective_user_id = request.user.UserId
+        if not effective_user_id:
+            effective_user_id = request.session.get('user_id')
+        if not effective_user_id:
+            effective_user_id = data.get('UserId')
+        if not effective_user_id:
+            return Response({
+                'success': False,
+                'message': 'Authentication required to clone compliance'
+            }, status=status.HTTP_401_UNAUTHORIZED)
+
+        try:
+            reviewer_id_int = int(reviewer_id)
+            created_by_id_int = int(effective_user_id)
+        except (TypeError, ValueError):
+            return Response({
+                'success': False,
+                'message': 'Invalid reviewer or creator identity'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            reviewer_user = Users.objects.get(UserId=reviewer_id_int, tenant_id=tenant_id)
+        except Users.DoesNotExist:
+            return Response({
+                'success': False,
+                'message': 'Invalid reviewer selection',
+                'errors': {'reviewer': ['Selected reviewer does not exist for this tenant']}
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        if reviewer_id_int == created_by_id_int:
+            return Response({
+                'success': False,
+                'message': 'Maker-checker violation: reviewer must be different from creator',
+                'errors': {'reviewer': ['Reviewer cannot be the same as the creator']}
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        if not RBACUtils.has_compliance_permission(reviewer_id_int, 'ApproveCompliance'):
+            return Response({
+                'success': False,
+                'message': 'Invalid reviewer selection',
+                'errors': {'reviewer': ['Selected reviewer is not authorized to approve compliance']}
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        debug_print(f"Using reviewer ID: {reviewer_id_int}")
         
         # Get the policy through the subpolicy relationship
         policy = target_subpolicy.PolicyId
         debug_print(f"Using policy ID: {policy.PolicyId}")
+        if not getattr(policy, 'FrameworkId_id', None):
+            return Response({
+                'success': False,
+                'message': 'Target policy has no framework; cannot submit compliance for approval.'
+            }, status=status.HTTP_400_BAD_REQUEST)
         
-        # Set approval due date
-        approval_due_date = data.get('ApprovalDueDate', (datetime.date.today() + datetime.timedelta(days=7)).isoformat())
-        debug_print(f"Using approval due date: {approval_due_date}")
+        # Approval due date as DateField (match create_compliance / DB expectations)
+        default_due = datetime.date.today() + datetime.timedelta(days=7)
+        raw_due = data.get('ApprovalDueDate')
+        approval_due_date_obj = default_due
+        if raw_due is not None:
+            if isinstance(raw_due, datetime.datetime):
+                approval_due_date_obj = raw_due.date()
+            elif isinstance(raw_due, datetime.date):
+                approval_due_date_obj = raw_due
+            elif isinstance(raw_due, str) and raw_due.strip():
+                try:
+                    approval_due_date_obj = datetime.date.fromisoformat(raw_due.strip()[:10])
+                except ValueError:
+                    approval_due_date_obj = default_due
+        debug_print(f"Using approval due date: {approval_due_date_obj}")
         
-        # Create extracted data for PolicyApproval
+        # Create extracted data — align with create_compliance (single u1 + same compliance_approval shape)
         extracted_data = {
             'type': 'compliance',
             'ComplianceTitle': new_compliance.ComplianceTitle,
@@ -8237,37 +8253,23 @@ def clone_compliance(request, compliance_id):
             'ComplianceId': new_compliance.ComplianceId,
             'ComplianceVersion': new_compliance.ComplianceVersion,
             'SubPolicy': target_subpolicy_id,
-            'Identifier': new_compliance.Identifier,  # Add the missing Identifier field
+            'Identifier': new_compliance.Identifier,
             'compliance_approval': {
                 'approved': None,
                 'remarks': '',
-                'ApprovalDueDate': approval_due_date
             }
         }
-        
-        # Create ComplianceApproval entry
-        # Resolve effective creator user id from JWT/session
-        try:
-            effective_user_id = RBACUtils.get_user_id_from_request(request)
-        except Exception:
-            effective_user_id = None
-        if not effective_user_id and hasattr(request, 'user') and getattr(request.user, 'UserId', None):
-            effective_user_id = request.user.UserId
-        if not effective_user_id:
-            effective_user_id = request.session.get('user_id')
-        if not effective_user_id:
-            effective_user_id = data.get('UserId')
         
         # Prepare creation data
         creation_data = {
             'PolicyId': policy,
             'Identifier': identifier,
             'ExtractedData': extracted_data,
-            'UserId': effective_user_id,
-            'ReviewerId': reviewer_id,
+            'UserId': created_by_id_int,
+            'ReviewerId': reviewer_id_int,
             'Version': 'u1',
             'ApprovedNot': None,  # Not yet approved
-            'ApprovalDueDate': approval_due_date
+            'ApprovalDueDate': approval_due_date_obj
         }
         
         # Add FrameworkId if available from the policy
@@ -8293,27 +8295,27 @@ def clone_compliance(request, compliance_id):
             from ...routes.Global.notification_service import NotificationService
             notification_service = NotificationService()
             
-            # Make sure reviewer has a valid email
+            # Make sure reviewer has a valid email (reviewer_user already validated above)
             try:
-                reviewer = Users.objects.get(UserId=reviewer_id, tenant_id=tenant_id)
+                reviewer = reviewer_user
                 if not reviewer.Email or '@' not in reviewer.Email:
-                    reviewer.Email = f"reviewer{reviewer_id}@example.com"
+                    reviewer.Email = f"reviewer{reviewer_id_int}@example.com"
                     reviewer.save()
-                    debug_print(f"Updated reviewer {reviewer_id} with email {reviewer.Email}")
+                    debug_print(f"Updated reviewer {reviewer_id_int} with email {reviewer.Email}")
                 
                 debug_print(f"Found reviewer: {reviewer.UserName} with email: {reviewer.Email}")
-            except Users.DoesNotExist:
-                debug_print(f"ERROR: Reviewer with ID {reviewer_id} does not exist")
+            except Exception:
+                debug_print(f"ERROR: Reviewer with ID {reviewer_id_int} could not be loaded for notification")
             
             # Send notification
-            debug_print(f"Sending clone notification for compliance {new_compliance.ComplianceId} to reviewer {reviewer_id}")
+            debug_print(f"Sending clone notification for compliance {new_compliance.ComplianceId} to reviewer {reviewer_id_int}")
             notification_result = notification_service.send_compliance_clone_notification(
                 compliance=new_compliance,
-                reviewer_id=reviewer_id
+                reviewer_id=reviewer_id_int
             )
             
             if notification_result.get('success'):
-                debug_print(f"Successfully sent compliance clone notification to reviewer {reviewer_id}")
+                debug_print(f"Successfully sent compliance clone notification to reviewer {reviewer_id_int}")
             else:
                 debug_print(f"Failed to send notification: {notification_result.get('error', 'Unknown error')}")
                 debug_print(f"Error details: {notification_result.get('errors', [])}") 
@@ -8321,7 +8323,7 @@ def clone_compliance(request, compliance_id):
             # Log the notification directly in the database
             from ...models import Notification
             try:
-                reviewer_email, reviewer_name = notification_service.get_user_email_by_id(reviewer_id)
+                reviewer_email, reviewer_name = notification_service.get_user_email_by_id(reviewer_id_int)
                 if reviewer_email:
                     Notification.objects.create(
                         recipient=reviewer_email,
@@ -8347,7 +8349,7 @@ def clone_compliance(request, compliance_id):
             'compliance_id': new_compliance.ComplianceId,
             'Identifier': identifier,
             'version': new_compliance.ComplianceVersion,
-            'reviewer_id': reviewer_id
+            'reviewer_id': reviewer_id_int
         }, status=status.HTTP_201_CREATED)
         
     except Compliance.DoesNotExist:

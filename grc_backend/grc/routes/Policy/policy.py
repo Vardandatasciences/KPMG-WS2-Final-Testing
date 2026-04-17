@@ -4254,13 +4254,27 @@ def submit_policy_approval_review(request, policy_id):
         # Extract necessary data
         extracted_data = data.get('ExtractedData', {})
         
-        # Get user ID from request user or fallback to data
-        if hasattr(request.user, 'UserId') and request.user.UserId:
-            user_id = request.user.UserId
-        elif hasattr(request.user, 'id') and request.user.id:
-            user_id = request.user.id
-        else:
-            user_id = data.get('UserId', 1)
+        # Preserve the original policy creator on every review row.
+        # `UserId` in PolicyApproval must remain the submitter/creator, while
+        # `ReviewerId` must be the current reviewer performing the action.
+        user_id = data.get('UserId')
+        if not user_id:
+            latest_approval = PolicyApproval.objects.filter(
+                PolicyId__tenant=tenant_id,
+                PolicyId=policy
+            ).order_by('-ApprovalId').first()
+            if latest_approval and latest_approval.UserId:
+                user_id = latest_approval.UserId
+        if not user_id:
+            user_id = getattr(policy, 'CreatedBy', None)
+        if not user_id and getattr(policy, 'CreatedByName', None):
+            creator_user = Users.objects.filter(
+                tenant_id=tenant_id,
+                UserName=policy.CreatedByName
+            ).only('UserId').first()
+            user_id = creator_user.UserId if creator_user else None
+        if not user_id:
+            user_id = getattr(request.user, 'UserId', None) or getattr(request.user, 'id', None) or 1
         
         # Get reviewer ID from request user or fallback to data
         if hasattr(request.user, 'UserId') and request.user.UserId:

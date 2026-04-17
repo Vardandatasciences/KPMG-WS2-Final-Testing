@@ -1275,13 +1275,6 @@ export default {
       openMenus.value[section] = !openMenus.value[section]
     }
 
-    // Close all open menus
-    const closeAllMenus = () => {
-      Object.keys(openMenus.value).forEach(key => {
-        openMenus.value[key] = false
-      })
-    }
-
     const toggleThemeMenu = () => {
       themeMenuOpen.value = !themeMenuOpen.value
     }
@@ -1562,34 +1555,11 @@ export default {
       // Listen for authentication events
       window.addEventListener('authChanged', handleLogin)
       eventBus.on(LOGOUT_EVENT, handleLogout)
-      
-      // Listen for clicks outside sidebar to close all menus
-      const handleClickOutside = (event) => {
-        const sidebar = document.querySelector('.sidebar')
-        const clickedElement = event.target
-        
-        // Check if click is outside the sidebar
-        if (sidebar && !sidebar.contains(clickedElement)) {
-          closeAllMenus()
-        }
-      }
-      
-      // Add click listener to document
-      document.addEventListener('click', handleClickOutside)
-      
-      // Store handler for cleanup
-      window.sidebarClickHandler = handleClickOutside
     })
     onUnmounted(() => {
       window.removeEventListener('userDataUpdated', fetchUsername)
       window.removeEventListener('authChanged', handleLogin)
       eventBus.off(LOGOUT_EVENT, handleLogout)
-      
-      // Remove click outside listener
-      if (window.sidebarClickHandler) {
-        document.removeEventListener('click', window.sidebarClickHandler)
-        delete window.sidebarClickHandler
-      }
     })
 
     return {

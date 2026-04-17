@@ -945,17 +945,24 @@ export default {
           this.loadingActivities = true
         }
         console.log('Fetching recent activities...')
-        
-        // Get current user ID for reviewer
-        const currentUserId = localStorage.getItem('user_id') || sessionStorage.getItem('userId') || 2
-        const reviewerId = parseInt(currentUserId) || 2
-        
+
+        const loggedIn =
+          (sessionStorage.getItem('is_logged_in') || localStorage.getItem('is_logged_in')) === 'true'
+        if (!loggedIn) {
+          console.debug(
+            '[ComplianceDashboard] Skipping reviewer approvals fetch until user is logged in'
+          )
+          this.loadingActivities = false
+          return
+        }
+
         // Fetch activities with timeout to prevent hanging
         // Only fetch approvals - frameworks fetch is not needed for activities
+        // Backend resolves reviewer from session (RBAC); do not pass client reviewer_id (was misleading in logs).
         let approvalsResponse = null
         try {
           approvalsResponse = await Promise.race([
-            this.api.complianceService.getCompliancePolicyApprovals({ reviewer_id: reviewerId }),
+            this.api.complianceService.getCompliancePolicyApprovals({}),
             new Promise((_, reject) => setTimeout(() => reject(new Error('Approvals API timeout')), 10000))
           ])
         } catch (error) {

@@ -380,11 +380,11 @@
           <button 
             class="resubmit-button" 
             @click="validateAndResubmit(editingCompliance)" 
-            :disabled="isLoading"
-            :class="{ 'submitting': isLoading }">
-            <i class="fas fa-redo" v-if="!isLoading"></i>
-            <i class="fas fa-spinner fa-spin" v-if="isLoading"></i>
-            {{ isLoading ? 'Submitting...' : 'Resubmit for Review' }}
+            :disabled="isResubmitLoading"
+            :class="{ 'submitting': isResubmitLoading }">
+            <i class="fas fa-redo" v-if="!isResubmitLoading"></i>
+            <i class="fas fa-spinner fa-spin" v-if="isResubmitLoading"></i>
+            {{ isResubmitLoading ? 'Submitting...' : 'Resubmit for Review' }}
           </button>
         </div>
       </div>
@@ -703,6 +703,7 @@ export default {
       editingCompliance: null,
       originalComplianceData: null, // Store original data for change detection
       isLoading: false,
+      isResubmitLoading: false, // Edit & Resubmit modal only (do not share with refreshData)
       isSubmitting: false, // Prevent duplicate submissions
       error: null,
       counts: {
@@ -883,16 +884,17 @@ export default {
     },
     async refreshData() {
       if (this.isLoading) return; // Prevent multiple simultaneous refreshes
-      
+      if (!this.currentUserId) {
+        return;
+      }
+
       this.isLoading = true;
       this.error = null;
       // console.log('🔄 Refreshing compliance approval data...');
       
       try {
         // Fetch approvals with reviewer_id - use currentUserId
-        const approvalsResponse = await complianceService.getCompliancePolicyApprovals({
-          reviewer_id: this.currentUserId
-        });
+        const approvalsResponse = await complianceService.getCompliancePolicyApprovals({});
         // console.log('📡 Approvals response:', approvalsResponse);
 
         if (approvalsResponse.data.success) {
@@ -1555,6 +1557,9 @@ export default {
     },
    
     async resubmitCompliance(compliance) {
+      if (this.isResubmitLoading) {
+        return;
+      }
       try {
         // Check if any changes were made to the compliance
         const hasChanges = this.checkComplianceChanges();
@@ -1605,7 +1610,7 @@ export default {
           delete compliance.ExtractedData.rejection_remarks;
         }
        
-        this.isLoading = true;
+        this.isResubmitLoading = true;
         console.log("Resubmitting compliance with ID:", compliance.ApprovalId);
         console.log("Resubmitting with data:", JSON.stringify(compliance.ExtractedData));
         console.log("Impact field before resubmission:", compliance.ExtractedData.Impact);
@@ -1645,28 +1650,17 @@ export default {
         
         console.log("Resubmission payload:", resubmissionPayload);
         
-        // Use Promise.race to add a timeout and ensure UI updates quickly
-        const apiCall = complianceService.resubmitComplianceApproval(
+        const response = await complianceService.resubmitComplianceApproval(
           compliance.ApprovalId,
           resubmissionPayload
         );
-        
-        // Set a timeout to ensure UI doesn't hang
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Request timeout')), 30000)
-        );
-        
-        const response = await Promise.race([apiCall, timeoutPromise]);
        
         console.log("Resubmission response:", response);
         
         if (response.data && (response.data.ApprovalId || response.data.success)) {
           // Use $nextTick to ensure Vue updates the DOM immediately
           await this.$nextTick();
-          
-          // Set loading to false immediately so button becomes enabled
-          this.isLoading = false;
-          
+
           // Force Vue to update the DOM
           this.$forceUpdate();
           
@@ -1694,8 +1688,15 @@ export default {
         }
       } catch (error) {
         console.error('Error resubmitting compliance:', error);
-        this.showErrorPopup('Error resubmitting compliance: ' + (error.response?.data?.message || error.message), 'Resubmission Error');
-        this.isLoading = false;
+        const msg =
+          error.isTimeout ||
+          error.code === 'ECONNABORTED' ||
+          error.message?.toLowerCase().includes('timeout')
+            ? 'Request timed out (60s). Check your connection and database, then try again.'
+            : error.response?.data?.message || error.message;
+        this.showErrorPopup('Error resubmitting compliance: ' + msg, 'Resubmission Error');
+      } finally {
+        this.isResubmitLoading = false;
       }
     },
    
@@ -2176,6 +2177,9 @@ export default {
       console.log(`Current editingCompliance.ExtractedData.${fieldName}:`, this.editingCompliance.ExtractedData[fieldName]);
     },
     validateAndResubmit(compliance) {
+      if (this.isResubmitLoading) {
+        return;
+      }
       console.log("Validating compliance before resubmission...");
       console.log("Current ExtractedData:", compliance.ExtractedData);
       

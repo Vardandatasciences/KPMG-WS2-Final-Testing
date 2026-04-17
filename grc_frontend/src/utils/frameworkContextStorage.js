@@ -22,6 +22,32 @@ export function getSessionFrameworkId() {
   return (a && String(a).trim()) || (b && String(b).trim()) || null
 }
 
+export function getLegacyStoredFrameworkId() {
+  try {
+    const candidates = [
+      sessionStorage.getItem('frameworkId'),
+      localStorage.getItem('selectedFrameworkId'),
+      localStorage.getItem('frameworkId')
+    ]
+
+    for (const value of candidates) {
+      const normalized = value == null ? '' : String(value).trim()
+      if (!normalized || normalized === 'null' || normalized === 'undefined' || normalized === 'all') {
+        continue
+      }
+      return normalized
+    }
+  } catch {
+    /* ignore storage access errors */
+  }
+
+  return null
+}
+
+export function getExplicitFrameworkId() {
+  return getSessionFrameworkId() || getLegacyStoredFrameworkId() || null
+}
+
 export function setSessionFrameworkId(frameworkId) {
   if (frameworkId == null || frameworkId === '') return
   sessionStorage.setItem('framework_id', String(frameworkId))

@@ -880,22 +880,7 @@ const fetchMyTasks = async (userId) => {
       }
     })
 
-    // Filter by selected framework if one is selected
-    if (selectedFrameworkId.value) {
-      console.log('🔍 DEBUG: Filtering my tasks by selected framework ID:', selectedFrameworkId.value);
-      allRequests = allRequests.filter(request => {
-        // For framework requests, check FrameworkId
-        if (request.ItemType === 'framework' && request.FrameworkId) {
-          return request.FrameworkId.toString() === selectedFrameworkId.value.toString()
-        }
-        // For policy requests, check if they belong to the selected framework
-        if (request.ItemType === 'policy' && request.FrameworkId) {
-          return request.FrameworkId.toString() === selectedFrameworkId.value.toString()
-        }
-        return false
-      });
-      console.log('✅ DEBUG: Filtered my tasks count:', allRequests.length);
-    }
+    // Framework dropdown is visual-only here; do not filter loaded task data.
     
     myTasks.value = allRequests.sort((a, b) => {
       const dateA = new Date(a.RequestDate || 0)
@@ -957,22 +942,7 @@ const fetchReviewerTasks = async (userId) => {
       }
     })
 
-    // Filter by selected framework if one is selected
-    if (selectedFrameworkId.value) {
-      console.log('🔍 DEBUG: Filtering reviewer tasks by selected framework ID:', selectedFrameworkId.value);
-      allRequests = allRequests.filter(request => {
-        // For framework requests, check FrameworkId
-        if (request.ItemType === 'framework' && request.FrameworkId) {
-          return request.FrameworkId.toString() === selectedFrameworkId.value.toString()
-        }
-        // For policy requests, check if they belong to the selected framework
-        if (request.ItemType === 'policy' && request.FrameworkId) {
-          return request.FrameworkId.toString() === selectedFrameworkId.value.toString()
-        }
-        return false
-      });
-      console.log('✅ DEBUG: Filtered reviewer tasks count:', allRequests.length);
-    }
+    // Framework dropdown is visual-only here; do not filter loaded task data.
     
     reviewerTasks.value = allRequests.sort((a, b) => {
       const dateA = new Date(a.RequestDate || 0)

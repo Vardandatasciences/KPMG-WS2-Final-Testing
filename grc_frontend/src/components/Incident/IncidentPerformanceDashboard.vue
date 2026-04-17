@@ -244,6 +244,7 @@ import jsPDF from 'jspdf'
 import incidentDataService from '../../services/incidentService.js' // Updated: Use consistent naming
 import CustomDropdown from '@/components/CustomDropdown.vue'
 import { convertColorForColorblind as convertColorFromUtil } from '@/utils/colorblindness'
+import { getExplicitFrameworkId } from '@/utils/frameworkContextStorage.js'
 
 ChartJS.register(
   CategoryScale,
@@ -602,7 +603,7 @@ export default {
         } else {
           console.log('⚠️ No framework selected or frameworkId not found in response')
           // UX-only fallback; server must authorize and scope data by tenant/session (never trust this ID for authz).
-          const storedFrameworkId = localStorage.getItem('selectedFrameworkId') || localStorage.getItem('frameworkId')
+          const storedFrameworkId = getExplicitFrameworkId()
           if (storedFrameworkId) {
             this.selectedFramework = storedFrameworkId
             console.log('✅ Using framework ID from localStorage:', this.selectedFramework)
@@ -615,7 +616,7 @@ export default {
       } catch (error) {
         console.warn('⚠️ Could not fetch selected framework:', error)
         // Try localStorage fallback
-        const storedFrameworkId = localStorage.getItem('selectedFrameworkId') || localStorage.getItem('frameworkId')
+        const storedFrameworkId = getExplicitFrameworkId()
         if (storedFrameworkId) {
           this.selectedFramework = storedFrameworkId
           console.log('✅ Using framework ID from localStorage as fallback:', this.selectedFramework)

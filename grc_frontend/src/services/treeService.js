@@ -9,6 +9,7 @@
 
 import { axiosInstance } from '@/config/api.js';
 import { API_ENDPOINTS } from '@/config/api.js';
+import { getExplicitFrameworkId } from '@/utils/frameworkContextStorage.js';
 
 class TreeService {
   constructor() {
@@ -107,12 +108,12 @@ class TreeService {
 
     // Fallback to localStorage
     try {
-      const stored = localStorage.getItem('selectedFrameworkId') || localStorage.getItem('frameworkId');
-      if (stored && stored !== '' && stored !== 'null') {
+      const stored = getExplicitFrameworkId();
+      if (stored) {
         return parseInt(stored);
       }
     } catch (error) {
-      console.log('[Tree Service] Could not read framework selection from localStorage:', error.message);
+      console.log('[Tree Service] Could not read normalized framework selection:', error.message);
     }
 
     return null;

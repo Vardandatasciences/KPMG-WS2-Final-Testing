@@ -931,6 +931,7 @@ import CollapsibleTable from '@/components/CollapsibleTable.vue';
 import EvidenceAttachment from '@/components/EventHandling/EvidenceAttachment.vue';
 import incidentService from '../../services/incidentService.js';
 import { safeEvidenceUrl } from '@/utils/trustedEvidenceUrl';
+import { getExplicitFrameworkId } from '@/utils/frameworkContextStorage.js';
 import './IncidentUserTask.css'; // Import the CSS file
 
 export default {
@@ -1310,8 +1311,8 @@ export default {
         } else {
           console.log('⚠️ No framework selected or frameworkId not found in response');
           // UX-only filter hint; server must enforce tenant/RBAC (do not trust for authorization).
-          const storedFrameworkId = localStorage.getItem('selectedFrameworkId') || localStorage.getItem('frameworkId');
-          if (storedFrameworkId && storedFrameworkId !== '' && storedFrameworkId !== 'null') {
+          const storedFrameworkId = getExplicitFrameworkId();
+          if (storedFrameworkId) {
             this.selectedFramework = parseInt(storedFrameworkId);
             console.log('✅ Using framework ID from localStorage:', this.selectedFramework);
           } else {
@@ -1323,8 +1324,8 @@ export default {
       } catch (frameworkError) {
         console.warn('⚠️ Could not fetch selected framework:', frameworkError);
         // Try to get from localStorage as fallback
-        const storedFrameworkId = localStorage.getItem('selectedFrameworkId') || localStorage.getItem('frameworkId');
-        if (storedFrameworkId && storedFrameworkId !== '' && storedFrameworkId !== 'null') {
+        const storedFrameworkId = getExplicitFrameworkId();
+        if (storedFrameworkId) {
           this.selectedFramework = parseInt(storedFrameworkId);
           console.log('✅ Using framework ID from localStorage as fallback:', this.selectedFramework);
         } else {
