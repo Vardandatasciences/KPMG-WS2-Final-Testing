@@ -582,10 +582,11 @@ export default {
   bottom: 0;
   left: 0;
   right: 0;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  background: #d8dde6;
+  color: #2a3140;
   padding: 20px;
-  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
+  border-top: 1px solid #c8ced9;
+  box-shadow: 0 -4px 14px rgba(22, 30, 44, 0.08);
   z-index: 9999;
   animation: slideUp 0.3s ease-out;
 }
@@ -623,7 +624,7 @@ export default {
 }
 
 .cookie-link {
-  color: white;
+  color: #4b5d7a;
   text-decoration: underline;
   font-weight: 500;
 }
@@ -651,34 +652,35 @@ export default {
 }
 
 .cookie-btn-accept {
-  background: white;
-  color: #667eea;
+  background: #e2e6ed;
+  color: #2a3140;
+  border: 1px solid #c8ced9;
 }
 
 .cookie-btn-accept:hover {
-  background: #f0f0f0;
+  background: #dbe0e8;
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 12px rgba(22, 30, 44, 0.12);
 }
 
 .cookie-btn-reject {
-  background: rgba(255, 255, 255, 0.2);
-  color: white;
-  border: 2px solid rgba(255, 255, 255, 0.3);
+  background: #e2e6ed;
+  color: #2a3140;
+  border: 1px solid #c8ced9;
 }
 
 .cookie-btn-reject:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: #dbe0e8;
 }
 
 .cookie-btn-customize {
-  background: rgba(255, 255, 255, 0.2);
-  color: white;
-  border: 2px solid rgba(255, 255, 255, 0.3);
+  background: #e2e6ed;
+  color: #2a3140;
+  border: 1px solid #c8ced9;
 }
 
 .cookie-btn-customize:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: #dbe0e8;
 }
 
 /* Modal */
