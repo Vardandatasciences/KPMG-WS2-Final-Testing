@@ -956,6 +956,10 @@ class EventViewAllPermission(BaseEventPermission):
         
         return False
 
+class EventAnyAccessPermission(EventViewAllPermission):
+    """Permission to access event-related features (alias for EventViewAllPermission)"""
+    pass
+
 class EventViewModulePermission(BaseEventPermission):
     """Permission to view events from specific modules only"""
     

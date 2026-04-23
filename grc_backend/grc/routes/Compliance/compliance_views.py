@@ -88,6 +88,7 @@ from ...routes.Global.notification_service import NotificationService
 from ...routes.Global.notifications import notifications_storage
 from django.contrib.auth.models import User
 from ...models import Users
+from ..Incident.system_risk_service import trigger_single_source_risk_scan
 
 
 # DRF Session auth variant that skips CSRF enforcement for API clients
@@ -1381,6 +1382,16 @@ def create_compliance(request):
         except Exception as e:
             debug_print(f"Error creating in-app notifications for compliance creation: {str(e)}")
 
+        # Trigger automatic AI Risk Identification (Background)
+        try:
+            trigger_single_source_risk_scan(
+                source_type='COMPLIANCE', 
+                source_id=new_compliance.ComplianceId, 
+                tenant_id=tenant_id
+            )
+        except Exception as e:
+            debug_print(f"Error triggering automatic risk scan: {str(e)}")
+
         return Response({
             'success': True,
             'message': 'Compliance created successfully and sent for review',
@@ -2480,6 +2491,27 @@ def submit_compliance_review(request, approval_id):
                     current_compliance.save()
                     debug_print(f"✅ SUCCESSFULLY UPDATED compliance status to: {current_compliance.Status}")
                     debug_print(f"✅ SUCCESSFULLY UPDATED compliance ActiveInactive to: {current_compliance.ActiveInactive}")
+
+                    # Chain activation: Update parent SubPolicy and Policy if they are also 'Under Review'
+                    # This handles the "Match Compliance" flow where new policies/subpolicies are created on the fly
+                    if approved_not is True and not is_deactivation_request:
+                        try:
+                            # Use select_related if possible, but here we just follow the FKs
+                            subpolicy = current_compliance.SubPolicy
+                            if subpolicy and subpolicy.Status == 'Under Review':
+                                subpolicy.Status = 'Approved'
+                                subpolicy.save()
+                                debug_print(f"✅ Parent SubPolicy {subpolicy.SubPolicyId} activated (Status: Approved)")
+                                
+                                policy = subpolicy.PolicyId
+                                if policy and policy.Status == 'Under Review':
+                                    policy.Status = 'Approved'
+                                    policy.ActiveInactive = 'Active'
+                                    policy.save()
+                                    debug_print(f"✅ Parent Policy {policy.PolicyId} activated (Status: Approved, ActiveInactive: Active)")
+                        except Exception as chain_err:
+                            debug_print(f"⚠️ Error in chain activation: {str(chain_err)}")
+                            # Non-critical failure, don't break the main approval flow
                     
                     # Double-check the update worked
                     updated_compliance = Compliance.objects.get(ComplianceId=current_compliance.ComplianceId, tenant_id=tenant_id)

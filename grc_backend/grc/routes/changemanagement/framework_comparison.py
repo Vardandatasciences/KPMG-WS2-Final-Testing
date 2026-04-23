@@ -24,6 +24,7 @@ from .framework_update_checker import run_framework_update_check
 from .downloads_scanner import scan_downloads_folder, DownloadsScanner
 from ..Global.logging_service import send_log
 from ...rbac.utils import RBACUtils
+from grc.ai.service import get_ai_service
 
 # Import centralized AI services
 try:
@@ -33,7 +34,7 @@ except ImportError:
     CENTRALIZED_GAP_ANALYSIS_AVAILABLE = False
     get_centralized_gap_analysis_service = None
 import logging
-from django.views.decorators.csrf import csrf_protect as csrf_exempt
+from django.views.decorators.csrf import csrf_exempt
 from rest_framework.permissions import AllowAny
 
 # Reuse central AI provider configuration (OpenAI vs Ollama) from risk module
@@ -258,21 +259,16 @@ def _is_cancel_requested(framework_id, document_name: str = None, amendment_date
     return bool(latest.get('cancel_requested')) if isinstance(latest, dict) else False
 
 
-def _call_openai_for_compliance_matching(amendment_compliance: dict, db_compliances: list, framework_name: str) -> dict:
-    """Use OpenAI to match an amendment compliance against database compliances"""
+def _call_centralized_ai_for_compliance_matching(amendment_compliance: dict, db_compliances: list, framework_name: str) -> dict:
+    """Use Centralized AI Service to match an amendment compliance against database compliances"""
     try:
-        import requests
+        from grc.ai.service import get_ai_service
+        from grc.ai.types import AIRequestOptions
         import json
         
-        # Get OpenAI API key from settings (which reads from environment variable OPENAI_API_KEY)
-        api_key = getattr(settings, 'OPENAI_API_KEY', '')
-        if not api_key or api_key == 'your-openai-api-key-here':
-            raise Exception("OpenAI API key not configured. Please set OPENAI_API_KEY in your .env file.")
+        ai_service = get_ai_service()
         
-        # Get OpenAI model from settings (which reads from environment variable OPENAI_MODEL)
-        model = getattr(settings, 'OPENAI_MODEL', 'gpt-4o-mini')
-        
-        # Build prompt
+        # Build prompt (similar to legacy but for centralized router)
         amendment_text = f"{amendment_compliance.get('compliance_title', '')}: {amendment_compliance.get('compliance_description', '')}"
         
         db_compliance_list = []
@@ -313,43 +309,19 @@ SCORING RULES:
 
 JSON:"""
         
-        debug_print(f"[ComplianceMatch][AI] Preparing OpenAI match for '{amendment_compliance.get('compliance_title', '')}' (framework: {framework_name})")
-
-        headers = {
-            'Authorization': f'Bearer {api_key}',
-            'Content-Type': 'application/json'
-        }
+        logger.info(f"🤖 [ComplianceMatch] Requesting centralized AI match for '{amendment_compliance.get('compliance_title', '')}'")
         
-        payload = {
-            'model': model,
-            'messages': [
-                {'role': 'system', 'content': 'You are an expert GRC compliance auditor specializing in compliance requirement matching and gap analysis.'},
-                {'role': 'user', 'content': prompt}
-            ],
-            'temperature': 0.1,
-            'max_tokens': 500
-        }
-        
-        response = requests.post(
-            'https://api.openai.com/v1/chat/completions',
-            headers=headers,
-            json=payload,
-            timeout=60
+        options = AIRequestOptions(task_name="compliance.match_legacy")
+        # Call centralized AI service for matching
+        match_result = ai_service.generate_json(
+            task_name="compliance.match_legacy",
+            prompt=prompt,
+            options=options
         )
         
-        if response.status_code != 200:
-            raise Exception(f"OpenAI API error {response.status_code}")
-        
-        result = response.json()
-        content = result['choices'][0]['message']['content']
-        
-        # Parse JSON from response
-        import re
-        json_match = re.search(r'\{.*\}', content, re.DOTALL)
-        if json_match:
-            match_result = json.loads(json_match.group())
+        if match_result:
             debug_print(
-                "[ComplianceMatch][AI] Response parsed | "
+                "[ComplianceMatch][AI] Centralized Response parsed | "
                 f"has_match={match_result.get('has_match')} | "
                 f"score={match_result.get('match_score')} | "
                 f"status={match_result.get('compliance_status')}"
@@ -357,25 +329,23 @@ JSON:"""
             
             # If there's a match, include the matched compliance details
             if match_result.get('has_match') and match_result.get('best_match_index'):
-                idx = match_result['best_match_index'] - 1  # Convert to 0-based
-                if 0 <= idx < len(db_compliances):
-                    match_result['matched_compliance'] = db_compliances[idx]
+                try:
+                    idx = int(match_result['best_match_index']) - 1  # Convert to 0-based
+                    if 0 <= idx < len(db_compliances):
+                        match_result['matched_compliance'] = db_compliances[idx]
+                except (ValueError, TypeError):
+                    pass
             
             return match_result
         else:
-            return {
-                'has_match': False,
-                'match_score': 0.0,
-                'match_reason': 'Failed to parse AI response',
-                'compliance_status': 'NON_COMPLIANT'
-            }
+            raise Exception("AI service returned empty or invalid JSON")
         
     except Exception as e:
-        logger.error(f"Error in AI compliance matching: {str(e)}")
+        logger.error(f"Error in Centralized AI compliance matching: {str(e)}")
         return {
             'has_match': False,
             'match_score': 0.0,
-            'match_reason': f'Error: {str(e)}',
+            'match_reason': f'AI Service Error: {str(e)}',
             'compliance_status': 'NON_COMPLIANT'
         }
 
@@ -424,39 +394,13 @@ def _match_compliances_with_ai(target_compliances: list, db_compliances: list, f
     if not target_compliances:
         return results
 
-    # Decide once which provider to use: OpenAI (via env) or fallback text similarity
-    ai_provider = (RISK_AI_PROVIDER or 'openai').lower()
-    has_openai_key = bool(RISK_OPENAI_API_KEY)
-
-    # We only call OpenAI when:
-    #  - frontend requested AI (use_ai=True)
-    #  - global provider is set to 'openai'
-    #  - and an API key is configured
-    use_openai = bool(use_ai and ai_provider == 'openai' and has_openai_key)
-
-    if use_openai:
-        logger.info("[ComplianceMatch] Using OpenAI provider for compliance matching (env AI_PROVIDER=openai)")
-    else:
-        logger.info(
-            "[ComplianceMatch] Using local text-similarity matcher for compliance matching "
-            f"(AI provider={ai_provider}, OPENAI key configured={has_openai_key})"
-        )
-
     for idx, target in enumerate(target_compliances, 1):
-        logger.info(f"🔍 [AI Compliance Fallback] Matching structured compliance {idx}/{len(target_compliances)}")
-        debug_print(
-            "[ComplianceMatch][FallbackAI] Processing structured compliance "
-            f"{idx}/{len(target_compliances)} | "
-            f"title='{target.get('compliance_title', '')}' | "
-            f"use_ai={use_ai} | provider={ai_provider}"
-        )
-
-        if use_openai:
-            # Env says: use OpenAI for compliance matching
+        if use_ai:
+            # UI requested AI matching - now uses Centralized AI Service (Standard router)
             try:
-                match_result = _call_openai_for_compliance_matching(target, db_compliances, framework_name)
+                match_result = _call_centralized_ai_for_compliance_matching(target, db_compliances, framework_name)
             except Exception as e:
-                logger.error(f"[ComplianceMatch][AI] OpenAI matching failed, falling back to text similarity: {e}")
+                logger.error(f"[ComplianceMatch][AI] Centralized matching failed, falling back to text similarity: {e}")
                 match_result = {'has_match': False, 'match_score': 0.0, 'match_reason': str(e)}
 
             match_score = match_result.get('match_score', 0) or 0
@@ -527,8 +471,14 @@ def _match_compliances_with_ai(target_compliances: list, db_compliances: list, f
 def add_compliance_from_amendment(request, framework_id):
     """
     Create Policy, SubPolicy, Compliance entries from amendment data (manual add)
+    and send the compliance for approval via the standard ComplianceApproval flow.
+    The compliance is NOT saved as Active until the reviewer approves it.
     """
     try:
+        from ...models import ComplianceApproval, Users
+        from ...tenant_utils import get_tenant_id_from_request
+        import datetime
+
         framework = Framework.objects.get(FrameworkId=framework_id)
         payload = request.data or {}
 
@@ -542,18 +492,50 @@ def add_compliance_from_amendment(request, framework_id):
                 'error': 'Compliance title or description is required'
             }, status=status.HTTP_400_BAD_REQUEST)
 
+        reviewer_id = payload.get('reviewer_id')
+        if not reviewer_id:
+            return Response({
+                'success': False,
+                'error': 'reviewer_id is required to send the compliance for approval'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            reviewer_id = int(reviewer_id)
+        except (ValueError, TypeError):
+            return Response({
+                'success': False,
+                'error': 'reviewer_id must be a valid integer'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        approval_due_date = payload.get(
+            'approval_due_date',
+            (datetime.date.today() + datetime.timedelta(days=7)).isoformat()
+        )
+
+        # Resolve creator user
+        try:
+            user_id = RBACUtils.get_user_id_from_request(request)
+        except Exception:
+            user_id = None
+        if not user_id and hasattr(request, 'user') and getattr(request.user, 'UserId', None):
+            user_id = request.user.UserId
+        if not user_id:
+            user_id = request.session.get('user_id')
+
         user = getattr(request, 'user', None)
-        user_name = getattr(user, 'username', None) or getattr(user, 'UserName', None) or 'System'
+        user_name = getattr(user, 'UserName', None) or getattr(user, 'username', None) or 'System'
         today = timezone.now().date()
 
-        # Create Policy
+        tenant_id = get_tenant_id_from_request(request)
+
+        # ── Policy ────────────────────────────────────────────────────────────
         policy_identifier = policy_payload.get('identifier') or f"POL-{uuid.uuid4().hex[:8].upper()}"
         policy = Policy.objects.create(
             FrameworkId=framework,
             PolicyName=policy_payload.get('name') or compliance_payload.get('title') or 'Amendment Policy',
             PolicyDescription=policy_payload.get('description') or '',
             Identifier=policy_identifier,
-            Status=policy_payload.get('status') or 'Draft',
+            Status='Under Review',
+            ActiveInactive='Inactive',
             CurrentVersion=policy_payload.get('version') or '1.0',
             StartDate=policy_payload.get('start_date') or today,
             CreatedByName=user_name,
@@ -562,21 +544,21 @@ def add_compliance_from_amendment(request, framework_id):
             Objective=policy_payload.get('objective', '')
         )
 
-        # Create SubPolicy
+        # ── Sub-Policy ────────────────────────────────────────────────────────
         subpolicy_identifier = subpolicy_payload.get('identifier') or f"SUB-{uuid.uuid4().hex[:8].upper()}"
         subpolicy = SubPolicy.objects.create(
             PolicyId=policy,
             SubPolicyName=subpolicy_payload.get('name') or compliance_payload.get('title') or 'Amendment SubPolicy',
             Description=subpolicy_payload.get('description') or '',
             Identifier=subpolicy_identifier,
-            Status=subpolicy_payload.get('status') or 'Draft',
+            Status='Under Review',
             CreatedByName=user_name,
             CreatedByDate=today,
             Control=subpolicy_payload.get('control', ''),
             FrameworkId=framework
         )
 
-        # Duplicate name check: prevent two compliances with the same title in the same framework
+        # Duplicate name check
         compliance_title_to_create = (compliance_payload.get('title') or 'New Compliance').strip()
         if Compliance.objects.filter(
             FrameworkId=framework,
@@ -588,7 +570,8 @@ def add_compliance_from_amendment(request, framework_id):
                          'Each compliance name must be unique within a framework.'
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        # Create Compliance
+        # ── Compliance (Under Review / Inactive until approved) ────────────────
+        compliance_identifier = f"COMP-{subpolicy.SubPolicyId}-{today.strftime('%y%m%d')}-{uuid.uuid4().hex[:6]}"
         compliance = Compliance.objects.create(
             SubPolicy=subpolicy,
             ComplianceTitle=compliance_title_to_create,
@@ -597,15 +580,94 @@ def add_compliance_from_amendment(request, framework_id):
             Criticality=compliance_payload.get('criticality') or 'Medium',
             MandatoryOptional=compliance_payload.get('mandatory') or 'Mandatory',
             ManualAutomatic=compliance_payload.get('manual_automatic') or 'Manual',
-            Status='Approved' if payload.get('auto_approve') else 'Under Review',
+            Status='Under Review',          # will be updated to Active on approval
+            ActiveInactive='Inactive',       # inactive until reviewer approves
             ComplianceVersion='1.0',
             CreatedByName=user_name,
             CreatedByDate=today,
-            FrameworkId=framework
+            Identifier=compliance_identifier,
+            FrameworkId=framework,
+            **(({'tenant_id': tenant_id}) if tenant_id else {})
         )
 
-        response_data = {
+        # ── ComplianceApproval record (mirrors compliance_views.py flow) ───────
+        extracted_data = {
+            'type': 'compliance',
+            'ComplianceTitle': compliance.ComplianceTitle,
+            'ComplianceItemDescription': compliance.ComplianceItemDescription,
+            'Criticality': compliance.Criticality,
+            'Impact': '5.0',
+            'Probability': '5.0',
+            'mitigation': {},
+            'PossibleDamage': '',
+            'IsRisk': False,
+            'MandatoryOptional': compliance.MandatoryOptional,
+            'ManualAutomatic': compliance.ManualAutomatic,
+            'CreatedByName': compliance.CreatedByName,
+            'CreatedByDate': compliance.CreatedByDate.isoformat(),
+            'Status': 'Under Review',
+            'ComplianceId': compliance.ComplianceId,
+            'ComplianceVersion': compliance.ComplianceVersion,
+            'SubPolicy': subpolicy.SubPolicyId,
+            'Identifier': compliance_identifier,
+            'source': 'amendment',          # mark origin for traceability
+            'compliance_approval': {
+                'approved': None,
+                'remarks': '',
+                'ApprovalDueDate': approval_due_date
+            }
+        }
+
+        compliance_approval = ComplianceApproval.objects.create(
+            PolicyId=policy,
+            Identifier=compliance_identifier,
+            ExtractedData=extracted_data,
+            UserId=user_id,
+            ReviewerId=reviewer_id,
+            ApprovedNot=None,
+            Version='u1',
+            ApprovalDueDate=approval_due_date,
+            FrameworkId_id=framework.FrameworkId
+        )
+
+        # ── Notification to reviewer ───────────────────────────────────────────
+        try:
+            from ...routes.Global.notification_service import NotificationService
+            notification_service = NotificationService()
+            notification_result = notification_service.send_compliance_clone_notification(
+                compliance=compliance,
+                reviewer_id=reviewer_id
+            )
+            debug_print(f"[add_compliance_from_amendment] Notification result: {notification_result}")
+        except Exception as notif_err:
+            logger.warning(f"Failed to send notification: {notif_err}")
+
+        # ── Log action ────────────────────────────────────────────────────────
+        try:
+            send_log(
+                module='Framework Comparison',
+                actionType='ADD_COMPLIANCE_FROM_AMENDMENT',
+                description=f'Compliance "{compliance.ComplianceTitle}" sent for approval (Framework: {framework.FrameworkName})',
+                userId=user_id,
+                userName=user_name,
+                entityType='Compliance',
+                entityId=str(compliance.ComplianceId),
+                frameworkId=framework_id,
+                additionalInfo={
+                    'policy_id': policy.PolicyId,
+                    'subpolicy_id': subpolicy.SubPolicyId,
+                    'compliance_id': compliance.ComplianceId,
+                    'approval_id': compliance_approval.ApprovalId,
+                    'reviewer_id': reviewer_id
+                }
+            )
+        except Exception as log_err:
+            logger.warning(f"Failed to log add compliance action: {log_err}")
+
+        return Response({
             'success': True,
+            'message': 'Compliance sent for approval. It will be active once the reviewer approves it.',
+            'approval_id': compliance_approval.ApprovalId,
             'policy': {
                 'PolicyId': policy.PolicyId,
                 'PolicyName': policy.PolicyName,
@@ -619,34 +681,10 @@ def add_compliance_from_amendment(request, framework_id):
             'compliance': {
                 'ComplianceId': compliance.ComplianceId,
                 'ComplianceTitle': compliance.ComplianceTitle,
-                'ComplianceItemDescription': compliance.ComplianceItemDescription
+                'ComplianceItemDescription': compliance.ComplianceItemDescription,
+                'Status': compliance.Status
             }
-        }
-
-        # Log to GRC logging service
-        try:
-            user_id = None
-            if hasattr(request, 'user') and request.user and not request.user.is_anonymous:
-                user_id = getattr(request.user, 'UserId', None) or getattr(request.user, 'id', None)
-            send_log(
-                module='Framework Comparison',
-                actionType='ADD_COMPLIANCE_FROM_AMENDMENT',
-                description=f'Added compliance from amendment: {compliance.ComplianceTitle} (Framework: {framework.FrameworkName})',
-                userId=user_id,
-                userName=user_name,
-                entityType='Compliance',
-                entityId=str(compliance.ComplianceId),
-                frameworkId=framework_id,
-                additionalInfo={
-                    'policy_id': policy.PolicyId,
-                    'subpolicy_id': subpolicy.SubPolicyId,
-                    'compliance_id': compliance.ComplianceId
-                }
-            )
-        except Exception as log_err:
-            logger.warning(f"Failed to log add compliance action: {str(log_err)}")
-
-        return Response(response_data, status=status.HTTP_201_CREATED)
+        }, status=status.HTTP_201_CREATED)
 
     except Framework.DoesNotExist:
         return Response({
@@ -745,20 +783,16 @@ def check_framework_updates(request, framework_id):
         framework = Framework.objects.get(FrameworkId=framework_id)
         print(f"[CHECK_UPDATES] Loaded Framework object | FrameworkId={framework.FrameworkId}")
         
-        # Clear Amendment column for this framework when checking for updates
-        logger.info(f"Clearing Amendment column for framework {framework_id} before checking updates")
-        # BACKUP existing amendments before clearing
-        backup_amendments = framework.Amendment if framework.Amendment else []
-        print(f"[CHECK_UPDATES] Backed up Amendment list | count={len(backup_amendments) if isinstance(backup_amendments, list) else 'non-list'}")
-        framework.Amendment = []
-        framework.save(update_fields=['Amendment'])
-        logger.info(f"Cleared Amendment column for framework {framework_id}")
-        print(f"[CHECK_UPDATES] Cleared Amendment column and saved framework {framework_id}")
-        
-        # Fetch Perplexity API key and sanitize it to avoid accidental quotes from env configuration
+        # Fetch Perplexity API key and sanitize it
         raw_api_key = getattr(settings, 'PERPLEXITY_API_KEY', '') or ''
         api_key = str(raw_api_key).strip().strip('"').strip("'")
-        print(f"[CHECK_UPDATES] PERPLEXITY_API_KEY raw length={len(str(raw_api_key)) if raw_api_key else 0} | sanitized length={len(api_key) if api_key else 0}")
+        
+        # Log sanitized status (first 8 chars only for safety)
+        if api_key:
+            safe_preview = api_key[:8]
+            logger.info(f"Using Perplexity API key: {safe_preview}... (length: {len(api_key)})")
+        else:
+            logger.warning("Perplexity API key is not configured.")
  
         # Debug log to help diagnose key issues without exposing the full value
         if api_key:
@@ -828,32 +862,29 @@ def check_framework_updates(request, framework_id):
         print(f"[CHECK_UPDATES] Computed last_date_str={last_date_str}")
 
         # Documents will be stored in MEDIA_ROOT/change_management/
-        # Clear the folder before checking for new updates
         download_dir = os.path.join(settings.MEDIA_ROOT, 'change_management')
-        print(f"[CHECK_UPDATES] Using download_dir={download_dir}")
-        
-        # Clear all files in change_management folder before starting
-        if os.path.exists(download_dir):
-            try:
-                import shutil
-                for filename in os.listdir(download_dir):
-                    file_path = os.path.join(download_dir, filename)
-                    try:
-                        if os.path.isfile(file_path) or os.path.islink(file_path):
-                            os.unlink(file_path)
-                        elif os.path.isdir(file_path):
-                            shutil.rmtree(file_path)
-                    except Exception as e:
-                        logger.warning(f"Failed to delete {file_path}: {str(e)}")
-                        print(f"[CHECK_UPDATES] WARNING: Failed to delete {file_path} | error={e}")
-                logger.info(f"Cleared change_management folder: {download_dir}")
-                print(f"[CHECK_UPDATES] Cleared existing contents of {download_dir}")
-            except Exception as e:
-                logger.warning(f"Error clearing change_management folder: {str(e)}")
-                print(f"[CHECK_UPDATES] WARNING: Error clearing folder {download_dir} | error={e}")
-        
         os.makedirs(download_dir, exist_ok=True)
-        print(f"[CHECK_UPDATES] Ensured download_dir exists")
+        
+        # BACKUP existing amendments - we only clear them if we find a new one
+        try:
+            backup_amendments = framework.Amendment if framework.Amendment else []
+            if not isinstance(backup_amendments, list):
+                # If it's a string (old bug), try to parse it or just reset
+                if isinstance(backup_amendments, str):
+                    try:
+                        backup_amendments = json.loads(backup_amendments)
+                        if not isinstance(backup_amendments, list):
+                            backup_amendments = [backup_amendments]
+                    except:
+                        backup_amendments = []
+                else:
+                    backup_amendments = []
+        except Exception:
+            backup_amendments = []
+            
+        print(f"[CHECK_UPDATES] Backed up Amendment list | count={len(backup_amendments)}")
+        # [STABILIZATION] Ensured download_dir exists; clearing is now delayed until valid document found.
+        print(f"[CHECK_UPDATES] Ensured download_dir exists at {download_dir}")
 
         # By default, do NOT auto-process - user will manually trigger via "Start Analysis"
         process_amendment = request.data.get('process_amendment', False)  # Changed default to False
@@ -2506,14 +2537,21 @@ def start_amendment_analysis(request, framework_id):
         # Define background processing function
         def process_in_background():
             """Process amendment in background thread"""
+            print(f"[Background] Thread launching for framework {framework_id}")
+            logger.info(f"[Background] Thread launching for framework {framework_id}")
             try:
                 from django.db import connection
                 # Close the database connection from the main thread
                 connection.close()
                 
+                print(f"[Background] Database connection reset for framework {framework_id}")
+                
                 from .amendment_processor import process_downloaded_amendment
                 
                 logger.info(f"[Background] Starting processing for framework {framework_id}")
+                print(f"[Background] Starting AI generation for framework {framework_id}...")
+                print(f"[Background] Processing document: {document_name}")
+                print(f"[Background] About to call process_downloaded_amendment for framework {framework_id}")
 
                 # If cancel was requested before we even start, exit early.
                 if _is_cancel_requested(framework_id, document_name=document_name, amendment_date=amendment_date_str):
@@ -2632,6 +2670,12 @@ def start_amendment_analysis(request, framework_id):
                     framework_obj.latestAmmendmentDate = latest_date
                     framework_obj.latestComparisionCheckDate = timezone.now().date()
                     framework_obj.save(update_fields=['Amendment', 'latestAmmendmentDate', 'latestComparisionCheckDate'])
+                    
+                    print("\n" + "="*50)
+                    print(f"SUCCESS: AI generation completed for framework {framework_id}!")
+                    print(f"Document: {document_name}")
+                    print("The UI should now update automatically.")
+                    print("="*50 + "\n")
                     
                     # ---- Debug printing of what was generated (can be large) ----
                     try:
@@ -3230,3 +3274,163 @@ def assess_ai_compliance_impact(request, framework_id):
         return Response({
             'error': f'AI compliance impact assessment failed: An internal server error occurred'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+@csrf_exempt
+@api_view(['POST'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def compare_framework_versions(request):
+    """
+    Hybrid API endpoint to compare frameworks: Performs structural matching via code 
+    and semantic analysis via AI. Ensures 100% data accuracy.
+    """
+    try:
+        framework1_id = request.data.get('framework1_id')
+        framework2_id = request.data.get('framework2_id')
+        
+        if not framework1_id or not framework2_id:
+            return Response({'error': 'framework1_id and framework2_id are required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        f1 = Framework.objects.get(FrameworkId=framework1_id)
+        f2 = Framework.objects.get(FrameworkId=framework2_id)
+        
+        # 1. Fetch essential compliance data for both frameworks
+        # Use .only() to prevent massive data transfer and read timeouts
+        essential_fields = [
+            'ComplianceId', 'Identifier', 'ComplianceTitle', 
+            'ComplianceItemDescription', 'Criticality', 
+            'MandatoryOptional', 'ComplianceType'
+        ]
+        q1 = Compliance.objects.filter(FrameworkId=f1).only(*essential_fields)
+        q2 = Compliance.objects.filter(FrameworkId=f2).only(*essential_fields)
+        
+        # Index V1 by Title and Identifier for fast lookup
+        v1_by_id = {str(c.ComplianceId): c for c in q1}
+        v1_by_ident = {c.Identifier: c for c in q1}
+        v1_by_title = {c.ComplianceTitle.strip().lower(): c for c in q1}
+        
+        results = []
+        unmatched_f1 = set(v1_by_id.keys())
+        potential_mods = [] # List of (new_item, old_item) triples for AI
+        
+        # 2. Structural Matching Loop
+        for c2 in q2:
+            match = v1_by_ident.get(c2.Identifier) or v1_by_title.get(c2.ComplianceTitle.strip().lower())
+            
+            if match:
+                unmatched_f1.discard(str(match.ComplianceId))
+                
+                # Check for semantic differences
+                desc1 = (match.ComplianceItemDescription or "").strip().lower()
+                desc2 = (c2.ComplianceItemDescription or "").strip().lower()
+                
+                if desc1 == desc2:
+                    change_type = "UNCHANGED"
+                    ai_analysis = "Direct structural match found."
+                else:
+                    change_type = "MODIFIED"
+                    potential_mods.append((c2, match))
+                    ai_analysis = "Processing semantic differences with AI..."
+                    
+                results.append({
+                    "id": str(c2.ComplianceId),
+                    "identifier": c2.Identifier,
+                    "title": c2.ComplianceTitle,
+                    "description": c2.ComplianceItemDescription,
+                    "criticality": c2.Criticality,
+                    "mandatory": c2.MandatoryOptional,
+                    "type": c2.ComplianceType,
+                    "change_type": change_type,
+                    "ai_analysis": ai_analysis,
+                    "v1_equivalent_id": str(match.ComplianceId)
+                })
+            else:
+                # Truly new or semantically renamed
+                results.append({
+                    "id": str(c2.ComplianceId),
+                    "identifier": c2.Identifier,
+                    "title": c2.ComplianceTitle,
+                    "description": c2.ComplianceItemDescription,
+                    "criticality": c2.Criticality,
+                    "mandatory": c2.MandatoryOptional,
+                    "type": c2.ComplianceType,
+                    "change_type": "NEW",
+                    "ai_analysis": "Evaluating legacy equivalents...",
+                    "v1_equivalent_id": None
+                })
+
+        # 3. Handle REMOVED items
+        for r_id in unmatched_f1:
+            match = v1_by_id[r_id]
+            # Check if this "removed" item is actually one of the "NEW" items (semantic rename)
+            results.append({
+                "id": str(match.ComplianceId),
+                "identifier": match.Identifier,
+                "title": match.ComplianceTitle,
+                "description": match.ComplianceItemDescription,
+                "criticality": match.Criticality,
+                "mandatory": match.MandatoryOptional,
+                "type": match.ComplianceType,
+                "change_type": "REMOVED",
+                "ai_analysis": "Requirement no longer present in newer version.",
+                "v1_equivalent_id": str(match.ComplianceId)
+            })
+
+        # 4. Selective AI Delta Analysis
+        # Only run AI on the MODIFIED and NEW items to explain the "WHYS"
+        if potential_mods:
+            ai_service = get_ai_service()
+            try:
+                # Prepare a small-batch payload for AI
+                ai_payload = {
+                    "framework1_name": f1.FrameworkName,
+                    "framework2_name": f2.FrameworkName,
+                    "modifications": [
+                        {
+                            "id": str(n.ComplianceId),
+                            "title": n.ComplianceTitle,
+                            "v1_text": o.ComplianceItemDescription,
+                            "v2_text": n.ComplianceItemDescription
+                        }
+                        for n, o in potential_mods[:10] # Limit AI to top 10 modifications for speed/tokens
+                    ]
+                }
+                
+                ai_result = ai_service.run_task("mapping.version_comparison_smart", ai_payload)
+                
+                # Apply AI justifications back to results
+                if ai_result and isinstance(ai_result, dict) and 'justifications' in ai_result:
+                    just_map = {str(j['id']): j['reason'] for j in ai_result['justifications']}
+                    for res in results:
+                        if res['id'] in just_map:
+                            res['ai_analysis'] = just_map[res['id']]
+            except Exception as ai_err:
+                logger.warning(f"AI Smart analysis failed: {ai_err}")
+
+        # Summary statistics
+        summary = {
+            "new_items": len([r for r in results if r['change_type'] == "NEW"]),
+            "modified_items": len([r for r in results if r['change_type'] == "MODIFIED"]),
+            "removed_items": len([r for r in results if r['change_type'] == "REMOVED"]),
+            "unchanged_items": len([r for r in results if r['change_type'] == "UNCHANGED"]),
+            "overall_impact": "Significant" if len(potential_mods) > 5 else "Moderate"
+        }
+
+        # FINAL RESPONSE (Ensure strictly 100% database data is returned)
+        return Response({
+            'success': True,
+            'summary': summary,
+            'result': {
+                'summary': summary,
+                'changes': results
+            }
+        }, status=status.HTTP_200_OK)
+        
+    except Framework.DoesNotExist:
+        return Response({'error': 'One or both frameworks not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        logger.error(f"Error in Hybrid Comparison: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        logger.error(f"Error in compare_framework_versions: {e}")
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

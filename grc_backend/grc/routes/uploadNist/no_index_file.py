@@ -30,7 +30,7 @@ except ImportError:
     PyPDF2 = None
 
 try:
-    import fitz  # PyMuPDF
+    import pymupdf as fitz  # PyMuPDF
 except ImportError:
     fitz = None
 
@@ -108,29 +108,30 @@ def extract_pdf_text_by_pages(pdf_path: str, max_pages: Optional[int] = None) ->
         # Fallback to PyMuPDF if available
         elif fitz:
             debug_print(f"📄 Using PyMuPDF to extract text from: {os.path.basename(pdf_path)}")
-            with fitz.open(pdf_path) as pdf_doc:
-                total_pages = len(pdf_doc)
-                process_pages = min(total_pages, max_pages) if max_pages else total_pages
-                debug_print(f"📄 Processing {process_pages} of {total_pages} pages")
-                
-                for page_num in range(process_pages):
-                    try:
-                        page = pdf_doc[page_num]
-                        text = page.get_text() or ""
-                        
-                        text = text.strip()
-                        if len(text) > 50:
-                            pages_data.append({
-                                "page_number": page_num + 1,
-                                "text": text,
-                                "char_count": len(text)
-                            })
-                            debug_print(f"📄 Page {page_num + 1}: {len(text)} characters extracted")
-                        else:
-                            debug_print(f"📄 Page {page_num + 1}: Skipped (insufficient content)")
-                    except Exception as e:
-                        debug_print(f"⚠️ Error extracting page {page_num + 1}: {e}")
-                        continue
+            pdf_doc = fitz.open(pdf_path)
+            total_pages = len(pdf_doc)
+            process_pages = min(total_pages, max_pages) if max_pages else total_pages
+            debug_print(f"📄 Processing {process_pages} of {total_pages} pages")
+            
+            for page_num in range(process_pages):
+                try:
+                    page = pdf_doc[page_num]
+                    text = page.get_text() or ""
+                    
+                    text = text.strip()
+                    if len(text) > 50:
+                        pages_data.append({
+                            "page_number": page_num + 1,
+                            "text": text,
+                            "char_count": len(text)
+                        })
+                        debug_print(f"📄 Page {page_num + 1}: {len(text)} characters extracted")
+                    else:
+                        debug_print(f"📄 Page {page_num + 1}: Skipped (insufficient content)")
+                except Exception as e:
+                    debug_print(f"⚠️ Error extracting page {page_num + 1}: {e}")
+                    continue
+            pdf_doc.close()
             
         else:
             raise Exception("No PDF parsing library available (pdfplumber, PyPDF2, or PyMuPDF required)")

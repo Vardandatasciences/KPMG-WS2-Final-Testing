@@ -80,8 +80,8 @@
 </template>
 
 <script>
-import apiService from '@/services/apiService.js';
 import { API_ENDPOINTS } from '../../config/api.js';
+import apiService from '../../services/apiService.js';
 
 export default {
   name: 'SystemRiskWorkflowModal',
@@ -139,26 +139,33 @@ export default {
     },
 
     resetForm() {
-      this.selectedUser = '';
-      this.selectedReviewer = '';
+      this.selectedUser = this.riskData?.riskOwner || '';
+      this.selectedReviewer = this.riskData?.reviewer || '';
+      
+      console.log('Reset form with pre-selected data:', {
+        user: this.selectedUser,
+        reviewer: this.selectedReviewer
+      });
     },
 
     async loadUsers() {
       this.loading = true;
       try {
+        const currentUserId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || '';
         const usersEndpoint = API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION
           || API_ENDPOINTS.USERS_FOR_DROPDOWN
           || API_ENDPOINTS.USERS;
 
-        const responseData = await apiService.get(usersEndpoint, {
-          module: 'risk'
+        const response = await apiService.get(usersEndpoint, {
+          module: 'risk',
+          current_user_id: currentUserId
         });
 
         // Support multiple API response shapes:
         // 1) { status: 'success', data: [...] }
         // 2) { users: [...] }
         // 3) [ ... ]
-        const payload = responseData;
+        const payload = response?.data;
         const list = Array.isArray(payload)
           ? payload
           : (Array.isArray(payload?.data) ? payload.data : (Array.isArray(payload?.users) ? payload.users : []));
@@ -184,7 +191,8 @@ export default {
 
       this.submitting = true;
       try {
-        const responseData = await apiService.post(API_ENDPOINTS.SYSTEM_RISKS_SEND_FOR_APPROVAL(this.riskData.id), {
+        const response = await apiService.post(API_ENDPOINTS.SYSTEM_RISKS_SEND_FOR_APPROVAL(this.riskData.id), {
+          user_id: this.selectedUser,
           reviewer_id: this.selectedReviewer,
           risk_data: {
             risk_title: this.riskData.title,
@@ -205,7 +213,7 @@ export default {
           }
         });
 
-        if (responseData.status === 'success') {
+        if (response && (response.status === 'success' || response.data?.status === 'success')) {
           this.$notify?.({
             type: 'success',
             title: 'Success',

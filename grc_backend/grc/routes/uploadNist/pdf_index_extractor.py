@@ -70,7 +70,8 @@ def to_int_if_numeric(page_label: str) -> int | None:
 
 def load_pages_with_positions_pymupdf(pdf_path: str):
     """Return list of pages; each page is list of (text_line, x0_left)."""
-    import fitz  # PyMuPDF
+    import pymupdf as fitz  # PyMuPDF
+    doc = fitz.open(pdf_path)
     pages = []
     with fitz.open(pdf_path) as doc:
         for pno in range(len(doc)):
@@ -95,7 +96,9 @@ def load_pages_with_positions_pymupdf(pdf_path: str):
 
 def extract_outline_pymupdf(pdf_path: str):
     """Return outline items from the PDF's internal bookmarks, if any."""
-    import fitz
+    import pymupdf as fitz
+    doc = fitz.open(pdf_path)
+    toc = doc.get_toc(simple=True)  # list of [level, title, page]
     items = []
     with fitz.open(pdf_path) as doc:
         toc = doc.get_toc(simple=True)  # list of [level, title, page]
@@ -116,14 +119,14 @@ def load_pages_text_pdfminer(pdf_path: str):
     """Fallback: return list of pages; each page is list of (text_line, None)."""
     from pdfminer.high_level import extract_text
     try:
-        import fitz
-        with fitz.open(pdf_path) as doc:
-            pages = []
-            for pno in range(len(doc)):
-                txt = norm_ws(norm_dashes(doc[pno].get_text("text")))
-                lines = [(ln, None) for ln in txt.split("\n") if ln.strip()]
-                pages.append(lines)
-            return pages
+        import pymupdf as fitz
+        doc = fitz.open(pdf_path)
+        pages = []
+        for pno in range(len(doc)):
+            txt = norm_ws(norm_dashes(doc[pno].get_text("text")))
+            lines = [(ln, None) for ln in txt.split("\n") if ln.strip()]
+            pages.append(lines)
+        return pages
     except Exception:
         text = extract_text(pdf_path)
         text = norm_ws(norm_dashes(text))

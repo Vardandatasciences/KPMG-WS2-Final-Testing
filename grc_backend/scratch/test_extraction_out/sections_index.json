@@ -1,0 +1,19 @@
+{
+  "source_pdf": "C:\\Users\\Admin\\Desktop\\GRC_TPRM\\grc_backend\\MEDIA_ROOT\\change_management\\Banking_Regulation(RBI_Guidelines)_20260420_120841.pdf",
+  "index_json": "C:\\Users\\Admin\\Desktop\\GRC_TPRM\\grc_backend\\scratch\\test_extraction_out\\index.json",
+  "structure_type": "hierarchical",
+  "sections_written": [
+    {
+      "folder": "001-Mumbai_-_400_001_फ_न_Phone_022_-_2266",
+      "title": "Mumbai - 400 001 फोन/Phone: 022 - 2266",
+      "level": 1,
+      "start_page": 1,
+      "end_page": 1,
+      "printed_page": 502,
+      "has_children": false,
+      "pdf_file": "(empty - page range beyond document)",
+      "out_of_range": true
+    }
+  ],
+  "unresolved_titles": []
+}

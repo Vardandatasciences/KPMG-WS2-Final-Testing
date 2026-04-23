@@ -1,103 +1,154 @@
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-gray-50">
-    <div class="max-w-md w-full bg-white rounded-lg shadow-lg p-8 text-center">
-      <!-- Icon -->
-      <div class="mx-auto flex items-center justify-center h-20 w-20 rounded-full bg-red-100 mb-6">
-        <ShieldX class="h-10 w-10 text-red-600" />
-    </div>
-    
-    <!-- Title -->
-      <h1 class="text-2xl font-bold text-gray-900 mb-2">Access Denied</h1>
-    
-    <!-- Description -->
-      <p class="text-gray-600 mb-6">
-        {{ errorInfo.message }}
-      </p>
-      
-      <!-- Error Code and Permission Info -->
-      <div class="mb-6 space-y-2">
-        <div v-if="errorInfo.code">
-          <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-800">
-            Error Code: {{ errorInfo.code }}
-          </span>
-        </div>
-        <div v-if="errorInfo.permission || errorInfo.permissionRequired">
-          <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
-            Required Permission: {{ errorInfo.permission || errorInfo.permissionRequired }}
-          </span>
+  <div class="access-denied-viewport">
+    <div class="glass-card-modern">
+      <!-- Skeleton State -->
+      <div v-if="isLoading" class="flex flex-col items-center">
+        <div class="w-24 h-24 rounded-3xl bg-slate-100 animate-pulse mb-8 rotate-[-3deg]"></div>
+        <div class="w-64 h-8 bg-slate-100 rounded-lg animate-pulse mb-4"></div>
+        <div class="w-80 h-4 bg-slate-100 rounded-md animate-pulse mb-2"></div>
+        <div class="w-60 h-4 bg-slate-100 rounded-md animate-pulse mb-10"></div>
+        
+        <div class="grid grid-cols-2 gap-4 w-full">
+          <div class="h-12 bg-slate-100 rounded-xl animate-pulse"></div>
+          <div class="h-12 bg-slate-100 rounded-xl animate-pulse"></div>
         </div>
       </div>
-      
-      <!-- Actions -->
-      <div class="space-y-3">
-        <Button @click="goBack" class="w-full">
-          <ArrowLeft class="w-4 h-4 mr-2" />
-          Go Back
-        </Button>
-        
-        <Button variant="outline" @click="goHome" class="w-full">
-          <Home class="w-4 h-4 mr-2" />
-          Go to Dashboard
-        </Button>
-        
-        <Button variant="ghost" @click="contactSupport" class="w-full">
-          <Mail class="w-4 h-4 mr-2" />
-          Contact Support
-        </Button>
+
+      <!-- Main Content -->
+      <div v-else class="fade-in">
+        <!-- Icon Section -->
+        <div class="icon-header-premium">
+
+        <div class="shield-container-animated">
+          <div class="glow-layer"></div>
+          <Shield class="h-12 w-12 text-white relative z-10" />
+          <div class="lock-overlay-badge">
+            <Lock class="w-3.5 h-3.5 text-indigo-600" />
+          </div>
+        </div>
       </div>
       
-      <!-- Additional Info -->
-      <div class="mt-8 pt-6 border-t border-gray-200">
-        <p class="text-sm text-gray-500">
-          If you need access to this page, please contact your system administrator.
+      <!-- Content Section -->
+      <div class="content-body">
+        <h1 class="text-3xl font-bold text-slate-900 mb-3 tracking-tight">Secure Workspace</h1>
+        <p class="text-slate-600 mb-2 text-lg leading-relaxed">
+          You've reached a secure area of the platform.
         </p>
-      </div>
-      
-      <!-- Request Access Button -->
-      <div class="mt-6">
-        <Button 
-          @click="requestAccess"
-          :disabled="isRequesting || requestSubmitted"
-          variant="default"
-          class="w-full"
-        >
-          <span v-if="isRequesting">Submitting...</span>
-          <span v-else-if="requestSubmitted">Request Submitted</span>
-          <span v-else>Request Access</span>
-        </Button>
-      </div>
-      
-      <!-- Success/Error Message -->
-      <div v-if="message" class="mt-4">
-        <p :class="['text-sm p-3 rounded', messageType === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800']">
-          {{ message }}
+        <p class="text-slate-500 mb-8 text-sm leading-relaxed max-w-sm mx-auto">
+          To access this module, please ensure you have the appropriate permissions or submit a request below.
         </p>
+        
+        <!-- Primary Actions -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+          <Button @click="goBack" variant="outline" class="h-12 rounded-xl border-slate-200 text-slate-700 hover:bg-slate-50 font-semibold flex items-center justify-center gap-2">
+            <ArrowLeft class="w-4 h-4" />
+            Go Back
+          </Button>
+          
+          <Button 
+            @click="requestAccess"
+            :disabled="isRequesting || requestSubmitted"
+            class="h-12 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-100 font-semibold flex items-center justify-center gap-2"
+          >
+            <div v-if="isRequesting" class="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+            <span v-if="isRequesting">Processing...</span>
+            <span v-else-if="requestSubmitted" class="flex items-center gap-2"><CheckCircle2 class="w-4 h-4" /> Sent</span>
+            <span v-else>Request Approval</span>
+          </Button>
+        </div>
+
+        <!-- Technical Details Toggle -->
+        <button @click="showDetails = !showDetails" class="text-indigo-600 hover:text-indigo-700 font-semibold text-sm py-2 px-4 rounded-lg hover:bg-indigo-50 transition-colors flex items-center gap-2 mx-auto mb-4">
+          {{ showDetails ? 'Hide' : 'View' }} Technical Details
+          <ChevronDown :class="['w-4 h-4 transition-transform duration-300', showDetails ? 'rotate-180' : '']" />
+        </button>
+
+        <!-- Status Feedback -->
+        <transition name="fade">
+          <div v-if="message" :class="['p-3 rounded-xl border text-sm flex items-center gap-3 mb-4', messageType === 'success' ? 'bg-emerald-50 text-emerald-800 border-emerald-100' : 'bg-red-50 text-red-800 border-red-100']">
+            <component :is="messageType === 'success' ? 'CheckCircle2' : 'AlertCircle'" class="w-4 h-4 flex-shrink-0" />
+            {{ message }}
+          </div>
+        </transition>
+
+        <!-- Collapsible Details Box -->
+        <transition name="expand">
+          <div v-if="showDetails" class="mt-4 bg-white border border-slate-100 rounded-2xl p-5 text-left shadow-inner">
+            <div class="space-y-3">
+              <div class="flex justify-between items-center py-1 border-b border-slate-50 last:border-0">
+                <span class="text-xs font-medium text-slate-500 uppercase tracking-wider">Module</span>
+                <span class="text-sm font-semibold text-slate-800">{{ errorInfo.message || 'Restricted Module' }}</span>
+              </div>
+              <div class="flex justify-between items-center py-1 border-b border-slate-50 last:border-0">
+                <span class="text-xs font-medium text-slate-500 uppercase tracking-wider">Resource</span>
+                <span class="text-sm font-semibold text-slate-800 truncate max-w-[200px]">{{ requestedUrl }}</span>
+              </div>
+              <div class="flex justify-between items-center py-1 border-b border-slate-50 last:border-0">
+                <span class="text-xs font-medium text-slate-500 uppercase tracking-wider">Security ID</span>
+                <span class="text-sm font-semibold text-slate-800">{{ userInfo.userId || 'Guest Session' }}</span>
+              </div>
+            </div>
+
+            <div class="flex gap-4 mt-6 pt-4 border-t border-slate-50">
+              <button @click="goHome" class="flex-1 flex items-center justify-center gap-2 text-xs font-bold text-slate-600 hover:text-indigo-600 transition-colors">
+                <LayoutDashboard class="w-3.5 h-3.5" />
+                DASHBOARD
+              </button>
+              <button @click="contactSupport" class="flex-1 flex items-center justify-center gap-2 text-xs font-bold text-slate-600 hover:text-indigo-600 transition-colors">
+                <HelpCircle class="w-3.5 h-3.5" />
+                SUPPORT
+              </button>
+            </div>
+          </div>
+        </transition>
       </div>
     </div>
   </div>
 </template>
 
 <script>
-import { API_ENDPOINTS, API_CONFIG, getAuthToken } from '../config/api.js'
+import { API_ENDPOINTS, getAuthToken } from '../config/api.js'
 import { getCurrentUserId } from '../utils/session.js'
 import axios from 'axios'
-import { ShieldX, ArrowLeft, Home, Mail } from 'lucide-vue-next'
+import { 
+  Shield, 
+  Lock, 
+  ArrowLeft, 
+  LayoutDashboard, 
+  HelpCircle, 
+  ShieldAlert, 
+  CheckCircle2, 
+  AlertCircle,
+  ChevronDown
+} from 'lucide-vue-next'
 import Button from '@/components/ui/button.vue'
 
 export default {
   components: {
-    ShieldX,
+    Shield,
+    Lock,
     ArrowLeft,
-    Home,
-    Mail,
+    LayoutDashboard,
+    HelpCircle,
+    ShieldAlert,
+    CheckCircle2,
+    AlertCircle,
+    ChevronDown,
     Button
   },
   data() {
     return {
+      isLoading: true,
       isRequesting: false,
       requestSubmitted: false,
       message: '',
-      messageType: 'success' // 'success' or 'error'
+      messageType: 'success',
+      showDetails: false,
+      userInfo: {
+        userId: null,
+        role: null
+      },
+      requestedUrl: ''
     }
   },
   computed: {
@@ -111,8 +162,8 @@ export default {
         console.error('Error parsing access denied info:', e)
       }
       return {
-        message: 'You do not have permission to access this page.',
-        code: '403',
+        message: 'Security clearance required.',
+        code: null,
         permission: null,
         permissionRequired: null,
         path: null
@@ -120,25 +171,45 @@ export default {
     }
   },
   mounted() {
-    console.log('🔵 [AccessDenied] Component mounted')
-    // Prevent scrolling on this page
     document.body.style.overflow = 'hidden'
+    
+    // Parse requested URL and load user info
+    try {
+      const accessDeniedInfo = sessionStorage.getItem('access_den_error') || sessionStorage.getItem('access_denied_error')
+      if (accessDeniedInfo) {
+        const info = JSON.parse(accessDeniedInfo)
+        if (info.path) {
+          this.requestedUrl = info.path
+        }
+      }
+    } catch (e) {}
+
+    if (!this.requestedUrl) {
+      this.requestedUrl = window.location.pathname
+    }
+
+    const userId = localStorage.getItem('user_id')
+    const userRole = localStorage.getItem('user_role') || localStorage.getItem('role')
+    this.userInfo = {
+      userId: userId,
+      role: userRole
+    }
+
+    // Delay for skeleton visualization
+    setTimeout(() => {
+      this.isLoading = false
+    }, 800)
   },
   beforeUnmount() {
-    // Restore scrolling when leaving the page
     document.body.style.overflow = ''
   },
   methods: {
     async requestAccess() {
-      console.log('🔵 [AccessDenied] Request Access button clicked!')
       try {
-        console.log('🔵 [AccessDenied] Starting request access process...')
         this.isRequesting = true
         this.message = ''
         
-        // Get access denied info from sessionStorage
         const accessDeniedInfo = sessionStorage.getItem('access_denied_error')
-        console.log('🔵 [AccessDenied] Access denied info from sessionStorage:', accessDeniedInfo)
         let requestedUrl = ''
         let requestedFeature = ''
         let requiredPermission = ''
@@ -146,9 +217,6 @@ export default {
         if (accessDeniedInfo) {
           try {
             const info = JSON.parse(accessDeniedInfo)
-            console.log('Access denied info:', info)
-            
-            // Extract URL - use the stored URL from the router guard, not current location
             if (info.path) {
               try {
                 const urlObj = new URL(info.path, window.location.origin)
@@ -158,115 +226,48 @@ export default {
                 requestedUrl = pathMatch ? pathMatch[1] : info.path
               }
             }
-            
-            // Get the required permission if available
             requiredPermission = info.permission || ''
-            
-            // Get the feature name
             requestedFeature = info.message || requestedUrl || ''
-            
-            console.log('Extracted values:', {
-              requestedUrl,
-              requestedFeature,
-              requiredPermission
-            })
           } catch (e) {
-            console.error('Error parsing accessDeniedInfo:', e)
             requestedUrl = window.location.pathname
           }
         } else {
-          // If no access denied info, use current pathname
           requestedUrl = window.location.pathname
-          console.warn('No accessDeniedInfo found in sessionStorage, using current pathname:', requestedUrl)
         }
         
-        // Validate that we have at least a URL
         if (!requestedUrl || requestedUrl === '/access-denied') {
-          this.message = 'Unable to determine the requested page. Please try accessing the page again.'
+          this.message = 'Unable to determine the requested module.'
           this.messageType = 'error'
           this.isRequesting = false
           return
         }
         
-        // Get user ID - use the session utility first, then fallback to other methods
         let userId = null
-        
         try {
-          // Try using the session utility function
           userId = getCurrentUserId()
-          if (userId) {
-            console.log('🔵 [AccessDenied] Got user_id from session utility:', userId)
-          }
-        } catch (e) {
-          console.warn('🔵 [AccessDenied] Error getting user_id from session utility:', e)
-        }
+        } catch (e) {}
         
-        // Fallback: try multiple possible keys and formats
         if (!userId) {
-          userId = sessionStorage.getItem('user_id') || 
-                   sessionStorage.getItem('userId') || 
-                   sessionStorage.getItem('UserId') ||
-                   localStorage.getItem('user_id') ||
-                   localStorage.getItem('userId') ||
-                   localStorage.getItem('UserId')
-        }
-        
-        // Try to extract from current_user or user objects
-        if (!userId) {
-          try {
-            const currentUser = sessionStorage.getItem('current_user') || localStorage.getItem('current_user')
-            if (currentUser) {
-              const userObj = JSON.parse(currentUser)
-              userId = userObj.user_id || userObj.userId || userObj.UserId || userObj.id || userObj.UserId
-              console.log('🔵 [AccessDenied] Extracted user_id from current_user:', userId)
-            }
-          } catch (e) {
-            console.warn('🔵 [AccessDenied] Error parsing current_user:', e)
-          }
+          userId = localStorage.getItem('user_id')
         }
         
         if (!userId) {
-          try {
-            const user = sessionStorage.getItem('user') || localStorage.getItem('user')
-            if (user) {
-              const userObj = JSON.parse(user)
-              userId = userObj.user_id || userObj.userId || userObj.UserId || userObj.id
-              console.log('🔵 [AccessDenied] Extracted user_id from user:', userId)
-            }
-          } catch (e) {
-            console.warn('🔵 [AccessDenied] Error parsing user:', e)
-          }
-        }
-        
-        // Cookie-first: do not decode JWTs from browser storage.
-        
-        console.log('🔵 [AccessDenied] Final User ID:', userId)
-        console.log('🔵 [AccessDenied] All localStorage keys:', Object.keys(localStorage))
-        
-        if (!userId) {
-          console.warn('🔵 [AccessDenied] No user ID found in any storage location')
-          this.message = 'Please log in to request access.'
+          this.message = 'Please sign in to request clearance.'
           this.messageType = 'error'
           this.isRequesting = false
           return
         }
         
-        // Prepare request data
+        const accessToken = getAuthToken()
         const requestData = {
-          user_id: parseInt(userId), // Include user_id in request body as fallback
+          user_id: parseInt(userId),
           requested_url: requestedUrl,
           requested_feature: requestedFeature,
           required_permission: requiredPermission,
-          requested_role: '', // Can be enhanced to allow role selection
-          message: `Requesting access to ${requestedFeature || requestedUrl}${requiredPermission ? ` (Permission: ${requiredPermission})` : ''}`
+          requested_role: '',
+          message: `Clearance request for: ${requestedFeature || requestedUrl}`
         }
         
-        console.log('🔵 [AccessDenied] Submitting TPRM access request:', requestData)
-        console.log('🔵 [AccessDenied] API Endpoint:', API_ENDPOINTS.CREATE_ACCESS_REQUEST)
-        console.log('🔵 [AccessDenied] User ID:', userId)
-        console.log('🔵 [AccessDenied] Access Token:', accessToken ? 'Present' : 'Missing')
-        
-        // Make API call to create access request
         const response = await axios.post(
           API_ENDPOINTS.CREATE_ACCESS_REQUEST,
           requestData,
@@ -278,186 +279,135 @@ export default {
           }
         )
         
-        console.log('🔵 [AccessDenied] Response received:', response.data)
-        
         if (response.data && response.data.status === 'success') {
           this.requestSubmitted = true
-          this.message = 'Your access request has been submitted. An administrator will review it shortly.'
+          this.message = 'Clearance request submitted. You will be notified once reviewed.'
           this.messageType = 'success'
-          console.log('🔵 [AccessDenied] Access request created successfully:', response.data.data)
         } else {
-          throw new Error(response.data?.message || 'Failed to submit request')
+          throw new Error(response.data?.message || 'Submission failed')
         }
         
       } catch (error) {
-        console.error('🔴 [AccessDenied] Error requesting access:', error)
-        console.error('🔴 [AccessDenied] Error details:', {
-          message: error.message,
-          response: error.response?.data,
-          status: error.response?.status,
-          statusText: error.response?.statusText,
-          url: error.config?.url
-        })
-        
-        // Show more detailed error message
-        let errorMessage = 'Failed to submit access request. Please try again.'
-        if (error.response) {
-          // Server responded with error
-          errorMessage = error.response.data?.message || error.response.data?.error || `Server error: ${error.response.status}`
-        } else if (error.request) {
-          // Request was made but no response received
-          errorMessage = 'No response from server. Please check your connection and try again.'
-        } else {
-          // Error in setting up the request
-          errorMessage = error.message || 'Failed to submit access request.'
-        }
-        
-        this.message = errorMessage
+        this.message = error.response?.data?.message || 'Access request could not be sent at this time.'
         this.messageType = 'error'
       } finally {
         this.isRequesting = false
       }
     },
-
-    // Navigate back to previous page or a sensible module dashboard
     goBack() {
       if (window.history.length > 1) {
         this.$router.go(-1)
       } else {
-        // Go to appropriate module's home page
-        const storedPath = this.errorInfo?.path || ''
-
-        if (storedPath.includes('/bcp') || storedPath.includes('/vendor-upload') || storedPath.includes('/library')) {
-          this.$router.push('/vendor-upload')
-        } else if (storedPath.includes('/contract')) {
-          this.$router.push('/contracts')
-        } else if (storedPath.includes('/rfp')) {
-          this.$router.push('/rfp/dashboard')
-        } else {
-          this.$router.push('/dashboard')
-        }
+        this.$router.push('/dashboard')
       }
     },
-
-    // Navigate directly to the correct dashboard based on denied path
     goHome() {
-      const storedPath = this.errorInfo?.path || ''
-
-      if (storedPath.includes('/bcp') || storedPath.includes('/vendor-upload') || storedPath.includes('/library')) {
-        // BCP module
-        this.$router.push('/dashboard')
-      } else if (storedPath.includes('/contract')) {
-        // Contract module
-        this.$router.push('/contractdashboard')
-      } else if (storedPath.includes('/rfp')) {
-        // RFP module
-        this.$router.push('/rfp/dashboard')
-      } else {
-        // Default dashboard
-        this.$router.push('/dashboard')
-      }
+      this.$router.push('/dashboard')
     },
-
-    // Simple support contact handler
     contactSupport() {
-      alert('Please contact your system administrator for access to this page.')
+      alert('Security center documentation is available in the help section.')
     }
   }
 }
 </script>
 
 <style scoped>
-.access-denied-container {
+.access-denied-viewport {
   min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  background-color: #f5f5f5;
-  padding: 20px;
-}
-
-.error-icon {
-  width: 120px;
-  height: 120px;
-  border-radius: 50%;
-  background-color: #dc3545;
+  width: 100%;
+  background: radial-gradient(circle at top right, #fdfbff, #f0f4f9, #e6ecf5);
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 30px;
+  padding: 24px;
 }
 
-.x-symbol {
-  color: white;
-  font-size: 60px;
-  font-weight: bold;
-  line-height: 1;
-}
-
-.access-denied-title {
-  font-size: 36px;
-  font-weight: bold;
-  color: #333;
-  margin: 0 0 20px 0;
+.glass-card-modern {
+  width: 100%;
+  max-width: 540px;
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 24px;
+  padding: 48px 40px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.04), 
+              0 2px 10px rgba(0, 0, 0, 0.02);
   text-align: center;
+  position: relative;
 }
 
-.error-message {
-  font-size: 16px;
-  color: #333;
-  margin: 8px 0;
-  text-align: center;
+.icon-header-premium {
+  margin-bottom: 32px;
+  display: flex;
+  justify-content: center;
 }
 
-.error-code {
-  font-size: 14px;
-  color: #333;
-  margin-top: 30px;
-  text-align: center;
+.shield-container-animated {
+  position: relative;
+  width: 96px;
+  height: 96px;
+  background: linear-gradient(135deg, #4f46e5, #6366f1);
+  border-radius: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 12px 24px rgba(79, 70, 229, 0.15);
+  transform: rotate(-3deg);
 }
 
-.request-access-btn {
-  margin-top: 30px;
-  padding: 12px 30px;
-  font-size: 16px;
-  font-weight: 600;
-  color: white;
-  background-color: #007bff;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-  transition: background-color 0.3s ease;
+.glow-layer {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 120%;
+  height: 120%;
+  background: radial-gradient(circle, rgba(99, 102, 241, 0.15) 0%, transparent 70%);
+  animation: pulse-ring 2.5s infinite ease-in-out;
 }
 
-.request-access-btn:hover:not(:disabled) {
-  background-color: #0056b3;
+.lock-overlay-badge {
+  position: absolute;
+  bottom: -6px;
+  right: -6px;
+  background: white;
+  padding: 6px;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  z-index: 20;
 }
 
-.request-access-btn:disabled {
-  background-color: #6c757d;
-  cursor: not-allowed;
-  opacity: 0.7;
+@keyframes pulse-ring {
+  0% { transform: translate(-50%, -50%) scale(0.9); opacity: 0.4; }
+  50% { transform: translate(-50%, -50%) scale(1.1); opacity: 0.7; }
+  100% { transform: translate(-50%, -50%) scale(0.9); opacity: 0.4; }
 }
 
-.message {
-  margin-top: 20px;
-  padding: 12px 20px;
-  border-radius: 5px;
-  text-align: center;
-  font-size: 14px;
-  max-width: 500px;
+.fade-enter-active, .fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+.fade-enter-from, .fade-leave-to {
+  opacity: 0;
 }
 
-.message.success {
-  background-color: #d4edda;
-  color: #155724;
-  border: 1px solid #c3e6cb;
+.expand-enter-active, .expand-leave-active {
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  max-height: 400px;
+  overflow: hidden;
+}
+.expand-enter-from, .expand-leave-to {
+  max-height: 0;
+  opacity: 0;
+  transform: translateY(-10px);
 }
 
-.message.error {
-  background-color: #f8d7da;
-  color: #721c24;
-  border: 1px solid #f5c6cb;
+.fade-in {
+  animation: fadeIn 0.4s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 </style>

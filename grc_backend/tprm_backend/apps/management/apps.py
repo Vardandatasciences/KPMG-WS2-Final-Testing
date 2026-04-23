@@ -10,6 +10,7 @@ or Celery Beat on the development machine.
 import logging
 import threading
 import datetime
+from django.db import connection
 
 from django.apps import AppConfig
 
@@ -23,8 +24,9 @@ def _run_due_schedules():
     Core screening-schedule runner.  Imported lazily (inside the thread)
     so Django is fully initialised before we touch the ORM.
     """
-    from django import db
-    db.close_old_connections()
+    # Reset connections to avoid 'Server has gone away' in persistent background loop
+    from django.db import close_old_connections
+    close_old_connections()
     try:
         from tprm_backend.apps.management.models import ScreeningSchedule
         from tprm_backend.apps.management.views import (

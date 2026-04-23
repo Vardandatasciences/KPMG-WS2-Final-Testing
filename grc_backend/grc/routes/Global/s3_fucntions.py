@@ -2,8 +2,8 @@
 #!/usr/bin/env python3
 """
 S3 Microservice Client for Direct Deployment with MySQL Database
-Direct URL: http://15.207.1.40:3000
-MySQL Database for operation trftg6hy7uracking (uses Django settings)
+Direct URL: http://193.203.161.212:3000
+MySQL Database for operation tracking (uses Django settings)
 No AWS credentials required - handled by the microservice
 
 ================================================================================
@@ -136,7 +136,7 @@ except ImportError:
     OPENAI_AVAILABLE = False
 
 # Ollama configuration
-OLLAMA_BASE_URL = "http://13.205.15.232:11434"
+OLLAMA_BASE_URL = "http://193.203.161.212:3000"
 OLLAMA_MODEL = "llama3:8b-instruct-q4_K_M"
 OLLAMA_AVAILABLE = True  # Assume available if server is running
 
@@ -361,7 +361,7 @@ class RenderS3Client:
     """
     
     def __init__(self, 
-                 api_base_url: str = "http://15.207.1.40:3000",
+                 api_base_url: str = "http://193.203.161.212:3000",
                  mysql_config: Optional[Dict] = None):
         """
         Initialize the Direct S3 client with local MySQL
@@ -5476,7 +5476,7 @@ def create_direct_mysql_client(mysql_config: Optional[Dict] = None) -> RenderS3C
                 debug_print(f"WARNING: Django settings not available, using environment variables: {mysql_config['host']}:{mysql_config['port']}/{mysql_config['database']}")
         
         debug_print(f"Creating S3 client with MySQL config: {mysql_config['host']}:{mysql_config['port']}/{mysql_config['database']}")
-        client = RenderS3Client("http://15.207.1.40:3000", mysql_config)
+        client = RenderS3Client("http://193.203.161.212:3000", mysql_config)
         debug_print("S3 client created successfully")
         return client
         
@@ -5484,7 +5484,7 @@ def create_direct_mysql_client(mysql_config: Optional[Dict] = None) -> RenderS3C
             debug_print(f"ERROR: Import error creating S3 client: {import_e}")
             debug_print("INFO: Trying to create client without MySQL...")
             try:
-                client = RenderS3Client("http://15.207.1.40:3000", None)
+                client = RenderS3Client("http://193.203.161.212:3000", None)
                 debug_print("WARNING: S3 client created without MySQL (fallback mode)")
                 return client
             except Exception as fallback_e:
@@ -5495,7 +5495,7 @@ def create_direct_mysql_client(mysql_config: Optional[Dict] = None) -> RenderS3C
         debug_print(f"ERROR: MySQL connection error: {mysql_e}")
         debug_print("INFO: Creating S3 client without MySQL...")
         try:
-            client = RenderS3Client("http://15.207.1.40:3000", None)
+            client = RenderS3Client("http://193.203.161.212:3000", None)
             debug_print("WARNING: S3 client created without MySQL (fallback mode)")
             return client
         except Exception as fallback_e:
@@ -5506,7 +5506,7 @@ def create_direct_mysql_client(mysql_config: Optional[Dict] = None) -> RenderS3C
         debug_print(f"ERROR: General error creating S3 client: {e}")
         debug_print("INFO: Trying to create client without MySQL...")
         try:
-            client = RenderS3Client("http://15.207.1.40:3000", None)
+            client = RenderS3Client("http://193.203.161.212:3000", None)
             debug_print("WARNING: S3 client created without MySQL (fallback mode)")
             return client
         except Exception as fallback_e:
@@ -5546,7 +5546,7 @@ def test_all_export_formats():
     """Comprehensive test for all export formats"""
     
     debug_print("🚀 Testing All Export Formats")
-    debug_print("🌐 Direct URL: http://15.207.1.40:3000")
+    debug_print("🌐 Direct URL: http://193.203.161.212:3000")
     debug_print("📊 Testing: JSON, CSV, XML, TXT, PDF")
     debug_print("=" * 60)
     
@@ -5724,7 +5724,7 @@ def main():
     """Example usage of Direct S3 Client with MySQL from Django settings"""
     
     debug_print("🚀 Direct S3 Microservice Client with MySQL")
-    debug_print("🌐 Direct URL: http://15.207.1.40:3000")
+    debug_print("🌐 Direct URL: http://193.203.161.212:3000")
     debug_print("🗄️  Database: MySQL (from Django settings)")
     debug_print("🔐 AWS Credentials: Handled by microservice")
     debug_print("=" * 60)
@@ -5802,7 +5802,7 @@ def test_pdf_processing():
     """Test PDF upload with automatic metadata extraction and summary generation"""
     
     debug_print("🚀 Testing PDF Processing with OpenAI Summarization")
-    debug_print("🌐 Direct URL: http://15.207.1.40:3000")
+    debug_print("🌐 Direct URL: http://193.203.161.212:3000")
     debug_print("🤖 AI: OpenAI for document summarization")
     debug_print("=" * 60)
     

@@ -18,11 +18,11 @@
         <button 
           @click="saveSelectedCompliances" 
           class="CC_save-button"
-          :disabled="selectedCompliances.length === 0 || saving"
+          :disabled="selectedCompliances.length === 0 || saving || !selectedReviewerId"
         >
-          <i v-if="!saving" class="fas fa-save"></i>
+          <i v-if="!saving" class="fas fa-paper-plane"></i>
           <i v-else class="fas fa-spinner fa-spin"></i>
-          {{ saving ? 'Saving...' : `Save Selected (${selectedCompliances.length})` }}
+          {{ saving ? 'Sending...' : `Send for Approval (${selectedCompliances.length})` }}
         </button>
       </div>
     </div>
@@ -31,6 +31,25 @@
       <div v-if="loading" class="CC_loading">
         <i class="fas fa-spinner fa-spin"></i>
         <p>Loading compliances...</p>
+      </div>
+
+      <div class="CC_reviewer-section" v-if="!loading && compliances.length > 0">
+        <h4><i class="fas fa-user-check"></i> Global Approval Reviewer</h4>
+        <p class="CC_reviewer-info">All selected compliances will be sent to this reviewer for approval before becoming active.</p>
+        <div class="CC_form-field">
+          <label>Reviewer <span class="CC_required">*</span></label>
+          <select v-model="selectedReviewerId" class="CC_reviewer-select" :disabled="loadingReviewers">
+            <option value="">{{ loadingReviewers ? 'Loading reviewers...' : 'Select a reviewer' }}</option>
+            <option
+              v-for="reviewer in availableReviewers"
+              :key="reviewer.UserId"
+              :value="reviewer.UserId"
+            >
+              {{ reviewer.UserName || reviewer.FirstName + ' ' + reviewer.LastName }}
+            </option>
+          </select>
+          <small v-if="reviewerError" class="CC_reviewer-error">{{ reviewerError }}</small>
+        </div>
       </div>
 
       <div v-else-if="compliances.length === 0" class="CC_empty">
@@ -263,11 +282,17 @@ export default {
       editedCompliance: null,
       loading: false,
       saving: false,
-      frameworkId: null
+      frameworkId: null,
+      // Reviewer selection
+      selectedReviewerId: '',
+      availableReviewers: [],
+      loadingReviewers: false,
+      reviewerError: ''
     }
   },
   async mounted() {
     await this.loadCompliances()
+    await this.fetchReviewers()
   },
   methods: {
     async loadCompliances() {
@@ -293,6 +318,42 @@ export default {
         PopupService.error('Failed to load compliances. Please try again.', 'Error')
       } finally {
         this.loading = false
+      }
+    },
+    async fetchReviewers() {
+      try {
+        this.loadingReviewers = true
+        const { API_ENDPOINTS } = await import('@/config/api.js').catch(() => ({ API_ENDPOINTS: {} }))
+        
+        // Try fetching with module=compliance first
+        let url = API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION || '/api/users-for-reviewer-selection/'
+        if (url.includes('?')) {
+          url += '&module=compliance'
+        } else {
+          url += '?module=compliance'
+        }
+        
+        let response = await (this.$http ? this.$http.get(url) : (await import('axios')).default.get(url, { withCredentials: true }))
+        let data = response.data
+        
+        // Handle direct array or {users: []}
+        let reviewers = Array.isArray(data) ? data : (data && data.users ? data.users : [])
+        
+        // Fallback to USERS_FOR_DROPDOWN if no reviewers found
+        if (reviewers.length === 0) {
+          console.warn('No reviewers found for module=compliance, falling back to USERS_FOR_DROPDOWN')
+          const fallbackUrl = API_ENDPOINTS.USERS_FOR_DROPDOWN || '/api/rbac/users-for-dropdown/'
+          response = await (this.$http ? this.$http.get(fallbackUrl) : (await import('axios')).default.get(fallbackUrl, { withCredentials: true }))
+          data = response.data
+          reviewers = Array.isArray(data) ? data : (data && data.data ? data.data : (data && data.users ? data.users : []))
+        }
+        
+        this.availableReviewers = reviewers
+      } catch (err) {
+        console.error('Failed to fetch reviewers:', err)
+        this.availableReviewers = []
+      } finally {
+        this.loadingReviewers = false
       }
     },
     
@@ -372,6 +433,13 @@ export default {
         return
       }
       
+      if (!this.selectedReviewerId) {
+        this.reviewerError = 'Please select a reviewer for the approval workflow.'
+        PopupService.warning('Please select a reviewer before submitting.', 'Reviewer Required')
+        return
+      }
+      this.reviewerError = ''
+      
       if (!this.frameworkId) {
         PopupService.error('Framework ID not found. Please go back and try again.', 'Error')
         return
@@ -386,9 +454,13 @@ export default {
         for (const index of this.selectedCompliances) {
           try {
             const compliance = this.compliances[index]
+            const payload = {
+              ...compliance,
+              reviewer_id: this.selectedReviewerId
+            }
             await frameworkComparisonService.createComplianceFromAmendment(
               this.frameworkId,
-              compliance
+              payload
             )
             successCount++
           } catch (error) {
@@ -399,8 +471,8 @@ export default {
         
         if (successCount > 0) {
           PopupService.success(
-            `Successfully saved ${successCount} compliance(s).${errorCount > 0 ? ` ${errorCount} failed.` : ''}`,
-            'Save Complete'
+            `Successfully submitted ${successCount} compliance(s) for approval.${errorCount > 0 ? ` ${errorCount} failed.` : ''}`,
+            'Sent for Approval'
           )
           
           // Remove saved compliances from list
@@ -763,6 +835,73 @@ export default {
 .CC_compliance-meta span {
   font-size: 12px;
   color: var(--text-secondary, #6b7280);
+}
+
+/* Reviewer Section Styling */
+.CC_reviewer-section {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.06) 0%, rgba(59, 130, 246, 0.06) 100%);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 24px;
+}
+
+.CC_reviewer-section h4 {
+  color: #16a34a;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  margin: 0 0 8px 0;
+}
+
+.CC_reviewer-info {
+  font-size: 13px;
+  color: #6b7280;
+  margin: 0 0 16px 0;
+  line-height: 1.5;
+}
+
+.CC_reviewer-select {
+  width: 100%;
+  max-width: 400px;
+  padding: 10px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+  background: #fff;
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%236b7280'%3E%3Cpath fill-rule='evenodd' d='M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z' clip-rule='evenodd'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 16px;
+  padding-right: 36px;
+}
+
+.CC_reviewer-select:focus {
+  outline: none;
+  border-color: #22c55e;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.15);
+}
+
+.CC_reviewer-select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background-color: #f9fafb;
+}
+
+.CC_reviewer-error {
+  color: #dc2626;
+  font-size: 12px;
+  margin-top: 6px;
+  display: block;
+}
+
+.CC_required {
+  color: #dc2626;
+  font-weight: 700;
 }
 
 @media (max-width: 768px) {

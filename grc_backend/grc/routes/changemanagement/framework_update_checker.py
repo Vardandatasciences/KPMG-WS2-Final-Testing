@@ -4,7 +4,7 @@ import os
 import re
 from datetime import datetime
 from typing import Optional
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 
 import requests
 
@@ -15,10 +15,7 @@ def create_system_prompt(framework_name: str, last_updated_date: str) -> str:
     """Create system prompt for Perplexity API."""
     return f"""You are a GRC (Governance, Risk, and Compliance) framework update tracker.
 
-Your task is to check if the {framework_name} framework has been updated after {last_updated_date} and find the DIRECT PDF download link for the LATEST AMENDMENT document (NOT the full framework document).
-
-CRITICAL: The has_update field should ONLY be true if the latest official update date is AFTER {last_updated_date}.
-If the latest update is on or before {last_updated_date}, set has_update to false.
+Your task is to find the DIRECT PDF download link for the LATEST AMENDMENT document for the {framework_name} framework (NOT the full framework document).
 
 IMPORTANT: You are looking for AMENDMENT documents, NOT the full framework document.
 - Amendments are typically smaller PDFs (usually 10-100 pages) that describe changes/updates
@@ -29,11 +26,11 @@ IMPORTANT: You are looking for AMENDMENT documents, NOT the full framework docum
 Instructions:
 1. Search for the latest official AMENDMENT/UPDATE document of {framework_name} (NOT the full framework)
 2. Find the exact release/publication date of the latest amendment
-3. Compare the latest update date with {last_updated_date}
-4. If you find that there IS an amendment after {last_updated_date}, you MUST return a useful URL in document_url:
+3. You MUST return a useful URL in document_url for the latest amendment found:
    - PREFER: a DIRECT download link to the AMENDMENT PDF (ends with .pdf)
    - OTHERWISE: return the BEST official webpage that clearly describes or links to the latest amendment
-5. Set has_update to true ONLY if latest_update_date > {last_updated_date}. When has_update is true, document_url MUST NOT be null.
+4. Set has_update to true if you find ANY amendment. When has_update is true, document_url MUST NOT be null.
+5. Search multiple official sources (e.g., indiacode.nic.in, gazette notifications, official ministry websites, or sansad.in).
 6. Respond ONLY in the following JSON format (no additional text):
 
 {{
@@ -57,18 +54,12 @@ CRITICAL REQUIREMENTS FOR document_url:
 - DO NOT provide page URLs like https://example.com/pages/document (these are HTML pages)
 - DO NOT provide URLs that redirect to pages - find the actual PDF file URL
 - If you cannot find a direct AMENDMENT PDF download link, set document_url to null
-- Use only official sources (nist.gov, iso.org, hhs.gov, etc.)
+- Use only official sources (nist.gov, iso.org, hhs.gov, indiacode.nic.in, etc.)
 - Focus on finding the PDF for the LATEST AMENDMENT ONLY (small document, not full framework)
 
 Other Requirements:
-- has_update must be true ONLY if latest_update_date is AFTER {last_updated_date}
-- If latest_update_date is same as or before {last_updated_date}, set has_update to false and document_url to null
-- If no update found or dates are equal/before, set has_update to false and document_url to null
 - If you find evidence of an update but no direct PDF link, you MUST still set has_update to true and set document_url to the best official webpage for that amendment (NOT null)
-
-Example date comparison:
-- If last_updated_date is 2025-09-13 and latest is 2025-08-27: has_update = false
-- If last_updated_date is 2025-08-27 and latest is 2025-09-13: has_update = true
+- If you genuinely cannot find any amendment for this framework on the internet, ONLY then set has_update to false.
 
 Example of GOOD document_url (AMENDMENT documents):
 - https://csrc.nist.gov/publications/detail/sp/800-53/rev-5/upd1/final/sp800-53r5-upd1.pdf (amendment)
@@ -91,12 +82,30 @@ def _clean_response_content(content: str) -> str:
     return content.strip()
 
 
-def query_perplexity_api(framework_name: str, last_updated_date: str, api_key: str) -> dict:
+def query_perplexity_api(framework_name: str, last_updated_date: str, api_key: str, failed_urls: Optional[list] = None) -> dict:
     """Call Perplexity API and return parsed JSON response."""
     if not api_key:
         raise ValueError("Perplexity API key is required")
 
     system_prompt = create_system_prompt(framework_name, last_updated_date)
+    
+    # Build user content with excluded URLs if any
+    user_content = (
+        f"{system_prompt}\n\n"
+        f"Find the DIRECT PDF download link for the LATEST AMENDMENT document for {framework_name} (NOT the full framework). "
+        f"Amendment documents are typically small PDFs (10-100 pages) that describe changes. "
+        f"DO NOT download the full framework document (which is large, 200+ pages). "
+        f"Search specifically for: 'amendment PDF', 'update PDF', 'change document PDF'. "
+        f"The document_url MUST be a direct PDF file URL (ending in .pdf), NOT a webpage. "
+        f"Look for URLs containing words like: amendment, update, changes, revision."
+    )
+    
+    if failed_urls:
+        user_content += f"\n\nIMPORTANT: The following URLs previously failed with server errors. DO NOT return these. Find an ALTERNATE source:\n"
+        for url in failed_urls:
+            user_content += f"- {url}\n"
+        user_content += "\nSearch for mirrors, official gazettes, or alternative ministry websites."
+
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
@@ -106,16 +115,7 @@ def query_perplexity_api(framework_name: str, last_updated_date: str, api_key: s
         "messages": [
             {
                 "role": "user",
-                "content": (
-                    f"{system_prompt}\n\n"
-                    f"Check if {framework_name} has been updated after {last_updated_date}. "
-                    f"Find the DIRECT PDF download link for the LATEST AMENDMENT document (NOT the full framework). "
-                    f"Amendment documents are typically small PDFs (10-100 pages) that describe changes. "
-                    f"DO NOT download the full framework document (which is large, 200+ pages). "
-                    f"Search specifically for: 'amendment PDF', 'update PDF', 'change document PDF'. "
-                    f"The document_url MUST be a direct PDF file URL (ending in .pdf), NOT a webpage. "
-                    f"Look for URLs containing words like: amendment, update, changes, revision."
-                ),
+                "content": user_content,
             }
         ],
         "temperature": 0.2,
@@ -158,14 +158,15 @@ def query_perplexity_api(framework_name: str, last_updated_date: str, api_key: s
     logger.info(f"Parsed update info: has_update={parsed.get('has_update')}, latest_update_date={parsed.get('latest_update_date')}, document_url={parsed.get('document_url')}")
 
     # Validate date ordering per business rules
-    if parsed.get("has_update") and parsed.get("latest_update_date"):
-        try:
-            latest_date = datetime.strptime(parsed["latest_update_date"], "%Y-%m-%d").date()
-            last_known = datetime.strptime(last_updated_date, "%Y-%m-%d").date()
-            if latest_date <= last_known:
-                parsed["has_update"] = False
-        except ValueError:
-            parsed["has_update"] = False
+    # [COMMENTED OUT AS PER REQUEST to simply fetch the latest amendment without date constraints]
+    # if parsed.get("has_update") and parsed.get("latest_update_date"):
+    #     try:
+    #         latest_date = datetime.strptime(parsed["latest_update_date"], "%Y-%m-%d").date()
+    #         last_known = datetime.strptime(last_updated_date, "%Y-%m-%d").date()
+    #         if latest_date <= last_known:
+    #             parsed["has_update"] = False
+    #     except ValueError:
+    #         parsed["has_update"] = False
     
     # Validate document_url - must be a PDF URL
     doc_url = parsed.get("document_url")
@@ -277,11 +278,61 @@ def download_document(
     os.makedirs(download_dir, exist_ok=True)
     logger.info(f"Download directory: {download_dir}")
     
-    def _attempt_download(url: str):
-        logger.info(f"Downloading from: {url}")
-        resp = requests.get(url, stream=True, timeout=60, allow_redirects=True)
-        resp.raise_for_status()
-        return resp
+    # Initialize a session for cookie persistence and browser emulation
+    session = requests.Session()
+    default_headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'none',
+        'Sec-Fetch-User': '?1',
+        'Cache-Control': 'max-age=0'
+    }
+    session.headers.update(default_headers)
+
+    def _warm_up_session(url: str):
+        """Visit the base domain to acquire cookies/session state"""
+        try:
+            from urllib.parse import urlparse
+            parsed = urlparse(url)
+            base_url = f"{parsed.scheme}://{parsed.netloc}/"
+            logger.info(f"Warming up session by visiting base domain: {base_url}")
+            session.get(base_url, timeout=15)
+        except Exception as e:
+            logger.warning(f"Session warm-up failed: {e}")
+
+    def _attempt_download(url: str, is_retry: bool = False):
+        logger.info(f"Downloading from: {url} (is_retry={is_retry})")
+        
+        # Update referer to looks like we came from the site itself
+        from urllib.parse import urlparse
+        parsed = urlparse(url)
+        session.headers.update({'Referer': f"{parsed.scheme}://{parsed.netloc}/"})
+
+        try:
+            resp = session.get(url, stream=True, timeout=60, allow_redirects=True)
+            
+            # If we get a 403 or 500 and haven't tried warming up yet, try it once
+            if resp.status_code in [403, 500] and not is_retry:
+                logger.warning(f"Received {resp.status_code}, attempting session warm-up...")
+                _warm_up_session(url)
+                return _attempt_download(url, is_retry=True)
+                
+            resp.raise_for_status()
+            return resp
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code in [403, 500] and not is_retry:
+                logger.warning(f"HTTPError {e.response.status_code}, attempting session warm-up...")
+                _warm_up_session(url)
+                return _attempt_download(url, is_retry=True)
+            raise
+        except Exception:
+            raise
     
     try:
         url_to_fetch = document_url
@@ -293,7 +344,7 @@ def download_document(
             
             # 1) Try plain HTML scraping for PDF links on the page
             try:
-                page_resp = requests.get(document_url, timeout=30)
+                page_resp = session.get(document_url, timeout=30)
                 page_resp.raise_for_status()
                 html = page_resp.text or ""
                 logger.info(f"Fetched HTML page for PDF discovery, length={len(html)}")
@@ -360,8 +411,14 @@ def download_document(
         response = None
         try:
             response = _attempt_download(url_to_fetch)
-        except requests.exceptions.HTTPError as http_err:
-            logger.error(f"HTTP error downloading {url_to_fetch}: {http_err}")
+            
+            # Check for soft-404 (receives HTML despite expecting PDF)
+            if 'text/html' in response.headers.get('content-type', '').lower():
+                logger.warning(f"URL returned HTML instead of PDF: {url_to_fetch}")
+                raise requests.exceptions.RequestException(f"Soft-404: Received HTML response instead of PDF for {url_to_fetch}")
+                
+        except (requests.exceptions.HTTPError, requests.exceptions.RequestException) as err:
+            logger.error(f"Error downloading {url_to_fetch}: {err}")
             # If the direct link failed but we have an API key, ask Perplexity for another PDF URL
             if api_key:
                 logger.info("Attempting to locate alternate PDF URL via Perplexity...")
@@ -369,9 +426,17 @@ def download_document(
                 if alternate_url and alternate_url.lower().endswith('.pdf') and alternate_url != url_to_fetch:
                     logger.info(f"Alternate PDF URL found: {alternate_url}")
                     url_to_fetch = alternate_url
-                    response = _attempt_download(url_to_fetch)
+                    try:
+                        response = _attempt_download(url_to_fetch)
+                        
+                        if 'text/html' in response.headers.get('content-type', '').lower():
+                            logger.warning(f"Alternate URL also returned HTML instead of PDF: {url_to_fetch}")
+                            response = None
+                    except Exception as alt_err:
+                        logger.error(f"Failed to download alternate URL: {alt_err}")
+                        response = None
             if response is None:
-                raise
+                return None
         except Exception:
             raise
         
@@ -416,17 +481,19 @@ def download_document(
             logger.warning(f"Could not verify PDF file: {str(e)}. PDF document is not available.")
             return None
         
-        # Check file size - amendments are typically smaller (1-15 MB), full frameworks are large (20+ MB)
+        # Check file size - amendments are typically smaller, but regulatory docs can be large
         file_size_mb = downloaded / (1024 * 1024)
-        MAX_AMENDMENT_SIZE_MB = 15  # Amendments are typically 1-15 MB
+        MAX_AMENDMENT_SIZE_MB = 50  # Increased from 15MB to 50MB for larger docs
         
         if file_size_mb > MAX_AMENDMENT_SIZE_MB:
             # File is too large, likely the full framework document, not an amendment
             os.remove(temp_filepath)
-            logger.warning(f"Downloaded PDF is too large ({file_size_mb:.2f} MB). This appears to be the full framework document, not an amendment. Amendments are typically 1-15 MB. PDF document is not available.")
+            logger.warning(f"Downloaded PDF is too large ({file_size_mb:.2f} MB). Limit is {MAX_AMENDMENT_SIZE_MB} MB. PDF document is not available.")
+            print(f"[DOWNLOAD] ❌ PDF too large: {file_size_mb:.2f} MB (Limit: {MAX_AMENDMENT_SIZE_MB} MB)")
             return None
         
         logger.info(f"PDF file size: {file_size_mb:.2f} MB (acceptable for amendment document)")
+        print(f"[DOWNLOAD] ✅ File size ok: {file_size_mb:.2f} MB")
         
         # It's a valid PDF and size is appropriate for an amendment, rename to .pdf extension
         filename = f"{safe_name}_{timestamp}.pdf"
@@ -455,17 +522,25 @@ def download_document(
             )
             
             if upload_result.get('success'):
-                s3_url = upload_result['file_info']['url']
-                logger.info(f"Successfully uploaded to S3: {s3_url}")
+                file_info = upload_result.get('file_info', {})
+                s3_url = file_info.get('url')
+                s3_key = file_info.get('s3Key', '')
+                s3_stored_name = file_info.get('storedName', filename)
+                
+                logger.info(f"✅ Successfully uploaded to S3: {s3_url}")
+                logger.info(f"   - S3 Key: {s3_key}")
+                logger.info(f"   - Stored Name: {s3_stored_name}")
+                
                 # Return both local path and S3 URL as a dict
                 return {
                     'local_path': filepath,
                     's3_url': s3_url,
-                    's3_key': upload_result['file_info'].get('s3Key', ''),
-                    'stored_name': upload_result['file_info'].get('storedName', filename)
+                    's3_key': s3_key,
+                    'stored_name': s3_stored_name
                 }
             else:
-                logger.warning(f"Failed to upload to S3: {upload_result.get('error')}")
+                error_msg = upload_result.get('error', 'Unknown S3 upload error')
+                logger.warning(f"❌ Failed to upload to S3: {error_msg}")
                 # Return just local path if S3 upload fails
                 return filepath
                 
@@ -498,7 +573,7 @@ def run_framework_update_check(
     store_in_media: bool = True,
 ) -> dict:
     """
-    Run the Perplexity check for a framework.
+    Run the Perplexity check for a framework with an auto-retry loop.
 
     Args:
         framework_name: Name of the framework
@@ -514,102 +589,129 @@ def run_framework_update_check(
         notes, downloaded_path (optional), processing_result (optional)
     """
     download_folder = download_dir or "downloads"
-    logger.info(f"🔍 DEBUGGING: Calling Perplexity API for {framework_name} with last_date={last_updated_date}")
-    update_info = query_perplexity_api(framework_name, last_updated_date, api_key)
-    logger.info(f"🔍 DEBUGGING: Perplexity API response: {update_info}")
-
+    
     downloaded_path = None
     downloaded_info = None  # Will contain S3 info if available
     processing_result = None
+    update_info = {}
+    failed_urls = []
     
-    # Log the update check results with full details
-    logger.info(f"📊 Update check results for {framework_name}:")
-    logger.info(f"   - has_update: {update_info.get('has_update')}")
-    logger.info(f"   - document_url: {update_info.get('document_url')}")
-    logger.info(f"   - latest_update_date: {update_info.get('latest_update_date')}")
-    logger.info(f"   - version: {update_info.get('version')}")
-    logger.info(f"   - notes: {update_info.get('notes')}")
-    print(f"[UPDATE-CHECK] {framework_name}: has_update={update_info.get('has_update')}, document_url={'present' if update_info.get('document_url') else 'missing'}")
-    
-    if update_info.get("has_update") and update_info.get("document_url"):
-        logger.info(f"📥 DEBUGGING: Document URL found, attempting to download from: {update_info['document_url']}")
-        print(f"[DOWNLOAD] Starting download for {framework_name}: {update_info['document_url']}")
-        try:
-            download_result = download_document(
-                framework_name,
-                update_info["document_url"],
-                download_folder,
-                api_key=api_key,
-                store_in_media=store_in_media,
-            )
-            
-            logger.info(f"🔍 DEBUGGING: download_document returned: {download_result}")
-            print(f"[DOWNLOAD] Result: {'success' if download_result else 'failed'}")
-            
-            if download_result:
-                # Handle both dict (with S3 info) and string (local path only) returns
-                if isinstance(download_result, dict):
-                    downloaded_path = download_result.get('local_path')
-                    downloaded_info = download_result
-                    logger.info(f"✅ Successfully downloaded and uploaded to S3: {downloaded_info.get('s3_url')}")
-                    print(f"[DOWNLOAD] ✅ S3 upload success: {downloaded_info.get('s3_url')}")
-                else:
-                    downloaded_path = download_result
-                    logger.info(f"✅ Successfully downloaded amendment document for {framework_name} to {downloaded_path}")
-                    print(f"[DOWNLOAD] ✅ Local download success: {downloaded_path}")
-                
-                # Only process the downloaded amendment if explicitly requested
-                # Note: By default, we now wait for manual trigger via "Start Analysis" button
-                if process_amendment and framework_id and downloaded_path and downloaded_path.lower().endswith('.pdf'):
-                    try:
-                        from .amendment_processor import process_downloaded_amendment
-                        
-                        logger.info(f"Starting amendment processing for {framework_name}")
-                        
-                        # Use the download directory as the output directory for processing
-                        output_dir = download_dir if download_dir else os.path.dirname(downloaded_path)
-                        
-                        processing_result = process_downloaded_amendment(
-                            pdf_path=downloaded_path,
-                            framework_name=framework_name,
-                            framework_id=framework_id,
-                            amendment_date=update_info.get('latest_update_date', last_updated_date),
-                            output_dir=output_dir
-                        )
-                        
-                        if processing_result.get('success'):
-                            logger.info(f"Successfully processed amendment: {processing_result.get('output_file')}")
-                        else:
-                            logger.error(f"Amendment processing failed: {processing_result.get('error')}")
-                            
-                    except Exception as e:
-                        logger.error(f"Error processing amendment: {str(e)}")
-                        import traceback
-                        logger.error(traceback.format_exc())
-                        processing_result = {
-                            'success': False,
-                            'error': str(e)
-                        }
-            else:
-                logger.error(f"❌ Download failed or returned None for {framework_name}. document_url was: {update_info.get('document_url')}")
-                print(f"[DOWNLOAD] ❌ Download failed for {framework_name}")
-                        
-        except Exception as e:
-            logger.error(f"❌ Error downloading document for {framework_name}: {str(e)}")
-            print(f"[DOWNLOAD] ❌ Exception during download: {str(e)}")
-            import traceback
-            logger.error(traceback.format_exc())
-            downloaded_path = None
-    else:
+    MAX_RETRIES = 3
+    for attempt in range(1, MAX_RETRIES + 1):
+        logger.info(f"🔍 DEBUGGING: Calling Perplexity API for {framework_name} with last_date={last_updated_date} (Attempt {attempt}/{MAX_RETRIES})")
+        current_update_info = query_perplexity_api(framework_name, last_updated_date, api_key, failed_urls=failed_urls)
+        logger.info(f"🔍 DEBUGGING: Perplexity API response: {current_update_info}")
+        
+        # Merge info to keep the latest results in top-level scope
+        update_info = current_update_info
+        
+        logger.info(f"📊 Update check results for {framework_name} (Attempt {attempt}):")
+        logger.info(f"   - has_update: {update_info.get('has_update')}")
+        logger.info(f"   - document_url: {update_info.get('document_url')}")
+        logger.info(f"   - version: {update_info.get('version')}")
+        print(f"[UPDATE-CHECK] {framework_name} (Attempt {attempt}): has_update={update_info.get('has_update')}, document_url={'present' if update_info.get('document_url') else 'missing'}")
+        
+        # Condition 1: No update found. This is a definitive result. Break immediately.
         if not update_info.get("has_update"):
             logger.info(f"❌ No update found for {framework_name} (has_update=False)")
             print(f"[UPDATE-CHECK] ❌ No update found for {framework_name}")
-        elif not update_info.get("document_url"):
+            break
+            
+        # Condition 2: Update found but NO URL. This is likely an AI hallucination/miss. Retry if we can.
+        if update_info.get("has_update") and not update_info.get("document_url"):
             logger.warning(f"⚠️ Update found for {framework_name} but no document_url provided")
             print(f"[UPDATE-CHECK] ⚠️ Update found but no document URL for {framework_name}")
-        else:
-            logger.warning(f"❓ Unexpected condition for {framework_name}: has_update={update_info.get('has_update')}, document_url present={bool(update_info.get('document_url'))}")
-            print(f"[UPDATE-CHECK] ❓ Unexpected condition for {framework_name}")
+            if attempt < MAX_RETRIES:
+                logger.info(f"🔄 Retrying whole search process (Attempt {attempt+1})...")
+                continue
+            else:
+                break
+                
+        # Condition 3: Update found AND URL present. Attempt download!
+        if update_info.get("has_update") and update_info.get("document_url"):
+            logger.info(f"📥 DEBUGGING: Document URL found, attempting to download from: {update_info['document_url']}")
+            print(f"[DOWNLOAD] Starting download for {framework_name}: {update_info['document_url']}")
+            try:
+                download_result = download_document(
+                    framework_name,
+                    update_info["document_url"],
+                    download_folder,
+                    api_key=api_key,
+                    store_in_media=store_in_media,
+                )
+                
+                logger.info(f"🔍 DEBUGGING: download_document returned: {download_result}")
+                print(f"[DOWNLOAD] Result: {'success' if download_result else 'failed'}")
+                
+                if download_result:
+                    # SUCCESS!
+                    # [STABILIZATION] Only CLEAR amendments if we actually download a valid file
+                    try:
+                        from grc.models import Framework
+                        fw_to_clear = Framework.objects.get(FrameworkId=framework_id)
+                        fw_to_clear.Amendment = []
+                        fw_to_clear.save(update_fields=['Amendment'])
+                        logger.info(f"✅ Cleared existing amendments after successful download for framework {framework_id}")
+                        print(f"[DOWNLOAD] ✅ Cleared existing amendments in database")
+                    except Exception as clear_err:
+                        logger.warning(f"Failed to clear amendments: {str(clear_err)}")
+
+                    if isinstance(download_result, dict):
+                        downloaded_path = download_result.get('local_path')
+                        downloaded_info = download_result
+                        logger.info(f"✅ Successfully downloaded and uploaded to S3: {downloaded_info.get('s3_url')}")
+                        print(f"[DOWNLOAD] ✅ S3 upload success: {downloaded_info.get('s3_url')}")
+                    else:
+                        downloaded_path = download_result
+                        logger.info(f"✅ Successfully downloaded amendment document for {framework_name} to {downloaded_path}")
+                        print(f"[DOWNLOAD] ✅ Local download success: {downloaded_path}")
+                    
+                    # Process amendment if requested
+                    if process_amendment and framework_id and downloaded_path and downloaded_path.lower().endswith('.pdf'):
+                        try:
+                            from .amendment_processor import process_downloaded_amendment
+                            logger.info(f"Starting amendment processing for {framework_name}")
+                            output_dir = download_dir if download_dir else os.path.dirname(downloaded_path)
+                            processing_result = process_downloaded_amendment(
+                                pdf_path=downloaded_path,
+                                framework_name=framework_name,
+                                framework_id=framework_id,
+                                amendment_date=update_info.get('latest_update_date', last_updated_date),
+                                output_dir=output_dir
+                            )
+                            if processing_result.get('success'):
+                                logger.info(f"Successfully processed amendment: {processing_result.get('output_file')}")
+                            else:
+                                logger.error(f"Amendment processing failed: {processing_result.get('error')}")
+                        except Exception as e:
+                            logger.error(f"Error processing amendment: {str(e)}")
+                            processing_result = {'success': False, 'error': str(e)}
+                            
+                    # Successfully downloaded (and processed), break out of retry loop!
+                    break
+                else:
+                    # Download failed (invalid PDF, broken URL, etc). Retry if possible.
+                    logger.error(f"❌ Download failed or returned None for {framework_name}. document_url was: {update_info.get('document_url')}")
+                    print(f"[DOWNLOAD] ❌ Download failed for {framework_name}")
+                    if update_info.get("document_url"):
+                        failed_urls.append(update_info["document_url"])
+                    if attempt < MAX_RETRIES:
+                        logger.info(f"🔄 Download failed. Retrying whole search process (Attempt {attempt+1})...")
+                        continue
+                    else:
+                        break
+                            
+            except Exception as e:
+                logger.error(f"❌ Error downloading document for {framework_name}: {str(e)}")
+                print(f"[DOWNLOAD] ❌ Exception during download: {str(e)}")
+                if update_info.get("document_url"):
+                    failed_urls.append(update_info["document_url"])
+                downloaded_path = None
+                if attempt < MAX_RETRIES:
+                    logger.info(f"🔄 Download error. Retrying whole search process (Attempt {attempt+1})...")
+                    continue
+                else:
+                    break
 
     result = {
         **update_info,

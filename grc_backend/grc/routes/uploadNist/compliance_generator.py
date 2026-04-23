@@ -406,6 +406,8 @@ def generate_compliance_for_single_subpolicy(
                 pass
         
         # Generate compliance records using simple AI call
+        # FALLBACK: if control is missing, AI task in grc/ai/tasks/policy.py will use subpolicy_title/description
+        # But we pass them explicitly here for maximum context.
         result = _generate_compliance_with_ai(
             subpolicy_name, description, control, current_date
         )
@@ -417,7 +419,11 @@ def generate_compliance_for_single_subpolicy(
             compliance_data = result
         
         compliances = compliance_data.get("compliances", [])
-        debug_print(f"[AMENDMENT][COMPLIANCE]   ✅ AI returned compliances={len(compliances)}")
+        if not compliances:
+            debug_print(f"[AMENDMENT][COMPLIANCE]   ⚠️ AI returned empty list for '{subpolicy_name}'")
+        else:
+            debug_print(f"[AMENDMENT][COMPLIANCE]   ✅ AI successfully returned {len(compliances)} compliances")
+
         
         # Process each compliance and add subpolicy reference
         processed_compliances = []

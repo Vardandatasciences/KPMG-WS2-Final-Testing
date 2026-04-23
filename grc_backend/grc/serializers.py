@@ -556,7 +556,7 @@ class RiskSerializer(AutoDecryptingModelSerializer):
             'RiskId', 'ComplianceId', 'RiskTitle', 'Criticality', 'PossibleDamage',
             'Category', 'RiskType', 'BusinessImpact', 'RiskPriority', 'RiskDescription',
             'RiskLikelihood', 'RiskImpact', 'RiskExposureRating', 'RiskMultiplierX',
-            'RiskMultiplierY', 'RiskMitigation', 'CreatedAt', 'FrameworkId', 'data_inventory'
+            'RiskMultiplierY', 'RiskMitigation', 'CreatedAt', 'FrameworkId', 'data_inventory', 'Origin'
         ]  # Explicitly list fields that exist in the model
 
     def validate_RiskLikelihood(self, value):

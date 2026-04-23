@@ -266,10 +266,14 @@
             <div class="cfm-mapping-to">
               <div class="cfm-mapping-framework">{{ change.framework2_name }}</div>
               <div class="cfm-mapping-control">
-                <span v-if="change.control2_identifier" class="cfm-control-identifier">[{{ change.control2_identifier }}]</span>
+                <span v-if="change.identifier" class="cfm-control-identifier">[{{ change.identifier }}]</span>
                 {{ change.control2_title }}
               </div>
-              <div class="cfm-mapping-description">{{ truncateText(change.control2_description, 100) }}</div>
+              <div class="cfm-mapping-description">{{ truncateText(change.control2_description, 200) }}</div>
+              <div class="cfm-compliance-meta">
+                <span class="cfm-meta-badge">{{ change.criticality || 'N/A' }}</span>
+                <span class="cfm-meta-badge">{{ change.mandatory || 'N/A' }}</span>
+              </div>
             </div>
           </template>
 
@@ -278,10 +282,14 @@
             <div class="cfm-mapping-from">
               <div class="cfm-mapping-framework">{{ change.framework1_name }}</div>
               <div class="cfm-mapping-control">
-                <span v-if="change.control1_identifier" class="cfm-control-identifier">[{{ change.control1_identifier }}]</span>
+                <span v-if="change.identifier" class="cfm-control-identifier">[{{ change.identifier }}]</span>
                 {{ change.control1_title }}
               </div>
-              <div class="cfm-mapping-description">{{ truncateText(change.control1_description, 100) }}</div>
+              <div class="cfm-mapping-description">{{ truncateText(change.control1_description, 200) }}</div>
+              <div class="cfm-compliance-meta">
+                <span class="cfm-meta-badge">{{ change.criticality || 'N/A' }}</span>
+                <span class="cfm-meta-badge">{{ change.mandatory || 'N/A' }}</span>
+              </div>
             </div>
             
             <div class="cfm-mapping-arrow">
@@ -304,10 +312,14 @@
             <div class="cfm-mapping-from">
               <div class="cfm-mapping-framework">{{ change.framework1_name }}</div>
               <div class="cfm-mapping-control">
-                <span v-if="change.control1_identifier" class="cfm-control-identifier">[{{ change.control1_identifier }}]</span>
+                <span v-if="change.identifier" class="cfm-control-identifier">[{{ change.identifier }}]</span>
                 {{ change.control1_title }}
               </div>
-              <div class="cfm-mapping-description">{{ truncateText(change.control1_description, 100) }}</div>
+              <div class="cfm-mapping-description">{{ truncateText(change.control1_description, 200) }}</div>
+              <div class="cfm-compliance-meta">
+                <span class="cfm-meta-badge">{{ change.criticality || 'N/A' }}</span>
+                <span class="cfm-meta-badge">{{ change.mandatory || 'N/A' }}</span>
+              </div>
             </div>
             
             <div class="cfm-mapping-arrow">
@@ -320,10 +332,14 @@
             <div class="cfm-mapping-to">
               <div class="cfm-mapping-framework">{{ change.framework2_name }}</div>
               <div class="cfm-mapping-control">
-                <span v-if="change.control2_identifier" class="cfm-control-identifier">[{{ change.control2_identifier }}]</span>
+                <span v-if="change.identifier" class="cfm-control-identifier">[{{ change.identifier }}]</span>
                 {{ change.control2_title }}
               </div>
-              <div class="cfm-mapping-description">{{ truncateText(change.control2_description, 100) }}</div>
+              <div class="cfm-mapping-description">{{ truncateText(change.control2_description, 200) }}</div>
+              <div class="cfm-compliance-meta">
+                <span class="cfm-meta-badge">{{ change.criticality || 'N/A' }}</span>
+                <span class="cfm-meta-badge">{{ change.mandatory || 'N/A' }}</span>
+              </div>
             </div>
           </template>
 
@@ -338,16 +354,8 @@
 </template>
 
 <script>
-import apiService from '@/services/apiService.js'
+import axios from 'axios'
 import { API_BASE_URL } from '../../config/api.js'
-
-const axios = {
-  get: async (url, config = {}) => ({ data: await apiService.get(url, config.params || {}, { ...config, params: undefined }) }),
-  post: async (url, data, config = {}) => ({ data: await apiService.post(url, data, config) }),
-  put: async (url, data, config = {}) => ({ data: await apiService.put(url, data, config) }),
-  patch: async (url, data, config = {}) => ({ data: await apiService.patch(url, data, config) }),
-  delete: async (url, config = {}) => ({ data: await apiService.delete(url, config) })
-}
 
 export default {
   name: 'CrossFrameworkMapping',
@@ -521,9 +529,67 @@ export default {
       this.error = ''
       this.successMessage = ''
       this.processingMessage = 'Comparing framework versions...'
-      this.processingSubMessage = 'Detecting changes between versions'
+      this.processingSubMessage = 'Utilizing AI for semantic gap analysis'
 
       try {
+        console.log(`🤖 Requesting Semantic Comparison Between Frameworks...`)
+        
+        const response = await axios.post(`${API_BASE_URL}/api/change-management/compare-versions/`, {
+          framework1_id: this.framework1Id,
+          framework2_id: this.framework2Id
+        })
+
+        if (response.data.success && response.data.result) {
+          const aiResult = response.data.result
+          const changes = aiResult.changes || (aiResult.result && aiResult.result.changes)
+          
+          if (changes && changes.length > 0) {
+            // Build a lookup map of Framework 2 compliances for metadata enrichment
+            const fw2Lookup = {}
+            if (this.framework2Compliances && this.framework2Compliances.length > 0) {
+              this.framework2Compliances.forEach(c => {
+                fw2Lookup[c.ComplianceId] = c
+                fw2Lookup[c.Identifier] = c
+              })
+            }
+
+            this.mappingResults = changes.map(change => {
+              const localMeta = fw2Lookup[change.id] || fw2Lookup[change.identifier] || {}
+              
+              return {
+                change_type: (change.change_type || 'modified').toUpperCase(),
+                control1_id: change.id,
+                control1_title: change.title || localMeta.ComplianceTitle || change.id,
+                control1_description: localMeta.ComplianceItemDescription || '',
+                framework1_name: this.framework1.framework_name,
+                
+                control2_id: change.id,
+                control2_title: change.title || localMeta.ComplianceTitle || change.id,
+                control2_description: localMeta.ComplianceItemDescription || '',
+                framework2_name: this.framework2.framework_name,
+                
+                ai_analysis: change.semantic_diff || (change.change_type === 'unchanged' ? 'Identical requirements' : 'New requirement identified')
+              }
+            })
+            
+            this.summary = {
+              new: aiResult.summary?.new_items || 0,
+              modified: aiResult.summary?.modified_items || 0,
+              removed: aiResult.summary?.removed_items || 0,
+              unchanged: aiResult.summary?.unchanged_items || 0,
+              overall_impact: aiResult.summary?.overall_impact || 'Moderate'
+            }
+
+            this.successMessage = `Semantic Comparison Complete: ${this.summary.new} new, ${this.summary.modified} modified`
+            this.isProcessing = false
+            return
+          }
+        }
+
+        // Fallback to local comparison if AI is not available or fails
+        this.processingSubMessage = 'Falling back to structural comparison'
+        console.warn('⚠️ AI comparison unavailable or failed, performing structural comparison')
+        
         const changes = []
         
         // Create maps for quick lookup by identifier

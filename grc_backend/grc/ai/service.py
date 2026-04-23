@@ -35,6 +35,7 @@ from .tasks.risk import RISK_TASKS
 from .tasks.incident import INCIDENT_TASKS
 from .tasks.similarity import SIMILARITY_TASKS
 from .tasks.gap_analysis import GAP_ANALYSIS_TASKS
+from .tasks.mapping import MAPPING_TASKS
 from .types import AIRequestOptions, EvidenceSource, InferenceTrace
 
 
@@ -442,6 +443,7 @@ class AIService:
             **INCIDENT_TASKS,
             **SIMILARITY_TASKS,
             **GAP_ANALYSIS_TASKS,
+            **MAPPING_TASKS,
         }.get(task_name)
         if task is None:
             raise RuntimeError(f"Unknown AI task: {task_name}")

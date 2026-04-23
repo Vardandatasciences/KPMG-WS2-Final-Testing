@@ -379,6 +379,9 @@
         <div class="menu-item" @click="navigate('/risk/system-identified-risks')" :class="{'active': isActive('/risk/system-identified-risks')}">
           <i class="fas fa-robot icon"></i>
           <span>System Identified Risks</span>
+          <span v-if="!isCollapsed && pendingRiskCount > 0" class="notification-badge pulsing">
+            {{ pendingRiskCount }}
+          </span>
         </div>
       </div>
 
@@ -798,10 +801,6 @@
             <i class="fas fa-check-square icon"></i>
             <span>All Approvals</span>
           </div>
-          <div class="menu-item" @click="navigate('/tprm-app/vendor-assignee-decision')" :class="{'active': isActive('/tprm-app/vendor-assignee-decision')}">
-            <i class="fas fa-clipboard-check icon"></i>
-            <span>Vendor Decision</span>
-          </div>
         </div>
       </div>
       <div @click="toggleSubmenu('vendorMgmtModule')" class="menu-item has-submenu" :class="{'expanded': openMenus.vendorMgmtModule}">
@@ -1154,7 +1153,7 @@
 
 <script>
 import {  API_ENDPOINTS } from '../../config/api.js'
-import apiService from '@/services/apiService.js'
+import apiService from '../../services/apiService.js'
 import authService from '../../services/authService.js'
 
 import { ref, onMounted, onUnmounted, computed } from 'vue'
@@ -1176,6 +1175,7 @@ export default {
     const isBottomSectionCollapsed = ref(true) // Default to collapsed)
     const currentColorblindMode = ref(null)
     const username = ref('User')
+    const pendingRiskCount = ref(0)
     
     // Compute current route path for active highlighting
     const currentPath = computed(() => route.path)
@@ -1273,6 +1273,13 @@ export default {
 
     const toggleSubmenu = (section) => {
       openMenus.value[section] = !openMenus.value[section]
+    }
+
+    // Close all open menus
+    const closeAllMenus = () => {
+      Object.keys(openMenus.value).forEach(key => {
+        openMenus.value[key] = false
+      })
     }
 
     const toggleThemeMenu = () => {
@@ -1382,91 +1389,6 @@ export default {
       }
     }
     
-    // Load theme preference from backend or local storage (unused function)
-    // const loadUserTheme = async () => {
-    //   try {
-    //     const userId = localStorage.getItem('user_id')
-    //     let theme = 'light'
-    //     let colorblind = null
-    //     
-    //     if (userId) {
-    //       try {
-    //         // Try to load from backend
-    //         const response = await axios.get(API_ENDPOINTS.GET_USER_THEME(userId), {
-    //           headers: {
-    //             'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-    //             'Content-Type': 'application/json'
-    //           }
-    //         })
-    //         
-    //         if (response.data && response.data.status === 'success') {
-    //           theme = response.data.theme || 'light'
-    //           colorblind = response.data.colorblind || null
-    //         }
-    //       } catch (backendError) {
-    //         console.log('Could not load theme from backend, using localStorage:', backendError)
-    //         // Fallback to localStorage
-    //         theme = localStorage.getItem('selected-theme') || 'light'
-    //         colorblind = localStorage.getItem('selected-colorblind') || null
-    //       }
-    //     } else {
-    //       // No user ID, use localStorage
-    //       theme = localStorage.getItem('selected-theme') || 'light'
-    //       colorblind = localStorage.getItem('selected-colorblind') || null
-    //     }
-    //     
-    //     // Apply theme globally to all root elements
-    //     currentTheme.value = theme
-    //     document.documentElement.setAttribute('data-theme', theme)
-    //     document.body.setAttribute('data-theme', theme)
-    //     const appElement = document.getElementById('app')
-    //     if (appElement) {
-    //       appElement.setAttribute('data-theme', theme)
-    //     }
-    //     localStorage.setItem('selected-theme', theme)
-    //     
-    //     // Apply color-blindness mode if set
-    //     if (colorblind) {
-    //       currentColorblindMode.value = colorblind
-    //       document.documentElement.setAttribute('data-colorblind', colorblind)
-    //       document.body.setAttribute('data-colorblind', colorblind)
-    //       if (appElement) {
-    //         appElement.setAttribute('data-colorblind', colorblind)
-    //       }
-    //       localStorage.setItem('selected-colorblind', colorblind)
-    //       console.log(`✅ Loaded color-blindness mode: ${colorblind}`)
-    //     } else {
-    //       // Ensure color-blindness is disabled
-    //       currentColorblindMode.value = null
-    //       document.documentElement.removeAttribute('data-colorblind')
-    //       document.body.removeAttribute('data-colorblind')
-    //       if (appElement) {
-    //         appElement.removeAttribute('data-colorblind')
-    //       }
-    //     }
-    //   } catch (error) {
-    //     console.error('Error loading theme:', error)
-    //     // Default to light theme if error
-    //     const fallbackTheme = localStorage.getItem('selected-theme') || 'light'
-    //     const fallbackColorblind = localStorage.getItem('selected-colorblind') || null
-    //     currentTheme.value = fallbackTheme
-    //     document.documentElement.setAttribute('data-theme', fallbackTheme)
-    //     document.body.setAttribute('data-theme', fallbackTheme)
-    //     const appElement = document.getElementById('app')
-    //     if (appElement) {
-    //       appElement.setAttribute('data-theme', fallbackTheme)
-    //     }
-    //     
-    //     if (fallbackColorblind) {
-    //       currentColorblindMode.value = fallbackColorblind
-    //       document.documentElement.setAttribute('data-colorblind', fallbackColorblind)
-    //       document.body.setAttribute('data-colorblind', fallbackColorblind)
-    //       if (appElement) {
-    //         appElement.setAttribute('data-colorblind', fallbackColorblind)
-    //       }
-    //     }
-    //   }
-    // }
 
     const handleDashboardClick = () => {
       toggleSubmenu('dashboard')
@@ -1478,6 +1400,18 @@ export default {
     const navigate = (path) => {
       // Simple navigation without interceptor interference
       router.push(path)
+    }
+
+    const fetchPendingRiskCount = async () => {
+      try {
+        const data = await apiService.get(API_ENDPOINTS.SYSTEM_RISKS_STATS, {}, { background: true })
+        if (data && (data.stats || data.counts)) {
+          const stats = data.stats || data.counts
+          pendingRiskCount.value = stats.pending_count || stats.PENDING_REVIEW || 0
+        }
+      } catch (error) {
+        console.warn('Failed to fetch pending risk count:', error)
+      }
     }
 
     // Get logged in username
@@ -1546,6 +1480,11 @@ export default {
 
     onMounted(() => {
       fetchUsername();
+      fetchPendingRiskCount();
+      
+      // Set up polling for pending risk count (every 5 minutes)
+      const riskPollingInterval = setInterval(fetchPendingRiskCount, 5 * 60 * 1000)
+      window.riskPollingInterval = riskPollingInterval
       const savedTheme = localStorage.getItem('selected-theme') || 'light'
       setTheme(savedTheme)
       
@@ -1555,11 +1494,39 @@ export default {
       // Listen for authentication events
       window.addEventListener('authChanged', handleLogin)
       eventBus.on(LOGOUT_EVENT, handleLogout)
+      
+      // Listen for clicks outside sidebar to close all menus
+      const handleClickOutside = (event) => {
+        const sidebar = document.querySelector('.sidebar')
+        const clickedElement = event.target
+        
+        // Check if click is outside the sidebar
+        if (sidebar && !sidebar.contains(clickedElement)) {
+          closeAllMenus()
+        }
+      }
+      
+      // Add click listener to document
+      document.addEventListener('click', handleClickOutside)
+      
+      // Store handler for cleanup
+      window.sidebarClickHandler = handleClickOutside
     })
     onUnmounted(() => {
       window.removeEventListener('userDataUpdated', fetchUsername)
       window.removeEventListener('authChanged', handleLogin)
       eventBus.off(LOGOUT_EVENT, handleLogout)
+      
+      if (window.riskPollingInterval) {
+        clearInterval(window.riskPollingInterval)
+        delete window.riskPollingInterval
+      }
+
+      // Remove click outside listener
+      if (window.sidebarClickHandler) {
+        document.removeEventListener('click', window.sidebarClickHandler)
+        delete window.sidebarClickHandler
+      }
     })
 
     return {
@@ -1581,7 +1548,9 @@ export default {
       isActive,
       handleLogoutClick,
       kpiLabel,
-      isBaselFramework
+      isBaselFramework,
+      pendingRiskCount,
+      fetchPendingRiskCount
     }
   }
 }
@@ -1795,4 +1764,37 @@ export default {
 .bold-text {
   font-weight: bold !important;
 }
-</style> 
+
+/* Notification Badge Styles */
+.notification-badge {
+  background-color: #ff4757;
+  color: white;
+  font-size: 0.7rem;
+  font-weight: bold;
+  padding: 2px 6px;
+  border-radius: 10px;
+  margin-left: auto;
+  min-width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.notification-badge.pulsing {
+  animation: pulse-bg 2s infinite;
+}
+
+@keyframes pulse-bg {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 71, 87, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 6px rgba(255, 71, 87, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 71, 87, 0);
+  }
+}
+</style>

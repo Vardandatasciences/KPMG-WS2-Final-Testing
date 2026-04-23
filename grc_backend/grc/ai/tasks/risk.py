@@ -823,10 +823,120 @@ DOCUMENT:
     return enriched_instances
 
 
+def identify_risks_task(
+    service,
+    payload: dict[str, Any],
+    metadata: dict[str, Any] | None = None,
+    options: AIRequestOptions | None = None,
+):
+    """
+    Universal task for identifying risks from various data sources.
+    Supported source_types: INCIDENT, AUDIT, COMPLIANCE, DOCUMENT, TPRM, MANUAL.
+    """
+    source_type = payload.get("source_type", "GENERAL")
+    data_summary = payload.get("data_summary", "")
+    
+    print(f"[AI-TASK] identify_risks_task START: source={source_type}")
+    
+    prompt = f"""You are a senior GRC (Governance, Risk, Compliance) and Enterprise Risk Management expert.
+Analyze the following data from the {source_type} module and identify potential risks that should be added to the Risk Register.
+
+INPUT DATA:
+\"\"\"{data_summary}\"\"\"
+
+REQUIREMENTS:
+1. Identify 1-3 distinct risks from this data.
+2. For each risk, provide:
+   - risk_title: Concise, professional title.
+   - risk_description: Detailed explanation of the risk scenario (cause -> event -> consequence).
+   - category: Best fit (Operational, Financial, Strategic, Compliance, Technical, Reputational, Information Security, Third-Party, etc.).
+   - risk_type: "Current" or "Emerging".
+   - criticality: "Low", "Medium", "High", or "Critical".
+   - business_impact: 2-3 sentences describing realistic revenue, SLA, operational, reputation, or regulatory exposure.
+   - possible_damage: 1-2 sentences describing the specific type of loss (financial, data, assets).
+   - likelihood: Integer 1-10.
+   - impact: Integer 1-10.
+   - ai_reasoning: 2-3 sentences explaining why this data points to this specific risk. Include citations if possible.
+   - confidence_score: Integer 0-100 reflecting your certainty.
+   - velocity_score: Integer 1-10 (1=Slow/Years, 10=Instant/Days) reflecting how quickly the risk could materialize.
+   - control_effectiveness: "Low", "Medium", or "High" based on how well existing controls might address this risk.
+   - framework_reference: A concise reference (e.g. "ME 4", "NIST PR.AC-1") if applicable.
+    - per_field_rationale: CRITICAL. Provide a JSON object with rationales for these keys: "risk_title", "risk_description", "category", "risk_type", "criticality", "likelihood", "impact", "velocity", "control_effectiveness", "mitigation_steps", "possible_damage", "business_impact". For each, explain WHAT the selection represents and HOW the specific source data points (title, description, impact) led to this selection.
+   - mitigation_steps: JSON array of 2-4 actionable steps.
+   - functional_area: The department/area most affected (e.g., IT, Finance, HR, Operations, Legal).
+
+OUTPUT FORMAT:
+Return ONLY a JSON array of objects.
+[
+  {{
+    "risk_title": "...",
+    "risk_description": "...",
+    "category": "...",
+    "risk_type": "...",
+    "criticality": "...",
+    "business_impact": "...",
+    "possible_damage": "...",
+    "likelihood": 5,
+    "impact": 5,
+    "ai_reasoning": "...",
+    "confidence_score": 85,
+    "velocity_score": 5,
+    "control_effectiveness": "...",
+    "framework_reference": "...",
+    "per_field_rationale": {{
+        "risk_title": "...",
+        "risk_description": "...",
+        "category": "...",
+        "risk_type": "...",
+        "criticality": "...",
+        "likelihood": "...",
+        "impact": "...",
+        "velocity": "...",
+        "control_effectiveness": "...",
+        "mitigation_steps": "...",
+        "possible_damage": "...",
+        "business_impact": "...",
+        "functional_area": "...",
+        "framework_reference": "..."
+    }},
+    "mitigation_steps": ["step 1", "step 2"],
+    "functional_area": "..."
+  }}
+]
+
+CRITICAL RULES:
+- Return ONLY the JSON array. No markdown, no extra text.
+- If no risks are found, return an empty array [].
+- Be realistic and professional. Avoid generic boilerplate.
+- Ensure all integer fields are valid numbers.
+"""
+
+    result = _generate_json(service, "risk.identify_risks", prompt, options)
+    
+    # Normalize result to ensure it's a list
+    if isinstance(result, list):
+        risks = result
+    elif isinstance(result, dict):
+        # Handle cases where LLM wraps array in a key
+        for key in ["risks", "identified_risks", "data"]:
+            if isinstance(result.get(key), list):
+                risks = result[key]
+                break
+        else:
+            risks = [result]
+    else:
+        risks = []
+    
+    print(f"[AI-TASK] identify_risks_task DONE: source={source_type}, found={len(risks)} risks")
+    return risks
+
+
+
 RISK_TASKS = {
     "risk.analyze_security_incident": analyze_security_incident_task,
     "risk.infer_field": infer_risk_field_task,
     "risk.ingest_risk_document": ingest_risk_document_task,
     "risk.ingest_risk_instance_document": ingest_risk_instance_document_task,
     "risk.ingest_risk_instance_document_streaming": ingest_risk_instance_document_streaming,
+    "risk.identify_risks": identify_risks_task,
 }

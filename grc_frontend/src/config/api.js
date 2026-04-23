@@ -2,7 +2,7 @@
 // Change this variable to switch between different environments
 
 // Environment Configuration
-const ENVIRONMENT = 'aws';
+const ENVIRONMENT = 'development';
 // Options: 'aws', 'local', 'development'
 
 // API Base URLs for different environments
@@ -515,6 +515,7 @@ export const API_ENDPOINTS = {
   INCIDENT_AI_TEST: `${API_BASE_URL}/api/ai-incident-test/`,
   // System Identified Risk Queue
   SYSTEM_RISKS_RUN_SCAN_INCIDENT: `${API_BASE_URL}/api/system-risks/run-scan/incident/`,
+  SYSTEM_RISKS_RUN_SCAN_MANUAL: `${API_BASE_URL}/api/system-risks/run-scan/manual/`,
   SYSTEM_RISKS_RUN_TEST_ANALYSIS: `${API_BASE_URL}/api/system-risks/run-test-analysis/`,
   SYSTEM_RISKS_RUN_TEST_ANALYSIS_STATUS: (jobId) => `${API_BASE_URL}/api/system-risks/run-test-analysis/${jobId}/status/`,
   SYSTEM_RISKS_RUN_TEST_ANALYSIS_CANCEL: (jobId) => `${API_BASE_URL}/api/system-risks/run-test-analysis/${jobId}/cancel/`,

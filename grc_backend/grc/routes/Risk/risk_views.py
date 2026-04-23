@@ -804,6 +804,7 @@ class RiskViewSet(viewsets.ModelViewSet):
                         r.RiskPriority,
                         r.RiskMitigation,
                         r.CreatedAt,
+                        r.Origin,
                         u.UserName as CreatedBy,
                         CONCAT(u.FirstName, ' ', u.LastName) as CreatedByName,
                         d.DepartmentName,
@@ -910,6 +911,17 @@ class RiskViewSet(viewsets.ModelViewSet):
         # SECURITY: Never trust client-supplied ownership fields.
         request.data['UserId'] = request.user.id
         request.data['user_id'] = request.user.id
+        if 'Origin' in request.data:
+            debug_print(f"🌐 [RISK CREATE] Risk origin provided by frontend: {request.data.get('Origin')}")
+        
+        # ✅ Backend Tracking: If Origin is not SYSTEM-AI, check if user recently performed an AI analysis
+        # This bridges the gap if the frontend fails to send the correct origin.
+        if request.user.is_authenticated and request.data.get('Origin') != 'SYSTEM-AI':
+            cache_key = f"ai_analysis_flag_{request.user.id}"
+            if cache.get(cache_key):
+                request.data['Origin'] = 'SYSTEM-AI'
+                cache.delete(cache_key)  # Clear the flag as requested
+                debug_print(f"🌐 [RISK CREATE] Risk origin IDENTIFIED from backend cache: SYSTEM-AI (Flag cleared)")
         
         if framework_id:
             # Add framework ID if one is selected
@@ -4617,6 +4629,7 @@ def get_all_risks_for_dropdown(request):
                     r.RiskPriority,
                     r.RiskMitigation,
                     r.CreatedAt,
+                    r.Origin,
                     u.UserName as CreatedBy,
                     CONCAT(u.FirstName, ' ', u.LastName) as CreatedByName,
                     d.DepartmentName,

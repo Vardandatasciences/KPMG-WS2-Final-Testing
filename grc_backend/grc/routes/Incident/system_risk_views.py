@@ -20,7 +20,10 @@ from ...jwt_auth import UnifiedJWTAuthentication
 from ...tenant_utils import get_tenant_id_from_request, require_tenant
 from .system_risk_service import (
     generate_risk_candidates_from_incidents,
+    generate_risk_candidates_from_multiple_sources,
     generate_risk_candidates_from_synthetic_sources,
+    generate_risk_candidates_from_document,
+    find_latest_risk_document,
     create_risk_from_queue_entry,
     create_risk_from_queue_entry_for_workflow,
     get_queue_statistics,
@@ -94,10 +97,10 @@ class CsrfExemptSessionAuthentication(SessionAuthentication):
         return
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication, CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([IsAuthenticated])
 @require_tenant
 @csrf_exempt
+@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 def run_incident_risk_scan(request):
     """Run AI scan on incidents to generate risk candidates."""
     tenant_id = get_tenant_id_from_request(request)
@@ -121,6 +124,53 @@ def run_incident_risk_scan(request):
         })
     except Exception as e:
         print(f"[API] run_incident_risk_scan error: {e}")
+        return Response({
+            'status': 'error',
+            'message': f'Scan failed: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['POST'])
+@require_tenant
+@csrf_exempt
+@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+def run_manual_risk_scan(request):
+    """Run AI scan on multiple manually selected sources to generate risk candidates."""
+    tenant_id = get_tenant_id_from_request(request)
+    
+    # New multi-source payload
+    source_types = request.data.get('source_types', [])
+    if not source_types and 'source_type' in request.data:
+        source_types = [request.data.get('source_type')]
+        
+    subfolder_ids = request.data.get('subfolder_ids', [])
+    document_ids = request.data.get('document_ids', [])
+    run_checklist = request.data.get('run_checklist', False)
+    requested_limit = request.data.get('limit', 5)
+    
+    try:
+        requested_limit = int(requested_limit)
+    except Exception:
+        requested_limit = 5
+    limit = min(requested_limit, 10) # Increased limit for multi-source
+    
+    print(f"[API] run_manual_risk_scan: tenant={tenant_id}, sources={source_types}, subfolders={subfolder_ids}, docs={document_ids}, checklist={run_checklist}, limit={limit}")
+    
+    try:
+        results = generate_risk_candidates_from_multiple_sources(
+            tenant_id=tenant_id, 
+            source_types=source_types, 
+            limit=limit,
+            subfolder_ids=subfolder_ids,
+            document_ids=document_ids,
+            run_checklist=run_checklist
+        )
+        return Response({
+            'status': 'success',
+            'message': f"Scan completed for {', '.join(source_types) if source_types else 'requested sources'}. Created {results['created']} new risk candidates.",
+            'results': results
+        })
+    except Exception as e:
+        print(f"[API] run_manual_risk_scan error: {e}")
         return Response({
             'status': 'error',
             'message': f'Scan failed: {str(e)}'
@@ -183,12 +233,27 @@ def run_synthetic_risk_test_analysis(request):
                 return bool(job and job.get("cancel_requested"))
 
         try:
-            results = generate_risk_candidates_from_synthetic_sources(
-                tenant_id,
-                limit,
-                progress_callback=_update_progress,
-                should_abort=_should_abort
-            )
+            # Smart Scan: Check for document first
+            file_op, link = find_latest_risk_document(tenant_id)
+            
+            if file_op:
+                print(f"[API] Smart Scan: Found document {file_op.original_name}. Using document-based analysis.")
+                results = generate_risk_candidates_from_document(
+                    tenant_id,
+                    file_op,
+                    link=link,
+                    progress_callback=_update_progress,
+                    should_abort=_should_abort
+                )
+            else:
+                print("[API] Smart Scan: No document found. Falling back to synthetic sources.")
+                results = generate_risk_candidates_from_synthetic_sources(
+                    tenant_id,
+                    limit,
+                    progress_callback=_update_progress,
+                    should_abort=_should_abort
+                )
+                
             with _SYNTHETIC_ANALYSIS_LOCK:
                 job = _SYNTHETIC_ANALYSIS_JOBS.get(job_id)
                 if job is not None:
@@ -309,6 +374,19 @@ def list_system_risk_queue(request):
     if category_filter:
         queryset = queryset.filter(category__icontains=category_filter)
         print(f"[API] Filtering by category: {category_filter}")
+
+    functional_area_filter = request.GET.get('functional_area')
+    if functional_area_filter:
+        queryset = queryset.filter(functional_area=functional_area_filter)
+        print(f"[API] Filtering by functional_area: {functional_area_filter}")
+
+    velocity_filter = request.GET.get('velocity_min')
+    if velocity_filter:
+        try:
+            queryset = queryset.filter(velocity_score__gte=int(velocity_filter))
+            print(f"[API] Filtering by velocity_min: {velocity_filter}")
+        except Exception:
+            pass
     
     # Order by creation date (newest first)
     queryset = queryset.order_by('-created_at')
@@ -395,6 +473,8 @@ def list_system_risk_queue(request):
             'category': item.category,
             'criticality': item.criticality,
             'confidence_score': final_score,
+            'velocity_score': item.velocity_score,
+            'functional_area': item.functional_area,
             'likelihood': item.likelihood,
             'impact': item.impact,
             'exposure_rating': item.exposure_rating,
@@ -453,6 +533,8 @@ def get_system_risk_detail(request, risk_id):
         'mitigation_steps': risk.mitigation_steps,
         'ai_reasoning': risk.ai_reasoning,
         'confidence_score': final_score,
+        'velocity_score': risk.velocity_score,
+        'functional_area': risk.functional_area,
         'confidence_justification': confidence_justification,
         'confidence_factors': confidence_factors,
         'ai_metadata': risk.ai_metadata,

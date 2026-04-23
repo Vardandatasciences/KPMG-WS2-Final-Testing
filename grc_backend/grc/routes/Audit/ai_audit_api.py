@@ -417,14 +417,38 @@ def call_ai_api(prompt, audit_id=None, document_id=None, model_type='compliance'
     Returns:
         str: AI response text
     """
-    api_key = getattr(settings, 'OPENAI_API_KEY', '') or ''
+    raw_provider = (
+        getattr(settings, 'RISK_AI_PROVIDER', None)
+        or os.environ.get('RISK_AI_PROVIDER')
+        or ''
+    )
+    provider = str(raw_provider).strip().lower()
+    use_nvidia = provider == 'nvidia'
+
+    api_key = ''
+    if use_nvidia:
+        api_key = (
+            getattr(settings, 'NVIDIA_API_KEY', None)
+            or os.environ.get('NVIDIA_API_KEY')
+            or getattr(settings, 'OPENAI_API_KEY', None)
+            or os.environ.get('OPENAI_API_KEY')
+            or ''
+        )
+    else:
+        api_key = (
+            getattr(settings, 'OPENAI_API_KEY', None)
+            or os.environ.get('OPENAI_API_KEY')
+            or os.environ.get('NVIDIA_API_KEY')
+            or ''
+        )
     api_key = (api_key.strip() if isinstance(api_key, str) else '') or ''
     if api_key:
-        logger.info(f"🤖 [AI] Using OpenAI for {model_type} (audit_id={audit_id}, document_id={document_id})")
+        provider_name = "NVIDIA (OpenAI-compatible)" if use_nvidia else "OpenAI"
+        logger.info(f"🤖 [AI] Using {provider_name} for {model_type} (audit_id={audit_id}, document_id={document_id})")
         return _call_openai_api(prompt, audit_id, document_id, model_type)
     logger.warning(
-        "🤖 [AI] OPENAI_API_KEY is not set or empty. Using Ollama. "
-        "Set OPENAI_API_KEY in .env (in grc_backend folder) and restart the server to use OpenAI."
+        "🤖 [AI] OpenAI/NVIDIA API key is not set or empty. Using Ollama. "
+        "Set OPENAI_API_KEY or NVIDIA_API_KEY in .env (in grc_backend folder) and restart the server to use OpenAI-compatible APIs."
     )
     return _call_ollama_api(prompt, audit_id, document_id, model_type)
 
@@ -510,13 +534,64 @@ def _call_openai_api(prompt, audit_id=None, document_id=None, model_type='compli
     EXPECTED DOCUMENT TYPE, and WHAT IS NEEDED (fewer placeholders/generic phrases).
     """
     import requests as req_lib
-    api_key = (getattr(settings, 'OPENAI_API_KEY', '') or '').strip()
+    raw_provider = (
+        getattr(settings, 'RISK_AI_PROVIDER', None)
+        or os.environ.get('RISK_AI_PROVIDER')
+        or ''
+    )
+    provider = str(raw_provider).strip().lower()
+    use_nvidia = provider == 'nvidia'
+
+    if use_nvidia:
+        api_key = (
+            getattr(settings, 'NVIDIA_API_KEY', None)
+            or os.environ.get('NVIDIA_API_KEY')
+            or getattr(settings, 'OPENAI_API_KEY', None)
+            or os.environ.get('OPENAI_API_KEY')
+            or ''
+        )
+    else:
+        api_key = (
+            getattr(settings, 'OPENAI_API_KEY', None)
+            or os.environ.get('OPENAI_API_KEY')
+            or os.environ.get('NVIDIA_API_KEY')
+            or ''
+        )
+    api_key = str(api_key).strip()
     if not api_key:
-        raise Exception("OPENAI_API_KEY is not set")
-    model = getattr(settings, 'OPENAI_MODEL', 'gpt-4o-mini')
+        raise Exception("OPENAI_API_KEY/NVIDIA_API_KEY is not set")
+
+    if use_nvidia:
+        model = (
+            getattr(settings, 'NVIDIA_MODEL', None)
+            or os.environ.get('NVIDIA_MODEL')
+            or getattr(settings, 'OPENAI_MODEL', None)
+            or os.environ.get('OPENAI_MODEL')
+            or 'meta/llama-3.1-70b-instruct'
+        )
+        api_url = (
+            getattr(settings, 'NVIDIA_API_URL', None)
+            or os.environ.get('NVIDIA_API_URL')
+            or getattr(settings, 'OPENAI_API_URL', None)
+            or os.environ.get('OPENAI_API_URL')
+            or 'https://integrate.api.nvidia.com/v1/chat/completions'
+        )
+    else:
+        model = (
+            getattr(settings, 'OPENAI_MODEL', None)
+            or os.environ.get('OPENAI_MODEL')
+            or 'gpt-4o-mini'
+        )
+        api_url = (
+            getattr(settings, 'OPENAI_API_URL', None)
+            or os.environ.get('OPENAI_API_URL')
+            or 'https://api.openai.com/v1/chat/completions'
+        )
+
     if not model:
         model = 'gpt-4o-mini'
     model = str(model).strip().strip('"').strip("'")
+    api_url = str(api_url).strip().strip('"').strip("'")
     timeout = getattr(settings, 'OLLAMA_TIMEOUT', 120)
     # Use fully deterministic output for compliance assessments
     temperature = 0.0
@@ -542,14 +617,15 @@ def _call_openai_api(prompt, audit_id=None, document_id=None, model_type='compli
     max_tokens = getattr(settings, 'OLLAMA_MAX_TOKENS', None)
     if max_tokens is not None and max_tokens > 0:
         payload["max_tokens"] = int(max_tokens)
-    logger.info(f"🤖 Calling OpenAI model={model} for {model_type}")
+    provider_name = "NVIDIA (OpenAI-compatible)" if use_nvidia else "OpenAI"
+    logger.info(f"🤖 Calling {provider_name} model={model} for {model_type}")
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {api_key}",
     }
     try:
         response = req_lib.post(
-            "https://api.openai.com/v1/chat/completions",
+            api_url,
             headers=headers,
             json=payload,
             timeout=timeout,
@@ -2117,7 +2193,7 @@ class AIAuditDocumentUploadView(APIView):
                     try:
                         from ...models import Audit
                         audit_obj = Audit.objects.get(AuditId=int(audit_id) if str(audit_id).isdigit() else audit_id, tenant_id=tenant_id)
-                        if audit_obj.Status == 'Yet to Start':
+                        if str(getattr(audit_obj, 'Status', '') or '').strip().lower() == 'yet to start':
                             audit_obj.Status = 'Work In Progress'
                             audit_obj.save()
                             logger.info(f"✅ Updated audit {audit_id} status to 'Work In Progress' (auto-check started)")
@@ -2135,7 +2211,7 @@ class AIAuditDocumentUploadView(APIView):
                 try:
                     from ...models import Audit
                     audit_obj = Audit.objects.get(AuditId=int(audit_id) if str(audit_id).isdigit() else audit_id)
-                    if audit_obj.Status == 'Yet to Start':
+                    if str(getattr(audit_obj, 'Status', '') or '').strip().lower() == 'yet to start':
                         audit_obj.Status = 'Work In Progress'
                         audit_obj.save()
                         logger.info(f"✅ Updated audit {audit_id} status to 'Work In Progress' (manual document upload)")
@@ -4430,151 +4506,81 @@ REQUIRED OUTPUT FOR "missing" ARRAY:
     audit_objective_text = audit_context.get('objective', '') if audit_context else ''
     audit_scope_text = audit_context.get('scope', '') if audit_context else ''
     
-    # Create enhanced prompt with clear audit process explanation
-    prompt = f"""You are a GRC compliance auditor performing an audit. Your job is to analyze whether the uploaded document provides evidence that the organization meets the compliance requirement.
+    # Build prompt from reusable sections for easier maintenance.
+    prompt_intro = """You are a GRC compliance auditor. Determine whether the uploaded content proves the organization meets the requirement.
 
-IMPORTANT: The uploaded content may be:
-- A narrative document (policy, procedure, memo, minutes, email, etc.)
-- A structured table, spreadsheet, or CSV-style data (rows and columns with headers)
-- A mix of both
+The content may be narrative text, structured data (table/CSV), or both.
+Treat structured data as valid evidence:
+- Header row = field names
+- Each data row = real record
+- Extract row-wise facts using header:value pairs
+- Do not ignore table/CSV evidence
 
-You MUST treat structured/tabular data (including CSV-style rows) as valid evidence. Each row in a table/CSV represents a real record or instance, and column headers with cell values contain factual data that can demonstrate compliance. Do not ignore structured data just because it is in tabular format - extract evidence from the actual data values in the rows and columns.
+Human-like audit reasoning rules:
+- Do NOT decide compliance from keyword overlap alone
+- First interpret what the requirement truly expects in plain language
+- Then verify whether the document proves execution of that expectation
+- If evidence is weak/ambiguous, mark NON_COMPLIANT and explain "INSUFFICIENT EVIDENCE" in missing[]
+- Do NOT hallucinate. Do NOT invent facts, controls, logs, metrics, policies, or events.
+- Use ONLY the data provided in this prompt. If information is not present, explicitly say it is missing.
+"""
 
-{audit_context_section if audit_context else ''}=== COMPLIANCE REQUIREMENT TO CHECK ===
-{req_text}
+    prompt_logic = f"""=== AUDIT LOGIC ===
+Step 1) RELEVANCE (mandatory first)
+Audit context:
+- Title: {audit_context.get('title', 'N/A') if audit_context else 'N/A'}
+- Objective: {audit_objective_text if audit_context and audit_context.get('objective') else 'N/A'}
+- Scope: {audit_scope_text if audit_context and audit_context.get('scope') else 'N/A'}
+Requirement: "{req_desc}"
 
-=== UPLOADED DOCUMENT CONTENT ===
-{evidence_section_label}:
-{document_text}
+Answer all:
+1) Same topic as "{req_desc}"? (for tables: do columns/rows map to this topic)
+2) Related to Policy "{policy_name}" / Sub-Policy "{subpolicy_name}"?
+3) Aligned with this audit objective?
+4) Within this audit scope?
+5) Useful to prove compliance for this specific audit?
 
-=== HOW TO PERFORM THIS AUDIT ===
+If ANY answer is NO:
+- compliance_status = "NON_COMPLIANT"
+- compliance_score = 0.0-0.2
+- evidence = []
+- missing = full 7-item array (defined below)
+- Stop; do not run further steps.
 
-STEP 1: RELEVANCE CHECK (MUST DO FIRST):
-   - CRITICAL: This audit is about: {audit_context.get('title', 'N/A') if audit_context else 'N/A'}
-   - CRITICAL: This audit's objective is: {audit_objective_text if audit_context and audit_context.get('objective') else 'N/A'}
-   - CRITICAL: This audit's scope is: {audit_scope_text if audit_context and audit_context.get('scope') else 'N/A'}
-   - The requirement being checked: "{req_desc}"
-   - The document content provided above (including any tables / CSV-style data)
-   
-   IMPORTANT FOR STRUCTURED DATA: If the document contains comma-separated values, tab-separated values, or table rows with headers:
-   - The first line typically contains column headers that describe what data is in each column
-   - Each subsequent line represents a data record with values separated by commas/tabs
-   - This structured data format contains actual evidence - treat the header row and data rows as factual information
-   - Check if the column headers relate to the requirement topic - if yes, the document is relevant
-   
-   RELEVANCE QUESTIONS (ALL must be YES for document to be relevant):
-   1. Is the document about the SAME TOPIC as the requirement "{req_desc}"? (For structured data: do the column headers indicate data related to this requirement?)
-   2. Is the document related to Policy "{policy_name}" / Sub-Policy "{subpolicy_name}"?
-   3. Does the document relate to THIS AUDIT's objective: {audit_objective_text if audit_context and audit_context.get('objective') else 'N/A'}?
-   4. Does the document fall within THIS AUDIT's scope: {audit_scope_text if audit_context and audit_context.get('scope') else 'N/A'}?
-   5. Would this document help prove compliance for THIS SPECIFIC AUDIT (not just any audit)?
-   
-   IF ANY ANSWER IS NO → Document is IRRELEVANT:
-   → Set evidence = []
-   → Set compliance_status = 'NON_COMPLIANT'
-   → Set compliance_score = 0.0-0.2
-   → You STILL MUST generate a full "missing" array with 7 items, each containing your own analysis, NOT a generic template
-   → STOP HERE - do not proceed to Step 2
+Step 2) EVIDENCE EXTRACTION (only if relevant)
+- Include only direct requirement-linked evidence (quotes, numbers, row facts)
+- Evidence must match requirement topic and audit objective/scope
+- Mentioning topic without proof is not evidence
+- For structured data, include all relevant rows and specific header:value facts
 
-STEP 2: EVIDENCE EXTRACTION (ONLY IF RELEVANT):
-   - Remember: This audit is checking: {audit_objective_text if audit_context and audit_context.get('objective') else 'N/A'}
-   - Requirement asks for: "{req_desc}"
-   - Search document for text/data that directly addresses this requirement
-   - Evidence MUST match requirement topic EXACTLY
-   - Evidence MUST be relevant to the audit objective and scope
-   - If document mentions requirement topic but doesn't provide evidence → evidence = []
-   - Extract actual quotes, numbers, or facts from document
-   
-   CRITICAL FOR STRUCTURED/TABULAR DATA (CSV, tables, spreadsheets):
-   - If content has comma-separated or tab-separated values with a header row:
-       * Identify the header row (first line with column names)
-       * Each subsequent data row represents a real instance/record
-       * Extract evidence by combining column header names with values from each data row
-       * Count how many data rows exist - this shows quantity/frequency
-       * Extract ALL relevant data rows that match the requirement - do not skip any
-       * Treat each data row as factual evidence that proves or demonstrates compliance
-   - Do NOT ignore structured data - it contains real evidence in organized format
-   - If you see multiple data rows, each one is separate evidence of compliance activity
+Step 3) COMPLIANCE VERIFICATION (if evidence exists)
+- Does evidence show actual compliance (not just intent)?
+- Are all requirement aspects covered?
+- Is evidence complete and sufficient?
+- Explain linkage between evidence, requirement, and audit objective
+- Reject superficial matches: same words without operational proof are NOT compliant
 
-STEP 3: COMPLIANCE VERIFICATION (ONLY IF EVIDENCE FOUND):
-   - Remember: This audit objective is: {audit_objective_text if audit_context and audit_context.get('objective') else 'N/A'}
-   - Does the evidence show the organization MEETS the requirement?
-   - Check: Are ALL aspects of the requirement addressed?
-   - Check: Is the evidence complete and sufficient?
-   - Check: Does evidence demonstrate actual compliance (not just intent)?
-   - Check: Does the evidence align with what the audit objective is checking?
-   - ANALYZE: How does each piece of evidence relate to the requirement AND the audit objective?
-   - ANALYZE: What does the evidence prove about compliance in the context of this audit?
+Step 4) CONCLUSION
+- Explain audit process (what checked, what found)
+- Explain status decision:
+  - COMPLIANT: strong evidence, all aspects met
+  - PARTIALLY_COMPLIANT: some evidence, specific gaps remain
+  - NON_COMPLIANT: irrelevant OR no evidence OR insufficient evidence
+"""
 
-STEP 4: AUDIT CONCLUSION & REASONING (REQUIRED):
-   - Explain HOW you performed this audit (what you checked, what you found)
-   - Explain WHY you determined the compliance status:
-     * If COMPLIANT: Explain how the evidence demonstrates full compliance with all aspects of the requirement
-     * If PARTIALLY_COMPLIANT: Explain what evidence was found and what specific gaps remain
-     * If NON_COMPLIANT: Explain why the evidence is insufficient or missing
-   - Provide clear reasoning that connects the evidence to the requirement
+    prompt_missing_rules = f"""=== MISSING ELEMENTS RULES (when evidence = []) ===
+missing must contain EXACTLY 7 items, in this exact order, with analysis text (no placeholders):
+1. "NO EVIDENCE FOUND: ..."
+2. "REQUIREMENT NEEDS: ..." (based on "{req_desc}")
+3. "DOCUMENT IS ABOUT: ..." (for table/CSV include key columns and row meaning)
+4. "DATA REQUIRED FOR THIS AUDIT: ..." (specific logs/records/metrics/tables needed)
+5. "EXPECTED DOCUMENT TYPE: ..." (concrete types, not generic)
+6. "WHAT IS NEEDED: ..." (at least 2-3 concrete missing documents/data sets)
+7. "POLICY CONTEXT: ..." (how requirement maps to Policy "{policy_name}" / Sub-Policy "{subpolicy_name}")
+"""
 
-=== COMPLIANCE STATUS DECISION ===
-- COMPLIANT: Document is relevant + Strong evidence found + All requirement aspects met + Evidence clearly demonstrates compliance
-- PARTIALLY_COMPLIANT: Document is relevant + Some evidence found + But specific gaps exist + Not all requirement aspects met
-- NON_COMPLIANT: Document is irrelevant OR No evidence found OR Evidence doesn't show compliance OR Evidence is insufficient
-
-=== EVIDENCE RULES ===
-- Only include evidence if it directly matches the requirement topic
-- Extract actual text, numbers, or data from the document
-- Do NOT include generic statements or unrelated content
-- If no relevant evidence: evidence = [], and you MUST still generate a full "missing" array with 7 items, each containing your own, document-specific analysis
-
-=== MISSING ELEMENTS RULES ===
-If evidence = [] (no evidence found):
-   - missing MUST include ALL 7 items from the template below - DO NOT skip any field
-   - The missing array MUST have exactly these 7 items (in this order). Each item MUST start with the fixed heading shown below, followed by your own analysis text based on THIS document and THIS audit (do NOT copy any placeholder text from this prompt):
-   1. "NO EVIDENCE FOUND: ..." → explain in your own words why no evidence was found for this requirement
-   2. "REQUIREMENT NEEDS: ..." → explain in your own words what the requirement needs (based on: {req_desc})
-   3. "DOCUMENT IS ABOUT: ..." → explain in your own words what the document is actually about
-   4. "DATA REQUIRED FOR THIS AUDIT: ..." → explain in your own words what data is required for this audit
-   5. "EXPECTED DOCUMENT TYPE: ..." → explain in your own words what type of document/data would provide evidence
-   6. "WHAT IS NEEDED: ..." → explain in your own words what concrete document, data, or evidence is needed to prove compliance
-   7. "POLICY CONTEXT: ..." → explain in your own words how this requirement fits Policy "{policy_name}" / Sub-Policy "{subpolicy_name}" and why the document must relate to this policy area
-   
-   - CRITICAL: When filling in the missing array, you MUST REPLACE ALL bracketed placeholders with ACTUAL ANALYSIS
-   - DO NOT include square brackets [] or placeholder text in your output
-   - DO NOT skip any of the 7 required fields
-   - Each field must contain actual analysis, not instruction text
-   
-   - For "DOCUMENT IS ABOUT": 
-    * Read the document content provided above
-    * Analyze what the document actually contains (NOT what the requirement says)
-    * If the content is a table/CSV, explicitly name key column headers and what the rows represent
-    * Describe the topic, purpose, and content in a way that could only be written after actually reading THIS document (no generic sentences)
-   
-   - For "DATA REQUIRED FOR THIS AUDIT": 
-    * Consider the Audit Objective: {audit_objective_text if audit_context and audit_context.get('objective') else 'N/A'}
-    * Consider the Audit Scope: {audit_scope_text if audit_context and audit_context.get('scope') else 'N/A'}
-    * Consider the Requirement: "{req_desc}"
-    * Consider the Policy Context: Policy "{policy_name}" / Sub-Policy "{subpolicy_name}"
-    * Analyze and specify: What concrete data points, metrics, logs, tables, or records would prove compliance for THIS specific audit. Do NOT use vague phrases like "specific data points, metrics, records, measurements, or evidence".
-    
-   - For "EXPECTED DOCUMENT TYPE": 
-    * Name concrete document types that would provide evidence for this requirement, not generic descriptions like "a document that provides detailed information..."
-   
-   - For "WHAT IS NEEDED": 
-    * List the specific additional documents and/or data sets that are still missing for this requirement in this audit
-    * Name at least 2-3 concrete items needed for this audit
-    * Do NOT use generic phrases like "Specific data points and metrics to demonstrate compliance" – always mention the actual type of data/log/report needed
-   
-   - Be specific and detailed in your analysis for ALL fields
-   - Reference the policy/subpolicy context: Policy "{policy_name}" / Sub-Policy "{subpolicy_name}"
-
-If evidence found but incomplete:
-   - List specific gaps: What parts of requirement are missing?
-   - What additional data points or evidence would be needed?
-   - What specific actions, measurements, or data are missing?
-
-=== OUTPUT FORMAT ===
-Return ONLY valid JSON (no markdown, no explanations, no code blocks).
-
-JSON Structure:
+    prompt_output_schema = f"""=== OUTPUT ===
+Return ONLY valid JSON (no markdown, no code blocks).
 {{
   "analysis": [{{
     "index": {global_idx},
@@ -4584,59 +4590,33 @@ JSON Structure:
     "compliance_score": 0.0-1.0,
     "risk_level": "LOW|MEDIUM|HIGH",
     "confidence": 0.0-1.0,
-    "evidence": ["actual text quotes from document that prove compliance"],
-    "missing": ["MUST include ALL 7 fields from template if no evidence: NO EVIDENCE FOUND, REQUIREMENT NEEDS, DOCUMENT IS ABOUT, DATA REQUIRED FOR THIS AUDIT, EXPECTED DOCUMENT TYPE, WHAT IS NEEDED, POLICY CONTEXT"],
-    "strengths": ["HOW AUDIT WAS PERFORMED: Explain the audit process - what you checked, what evidence you found, and how it relates to the requirement. REASON FOR STATUS: Explain why this is COMPLIANT/PARTIALLY_COMPLIANT/NON_COMPLIANT - what evidence supports this conclusion"],
-    "weaknesses": ["What specific aspects of the requirement are not met or are missing. Explain what gaps exist and why they prevent full compliance"],
-    "recommendations": ["Actionable recommendations to improve compliance, based on the specific gaps found during this audit"]
+    "evidence": ["actual text/data quotes"],
+    "missing": ["..."],
+    "requirement_interpretation": "plain-language explanation of what must be true to comply",
+    "verification_reasoning": "why evidence proves/does not prove compliance",
+    "evidence_sufficiency": "SUFFICIENT|PARTIAL|INSUFFICIENT",
+    "strengths": ["AUDIT PROCESS: ... REASON FOR STATUS: ..."],
+    "weaknesses": ["specific gaps only"],
+    "recommendations": ["actionable remediation steps"]
   }}]
 }}
 
-CRITICAL OUTPUT RULES:
-- If document is IRRELEVANT: 
-  * evidence = []
-  * missing = a full 7-item array that YOU generate with your own analysis (see MISSING ELEMENTS RULES)
-  * compliance_status = 'NON_COMPLIANT'
-  * strengths = ["AUDIT PROCESS: Document was analyzed for relevance to requirement '{req_desc}'. REASON: Document is about [topic] which is not related to requirement '{req_desc}' or Policy '{policy_name}'. Therefore, no evidence can be found and status is NON_COMPLIANT."]
-
-- If document is RELEVANT but no evidence: 
-  * evidence = []
-  * missing = specific gaps
-  * compliance_status = 'NON_COMPLIANT'
-  * strengths = ["AUDIT PROCESS: Document was analyzed and found relevant to requirement '{req_desc}'. However, no specific evidence was found that demonstrates compliance. REASON: Document mentions the topic but does not provide the required data/evidence to prove compliance."]
-
-- If evidence found: 
-  * evidence = [actual quotes from document]
-  * missing = specific gaps only (if any)
-  * strengths = ["AUDIT PROCESS: [Explain how you performed the audit - what you checked, what evidence you found]. REASON FOR [COMPLIANT/PARTIALLY_COMPLIANT]: [Explain why the evidence supports this status - how each piece of evidence relates to the requirement and what it proves]"]
-  * weaknesses = [specific gaps if PARTIALLY_COMPLIANT, or empty if COMPLIANT]
-
-- relevance: 0.0-0.3 if irrelevant, 0.4-0.7 if partially relevant, 0.8-1.0 if highly relevant
-- compliance_score: 0.0-0.3 if non-compliant, 0.4-0.7 if partially compliant, 0.8-1.0 if compliant
-
-CRITICAL: When filling the "missing" array:
-- You MUST include ALL 7 required fields - DO NOT skip any field
-- You MUST REPLACE all bracketed placeholders with ACTUAL ANALYSIS
-- The missing array MUST contain exactly 7 items:
-  1. NO EVIDENCE FOUND message
-  2. REQUIREMENT NEEDS with the requirement text
-  3. DOCUMENT IS ABOUT with your analysis
-  4. DATA REQUIRED FOR THIS AUDIT with your analysis
-  5. EXPECTED DOCUMENT TYPE with your analysis
-  6. WHAT IS NEEDED with your analysis
-  7. POLICY CONTEXT message
-- For "DOCUMENT IS ABOUT": Analyze the document content and describe what it actually contains
-- For "DATA REQUIRED FOR THIS AUDIT": Analyze what specific data/evidence is needed based on the audit objective, scope, requirement, and policy context - provide actual analysis
-- For "EXPECTED DOCUMENT TYPE": Determine and specify the actual document type needed
-- For "WHAT IS NEEDED": Specify what actual document, data, or evidence is needed
-- DO NOT include square brackets [], instruction text, or placeholder text
-- DO NOT skip any of the 7 required fields - ALL must be present
-
-REQUIRED: The "strengths" field MUST explain:
-1. HOW the audit was performed (what was checked, what evidence was found)
-2. WHY the compliance status was determined (reasoning connecting evidence to requirement)
+Scoring guidance:
+- relevance: 0.0-0.3 irrelevant, 0.4-0.7 partial, 0.8-1.0 high
+- compliance_score: 0.0-0.3 non-compliant, 0.4-0.7 partial, 0.8-1.0 compliant
+- If evidence_sufficiency is INSUFFICIENT, compliance_status must be NON_COMPLIANT and compliance_score <= 0.3
 
 Return JSON now:"""
+
+    prompt = (
+        f"{prompt_intro}\n"
+        f"{audit_context_section if audit_context else ''}"
+        f"=== COMPLIANCE REQUIREMENT ===\n{req_text}\n\n"
+        f"=== DOCUMENT CONTENT ===\n{evidence_section_label}:\n{document_text}\n\n"
+        f"{prompt_logic}\n"
+        f"{prompt_missing_rules}\n\n"
+        f"{prompt_output_schema}"
+    )
     
     # Use unified AI API call
     data = call_ai_api(prompt, audit_id, document_id, 'compliance')
@@ -5067,9 +5047,9 @@ Return JSON now:"""
                             parsed = {
                                 "analysis": [{
                                     "compliance_id": int(compliance_id_match.group(1)),
-                                    "compliance_status": status_match.group(1) if status_match else "PARTIALLY_COMPLIANT",
-                                    "compliance_score": float(score_match.group(1)) if score_match else 0.5,
-                                    "relevance": float(score_match.group(1)) if score_match else 0.5
+                                    "compliance_status": status_match.group(1) if status_match else "NON_COMPLIANT",
+                                    "compliance_score": float(score_match.group(1)) if score_match else 0.2,
+                                    "relevance": float(score_match.group(1)) if score_match else 0.2
                                 }]
                             }
                             logger.info(f"✅ Successfully extracted analysis from truncated JSON using regex fallback")
@@ -5136,12 +5116,12 @@ Return JSON now:"""
                     elif relevance_match:
                         extracted['compliance_score'] = float(relevance_match.group(1))
                     
-                    # Set default values if status fields are missing but we have array fields
+                    # No status fallback: if status fields are absent in truncated output,
+                    # fail-safe to NON_COMPLIANT with low score.
                     if not has_status_fields:
-                        # Default to PARTIALLY_COMPLIANT if we have missing items
-                        extracted['compliance_status'] = 'PARTIALLY_COMPLIANT'
-                        extracted['relevance'] = 0.5
-                        extracted['compliance_score'] = 0.5
+                        extracted['compliance_status'] = 'NON_COMPLIANT'
+                        extracted['relevance'] = 0.2
+                        extracted['compliance_score'] = 0.2
                     
                     # Try to extract evidence and missing (even if truncated)
                     if evidence_array_start >= 0:
@@ -5406,11 +5386,19 @@ COMPLIANCE REQUIREMENTS TO ANALYZE:
 ADVANCED MULTI-REQUIREMENT ANALYSIS TASK:
 For EACH requirement (1 through {len(batch)}), perform:
 
+0. **Requirement Interpretation**: Explain in plain language what "true compliance" means for this requirement
 1. **Comprehensive Evidence Detection**: Find ALL specific evidence demonstrating compliance
 2. **Gap Analysis**: Identify ALL missing elements needed for full compliance  
 3. **Compliance Assessment**: Determine exact compliance level (COMPLIANT/PARTIALLY_COMPLIANT/NON_COMPLIANT)
 4. **Risk Evaluation**: Assess risk level of compliance gaps
 5. **Quality Assessment**: Evaluate evidence quality and completeness
+
+IMPORTANT REASONING GUARDRAILS:
+- Do NOT mark compliant from keyword overlap alone
+- Same terminology without operational proof is not compliance
+- If evidence is weak/ambiguous, set compliance_status to NON_COMPLIANT and clearly state INSUFFICIENT EVIDENCE
+- Do NOT hallucinate. Do NOT invent facts, controls, logs, metrics, policies, or events.
+- Use ONLY the data provided in this prompt. If information is not present, explicitly state it as missing evidence.
 
 COMPLIANCE LEVEL DEFINITIONS:
 - **COMPLIANT**: Strong evidence, all key elements present, well-documented, low risk
@@ -5430,6 +5418,9 @@ REQUIRED JSON OUTPUT FORMAT:
       "confidence": 0.0-1.0,
       "evidence": ["Specific evidence found in document"],
       "missing": ["Specific gaps identified"],
+      "requirement_interpretation": "Plain-language meaning of the requirement",
+      "verification_reasoning": "Why evidence proves/does not prove compliance",
+      "evidence_sufficiency": "SUFFICIENT|PARTIAL|INSUFFICIENT",
       "strengths": ["What document does well"],
       "weaknesses": ["Areas needing improvement"],
       "recommendations": ["Specific actionable steps"]
@@ -5450,6 +5441,7 @@ CRITICAL REQUIREMENTS:
 - Use double quotes, square brackets, curly braces for JSON
 - No explanations or additional text outside JSON
 - Each requirement gets ONE object in the analysis array
+- If evidence_sufficiency is INSUFFICIENT, compliance_status must be NON_COMPLIANT and compliance_score <= 0.3
 
 JSON:"""
         
@@ -5501,6 +5493,20 @@ JSON:"""
                     a['compliance_title'] = f'Compliance {global_index}'
                 # Overwrite index with the global index so downstream consumers are consistent
                 a['index'] = global_index
+                # Normalize optional human-style reasoning fields so UI/reporting stays consistent
+                a['requirement_interpretation'] = str(a.get('requirement_interpretation', '') or '')
+                a['verification_reasoning'] = str(a.get('verification_reasoning', '') or '')
+                a['evidence_sufficiency'] = str(a.get('evidence_sufficiency', '') or '').upper()
+                if a['evidence_sufficiency'] not in ['SUFFICIENT', 'PARTIAL', 'INSUFFICIENT']:
+                    a['evidence_sufficiency'] = 'PARTIAL'
+                # Hard guard: insufficient evidence cannot be marked compliant
+                if a['evidence_sufficiency'] == 'INSUFFICIENT':
+                    a['compliance_status'] = 'NON_COMPLIANT'
+                    try:
+                        current_score = float(a.get('compliance_score', 0.0))
+                    except Exception:
+                        current_score = 0.0
+                    a['compliance_score'] = min(current_score, 0.3)
                 # Skip duplicates by title or by index across all batches
                 title_key = a['requirement_title'].strip().lower()
                 if global_index in seen_indexes_global or title_key in seen_titles_global:
@@ -8688,7 +8694,8 @@ def delete_audit_document_api(request, audit_id, document_id):
             )
             status_row = cursor.fetchone()
         audit_status = status_row[0] if status_row else None
-        if audit_status in ('Work In Progress', 'Under review', 'Completed'):
+        normalized_audit_status = str(audit_status or '').strip().lower()
+        if normalized_audit_status in ('work in progress', 'under review', 'completed'):
             return Response(
                 {
                     'success': False,

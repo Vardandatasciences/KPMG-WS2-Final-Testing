@@ -62,6 +62,7 @@ from ...tenant_utils import (
     require_tenant, tenant_filter, get_tenant_id_from_request,
     validate_tenant_access, get_tenant_aware_queryset
 )
+from ..Incident.system_risk_service import trigger_single_source_risk_scan
 logger = logging.getLogger(__name__)
 
 # SECURITY: S3 download / Content-Disposition hardening (header injection, CRLF, reflection).
@@ -1813,6 +1814,19 @@ def create_event(request):
             
             total_events = len(created_events)
             message = f'Event created successfully' if total_events == 1 else f'{total_events} events created successfully (1 primary + {total_events-1} additional records)'
+
+
+             # Trigger automatic AI Risk Identification (Background) - using primary event
+            try:
+                from ...models import SystemIdentifiedRiskQueue
+                trigger_single_source_risk_scan(
+                    source_type=SystemIdentifiedRiskQueue.SOURCE_MANUAL, 
+                    source_id=event.EventId, 
+                    tenant_id=tenant_id
+                )
+            except Exception as e:
+                debug_print(f"Error triggering automatic risk scan: {str(e)}")
+            
             
             # Send email notifications for event creation
             try:

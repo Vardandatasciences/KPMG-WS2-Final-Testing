@@ -237,17 +237,27 @@
           <i class="fas fa-times"></i>
           Clear Matches
         </button>
-        <button 
-          v-if="selectedFrameworkId && targetData"
-          @click="matchCompliances" 
-          :disabled="complianceMatchingInProgress"
-          class="FC_match-compliances-button"
-          title="Match all compliances from amendments"
-        >
-          <i v-if="!complianceMatchingInProgress" class="fas fa-check-circle"></i>
-          <i v-else class="fas fa-spinner fa-spin"></i>
-          {{ complianceMatchingInProgress ? 'Matching Compliances...' : 'Match Compliances' }}
-        </button>
+        <div class="FC_match-compliances-wrapper">
+          <button 
+            v-if="selectedFrameworkId && targetData"
+            @click="matchCompliances(false)" 
+            :disabled="complianceMatchingInProgress"
+            class="FC_match-compliances-button"
+            title="Match all compliances from amendments"
+          >
+            <i v-if="!complianceMatchingInProgress" class="fas fa-check-circle"></i>
+            <i v-else class="fas fa-spinner fa-spin"></i>
+            {{ complianceMatchingInProgress ? 'Matching Compliances...' : 'Match Compliances' }}
+          </button>
+          <button
+            v-if="selectedFrameworkId && targetData && !complianceMatchingInProgress"
+            @click="matchCompliances(true)"
+            class="FC_refresh-compliances-button"
+            title="Clear saved results and re-run AI matching"
+          >
+            <i class="fas fa-sync-alt"></i>
+          </button>
+        </div>
       </div>
     </div>
     
@@ -796,17 +806,38 @@
               </div>
             </div>
           </div>
+
+          <!-- Reviewer Section -->
+          <div class="FC_modal-section FC_reviewer-section">
+            <h4><i class="fas fa-user-check"></i> Approval Reviewer</h4>
+            <p class="FC_reviewer-info">This compliance, along with its identified Policy and Sub-Policy, will be sent for approval before becoming active. Please select a reviewer.</p>
+            <div class="FC_modal-field">
+              <label>Reviewer <span class="FC_required">*</span></label>
+              <select v-model="selectedReviewerId" class="FC_reviewer-select" :disabled="loadingReviewers">
+                <option value="">{{ loadingReviewers ? 'Loading reviewers...' : 'Select a reviewer' }}</option>
+                <option
+                  v-for="reviewer in availableReviewers"
+                  :key="reviewer.UserId"
+                  :value="reviewer.UserId"
+                >
+                  {{ reviewer.UserName || reviewer.FirstName + ' ' + reviewer.LastName }}
+                </option>
+              </select>
+              <small v-if="reviewerError" class="FC_reviewer-error">{{ reviewerError }}</small>
+            </div>
+          </div>
+
           <p v-if="complianceSaveError" class="FC_modal-error">{{ complianceSaveError }}</p>
         </div>
         <div class="FC_modal-footer">
           <button class="FC_modal-secondary" @click="closeComplianceModal">Cancel</button>
           <button 
             class="FC_modal-primary"
-            :disabled="submittingCompliance"
+            :disabled="submittingCompliance || !selectedReviewerId"
             @click="submitComplianceForm"
           >
-            <span v-if="!submittingCompliance">Save Compliance</span>
-            <span v-else><i class="fas fa-spinner fa-spin"></i> Saving...</span>
+            <span v-if="!submittingCompliance"><i class="fas fa-paper-plane"></i> Send for Approval</span>
+            <span v-else><i class="fas fa-spinner fa-spin"></i> Sending...</span>
           </button>
         </div>
       </div>
@@ -1032,7 +1063,12 @@ export default {
         manual_automatic: 'Manual'
       },
       complianceSaveError: '',
-      submittingCompliance: false
+      submittingCompliance: false,
+      // Reviewer selection for approval workflow
+      selectedReviewerId: '',
+      availableReviewers: [],
+      loadingReviewers: false,
+      reviewerError: ''
     }
   },
   
@@ -1452,7 +1488,7 @@ export default {
       
       // Open document in new tab
       const documentUrl = this.documentInfo.document.url
-      window.open(documentUrl, '_blank', 'noopener,noreferrer')
+      window.open(documentUrl, '_blank')
     },
     
     async startAnalysis() {
@@ -2139,7 +2175,7 @@ export default {
     },
     
     
-    async matchCompliances() {
+    async matchCompliances(force = false) {
       if (!this.selectedFrameworkId || !this.targetData) return
       
       try {
@@ -2147,18 +2183,22 @@ export default {
         this.complianceMatches = null
         this.expandedComplianceIndex = null
         
-        console.log('Matching compliances for framework:', this.selectedFrameworkId)
+        console.log('Matching compliances for framework:', this.selectedFrameworkId, 'force:', force)
         
         const response = await frameworkComparisonService.matchAmendmentsCompliances(
           this.selectedFrameworkId,
           true,  // Always use AI matching (OpenAI)
-          0.65  // Threshold for matching
+          0.65,  // Threshold for matching
+          force
         )
         
         if (response.success) {
           this.complianceMatches = response.results
           if (response.reused_cached) {
             PopupService.info('Using saved compliance matching results for this amendment. Upload a new amendment to re-run matching.', 'Using Saved Results')
+          } else {
+            console.log('AI generation completed')
+            PopupService.success('AI generation completed and matches updated.', 'Success')
           }
           this.$forceUpdate()
           return response
@@ -2198,21 +2238,70 @@ export default {
       }
       this.complianceModalData = unmatch
       this.complianceSaveError = ''
+      this.selectedReviewerId = ''
+      this.reviewerError = ''
       this.showComplianceModal = true
+      // Fetch reviewers for the approval flow
+      this.fetchReviewers()
     },
 
     closeComplianceModal() {
       if (this.submittingCompliance) return
       this.showComplianceModal = false
       this.complianceModalData = null
+      this.selectedReviewerId = ''
+      this.reviewerError = ''
+    },
+
+    async fetchReviewers() {
+      try {
+        this.loadingReviewers = true
+        const { API_ENDPOINTS } = await import('@/config/api.js').catch(() => ({ API_ENDPOINTS: {} }))
+        
+        // Try fetching with module=compliance first
+        let url = API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION || '/api/users-for-reviewer-selection/'
+        if (url.includes('?')) {
+          url += '&module=compliance'
+        } else {
+          url += '?module=compliance'
+        }
+        
+        let response = await (this.$http ? this.$http.get(url) : (await import('axios')).default.get(url, { withCredentials: true }))
+        let data = response.data
+        
+        // Handle direct array or {users: []}
+        let reviewers = Array.isArray(data) ? data : (data && data.users ? data.users : [])
+        
+        // Fallback to USERS_FOR_DROPDOWN if no reviewers found
+        if (reviewers.length === 0) {
+          console.warn('No reviewers found for module=compliance, falling back to USERS_FOR_DROPDOWN')
+          const fallbackUrl = API_ENDPOINTS.USERS_FOR_DROPDOWN || '/api/rbac/users-for-dropdown/'
+          response = await (this.$http ? this.$http.get(fallbackUrl) : (await import('axios')).default.get(fallbackUrl, { withCredentials: true }))
+          data = response.data
+          reviewers = Array.isArray(data) ? data : (data && data.data ? data.data : (data && data.users ? data.users : []))
+        }
+        
+        this.availableReviewers = reviewers
+      } catch (err) {
+        console.error('Failed to fetch reviewers:', err)
+        this.availableReviewers = []
+      } finally {
+        this.loadingReviewers = false
+      }
     },
 
     async submitComplianceForm() {
       if (!this.selectedFrameworkId) return
+      if (!this.selectedReviewerId) {
+        this.reviewerError = 'Please select a reviewer before submitting.'
+        return
+      }
       try {
         this.submittingCompliance = true
         this.complianceSaveError = ''
+        this.reviewerError = ''
         const payload = {
+          reviewer_id: this.selectedReviewerId,
           policy: {
             name: this.complianceForm.policy_name,
             identifier: this.complianceForm.policy_identifier,
@@ -2244,18 +2333,19 @@ export default {
         if (response && response.success) {
           const complianceTitle = response.compliance?.ComplianceTitle || this.complianceForm.compliance_title || 'Compliance'
           PopupService.success(
-            `Compliance "${complianceTitle}" has been added successfully!`,
-            'Compliance Added'
+            `Compliance "${complianceTitle}" has been submitted for approval! The reviewer will be notified.`,
+            'Sent for Approval'
           )
         }
         
         this.showComplianceModal = false
         this.complianceModalData = null
+        this.selectedReviewerId = ''
         await this.matchCompliances()
       } catch (error) {
         this.complianceSaveError = error?.response?.data?.error || error.message || 'Failed to save compliance'
         PopupService.error(
-          `Failed to add compliance: ${this.complianceSaveError}`,
+          `Failed to submit compliance: ${this.complianceSaveError}`,
           'Error'
         )
       } finally {
@@ -3934,6 +4024,12 @@ export default {
 }
 
 /* Compliance Matching Styles */
+.FC_match-compliances-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .FC_match-compliances-button {
   display: flex;
   align-items: center;
@@ -3958,6 +4054,27 @@ export default {
 .FC_match-compliances-button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.FC_refresh-compliances-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: var(--card-bg);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.FC_refresh-compliances-button:hover {
+  background: var(--secondary-color);
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+  transform: rotate(180deg);
 }
 
 .FC_compliance-matches-panel {
@@ -4327,6 +4444,66 @@ export default {
   color: #dc2626;
   font-weight: 500;
   margin-top: 8px;
+}
+
+/* Reviewer Section Styling */
+.FC_reviewer-section {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.06) 0%, rgba(59, 130, 246, 0.06) 100%);
+  border: 1px solid rgba(34, 197, 94, 0.3) !important;
+  border-radius: 10px;
+}
+
+.FC_reviewer-section h4 {
+  color: #16a34a !important;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.FC_reviewer-info {
+  font-size: 0.8rem;
+  color: #6b7280;
+  margin: 0 0 12px 0;
+  line-height: 1.5;
+}
+
+.FC_reviewer-select {
+  padding: 9px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  background: #fff;
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%236b7280'%3E%3Cpath fill-rule='evenodd' d='M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z' clip-rule='evenodd'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 16px;
+  padding-right: 36px;
+}
+
+.FC_reviewer-select:focus {
+  outline: none;
+  border-color: #22c55e;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.15);
+}
+
+.FC_reviewer-select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background-color: #f9fafb;
+}
+
+.FC_required {
+  color: #dc2626;
+  font-weight: 700;
+}
+
+.FC_reviewer-error {
+  color: #dc2626;
+  font-size: 0.8rem;
+  margin-top: 4px;
 }
 
 @media (max-width: 640px) {

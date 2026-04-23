@@ -74,7 +74,7 @@ from ...debug_utils import debug_print
 
 # Set up logging
 logger = logging.getLogger(__name__)
-
+from .system_risk_service import trigger_single_source_risk_scan
 # Logging Configuration
 LOGGING_SERVICE_URL = None  # Disabled external logging service
 
@@ -2624,6 +2624,17 @@ def create_incident(request):
             
             # DO NOT create RiskInstance here - only create when escalated to risk
             debug_print("Incident saved to incidents table only. RiskInstance will be created when escalated to risk.")
+                
+            # Trigger automatic AI Risk Identification (Background)
+            try:
+                from ...models import SystemIdentifiedRiskQueue
+                trigger_single_source_risk_scan(
+                    source_type=SystemIdentifiedRiskQueue.SOURCE_INCIDENT, 
+                    source_id=incident.IncidentId, 
+                    tenant_id=tenant_id
+                )
+            except Exception as e:
+                debug_print(f"Error triggering automatic risk scan: {str(e)}")
                 
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         

@@ -82,10 +82,14 @@ ALLOWED_HOSTS = [
     'localhost',
     '127.0.0.1',
     'riskavaire.vardaands.com',  # Main production domain
+    'riskavairegrc.vardaands.com',  # Hostinger VPS (GRC + TPRM SPA)
+    'riskavaire-grc-tprm.vardaands.com',  # Dedicated subdomain (Docker stack + host nginx)
     'grc-tprm.vardaands.com',
     'grc-backend.vardaands.com',
     '15.207.108.158',
     '13.204.228.21',
+    '193.203.161.212',  # Hostinger VPS public IP
+    'test-riskavaire.vardaands.com',
     'e581-2405-201-c00b-4973-29e6-34b2-9eae-1e0c.ngrok-free.app',
 ]
 
@@ -614,6 +618,9 @@ CORS_ALLOWED_ORIGINS = [
     "https://13.204.228.21:8000",
     "http://13.204.228.21:8000",
     "https://riskavaire.vardaands.com",
+    "https://riskavairegrc.vardaands.com",
+    "https://riskavaire-grc-tprm.vardaands.com",
+    "https://test-riskavaire.vardaands.com",
 ] + _env_csv("CORS_ALLOWED_ORIGINS_EXTRA")
 
 # Support local dev ports without opening wildcard access.
@@ -652,6 +659,9 @@ CSRF_TRUSTED_ORIGINS = [
     "https://13.204.228.21:8000",  # New server IP with port (HTTPS)
     "http://13.204.228.21:8000",
     "https://grc-tprm.vardaands.com",
+    "https://riskavairegrc.vardaands.com",
+    "https://riskavaire-grc-tprm.vardaands.com",
+    "https://test-riskavaire.vardaands.com",
 ]
 
 # Additional CORS settings
@@ -717,7 +727,7 @@ JWT_VERIFYING_KEY = JWT_PUBLIC_KEY
 # Legacy alias retained for existing modules that still reference JWT_SECRET_KEY.
 JWT_SECRET_KEY = JWT_SIGNING_KEY
 JWT_ALLOWED_ALGORITHMS = [JWT_ALGORITHM]
-JWT_ACCESS_TOKEN_LIFETIME = 3600  # 1 hour in seconds
+JWT_ACCESS_TOKEN_LIFETIME = 36000  # 1 hour in seconds
 JWT_REFRESH_TOKEN_LIFETIME = 604800  # 7 days in seconds
 # reCAPTCHA Configuration
 RECAPTCHA_SECRET_KEY = os.environ.get('RECAPTCHA_SECRET_KEY', '6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe')  # Default is Google's test key
@@ -787,7 +797,7 @@ DATA_UPLOAD_MAX_NUMBER_FIELDS = 10000
 # Maximum file upload size (for file uploads)
 FILE_UPLOAD_MAX_MEMORY_SIZE = 52428800  # 50MB (increased from 10MB)
 # S3 Microservice settings
-S3_MICROSERVICE_URL = 'http://localhost:3000'  # Default URL for S3 microservice
+S3_MICROSERVICE_URL = os.environ.get('S3_MICROSERVICE_URL', 'http://193.203.161.212:3000')
 
 # Report generation settings
 REPORTS_DIR = Path(BASE_DIR) / 'Reports'

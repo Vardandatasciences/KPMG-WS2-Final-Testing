@@ -124,11 +124,19 @@ class AmendmentProcessor:
                     if os.path.exists(sections_content_dir):
                         for root, dirs, files in os.walk(sections_content_dir):
                             if "content.json" in files:
+                                try:
+                                    content_path = os.path.join(root, "content.json")
+                                    with open(content_path, 'r', encoding='utf-8') as cf:
+                                        cdata = json.load(cf)
+                                    # Ensure the content actually has meaningful text
+                                    if len(cdata.get("content", "").strip()) > 50:
                                 has_content = True
                                 break
+                                except Exception:
+                                    pass
                     
                     if not has_content:
-                        logger.warning("No section content found after indexed extraction; triggering fallback")
+                        logger.warning("No section content found (or content too short) after indexed extraction; triggering fallback")
                         fallback_required = True
 
                 if fallback_required:
@@ -215,7 +223,7 @@ class AmendmentProcessor:
                 logger.info(f"Successfully extracted {result.get('summary', {}).get('extraction_summary', {}).get('total_policies', 0)} policies")
                 return result
             else:
-                error_msg = result.get('error', 'Unknown error') if result else 'No result returned'
+                error_msg = result.get('error', 'No policies could be extracted from the provided text content') if result else 'No result returned'
                 logger.error(f"Failed to extract policies: {error_msg}")
                 return None
                 
@@ -250,23 +258,31 @@ class AmendmentProcessor:
             subpolicy_list = []
             total_subpolicies = 0
             
-            for section in policies_data.get('all_policies', []):
-                for policy in section.get('analysis', {}).get('policies', []):
-                    policy_id = policy.get('policy_id', '')
-                    policy_title = policy.get('policy_title', '')
+            for s_idx, section in enumerate(policies_data.get('all_policies', []), 1):
+                section_policies = section.get('analysis', {}).get('policies', [])
+                logger.info(f"Scanning section {s_idx}: found {len(section_policies)} policies")
+                
+                for p_idx, policy in enumerate(section_policies, 1):
+                    policy_id = policy.get('policy_id', '') or policy.get('identifier', '')
+                    policy_title = policy.get('policy_title', '') or policy.get('title', '')
                     
-                    for subpolicy in policy.get('subpolicies', []):
+                    subpolicies = policy.get('subpolicies', [])
+                    for sp_idx, subpolicy in enumerate(subpolicies, 1):
                         total_subpolicies += 1
+                        
+                        # Ensure we have some text for the control field
+                        raw_control = subpolicy.get('control') or subpolicy.get('subpolicy_description') or subpolicy.get('subpolicy_title', '')
+                        
                         subpolicy_list.append({
-                            'subpolicy_id': subpolicy.get('subpolicy_id', ''),
-                            'subpolicy_title': subpolicy.get('subpolicy_title', ''),
-                            'subpolicy_description': subpolicy.get('subpolicy_description', ''),
-                            'control': subpolicy.get('control', ''),
+                            'subpolicy_id': subpolicy.get('subpolicy_id', '') or subpolicy.get('id', ''),
+                            'subpolicy_title': subpolicy.get('subpolicy_title', '') or subpolicy.get('title', ''),
+                            'subpolicy_description': subpolicy.get('subpolicy_description', '') or subpolicy.get('description', ''),
+                            'control': raw_control,
                             'policy_id': policy_id,
                             'policy_title': policy_title
                         })
             
-            logger.info(f"Collected {total_subpolicies} subpolicies for processing")
+            logger.info(f"✅ Collection complete. Total subpolicies to analyze: {total_subpolicies}")
             
             # Simple sequential processing (no parallel processing)
             compliance_results = []
@@ -314,14 +330,13 @@ class AmendmentProcessor:
                         for compliance in compliances:
                             compliance['PolicyId'] = subpolicy_data['policy_id']
                             compliance['PolicyTitle'] = subpolicy_data['policy_title']
+                            compliance['SubPolicyId'] = subpolicy_data['subpolicy_id']
                         
                         compliance_results.extend(compliances)
                         processed_subpolicies += 1
-                        
-                        if idx % 10 == 0:  # Log progress every 10 subpolicies
-                            logger.info(f"Progress: {idx}/{total_subpolicies} subpolicies processed ({processed_subpolicies} successful)")
+                        logger.info(f"   ∟ ✅ Success: Generated {len(compliances)} compliance records")
                     else:
-                        logger.warning(f"Failed to generate compliance for: {subpolicy_data['subpolicy_title']}")
+                        logger.warning(f"   ∟ ⚠️ No compliance records returned for: {subpolicy_data['subpolicy_title']}")
                         
                 except Exception as e:
                     logger.error(f"Error generating compliance for subpolicy {subpolicy_data['subpolicy_id']}: {str(e)}")

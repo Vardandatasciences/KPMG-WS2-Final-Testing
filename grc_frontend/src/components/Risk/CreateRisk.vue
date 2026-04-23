@@ -1884,6 +1884,10 @@ export default {
       if (!this.newRisk.ComplianceId && this.incidentId) {
         this.newRisk.ComplianceId = this.incidentId
       }
+      
+      // Mark that AI suggestions have been generated to ensure 'SYSTEM-AI' origin
+      this.aiSuggestionGenerated = true
+      this.isGeneratingAi = false
     },
 
     resetForm() {
@@ -2254,6 +2258,7 @@ export default {
         RiskImpact: parseInt(this.newRisk.RiskImpact) || 1,
         RiskExposureRating: parseFloat(this.newRisk.RiskExposureRating) || 1,
         data_inventory: dataInventory, // Include data inventory JSON with field labels
+        Origin: this.aiSuggestionGenerated ? 'SYSTEM-AI' : 'Manual'
       };
 
       // Include consent data if consent was required and accepted

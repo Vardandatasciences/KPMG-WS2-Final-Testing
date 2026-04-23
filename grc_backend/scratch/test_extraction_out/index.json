@@ -1,0 +1,13 @@
+{
+  "source_pdf": "C:\\Users\\Admin\\Desktop\\GRC_TPRM\\grc_backend\\MEDIA_ROOT\\change_management\\Banking_Regulation(RBI_Guidelines)_20260420_120841.pdf",
+  "extraction_method": "toc_text_with_positions",
+  "items": [
+    {
+      "level": 1,
+      "title": "Mumbai - 400 001 फोन/Phone: 022 - 2266",
+      "page_label": "0502",
+      "page_number": 502,
+      "source_page": 1
+    }
+  ]
+}

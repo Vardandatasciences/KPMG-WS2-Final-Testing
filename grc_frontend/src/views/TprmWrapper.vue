@@ -47,13 +47,26 @@ const getTprmBaseUrl = () => {
   // BUT: Ignore localhost values if we're on production domain
   if (process.env.VUE_APP_TPRM_BASE_URL) {
     const envUrl = process.env.VUE_APP_TPRM_BASE_URL
+
+    let envHostMismatch = false
+    if (isProductionDomain && typeof window !== 'undefined' && window.location?.hostname) {
+      try {
+        const resolved = /^https?:\/\//i.test(envUrl) ? envUrl : `https://${envUrl}`
+        envHostMismatch = new URL(resolved).hostname !== window.location.hostname
+      } catch {
+        envHostMismatch = false
+      }
+    }
     
     // CRITICAL: If env var is localhost but we're on production domain, IGNORE IT
     if (isProductionDomain && (envUrl.includes('localhost') || envUrl.includes('127.0.0.1'))) {
       console.warn('[TprmWrapper] ⚠️ VUE_APP_TPRM_BASE_URL is set to localhost but running on production domain!')
       console.warn('[TprmWrapper] Ignoring env var and using production URL instead')
       console.warn('[TprmWrapper] Fix: Remove or update VUE_APP_TPRM_BASE_URL in your .env file')
-      // Fall through to use production URL
+      // Fall through to use same-origin /tprm
+    } else if (isProductionDomain && envHostMismatch) {
+      console.warn('[TprmWrapper] VUE_APP_TPRM_BASE_URL points at a different host than this page — using same origin /tprm')
+      // Fall through (avoids wrong TLS / cert when SPA is served on a new subdomain)
     } else {
       console.log('[TprmWrapper] Using VUE_APP_TPRM_BASE_URL:', envUrl, debugInfo)
       return envUrl
