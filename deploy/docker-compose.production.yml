@@ -31,7 +31,7 @@ services:
       DJANGO_SETTINGS_MODULE: backend.settings
     volumes:
       - grc_riskavaire_media:/app/MEDIA_ROOT
-      - grc_riskavaire_temp_media:/app/TEMP_MEDIA_ROOT
+      - ../grc_backend/TEMP_MEDIA_ROOT:/app/TEMP_MEDIA_ROOT
       - grc_riskavaire_reports:/app/Reports
     expose:
       - "8000"
