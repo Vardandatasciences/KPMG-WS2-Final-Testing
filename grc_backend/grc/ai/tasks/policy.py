@@ -39,57 +39,52 @@ Extract a concise framework structure from this source document:
 def extract_policy_hierarchy(service, payload: dict[str, Any], metadata: dict[str, Any] | None = None, options: AIRequestOptions | None = None):
     """
     Centralized AI task: extract policy hierarchy from section text.
-    Returns policies and subpolicies with justification analysis (what/where/how selected).
-    Caller: policy_extractor_enhanced (upload framework) or any payload-based client.
+    Returns policies and subpolicies with justification analysis.
     """
     section_title = payload.get("section_title", "")
     section_text = payload.get("section_text", "") or "(no text)"
-    print(f"[AI-TASK] extract_policy_hierarchy: section_title={section_title[:60]}..., section_text_len={len(section_text)}")
+    framework_name = payload.get("framework_name", "the framework")
+    
+    print(f"[AI-TASK] extract_policy_hierarchy: section_title={section_title[:60]}..., framework={framework_name}, section_text_len={len(section_text)}")
+    
     prompt = f"""
-Extract the FULL policy hierarchy from this section. You MUST extract ALL policies and ALL subpolicies/controls you find. Do NOT skip any. If the text has multiple requirements or controls, create a separate subpolicy for each.
+Extract the FULL policy hierarchy from this section of {framework_name}. 
+You MUST extract ALL policies and ALL subpolicies/controls you find. Do NOT skip any. 
 
 RULES (VERY IMPORTANT):
-- Return ONLY a valid JSON object. No markdown, no ```json, no extra text before or after.
+- Return ONLY a valid JSON object. No markdown, no ```json.
 - Use double quotes for all keys and string values.
 - ALWAYS populate "policies" array with at least one policy.
-- NEVER use a top-level key called "controls". ALL individual requirements MUST be represented as items in the "subpolicies" array for each policy.
-- If the source text contains a list of controls/requirements, create ONE subpolicy per control/requirement.
-- For subpolicy_title: use the control identifier, requirement ID, or a short descriptive title that is meaningful in UI.
-- For control: include the full requirement text. If long, summarize the key points but keep the most important regulatory phrases.
-- If section_text is sparse or unclear, infer structure from headers, numbering, bullets or strong phrases.
-- For each policy and each subpolicy you MUST include "ai_analysis" with:
-  - "extraction_rationale": one clear sentence explaining WHY this policy/subpolicy was created (the reason).
-  - "source_excerpt": a short quote from the section text that led to this selection (HOW/source), or "" only if there is absolutely no quote that makes sense.
+- Treat every requirement, control, numbered item, or bullet point as a separate subpolicy.
+- For subpolicy_title: use the control identifier (e.g. AC-1, 1.2.3) or a short descriptive title.
+- For control: include the full requirement text.
+- For each policy and each subpolicy you MUST include "ai_analysis" with "extraction_rationale" and "source_excerpt".
   
-QUALITY RULES:
-- Prefer SPECIFIC, regulatory-style titles (e.g. "PCI DSS - Protect Stored Cardholder Data") instead of generic ones.
-- Group logically related controls under the same policy when they belong to the same standard or topic.
-- Avoid duplicating identical subpolicies; merge closely similar sentences into a single, richer subpolicy.
-
-REQUIRED JSON STRUCTURE (FOLLOW EXACTLY THESE KEYS):
+REQUIRED JSON STRUCTURE:
 {{
+  "has_policies": true,
   "section_title": "{section_title}",
   "policies": [
     {{
-      "policy_title": "Short, specific, business-friendly policy name (e.g. 'PCI DSS - Secure Storage of Cardholder Data')",
-      "policy_description": "2-4 sentences summarising the main intent of the policy in plain language.",
-      "scope": "Which entities / systems / data this policy applies to.",
-      "objective": "What this policy is trying to achieve (risk reduction / compliance outcomes).",
-      "policy_type": "One of: 'Regulatory', 'Internal', 'Industry Standard', 'Contractual'.",
-      "policy_category": "High-level category (e.g. 'Information Security', 'Compliance', 'Privacy', 'Operational Risk').",
-      "policy_subcategory": "More specific grouping under the category (e.g. 'Payment Card Security', 'Access Control').",
+      "policy_title": "Policy Name",
+      "policy_description": "2-4 sentences summarizing intent.",
+      "scope": "System/Personnel scope.",
+      "objective": "Risk/Compliance outcome.",
+      "policy_type": "Regulatory/Internal/Industry Standard",
+      "policy_category": "e.g. Access Control",
+      "policy_subcategory": "e.g. Identity Management",
       "ai_analysis": {{
-        "extraction_rationale": "ONE short sentence explaining WHY this policy exists and what problem it addresses.",
-        "source_excerpt": "Short quote from the section text that best represents this policy, or \"\" if nothing is suitable."
+        "extraction_rationale": "Why this policy was created.",
+        "source_excerpt": "Quote from text"
       }},
       "subpolicies": [
         {{
-          "subpolicy_title": "Short requirement/controls name (e.g. 'Secure Storage of Cardholder Data').",
-          "subpolicy_description": "1-3 sentences describing what this specific requirement/ control enforces.",
-          "control": "The full requirement text or a faithful summary of the key sentences from the source.",
+          "subpolicy_title": "Requirement ID or Title",
+          "subpolicy_description": "Enforcement details.",
+          "control": "Full requirement text.",
           "ai_analysis": {{
-            "extraction_rationale": "ONE short sentence explaining WHY this subpolicy/control is important.",
-            "source_excerpt": "Short quote from the section text that led to this subpolicy, or \"\" if nothing is suitable."
+            "extraction_rationale": "Why this control is important.",
+            "source_excerpt": "Quote from text"
           }}
         }}
       ]
@@ -161,7 +156,43 @@ REQUIRED JSON STRUCTURE:
 Return the JSON object now."""
     print(f"[AI-TASK] generate_subpolicy_compliances: subpolicy={subpolicy_title[:50]}..., control_len={len(control)}")
     result = _generate_json(service, "policy.generate_subpolicy_compliances", prompt, options)
-    compliances = result.get("compliances", []) if isinstance(result, dict) else (result if isinstance(result, list) else [])
+    
+    # Normalize result to a list of compliances
+    if isinstance(result, dict):
+        compliances = result.get("compliances", [])
+    elif isinstance(result, list):
+        compliances = result
+    else:
+        compliances = []
+
+    # Safety Fallback: If AI returns empty, synthesize at least one record from the input
+    if not compliances:
+        print(f"[AI-TASK] generate_subpolicy_compliances: ⚠️ AI returned empty. Synthesizing fallback record.")
+        compliances = [
+            {
+                "ComplianceTitle": f"Comply with: {subpolicy_title}",
+                "ComplianceItemDescription": f"Organizational requirement to satisfy: {control[:300]}",
+                "ComplianceType": "Manual",
+                "Scope": "Affected Departments",
+                "Objective": f"Ensure governance for {subpolicy_title}",
+                "Criticality": "Medium",
+                "MandatoryOptional": "Mandatory",
+                "ManualAutomatic": "Manual",
+                "Impact": 3,
+                "Probability": 3,
+                "MaturityLevel": "Developing",
+                "Applicability": "Global",
+                "RiskType": "Current",
+                "RiskCategory": "Operational",
+                "PossibleDamage": f"Failure to implement {subpolicy_title} controls may lead to increased operational risk and compliance gaps.",
+                "risk_details": {
+                    "risk_summary": f"Risk of non-compliance with {subpolicy_title}",
+                    "source_logic": "Auto-generated fallback due to AI extraction timeout or empty response",
+                    "evidence_source": "Policy control text"
+                }
+            }
+        ]
+
     print(f"[AI-TASK] generate_subpolicy_compliances: DONE - compliances_count={len(compliances)}")
     return compliances
 

@@ -51,9 +51,6 @@ class AmendmentProcessor:
 
     def prepare_temp_dir(self):
         """Clear any previous temp_processing data before a new run."""
-        import shutil
-        import time
-        
         # If we are using a specific work_dir that contains other files (like the PDF),
         # we shouldn't just wipe the whole directory blindly.
         # However, per requirement "clear all files and folder before starting",
@@ -80,9 +77,6 @@ class AmendmentProcessor:
         try:
             # Import PDF extraction module
             from ..uploadNist.pdf_extractor import extract_sections_from_pdf as pdf_extract_sections
-            import shutil
-            import time
-            
             # Create output directory for sections
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             safe_name = framework_name.replace(' ', '_').replace('/', '_')
@@ -130,8 +124,8 @@ class AmendmentProcessor:
                                         cdata = json.load(cf)
                                     # Ensure the content actually has meaningful text
                                     if len(cdata.get("content", "").strip()) > 50:
-                                has_content = True
-                                break
+                                        has_content = True
+                                        break
                                 except Exception:
                                     pass
                     
@@ -430,7 +424,7 @@ class AmendmentProcessor:
                     'framework_name': framework_name,
                     'amendment_date': amendment_date,
                     'processing_date': datetime.now().isoformat(),
-                    'framework_info': policies_data.get('all_policies', [{}])[0].get('analysis', {}).get('framework_info', {})
+                    'framework_info': (policies_data.get('all_policies') or [{}])[0].get('analysis', {}).get('framework_info', {})
                 },
                 'extraction_summary': {
                     'total_sections': len(enhanced_policies),
@@ -483,7 +477,6 @@ class AmendmentProcessor:
     def cleanup_temp_files(self):
         """Clean up temporary processing files."""
         try:
-            import shutil
             if os.path.exists(self.temp_dir):
                 shutil.rmtree(self.temp_dir)
                 logger.info("Cleaned up temporary processing files")

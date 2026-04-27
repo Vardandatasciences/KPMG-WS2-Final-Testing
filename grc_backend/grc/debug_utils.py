@@ -8,4 +8,11 @@ from django.conf import settings
 def debug_print(*args, **kwargs):
     """Only print when ENABLE_DEBUG_LOGGING is True in settings."""
     if getattr(settings, 'ENABLE_DEBUG_LOGGING', False):
-        print(*args, **kwargs)
+        try:
+            print(*args, **kwargs)
+        except UnicodeEncodeError:
+            # Fallback for Windows terminals that don't support emojis
+            clean_args = [str(arg).encode('ascii', 'ignore').decode('ascii') for arg in args]
+            print(*clean_args, **kwargs)
+        except Exception:
+            pass

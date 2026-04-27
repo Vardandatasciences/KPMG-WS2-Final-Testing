@@ -693,8 +693,6 @@ def add_compliance_from_amendment(request, framework_id):
         }, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
         logger.error(f"Error adding compliance from amendment: {str(e)}")
-        import traceback
-        logger.error(traceback.format_exc())
         return Response({
             'success': False,
             'error': str(e)

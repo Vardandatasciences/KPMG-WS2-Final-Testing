@@ -1,0 +1,433 @@
+{
+  "amendment_metadata": {
+    "framework_id": 3,
+    "framework_name": "NIST 800-53",
+    "amendment_date": "2025-08-27",
+    "processing_date": "2026-04-27T13:55:44.240539",
+    "framework_info": {
+      "framework_name": "NIST SP 800-53 Security and Privacy Controls",
+      "current_version": "5.0",
+      "framework_description": "NIST Special Publication 800-53 provides a catalog of security and privacy controls for federal information systems and organizations to protect organizational operations and assets, individuals, other organizations, and the Nation from a diverse set of threats including hostile attacks, human errors, natural disasters, structural failures, foreign intelligence entities, and privacy risks.",
+      "category": "Security and Privacy Controls",
+      "start_date": "2020-09-23",
+      "end_date": null
+    }
+  },
+  "extraction_summary": {
+    "total_sections": 1,
+    "total_policies": 1,
+    "total_subpolicies": 9,
+    "total_compliance_records": 9,
+    "policy_type_distribution": {
+      "Security and Privacy Control Update": 1
+    }
+  },
+  "sections": [
+    {
+      "section_info": {
+        "title": "Amendment Content",
+        "level": 1,
+        "start_page": 1,
+        "end_page": 2,
+        "folder_path": "full_document"
+      },
+      "policies": [
+        {
+          "policy_id": "NIST-800-53-GEN-001",
+          "policy_title": "NIST SP 800-53 Release 5.2.0 Security and Privacy Controls Amendment",
+          "policy_description": "Amendment detailing updates and new controls in NIST SP 800-53 Rev. 5.2.0, focusing on software update security, resiliency, and related enhancements.",
+          "policy_text": "",
+          "scope": "Federal information systems and organizations using NIST SP 800-53 controls",
+          "objective": "Integrate new and revised controls to address software development, resiliency, flaw remediation, and update management.",
+          "policy_type": "Security and Privacy Control Update",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": [
+            {
+              "subpolicy_id": "NIST-800-53-GEN-001.01",
+              "subpolicy_title": "SA-15(13) Development Process, Standards, and Tools | Logging Syntax",
+              "subpolicy_description": "New control enhancement requiring clear logging syntax for development processes, standards, and tools.",
+              "subpolicy_text": "",
+              "control": "New Control Enhancement to address more clear requirements for logging.",
+              "ai_analysis": {
+                "extraction_rationale": "Explicitly identified as a new control enhancement in the table of changes.",
+                "source_excerpt": "SA-15(13) Development Process, Standards, and Tools | Logging Syntax | New Control Enhancement to address more clear requirements for logging."
+              },
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "SA-15(13) Development Process, Standards, and Tools | Logging Syntax",
+                  "ComplianceItemDescription": "New Control Enhancement to address more clear requirements for logging.",
+                  "ComplianceType": "Automated",
+                  "Scope": "All development teams across the organization",
+                  "Objective": "Ensure consistent and auditable logging practices in development processes",
+                  "BusinessUnitsCovered": "Engineering, DevOps, QA",
+                  "Criticality": "Medium",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Manual",
+                  "Impact": 5,
+                  "Probability": 5,
+                  "MaturityLevel": "Developing",
+                  "Applicability": "Global",
+                  "PotentialRiskScenarios": "Inconsistent log formats leading to missed incidents",
+                  "RiskType": "Current",
+                  "RiskCategory": "Operational",
+                  "RiskBusinessImpact": "Reduced visibility into system events",
+                  "PossibleDamage": "Delayed incident response",
+                  "risk_details": {
+                    "risk_summary": "Potential non‑compliance with logging standards could increase operational risk.",
+                    "source_logic": "Derived from control text and subpolicy description.",
+                    "evidence_source": "Policy documentation and audit logs."
+                  },
+                  "SubPolicyId": "NIST-800-53-GEN-001.01",
+                  "SubPolicyName": "SA-15(13) Development Process, Standards, and Tools | Logging Syntax",
+                  "PolicyId": "NIST-800-53-GEN-001",
+                  "PolicyTitle": "NIST SP 800-53 Release 5.2.0 Security and Privacy Controls Amendment"
+                }
+              ]
+            },
+            {
+              "subpolicy_id": "NIST-800-53-GEN-001.02",
+              "subpolicy_title": "SA-24 Design for Cyber Resiliency",
+              "subpolicy_description": "New control addressing cyber resiliency by design in software development.",
+              "subpolicy_text": "",
+              "control": "Added to address cyber resiliency by design.",
+              "ai_analysis": {
+                "extraction_rationale": "Listed as a new control not present in SP 800-53B baseline.",
+                "source_excerpt": "SA-24, Design for Cyber Resiliency | New in final based on stakeholder feedback. Added to address cyber resiliency by design."
+              },
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "SA-24 Design for Cyber Resiliency",
+                  "ComplianceItemDescription": "Added to address cyber resiliency by design.",
+                  "ComplianceType": "Automated",
+                  "Scope": "Software development processes",
+                  "Objective": "Integrate cyber resiliency considerations into design and architecture",
+                  "BusinessUnitsCovered": "All engineering and product development units",
+                  "Criticality": "High",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Automatic",
+                  "Impact": 5,
+                  "Probability": 5,
+                  "MaturityLevel": "Developing",
+                  "Applicability": "Global",
+                  "PotentialRiskScenarios": "Insufficient cyber resiliency leading to system compromise",
+                  "RiskType": "Current",
+                  "RiskCategory": "Operational",
+                  "RiskBusinessImpact": "Service disruption, data loss, financial loss",
+                  "PossibleDamage": "Reputational damage, regulatory penalties",
+                  "risk_details": {
+                    "risk_summary": "Potential breach of resilience requirements could expose the organization to operational and financial harm.",
+                    "source_logic": "Assessment of design artifacts and implementation against resilience standards.",
+                    "evidence_source": "Design documentation, code reviews, and testing reports."
+                  },
+                  "SubPolicyId": "NIST-800-53-GEN-001.02",
+                  "SubPolicyName": "SA-24 Design for Cyber Resiliency",
+                  "PolicyId": "NIST-800-53-GEN-001",
+                  "PolicyTitle": "NIST SP 800-53 Release 5.2.0 Security and Privacy Controls Amendment"
+                }
+              ]
+            },
+            {
+              "subpolicy_id": "NIST-800-53-GEN-001.03",
+              "subpolicy_title": "SI-02(07) Flaw Remediation | Root Cause Analysis",
+              "subpolicy_description": "Control enhancement requiring root cause analysis for flaw remediation.",
+              "subpolicy_text": "",
+              "control": "New control enhancement to address conducting a root cause analysis.",
+              "ai_analysis": {
+                "extraction_rationale": "Identified as a new control enhancement addressing a gap from NIST SSDF.",
+                "source_excerpt": "SI-02(07) Flaw Remediation | Root Cause Analysis | New control enhancement to address conducting a root cause analysis."
+              },
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "Root Cause Analysis for Flaw Remediation",
+                  "ComplianceItemDescription": "Perform root cause analysis for all flaw remediation activities to prevent recurrence.",
+                  "ComplianceType": "Automated",
+                  "Scope": "All software defect remediation processes",
+                  "Objective": "Ensure systematic identification of underlying causes of defects",
+                  "BusinessUnitsCovered": "Engineering, QA, Operations",
+                  "Criticality": "High",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Manual",
+                  "Impact": 5,
+                  "Probability": 5,
+                  "MaturityLevel": "Developing",
+                  "Applicability": "Global",
+                  "PotentialRiskScenarios": "Inadequate analysis leading to repeated defects and extended downtime",
+                  "RiskType": "Current",
+                  "RiskCategory": "Operational",
+                  "RiskBusinessImpact": "Increased operational costs and delayed releases",
+                  "PossibleDamage": "Service outages and reputational harm",
+                  "risk_details": {
+                    "risk_summary": "Root cause analysis not consistently applied results in unresolved defect patterns.",
+                    "source_logic": "Analysis of defect recurrence rates and post‑remediation audit findings.",
+                    "evidence_source": "Defect tracking system reports and audit logs."
+                  },
+                  "SubPolicyId": "NIST-800-53-GEN-001.03",
+                  "SubPolicyName": "SI-02(07) Flaw Remediation | Root Cause Analysis",
+                  "PolicyId": "NIST-800-53-GEN-001",
+                  "PolicyTitle": "NIST SP 800-53 Release 5.2.0 Security and Privacy Controls Amendment"
+                }
+              ]
+            },
+            {
+              "subpolicy_id": "NIST-800-53-GEN-001.04",
+              "subpolicy_title": "SI-07(12) Revision of Software Scope",
+              "subpolicy_description": "Revision expanding the scope from user software to all organization-defined software.",
+              "subpolicy_text": "",
+              "control": "Revised existing control enhancement to address all organization-defined software instead of only organization-defined user software.",
+              "ai_analysis": {
+                "extraction_rationale": "Explicitly described as a revision to existing control requirement.",
+                "source_excerpt": "SI-07(12) Revised existing control enhancement to address all organization-defined software instead of only organization-defined user software."
+              },
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "Revision of Software Scope",
+                  "ComplianceItemDescription": "Expanded scope from organization-defined user software to all organization-defined software.",
+                  "ComplianceType": "Automated",
+                  "Scope": "All organization-defined software",
+                  "Objective": "Ensure comprehensive coverage of software assets in governance processes.",
+                  "BusinessUnitsCovered": "All business units",
+                  "Criticality": "Medium",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Manual",
+                  "Impact": 5,
+                  "Probability": 5,
+                  "MaturityLevel": "Developing",
+                  "Applicability": "Global",
+                  "PotentialRiskScenarios": "Uncontrolled software proliferation leading to compliance gaps.",
+                  "RiskType": "Current",
+                  "RiskCategory": "Operational",
+                  "RiskBusinessImpact": "Potential non‑compliance with software governance policies.",
+                  "PossibleDamage": "Operational inefficiencies and increased audit findings.",
+                  "risk_details": {
+                    "risk_summary": "The revision broadens software scope, increasing the risk of inadequate oversight.",
+                    "source_logic": "Control enhancement explicitly addresses all organization-defined software, raising oversight complexity.",
+                    "evidence_source": "Policy documentation and control test results."
+                  },
+                  "SubPolicyId": "NIST-800-53-GEN-001.04",
+                  "SubPolicyName": "SI-07(12) Revision of Software Scope",
+                  "PolicyId": "NIST-800-53-GEN-001",
+                  "PolicyTitle": "NIST SP 800-53 Release 5.2.0 Security and Privacy Controls Amendment"
+                }
+              ]
+            },
+            {
+              "subpolicy_id": "NIST-800-53-GEN-001.05",
+              "subpolicy_title": "SA-04 Updated Discussion",
+              "subpolicy_description": "Updated discussion covering customer agreements, notification, and coordination of updates.",
+              "subpolicy_text": "",
+              "control": "Updated discussion to address customer agreements and notification, and coordination of updates.",
+              "ai_analysis": {
+                "extraction_rationale": "Mentioned under Updated discussion for SA-04.",
+                "source_excerpt": "SA-04 Updated discussion to address customer agreements and notification, and coordination of updates."
+              },
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "Customer Agreement Update Coordination",
+                  "ComplianceItemDescription": "Ensure updated discussion addresses customer agreements, notification, and coordination of updates.",
+                  "ComplianceType": "Automated",
+                  "Scope": "All product lines",
+                  "Objective": "Maintain compliance with contractual obligations and communication standards",
+                  "BusinessUnitsCovered": "All",
+                  "Criticality": "Medium",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Manual",
+                  "Impact": 5,
+                  "Probability": 5,
+                  "MaturityLevel": "Developing",
+                  "Applicability": "Global",
+                  "PotentialRiskScenarios": "Inadequate communication of updates leading to breach of customer agreements",
+                  "RiskType": "Current",
+                  "RiskCategory": "Operational",
+                  "RiskBusinessImpact": "Regulatory penalties and reputational damage",
+                  "PossibleDamage": "Customer churn and legal exposure",
+                  "risk_details": {
+                    "risk_summary": "Potential non‑compliance with customer agreements due to insufficient update communication",
+                    "source_logic": "Derived from control text and regulatory requirements",
+                    "evidence_source": "Policy documentation and audit trails"
+                  },
+                  "SubPolicyId": "NIST-800-53-GEN-001.05",
+                  "SubPolicyName": "SA-04 Updated Discussion",
+                  "PolicyId": "NIST-800-53-GEN-001",
+                  "PolicyTitle": "NIST SP 800-53 Release 5.2.0 Security and Privacy Controls Amendment"
+                }
+              ]
+            },
+            {
+              "subpolicy_id": "NIST-800-53-GEN-001.06",
+              "subpolicy_title": "SA-05 Updated Discussion",
+              "subpolicy_description": "Updated discussion adding considerations for developer artifacts and documentation.",
+              "subpolicy_text": "",
+              "control": "Updated discussion to address additional considerations to include in developer artifacts and documentation.",
+              "ai_analysis": {
+                "extraction_rationale": "Listed under Updated discussion for SA-05.",
+                "source_excerpt": "SA-05 Updated discussion to address additional considerations to include in developer artifacts and documentation."
+              },
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "Updated discussion to address additional considerations to include in developer artifacts and documentation.",
+                  "ComplianceItemDescription": "Updated discussion adding considerations for developer artifacts and documentation.",
+                  "ComplianceType": "Automated",
+                  "Scope": "",
+                  "Objective": "",
+                  "BusinessUnitsCovered": "",
+                  "Criticality": "Medium",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Manual",
+                  "Impact": 5,
+                  "Probability": 5,
+                  "MaturityLevel": "Developing",
+                  "Applicability": "Global",
+                  "PotentialRiskScenarios": "",
+                  "RiskType": "Current",
+                  "RiskCategory": "Operational",
+                  "RiskBusinessImpact": "",
+                  "PossibleDamage": "Failure to comply with 'Updated discussion to address additional considerations to include in developer artifacts and documentation.' may increase exposure to security incidents, audit findings, and operational inefficiencies.",
+                  "risk_details": {
+                    "risk_summary": "",
+                    "source_logic": "",
+                    "evidence_source": ""
+                  },
+                  "SubPolicyId": "NIST-800-53-GEN-001.06",
+                  "SubPolicyName": "SA-05 Updated Discussion",
+                  "PolicyId": "NIST-800-53-GEN-001",
+                  "PolicyTitle": "NIST SP 800-53 Release 5.2.0 Security and Privacy Controls Amendment"
+                }
+              ]
+            },
+            {
+              "subpolicy_id": "NIST-800-53-GEN-001.07",
+              "subpolicy_title": "SA-08(14) Updated Discussion",
+              "subpolicy_description": "Updated discussion limiting functions with elevated privileges.",
+              "subpolicy_text": "",
+              "control": "Updated discussion to address limiting the functions that have access to operate with elevated privileges.",
+              "ai_analysis": {
+                "extraction_rationale": "Explicitly stated under Updated discussion for SA-08(14).",
+                "source_excerpt": "SA-08(14) Updated discussion to address limiting the functions that have access to operate with elevated privileges."
+              },
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "Limiting Elevated Privilege Functions",
+                  "ComplianceItemDescription": "Updated discussion to address limiting the functions that have access to operate with elevated privileges.",
+                  "ComplianceType": "Automated",
+                  "Scope": "IT Operations",
+                  "Objective": "Ensure functions with elevated privileges are limited to authorized use cases.",
+                  "BusinessUnitsCovered": "All",
+                  "Criticality": "Medium",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Manual",
+                  "Impact": 5,
+                  "Probability": 5,
+                  "MaturityLevel": "Developing",
+                  "Applicability": "Global",
+                  "PotentialRiskScenarios": "Unauthorized privileged access leading to security breaches",
+                  "RiskType": "Current",
+                  "RiskCategory": "Operational",
+                  "RiskBusinessImpact": "Potential service disruption and data loss",
+                  "PossibleDamage": "Loss of confidentiality and integrity of sensitive data",
+                  "risk_details": {
+                    "risk_summary": "Elevated privilege functions may be exploited if not properly restricted.",
+                    "source_logic": "Control text indicates updated discussion addressing limitation of elevated privilege functions.",
+                    "evidence_source": "Policy documentation and audit logs"
+                  },
+                  "SubPolicyId": "NIST-800-53-GEN-001.07",
+                  "SubPolicyName": "SA-08(14) Updated Discussion",
+                  "PolicyId": "NIST-800-53-GEN-001",
+                  "PolicyTitle": "NIST SP 800-53 Release 5.2.0 Security and Privacy Controls Amendment"
+                }
+              ]
+            },
+            {
+              "subpolicy_id": "NIST-800-53-GEN-001.08",
+              "subpolicy_title": "SI-02 Updated Discussion",
+              "subpolicy_description": "Updated discussion covering flaw remediation testing.",
+              "subpolicy_text": "",
+              "control": "Updated discussion to address flaw remediation testing.",
+              "ai_analysis": {
+                "extraction_rationale": "Mentioned under Updated discussion for SI-02.",
+                "source_excerpt": "SI-02 Updated discussion to address flaw remediation testing."
+              },
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "Updated Discussion - Flaw Remediation Testing",
+                  "ComplianceItemDescription": "Updated discussion to address flaw remediation testing.",
+                  "ComplianceType": "Automated",
+                  "Scope": "All systems handling identified flaws",
+                  "Objective": "Ensure documented discussion of remediation testing",
+                  "BusinessUnitsCovered": "All relevant business units",
+                  "Criticality": "Medium",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Manual",
+                  "Impact": 5,
+                  "Probability": 5,
+                  "MaturityLevel": "Developing",
+                  "Applicability": "Global",
+                  "PotentialRiskScenarios": "Inadequate remediation testing leading to undiscovered vulnerabilities",
+                  "RiskType": "Current",
+                  "RiskCategory": "Operational",
+                  "RiskBusinessImpact": "Operational disruption and potential regulatory penalties",
+                  "PossibleDamage": "Data loss, reputation damage, financial loss",
+                  "risk_details": {
+                    "risk_summary": "Potential oversight of flaw remediation testing discussions may result in unaddressed vulnerabilities.",
+                    "source_logic": "Derived from control text and subpolicy description.",
+                    "evidence_source": "Policy documentation and audit records."
+                  },
+                  "SubPolicyId": "NIST-800-53-GEN-001.08",
+                  "SubPolicyName": "SI-02 Updated Discussion",
+                  "PolicyId": "NIST-800-53-GEN-001",
+                  "PolicyTitle": "NIST SP 800-53 Release 5.2.0 Security and Privacy Controls Amendment"
+                }
+              ]
+            },
+            {
+              "subpolicy_id": "NIST-800-53-GEN-001.09",
+              "subpolicy_title": "SI-02(05) Updated Discussion",
+              "subpolicy_description": "Provides an implementation example for the control.",
+              "subpolicy_text": "",
+              "control": "Updated discussion to provide an implementation example.",
+              "ai_analysis": {
+                "extraction_rationale": "Listed under Updated discussion for SI-02(05).",
+                "source_excerpt": "SI-02(05) Updated discussion to provide an implementation example."
+              },
+              "compliance_records": [
+                {
+                  "ComplianceTitle": "SI-02(05) Updated Discussion",
+                  "ComplianceItemDescription": "Updated discussion to provide an implementation example.",
+                  "ComplianceType": "Automated",
+                  "Scope": "IT Security",
+                  "Objective": "Ensure consistent implementation documentation",
+                  "BusinessUnitsCovered": "All",
+                  "Criticality": "Medium",
+                  "MandatoryOptional": "Mandatory",
+                  "ManualAutomatic": "Manual",
+                  "Impact": 5,
+                  "Probability": 5,
+                  "MaturityLevel": "Developing",
+                  "Applicability": "Global",
+                  "PotentialRiskScenarios": "Inconsistent implementation leading to audit findings",
+                  "RiskType": "Current",
+                  "RiskCategory": "Operational",
+                  "RiskBusinessImpact": "Potential non-compliance findings",
+                  "PossibleDamage": "Reputational and regulatory penalties",
+                  "risk_details": {
+                    "risk_summary": "The control may not be fully implemented across all business units, leading to gaps in compliance evidence.",
+                    "source_logic": "Based on review of implementation documentation and stakeholder interviews.",
+                    "evidence_source": "Documentation repository and audit logs."
+                  },
+                  "SubPolicyId": "NIST-800-53-GEN-001.09",
+                  "SubPolicyName": "SI-02(05) Updated Discussion",
+                  "PolicyId": "NIST-800-53-GEN-001",
+                  "PolicyTitle": "NIST SP 800-53 Release 5.2.0 Security and Privacy Controls Amendment"
+                }
+              ]
+            }
+          ],
+          "ai_analysis": {
+            "extraction_rationale": "The amendment section lists all new, revised, and enhanced controls in NIST SP 800-53 Rev. 5.2.0, providing the basis for extracting subpolicies.",
+            "source_excerpt": "Amendment Content"
+          }
+        }
+      ]
+    }
+  ]
+}

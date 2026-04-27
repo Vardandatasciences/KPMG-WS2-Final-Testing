@@ -1,0 +1,18 @@
+{
+  "amendment_id": 1,
+  "amendment_name": "NIST 800-53 Amendment - 2025-08-27",
+  "amendment_date": "2025-08-27",
+  "document_path": "C:\\Users\\Admin\\Desktop\\KPMG-WS2-Final-Testing\\grc_backend\\MEDIA_ROOT\\change_management\\NIST_800-53_20260427_134145.pdf",
+  "document_relative_path": "change_management\\NIST_800-53_20260427_134145.pdf",
+  "document_name": "NIST_800-53_20260427_134145.pdf",
+  "document_url": "https://csrc.nist.gov/csrc/media/Projects/risk-management/800-53%20Comment%20Site/SP800-53-r5.2.0-changes.pdf",
+  "s3_url": "https://innoida.utho.io/db-bck-189767/vardaanwebsites/system_1777277509250_q23z6f_NIST_800-53_20260427_134145.pdf",
+  "s3_key": "vardaanwebsites/system_1777277509250_q23z6f_NIST_800-53_20260427_134145.pdf",
+  "s3_stored_name": "system_1777277509250_q23z6f_NIST_800-53_20260427_134145.pdf",
+  "downloaded_date": "2026-04-27T13:41:49.194099",
+  "processed": false,
+  "extraction_summary": {},
+  "sections": [],
+  "framework_info": {},
+  "ai_analysis": {}
+}

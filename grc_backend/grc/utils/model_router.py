@@ -153,7 +153,9 @@ def route_model(
         document_size = text_length
     
     # Determine task complexity
-    if task_type in ["simple_query", "field_extraction"]:
+    if any(kw in task_type.lower() for kw in ["compliance", "gap", "extract_policy", "extraction"]):
+        complexity = "complex"
+    elif task_type in ["simple_query", "field_extraction"]:
         complexity = "simple"
     elif task_type in ["complex_analysis", "multi_risk_extraction"]:
         complexity = "complex"
@@ -163,7 +165,7 @@ def route_model(
     # Adjust complexity based on document size and number of risks
     if document_size > 50000 or num_risks > 5:
         complexity = "complex"
-    elif document_size < 2000 and num_risks == 1:
+    elif complexity != "complex" and (document_size < 2000 and num_risks == 1):
         complexity = "simple"
     
     # Route based on provider

@@ -12,7 +12,7 @@ class ModelRoutingService:
             selected = options.preferred_model or route_model(
                 task_type=options.task_name or "analysis",
                 document_size=document_size,
-                accuracy_required="high" if "gap" in (options.task_name or "") else "medium",
+                accuracy_required="high" if any(kw in (options.task_name or "").lower() for kw in ["gap", "compliance"]) else "medium",
                 system_load=get_current_system_load(),
                 provider="openai",
             )
@@ -27,7 +27,7 @@ class ModelRoutingService:
             model = route_model(
                 task_type=options.task_name or "analysis",
                 document_size=document_size,
-                accuracy_required="high" if "gap" in (options.task_name or "") else "medium",
+                accuracy_required="high" if any(kw in (options.task_name or "").lower() for kw in ["gap", "compliance"]) else "medium",
                 system_load=get_current_system_load(),
             )
             print(f"[AI-ROUTER] select_model: Ollama heuristic, model={model}, task={options.task_name}, doc_size={document_size}")

@@ -1,0 +1,142 @@
+[
+  {
+    "section_info": {
+      "title": "Amendment Content",
+      "level": 1,
+      "start_page": 1,
+      "end_page": 2,
+      "folder_path": "full_document"
+    },
+    "analysis": {
+      "has_policies": true,
+      "framework_info": {
+        "framework_name": "NIST SP 800-53 Security and Privacy Controls",
+        "current_version": "5.0",
+        "framework_description": "NIST Special Publication 800-53 provides a catalog of security and privacy controls for federal information systems and organizations to protect organizational operations and assets, individuals, other organizations, and the Nation from a diverse set of threats including hostile attacks, human errors, natural disasters, structural failures, foreign intelligence entities, and privacy risks.",
+        "category": "Security and Privacy Controls",
+        "start_date": "2020-09-23",
+        "end_date": null
+      },
+      "policies": [
+        {
+          "policy_id": "NIST-800-53-GEN-001",
+          "policy_title": "NIST SP 800-53 Release 5.2.0 Security and Privacy Controls Amendment",
+          "policy_description": "Amendment detailing updates and new controls in NIST SP 800-53 Rev. 5.2.0, focusing on software update security, resiliency, and related enhancements.",
+          "policy_text": "",
+          "scope": "Federal information systems and organizations using NIST SP 800-53 controls",
+          "objective": "Integrate new and revised controls to address software development, resiliency, flaw remediation, and update management.",
+          "policy_type": "Security and Privacy Control Update",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": [
+            {
+              "subpolicy_id": "NIST-800-53-GEN-001.01",
+              "subpolicy_title": "SA-15(13) Development Process, Standards, and Tools | Logging Syntax",
+              "subpolicy_description": "New control enhancement requiring clear logging syntax for development processes, standards, and tools.",
+              "subpolicy_text": "",
+              "control": "New Control Enhancement to address more clear requirements for logging.",
+              "ai_analysis": {
+                "extraction_rationale": "Explicitly identified as a new control enhancement in the table of changes.",
+                "source_excerpt": "SA-15(13) Development Process, Standards, and Tools | Logging Syntax | New Control Enhancement to address more clear requirements for logging."
+              }
+            },
+            {
+              "subpolicy_id": "NIST-800-53-GEN-001.02",
+              "subpolicy_title": "SA-24 Design for Cyber Resiliency",
+              "subpolicy_description": "New control addressing cyber resiliency by design in software development.",
+              "subpolicy_text": "",
+              "control": "Added to address cyber resiliency by design.",
+              "ai_analysis": {
+                "extraction_rationale": "Listed as a new control not present in SP 800-53B baseline.",
+                "source_excerpt": "SA-24, Design for Cyber Resiliency | New in final based on stakeholder feedback. Added to address cyber resiliency by design."
+              }
+            },
+            {
+              "subpolicy_id": "NIST-800-53-GEN-001.03",
+              "subpolicy_title": "SI-02(07) Flaw Remediation | Root Cause Analysis",
+              "subpolicy_description": "Control enhancement requiring root cause analysis for flaw remediation.",
+              "subpolicy_text": "",
+              "control": "New control enhancement to address conducting a root cause analysis.",
+              "ai_analysis": {
+                "extraction_rationale": "Identified as a new control enhancement addressing a gap from NIST SSDF.",
+                "source_excerpt": "SI-02(07) Flaw Remediation | Root Cause Analysis | New control enhancement to address conducting a root cause analysis."
+              }
+            },
+            {
+              "subpolicy_id": "NIST-800-53-GEN-001.04",
+              "subpolicy_title": "SI-07(12) Revision of Software Scope",
+              "subpolicy_description": "Revision expanding the scope from user software to all organization-defined software.",
+              "subpolicy_text": "",
+              "control": "Revised existing control enhancement to address all organization-defined software instead of only organization-defined user software.",
+              "ai_analysis": {
+                "extraction_rationale": "Explicitly described as a revision to existing control requirement.",
+                "source_excerpt": "SI-07(12) Revised existing control enhancement to address all organization-defined software instead of only organization-defined user software."
+              }
+            },
+            {
+              "subpolicy_id": "NIST-800-53-GEN-001.05",
+              "subpolicy_title": "SA-04 Updated Discussion",
+              "subpolicy_description": "Updated discussion covering customer agreements, notification, and coordination of updates.",
+              "subpolicy_text": "",
+              "control": "Updated discussion to address customer agreements and notification, and coordination of updates.",
+              "ai_analysis": {
+                "extraction_rationale": "Mentioned under Updated discussion for SA-04.",
+                "source_excerpt": "SA-04 Updated discussion to address customer agreements and notification, and coordination of updates."
+              }
+            },
+            {
+              "subpolicy_id": "NIST-800-53-GEN-001.06",
+              "subpolicy_title": "SA-05 Updated Discussion",
+              "subpolicy_description": "Updated discussion adding considerations for developer artifacts and documentation.",
+              "subpolicy_text": "",
+              "control": "Updated discussion to address additional considerations to include in developer artifacts and documentation.",
+              "ai_analysis": {
+                "extraction_rationale": "Listed under Updated discussion for SA-05.",
+                "source_excerpt": "SA-05 Updated discussion to address additional considerations to include in developer artifacts and documentation."
+              }
+            },
+            {
+              "subpolicy_id": "NIST-800-53-GEN-001.07",
+              "subpolicy_title": "SA-08(14) Updated Discussion",
+              "subpolicy_description": "Updated discussion limiting functions with elevated privileges.",
+              "subpolicy_text": "",
+              "control": "Updated discussion to address limiting the functions that have access to operate with elevated privileges.",
+              "ai_analysis": {
+                "extraction_rationale": "Explicitly stated under Updated discussion for SA-08(14).",
+                "source_excerpt": "SA-08(14) Updated discussion to address limiting the functions that have access to operate with elevated privileges."
+              }
+            },
+            {
+              "subpolicy_id": "NIST-800-53-GEN-001.08",
+              "subpolicy_title": "SI-02 Updated Discussion",
+              "subpolicy_description": "Updated discussion covering flaw remediation testing.",
+              "subpolicy_text": "",
+              "control": "Updated discussion to address flaw remediation testing.",
+              "ai_analysis": {
+                "extraction_rationale": "Mentioned under Updated discussion for SI-02.",
+                "source_excerpt": "SI-02 Updated discussion to address flaw remediation testing."
+              }
+            },
+            {
+              "subpolicy_id": "NIST-800-53-GEN-001.09",
+              "subpolicy_title": "SI-02(05) Updated Discussion",
+              "subpolicy_description": "Provides an implementation example for the control.",
+              "subpolicy_text": "",
+              "control": "Updated discussion to provide an implementation example.",
+              "ai_analysis": {
+                "extraction_rationale": "Listed under Updated discussion for SI-02(05).",
+                "source_excerpt": "SI-02(05) Updated discussion to provide an implementation example."
+              }
+            }
+          ],
+          "ai_analysis": {
+            "extraction_rationale": "The amendment section lists all new, revised, and enhanced controls in NIST SP 800-53 Rev. 5.2.0, providing the basis for extracting subpolicies.",
+            "source_excerpt": "Amendment Content"
+          }
+        }
+      ],
+      "document_type": "other",
+      "confidence": 0.0
+    }
+  }
+]

@@ -8,7 +8,7 @@ from openai import OpenAI
 # ── Configuration ──────────────────────────────────────────────────────────────
 NVIDIA_API_KEY = "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"   # <-- Replace with your key
 NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1"
-NVIDIA_MODEL = "nvidia/llama-3.3-nemotron-super-49b-v1.5"
+NVIDIA_MODEL = "nvidia/nemotron-3-nano-30b-a3b"
 
 
 

@@ -90,9 +90,22 @@ def optimize_prompt_for_speed(task_name: str, payload: Any) -> str:
 
 def render_prompt(task_name: str, payload: Any) -> str:
     template = get_prompt_template(task_name)
+    
+    # If payload is already a string, it's likely a pre-rendered prompt.
+    # We should return it as-is to avoid KeyError when the template expects dict keys.
+    if isinstance(payload, str):
+        return payload
+        
     if isinstance(payload, dict):
         try:
             return template.format(**payload, payload=payload)
         except Exception:
-            return template.format(payload=payload)
-    return template.format(payload=payload)
+            try:
+                return template.format(payload=payload)
+            except Exception:
+                return str(payload)
+    
+    try:
+        return template.format(payload=payload)
+    except Exception:
+        return str(payload)

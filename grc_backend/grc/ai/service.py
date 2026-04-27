@@ -56,7 +56,7 @@ class AIService:
 
     def _prepare_prompt(self, task_name: str, prompt: str) -> dict[str, Any]:
         print(f"[AI-SERVICE] _prepare_prompt: task={task_name}, raw_prompt_len={len(prompt)}")
-        task_complexity = "full_document" if "ingest_document" in task_name else ("complex" if "gap" in task_name else "medium")
+        task_complexity = "full_document" if "ingest_document" in task_name else ("complex" if any(kw in task_name for kw in ["gap", "policy", "extraction"]) else "medium")
         context = build_context_window(prompt, strategy="balanced", task_complexity=task_complexity)
         optimized = optimize_prompt_for_speed(task_name, context["content"])
         enriched = attach_few_shot_examples(optimized, task_name)

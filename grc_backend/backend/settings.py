@@ -226,9 +226,6 @@ MIDDLEWARE = [
     # MULTI-TENANCY: Add tenant context middleware (after JWT authentication)
     "grc.tenant_middleware.TenantContextMiddleware",
     "grc.tenant_middleware.TenantIsolationMiddleware",
-    # MULTI-TENANCY: Add TPRM tenant context middleware for TPRM modules
-    "tprm_backend.core.tenant_middleware.TenantContextMiddleware",
-    "tprm_backend.core.tenant_middleware.TenantIsolationMiddleware",
     "grc.middleware.AuditLoggingMiddleware",
     # AUTO-DECRYPT: Automatically decrypt any encrypted data in API responses (safety net)
     "grc.utils.auto_decrypt_middleware.AutoDecryptMiddleware",
@@ -483,7 +480,7 @@ LOGGING = {
         'grc': {
             'handlers': ['console'],
             'level': _DEBUG_LOG_LEVEL,
-            'propagate': True,
+            'propagate': False,
         },
         'grc.rbac': {
             'handlers': ['console'],
@@ -494,7 +491,7 @@ LOGGING = {
         'tprm_backend': {
             'handlers': ['console'],
             'level': _DEBUG_LOG_LEVEL,
-            'propagate': True,
+            'propagate': False,
         },
     },
     # Root logger - catches everything else

@@ -185,36 +185,6 @@
         </div>
       </div>
     </div>
-    <div 
-      v-if="selectedFrameworkId && !loading && extractionSummary" 
-      class="FC_summary-stats-grid FC_structured-summary-grid"
-    >
-      <div class="FC_summary-stat-card">
-        <div class="FC_summary-stat-content">
-          <p class="FC_summary-stat-number FC_summary-stat-structured">
-            {{ extractionSummary.total_policies || 0 }}
-          </p>
-          <p class="FC_summary-stat-label">Extracted Policies</p>
-        </div>
-      </div>
-      <div class="FC_summary-stat-card">
-        <div class="FC_summary-stat-content">
-          <p class="FC_summary-stat-number FC_summary-stat-structured">
-            {{ extractionSummary.total_subpolicies || 0 }}
-          </p>
-          <p class="FC_summary-stat-label">Extracted Sub-Policies</p>
-        </div>
-      </div>
-      <div class="FC_summary-stat-card">
-        <div class="FC_summary-stat-content">
-          <p class="FC_summary-stat-number FC_summary-stat-structured">
-            {{ extractionSummary.total_compliance_records || 0 }}
-          </p>
-          <p class="FC_summary-stat-label">Extracted Compliances</p>
-        </div>
-      </div>
-    </div>
-
     <!-- Filters -->
     <div v-if="selectedFrameworkId && !loading" class="FC_filters-card">
       <div class="FC_filters-content">
@@ -2554,7 +2524,7 @@ export default {
 }
 
 .FC_notification-popover__count {
-  background: var(--primary-color);
+  background: #1f2937;
   color: white;
   border-radius: 999px;
   padding: 2px 8px;
@@ -2684,8 +2654,8 @@ export default {
   align-items: center;
   gap: 8px;
   padding: 8px 16px;
-  background: var(--primary-color);
-  border: 1px solid var(--primary-color);
+  background: #1f2937;
+  border: 1px solid #1f2937;
   color: white;
   border-radius: 6px;
   cursor: pointer;
@@ -2741,7 +2711,7 @@ export default {
 
 .FC_document-icon {
   font-size: 48px;
-  color: #4f8cff;
+  color: #6b7280;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2996,7 +2966,7 @@ export default {
 .FC_summary-stat-modified { color: var(--primary-color); }
 .FC_summary-stat-removed { color: #ef4444; }
 .FC_summary-stat-unchanged { color: #6b7280; }
-.FC_summary-stat-structured { color: #0ea5e9; }
+.FC_summary-stat-structured { color: #1f2937; }
 .FC_structured-summary-grid {
   margin-top: 8px;
 }
@@ -3051,7 +3021,7 @@ export default {
 .FC_add-all-button {
   margin-left: auto;
   padding: 6px 16px;
-  background: var(--primary-color, #3b82f6);
+  background: #1f2937;
   color: white;
   border: none;
   border-radius: 6px;
@@ -3088,7 +3058,7 @@ export default {
 }
 
 .FC_framework-badge-target {
-  background: var(--primary-color);
+  background: #22c55e;
   color: white;
 }
 
@@ -3238,8 +3208,8 @@ export default {
 }
 
 .FC_subpolicy-pill {
-  background: rgba(14, 165, 233, 0.15);
-  color: #0ea5e9;
+  background: rgba(31, 41, 55, 0.1);
+  color: #1f2937;
   border-radius: 999px;
   padding: 3px 8px;
   font-size: 0.7rem;
@@ -3826,7 +3796,7 @@ export default {
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
-  background: var(--primary-color);
+  background: #1f2937;
   color: white;
   border-radius: 12px;
   font-size: 0.75rem;
@@ -3861,7 +3831,7 @@ export default {
   justify-content: center;
   width: 32px;
   height: 32px;
-  background: var(--primary-color);
+  background: #1f2937;
   color: white;
   border-radius: 50%;
   font-weight: 700;
@@ -3879,8 +3849,8 @@ export default {
   align-items: center;
   gap: 4px;
   padding: 2px 8px;
-  background: rgba(59, 130, 246, 0.1);
-  color: var(--primary-color);
+  background: rgba(31, 41, 55, 0.1);
+  color: #1f2937;
   border-radius: 4px;
   font-size: 0.625rem;
   font-weight: 600;
@@ -3911,7 +3881,7 @@ export default {
 
 .FC_score-fill {
   height: 100%;
-  background: linear-gradient(90deg, #22c55e 0%, var(--primary-color) 50%, #f59e0b 100%);
+  background: linear-gradient(90deg, #22c55e 0%, #1f2937 50%, #f59e0b 100%);
   border-radius: 4px;
   transition: width 0.3s ease;
 }
@@ -4652,7 +4622,7 @@ export default {
 
 .FC_progress-modal-header {
   padding: 24px;
-  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  background: #1f2937;
   color: white;
   display: flex;
   align-items: center;
@@ -4720,7 +4690,7 @@ export default {
   width: 60px;
   height: 60px;
   border: 4px solid #e5e7eb;
-  border-top-color: #3b82f6;
+  border-top-color: #22c55e;
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -4757,7 +4727,7 @@ export default {
 
 .FC_progress-bar-fill {
   height: 100%;
-  background: linear-gradient(90deg, #3b82f6 0%, #1d4ed8 100%);
+  background: #22c55e;
   border-radius: 6px;
   transition: width 0.3s ease;
   position: relative;
@@ -4792,7 +4762,7 @@ export default {
 .FC_progress-percentage {
   font-size: 1rem;
   font-weight: 700;
-  color: #3b82f6;
+  color: #22c55e;
   min-width: 50px;
   text-align: right;
 }
@@ -4831,11 +4801,11 @@ export default {
 
 .FC_progress-step.active {
   opacity: 1;
-  background: rgba(59, 130, 246, 0.1);
+  background: rgba(31, 41, 55, 0.1);
 }
 
 .FC_progress-step.active i {
-  color: #3b82f6;
+  color: #22c55e;
   animation: pulse 2s infinite;
 }
 
@@ -4909,7 +4879,7 @@ export default {
 }
 
 .FC_progress-stat i {
-  color: #3b82f6;
+  color: #22c55e;
   min-width: 16px;
 }
 

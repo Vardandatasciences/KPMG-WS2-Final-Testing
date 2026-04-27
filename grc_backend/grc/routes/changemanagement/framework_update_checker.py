@@ -437,8 +437,9 @@ def download_document(
                         response = None
             if response is None:
                 return None
-        except Exception:
-            raise
+        except Exception as e:
+            logger.error(f"Unexpected error during download preparation: {e}")
+            return None
         
         # Check if we actually got a PDF
         content_type = response.headers.get('content-type', '').lower()
@@ -546,20 +547,14 @@ def download_document(
                 
         except Exception as s3_error:
             logger.error(f"Error uploading to S3: {str(s3_error)}")
-            import traceback
-            logger.error(traceback.format_exc())
             # Return local path even if S3 upload fails
             return filepath
         
     except requests.exceptions.RequestException as e:
         logger.error(f"Request error downloading document: {str(e)}")
-        import traceback
-        logger.error(traceback.format_exc())
         return None
     except Exception as e:
         logger.error(f"Unexpected error downloading document: {str(e)}")
-        import traceback
-        logger.error(traceback.format_exc())
         return None
 
 
