@@ -81,6 +81,7 @@ _default_secure_cookies = not DEBUG
 ALLOWED_HOSTS = [
     'localhost',
     '127.0.0.1',
+    'grc-riskavaire.vardaands.com',
     'riskavaire.vardaands.com',  # Main production domain
     'riskavairegrc.vardaands.com',  # Hostinger VPS (GRC + TPRM SPA)
     'riskavaire-grc-tprm.vardaands.com',  # Dedicated subdomain (Docker stack + host nginx)
@@ -596,6 +597,7 @@ CORS_ALLOW_CREDENTIALS = True
 # Optional env-driven CORS extension:
 # CORS_ALLOWED_ORIGINS_EXTRA="https://app.example.com,https://admin.example.com"
 CORS_ALLOWED_ORIGINS = [
+    "https://grc-riskavaire.vardaands.com",
     "https://grc-tprm.vardaands.com",
     "https://test-riskavaire.vardaands.com",
     "http://localhost:3000",  # TPRM frontend development server
@@ -637,6 +639,7 @@ CORS_ALLOWED_ORIGIN_REGEXES = [
 
 # CSRF settings
 CSRF_TRUSTED_ORIGINS = [
+    "https://grc-riskavaire.vardaands.com",
     "https://riskavaire.vardaands.com",
     "https://test-riskavaire.vardaands.com",
     "http://localhost:3000",  # TPRM frontend development server
