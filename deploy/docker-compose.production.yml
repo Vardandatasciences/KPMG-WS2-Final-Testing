@@ -10,7 +10,7 @@
 # Ensure grc_backend/.env exists on the server (DB, secrets, DEBUG=false, etc.).
 
 services:
-  grc_tprm_backend:
+  riskavaire_backend_svc:
     build:
       context: ../grc_backend
       dockerfile: Dockerfile
@@ -39,7 +39,7 @@ services:
       - "8005:8000"
     restart: unless-stopped
 
-  frontend:
+  riskavaire_frontend_svc:
     build:
       context: ../grc_frontend
       dockerfile: Dockerfile
@@ -50,7 +50,7 @@ services:
       # Host :80 is often already used by system nginx. Default 8080; proxy from host nginx, or set FRONTEND_HTTP_PORT=80 if unused.
       - "8085:80"
     depends_on:
-      - grc_tprm_backend
+      - riskavaire_backend_svc
     restart: unless-stopped
 
 volumes:
