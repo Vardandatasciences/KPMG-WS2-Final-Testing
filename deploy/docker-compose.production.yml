@@ -14,7 +14,7 @@ services:
     build:
       context: ../grc_backend
       dockerfile: Dockerfile
-    container_name: grc_tprm_backend_v2
+    container_name: grc_riskavaire_backend
     # Do not use Django runserver in production
     command: >
       gunicorn backend.wsgi:application
@@ -30,13 +30,13 @@ services:
       PYTHONUNBUFFERED: "1"
       DJANGO_SETTINGS_MODULE: backend.settings
     volumes:
-      - grc_media:/app/MEDIA_ROOT
-      - grc_temp_media:/app/TEMP_MEDIA_ROOT
-      - grc_reports:/app/Reports
+      - grc_riskavaire_media:/app/MEDIA_ROOT
+      - grc_riskavaire_temp_media:/app/TEMP_MEDIA_ROOT
+      - grc_riskavaire_reports:/app/Reports
     expose:
       - "8000"
     ports:
-      - "8001:8000"
+      - "8002:8000"
     restart: unless-stopped
 
   frontend:
@@ -45,15 +45,15 @@ services:
       dockerfile: Dockerfile
       # Do not pass empty VUE_APP_* / VITE_* args — that used to override .env.production and embed 127.0.0.1:8000.
       # To override: docker compose build --build-arg VUE_APP_API_BASE_URL=https://riskavaire.vardaands.com frontend
-    container_name: grc_tprm_frontend_v2
+    container_name: grc_riskavaire_frontend
     ports:
       # Host :80 is often already used by system nginx. Default 8080; proxy from host nginx, or set FRONTEND_HTTP_PORT=80 if unused.
-      - "8081:80"
+      - "8083:80"
     depends_on:
       - grc_tprm_backend
     restart: unless-stopped
 
 volumes:
-  grc_media:
-  grc_temp_media:
-  grc_reports:
+  grc_riskavaire_media:
+  grc_riskavaire_temp_media:
+  grc_riskavaire_reports:

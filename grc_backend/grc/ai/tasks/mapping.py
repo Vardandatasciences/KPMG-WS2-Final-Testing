@@ -176,15 +176,17 @@ def version_comparison_smart_task(
     prompt = f"""You are a GRC Expert auditing the evolution of {f1_name} into {f2_name}.
 
 TASK:
-For each of the compliance controls listed below, explain exactly what changed semantically between the old version (V1) and the new version (V2).
+For EVERY compliance control listed below, explain exactly what changed semantically between the old version (V1) and the new version (V2).
+You MUST provide a unique justification for each ID provided in the input. Do not skip any items.
 
 CONTROLS TO ANALYZE:
 {json.dumps(modifications, indent=1)}
 
 STRICT RULES:
-1. FOCUS ON DELTA: Identify if obligations are stronger, weaker, clarified, or expanded.
-2. BE CONCISE: Maximum 2 sentences per justification.
-3. OUTPUT FORMAT: Return ONLY a valid JSON object with this structure:
+1. COVERAGE: Provide a justification for every single ID in the input list.
+2. FOCUS ON DELTA: Identify if obligations are stronger, weaker, clarified, or expanded.
+3. BE CONCISE: Maximum 2 sentences per justification.
+4. OUTPUT FORMAT: Return ONLY a valid JSON object with this structure:
 
 {{
   "justifications": [

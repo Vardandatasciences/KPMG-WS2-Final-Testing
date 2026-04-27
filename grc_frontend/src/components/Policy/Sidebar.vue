@@ -383,6 +383,10 @@
             {{ pendingRiskCount }}
           </span>
         </div>
+        <div class="menu-item" @click="navigate('/risk/threshold')" :class="{'active': isActive('/risk/threshold')}">
+          <i class="fas fa-shield-alt icon"></i>
+          <span>Risk Threshold</span>
+        </div>
       </div>
 
       <!-- Integration Section -->

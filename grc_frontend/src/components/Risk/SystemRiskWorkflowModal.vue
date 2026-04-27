@@ -209,7 +209,8 @@ export default {
             mitigation_steps: this.riskData.mitigationSteps,
             compliance_id: this.riskData.complianceId,
             multiplier_x: this.riskData.multiplierX,
-            multiplier_y: this.riskData.multiplierY
+            multiplier_y: this.riskData.multiplierY,
+            justifications: this.riskData.justifications
           }
         });
 

@@ -1486,6 +1486,8 @@ class Risk(EncryptedFieldsMixin, models.Model):
     CreatedAt = models.DateField(auto_now_add=True)
     FrameworkId = models.IntegerField(null=True)
     data_inventory = models.JSONField(null=True)
+    functional_area = models.CharField(max_length=100, null=True, blank=True)
+    Origin = models.CharField(max_length=50, null=True, blank=True)
 
     retentionExpiry = models.DateField(null=True, blank=True)
     class Meta:
@@ -1569,6 +1571,7 @@ class RiskInstance(EncryptedFieldsMixin, models.Model):
     RiskStatus = models.CharField(max_length=50, choices=RISK_STATUS_CHOICES, default=STATUS_NOT_ASSIGNED, null=True)
     MitigationStatus = models.CharField(max_length=45, choices=MITIGATION_STATUS_CHOICES, default=MITIGATION_PENDING, null=True)
     data_inventory = models.JSONField(null=True)
+    functional_area = models.CharField(max_length=100, null=True, blank=True)
     retentionExpiry = models.DateField(null=True, blank=True)
     
     def __str__(self):
@@ -1672,7 +1675,8 @@ class SystemIdentifiedRiskQueue(EncryptedFieldsMixin, models.Model):
     SOURCE_COMPLIANCE = 'COMPLIANCE'
     SOURCE_TPRM = 'TPRM'
     SOURCE_INTEGRATION = 'INTEGRATION'
-    SOURCE_MANUAL = 'MANUAL'
+    SOURCE_EVENT = 'EVENT'
+    SOURCE_EXTERNAL = 'INTEGRATION'
     
     SOURCE_CHOICES = [
         (SOURCE_INCIDENT, 'Incident Module'),
@@ -1680,7 +1684,8 @@ class SystemIdentifiedRiskQueue(EncryptedFieldsMixin, models.Model):
         (SOURCE_COMPLIANCE, 'Compliance Controls'),
         (SOURCE_TPRM, 'TPRM/Vendor Data'),
         (SOURCE_INTEGRATION, 'External Integrations'),
-        (SOURCE_MANUAL, 'Manual/Events'),
+        (SOURCE_EVENT, 'Event Module'),
+        (SOURCE_EXTERNAL, 'External Sources'),
     ]
     
     # Primary fields
@@ -2524,6 +2529,7 @@ class Department(EncryptedFieldsMixin, models.Model):
     IsActive = models.BooleanField(default=True)
     CreatedDate = models.DateTimeField()
     BusinessUnitId = models.IntegerField()
+    threshold_limit = models.IntegerField(default=50, help_text="AI confidence threshold for risk identification (0-100)")
     FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
     retentionExpiry = models.DateField(null=True, blank=True)
     class Meta:

@@ -169,6 +169,7 @@ class UnifiedJWTAuthentication(BaseAuthentication):
                         self.pk = user_id
                         self.id = user_id
                         self.userid = user_id
+                        self.UserId = user_id
                         self.username = username if username else f"user_{user_id}"
                         self.is_authenticated = True
                         self.is_active = True

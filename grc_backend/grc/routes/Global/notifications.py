@@ -379,7 +379,7 @@ def get_notifications(request):
     Get all notifications for a user
     """
     auth_user = getattr(request, 'user', None)
-    if not auth_user or not hasattr(auth_user, 'UserId'):
+    if not auth_user or not auth_user.is_authenticated:
         return JsonResponse({'error': 'Authentication required'}, status=401)
     try:
         # IDOR protection: always derive requester from auth context; allow admin override only.

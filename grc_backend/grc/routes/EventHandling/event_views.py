@@ -1820,7 +1820,7 @@ def create_event(request):
             try:
                 from ...models import SystemIdentifiedRiskQueue
                 trigger_single_source_risk_scan(
-                    source_type=SystemIdentifiedRiskQueue.SOURCE_MANUAL, 
+                    source_type=SystemIdentifiedRiskQueue.SOURCE_EVENT, 
                     source_id=event.EventId, 
                     tenant_id=tenant_id
                 )

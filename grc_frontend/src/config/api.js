@@ -528,6 +528,7 @@ export const API_ENDPOINTS = {
   SYSTEM_RISKS_SEND_FOR_APPROVAL: (id) => `${API_BASE_URL}/api/system-risks/${id}/send-for-approval/`,
   SYSTEM_RISKS_WORKFLOW_APPROVE: (riskInstanceId) => `${API_BASE_URL}/api/system-risks/workflow/${riskInstanceId}/approve/`,
   SYSTEM_RISKS_WORKFLOW_REJECT: (riskInstanceId) => `${API_BASE_URL}/api/system-risks/workflow/${riskInstanceId}/reject/`,
+  SYSTEM_RISKS_EXTERNAL_SOURCES: `${API_BASE_URL}/api/system-risks/external-sources/`,
   // Do not add a second copy of SYSTEM_RISKS_* keys here (eslint no-dupe-keys / duplicate object keys).
 
   // Tree/Data Workflow API endpoints

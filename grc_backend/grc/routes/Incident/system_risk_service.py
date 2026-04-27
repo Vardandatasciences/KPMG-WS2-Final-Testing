@@ -38,6 +38,54 @@ def _clamp_int(value, low=0, high=100, default=60):
         return default
 
 
+def ensure_department_exists(department_name, tenant_id):
+    """
+    Check if a department exists for a tenant, if not create it with defaults.
+    Ensures data integrity for functional_area categorization.
+    """
+    if not department_name or not tenant_id:
+        return department_name
+        
+    from ...models import Department, Framework, Entity
+    from django.utils import timezone
+    
+    # Standardize name
+    name = str(department_name).strip()
+    if not name:
+        return name
+        
+    # Check existing
+    existing = Department.objects.filter(
+        DepartmentName__iexact=name,
+        tenant_id=tenant_id
+    ).first()
+    
+    if existing:
+        return existing.DepartmentName
+        
+    # Auto-provision if missing
+    try:
+        # Get defaults
+        default_fw = Framework.objects.filter(tenant_id=tenant_id).first() or Framework.objects.first()
+        default_entity = Entity.objects.filter(tenant_id=tenant_id).first() or Entity.objects.first()
+        
+        Department.objects.create(
+            tenant_id=tenant_id,
+            DepartmentName=name,
+            EntityId=default_entity.Id if default_entity else 1,
+            DepartmentHead=1, # Default to system/admin user ID 1
+            IsActive=True,
+            CreatedDate=timezone.now(),
+            BusinessUnitId=1,
+            FrameworkId=default_fw
+        )
+        print(f"[SYSTEM-RISK] Auto-provisioned department: {name} for tenant {tenant_id}")
+        return name
+    except Exception as e:
+        print(f"[SYSTEM-RISK] Failed to auto-provision department '{name}': {e}")
+        return name # Return name anyway to store in risk record
+
+
 def _resolve_confidence_from_risk(risk_data: dict) -> tuple[int, dict]:
     """Resolve confidence score/metadata from AI output with safe fallback."""
     meta = (risk_data or {}).get("_meta") or {}
@@ -71,6 +119,14 @@ def _save_risk_candidate(tenant_id, source_module, source_record_id, source_ref,
         # Resolve confidence and metadata
         confidence_score, ai_metadata = _resolve_confidence_from_risk(risk_data)
         
+        # Merge extra source metadata if present in risk_data
+        if 'source_url' in risk_data:
+            ai_metadata['source_url'] = risk_data['source_url']
+        if 'source_title' in risk_data:
+            ai_metadata['source_title'] = risk_data['source_title']
+        if 'source_text' in risk_data:
+            ai_metadata['source_text'] = risk_data['source_text']
+            
         # Calculate exposure rating
         likelihood = _clamp_int(risk_data.get('likelihood'), 1, 10, 5)
         impact = _clamp_int(risk_data.get('impact'), 1, 10, 5)
@@ -148,7 +204,7 @@ def trigger_single_source_risk_scan(source_type, source_id, tenant_id):
                     f"Comments: {getattr(record, 'Comments', 'N/A')}"
                 )
                 source_ref = record.Title
-            elif source_type == SystemIdentifiedRiskQueue.SOURCE_MANUAL: # Used for Events
+            elif source_type == SystemIdentifiedRiskQueue.SOURCE_EVENT: # Used for Events
                 record = Event.objects.get(EventId=source_id, tenant_id=tenant_id)
                 data_summary = (
                     f"Event Title: {record.EventTitle}\n"
@@ -277,30 +333,19 @@ def generate_risk_candidates_from_incidents(tenant_id, limit=50):
                         results["skipped"] += 1
                         continue
                     
-                    # Create queue entry
-                    confidence_score, confidence_meta = _resolve_confidence_from_risk(risk_data)
-                    queue_entry = SystemIdentifiedRiskQueue.objects.create(
-                        tenant_id=tenant_id,
-                        source_module=SystemIdentifiedRiskQueue.SOURCE_INCIDENT,
-                        source_record_id=incident.IncidentId,
-                        source_ref=f"Incident #{incident.IncidentId}: {incident.IncidentTitle[:100]}",
-                        risk_title=risk_data.get('risk_title') or risk_data.get('RiskTitle', ''),
-                        risk_type=risk_data.get('risk_type') or risk_data.get('RiskType', 'Current'),
-                        category=risk_data.get('category') or risk_data.get('Category', ''),
-                        criticality=risk_data.get('criticality') or risk_data.get('Criticality', 'Medium'),
-                        risk_description=risk_data.get('risk_description') or risk_data.get('RiskDescription', ''),
-                        possible_damage=risk_data.get('possible_damage') or risk_data.get('PossibleDamage', ''),
-                        business_impact=risk_data.get('business_impact') or risk_data.get('BusinessImpact', []),
-                        likelihood=risk_data.get('likelihood') or risk_data.get('RiskLikelihood'),
-                        impact=risk_data.get('impact') or risk_data.get('RiskImpact'),
-                        priority=risk_data.get('priority') or risk_data.get('RiskPriority', 'Medium'),
-                        mitigation_steps=risk_data.get('mitigation_steps') or risk_data.get('RiskMitigation', []),
-                        ai_reasoning=risk_data.get('ai_reasoning', ''),
-                        confidence_score=confidence_score,
-                        ai_metadata=confidence_meta,
-                        status=SystemIdentifiedRiskQueue.STATUS_PENDING_REVIEW,
-                        velocity_score=risk_data.get('velocity_score', 50),
-                        functional_area=risk_data.get('functional_area', 'General')
+                    # Prepare more descriptive source ref
+                    source_ref = f"Incident: {incident.IncidentTitle[:100]} (#{incident.IncidentId})"
+                    
+                    # Add source metadata for the drawer
+                    risk_data['source_title'] = incident.IncidentTitle
+                    risk_data['source_text'] = incident.Description
+                    
+                    candidate = _save_risk_candidate(
+                        tenant_id, 
+                        SystemIdentifiedRiskQueue.SOURCE_INCIDENT, 
+                        incident.IncidentId, 
+                        source_ref, 
+                        risk_data
                     )
                     
                     results["created"] += 1
@@ -314,10 +359,10 @@ def generate_risk_candidates_from_incidents(tenant_id, limit=50):
     print(f"[SYSTEM-RISK] Scan complete: created={results['created']}, skipped={results['skipped']}, errors={len(results['errors'])}")
     return results
 
-def generate_risk_candidates_from_multiple_sources(tenant_id, source_types=None, limit=5, subfolder_ids=None, document_ids=None, run_checklist=False):
+def generate_risk_candidates_from_multiple_sources(tenant_id, source_types=None, limit=5, subfolder_ids=None, document_ids=None, run_checklist=False, external_urls=None):
     """
     Scan recent records from multiple modules and generate risk candidates.
-    Supported sources: INCIDENT, COMPLIANCE, AUDIT, MANUAL(Events), DOCUMENT
+    Supported sources: INCIDENT, COMPLIANCE, AUDIT, MANUAL(Events), DOCUMENT, EXTERNAL_SOURCES
     """
     # Triggering auto-reloader with this comment
     results = {"created": 0, "skipped": 0, "errors": []}
@@ -325,7 +370,7 @@ def generate_risk_candidates_from_multiple_sources(tenant_id, source_types=None,
         source_types = []
         
     print(f"[SYSTEM-RISK] Executing generate_risk_candidates_from_multiple_sources")
-    print(f"[SYSTEM-RISK] Starting multi-source scan. Sources={source_types}, Folders={subfolder_ids}, Docs={document_ids}, Checklist={run_checklist}, Tenant {tenant_id}")
+    print(f"[SYSTEM-RISK] Starting multi-source scan. Sources={source_types}, Folders={subfolder_ids}, Docs={document_ids}, Checklist={run_checklist}, ExternalUrls={external_urls}, Tenant {tenant_id}")
     
     # Process each standard source module
     for source_type in source_types:
@@ -336,7 +381,7 @@ def generate_risk_candidates_from_multiple_sources(tenant_id, source_types=None,
             records = list(Compliance.objects.filter(tenant_id=tenant_id).order_by('-CreatedByDate')[:limit])
         elif source_type == SystemIdentifiedRiskQueue.SOURCE_AUDIT:
             records = list(Audit.objects.filter(tenant_id=tenant_id).order_by('-AssignedDate')[:limit])
-        elif source_type == SystemIdentifiedRiskQueue.SOURCE_MANUAL: # Events
+        elif source_type == SystemIdentifiedRiskQueue.SOURCE_EVENT: # Events
             records = list(Event.objects.filter(tenant_id=tenant_id).order_by('-CreatedAt')[:limit])
         
         if records:
@@ -347,14 +392,49 @@ def generate_risk_candidates_from_multiple_sources(tenant_id, source_types=None,
                 results["skipped"] += res.get("skipped", 0)
                 if res.get("error"):
                     results["errors"].append(res["error"])
+    
+    # Process External Sources
+    # Check for various possible identifiers for external sources
+    is_external = 'EXTERNAL' in source_types or 'EXTERNAL_SOURCES' in source_types
+    print(f"[SYSTEM-RISK] External source check: {is_external} (source_types={source_types})")
+    
+    if is_external or external_urls:
+        print(f"[SYSTEM-RISK] Processing external sources for tenant {tenant_id}")
+        ext_res = generate_risk_candidates_from_external_sources(tenant_id, limit=limit, urls=external_urls)
+        results["created"] += ext_res.get("created", 0)
+        results["skipped"] += ext_res.get("skipped", 0)
+        if ext_res.get("errors"):
+            results["errors"].extend(ext_res["errors"])
                 
     # Process Specific Documents or Subfolders
     if document_ids or subfolder_ids:
         from grc.models import CompanySubfolderDocument, FileOperations
+        def _safe_int_list(values):
+            out = []
+            for value in values or []:
+                try:
+                    out.append(int(value))
+                except Exception:
+                    continue
+            return out
+
+        allowed_subfolder_ids = _safe_int_list(subfolder_ids)
+        allowed_file_ids = set()
+        if allowed_subfolder_ids:
+            allowed_file_ids = set(
+                CompanySubfolderDocument.objects.filter(
+                    company_subfolder_id__in=allowed_subfolder_ids,
+                    company_subfolder__tenant_id=tenant_id,
+                ).values_list("file_operation_id", flat=True)
+            )
         
         if document_ids:
             print(f"[SYSTEM-RISK] Processing {len(document_ids)} specific documents")
-            docs = FileOperations.objects.filter(id__in=document_ids)
+            requested_doc_ids = _safe_int_list(document_ids)
+            docs_qs = FileOperations.objects.filter(id__in=requested_doc_ids, tenant_id=tenant_id)
+            if allowed_file_ids:
+                docs_qs = docs_qs.filter(id__in=allowed_file_ids)
+            docs = list(docs_qs)
             for doc in docs:
                 doc_res = generate_risk_candidates_from_document(tenant_id, doc)
                 results["created"] += doc_res.get("created", 0)
@@ -366,11 +446,12 @@ def generate_risk_candidates_from_multiple_sources(tenant_id, source_types=None,
             for subfolder_id in subfolder_ids:
                 # Find documents in this subfolder
                 links = CompanySubfolderDocument.objects.filter(
-                    company_subfolder_id=subfolder_id
+                    company_subfolder_id=subfolder_id,
+                    company_subfolder__tenant_id=tenant_id,
                 ).select_related('file_operation')
                 
                 for link in links:
-                    if link.file_operation:
+                    if link.file_operation and getattr(link.file_operation, "tenant_id", None) == tenant_id:
                         doc_res = generate_risk_candidates_from_document(tenant_id, link.file_operation)
                         results["created"] += doc_res.get("created", 0)
                         results["skipped"] += doc_res.get("skipped", 0)
@@ -423,7 +504,7 @@ def _process_single_source_record(tenant_id, source_type, record):
                 f"Comments: {getattr(record, 'Comments', 'N/A')}"
             )
             source_ref = f"Audit #{source_id}"
-        elif source_type == SystemIdentifiedRiskQueue.SOURCE_MANUAL:
+        elif source_type == SystemIdentifiedRiskQueue.SOURCE_EVENT:
             source_id = record.EventId
             data_summary = (
                 f"Event Title: {record.EventTitle}\n"
@@ -491,7 +572,7 @@ def _normalize_source_module(value):
         SystemIdentifiedRiskQueue.SOURCE_COMPLIANCE,
         SystemIdentifiedRiskQueue.SOURCE_TPRM,
         SystemIdentifiedRiskQueue.SOURCE_INTEGRATION,
-        SystemIdentifiedRiskQueue.SOURCE_MANUAL,
+        SystemIdentifiedRiskQueue.SOURCE_EVENT,
     }
     return raw if raw in allowed else None
 
@@ -711,6 +792,10 @@ def create_risk_from_queue_entry(queue_entry, user_id, review_data=None):
     else:
         final_mitigation = str(final_mitigation)
 
+    # Resolve functional area and auto-provision if needed
+    raw_dept = _coalesce(review_data.get("functional_area"), queue_entry.functional_area)
+    final_dept = ensure_department_exists(raw_dept, queue_entry.tenant_id)
+
     with transaction.atomic():
         # Create risk record
         risk = Risk.objects.create(
@@ -742,6 +827,7 @@ def create_risk_from_queue_entry(queue_entry, user_id, review_data=None):
                 "functional_area": _coalesce(review_data.get("functional_area"), queue_entry.functional_area),
                 "justifications": review_data.get("justifications", (queue_entry.ai_metadata or {}).get("review_overrides", {}).get("justifications", {}))
             },
+            functional_area=final_dept,
             Origin='SYSTEM-AI',
             CreatedAt=timezone.now().date()
         )
@@ -925,6 +1011,10 @@ def create_risk_from_queue_entry_for_workflow(queue_entry, user_id, review_data=
     else:
         final_mitigation = str(final_mitigation)
 
+    # Resolve functional area and auto-provision if needed
+    raw_dept = _coalesce(review_data.get("functional_area"), queue_entry.functional_area)
+    final_dept = ensure_department_exists(raw_dept, queue_entry.tenant_id)
+
     # Framework is mandatory in existing RiskInstance schema.
     # Resolve a safe framework id automatically so frontend does not need to send one.
     framework_id = _parse_int(review_data.get("framework_id"), None)
@@ -948,13 +1038,14 @@ def create_risk_from_queue_entry_for_workflow(queue_entry, user_id, review_data=
         RiskImpact=_parse_int(_coalesce(review_data.get("impact"), queue_entry.impact), 5),
         RiskExposureRating=_parse_int(_coalesce(review_data.get("exposure_rating"), queue_entry.exposure_rating), 25),
         RiskPriority=_coalesce(review_data.get("priority"), queue_entry.priority) or "Medium",
+        functional_area=final_dept,
         RiskMitigation=[x for x in final_mitigation.split("\n") if x.strip()] if isinstance(final_mitigation, str) else final_mitigation,
         RiskStatus='Pending Approval',  # Set to pending approval for workflow
         UserId=_parse_int(user_id, None),
         ReportedBy=_parse_int(user_id, None),
         tenant_id=queue_entry.tenant_id,
         ComplianceId=_parse_int(review_data.get("compliance_id"), None),
-        Origin="SystemIdentifiedRiskQueue",
+        Origin='SYSTEM-AI',
         RiskFormDetails={
             "source_queue_id": queue_entry.id,
             "source_ref": queue_entry.source_ref,
@@ -1228,3 +1319,196 @@ def generate_risk_candidates_from_document(
         progress_callback(processed=1, total=1, phase="completed", last_record=None)
         
     return results
+
+def fetch_external_source_content(url):
+    """
+    Fetch content from external news portals.
+    Designed for simulated news sites like MedWatch, BankingWatch, DataShield.
+    """
+    try:
+        response = requests.get(url, timeout=15)
+        response.raise_for_status()
+        html = response.text
+        
+        # Simple extraction of text content using regex since BS4 might not be available
+        import re
+        
+        # 1. Try to get title
+        title_match = re.search(r'<title>(.*?)</title>', html, re.IGNORECASE)
+        title = title_match.group(1) if title_match else "External News Source"
+        
+        # 2. Try to find main content or article summaries
+        body_match = re.search(r'<body.*?>(.*?)</body>', html, re.IGNORECASE | re.DOTALL)
+        content = body_match.group(1) if body_match else html
+        
+        # Remove scripts, styles, and other non-text tags
+        content = re.sub(r'<script.*?>.*?</script>', '', content, flags=re.IGNORECASE | re.DOTALL)
+        content = re.sub(r'<style.*?>.*?</style>', '', content, flags=re.IGNORECASE | re.DOTALL)
+        content = re.sub(r'<.*?>', ' ', content) # Strip all other tags
+        
+        # Clean up whitespace
+        content = re.sub(r'\s+', ' ', content).strip()
+        
+        return {
+            "url": url,
+            "title": title,
+            "text": content[:10000] # Limit text for AI
+        }
+    except Exception as e:
+        logger.error(f"[SYSTEM-RISK] Failed to fetch external content from {url}: {e}")
+        return None
+
+def generate_risk_candidates_from_multiple_sources(tenant_id, source_types=None, limit=5, subfolder_ids=None, document_ids=None, run_checklist=False, external_urls=None):
+    """
+    Scan recent records from multiple modules and generate risk candidates.
+    Supported sources: INCIDENT, COMPLIANCE, AUDIT, MANUAL(Events), DOCUMENT, EXTERNAL_SOURCES
+    """
+    # Triggering auto-reloader with this comment
+    results = {"created": 0, "skipped": 0, "errors": []}
+    if source_types is None:
+        source_types = []
+        
+    print(f"[SYSTEM-RISK] Executing generate_risk_candidates_from_multiple_sources")
+    print(f"[SYSTEM-RISK] Starting multi-source scan. Sources={source_types}, Folders={subfolder_ids}, Docs={document_ids}, Checklist={run_checklist}, ExternalUrls={external_urls}, Tenant {tenant_id}")
+    
+    # Process each standard source module
+    for source_type in source_types:
+        records = []
+        if source_type == SystemIdentifiedRiskQueue.SOURCE_INCIDENT:
+            records = list(Incident.objects.filter(tenant_id=tenant_id).order_by('-Date')[:limit])
+        elif source_type == SystemIdentifiedRiskQueue.SOURCE_COMPLIANCE:
+            records = list(Compliance.objects.filter(tenant_id=tenant_id).order_by('-CreatedByDate')[:limit])
+        elif source_type == SystemIdentifiedRiskQueue.SOURCE_AUDIT:
+            records = list(Audit.objects.filter(tenant_id=tenant_id).order_by('-AssignedDate')[:limit])
+        elif source_type == SystemIdentifiedRiskQueue.SOURCE_EVENT: # Events
+            records = list(Event.objects.filter(tenant_id=tenant_id).order_by('-CreatedAt')[:limit])
+        
+        if records:
+            print(f"[SYSTEM-RISK] Processing {len(records)} records for source {source_type}")
+            for record in records:
+                res = _process_single_source_record(tenant_id, source_type, record)
+                results["created"] += res.get("created", 0)
+                results["skipped"] += res.get("skipped", 0)
+                if res.get("error"):
+                    results["errors"].append(res["error"])
+    
+    # Process External Sources
+    # Check for various possible identifiers for external sources
+    is_external = 'EXTERNAL' in source_types or 'EXTERNAL_SOURCES' in source_types
+    print(f"[SYSTEM-RISK] External source check: {is_external} (source_types={source_types})")
+    
+    if is_external or external_urls:
+        print(f"[SYSTEM-RISK] Processing external sources for tenant {tenant_id}")
+        ext_res = generate_risk_candidates_from_external_sources(tenant_id, limit=limit, urls=external_urls)
+        results["created"] += ext_res.get("created", 0)
+        results["skipped"] += ext_res.get("skipped", 0)
+        if ext_res.get("errors"):
+            results["errors"].extend(ext_res["errors"])
+    
+    return results
+
+def generate_risk_candidates_from_external_sources(tenant_id, limit=5, urls=None):
+    """
+    Scan external news portals and generate risk candidates.
+    """
+    if not urls:
+        urls = [
+            "https://medwatch-india-news.lovable.app",
+            "https://bankingwatch-news.lovable.app/",
+            "https://datashield-insight.lovable.app/"
+        ]
+    
+    results = {"created": 0, "skipped": 0, "errors": []}
+    
+    for url in urls:
+        try:
+            print(f"[SYSTEM-RISK] Fetching external content from {url}")
+            source_data = fetch_external_source_content(url)
+            
+            # Generate a stable ID for this external source URL
+            url_hash = hashlib.md5(url.encode()).hexdigest()
+            source_record_id = int(url_hash[:7], 16) # integer ID for DB
+            source_record_id_hex = url_hash[:8]      # short hex for ref
+            
+            if not source_data or not source_data.get("text"):
+                print(f"[SYSTEM-RISK] No content extracted from {url}")
+                continue
+                
+            # Prepare data for AI analysis
+            risk_candidates = ai_service.run_task(
+                "risk.identify_risks",
+                payload={
+                    "source_type": "EXTERNAL_SOURCES",
+                    "data_summary": f"Source Title: {source_data['title']}\nURL: {url}\n\nContent:\n{source_data['text']}"
+                }
+            )
+            
+            if not risk_candidates:
+                print(f"[SYSTEM-RISK] AI identified no risks for external source: {url}")
+                continue
+                
+            print(f"[SYSTEM-RISK] AI generated {len(risk_candidates)} risk candidates for {url}")
+            
+            for risk_data in risk_candidates:
+                raw_title = risk_data.get('risk_title') or risk_data.get('RiskTitle', '')
+                risk_title = raw_title.strip() if raw_title else ''
+                if not risk_title:
+                    continue
+                    
+                source_ref = f"External: {source_data['title'][:100]} (#{source_record_id_hex})"
+                
+                # Add source metadata for the drawer
+                risk_data['source_url'] = url
+                risk_data['source_title'] = source_data['title']
+                risk_data['source_text'] = source_data['text'][:1000] # Snippet
+                
+                # Check for duplicates
+                existing = SystemIdentifiedRiskQueue.objects.filter(
+                    tenant_id=tenant_id,
+                    source_module=SystemIdentifiedRiskQueue.SOURCE_EXTERNAL,
+                    source_record_id=source_record_id,
+                    risk_title__icontains=risk_title[:50]
+                ).exists()
+                
+                if existing:
+                    results["skipped"] += 1
+                    continue
+                candidate = _save_risk_candidate(
+                    tenant_id, 
+                    SystemIdentifiedRiskQueue.SOURCE_EXTERNAL, 
+                    source_record_id, 
+                    source_ref, 
+                    risk_data
+                )
+                if candidate:
+                    results["created"] += 1
+                    
+        except Exception as e:
+            results["errors"].append(f"{url}: {str(e)}")
+            print(f"[SYSTEM-RISK] Error processing external source {url}: {e}")
+            
+    return results
+
+
+def get_external_portals_list():
+    """
+    Returns the curated list of simulated news sites available for risk analysis.
+    This list is used both by the scanner and the frontend selection modal.
+    """
+    return [
+        {
+            "name": "MedWatch India (Healthcare)",
+            "url": "https://medwatch-india-news.lovable.app",
+            "category": "Healthcare"
+        },
+        {
+            "name": "BankingWatch (Finance)",
+            "url": "https://bankingwatch-news.lovable.app/",
+            "category": "Finance"
+        },
+        {
+            "name": "DataShield Insight (Technology)",
+            "url": "https://datashield-insight.lovable.app/",
+            "category": "Technology"
+        }
+    ]

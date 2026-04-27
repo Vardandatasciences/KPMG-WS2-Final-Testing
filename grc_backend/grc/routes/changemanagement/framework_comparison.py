@@ -3300,24 +3300,34 @@ def compare_framework_versions(request):
             'ComplianceItemDescription', 'Criticality', 
             'MandatoryOptional', 'ComplianceType'
         ]
-        q1 = Compliance.objects.filter(FrameworkId=f1).only(*essential_fields)
-        q2 = Compliance.objects.filter(FrameworkId=f2).only(*essential_fields)
+        q1 = Compliance.objects.filter(FrameworkId=f1, ActiveInactive='Active').only(*essential_fields)
+        q2 = Compliance.objects.filter(FrameworkId=f2, ActiveInactive='Active').only(*essential_fields)
         
         # Index V1 by Title and Identifier for fast lookup
         v1_by_id = {str(c.ComplianceId): c for c in q1}
-        v1_by_ident = {c.Identifier: c for c in q1}
-        v1_by_title = {c.ComplianceTitle.strip().lower(): c for c in q1}
+        # Avoid indexing empty strings or nulls
+        v1_by_ident = {c.Identifier: c for c in q1 if c.Identifier and c.Identifier.strip()}
+        v1_by_title = {c.ComplianceTitle.strip().lower(): c for c in q1 if c.ComplianceTitle and c.ComplianceTitle.strip()}
         
         results = []
         unmatched_f1 = set(v1_by_id.keys())
-        potential_mods = [] # List of (new_item, old_item) triples for AI
+        items_to_justify = [] # List of (new_item, old_item) pairs for AI
         
         # 2. Structural Matching Loop
         for c2 in q2:
-            match = v1_by_ident.get(c2.Identifier) or v1_by_title.get(c2.ComplianceTitle.strip().lower())
+            match = None
+            c2_ident = c2.Identifier.strip() if c2.Identifier else None
+            c2_title = c2.ComplianceTitle.strip().lower() if c2.ComplianceTitle else None
+
+            if c2_ident:
+                match = v1_by_ident.get(c2_ident)
+            
+            if not match and c2_title:
+                match = v1_by_title.get(c2_title)
             
             if match:
                 unmatched_f1.discard(str(match.ComplianceId))
+
                 
                 # Check for semantic differences
                 desc1 = (match.ComplianceItemDescription or "").strip().lower()
@@ -3325,17 +3335,19 @@ def compare_framework_versions(request):
                 
                 if desc1 == desc2:
                     change_type = "UNCHANGED"
-                    ai_analysis = "Direct structural match found."
+                    ai_analysis = "Identical requirements - Same as Version 1."
                 else:
                     change_type = "MODIFIED"
-                    potential_mods.append((c2, match))
-                    ai_analysis = "Processing semantic differences with AI..."
+                    items_to_justify.append((c2, match))
+                    ai_analysis = "Analyzing semantic modifications..."
                     
                 results.append({
                     "id": str(c2.ComplianceId),
                     "identifier": c2.Identifier,
                     "title": c2.ComplianceTitle,
-                    "description": c2.ComplianceItemDescription,
+                    "description": c2.ComplianceItemDescription, # Keep for compatibility
+                    "control1_description": match.ComplianceItemDescription,
+                    "control2_description": c2.ComplianceItemDescription,
                     "criticality": c2.Criticality,
                     "mandatory": c2.MandatoryOptional,
                     "type": c2.ComplianceType,
@@ -3344,67 +3356,88 @@ def compare_framework_versions(request):
                     "v1_equivalent_id": str(match.ComplianceId)
                 })
             else:
-                # Truly new or semantically renamed
+                # Truly new
+                items_to_justify.append((c2, None))
                 results.append({
                     "id": str(c2.ComplianceId),
                     "identifier": c2.Identifier,
                     "title": c2.ComplianceTitle,
                     "description": c2.ComplianceItemDescription,
+                    "control1_description": None,
+                    "control2_description": c2.ComplianceItemDescription,
                     "criticality": c2.Criticality,
                     "mandatory": c2.MandatoryOptional,
                     "type": c2.ComplianceType,
                     "change_type": "NEW",
-                    "ai_analysis": "Evaluating legacy equivalents...",
+                    "ai_analysis": "New requirement introduced in this version.",
                     "v1_equivalent_id": None
                 })
 
         # 3. Handle REMOVED items
         for r_id in unmatched_f1:
             match = v1_by_id[r_id]
-            # Check if this "removed" item is actually one of the "NEW" items (semantic rename)
+            items_to_justify.append((None, match))
             results.append({
                 "id": str(match.ComplianceId),
                 "identifier": match.Identifier,
                 "title": match.ComplianceTitle,
                 "description": match.ComplianceItemDescription,
+                "control1_description": match.ComplianceItemDescription,
+                "control2_description": None,
                 "criticality": match.Criticality,
                 "mandatory": match.MandatoryOptional,
                 "type": match.ComplianceType,
                 "change_type": "REMOVED",
-                "ai_analysis": "Requirement no longer present in newer version.",
+                "ai_analysis": "Requirement removed or consolidated in the newer version.",
                 "v1_equivalent_id": str(match.ComplianceId)
             })
 
         # 4. Selective AI Delta Analysis
-        # Only run AI on the MODIFIED and NEW items to explain the "WHYS"
-        if potential_mods:
+        # Run AI on MODIFIED, NEW, and REMOVED items in batches to explain the "WHYS"
+        if items_to_justify:
             ai_service = get_ai_service()
             try:
-                # Prepare a small-batch payload for AI
-                ai_payload = {
-                    "framework1_name": f1.FrameworkName,
-                    "framework2_name": f2.FrameworkName,
-                    "modifications": [
-                        {
-                            "id": str(n.ComplianceId),
-                            "title": n.ComplianceTitle,
-                            "v1_text": o.ComplianceItemDescription,
-                            "v2_text": n.ComplianceItemDescription
-                        }
-                        for n, o in potential_mods[:10] # Limit AI to top 10 modifications for speed/tokens
-                    ]
-                }
+                # Limit total AI analysis to top 200 items to balance coverage and performance
+                max_items = 200
+                batch_size = 20
+                items_to_process = items_to_justify[:max_items]
                 
-                ai_result = ai_service.run_task("mapping.version_comparison_smart", ai_payload)
+                all_justifications = {}
+                
+                for i in range(0, len(items_to_process), batch_size):
+                    batch = items_to_process[i:i+batch_size]
+                    print(f"[AI-BATCH] Processing batch {i//batch_size + 1} ({len(batch)} items)")
+                    
+                    ai_payload = {
+                        "framework1_name": f1.FrameworkName,
+                        "framework2_name": f2.FrameworkName,
+                        "modifications": [
+                            {
+                                "id": str(n.ComplianceId) if n else str(o.ComplianceId),
+                                "title": n.ComplianceTitle if n else o.ComplianceTitle,
+                                "type": "NEW" if not o else ("REMOVED" if not n else "MODIFIED"),
+                                "v1_text": o.ComplianceItemDescription if o else None,
+                                "v2_text": n.ComplianceItemDescription if n else None
+                            }
+                            for n, o in batch
+                        ]
+                    }
+                    
+                    ai_result = ai_service.run_task("mapping.version_comparison_smart", ai_payload)
+                    
+                    if ai_result and isinstance(ai_result, dict) and 'justifications' in ai_result:
+                        for j in ai_result['justifications']:
+                            all_justifications[str(j['id'])] = j['reason']
                 
                 # Apply AI justifications back to results
-                if ai_result and isinstance(ai_result, dict) and 'justifications' in ai_result:
-                    just_map = {str(j['id']): j['reason'] for j in ai_result['justifications']}
+                if all_justifications:
                     for res in results:
-                        if res['id'] in just_map:
-                            res['ai_analysis'] = just_map[res['id']]
+                        if res['id'] in all_justifications:
+                            res['ai_analysis'] = all_justifications[res['id']]
+                            
             except Exception as ai_err:
                 logger.warning(f"AI Smart analysis failed: {ai_err}")
+
 
         # Summary statistics
         summary = {
@@ -3412,8 +3445,9 @@ def compare_framework_versions(request):
             "modified_items": len([r for r in results if r['change_type'] == "MODIFIED"]),
             "removed_items": len([r for r in results if r['change_type'] == "REMOVED"]),
             "unchanged_items": len([r for r in results if r['change_type'] == "UNCHANGED"]),
-            "overall_impact": "Significant" if len(potential_mods) > 5 else "Moderate"
+            "overall_impact": "Significant" if len([r for r in results if r['change_type'] != "UNCHANGED"]) > 10 else "Moderate"
         }
+
 
         # FINAL RESPONSE (Ensure strictly 100% database data is returned)
         return Response({

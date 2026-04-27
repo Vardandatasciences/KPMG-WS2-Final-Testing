@@ -1,4 +1,16 @@
 <template>
+  <!-- Success Popup Modal -->
+  <div v-if="showSuccessModal" class="modal-backdrop success-popup" @click.self="showSuccessModal = false">
+    <div class="success-modal-content">
+      <div class="success-icon">
+        <i class="fas fa-check-circle"></i>
+      </div>
+      <h3>{{ successModalTitle }}</h3>
+      <p>{{ successModalMessage }}</p>
+      <button class="btn primary" @click="showSuccessModal = false">OK</button>
+    </div>
+  </div>
+
   <div class="system-risk-container" :class="{ 'sidebar-collapsed': isSidebarCollapsed }">
     <div class="system-risk-header">
       <div class="system-risk-header-left">
@@ -34,58 +46,110 @@
           </button>
 
           <!-- Dropdown Panel -->
+          <div v-if="isDocHandlingExpanded" class="scan-config-backdrop" @click="isDocHandlingExpanded = false"></div>
           <div v-if="isDocHandlingExpanded" class="scan-config-panel glass-panel shadow-2xl">
-            <div class="panel-section">
-              <label><i class="fas fa-cubes"></i> Source Modules</label>
-              <div class="module-grid">
-                <div 
-                  v-for="source in ['COMPLIANCE', 'AUDIT', 'INCIDENT', 'MANUAL']" 
-                  :key="source"
-                  class="module-option"
-                  :class="{ active: selectedSources.includes(source) }"
-                  @click="toggleSourceSelection(source)"
-                >
-                  <i :class="getSourceIcon(source)"></i>
-                  <span>{{ source.charAt(0) + source.slice(1).toLowerCase() }}</span>
-                  <div class="check-indicator"><i class="fas fa-check"></i></div>
-                </div>
-              </div>
+            <div class="panel-header">
+              <h3><i class="fas fa-robot"></i> AI Scan Configuration</h3>
+              <button type="button" class="panel-close-x" @click="isDocHandlingExpanded = false">
+                <i class="fas fa-times"></i>
+              </button>
             </div>
 
-            <div class="panel-section">
-              <label><i class="fas fa-folder-tree"></i> Document Repository</label>
-              <div class="repo-controls">
-                <select v-model="selectedFolderId" class="premium-select" @change="onFolderChange">
-                  <option value="">Select Company Folder...</option>
-                  <option v-for="folder in companyFolders" :key="folder.id" :value="folder.id">{{ folder.name }}</option>
-                </select>
-                
-                <div v-if="subFolders.length > 0" class="subfolder-selection">
-                  <div class="subfolder-list custom-scrollbar">
-                    <div v-for="sub in subFolders" :key="sub.id" class="subfolder-item-wrapper">
+            <div class="panel-body-layout">
+              <div class="panel-left-col">
+                <div class="panel-section">
+                  <label><i class="fas fa-cubes"></i> Source Modules</label>
+                  <p class="section-desc">Select which modules the AI should analyze for risks.</p>
+                  <div class="module-grid">
+                    <div 
+                      v-for="source in ['COMPLIANCE', 'AUDIT', 'INCIDENT', 'EVENT', 'EXTERNAL_SOURCES']" 
+                      :key="source"
+                      class="module-option"
+                      :class="{ active: selectedSources.includes(source) }"
+                      @click="toggleSourceSelection(source)"
+                    >
+                      <i :class="getSourceIcon(source)"></i>
+                      <span>{{ source === 'EXTERNAL_SOURCES' ? 'External Sources' : source.charAt(0) + source.slice(1).toLowerCase() }}</span>
+                      <div class="check-indicator"><i class="fas fa-check"></i></div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="panel-section no-border">
+                  <label class="flex-label" @click="runChecklist = !runChecklist">
+                    <span><i class="fas fa-clipboard-check"></i> Analysis Checklist</span>
+                    <div class="toggle-switch" :class="{ active: runChecklist }">
+                      <div class="switch-knob"></div>
+                    </div>
+                  </label>
+                  <p class="section-hint">Perform analysis on all items currently checklisted for review in the system.</p>
+                </div>
+              </div>
+
+              <div class="panel-right-col">
+                <!-- External Sources Selection (Visible when EXTERNAL_SOURCES module is selected) -->
+                <div v-if="selectedSources.includes('EXTERNAL_SOURCES')" class="panel-section external-sources-section">
+                  <label><i class="fas fa-globe"></i> News Portals & Feeds</label>
+                  <p class="section-desc">Select specific news sources the AI should crawl for relevant risks.</p>
+                  
+                  <div v-if="loadingExternalSources" class="external-loading">
+                    <i class="fas fa-spinner fa-spin"></i> Loading sources...
+                  </div>
+                  <div v-else class="external-source-list custom-scrollbar">
+                    <div v-for="source in availableExternalSources" :key="source.url" class="external-source-item">
                       <label class="premium-checkbox">
-                        <input type="checkbox" :value="sub.id" v-model="selectedSubFolderIds" @change="onSubfolderToggle(sub)" />
+                        <input type="checkbox" :value="source.url" v-model="selectedExternalUrls" />
                         <span class="box"><i class="fas fa-check"></i></span>
-                        <span class="label">{{ sub.name }}</span>
+                        <div class="source-info">
+                          <span class="label">{{ source.name }}</span>
+                          <span class="url-hint">{{ source.url }}</span>
+                        </div>
                       </label>
-                      
-                      <!-- Nested Documents -->
-                      <div v-if="selectedSubFolderIds.includes(sub.id)" class="nested-document-list">
-                        <div v-if="loadingDocuments[sub.id]" class="docs-loading">
-                          <i class="fas fa-spinner fa-spin"></i> Loading...
-                        </div>
-                        <div v-else-if="!subfolderDocuments[sub.id] || subfolderDocuments[sub.id].length === 0" class="docs-empty">
-                          No documents found.
-                        </div>
-                        <template v-else>
-                          <label v-for="doc in subfolderDocuments[sub.id]" :key="doc.id" class="premium-checkbox doc-checkbox">
-                            <input type="checkbox" :value="doc.id" v-model="selectedDocumentIds" />
+                    </div>
+                  </div>
+                </div>
+
+                <div class="panel-section" :class="{ 'with-top-margin': selectedSources.includes('EXTERNAL_SOURCES') }">
+                  <label><i class="fas fa-folder-tree"></i> Document Repository</label>
+                  <p class="section-desc">Choose specific documents or folders to include in the scan.</p>
+                  <div class="repo-controls">
+                    <select v-model="selectedFolderId" class="premium-select" @change="onFolderChange">
+                      <option value="">Select Company Folder...</option>
+                      <option v-for="folder in companyFolders" :key="folder.id" :value="folder.id">{{ folder.name }}</option>
+                    </select>
+                    
+                    <div v-if="subFolders.length > 0" class="subfolder-selection">
+                      <p class="repo-hint">Select subfolders, then choose specific documents if needed.</p>
+                      <div class="subfolder-list custom-scrollbar">
+                        <div v-for="sub in subFolders" :key="sub.id" class="subfolder-item-wrapper">
+                          <label class="premium-checkbox">
+                            <input type="checkbox" :value="sub.id" v-model="selectedSubFolderIds" @change="onSubfolderToggle(sub)" />
                             <span class="box"><i class="fas fa-check"></i></span>
-                            <span class="label doc-label" :title="doc.name">
-                              <i class="far fa-file-alt"></i> {{ maskValue(doc.name) }}
-                            </span>
+                            <span class="label">{{ sub.name }}</span>
                           </label>
-                        </template>
+                          
+                          <!-- Nested Documents -->
+                          <div v-if="selectedSubFolderIds.includes(sub.id)" class="nested-document-list">
+                            <div v-if="loadingDocuments[sub.id]" class="docs-loading">
+                              <i class="fas fa-spinner fa-spin"></i> Loading...
+                            </div>
+                            <div v-else-if="!subfolderDocuments[sub.id] || subfolderDocuments[sub.id].length === 0" class="docs-empty">
+                              No documents found.
+                            </div>
+                            <template v-else>
+                              <div class="docs-meta">
+                                <span>{{ subfolderDocuments[sub.id].length }} document(s) available</span>
+                              </div>
+                              <label v-for="doc in subfolderDocuments[sub.id]" :key="doc.id" class="premium-checkbox doc-checkbox">
+                                <input type="checkbox" :value="doc.id" v-model="selectedDocumentIds" />
+                                <span class="box"><i class="fas fa-check"></i></span>
+                                <span class="label doc-label" :title="doc.name">
+                                  <i class="far fa-file-alt"></i> {{ displayDocumentName(doc) }}
+                                </span>
+                              </label>
+                            </template>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -93,18 +157,14 @@
               </div>
             </div>
 
-            <div class="panel-section no-border">
-              <label class="flex-label" @click="runChecklist = !runChecklist">
-                <span><i class="fas fa-clipboard-check"></i> Analysis Checklist</span>
-                <div class="toggle-switch" :class="{ active: runChecklist }">
-                  <div class="switch-knob"></div>
-                </div>
-              </label>
-              <p class="section-hint">Perform analysis on all items currently checklisted for review.</p>
-            </div>
-
             <div class="panel-footer">
-              <button class="config-close-btn" @click="isDocHandlingExpanded = false">Close & Save Config</button>
+              <div class="footer-summary">
+                <span v-if="selectedSources.length">{{ selectedSources.length }} modules selected</span>
+                <span v-if="selectedSubFolderIds.length">{{ selectedSubFolderIds.length }} folders selected</span>
+              </div>
+              <button type="button" class="config-save-btn" @click="isDocHandlingExpanded = false">
+                Apply & Save Configuration
+              </button>
             </div>
           </div>
         </div>
@@ -140,7 +200,7 @@
       </div>
       <div class="stat-card clickable" :class="{ active: filters.status === 'ACCEPTED_PENDING_APPROVAL' }" @click="setStatusFilter('ACCEPTED_PENDING_APPROVAL')">
         <p class="stat-value pending">{{ pendingApprovalCount }}</p>
-        <p class="stat-label">Accepted</p>
+        <p class="stat-label">Pending Approval</p>
       </div>
       <div class="stat-card clickable" :class="{ active: filters.status === 'APPROVED_ADDED' }" @click="setStatusFilter('APPROVED_ADDED')">
         <p class="stat-value accepted">{{ acceptedCount }}</p>
@@ -323,9 +383,10 @@
 
         <div class="risk-mitigation-preview">
           <strong>Proposed Mitigation:</strong> 
-          <span v-if="risk.mitigationSteps && risk.mitigationSteps.length > 0">
+          <span v-if="Array.isArray(risk.mitigationSteps) && risk.mitigationSteps.length > 0">
             {{ risk.mitigationSteps.join('; ') }}
           </span>
+          <span v-else-if="risk.mitigationSteps">{{ risk.mitigationSteps }}</span>
           <span v-else>{{ risk.mitigation }}</span>
         </div>
 
@@ -338,8 +399,11 @@
               <button type="button" class="btn-reject-ghost" @click="rejectFromList(risk.id)">Reject</button>
             </template>
             <template v-else-if="risk.status === 'ACCEPTED_PENDING_APPROVAL'">
-              <button type="button" class="btn-review pending" disabled>
+              <button v-if="!canApprove(risk)" type="button" class="btn-review pending" disabled>
                 <i class="fas fa-spinner fa-spin"></i> Approval In Progress
+              </button>
+              <button v-else type="button" class="btn-review approve" @click="openReview(risk)">
+                Review & Approve
               </button>
               <button type="button" class="btn-review-ghost" @click="goToWorkflow(risk)">
                 View Workflow <i class="fas fa-arrow-right"></i>
@@ -379,32 +443,63 @@
           </button>
         </div>
         <div v-if="sourceDrawerLoading" class="source-drawer-body">
-          <p>Loading source details...</p>
+          <div class="drawer-loading-state">
+            <i class="fas fa-spinner fa-spin"></i>
+            <p>Fetching original source details...</p>
+          </div>
         </div>
         <div v-else-if="sourceDrawerRisk" class="source-drawer-body">
-          <div class="source-field">
-            <div class="source-label">Source Type</div>
-            <div class="source-value">{{ sourceDrawerRisk.category }}</div>
+          <div class="source-header-main">
+            <div class="source-icon">
+              <i :class="getSourceIcon(sourceDrawerRisk.sourceModule)"></i>
+            </div>
+            <div class="source-title-group">
+              <h3 class="source-drawer-title">{{ sourceDrawerDetail?.title || sourceDrawerRisk.source }}</h3>
+              <span class="source-drawer-type">{{ (sourceDrawerRisk.sourceModule || 'GENERAL').replace('_', ' ') }}</span>
+            </div>
           </div>
-          <div class="source-field">
-            <div class="source-label">Reference ID</div>
-            <div class="source-value">{{ sourceDrawerRisk.sourceRefId || '-' }}</div>
+
+          <div v-if="sourceDrawerDetail?.link" class="source-field">
+            <div class="source-label">Original Source Link</div>
+            <div class="source-link-box">
+              <a :href="sourceDrawerDetail.link" target="_blank" class="source-url">
+                <i class="fas fa-external-link-alt"></i> {{ sourceDrawerDetail.link }}
+              </a>
+            </div>
           </div>
+
           <div class="source-field">
-            <div class="source-label">Detected</div>
-            <div class="source-value">{{ sourceDrawerRisk.detected }}</div>
+            <div class="source-label">Source Content / Evidence Snippet</div>
+            <div class="source-summary-box">
+              {{ sourceDrawerDetail?.description || sourceDrawerRisk.description }}
+            </div>
           </div>
-          <div class="source-field">
-            <div class="source-label">Finding Summary</div>
-            <div class="source-summary-box">{{ sourceDrawerRisk.aiReasoning || sourceDrawerRisk.description }}</div>
+
+          <div class="source-metadata-grid">
+            <div class="source-field">
+              <div class="source-label">Reference ID</div>
+              <div class="source-value">{{ sourceDrawerRisk.sourceRefId || '-' }}</div>
+            </div>
+            <div class="source-field">
+              <div class="source-label">Detected On</div>
+              <div class="source-value">{{ sourceDrawerRisk.detected }}</div>
+            </div>
+            <div v-if="sourceDrawerDetail?.extra_info?.category" class="source-field">
+              <div class="source-label">Source Category</div>
+              <div class="source-value">{{ sourceDrawerDetail.extra_info.category }}</div>
+            </div>
           </div>
+
           <div class="source-field">
-            <div class="source-label">Related Risk</div>
+            <div class="source-label">AI Identification Reasoning</div>
+            <div class="source-reasoning-box">
+              <p>{{ sourceDrawerRisk.aiReasoning }}</p>
+            </div>
+          </div>
+          
+          <div class="source-field">
+            <div class="source-label">Associated Risk Candidate</div>
             <div class="source-value">{{ sourceDrawerRisk.title }}</div>
-          </div>
-          <div class="source-field">
-            <div class="source-label">Status</div>
-            <div class="source-status-chip">{{ statusLabel(sourceDrawerRisk.status) }}</div>
           </div>
         </div>
       </aside>
@@ -476,7 +571,7 @@
             </div>
             <div class="ai-field has-tooltip">
               <label>Business Impact <span class="ai-badge">AI</span></label>
-              <div class="ai-value">{{ (selectedRisk.businessImpact || []).join(', ') }}</div>
+              <div class="ai-value">{{ Array.isArray(selectedRisk.businessImpact) ? selectedRisk.businessImpact.join(', ') : (selectedRisk.businessImpact || 'N/A') }}</div>
               <div class="justification-tooltip">
                 <div class="tooltip-header"><i class="fas fa-info-circle"></i> Basis</div>
                 <div class="tooltip-body">{{ getRationale(selectedRisk, 'business_impact') }}</div>
@@ -549,9 +644,10 @@
 
             <div class="ai-field">
               <label>Mitigation Steps <span class="ai-badge">AI</span></label>
-              <ul class="ai-steps">
+              <ul class="ai-steps" v-if="Array.isArray(selectedRisk.mitigationSteps)">
                 <li v-for="(step, idx) in selectedRisk.mitigationSteps" :key="idx">{{ step }}</li>
               </ul>
+              <div v-else class="ai-value">{{ selectedRisk.mitigationSteps || 'None identified' }}</div>
             </div>
 
             <div class="ai-field">
@@ -616,56 +712,69 @@
 
             <div class="form-group">
               <label>Risk Title</label>
-              <input v-model="reviewForm.title" type="text" class="review-input" />
+              <input v-model="reviewForm.title" type="text" class="review-input" :disabled="isReviewerApprovalMode" />
+              <!-- Change Alert for Title -->
+              <div v-if="isReviewerApprovalMode && isFieldChanged('title')" class="field-change-alert">
+                <i class="fas fa-exclamation-triangle"></i> Modified from AI: <span>"{{ getOriginalValueDisplay('title') }}"</span>
+              </div>
             </div>
 
             <div class="form-group">
               <label>Risk Type</label>
-              <select v-model="reviewForm.type" class="review-select">
-                <option>Current</option>
-                <option>Residual</option>
-                <option>Inherent</option>
-                <option>Emerging</option>
-                <option>Accepted</option>
+              <select v-model="reviewForm.type" class="review-select" :disabled="isReviewerApprovalMode">
+                <option v-for="opt in typeOptions" :key="opt" :value="opt">{{ opt }}</option>
               </select>
+              <!-- Change Alert for Type -->
+              <div v-if="isReviewerApprovalMode && isFieldChanged('type')" class="field-change-alert">
+                <i class="fas fa-exclamation-triangle"></i> Modified from AI: <span>{{ getOriginalValueDisplay('type') }}</span>
+              </div>
             </div>
 
             <div class="form-group">
               <label>Category</label>
-              <select v-model="reviewForm.category" class="review-select">
+              <select v-model="reviewForm.category" class="review-select" :disabled="isReviewerApprovalMode">
                 <option v-for="cat in categoryOptions" :key="cat" :value="cat">{{ cat }}</option>
               </select>
+              <!-- Change Alert for Category -->
+              <div v-if="isReviewerApprovalMode && isFieldChanged('category')" class="field-change-alert">
+                <i class="fas fa-exclamation-triangle"></i> Modified from AI: <span>{{ getOriginalValueDisplay('category') }}</span>
+              </div>
             </div>
 
             <div class="form-group">
               <label>Criticality</label>
-              <select v-model="reviewForm.criticality" class="review-select">
+              <select v-model="reviewForm.criticality" class="review-select" :disabled="isReviewerApprovalMode">
                 <option>Low</option>
                 <option>Medium</option>
                 <option>High</option>
                 <option>Critical</option>
               </select>
+              <!-- Change Alert for Criticality -->
+              <div v-if="isReviewerApprovalMode && isFieldChanged('criticality')" class="field-change-alert">
+                <i class="fas fa-exclamation-triangle"></i> Modified from AI: <span>{{ getOriginalValueDisplay('criticality') }}</span>
+              </div>
             </div>
 
             <div class="form-group">
               <label>Description</label>
-              <textarea v-model="reviewForm.description" rows="3" class="review-textarea"></textarea>
+              <textarea v-model="reviewForm.description" rows="3" class="review-textarea" :disabled="isReviewerApprovalMode"></textarea>
             </div>
 
             <div class="form-group">
               <label>Possible Damage</label>
-              <textarea v-model="reviewForm.possibleDamage" rows="2" class="review-textarea"></textarea>
+              <textarea v-model="reviewForm.possibleDamage" rows="2" class="review-textarea" :disabled="isReviewerApprovalMode"></textarea>
             </div>
 
             <div class="form-group">
               <label>Business Impact</label>
-              <div class="impact-buttons">
+              <div class="impact-buttons" :class="{ disabled: isReviewerApprovalMode }">
                 <button 
                   v-for="impact in impactOptions" 
                   :key="impact" 
-                  @click="toggleImpact(impact)"
+                  @click="!isReviewerApprovalMode && toggleImpact(impact)"
                   :class="{ active: reviewForm.businessImpact.includes(impact) }"
                   class="impact-btn"
+                  :disabled="isReviewerApprovalMode"
                 >
                   {{ impact }}
                 </button>
@@ -675,16 +784,16 @@
             <div class="sliders-grid">
               <div class="slider-item">
                 <label>Likelihood: {{ reviewForm.likelihood }}/10</label>
-                <input type="range" v-model.number="reviewForm.likelihood" min="1" max="10" />
+                <input type="range" v-model.number="reviewForm.likelihood" min="1" max="10" :disabled="isReviewerApprovalMode" />
               </div>
               <div class="slider-item">
                 <label>Impact: {{ reviewForm.impact }}/10</label>
-                <input type="range" v-model.number="reviewForm.impact" min="1" max="10" />
+                <input type="range" v-model.number="reviewForm.impact" min="1" max="10" :disabled="isReviewerApprovalMode" />
               </div>
             </div>
 
             <!-- Justification for Likelihood/Impact -->
-            <div v-if="isFieldChanged('likelihood') || isFieldChanged('impact')" class="justification-box">
+            <div v-if="isReviewerApprovalMode && (isFieldChanged('likelihood') || isFieldChanged('impact'))" class="justification-box">
               <div class="justification-warning">
                 <span class="change-label">Changed Risk Metrics</span>
                 <span class="change-values">
@@ -706,19 +815,19 @@
 
             <div class="form-group">
               <label>Velocity: {{ reviewForm.velocity }}/10</label>
-              <input type="range" v-model.number="reviewForm.velocity" min="1" max="10" class="velocity-slider" />
+              <input type="range" v-model.number="reviewForm.velocity" min="1" max="10" class="velocity-slider" :disabled="isReviewerApprovalMode" />
               <p class="hint">How quickly this risk can impact the organisation</p>
             </div>
 
             <div class="form-group">
               <label>Control Effectiveness</label>
-              <select v-model="reviewForm.controlEffectiveness" class="review-select">
+              <select v-model="reviewForm.controlEffectiveness" class="review-select" :disabled="isReviewerApprovalMode">
                 <option v-for="opt in controlEffectivenessOptions" :key="opt" :value="opt">{{ opt }}</option>
               </select>
               <p class="hint">Effectiveness of existing controls for this risk</p>
 
               <!-- Justification for Control Effectiveness -->
-              <div v-if="isFieldChanged('controlEffectiveness')" class="justification-box">
+              <div v-if="isReviewerApprovalMode && isFieldChanged('controlEffectiveness')" class="justification-box">
                 <div class="justification-warning">
                   <span class="change-label">Changed Control Effectiveness</span>
                   <span class="change-values">
@@ -747,12 +856,12 @@
 
             <div class="form-group">
               <label>Framework Reference</label>
-              <select v-model="reviewForm.frameworkReference" class="review-select">
+              <select v-model="reviewForm.frameworkReference" class="review-select" :disabled="isReviewerApprovalMode">
                 <option v-for="ref in frameworkReferenceOptions" :key="ref" :value="ref">{{ ref }}</option>
               </select>
 
               <!-- Justification for Framework -->
-              <div v-if="isFieldChanged('frameworkReference')" class="justification-box">
+              <div v-if="isReviewerApprovalMode && isFieldChanged('frameworkReference')" class="justification-box">
                 <div class="justification-warning">
                   <span class="change-label">Changed Framework Reference</span>
                   <span class="change-values">
@@ -770,12 +879,18 @@
 
             <div class="form-group">
               <label>Functional Area</label>
-              <select v-model="reviewForm.functionalArea" class="review-select">
+              <select v-model="reviewForm.functionalArea" class="review-select" :disabled="isReviewerApprovalMode">
                 <option v-for="area in functionalAreaOptions" :key="area" :value="area">{{ area }}</option>
               </select>
 
+              <!-- AI Rationale for Functional Area -->
+              <div v-if="hasRationale(selectedRisk, 'functionalArea')" class="field-rationale">
+                <i class="fas fa-robot"></i>
+                <span>{{ getRationale(selectedRisk, 'functionalArea') }}</span>
+              </div>
+
               <!-- Justification for Functional Area -->
-              <div v-if="isFieldChanged('functionalArea')" class="justification-box">
+              <div v-if="isReviewerApprovalMode && isFieldChanged('functionalArea')" class="justification-box">
                 <div class="justification-warning">
                   <span class="change-label">Changed Functional Area</span>
                   <span class="change-values">
@@ -795,16 +910,16 @@
               <label>Mitigation Steps</label>
               <div class="mitigation-edit">
                 <div v-for="(step, i) in reviewForm.mitigationSteps" :key="i" class="step-input-row">
-                  <input v-model="reviewForm.mitigationSteps[i]" type="text" class="step-input" />
-                  <button @click="removeMitigationStep(i)" class="remove-step">×</button>
+                  <input v-model="reviewForm.mitigationSteps[i]" type="text" class="step-input" :disabled="isReviewerApprovalMode" />
+                  <button @click="removeMitigationStep(i)" class="remove-step" :disabled="isReviewerApprovalMode">×</button>
                 </div>
-                <button @click="addMitigationStep" class="add-step-link">+ Add Step</button>
+                <button @click="addMitigationStep" class="add-step-link" :disabled="isReviewerApprovalMode">+ Add Step</button>
               </div>
             </div>
 
             <div class="form-group">
               <label>Assign Risk Owner</label>
-              <select v-model="reviewForm.riskOwner" class="review-select">
+              <select v-model="reviewForm.riskOwner" class="review-select" :disabled="isReviewerApprovalMode">
                 <option value="">Select...</option>
                 <option v-for="u in userOptions" :key="u.id" :value="u.id">{{ u.name }}</option>
               </select>
@@ -812,23 +927,34 @@
 
             <div class="form-group">
               <label>Assign Reviewer</label>
-              <select v-model="reviewForm.reviewer" class="review-select">
+              <select v-model="reviewForm.reviewer" class="review-select" :disabled="isReviewerApprovalMode">
                 <option value="">Select...</option>
                 <option v-for="u in userOptions" :key="u.id" :value="u.id">{{ u.name }}</option>
               </select>
             </div>
 
             <div class="form-group">
-              <label>Notes / Comments</label>
-              <textarea v-model="reviewForm.notes" rows="3" class="review-textarea"></textarea>
+              <label>{{ isReviewerApprovalMode ? 'Reviewer Feedback / Comments' : 'Notes / Comments' }}</label>
+              <textarea 
+                v-model="reviewForm.notes" 
+                rows="3" 
+                class="review-textarea" 
+                :placeholder="isReviewerApprovalMode ? 'Enter your approval/rejection feedback here...' : ''"
+              ></textarea>
             </div>
 
             <p class="workflow-note">Accepted risks will be routed through the standard approval workflow before being added to the Risk Register.</p>
 
             <div class="drawer-actions">
-              <button @click="openWorkflowModal" class="btn-accept">Accept & Send for Approval</button>
-              <button @click="saveDraft" class="btn-draft">Save as Draft</button>
-              <button @click="rejectCurrent" class="btn-reject">Reject</button>
+              <template v-if="selectedRisk && selectedRisk.status === 'ACCEPTED_PENDING_APPROVAL'">
+                <button @click="approveRisk(selectedRisk)" class="btn-accept">Review & Accept</button>
+                <button @click="rejectRisk(selectedRisk)" class="btn-reject">Reject</button>
+              </template>
+              <template v-else>
+                <button @click="directSendForApproval" class="btn-accept">Accept & Send for Approval</button>
+                <button @click="saveDraft" class="btn-draft">Save as Draft</button>
+                <button @click="rejectCurrent" class="btn-reject">Reject</button>
+              </template>
               <button @click="closeReview" class="btn-cancel">Cancel</button>
             </div>
           </section>
@@ -838,13 +964,6 @@
 
 
 
-    <!-- System Risk Workflow Modal -->
-    <SystemRiskWorkflowModal
-      :is-visible="showWorkflowModal"
-      :risk-data="workflowRiskData"
-      @close="closeWorkflowModal"
-      @workflow-created="onWorkflowCreated"
-    />
 
     <!-- Scheduling Modal -->
     <div v-if="showScheduleModal" class="modal-backdrop" @click.self="closeScheduleModal">
@@ -923,13 +1042,10 @@
 <script>
 import apiService from '../../services/apiService.js';
 import { API_ENDPOINTS } from '../../config/api.js';
-import SystemRiskWorkflowModal from './SystemRiskWorkflowModal.vue';
 
 export default {
   name: 'SystemIdentifiedRisks',
-  components: {
-    SystemRiskWorkflowModal
-  },
+  components: {},
   data() {
     return {
       isSidebarCollapsed: false,
@@ -940,10 +1056,12 @@ export default {
         { label: 'Compliance Controls', value: 'COMPLIANCE' },
         { label: 'TPRM / Vendor Data', value: 'TPRM' },
         { label: 'External Integrations', value: 'INTEGRATION' },
-        { label: 'Manual / Events', value: 'MANUAL' }
+        { label: 'External Sources', value: 'EXTERNAL_SOURCES' },
+        { label: 'Events', value: 'EVENT' }
       ],
+      typeOptions: ['Current', 'Residual', 'Inherent', 'Emerging', 'Accepted'],
       categoryOptions: ['IT Security', 'Operational', 'Compliance', 'Financial', 'Strategic', 'Third-Party'],
-      functionalAreaOptions: ['Product', 'Engineering', 'HR', 'Finance', 'Legal', 'Sales', 'Marketing', 'Operations', 'Security'],
+      functionalAreaOptions: [],
       impactOptions: ['Revenue Loss', 'Reputation', 'Regulatory', 'Operational', 'Strategic'],
       stats: {
         pendingCount: 0,
@@ -957,11 +1075,15 @@ export default {
       selectedSources: ['INCIDENT'],     // New multi-source
       companyFolders: [],
       selectedFolderId: '',
+      selectedFolderCode: '',
       subFolders: [],
       selectedSubFolderIds: [],
       subfolderDocuments: {},
       selectedDocumentIds: [],
       loadingDocuments: {},
+      loadingExternalSources: false,
+      availableExternalSources: [],
+      selectedExternalUrls: [],
       isDocHandlingExpanded: false,
       runChecklist: false,
       pagination: {
@@ -998,6 +1120,7 @@ export default {
       sourceDrawerOpen: false,
       sourceDrawerLoading: false,
       sourceDrawerRisk: null,
+      sourceDrawerDetail: null,
       selectedRisk: null,
       showWorkflowModal: false,
       workflowRiskData: null,
@@ -1049,6 +1172,9 @@ export default {
       risks: [],
       expandedReasoning: [],
       originalAiValues: {},
+      showSuccessModal: false,
+      successModalTitle: '',
+      successModalMessage: ''
     };
   },
   computed: {
@@ -1139,6 +1265,11 @@ export default {
     controlEffectText() {
       const reductionMap = { 'Low': '15% reduction', 'Medium': '45% reduction', 'High': '85% reduction' };
       return `Control Effect: ${this.reviewForm.controlEffectiveness} (${reductionMap[this.reviewForm.controlEffectiveness] || '0%'})`;
+    },
+    isReviewerApprovalMode() {
+      return this.selectedRisk && 
+             this.selectedRisk.status === 'ACCEPTED_PENDING_APPROVAL' && 
+             this.canApprove(this.selectedRisk);
     }
   },
   methods: {
@@ -1286,9 +1417,9 @@ export default {
             description: item.risk_description || '',
             type: item.risk_type || 'Current',
             criticality: item.criticality || 'Medium',
-            source: item.source_ref || '',
+            source: item.source_title || item.source_ref || '',
             sourceRefId: this.extractSourceRefId(item.source_ref || ''),
-            sourceModule: item.source_module,
+            sourceModule: (item.source_module === 'INTEGRATION' && (item.source_ref || '').startsWith('External:')) ? 'EXTERNAL_SOURCES' : item.source_module,
             createdAtRaw: item.created_at || null,
             detected: this.formatDate(item.created_at),
             likelihood: item.likelihood || 5,
@@ -1297,12 +1428,12 @@ export default {
             priority: item.priority || 'Medium',
             velocity: item.velocity_score || 0,
             functionalArea: item.functional_area || 'General',
-            businessImpact: item.business_impact || [],
+            businessImpact: Array.isArray(item.business_impact) ? item.business_impact : (item.business_impact ? [item.business_impact] : []),
             possibleDamage: item.possible_damage || '',
-            mitigation: item.mitigation_steps && item.mitigation_steps.length > 0 
+            mitigation: (Array.isArray(item.mitigation_steps) && item.mitigation_steps.length > 0) 
               ? item.mitigation_steps[0] 
-              : 'No mitigation defined',
-            mitigationSteps: item.mitigation_steps || [],
+              : (item.mitigation_steps || 'No mitigation defined'),
+            mitigationSteps: Array.isArray(item.mitigation_steps) ? item.mitigation_steps : (item.mitigation_steps ? [item.mitigation_steps] : []),
             status: String(item.status || '').trim().toUpperCase(),
             riskInstanceId: item.risk_instance_id || null, // Add risk instance ID for workflow
             reviewerId: item.reviewer_id || null,
@@ -1336,10 +1467,12 @@ export default {
       this.sourceDrawerOpen = true;
       this.sourceDrawerLoading = true;
       this.sourceDrawerRisk = { ...risk };
+      this.sourceDrawerDetail = null;
       try {
-        const data = await apiService.get(API_ENDPOINTS.SYSTEM_RISKS_DETAIL(risk.id));
-        if (data) {
-          const d = data.data || {};
+        const response = await apiService.get(API_ENDPOINTS.SYSTEM_RISKS_DETAIL(risk.id));
+        if (response && response.data) {
+          const d = response.data || {};
+          this.sourceDrawerDetail = d.source_details || null;
           this.sourceDrawerRisk = {
             ...risk,
             sourceRefId: this.extractSourceRefId(d.source_ref || risk.source || ''),
@@ -1387,7 +1520,7 @@ export default {
       return this.expandedReasoning.includes(riskId);
     },
     isFieldChanged(field) {
-      if (!this.originalAiValues || this.originalAiValues[field] === undefined) return false;
+      if (!this.originalAiValues || this.originalAiValues[field] === undefined || this.originalAiValues[field] === '' || this.originalAiValues[field] === null) return false;
       const current = this.reviewForm[field];
       const original = this.originalAiValues[field];
       
@@ -1397,7 +1530,9 @@ export default {
       return current !== original;
     },
     getOriginalValueDisplay(field) {
-      return this.originalAiValues[field] || 'None';
+      const val = this.originalAiValues[field];
+      if (val === undefined || val === '' || val === null) return 'Not suggested by AI';
+      return val;
     },
 
     async runManualScan() {
@@ -1413,6 +1548,7 @@ export default {
           source_types: this.selectedSources,
           subfolder_ids: this.selectedSubFolderIds,
           document_ids: this.selectedDocumentIds,
+          external_urls: this.selectedExternalUrls,
           run_checklist: this.runChecklist
         };
         const response = await apiService.post(API_ENDPOINTS.SYSTEM_RISKS_RUN_SCAN_MANUAL, payload, { timeout: 600000 }); // 10 minute timeout for AI analysis
@@ -1439,6 +1575,19 @@ export default {
         this.loading = false;
       }
     },
+    async loadExternalSources() {
+      this.loadingExternalSources = true;
+      try {
+        const response = await apiService.get(API_ENDPOINTS.SYSTEM_RISKS_EXTERNAL_SOURCES);
+        if (response && response.data) {
+          this.availableExternalSources = response.data;
+        }
+      } catch (error) {
+        console.error('Error loading external sources:', error);
+      } finally {
+        this.loadingExternalSources = false;
+      }
+    },
 
     async loadCompanyFolders() {
       try {
@@ -1456,7 +1605,12 @@ export default {
       this.selectedSubFolderIds = [];
       this.subfolderDocuments = {};
       this.selectedDocumentIds = [];
+      this.selectedFolderCode = '';
       if (!this.selectedFolderId) return;
+      const selectedFolder = (this.companyFolders || []).find(
+        (folder) => String(folder.id) === String(this.selectedFolderId)
+      );
+      this.selectedFolderCode = selectedFolder?.code || '';
 
       try {
         const response = await apiService.get(API_ENDPOINTS.COMPANY_SUBFOLDERS(this.selectedFolderId));
@@ -1472,8 +1626,14 @@ export default {
       if (this.selectedSubFolderIds.includes(sub.id) && !this.subfolderDocuments[sub.id]) {
         this.loadingDocuments[sub.id] = true;
         try {
-          // Fetch documents for the checked subfolder
-          const response = await apiService.get(`${API_ENDPOINTS.DOCUMENTS_LIST}?subfolder_code=${encodeURIComponent(sub.code)}&page_size=100`);
+          const queryParams = new URLSearchParams({
+            subfolder_code: sub.code || '',
+            page_size: '100'
+          });
+          if (this.selectedFolderCode) {
+            queryParams.set('company_code', this.selectedFolderCode);
+          }
+          const response = await apiService.get(`${API_ENDPOINTS.DOCUMENTS_LIST}?${queryParams.toString()}`);
           if (response && response.documents) {
             this.subfolderDocuments[sub.id] = response.documents;
           } else {
@@ -1502,12 +1662,12 @@ export default {
         'COMPLIANCE': 'fas fa-shield-alt',
         'AUDIT': 'fas fa-search-dollar',
         'INCIDENT': 'fas fa-exclamation-triangle',
-        'MANUAL': 'fas fa-calendar-alt'
+        'EVENT': 'fas fa-calendar-check',
+        'EXTERNAL_SOURCES': 'fas fa-globe',
+        'INTEGRATION': 'fas fa-file-alt'
       };
       return icons[source] || 'fas fa-cube';
     },
-
-
 
     startTestAnalysisPolling() {
       this.stopTestAnalysisPolling();
@@ -1550,13 +1710,14 @@ export default {
             this.$notify?.({
               type: 'error',
               title: 'Risk Test Analysis Failed',
-              text: job.error || 'Background analysis failed.'
+              text: job.error || 'An unexpected error occurred during analysis.'
             });
           }
-        } catch (pollError) {
-          console.error('Error polling risk test analysis status:', pollError);
+        } catch (error) {
+          console.error('Error polling analysis status:', error);
+          this.stopTestAnalysisPolling();
         }
-      }, 1500);
+      }, 3000);
     },
 
     stopTestAnalysisPolling() {
@@ -1588,43 +1749,60 @@ export default {
     },
 
     async openReview(risk) {
+      this.selectedRisk = risk;
+      const meta = risk.aiMetadata || {};
+      
+      this.originalAiValues = {
+        title: meta.risk_title || '',
+        type: meta.risk_type || '',
+        category: meta.category || '',
+        criticality: meta.criticality || '',
+        description: meta.risk_description || '',
+        possibleDamage: meta.possible_damage || '',
+        businessImpact: Array.isArray(meta.business_impact) ? [...meta.business_impact] : [],
+        likelihood: meta.likelihood || 5,
+        impact: meta.impact || 5,
+        velocity: meta.velocity_score || 5,
+        controlEffectiveness: meta.control_effectiveness || 'Low',
+        frameworkReference: meta.framework_reference || '',
+        functionalArea: meta.functional_area || 'IT',
+        mitigationSteps: Array.isArray(meta.mitigation_steps) ? [...meta.mitigation_steps] : []
+      };
+
       try {
         const response = await apiService.get(API_ENDPOINTS.SYSTEM_RISKS_DETAIL(risk.id));
-        
-        if (response) {
+        if (response && response.data) {
           const data = response.data;
+          const currentMeta = data.ai_metadata || {};
+          
           this.selectedRisk = {
             ...risk,
-            // Add additional details from API
             description: data.risk_description || risk.description,
             possibleDamage: data.possible_damage || risk.possibleDamage,
-            businessImpact: data.business_impact || risk.businessImpact,
-            mitigationSteps: data.mitigation_steps || risk.mitigationSteps,
-            aiReasoning: data.ai_reasoning || ''
+            aiReasoning: data.ai_reasoning || risk.aiReasoning
           };
-          
-          const meta = data.ai_metadata || {};
+
           this.reviewForm = {
             title: data.risk_title || '',
-            type: data.risk_type || 'Current',
-            category: data.category || 'Operational',
-            criticality: data.criticality || 'Medium',
+            type: this.getValidOption(data.risk_type || risk.type, this.typeOptions, true),
+            category: this.getValidOption(data.category || risk.category, this.categoryOptions, true),
+            criticality: this.getValidOption(data.criticality || risk.criticality, ['Low', 'Medium', 'High', 'Critical']),
             description: data.risk_description || '',
             possibleDamage: data.possible_damage || '',
-            businessImpact: [...(data.business_impact || [])],
+            businessImpact: Array.isArray(data.business_impact) ? [...data.business_impact] : (data.business_impact ? [data.business_impact] : []),
             likelihood: data.likelihood || 5,
             impact: data.impact || 5,
-            velocity: data.velocity_score || meta.velocity_score || 5,
-            controlEffectiveness: meta.control_effectiveness || 'Low',
-            frameworkReference: meta.framework_reference || '',
-            functionalArea: data.functional_area || 'IT',
-            riskOwner: '',
-            reviewer: '',
+            velocity: data.velocity_score || currentMeta.velocity_score || 5,
+            controlEffectiveness: this.getValidOption(currentMeta.control_effectiveness || 'Low', this.controlEffectivenessOptions),
+            frameworkReference: currentMeta.framework_reference || '',
+            functionalArea: this.getValidOption(data.functional_area || 'IT', this.functionalAreaOptions, true),
+            riskOwner: data.user_id || this.currentUser?.id || this.currentUser?.UserId || '',
+            reviewer: data.reviewer_id || '',
             notes: '',
             priority: data.priority || 'Medium',
-            mitigationSteps: [...(data.mitigation_steps || risk.mitigationSteps || [])],
-            complianceId: meta.review_overrides?.compliance_id ?? null,
-            justifications: {
+            mitigationSteps: Array.isArray(data.mitigation_steps) ? [...data.mitigation_steps] : (data.mitigation_steps ? [data.mitigation_steps] : [...(risk.mitigationSteps || [])]),
+            complianceId: currentMeta.review_overrides?.compliance_id ?? null,
+            justifications: currentMeta.review_overrides?.justifications || {
               likelihood: '',
               impact: '',
               velocity: '',
@@ -1634,43 +1812,9 @@ export default {
               businessImpact: ''
             }
           };
-
-          // Capture original AI values for change detection
-          this.originalAiValues = {
-            likelihood: data.likelihood || 5,
-            impact: data.impact || 5,
-            velocity: data.velocity_score || meta.velocity_score || 5,
-            controlEffectiveness: meta.control_effectiveness || 'Low',
-            frameworkReference: meta.framework_reference || '',
-            functionalArea: data.functional_area || 'IT',
-            businessImpact: [...(data.business_impact || [])]
-          };
         }
       } catch (error) {
         console.error('Error loading risk details:', error);
-        // Fallback to basic risk data
-        this.selectedRisk = risk;
-        this.reviewForm = {
-          title: risk.title,
-          type: risk.type,
-          category: risk.category,
-          criticality: risk.criticality,
-          description: risk.description,
-          possibleDamage: risk.possibleDamage,
-          businessImpact: [...risk.businessImpact],
-          likelihood: risk.likelihood,
-          impact: risk.impact,
-          velocity: risk.velocity || 5,
-          controlEffectiveness: 'Low',
-          frameworkReference: '',
-          functionalArea: risk.functionalArea || 'IT',
-          riskOwner: '',
-          reviewer: '',
-          notes: '',
-          priority: risk.priority,
-          mitigationSteps: [...(risk.mitigationSteps || [])],
-          complianceId: null
-        };
       }
     },
 
@@ -1862,10 +2006,71 @@ export default {
         multiplierX: this.reviewForm.multiplierX,
         multiplierY: this.reviewForm.multiplierY,
         riskOwner: this.reviewForm.riskOwner,
-        reviewer: this.reviewForm.reviewer
+        reviewer: this.reviewForm.reviewer,
+        justifications: this.reviewForm.justifications
       };
       
       this.showWorkflowModal = true;
+    },
+
+    async directSendForApproval() {
+      if (!this.reviewForm.riskOwner || !this.reviewForm.reviewer) {
+        this.$notify?.({
+          type: 'warning',
+          title: 'Missing Selection',
+          text: 'Please select both a Risk Owner and a Reviewer before sending for approval.'
+        });
+        return;
+      }
+
+      this.loading = true;
+      try {
+        const payload = {
+          user_id: this.reviewForm.riskOwner,
+          reviewer_id: this.reviewForm.reviewer,
+          risk_data: {
+            risk_title: this.reviewForm.title,
+            risk_type: this.reviewForm.type,
+            category: this.reviewForm.category,
+            criticality: this.reviewForm.criticality,
+            risk_description: this.reviewForm.description,
+            possible_damage: this.reviewForm.possibleDamage,
+            business_impact: this.reviewForm.businessImpact,
+            likelihood: this.reviewForm.likelihood,
+            impact: this.reviewForm.impact,
+            exposure_rating: this.selectedRisk.exposure,
+            priority: this.reviewForm.priority,
+            mitigation_steps: this.reviewForm.mitigationSteps,
+            compliance_id: this.reviewForm.complianceId,
+            multiplier_x: this.reviewForm.multiplierX,
+            multiplier_y: this.reviewForm.multiplierY,
+            justifications: this.reviewForm.justifications
+          }
+        };
+
+        const response = await apiService.post(API_ENDPOINTS.SYSTEM_RISKS_SEND_FOR_APPROVAL(this.selectedRisk.id), payload);
+
+        if (response && (response.status === 'success' || response.data?.status === 'success')) {
+          this.$notify?.({
+            type: 'success',
+            title: 'Success',
+            text: 'Risk sent for approval successfully!'
+          });
+          
+          this.closeReview();
+          await this.loadStats();
+          await this.loadRisks();
+        }
+      } catch (error) {
+        console.error('Error creating workflow:', error);
+        this.$notify?.({
+          type: 'error',
+          title: 'Error',
+          text: error.response?.data?.message || 'Failed to create workflow.'
+        });
+      } finally {
+        this.loading = false;
+      }
     },
 
     closeWorkflowModal() {
@@ -1876,6 +2081,7 @@ export default {
     async onWorkflowCreated() {
       // Close the review modal and refresh data
       this.closeReview();
+      this.closeWorkflowModal();
       await this.loadStats();
       await this.loadRisks();
       
@@ -1913,19 +2119,16 @@ export default {
         const response = await apiService.post(API_ENDPOINTS.SYSTEM_RISKS_WORKFLOW_APPROVE(risk.riskInstanceId), {
           feedback: feedback || ''
         });
-
+        
         if (response) {
           // Immediate local UI update so user sees the change instantly
           const idx = (this.risks || []).findIndex((r) => r.id === risk.id);
           if (idx !== -1) {
             this.risks[idx].status = 'APPROVED_ADDED';
           }
-
-          this.$notify?.({
-            type: 'success',
-            title: 'Approved',
-            text: response.data.message
-          });
+          this.successModalTitle = 'Risk Approved';
+          this.successModalMessage = response?.message || response?.data?.message || 'Action completed successfully.';
+          this.showSuccessModal = true;
 
           // Close review modal and refresh server state
           this.closeReview();
@@ -1937,7 +2140,7 @@ export default {
         this.$notify?.({
           type: 'error',
           title: 'Error',
-          text: error.response?.data?.message || 'Failed to approve risk.'
+          text: error.response?.data?.message || error.message || 'Failed to approve risk.'
         });
       }
     },
@@ -1983,12 +2186,15 @@ export default {
         this.$notify?.({
           type: 'error',
           title: 'Error',
-          text: error.response?.data?.message || 'Failed to reject risk.'
+          text: error.response?.data?.message || error.message || 'Failed to reject risk.'
         });
       }
     },
 
     toggleImpact(impact) {
+      if (!Array.isArray(this.reviewForm.businessImpact)) {
+        this.reviewForm.businessImpact = [];
+      }
       if (this.reviewForm.businessImpact.includes(impact)) {
         this.reviewForm.businessImpact = this.reviewForm.businessImpact.filter((item) => item !== impact);
       } else {
@@ -2012,6 +2218,19 @@ export default {
       if (velocity >= 40) return 'velocity-medium';
       return 'velocity-low';
     },
+    getValidOption(val, options, allowCustom = false) {
+      if (!val) return options[0];
+      const match = options.find(opt => String(opt).toLowerCase() === String(val).toLowerCase());
+      if (match) return match;
+      
+      if (allowCustom) {
+        // Add to options if it's a custom value the user/AI wants
+        options.push(val);
+        return val;
+      }
+      return options[0];
+    },
+
     formatDate(dateString) {
       if (!dateString) return 'Unknown';
       
@@ -2062,6 +2281,24 @@ export default {
       const visible = val.substring(0, 3);
       const ext = val.includes('.') ? val.split('.').pop() : '';
       return `${visible}***${ext ? '.' + ext : ''}`;
+    },
+    displayDocumentName(doc) {
+      const rawName = doc?.name || doc?.file_name || doc?.original_name || 'Untitled document';
+      return String(rawName);
+    },
+    async fetchDepartments() {
+      try {
+        const response = await apiService.get(API_ENDPOINTS.DEPARTMENTS);
+        const data = response.data || response;
+        if (Array.isArray(data)) {
+          this.functionalAreaOptions = [...new Set(data.map(d => d.DepartmentName).filter(Boolean))].sort();
+          // Ensure 'IT' and 'Operations' are available as defaults
+          if (!this.functionalAreaOptions.includes('IT')) this.functionalAreaOptions.push('IT');
+          if (!this.functionalAreaOptions.includes('Operations')) this.functionalAreaOptions.push('Operations');
+        }
+      } catch (error) {
+        console.error('Error fetching departments:', error);
+      }
     }
   },
   async mounted() {
@@ -2074,6 +2311,8 @@ export default {
     await this.fetchUsers();
     await this.fetchCurrentUser();
     await this.loadCompanyFolders();
+    await this.fetchDepartments();
+    await this.loadExternalSources();
   },
   beforeUnmount() {
     this.stopTestAnalysisPolling();
@@ -2223,51 +2462,22 @@ export default {
 
 /* Scheduling Styles */
 .btn-schedule {
-  background: linear-gradient(135deg, #6c5ce7 0%, #a29bfe 100%);
-  color: white;
-  border: none;
+  margin-left: 10px;
 }
 
-.btn-schedule:hover {
-  background: linear-gradient(135deg, #5b4bc4 0%, #8e85e5 100%);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(108, 92, 231, 0.3);
-}
-
-.schedule-modal {
-  background: white;
-  width: 500px;
-  max-width: 95vw;
-  border-radius: 16px;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 20px 40px rgba(0,0,0,0.2);
-  overflow: hidden;
-}
-
-.schedule-config {
-  background: #f8f9fa;
-  padding: 20px;
-  border-radius: 12px;
-  margin-bottom: 24px;
+.scheduling-modal .modal-content {
+  max-width: 500px;
 }
 
 .form-group {
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 
 .form-group label {
   display: block;
-  font-size: 0.85rem;
+  margin-bottom: 8px;
   font-weight: 600;
   color: #4a5568;
-  margin-bottom: 6px;
-}
-
-.form-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
 }
 
 .form-control {
@@ -2303,15 +2513,9 @@ export default {
   justify-content: space-between;
   align-items: center;
   padding: 12px;
-  background: white;
-  border: 1px solid #edf2f7;
-  border-radius: 10px;
+  background: #f8fafc;
+  border-radius: 8px;
   margin-bottom: 8px;
-  transition: transform 0.2s;
-}
-
-.schedule-item:hover {
-  transform: translateX(4px);
 }
 
 .schedule-info {
@@ -2320,46 +2524,30 @@ export default {
 }
 
 .schedule-info strong {
-  font-size: 0.9rem;
   color: #2d3748;
+  font-size: 0.9rem;
 }
 
 .schedule-info span {
-  font-size: 0.75rem;
   color: #718096;
+  font-size: 0.8rem;
 }
 
-.btn-icon.danger {
-  color: #e53e3e;
-  background: #fff5f5;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s;
-}
-
-.btn-icon.danger:hover {
-  background: #feb2b2;
-  color: white;
-}
-
-/* Card Status Badge */
 .card-status-badge {
-  font-size: 0.75rem;
-  font-weight: 700;
-  padding: 2px 8px;
-  border-radius: 4px;
-  text-transform: uppercase;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  margin-right: 8px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
-.card-status-badge i {
+.card-status-badge.pending-review {
+  background: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #dbeafe;
   font-size: 0.5rem;
 }
 
@@ -2389,13 +2577,217 @@ export default {
 /* Pending Button */
 .btn-review.pending {
   background: #f3f4f6 !important;
-  color: #9ca3af !important;
+  color: #6b7280 !important;
   border: 1px solid #e5e7eb !important;
   cursor: not-allowed;
+}
+
+.field-change-alert {
+  margin-top: 4px;
+  padding: 6px 10px;
+  background: #fffbeb;
+  border-left: 3px solid #d97706;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  color: #92400e;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  animation: slideIn 0.3s ease-out;
+}
+
+.field-change-alert i {
+  color: #d97706;
+}
+
+.field-change-alert span {
+  font-weight: 600;
+  text-decoration: line-through;
   opacity: 0.8;
+  margin-left: 4px;
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(-5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.impact-buttons.disabled {
+  opacity: 0.8;
+  pointer-events: none;
 }
 
 .btn-review.pending i {
   margin-right: 6px;
+}
+
+/* Success Modal Styles */
+.success-popup .success-modal-content {
+  background: white;
+  border-radius: 20px;
+  padding: 40px;
+  width: 100%;
+  max-width: 400px;
+  text-align: center;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+  animation: modalScale 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  z-index: 10001;
+  position: relative;
+}
+
+@keyframes modalScale {
+  from { transform: scale(0.8); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.success-icon {
+  width: 80px;
+  height: 80px;
+  background: #f0fdf4;
+  color: #22c55e;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 40px;
+  margin: 0 auto 24px;
+}
+
+.success-popup h3 {
+  margin: 0 0 12px;
+  font-size: 24px;
+  color: #1a202c;
+}
+
+.success-popup p {
+  margin: 0 0 30px;
+  color: #4a5568;
+  line-height: 1.5;
+}
+
+.success-popup.modal-backdrop {
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Source Drawer Enhancements */
+.source-header-main {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: 12px;
+  margin-bottom: 24px;
+}
+
+.source-icon {
+  width: 48px;
+  height: 48px;
+  background: white;
+  color: #6366f1;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.source-title-group {
+  flex: 1;
+}
+
+.source-drawer-title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #1e293b;
+  line-height: 1.4;
+}
+
+.source-drawer-type {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.source-link-box {
+  background: #f1f5f9;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px dashed #cbd5e1;
+}
+
+.source-url {
+  color: #3b82f6;
+  text-decoration: none;
+  font-size: 0.85rem;
+  word-break: break-all;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.source-url:hover {
+  text-decoration: underline;
+}
+
+.source-metadata-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 20px 0;
+}
+
+.source-reasoning-box {
+  background: #fdf2f8;
+  padding: 16px;
+  border-radius: 8px;
+  border-left: 4px solid #db2777;
+  font-size: 0.9rem;
+  color: #831843;
+  line-height: 1.6;
+}
+
+.drawer-loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: #64748b;
+}
+
+.drawer-loading-state i {
+  font-size: 2rem;
+  margin-bottom: 16px;
+  color: #6366f1;
+}
+
+.repo-hint {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.docs-meta {
+  margin: 4px 0 8px;
+  font-size: 12px;
+  color: #4b5563;
+}
+
+.doc-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>

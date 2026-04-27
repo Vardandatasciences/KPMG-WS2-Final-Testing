@@ -344,7 +344,8 @@
           </template>
 
           <div v-if="change.ai_analysis" class="cfm-mapping-analysis">
-            <i class="fas fa-info-circle"></i>
+            <i class="fas fa-robot" style="color: #6366f1;"></i>
+            <strong style="color: #4b5563; margin-right: 4px;">AI Justification:</strong>
             <span>{{ change.ai_analysis }}</span>
           </div>
         </div>
@@ -558,17 +559,20 @@ export default {
               
               return {
                 change_type: (change.change_type || 'modified').toUpperCase(),
-                control1_id: change.id,
+                identifier: change.identifier || localMeta.Identifier,
+                control1_id: change.v1_equivalent_id || change.id,
                 control1_title: change.title || localMeta.ComplianceTitle || change.id,
-                control1_description: localMeta.ComplianceItemDescription || '',
+                control1_description: change.control1_description || '',
                 framework1_name: this.framework1.framework_name,
                 
                 control2_id: change.id,
                 control2_title: change.title || localMeta.ComplianceTitle || change.id,
-                control2_description: localMeta.ComplianceItemDescription || '',
+                control2_description: change.control2_description || '',
                 framework2_name: this.framework2.framework_name,
                 
-                ai_analysis: change.semantic_diff || (change.change_type === 'unchanged' ? 'Identical requirements' : 'New requirement identified')
+                ai_analysis: change.ai_analysis || change.semantic_diff || (change.change_type === 'unchanged' ? 'Identical requirements' : 'New requirement identified'),
+                criticality: change.criticality || localMeta.Criticality,
+                mandatory: change.mandatory || localMeta.MandatoryOptional
               }
             })
             

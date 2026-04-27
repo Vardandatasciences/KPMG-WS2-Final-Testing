@@ -412,7 +412,9 @@ from .routes.Incident.system_risk_views import (
     send_system_risk_for_approval,
     approve_system_risk_workflow,
     reject_system_risk_workflow,
-    get_queue_stats
+    get_queue_stats,
+    list_risks_exceeding_threshold,
+    list_external_sources
 )
 from .routes.Incident.system_risk_schedule_api import (
     create_sys_risk_schedule,
@@ -2184,6 +2186,7 @@ incident_urlpatterns = [
     path('system-risks/run-test-analysis/<str:job_id>/status/', get_synthetic_risk_test_analysis_status, name='api-system-risks-run-test-analysis-status'),
     path('system-risks/run-test-analysis/<str:job_id>/cancel/', cancel_synthetic_risk_test_analysis, name='api-system-risks-run-test-analysis-cancel'),
     path('system-risks/', list_system_risk_queue, name='api-system-risks-list'),
+    path('system-risks/external-sources/', list_external_sources, name='api-system-risks-external-sources'),
     path('system-risks/stats/', get_queue_stats, name='api-system-risks-stats'),
     path('system-risks/<int:risk_id>/', get_system_risk_detail, name='api-system-risks-detail'),
     path('system-risks/<int:risk_id>/review/', update_system_risk_review, name='api-system-risks-review'),
@@ -2192,6 +2195,7 @@ incident_urlpatterns = [
     path('system-risks/<int:risk_id>/send-for-approval/', send_system_risk_for_approval, name='api-system-risks-send-for-approval'),
     path('system-risks/workflow/<int:risk_instance_id>/approve/', approve_system_risk_workflow, name='api-system-risks-workflow-approve'),
     path('system-risks/workflow/<int:risk_instance_id>/reject/', reject_system_risk_workflow, name='api-system-risks-workflow-reject'),
+    path('system-risks/threshold-exceeded/', list_risks_exceeding_threshold, name='api-system-risks-threshold-exceeded'),
 
     # System Risk Scheduling
     path('system-risks/schedules/', list_sys_risk_schedules, name='api-system-risks-schedules'),

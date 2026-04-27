@@ -1628,7 +1628,7 @@ export default {
         riskArray.forEach(risk => {
           // Ensure Origin field exists
           if (!risk.Origin || risk.Origin === null) {
-            risk.Origin = 'MANUAL';
+            risk.Origin = 'EVENT';
           }
           
           // Use RiskTitle as fallback if RiskDescription is missing (shouldn't happen after filter, but just in case)
@@ -1714,7 +1714,7 @@ export default {
         taskArray.forEach(task => {
           // Ensure Origin field exists
           if (!task.Origin || task.Origin === null) {
-            task.Origin = 'MANUAL';
+            task.Origin = 'EVENT';
           }
           
           // Use RiskTitle as fallback if RiskDescription is missing (shouldn't happen after filter, but just in case)

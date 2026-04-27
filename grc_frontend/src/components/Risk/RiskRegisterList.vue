@@ -159,7 +159,8 @@
           {{ row.RiskTitle }}
           <span v-if="isNewRisk(row)" class="risk-register-new-badge">NEW</span>
           <span v-if="row.Origin === 'SYSTEM-AI'" class="risk-register-ai-badge">
-            <i class="fas fa-magic"></i> AI
+            <i class="fas fa-robot" aria-hidden="true"></i>
+            <span>AI</span>
           </span>
         </div>
       </template>

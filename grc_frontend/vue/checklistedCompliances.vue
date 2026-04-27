@@ -250,6 +250,10 @@
               <p v-if="compliance.subpolicy.identifier"><strong>Identifier:</strong> {{ compliance.subpolicy.identifier }}</p>
               <p v-if="compliance.subpolicy.description"><strong>Description:</strong> {{ compliance.subpolicy.description }}</p>
             </div>
+            <div v-if="compliance.reason || compliance.ai_analysis" class="CC_detail-section CC_ai-rationale">
+              <h6>AI Justification</h6>
+              <p>{{ compliance.reason || compliance.ai_analysis }}</p>
+            </div>
             <div class="CC_detail-section">
               <h6>Compliance</h6>
               <p><strong>Title:</strong> {{ compliance.compliance.title || 'N/A' }}</p>
@@ -923,6 +927,25 @@ export default {
     width: 100%;
     justify-content: flex-start;
   }
+}
+
+.CC_ai-rationale {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, rgba(59, 130, 246, 0.05) 100%) !important;
+  border: 1px solid rgba(99, 102, 241, 0.2) !important;
+  margin-top: 8px;
+}
+
+.CC_ai-rationale h6 {
+  color: #4f46e5 !important;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.CC_ai-rationale h6::before {
+  content: '\f544';
+  font-family: 'Font Awesome 5 Free';
+  font-weight: 900;
 }
 </style>
 
