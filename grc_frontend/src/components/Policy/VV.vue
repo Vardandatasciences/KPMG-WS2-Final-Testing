@@ -3176,19 +3176,25 @@ name: 'VV',
       this.error = null // Clear any previous errors
       
       console.log('=== Fetching frameworks...')
-      const response = await apiService.get(API_ENDPOINTS.FRAMEWORKS)
-      console.log('Raw framework response:', response)
+      // Align with Create Policy source so both pages show same framework set.
+      const response = await apiService.get(API_ENDPOINTS.FRAMEWORK_EXPLORER, {
+        params: { active_only: 'true' }
+      })
+      console.log('Raw framework response (framework_explorer):', response)
+      const frameworksData = Array.isArray(response)
+        ? response
+        : (Array.isArray(response?.frameworks) ? response.frameworks : [])
       
       // Map frameworks
-      this.frameworks = response.map(fw => ({ 
-        id: fw.FrameworkId, 
-        name: fw.FrameworkName,
-        description: fw.FrameworkDescription,
-        category: fw.Category,
-        internalExternal: fw.InternalExternal,
-        startDate: fw.StartDate,
-        endDate: fw.EndDate,
-        status: fw.Status
+      this.frameworks = frameworksData.map(fw => ({ 
+        id: fw.FrameworkId ?? fw.id, 
+        name: fw.FrameworkName ?? fw.name,
+        description: fw.FrameworkDescription ?? fw.description,
+        category: fw.Category ?? fw.category,
+        internalExternal: fw.InternalExternal ?? fw.internalExternal,
+        startDate: fw.StartDate ?? fw.startDate,
+        endDate: fw.EndDate ?? fw.endDate,
+        status: fw.Status ?? fw.status
       }))
 
       console.log('Mapped frameworks:', this.frameworks)

@@ -847,13 +847,15 @@ export default {
     }
 
     // Update all charts with current filters
-    const updateAllCharts = async () => {
+    const updateAllCharts = async (silent = false) => {
       try {
         console.log('🔄 DEBUG: Starting to update all charts...')
         console.log('🔍 DEBUG: Current framework:', selectedFramework.value)
         console.log('🔍 DEBUG: Current policy:', selectedPolicy.value)
         
-      isLoading.value = true
+      if (!silent) {
+        isLoading.value = true
+      }
       
         // Update Category Chart
         console.log('📊 DEBUG: Updating category chart...')
@@ -885,7 +887,9 @@ export default {
         console.error('❌ DEBUG: Error updating charts:', err)
         error.value = 'Failed to update charts'
       } finally {
-        isLoading.value = false
+        if (!silent) {
+          isLoading.value = false
+        }
       }
     }
 
@@ -1184,7 +1188,7 @@ export default {
           if (piniaData.completedAuditsData) Object.assign(completedAuditsData, piniaData.completedAuditsData)
           isLoading.value = false
           // Background: charts + activities + silent revalidation
-          updateAllCharts()
+          updateAllCharts(true)
           fetchRecentActivities()
           if (!dashboardsStore.isFresh('audit')) {
             Promise.all([fetchAuditCompletionRate(), fetchTotalAudits(), fetchOpenAudits(), fetchCompletedAudits()])
@@ -1221,7 +1225,7 @@ export default {
         dashboardsStore.set('audit', _auditKpiSnapshot())
         appDataStore.setAuditSummary(_auditKpiSnapshot())
         // BACKGROUND: charts + activities (non-blocking)
-        updateAllCharts()
+        updateAllCharts(true)
         fetchRecentActivities().then(() => saveSnapshot())
       } catch (error) {
         console.error('Error refreshing dashboard data:', error)
@@ -1272,7 +1276,7 @@ export default {
         isLoading.value = false
         dataSourceBadge.value = 'Loaded from Pinia (fast)'
         dashboardsStore.set('audit', _auditKpiSnapshot())
-        updateAllCharts()
+        updateAllCharts(true)
         fetchRecentActivities()
         const fwLoaded = await fetchFrameworks()
         if (fwLoaded) await checkSelectedFrameworkFromSession()
