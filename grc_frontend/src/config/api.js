@@ -2,7 +2,7 @@
 // Change this variable to switch between different environments
 
 // Environment Configuration
-const ENVIRONMENT = 'development';
+const ENVIRONMENT = 'aws';
 // Options: 'aws', 'local', 'development'
 
 // API Base URLs for different environments
@@ -10,7 +10,7 @@ const ENVIRONMENT = 'development';
 // and avoid CORS + "Network Error" when backend is at http://127.0.0.1:8000
 const API_URLS = {
   // AWS: Use domain without port - nginx proxies /api/ to localhost:8000/api/
-  aws: 'https://riskavaire.vardaands.com',
+  aws: 'https://grc-riskavaire.vardaands.com',
   local: '',
   development: 'http://localhost:8000'
 };
