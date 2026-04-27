@@ -3,7 +3,7 @@ import { getParentPostMessageTargetOrigin } from '@/utils/parentPostMessageOrigi
 // Change this variable to switch between different environments
 
 // Environment Configuration
-const ENVIRONMENT = 'aws';
+const ENVIRONMENT = 'development';
 // Options: 'aws', 'local', 'development'
 
 // API Base URLs for different environments

@@ -9,12 +9,15 @@
 import { axiosInstance } from '@/config/api.js';
 import { API_ENDPOINTS } from '../config/api.js';
 
+/** Bumped when homepage payload shape changes so stale in-memory entries are not reused. */
+const HOMEPAGE_DATA_CACHE_PREFIX = 'hp6';
+
 class HomepageService {
   constructor() {
     // Centralized data store
     this.dataStore = {
       approvedFrameworks: [],
-      homepageDataByFramework: {}, // { frameworkId: homepageData } or 'all': homepageData
+      homepageDataByFramework: {}, // keys: hp4:single:<id> | hp4:aggregate:all
       
       // Module metrics cache (for fallback endpoints)
       policyMetrics: null,
@@ -31,9 +34,31 @@ class HomepageService {
       isFetching: false,
       fetchError: null
     };
+    // Track in-flight homepage requests by cache key to prevent duplicate API calls.
+    this.inFlightHomepageRequests = {};
+    this.inFlightAllFrameworksRequest = null;
     
     // Cache validity duration (5 minutes)
     this.CACHE_VALIDITY_MS = 5 * 60 * 1000;
+  }
+
+  /** GET /api/homepage?frameworkId=… — never collides with aggregate all-frameworks payload */
+  _homepageSingleCacheKey(frameworkId) {
+    const seg =
+      frameworkId === null || frameworkId === undefined || frameworkId === ''
+        ? 'default'
+        : String(frameworkId);
+    return `${HOMEPAGE_DATA_CACHE_PREFIX}:single:${seg}`;
+  }
+
+  /** GET /api/homepage/all-frameworks — separate from single-framework cache */
+  _homepageAggregateCacheKey() {
+    return `${HOMEPAGE_DATA_CACHE_PREFIX}:aggregate:all`;
+  }
+
+  _resolveHomepageCacheKey(frameworkId) {
+    const useAggregate = !frameworkId || frameworkId === 'all';
+    return useAggregate ? this._homepageAggregateCacheKey() : this._homepageSingleCacheKey(frameworkId);
   }
 
   /**
@@ -98,6 +123,15 @@ class HomepageService {
    * @returns {Promise} Homepage data including policies, metrics, etc.
    */
   async getHomeContent(frameworkId = null) {
+    const cacheKey = this._homepageSingleCacheKey(frameworkId);
+    if (this.dataStore.homepageDataByFramework[cacheKey]) {
+      return this.dataStore.homepageDataByFramework[cacheKey];
+    }
+    if (this.inFlightHomepageRequests[cacheKey]) {
+      return this.inFlightHomepageRequests[cacheKey];
+    }
+
+    this.inFlightHomepageRequests[cacheKey] = (async () => {
     try {
       console.log('');
       console.log('🌐 ================================================');
@@ -120,13 +154,17 @@ class HomepageService {
       console.log('🌐 RESPONSE RECEIVED');
       console.log('🌐 ================================================');
       console.log('📊 Status:', response.status);
-      console.log('📊 Status Text:', response.statusText);
-      console.log('📊 Response data:', response.data);
+      console.log('📊 Response summary (single fw):', {
+        success: response.data?.success,
+        frameworkName: response.data?.framework?.name,
+        hasPreviewMetrics: !!response.data?.hero?.previewMetrics,
+        moduleMetricKeys: response.data?.moduleMetrics ? Object.keys(response.data.moduleMetrics) : [],
+        appliedPolicies: response.data?.policies?.applied?.count,
+      });
       console.log('🌐 ================================================');
       console.log('');
       
       // Cache the response by framework ID
-      const cacheKey = frameworkId ? frameworkId : 'all';
       if (response.data && response.data.success) {
         this.dataStore.homepageDataByFramework[cacheKey] = response.data;
       }
@@ -145,7 +183,12 @@ class HomepageService {
       console.log('🌐 ================================================');
       console.log('');
       throw error;
+    } finally {
+      delete this.inFlightHomepageRequests[cacheKey];
     }
+    })();
+
+    return this.inFlightHomepageRequests[cacheKey];
   }
 
   /**
@@ -153,6 +196,15 @@ class HomepageService {
    * @returns {Promise} Aggregated data for all frameworks
    */
   async getAllFrameworksData() {
+    const allKey = this._homepageAggregateCacheKey();
+    if (this.dataStore.homepageDataByFramework[allKey]) {
+      return this.dataStore.homepageDataByFramework[allKey];
+    }
+    if (this.inFlightAllFrameworksRequest) {
+      return this.inFlightAllFrameworksRequest;
+    }
+
+    this.inFlightAllFrameworksRequest = (async () => {
     try {
       console.log('');
       console.log('🌐 ================================================');
@@ -174,8 +226,15 @@ class HomepageService {
       console.log('🌐 ALL FRAMEWORKS RESPONSE RECEIVED');
       console.log('🌐 ================================================');
       console.log('📊 Status:', response.status);
-      console.log('📊 Status Text:', response.statusText);
-      console.log('📊 Response data:', JSON.stringify(response.data, null, 2));
+      console.log('📊 Response summary (all-fw):', {
+        success: response.data?.success,
+        frameworksCount: response.data?.frameworks?.length ?? 0,
+        moduleMetricKeys: response.data?.moduleMetrics ? Object.keys(response.data.moduleMetrics) : [],
+        appliedPolicies: response.data?.policies?.applied?.count,
+        heroStats: response.data?.hero?.stats
+          ? Object.fromEntries(['totalPoliciesAll','activePolicies','totalCompliancesAll','activeCompliances','totalRisks','totalIncidents'].map(k => [k, response.data.hero.stats[k]]))
+          : null,
+      });
       
       if (response.data?.frameworks) {
         console.log(`📊 Total Frameworks: ${response.data.frameworks.length}`);
@@ -226,7 +285,7 @@ class HomepageService {
       
       // Cache the all frameworks response
       if (response.data && response.data.success) {
-        this.dataStore.homepageDataByFramework['all'] = response.data;
+        this.dataStore.homepageDataByFramework[allKey] = response.data;
       }
       
       return response.data;
@@ -243,7 +302,12 @@ class HomepageService {
       console.log('🌐 ================================================');
       console.log('');
       throw error;
+    } finally {
+      this.inFlightAllFrameworksRequest = null;
     }
+    })();
+
+    return this.inFlightAllFrameworksRequest;
   }
 
   /**
@@ -302,7 +366,7 @@ class HomepageService {
    * @returns {boolean}
    */
   hasHomepageDataCache(frameworkId = null) {
-    const cacheKey = frameworkId ? frameworkId : 'all';
+    const cacheKey = this._resolveHomepageCacheKey(frameworkId);
     return !!this.dataStore.homepageDataByFramework[cacheKey];
   }
 
@@ -312,7 +376,7 @@ class HomepageService {
    * @returns {any|null} Cached homepage data
    */
   getHomepageData(frameworkId = null) {
-    const cacheKey = frameworkId ? frameworkId : 'all';
+    const cacheKey = this._resolveHomepageCacheKey(frameworkId);
     return this.dataStore.homepageDataByFramework[cacheKey] || null;
   }
 
@@ -420,7 +484,7 @@ class HomepageService {
    * @param {number|null|string} frameworkId - Framework ID or 'all'
    */
   clearHomepageDataCache(frameworkId = null) {
-    const cacheKey = frameworkId ? frameworkId : 'all';
+    const cacheKey = this._resolveHomepageCacheKey(frameworkId);
     delete this.dataStore.homepageDataByFramework[cacheKey];
     console.log(`[Homepage Service] Cleared homepage data cache for framework: ${cacheKey}`);
   }

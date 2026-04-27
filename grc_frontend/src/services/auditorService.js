@@ -25,7 +25,8 @@ class AuditorService {
   /**
    * Fetch all auditor data and cache it
    */
-  async fetchAllAuditorData() {
+  async fetchAllAuditorData(options = {}) {
+    const { scope = 'my' } = options;
     if (this.dataStore.isFetching) {
       console.log('[Auditor Service] Already fetching, skipping duplicate request');
       return this.dataStore;
@@ -37,7 +38,7 @@ class AuditorService {
     try {
       // Fetch all auditor-related datasets
       await Promise.all([
-        this.fetchAudits(),
+        this.fetchAudits(scope),
         this.fetchBusinessUnits()
       ]);
 
@@ -60,22 +61,23 @@ class AuditorService {
   /**
    * Fetch audits from API
    */
-  async fetchAudits() {
+  async fetchAudits(scope = 'my') {
     try {
-      const data = await apiService.get(API_ENDPOINTS.AUDIT_MY_AUDITS, {}, { timeout: 60000 });
+      const endpoint = scope === 'all' ? '/api/audits/' : API_ENDPOINTS.AUDIT_MY_AUDITS;
+      const data = await apiService.get(endpoint, {}, { timeout: 60000 });
 
       // Handle both old and new response formats
       if (Array.isArray(data)) {
         this.dataStore.audits = data;
-      } else if (data?.success && Array.isArray(data?.audits)) {
+      } else if (Array.isArray(data?.audits)) {
         this.dataStore.audits = data.audits;
-      } else if (data?.success && Array.isArray(data?.data)) {
+      } else if (Array.isArray(data?.data)) {
         this.dataStore.audits = data.data;
       } else {
         this.dataStore.audits = [];
       }
 
-      console.log(`[Auditor Service] Fetched ${this.dataStore.audits.length} audits`);
+      console.log(`[Auditor Service] Fetched ${this.dataStore.audits.length} audits (scope: ${scope})`);
     } catch (error) {
       console.error('[Auditor Service] Error fetching audits:', error);
       this.dataStore.audits = [];

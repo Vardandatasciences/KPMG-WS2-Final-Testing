@@ -29,6 +29,25 @@ def sanitize_for_log(value: Any, max_len: int = 500) -> str:
     return text
 
 
+def _sanitize_log_arg(value: Any, max_len: int = 500) -> Any:
+    """
+    Sanitize only text-like log args and preserve numeric/bool types.
+
+    Preserving ints/floats avoids breaking logging format strings such as
+    "%d" used by third-party libraries (e.g., urllib3).
+    """
+    if isinstance(value, str):
+        return sanitize_for_log(value, max_len=max_len)
+    if isinstance(value, (bytes, bytearray)):
+        return sanitize_for_log(value, max_len=max_len)
+    if isinstance(value, dict):
+        return {k: _sanitize_log_arg(v, max_len=max_len) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        ctor = tuple if isinstance(value, tuple) else list
+        return ctor(_sanitize_log_arg(v, max_len=max_len) for v in value)
+    return value
+
+
 def mask_email_for_log(email: Any) -> str:
     """
     Mask email to avoid leaking full identifiers in logs.
@@ -74,11 +93,11 @@ class LogForgingFilter(logging.Filter):
             record.msg = sanitize_for_log(record.msg, max_len=2000)
             if record.args:
                 if isinstance(record.args, dict):
-                    record.args = {k: sanitize_for_log(v, max_len=500) for k, v in record.args.items()}
+                    record.args = {k: _sanitize_log_arg(v, max_len=500) for k, v in record.args.items()}
                 elif isinstance(record.args, tuple):
-                    record.args = tuple(sanitize_for_log(v, max_len=500) for v in record.args)
+                    record.args = tuple(_sanitize_log_arg(v, max_len=500) for v in record.args)
                 else:
-                    record.args = sanitize_for_log(record.args, max_len=500)
+                    record.args = _sanitize_log_arg(record.args, max_len=500)
         except Exception:
             # Never block logging due to sanitization errors.
             return True

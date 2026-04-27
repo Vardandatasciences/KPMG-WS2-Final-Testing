@@ -6,6 +6,9 @@
         <div class="frameworks-container">
           <div class="frameworks-header" data-aos="fade-right">
             <h3 class="frameworks-title">Select Framework</h3>
+            <span class="data-source-badge" :class="`source-${homeDataSourceKey}`">
+              Data Source: {{ homeDataSourceLabel }}
+            </span>
           </div>
           <div class="framework-dropdown-wrapper" data-aos="fade-up">
             <select 
@@ -79,11 +82,16 @@
                   <div class="compliance-progress-section">
                     <div class="progress-header">
                       <h3>{{ previewCard.title }}</h3>
-                      <div class="progress-percentage">{{ previewCard.percentage }} Complete</div>
+                      <div class="progress-percentage">
+                        {{ previewCard.loaded ? `${previewCard.percentage} Complete` : 'Loading…' }}
+                      </div>
                     </div>
                     <div class="progress-bar-container">
                       <div class="progress-bar">
-                        <div class="progress-fill" :style="{ width: previewCard.percentage }"></div>
+                        <div
+                          class="progress-fill"
+                          :style="{ width: previewCard.loaded ? previewCard.percentage : '0%' }"
+                        ></div>
                       </div>
                       <!-- <div class="progress-labels">
                         <span>0%</span>
@@ -176,17 +184,17 @@
               </div>
             </div>
             <div class="chart-legend">
-              <div class="legend-item" @click="showLegendPopup('applied', $event)">
+              <div class="legend-item">
                 <div class="legend-color applied"></div>
-                <span>Applied ({{ policyData.applied.percentage }}%)</span>
+                <span>Implemented ({{ complianceProgressBreakdown.implementedPct }}%)</span>
               </div>
-              <div class="legend-item" @click="showLegendPopup('in_progress', $event)">
+              <div class="legend-item">
                 <div class="legend-color in-progress"></div>
-                <span>In Progress ({{ policyData.in_progress.percentage }}%)</span>
+                <span>Under Review ({{ complianceProgressBreakdown.underReviewPct }}%)</span>
               </div>
-              <div class="legend-item" @click="showLegendPopup('rejected', $event)">
+              <div class="legend-item">
                 <div class="legend-color rejected"></div>
-                <span>Rejected ({{ policyData.rejected.percentage }}%)</span>
+                <span>Remaining ({{ complianceProgressBreakdown.remainingPct }}%)</span>
               </div>
             </div>
           </div>
@@ -531,7 +539,7 @@
         <div class="section-header" data-aos="fade-up">
           <h2 class="section-title">{{ currentFrameworkContent.frameworkName }} Control Domains</h2>
             <p class="section-description">
-            <span v-if="selectedFrameworkId === 'all'">
+            <span v-if="isAllFrameworksSelected">
               Overall compliance percentage across all frameworks.
             </span>
             <span v-else>
@@ -541,7 +549,7 @@
         </div>
 
         <!-- All Frameworks View: Show Framework Cards -->
-        <div v-if="selectedFrameworkId === 'all' && allFrameworksList.length > 0" class="frameworks-cards">
+        <div v-if="isAllFrameworksSelected && allFrameworksList.length > 0" class="frameworks-cards">
           <div 
             v-for="(framework, index) in allFrameworksList" 
             :key="framework.id"
@@ -584,7 +592,7 @@
         </div>
         
         <!-- All Frameworks View: Show Percentage Only if no frameworks available -->
-        <div v-else-if="selectedFrameworkId === 'all' && allFrameworksCompliancePercentage !== null" class="all-frameworks-compliance">
+        <div v-else-if="isAllFrameworksSelected && allFrameworksCompliancePercentage !== null" class="all-frameworks-compliance">
           <div class="compliance-summary-card">
             <div class="compliance-summary-header">
               <h3 class="compliance-summary-title">Overall Compliance</h3>
@@ -1249,22 +1257,16 @@
 <script setup>
 import { Doughnut } from 'vue-chartjs';
 import { Chart as ChartJS, Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale, PointElement, LineElement, ArcElement } from 'chart.js';
-import { ref, onMounted, onUnmounted, computed, watch } from 'vue';
+import { ref, onMounted, onUnmounted, onActivated, onDeactivated, computed, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import { useStore } from 'vuex';
+import { useAppDataStore } from '@/stores/appData';
+import { useFrameworkStore } from '@/stores/framework';
+import { useHomepageStore } from '@/stores/homepage';
 import AOS from 'aos';
 import 'aos/dist/aos.css';
 import dashboardService from '@/services/dashboardService';
 import { complianceService } from '@/services/api';
 import homepageDataService from '@/services/homepageService'; // NEW: Centralized homepage data service (updated to class-based)
-import riskDataService from '@/services/riskService'; // NEW: Centralized risk data service
-import complianceDataService from '@/services/complianceService'; // NEW: Centralized compliance data service
-import auditorDataService from '@/services/auditorService'; // NEW: Centralized auditor data service
-import eventDataService from '@/services/eventService'; // NEW: Centralized event data service
-import policyDataService from '@/services/policyService'; // NEW: Centralized policy data service
-import treeDataService from '@/services/treeService'; // NEW: Centralized tree data service
-import documentDataService from '@/services/documentService'; // NEW: Centralized document data service
-import integrationsDataService from '@/services/integrationsService'; // NEW: Centralized integrations data service
 import axios from 'axios';
 import { API_ENDPOINTS, AUTO_CHECK_FRAMEWORKS } from '@/config/api.js';
 import { getFrameworkContent } from '@/config/frameworkContent.js';
@@ -1272,8 +1274,12 @@ import { getFrameworkContent } from '@/config/frameworkContent.js';
 ChartJS.register(Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale, PointElement, LineElement, ArcElement);
 
 const router = useRouter();
-const store = useStore();
+const appDataStore = useAppDataStore();
+const frameworkStore = useFrameworkStore();
+const homepageStore = useHomepageStore();
 const user = ref(null);
+const HOME_BACKGROUND_REFRESH_INTERVAL_MS = 45000; // 45s (between 30s and 1min)
+let homeBackgroundRefreshTimer = null;
 
 const SIDEBAR_OFFSET = 240;
 const SIDEBAR_OFFSET_ALL = 200;
@@ -1282,6 +1288,31 @@ const windowWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1440
 const isAllFrameworksSelected = computed(() => {
   return !selectedFrameworkId.value || selectedFrameworkId.value === 'all';
 });
+
+const isUserAuthenticatedForHomeRefresh = () => {
+  const userId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id');
+  const isLoggedIn = (sessionStorage.getItem('is_logged_in') || localStorage.getItem('is_logged_in')) === 'true';
+  const hasAuthFlag = (sessionStorage.getItem('isAuthenticated') || localStorage.getItem('isAuthenticated')) === 'true';
+  return !!(userId && (isLoggedIn || hasAuthFlag));
+};
+
+const stopHomeAutoRefresh = () => {
+  if (homeBackgroundRefreshTimer) {
+    clearInterval(homeBackgroundRefreshTimer);
+    homeBackgroundRefreshTimer = null;
+  }
+};
+
+const startHomeAutoRefresh = () => {
+  stopHomeAutoRefresh();
+  if (!isUserAuthenticatedForHomeRefresh()) return;
+
+  homeBackgroundRefreshTimer = setInterval(() => {
+    fetchAllDashboardMetrics().catch((e) => {
+      console.warn('[HomeView] periodic background refresh error:', e);
+    });
+  }, HOME_BACKGROUND_REFRESH_INTERVAL_MS);
+};
 
 const homeContainerStyle = computed(() => {
   if (windowWidth.value <= 1024) {
@@ -1361,18 +1392,41 @@ const handleResize = () => {
 };
 
 
+// ── Stale-while-revalidate: pre-populate from cache so re-visits are instant ──
+// These are synchronous reads; no API calls happen here.
+const _initFrameworkId = frameworkStore.selectedFrameworkId || null;
+const _initCacheKey = _initFrameworkId && _initFrameworkId !== 'all' ? String(_initFrameworkId) : 'all';
+const _initHomepageData = homepageStore.getHomepageData(_initCacheKey);
+const _initFrameworks = homepageDataService.hasApprovedFrameworksCache()
+  ? (homepageDataService.getData('approvedFrameworks') || []).map(fw => ({ ...fw }))
+  : [];
+
 // Approved Frameworks
-const approvedFrameworks = ref([]);
-const selectedFrameworkId = ref(null);
+const approvedFrameworks = ref(_initFrameworks);
+const selectedFrameworkId = ref(_initFrameworkId);
 
 const hasTriggeredAutoCheck = ref(false);
 
 // Homepage data from API
-const homepageData = ref(null);
+const homepageData = ref(_initHomepageData);
+const homeDataSource = ref(_initHomepageData ? 'pinia-cache' : 'unknown');
+const homeDataSourceKey = computed(() => homeDataSource.value || 'unknown');
+const homeDataSourceLabel = computed(() => {
+  const labels = {
+    'pinia-fresh': 'Loaded from Pinia (fast)',
+    'pinia-cache': 'Loaded from Pinia (fast)',
+    'service-cache': 'Service Cache',
+    'unified-api': 'Refreshed from API (latest)',
+    'unified-api-retry': 'Refreshed from API (latest)',
+    'fallback-synth': 'Fallback Synthesized',
+    'unknown': 'Unknown',
+  };
+  return labels[homeDataSource.value] || homeDataSource.value;
+});
 
 // Cached risks data and summary
-const risksData = ref([]);
-const riskCount = ref(0);
+const risksData = ref(appDataStore.risks.length ? appDataStore.risks : []);
+const riskCount = ref(appDataStore.risks.length || 0);
 // Current framework content (computed based on selected framework)
 const currentFrameworkContent = computed(() => {
   console.log('🔄 currentFrameworkContent computed - selectedFrameworkId:', selectedFrameworkId.value);
@@ -1403,181 +1457,200 @@ const currentFrameworkContent = computed(() => {
   return getFrameworkContent(frameworkName);
 });
 
-// Hero statistics - Always use dynamic API data, never fallback to static
+// Hero statistics — prefer hero.previewMetrics (same DB payload as implementation card) when present
 const heroStats = computed(() => {
-  // Only use dynamic homepage data - no fallback to static content
   if (!homepageData.value?.hero?.stats) {
-    // Return empty array if no data available yet (will show loading/empty state)
     return [];
   }
-  
+
   const stats = homepageData.value.hero.stats;
-  
-  // Handle "All Frameworks" case
-  if (selectedFrameworkId.value === 'all') {
-    // Calculate overall compliance percentage
-    const totalCompliances = stats.totalCompliancesAll || stats.totalCompliances || 0;
-    const compliantCompliances = stats.compliantCompliances || 0;
-    const compliancePercentage = totalCompliances > 0 
-      ? Math.round((compliantCompliances / totalCompliances) * 100) 
-      : 0;
-    
-    // Get aggregated counts
-    const policiesCount = stats.totalPoliciesAll || stats.totalPolicies || stats.activePolicies || 0;
-    const controlsCount = stats.totalCompliancesAll || stats.totalCompliances || 0;
-    
+  const pm = homepageData.value.hero.previewMetrics;
+  const frameworkName =
+    homepageData.value?.framework?.name ||
+    currentFrameworkContent.value?.frameworkName ||
+    'Framework';
+
+  if (pm && homepageData.value?.success) {
+    const implPct = Math.max(
+      0,
+      Math.min(
+        100,
+        Math.round(Number(pm.implementationProgressPercent ?? pm.compliancePercentage ?? 0))
+      )
+    );
+    const policiesCount = Number(
+      pm.totalActivePoliciesCount ?? pm.policiesValue ?? 0
+    );
+    const controlsCount = Number(pm.totalControlsCount ?? stats.totalCompliancesAll ?? 0);
+
+    if (isAllFrameworksSelected.value) {
+      return [
+        { number: `${implPct}%`, label: 'Average Implementation' },
+        { number: `${policiesCount}`, label: 'Total Policies' },
+        { number: `${controlsCount}`, label: 'Total Controls' }
+      ];
+    }
+
     return [
-      { 
-        number: `${compliancePercentage}%`, 
-        label: 'Average Compliance' 
-      },
-      { 
-        number: `${policiesCount}`, 
-        label: 'Total Policies' 
-      },
-      { 
-        number: `${controlsCount}`, 
-        label: 'Total Controls' 
-      }
+      { number: `${implPct}%`, label: `${frameworkName} Implementation` },
+      { number: `${policiesCount}`, label: 'Security Policies' },
+      { number: `${controlsCount}`, label: 'Security Controls' }
     ];
   }
-  
-  // Handle specific framework case (or null/undefined selectedFrameworkId - use dynamic data anyway)
-  // Get framework name - prioritize from API response, then from currentFrameworkContent
-  const frameworkName = homepageData.value?.framework?.name || currentFrameworkContent.value?.frameworkName || 'Framework';
-  
-  // Calculate compliance percentage
+
+  if (isAllFrameworksSelected.value) {
+    const totalCompliances = stats.totalCompliancesAll || stats.totalCompliances || 0;
+    const compliantCompliances = stats.compliantCompliances || 0;
+    const compliancePercentage =
+      totalCompliances > 0
+        ? Math.round((compliantCompliances / totalCompliances) * 100)
+        : 0;
+    const policiesCount =
+      stats.totalPoliciesAll || stats.totalPolicies || stats.activePolicies || 0;
+    const controlsCount = stats.totalCompliancesAll || stats.totalCompliances || 0;
+    return [
+      { number: `${compliancePercentage}%`, label: 'Average Compliance' },
+      { number: `${policiesCount}`, label: 'Total Policies' },
+      { number: `${controlsCount}`, label: 'Total Controls' }
+    ];
+  }
+
   const totalCompliances = stats.totalCompliancesAll || stats.totalCompliances || 0;
   const compliantCompliances = stats.compliantCompliances || 0;
-  const compliancePercentage = totalCompliances > 0 
-    ? Math.round((compliantCompliances / totalCompliances) * 100) 
-    : 0;
-  
-  // Get policies count (prefer activePolicies, fallback to totalPoliciesAll)
-  const policiesCount = stats.activePolicies || stats.totalPoliciesAll || stats.totalPolicies || 0;
-  
-  // Get controls count
+  const compliancePercentage =
+    totalCompliances > 0
+      ? Math.round((compliantCompliances / totalCompliances) * 100)
+      : 0;
+  const policiesCount =
+    stats.activePolicies || stats.totalPoliciesAll || stats.totalPolicies || 0;
   const controlsCount = stats.totalCompliancesAll || stats.totalCompliances || 0;
-  
-  // Build dynamic stats array
   return [
-    { 
-      number: `${compliancePercentage}%`, 
-      label: `${frameworkName} Compliance` 
-    },
-    { 
-      number: `${policiesCount}`, 
-      label: 'Security Policies' 
-    },
-    { 
-      number: `${controlsCount}`, 
-      label: 'Security Controls' 
-    }
+    { number: `${compliancePercentage}%`, label: `${frameworkName} Compliance` },
+    { number: `${policiesCount}`, label: 'Security Policies' },
+    { number: `${controlsCount}`, label: 'Security Controls' }
   ];
 });
 
-// Preview card data - Always use dynamic API data, never fallback to static
+// Preview card — values only from hero.previewMetrics (API / DB); placeholders until load completes
 const previewCard = computed(() => {
-  // Get framework name - prioritize from API response, then from currentFrameworkContent
-  let frameworkName = homepageData.value?.framework?.name || currentFrameworkContent.value?.frameworkName || 'Framework';
-  
-  // Only use dynamic homepage data - no fallback to static content
-  if (!homepageData.value?.hero?.previewMetrics) {
-    // Return empty/default values if no data available yet
-    return {
-      title: `${frameworkName} Implementation Progress`,
-      percentage: '0%',
-      remainingControls: '0%',
-      nextAudit: 'TBD',
-      policiesLabel: 'Security Policies',
-      policiesValue: '0 Total'
-    };
+  const frameworkName =
+    homepageData.value?.framework?.name ||
+    currentFrameworkContent.value?.frameworkName ||
+    'Framework';
+
+  const base = {
+    loaded: false,
+    title: `${frameworkName} Implementation Progress`,
+    percentage: '—',
+    remainingControls: '—',
+    nextAudit: '—',
+    policiesLabel: 'Security Policies',
+    policiesValue: '—'
+  };
+
+  if (!homepageData.value?.success || !homepageData.value?.hero?.previewMetrics) {
+    return base;
   }
-  
-  const previewMetricsData = homepageData.value.hero.previewMetrics;
+
+  const pm = homepageData.value.hero.previewMetrics;
   const stats = homepageData.value.hero.stats;
-  
-  // Use compliance percentage from previewMetrics if available, otherwise calculate from stats
-  const compliancePercentage = previewMetricsData.compliancePercentage !== undefined
-    ? Math.round(previewMetricsData.compliancePercentage)
-    : (() => {
-        const totalCompliances = stats.totalCompliancesAll || stats.totalCompliances || 0;
-        const compliantCompliances = stats.compliantCompliances || 0;
-        return totalCompliances > 0 
-          ? Math.round((compliantCompliances / totalCompliances) * 100) 
-          : 0;
-      })();
-  
-  // Calculate remaining controls percentage
-  // Backend returns remainingControls as count, so calculate percentage
-  const totalCompliances = stats.totalCompliancesAll || stats.totalCompliances || 0;
-  const remainingControlsCount = previewMetricsData.remainingControls !== undefined
-    ? previewMetricsData.remainingControls
-    : (totalCompliances - (stats.compliantCompliances || 0));
-  const remainingControlsPercentage = totalCompliances > 0 
-    ? Math.round((remainingControlsCount / totalCompliances) * 100) 
-    : 0;
-  
-  // Format next audit date
-  let nextAuditDisplay = 'TBD';
-  if (previewMetricsData.nextAudit) {
+  // Same HTTP response: total may only exist on stats when previewMetrics was cached from an older shape
+  const totalControls = Number(
+    pm.totalControlsCount ?? stats?.totalCompliancesAll ?? stats?.totalCompliances ?? 0
+  );
+  const remainingCount = Number(
+    pm.remainingControlsCount ?? pm.remainingControls ?? 0
+  );
+  // Always derive % from counts so we never show 0% when count/total disagree (e.g. stale preview fields)
+  const remainingPct =
+    totalControls > 0 && remainingCount >= 0
+      ? Math.round((remainingCount / totalControls) * 100)
+      : 0;
+
+  const implPct = Math.max(
+    0,
+    Math.min(
+      100,
+      Math.round(Number(pm.implementationProgressPercent ?? pm.compliancePercentage ?? 0))
+    )
+  );
+
+  let nextAuditDisplay = 'No upcoming audits';
+  if (pm.nextAudit) {
     try {
-      const auditDate = new Date(previewMetricsData.nextAudit);
+      const auditDate = new Date(`${pm.nextAudit}T12:00:00`);
       const options = { year: 'numeric', month: 'short', day: 'numeric' };
       nextAuditDisplay = auditDate.toLocaleDateString('en-US', options);
-    } catch (e) {
-      nextAuditDisplay = previewMetricsData.nextAudit;
+    } catch {
+      nextAuditDisplay = String(pm.nextAudit);
     }
   }
-  
-  // Get policies count from previewMetrics or stats
-  const policiesCount = previewMetricsData.policiesValue !== undefined
-    ? previewMetricsData.policiesValue
-    : (stats.activePolicies || stats.totalPoliciesAll || stats.totalPolicies || 0);
-  
+
+  const policiesCount = Number(
+    pm.totalActivePoliciesCount ?? pm.policiesValue ?? 0
+  );
+  const policiesLabel = pm.policiesLabel || 'Security Policies';
+
   return {
+    loaded: true,
     title: `${frameworkName} Implementation Progress`,
-    percentage: `${compliancePercentage}%`,
-    remainingControls: `${remainingControlsPercentage}% (${frameworkName})`,
+    percentage: `${implPct}%`,
+    remainingControls: `${remainingPct}% · ${remainingCount} control(s) remaining`,
     nextAudit: nextAuditDisplay,
-    policiesLabel: 'Security Policies',
+    policiesLabel,
     policiesValue: `${policiesCount} Total`
   };
 });
 
-// Preview metrics for hero visual - Always use dynamic API data
+// Preview KPI row — same hero.previewMetrics payload as implementation card (DB-backed)
 const previewMetrics = computed(() => {
-  // Only use dynamic homepage data - no fallback to static content
-  if (!homepageData.value?.hero?.previewMetrics || !homepageData.value?.hero?.stats) {
-    // Return empty array if no data available yet
+  if (!homepageData.value?.success || !homepageData.value?.hero?.previewMetrics) {
     return [];
   }
-  
+
+  const pm = homepageData.value.hero.previewMetrics;
   const stats = homepageData.value.hero.stats;
-  
-  // Calculate compliance percentage
-  const totalCompliances = stats.totalCompliancesAll || stats.totalCompliances || 0;
-  const compliantCompliances = stats.compliantCompliances || 0;
-  const compliancePercentage = totalCompliances > 0 
-    ? Math.round((compliantCompliances / totalCompliances) * 100) 
-    : 0;
-  
-  // Get active policies count
-  const activePolicies = stats.activePolicies || stats.totalPoliciesAll || stats.totalPolicies || 0;
-  
-  // Calculate risk coverage (mitigated risks / total risks)
-  const totalRisks = stats.totalRisks || 0;
-  const mitigatedRisks = stats.mitigatedRisks || 0;
-  const riskCoveragePercentage = totalRisks > 0 
-    ? Math.round((mitigatedRisks / totalRisks) * 100) 
-    : 0;
-  
-  // Build dynamic metrics array
+
+  // "Overall Compliance" = implementation progress (% of controls that are active/approved).
+  // We prefer implementationProgressPercent from previewMetrics; fall back to computing it
+  // from hero stats so the value always matches the hero implementation card.
+  const implPct = Number(
+    pm.implementationProgressPercent ??
+    pm.compliancePercentage ??
+    0
+  );
+  const totalC = Number(
+    stats?.totalCompliancesAll ?? stats?.totalCompliances ?? pm.totalControlsCount ?? 0
+  );
+  const activeC = Number(
+    stats?.activeCompliances ?? pm.implementedControlsCount ?? 0
+  );
+  const auditPct = implPct > 0
+    ? implPct
+    : (totalC > 0 ? Math.round((activeC / totalC) * 100) : 0);
+
+  const activePolicies = Number(
+    pm.totalActivePoliciesCount ??
+      pm.policiesValue ??
+      stats?.totalPolicies ??
+      stats?.activePolicies ??
+      0
+  );
+
+  // "Risk Coverage" = % of compliance controls covered by the risk register
+  // (total risks / total compliance controls, capped at 100%).
+  // Prefer backend value; if stale cache returns 0, recompute from hero stats.
+  const totalR = Number(stats?.totalRisks ?? 0);
+  const backendRiskPct = Number(pm.riskCoveragePercent ?? 0);
+  const riskPct = backendRiskPct > 0
+    ? backendRiskPct
+    : (totalC > 0 ? Math.min(100, Math.round((totalR / totalC) * 100)) : 0);
+
   return [
     {
       title: 'Overall Compliance',
-      value: `${compliancePercentage}%`,
-      change: '+0%', // Could be calculated from historical data if available
+      value: `${auditPct}%`,
+      change: '+0%',
       trend: 'positive',
       color: 'green',
       type: 'shield'
@@ -1585,15 +1658,15 @@ const previewMetrics = computed(() => {
     {
       title: 'Active Policies',
       value: `${activePolicies}`,
-      change: '+0', // Could be calculated from historical data if available
+      change: '+0',
       trend: 'positive',
       color: 'blue',
       type: 'check'
     },
     {
       title: 'Risk Coverage',
-      value: `${riskCoveragePercentage}%`,
-      change: '+0%', // Could be calculated from historical data if available
+      value: `${riskPct}%`,
+      change: '+0%',
       trend: 'positive',
       color: 'orange',
       type: 'alert'
@@ -1662,7 +1735,7 @@ const controlDomainPolicies = computed(() => {
   console.log('📦 Homepage Data Available:', !!homepageData.value);
   
   // If all frameworks selected, return empty array (will show percentage instead)
-  if (selectedFrameworkId.value === 'all' || !homepageData.value) {
+  if (!selectedFrameworkId.value || selectedFrameworkId.value === 'all' || !homepageData.value) {
     console.log('⏭️ Skipping - All frameworks selected or no data');
     console.log('🎯 ========================================');
     console.log('');
@@ -1707,44 +1780,48 @@ const controlDomainPolicies = computed(() => {
 
 // Compliance percentage for all frameworks view
 const allFrameworksCompliancePercentage = computed(() => {
-  if (selectedFrameworkId.value !== 'all' || !homepageData.value) {
+  if (!isAllFrameworksSelected.value || !homepageData.value) {
     return null;
   }
-  
+
+  // Prefer implementationProgressPercent (active+approved controls %) from previewMetrics
+  const pm = homepageData.value?.hero?.previewMetrics;
+  if (pm?.implementationProgressPercent != null) {
+    return pm.implementationProgressPercent;
+  }
+
   const stats = homepageData.value?.hero?.stats;
   if (!stats) return null;
-  
-  const total = stats.totalCompliancesAll || 0;
-  const compliant = stats.compliantCompliances || 0;
-  
-  // Use compliant compliances (based on audit findings) instead of just active
-  return total > 0 ? Math.round((compliant / total) * 100) : 0;
+
+  const total = stats.totalCompliancesAll || stats.totalCompliances || 0;
+  const active = stats.activeCompliances || 0;
+  return total > 0 ? Math.round((active / total) * 100) : 0;
 });
 
 // All frameworks list for "All Frameworks" view
 const allFrameworksList = computed(() => {
-  if (selectedFrameworkId.value !== 'all' || !homepageData.value) {
+  if (!isAllFrameworksSelected.value || !homepageData.value) {
     return [];
   }
   
   const frameworks = homepageData.value?.frameworks || [];
   
-  // Calculate compliance percentage for each framework based on compliant controls (audited)
+  // Calculate compliance % per framework using active/approved compliances
+  // (consistent with the implementation progress shown in the hero card)
   return frameworks.map(framework => {
     const stats = framework.stats || {};
     const totalCompliances = stats.totalCompliancesAll || 0;
-    const compliantCompliances = stats.compliantCompliances || 0;
-    // Use compliant compliances (based on audit findings) instead of just active
-    const compliancePercentage = totalCompliances > 0 
-      ? Math.round((compliantCompliances / totalCompliances) * 100) 
+    const activeCompliances = stats.activeCompliances || 0;
+    const compliancePercentage = totalCompliances > 0
+      ? Math.round((activeCompliances / totalCompliances) * 100)
       : 0;
-    
+
     return {
       ...framework,
       compliancePercentage,
       totalCompliances,
-      compliantCompliances,
-      activeCompliances: stats.activeCompliances || 0
+      compliantCompliances: activeCompliances,
+      activeCompliances,
     };
   });
 });
@@ -2044,23 +2121,48 @@ const pillar3Disclosure = ref({
   dashArray: '55 125' // 88% of 125.6 circumference
 });
 
-// Chart data (now computed from policy data)
-const overallComplianceData = computed(() => {
-  const policies = policyData.value;
+// Compliance progress breakdown (controls-based, not policy-status based)
+const complianceProgressBreakdown = computed(() => {
+  const mm = homepageData.value?.moduleMetrics?.compliance || {};
+  const stats = homepageData.value?.hero?.stats || {};
+
+  const total = Number(
+    mm.totalCompliances ??
+    mm.totalFindings ??
+    stats.totalCompliancesAll ??
+    stats.totalCompliances ??
+    0
+  );
+  const implemented = Number(
+    mm.activeCompliances ??
+    stats.activeCompliances ??
+    homepageData.value?.hero?.previewMetrics?.implementedControlsCount ??
+    0
+  );
+  const underReview = Number(mm.underReview ?? 0);
+  const remaining = Math.max(0, total - implemented - underReview);
+
+  const pct = (n) => (total > 0 ? Math.round((n / total) * 100) : 0);
   return {
-    labels: ['Applied', 'In Progress', 'Rejected'],
+    total,
+    implemented,
+    underReview,
+    remaining,
+    implementedPct: pct(implemented),
+    underReviewPct: pct(underReview),
+    remainingPct: pct(remaining),
+  };
+});
+
+// Chart data (controls implementation progress)
+const overallComplianceData = computed(() => {
+  const c = complianceProgressBreakdown.value;
+  return {
+    labels: ['Implemented', 'Under Review', 'Remaining'],
     datasets: [
       {
-        data: [
-          Number(policies.applied?.percentage || 0),
-          Number(policies.in_progress?.percentage || 0),
-          Number(policies.rejected?.percentage || 0)
-        ],
-        backgroundColor: [
-          '#10b981', // Green for applied
-          '#f59e0b', // Orange for in progress
-          '#ef4444'  // Red for rejected
-        ],
+        data: [c.implementedPct, c.underReviewPct, c.remainingPct],
+        backgroundColor: ['#10b981', '#f59e0b', '#ef4444'],
         borderWidth: 0,
         cutout: '75%',
         hoverOffset: 4
@@ -2439,52 +2541,6 @@ const fetchAuditorMetrics = async () => {
   }
 };
 
-// Show popup for legend items
-const showLegendPopup = (status, event) => {
-  console.log('');
-  console.log('🎯 ================================================');
-  console.log('🎯 LEGEND CLICKED');
-  console.log('🎯 ================================================');
-  console.log('🎯 Status:', status);
-  console.log('🎯 Event:', event);
-  
-  const labels = ['Applied', 'In Progress', 'Rejected'];
-  const colors = ['#3b82f6', '#f59e0b', '#ef4444'];
-  const statusKeys = ['applied', 'in_progress', 'rejected'];
-  
-  const index = statusKeys.indexOf(status);
-  const data = policyData.value[status];
-  
-  console.log('📋 Clicked status:', status);
-  console.log('📋 Status index:', index);
-  console.log('📋 Status label:', labels[index]);
-  console.log('📋 Data for this status:', data);
-  console.log('📋 Policies count:', data?.policies?.length || 0);
-  console.log('📋 Policies array:', data?.policies);
-  
-  popupData.value = {
-    policies: data.policies || [],
-    title: labels[index],
-    color: colors[index],
-    percentage: data.percentage || 0
-  };
-
-  
-  
-  console.log('🎪 ================================================');
-  console.log('🎪 LEGEND POPUP DATA SET');
-  console.log('🎪 ================================================');
-  console.log('🎪 Title:', popupData.value.title);
-  console.log('🎪 Color:', popupData.value.color);
-  console.log('🎪 Percentage:', popupData.value.percentage);
-  console.log('🎪 Policies count:', popupData.value.policies.length);
-  console.log('🎪 Policies:', popupData.value.policies);
-  console.log('🎪 ================================================');
-  console.log('');
-  
-  showPolicyPopup.value = true;
-};
-
 // Get policy description based on policy name
 const getPolicyDescription = (policyName) => {
   const descriptions = {
@@ -2522,16 +2578,30 @@ const fetchDynamicHomepageData = async () => {
     console.log('🏠 Selected Framework ID:', selectedFrameworkId.value);
     
     let response;
-    
-    // Check cache first
-    const cacheKey = selectedFrameworkId.value === 'all' ? 'all' : selectedFrameworkId.value;
-    
-    if (homepageDataService.hasHomepageDataCache(cacheKey)) {
-      console.log(`🏠 [HomeView] Using cached homepage data for framework: ${cacheKey}`);
+    let sourceTag = 'unified-api';
+
+    // Pinia uses null for "all"; dropdown may use 'all'. Both must load aggregate endpoint + cache.
+    const isAllFrameworksView =
+      !selectedFrameworkId.value || selectedFrameworkId.value === 'all';
+    const cacheKey = isAllFrameworksView ? 'all' : String(selectedFrameworkId.value);
+
+    // ── Pinia cache check (fast path on re-visit) ────────────────────────
+    const piniaFresh = homepageStore.getFreshHomepageData(cacheKey);
+    const piniaAny = homepageStore.getHomepageData(cacheKey);
+    if (piniaFresh) {
+      console.log(`🏠 [Pinia] Serving homepage data from store cache (key="${cacheKey}", age=${homepageStore.cacheAgeSeconds(cacheKey)}s)`);
+      response = piniaFresh;
+      sourceTag = 'pinia-fresh';
+    } else if (piniaAny) {
+      console.log(`🏠 [Pinia] Serving homepage data from store cache (key="${cacheKey}", stale-but-valid)`); 
+      response = piniaAny;
+      sourceTag = 'pinia-cache';
+    } else if (homepageDataService.hasHomepageDataCache(cacheKey)) {
+      console.log(`🏠 [HomeView] Using in-memory service cache for framework: ${cacheKey}`);
       response = homepageDataService.getHomepageData(cacheKey);
+      sourceTag = 'service-cache';
     } else {
-      // If "All Frameworks" is selected, use getAllFrameworksData
-      if (selectedFrameworkId.value === 'all') {
+      if (isAllFrameworksView) {
         console.log('🏠 "All Frameworks" selected - calling getAllFrameworksData...');
         response = await homepageDataService.getAllFrameworksData();
       } else {
@@ -2550,7 +2620,21 @@ const fetchDynamicHomepageData = async () => {
     console.log('🏠 ========================================');
     console.log('🏠 API RESPONSE RECEIVED');
     console.log('🏠 ========================================');
-    console.log('📊 Full Response:', JSON.stringify(response, null, 2));
+    try {
+      const pol = response?.policies;
+      console.log('📊 Response summary:', {
+        success: response?.success,
+        frameworkName: response?.framework?.name,
+        hasHero: !!response?.hero,
+        hasPreviewMetrics: !!response?.hero?.previewMetrics,
+        moduleKeys: response?.moduleMetrics ? Object.keys(response.moduleMetrics) : [],
+        frameworksCount: response?.frameworks?.length ?? 0,
+        appliedPolicyCount: pol?.applied?.count,
+        appliedPolicyListLen: Array.isArray(pol?.applied?.policies) ? pol.applied.policies.length : 0,
+      });
+    } catch (logErr) {
+      console.warn('📊 Response summary log skipped:', logErr?.message);
+    }
     console.log('📊 Response.success:', response?.success);
     console.log('📊 Response.framework:', response?.framework);
     console.log('📊 Response.policies:', response?.policies);
@@ -2598,6 +2682,12 @@ const fetchDynamicHomepageData = async () => {
       
       // Store homepage data for use in control domains section and module dashboards
       homepageData.value = response;
+      homeDataSource.value = sourceTag;
+      if (isAllFrameworksView && (selectedFrameworkId.value === null || selectedFrameworkId.value === undefined)) {
+        selectedFrameworkId.value = 'all';
+      }
+      // Persist to Pinia so re-visits are instant
+      homepageStore.setHomepageData(cacheKey, response);
       console.log('📦 Stored homepage data in homepageData.value');
       console.log('📦 Module metrics stored:', response.moduleMetrics);
       
@@ -2758,7 +2848,11 @@ const fetchDynamicHomepageData = async () => {
       console.log('🔧 UPDATING MODULE METRICS FROM DATABASE');
       console.log('🔧 ========================================');
       console.log('📊 response.moduleMetrics exists:', !!response.moduleMetrics);
-      console.log('📊 response.moduleMetrics:', response.moduleMetrics ? JSON.stringify(response.moduleMetrics, null, 2) : 'undefined');
+      try {
+        console.log('📊 response.moduleMetrics:', response.moduleMetrics ? JSON.stringify(response.moduleMetrics) : 'undefined');
+      } catch (e) {
+        console.log('📊 response.moduleMetrics: (log skipped)');
+      }
       
       let metricsUpdated = false;
       
@@ -2856,17 +2950,25 @@ const fetchDynamicHomepageData = async () => {
       console.log('🔧 ========================================');
       console.log('');
       
-      // Return false if moduleMetrics is missing or no metrics were updated
-      // This will trigger the fallback to individual endpoints
+      // Hero stats + previewMetrics are enough for the implementation card; do not fail the whole
+      // fetch if moduleMetrics alone is incomplete (would leave homepageData unset elsewhere).
+      const hasHeroPreview =
+        !!(response.hero?.stats && response.hero?.previewMetrics);
       if (!hasModuleMetrics || !metricsUpdated) {
         console.log('🏠 ========================================');
-        console.warn('⚠️ Module metrics missing or incomplete - returning false to trigger fallback');
+        console.warn('⚠️ Module metrics missing or incomplete');
         console.warn('⚠️ hasModuleMetrics:', hasModuleMetrics);
         console.warn('⚠️ metricsUpdated:', metricsUpdated);
+        if (hasHeroPreview) {
+          console.warn('⚠️ Hero + previewMetrics present — still treating fetch as success for homepage UI');
+          console.log('🏠 ========================================');
+          return true;
+        }
+        console.warn('⚠️ Returning false to trigger fallback endpoints');
         console.log('🏠 ========================================');
         return false;
       }
-      
+
       console.log('🏠 ========================================');
       console.log('✅ ALL DATA SUCCESSFULLY UPDATED!');
       console.log('🏠 ========================================');
@@ -2892,6 +2994,7 @@ const fetchDynamicHomepageData = async () => {
 };
 
 // Fetch policy data for donut chart popup (LEGACY - kept as fallback)
+// eslint-disable-next-line no-unused-vars
 const fetchPolicyData = async () => {
   try {
     console.log('🔍 Fetching policy data for framework:', selectedFrameworkId.value);
@@ -2954,7 +3057,12 @@ const fetchPolicyData = async () => {
 };
 
 // Fetch approved and active frameworks
+let approvedFrameworksRequestPromise = null;
 const fetchApprovedFrameworks = async () => {
+  if (approvedFrameworksRequestPromise) {
+    return approvedFrameworksRequestPromise;
+  }
+  approvedFrameworksRequestPromise = (async () => {
   try {
     console.log('🔍 [HomeView] Checking for cached approved frameworks...');
 
@@ -3004,12 +3112,28 @@ const fetchApprovedFrameworks = async () => {
     console.error('❌ DEBUG: Error fetching approved frameworks:', error);
     // Set empty array on error
     approvedFrameworks.value = [];
+  } finally {
+    approvedFrameworksRequestPromise = null;
   }
+  })();
+  return approvedFrameworksRequestPromise;
 };
 
 // Check currently selected framework from session
+let selectedFrameworkRequestPromise = null;
 const checkSelectedFramework = async () => {
+  if (selectedFrameworkRequestPromise) {
+    return selectedFrameworkRequestPromise;
+  }
+  selectedFrameworkRequestPromise = (async () => {
   try {
+    // Prefer already-loaded global selection from Pinia to avoid a repeat API call
+    if (frameworkStore.selectedFrameworkId !== undefined && frameworkStore.selectedFrameworkId !== null) {
+      selectedFrameworkId.value = frameworkStore.selectedFrameworkId || 'all';
+      console.log('✅ DEBUG: Using selected framework from Pinia:', selectedFrameworkId.value);
+      return;
+    }
+
     console.log('🔍 DEBUG: Checking currently selected framework...');
     const response = await axios.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED);
     console.log('📊 DEBUG: Selected framework response:', response.data);
@@ -3025,6 +3149,26 @@ const checkSelectedFramework = async () => {
   } catch (error) {
     console.error('❌ DEBUG: Error checking selected framework:', error);
     selectedFrameworkId.value = 'all';
+  } finally {
+    selectedFrameworkRequestPromise = null;
+  }
+  })();
+  return selectedFrameworkRequestPromise;
+};
+
+// Warm up "all frameworks" homepage cache once in background.
+// This helps route revisits switch between framework filters without refetching.
+// eslint-disable-next-line no-unused-vars
+const prefetchAllFrameworksHomepageData = async () => {
+  try {
+    if (homepageDataService.hasHomepageDataCache('all')) {
+      return;
+    }
+    console.log('🧊 [HomeView] Warming all-framework homepage cache in background...');
+    await homepageDataService.getAllFrameworksData();
+    console.log('✅ [HomeView] All-framework homepage cache warmed');
+  } catch (error) {
+    console.warn('⚠️ [HomeView] Failed to warm all-framework homepage cache:', error?.message || error);
   }
 };
 
@@ -3076,13 +3220,13 @@ const selectFramework = async (framework) => {
     const testContent = getFrameworkContent(framework.FrameworkName);
     console.log('🧪 DEBUG: Test content lookup result:', testContent.frameworkName);
     
-    // Update Vuex store (this will also save to backend session)
-    await store.dispatch('framework/setFramework', {
+    // Update framework selection in Pinia (also saves backend session)
+    await frameworkStore.setFramework({
       id: framework.FrameworkId,
       name: framework.FrameworkName
     });
     
-    console.log('✅ Framework successfully stored in Vuex store and backend session');
+    console.log('✅ Framework successfully stored in Pinia and backend session');
     console.log('🎉 Framework selection completed successfully');
     console.log('🎯 ================================================');
     console.log('');
@@ -3137,12 +3281,106 @@ const selectFrameworkById = async (frameworkId) => {
 // Flag to prevent concurrent API calls
 let isFetchingFrameworkData = false;
 let frameworkWatchTimeout = null;
+// When `checkSelectedFramework()` runs inside `fetchAllDashboardMetrics()`, it updates
+// `selectedFrameworkId` and would otherwise trigger this watch + debounced
+// `fetchDynamicHomepageData()` while the same function also calls
+// `fetchDynamicHomepageData()` directly — duplicate `homepage/?frameworkId=` requests.
+let suppressFrameworkWatchHomepageFetch = false;
+
+const buildQuickSingleFrameworkSnapshot = (frameworkId) => {
+  const source = homepageData.value;
+  if (!source || !Array.isArray(source.frameworks)) return null;
+
+  const target = source.frameworks.find((f) =>
+    String(f?.id ?? f?.FrameworkId ?? '') === String(frameworkId)
+  );
+  if (!target) return null;
+
+  const stats = target.stats || {};
+  const totalControls = stats.totalCompliancesAll || 0;
+  const activeControls = stats.activeCompliances || 0;
+  const implementationProgressPercent = totalControls > 0
+    ? Math.round((activeControls / totalControls) * 100)
+    : 0;
+
+  return {
+    success: true,
+    _quick: true,
+    framework: {
+      id: target.id ?? target.FrameworkId ?? frameworkId,
+      name: target.name || target.FrameworkName || `Framework ${frameworkId}`,
+      description: target.description || target.FrameworkDescription || '',
+      category: target.category || target.FrameworkName || 'Framework',
+    },
+    hero: {
+      stats: {
+        ...stats,
+      },
+      previewMetrics: {
+        implementationProgressPercent,
+        remainingControlsCount: Math.max(0, totalControls - activeControls),
+        remainingControlsPercent: totalControls > 0 ? Math.round(((totalControls - activeControls) / totalControls) * 100) : 0,
+        totalControlsCount: totalControls,
+        implementedControlsCount: activeControls,
+        compliancePercentage: implementationProgressPercent,
+        remainingControls: Math.max(0, totalControls - activeControls),
+        policiesLabel: 'Security Policies',
+        policiesValue: stats.totalPoliciesAll || stats.totalPolicies || 0,
+      },
+    },
+    // Keep current policy/module panes populated until exact framework data returns.
+    policies: policyData.value || {
+      applied: { policies: [], count: 0, percentage: 0 },
+      in_progress: { policies: [], count: 0, percentage: 0 },
+      pending: { policies: [], count: 0, percentage: 0 },
+      rejected: { policies: [], count: 0, percentage: 0 },
+    },
+    frameworks: source.frameworks,
+    moduleMetrics: source.moduleMetrics || {
+      policy: policyMetrics.value,
+      compliance: complianceMetrics.value,
+      risk: riskMetrics.value,
+      incident: incidentMetrics.value,
+      audit: auditorMetrics.value,
+    },
+  };
+};
 
 // Watch for framework changes and update content
 watch(selectedFrameworkId, async (newFrameworkId, oldFrameworkId) => {
-  // Skip if values are the same or if already fetching
-  if (newFrameworkId === oldFrameworkId || isFetchingFrameworkData) {
+  if (isFetchingFrameworkData) {
     return;
+  }
+
+  const normFw = (v) => (!v || v === 'all' ? 'all' : String(v));
+  const n = normFw(newFrameworkId);
+  const o = normFw(oldFrameworkId);
+
+  if (n !== 'all') {
+    const cachedSingle = homepageStore.getHomepageData(n);
+    if (cachedSingle?.success) {
+      homepageData.value = cachedSingle;
+      homeDataSource.value = 'pinia-cache';
+    } else {
+      const quickSnapshot = buildQuickSingleFrameworkSnapshot(n);
+      if (quickSnapshot) {
+        homepageData.value = quickSnapshot;
+        homeDataSource.value = 'pinia-cache';
+        homepageStore.setHomepageData(n, quickSnapshot);
+      }
+    }
+  }
+
+  if (n === o) {
+    if (n !== 'all') {
+      return;
+    }
+    const aggregateHomepageOk =
+      homepageData.value?.success && homepageData.value?.hero?.previewMetrics;
+    if (aggregateHomepageOk) {
+      return;
+    }
+    console.log('🔄 [HomeView] Same aggregate selection but homepage incomplete — refetching');
   }
 
   // Clear any pending timeout
@@ -3152,6 +3390,9 @@ watch(selectedFrameworkId, async (newFrameworkId, oldFrameworkId) => {
 
   // Debounce the API call to prevent rapid-fire requests
   frameworkWatchTimeout = setTimeout(async () => {
+    if (suppressFrameworkWatchHomepageFetch) {
+      return;
+    }
     // Double-check we're not already fetching
     if (isFetchingFrameworkData) {
       return;
@@ -3180,10 +3421,94 @@ watch(selectedFrameworkId, async (newFrameworkId, oldFrameworkId) => {
       console.log('🔄 ================================================');
       console.log('✅ Success:', success);
       
-      // If unified endpoint fails, fall back to individual endpoint
+      // If unified endpoint fails, run full fallback + synthesize homepageData
       if (!success) {
-        console.log('⚠️ Unified endpoint failed - falling back to individual policy endpoint');
-        await fetchPolicyData();
+        const watchKey = (!selectedFrameworkId.value || selectedFrameworkId.value === 'all')
+          ? 'all'
+          : String(selectedFrameworkId.value);
+        const piniaWatchData = homepageStore.getHomepageData(watchKey);
+        if (piniaWatchData?.success) {
+          homepageData.value = piniaWatchData;
+          homeDataSource.value = 'pinia-cache';
+          console.log(`✅ [HomeView] Watch fallback skipped — restored from Pinia cache (${watchKey})`);
+          return;
+        }
+        console.log('⚠️ Unified endpoint failed - running full fallback endpoints');
+        await Promise.all([
+          fetchPolicyMetrics(),
+          fetchComplianceMetrics(),
+          fetchRiskMetrics(),
+          fetchAuditorMetrics(),
+          // Not required for homepage core cards/hero now; kept commented per request.
+          // fetchPolicyData(),
+        ]);
+
+        // Synthesize homepageData so hero + control-domain sections render
+        if (!homepageData.value) {
+          const isAll = isAllFrameworksSelected.value;
+          // For all-frameworks view, retry aggregate endpoint once before synthesis.
+          if (isAll) {
+            try {
+              const retryAll = await homepageDataService.getAllFrameworksData();
+              if (retryAll?.success) {
+                homepageData.value = retryAll;
+                homepageStore.setHomepageData('all', retryAll);
+                homeDataSource.value = 'unified-api-retry';
+                console.log('✅ [HomeView] Watch fallback recovered all-frameworks data from unified retry');
+              }
+            } catch (e) {
+              console.warn('⚠️ [HomeView] Watch fallback unified retry failed, using synthesized data');
+            }
+          }
+          if (homepageData.value) {
+            return;
+          }
+          const fallbackName = isAll ? 'All Frameworks' : (currentFrameworkContent.value?.frameworkName || 'Framework');
+          const totalCRaw = complianceMetrics.value.totalFindings || 0;
+          const activeC = complianceMetrics.value.activeCompliances || 0;
+          const totalC = Math.max(totalCRaw, activeC, 0);
+          const iPct = totalC > 0 ? Math.round((Math.min(activeC, totalC) / totalC) * 100) : 0;
+          const tRisks = riskMetrics.value.totalRisks || riskMetrics.value.total || 0;
+          const mRisks = riskMetrics.value.mitigatedRisks || riskMetrics.value.mitigated || 0;
+          const aPols = policyMetrics.value.activePolicies || 0;
+          const tPols = policyMetrics.value.totalPolicies || aPols;
+          homepageData.value = {
+            success: true,
+            _synthetic: true,
+            framework: { id: isAll ? null : selectedFrameworkId.value, name: fallbackName, description: '', category: isAll ? 'All' : fallbackName },
+            hero: {
+              stats: {
+                totalPoliciesAll: tPols, activePolicies: aPols,
+                totalCompliancesAll: totalC, activeCompliances: activeC, compliantCompliances: 0,
+                totalRisks: tRisks, mitigatedRisks: mRisks,
+                totalIncidents: incidentMetrics.value.totalIncidents || incidentMetrics.value.total || 0,
+                totalAudits: auditorMetrics.value.totalAudits || 0,
+              },
+              previewMetrics: {
+                implementationProgressPercent: iPct,
+                remainingControlsCount: Math.max(0, totalC - activeC),
+                remainingControlsPercent: totalC > 0 ? Math.round(((totalC - activeC) / totalC) * 100) : 0,
+                totalControlsCount: totalC,
+                implementedControlsCount: activeC,
+                riskCoveragePercent: totalC > 0 ? Math.min(100, Math.round((tRisks / totalC) * 100)) : 0,
+                totalActivePoliciesCount: aPols,
+                nextAudit: null, nextAuditTitle: null,
+                compliancePercentage: iPct,
+                remainingControls: Math.max(0, totalC - activeC),
+                policiesLabel: isAll ? 'Total Policies' : 'Security Policies',
+                policiesValue: tPols,
+              },
+            },
+            policies: policyData.value || { applied: {policies:[],count:0,percentage:0}, in_progress: {policies:[],count:0,percentage:0}, pending: {policies:[],count:0,percentage:0}, rejected: {policies:[],count:0,percentage:0} },
+            frameworks: [],
+            moduleMetrics: { policy: policyMetrics.value, compliance: complianceMetrics.value, risk: riskMetrics.value, incident: incidentMetrics.value, audit: auditorMetrics.value },
+          };
+          console.log('✅ [HomeView] Synthesized homepageData from watch fallback metrics');
+          homeDataSource.value = 'fallback-synth';
+          // Persist synthesized data to Pinia
+          const watchSynthKey = isAll ? 'all' : String(selectedFrameworkId.value ?? 'all');
+          homepageStore.setHomepageData(watchSynthKey, homepageData.value);
+        }
       }
       
       console.log('🔄 ================================================');
@@ -3206,6 +3531,18 @@ const selectAllFrameworks = async () => {
   console.log('🎯 DEBUG: All frameworks selection started');
   
   try {
+    // Clear stale single-framework homepageData so hero doesn't stay on old framework data
+    if (homepageData.value && homepageData.value?.framework?.id !== null && homepageData.value?.framework?.name !== 'All Frameworks') {
+      homepageData.value = null;
+      console.log('🧹 [HomeView] Cleared stale single-framework homepageData');
+    }
+    // Always check Pinia cache for 'all' — if fresh, restore it immediately
+    const piniaAllData = homepageStore.getFreshHomepageData('all');
+    if (piniaAllData) {
+      console.log(`🏠 [Pinia] Restoring All Frameworks data from store cache (age=${homepageStore.cacheAgeSeconds('all')}s)`);
+      homepageData.value = piniaAllData;
+    }
+
     // Set "all" as selected framework in UI
     selectedFrameworkId.value = 'all';
     console.log('✅ DEBUG: All frameworks set in UI state');
@@ -3222,10 +3559,10 @@ const selectAllFrameworks = async () => {
       console.warn('⚠️ Unable to clear framework selection from storage:', e);
     }
     
-    // Reset Vuex store (this will clear backend session)
-    await store.dispatch('framework/resetFramework');
+    // Reset Pinia framework state (also clears backend session)
+    await frameworkStore.resetFramework();
     
-    console.log('✅ DEBUG: All frameworks set in Vuex store and backend session cleared');
+    console.log('✅ DEBUG: All frameworks set in Pinia and backend session cleared');
     console.log('⏳ Waiting for watch() to trigger data fetch...');
     console.log('🎉 DEBUG: All frameworks selection completed successfully');
     
@@ -3240,6 +3577,11 @@ const selectAllFrameworks = async () => {
 
 // Fetch all dashboard metrics
 const fetchAllDashboardMetrics = async () => {
+  suppressFrameworkWatchHomepageFetch = true;
+  if (frameworkWatchTimeout) {
+    clearTimeout(frameworkWatchTimeout);
+    frameworkWatchTimeout = null;
+  }
   try {
     // Check if user is authenticated (rely on flags and userId, not accessToken, for cookie-first auth)
     const userId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id');
@@ -3264,6 +3606,9 @@ const fetchAllDashboardMetrics = async () => {
     if (success) {
       console.log('✅ Successfully loaded data from unified homepage endpoint');
       console.log('✅ Module metrics should be available now');
+      // Non-blocking warm cache for "all frameworks" view.
+      // Not required for homepage rendering; kept commented per request.
+      // prefetchAllFrameworksHomepageData();
       // All data (donut + module cards) loaded from unified endpoint
       // If moduleMetrics were missing, fetchDynamicHomepageData would have returned false
       return;
@@ -3274,6 +3619,17 @@ const fetchAllDashboardMetrics = async () => {
     // ====================================================================
     console.log('⚠️ Unified endpoint failed or moduleMetrics missing, falling back to individual endpoints...');
    
+    const fallbackKey = (!selectedFrameworkId.value || selectedFrameworkId.value === 'all')
+      ? 'all'
+      : String(selectedFrameworkId.value);
+    const piniaFallbackData = homepageStore.getHomepageData(fallbackKey);
+    if (piniaFallbackData?.success) {
+      homepageData.value = piniaFallbackData;
+      homeDataSource.value = 'pinia-cache';
+      console.log(`✅ [HomeView] Unified failed — using Pinia cache instead of fallback synthesis (${fallbackKey})`);
+      return;
+    }
+
     if (isAuthenticated) {
       // User is authenticated - fetch all real data
       await Promise.all([
@@ -3281,29 +3637,145 @@ const fetchAllDashboardMetrics = async () => {
         fetchComplianceMetrics(),
         fetchRiskMetrics(),
         fetchAuditorMetrics(),
-        fetchPolicyData(),
-        fetchApprovedFrameworks(),
-        checkSelectedFramework()
+        // Not required for homepage core cards/hero now; kept commented per request.
+        // fetchPolicyData(),
       ]);
       console.log('✅ DEBUG: All dashboard metrics fetched successfully (fallback mode)');
     } else {
       // User is NOT authenticated - only fetch public data
       console.log('ℹ️ DEBUG: User not authenticated - fetching only public data');
       await Promise.all([
-        fetchPolicyData(),
-        fetchApprovedFrameworks(),
-        checkSelectedFramework()
+        // Not required for homepage core cards/hero now; kept commented per request.
+        // fetchPolicyData(),
       ]);
       
       console.log('✅ DEBUG: Public dashboard metrics fetched successfully (fallback mode)');
     }
+
+    // ====================================================================
+    // SYNTHESIZE homepageData from fallback metrics so hero card + control
+    // domains section can render even when the unified endpoint failed.
+    // ====================================================================
+    if (!homepageData.value) {
+      console.log('🔧 [HomeView] Synthesizing homepageData from fallback metrics...');
+      const isAll = isAllFrameworksSelected.value;
+      // For all-frameworks view, prefer one direct retry of unified aggregate endpoint
+      // before synthesizing from module fallbacks (which can be framework-scoped).
+      if (isAll) {
+        try {
+          const retryAll = await homepageDataService.getAllFrameworksData();
+          if (retryAll?.success) {
+            homepageData.value = retryAll;
+            homepageStore.setHomepageData('all', retryAll);
+            homeDataSource.value = 'unified-api-retry';
+            console.log('✅ [HomeView] Recovered all-frameworks data from unified retry');
+          }
+        } catch (e) {
+          console.warn('⚠️ [HomeView] Unified all-frameworks retry failed, using synthesized fallback');
+        }
+      }
+      if (homepageData.value) {
+        return;
+      }
+      const fallbackName = isAll
+        ? 'All Frameworks'
+        : (currentFrameworkContent.value?.frameworkName || 'Framework');
+
+      const totalControlsRaw = complianceMetrics.value.totalFindings || 0;
+      const activeControls = complianceMetrics.value.activeCompliances || 0;
+      const totalControls = Math.max(totalControlsRaw, activeControls, 0);
+      const implPct = totalControls > 0
+        ? Math.round((Math.min(activeControls, totalControls) / totalControls) * 100)
+        : 0;
+      const totalRisks = riskMetrics.value.totalRisks || riskMetrics.value.total || 0;
+      const mitigated = riskMetrics.value.mitigatedRisks || riskMetrics.value.mitigated || 0;
+      const activePolicies = policyMetrics.value.activePolicies || 0;
+      const totalPolicies = policyMetrics.value.totalPolicies || activePolicies;
+
+      homepageData.value = {
+        success: true,
+        _synthetic: true,  // flag so caches know this is fallback-built
+        framework: {
+          id: isAll ? null : selectedFrameworkId.value,
+          name: fallbackName,
+          description: '',
+          category: isAll ? 'All' : fallbackName,
+        },
+        hero: {
+          stats: {
+            totalPoliciesAll: totalPolicies,
+            activePolicies,
+            inactivePolicies: Math.max(0, totalPolicies - activePolicies),
+            totalCompliances: activeControls,
+            totalCompliancesAll: totalControls,
+            activeCompliances: activeControls,
+            inactiveCompliances: Math.max(0, totalControls - activeControls),
+            compliantCompliances: 0,
+            totalRisks,
+            activeRisks: riskMetrics.value.active || totalRisks,
+            inactiveRisks: riskMetrics.value.inactive || 0,
+            mitigatedRisks: mitigated,
+            totalIncidents: incidentMetrics.value.totalIncidents || incidentMetrics.value.total || 0,
+            activeIncidents: incidentMetrics.value.active || 0,
+            resolvedIncidents: incidentMetrics.value.resolved || 0,
+            totalAudits: auditorMetrics.value.totalAudits || 0,
+            activeAudits: auditorMetrics.value.active || 0,
+            completedAudits: auditorMetrics.value.completedAudits || 0,
+          },
+          previewMetrics: {
+            implementationProgressPercent: implPct,
+            remainingControlsCount: Math.max(0, totalControls - activeControls),
+            remainingControlsPercent: totalControls > 0 ? Math.round(((totalControls - activeControls) / totalControls) * 100) : 0,
+            totalControlsCount: totalControls,
+            implementedControlsCount: activeControls,
+            auditVerifiedCompliancePercent: 0,
+            compliantControlsCount: 0,
+            riskCoveragePercent: totalControls > 0 ? Math.min(100, Math.round((totalRisks / totalControls) * 100)) : 0,
+            totalActivePoliciesCount: activePolicies,
+            approvedActivePoliciesCount: activePolicies,
+            nextAudit: null,
+            nextAuditTitle: null,
+            nextAuditStatus: null,
+            compliancePercentage: implPct,
+            remainingControls: Math.max(0, totalControls - activeControls),
+            policiesLabel: isAll ? 'Total Policies' : 'Security Policies',
+            policiesValue: totalPolicies,
+          },
+        },
+        policies: policyData.value || {
+          applied: { policies: [], count: 0, percentage: 0 },
+          in_progress: { policies: [], count: 0, percentage: 0 },
+          pending: { policies: [], count: 0, percentage: 0 },
+          rejected: { policies: [], count: 0, percentage: 0 },
+        },
+        frameworks: [],
+        moduleMetrics: {
+          policy: policyMetrics.value,
+          compliance: complianceMetrics.value,
+          risk: riskMetrics.value,
+          incident: incidentMetrics.value,
+          audit: auditorMetrics.value,
+        },
+      };
+      console.log('✅ [HomeView] Synthesized homepageData from fallback metrics');
+      homeDataSource.value = 'fallback-synth';
+      // Store synthetic data in Pinia so it's available on re-visit
+      const synthKey = (isAllFrameworksSelected.value) ? 'all' : String(selectedFrameworkId.value ?? 'all');
+      homepageStore.setHomepageData(synthKey, homepageData.value);
+    }
   } catch (error) {
     console.error('❌ DEBUG: Error fetching dashboard metrics:', error);
+  } finally {
+    if (frameworkWatchTimeout) {
+      clearTimeout(frameworkWatchTimeout);
+      frameworkWatchTimeout = null;
+    }
+    suppressFrameworkWatchHomepageFetch = false;
   }
 };
  
 
-onMounted(() => {
+onMounted(async () => {
   handleResize();
   if (typeof window !== 'undefined') {
     window.addEventListener('resize', handleResize);
@@ -3325,138 +3797,54 @@ onMounted(() => {
     user.value = JSON.parse(userData);
   }
   
-  // Fetch dashboard metrics
-  fetchAllDashboardMetrics();
-  
-  // Load framework selection from Vuex store
-  const storeFramework = store.state.framework.selectedFrameworkId;
-  if (storeFramework && storeFramework !== 'all') {
-    selectedFrameworkId.value = storeFramework;
-    console.log('🔄 HomeView: Loaded framework from Vuex store:', storeFramework);
-  }
   // Evaluate session status (rely on flags and userId, not accessToken, for cookie-first auth)
   const userId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id');
   const isLoggedIn = (sessionStorage.getItem('is_logged_in') || localStorage.getItem('is_logged_in')) === 'true';
   const hasAuthFlag = (sessionStorage.getItem('isAuthenticated') || localStorage.getItem('isAuthenticated')) === 'true';
   const isAuthenticated = !!(userId && (isLoggedIn || hasAuthFlag));
 
-  // Only prefetch authenticated/private datasets when user session is valid.
-  // Prevents noisy 401 bursts and avoids triggering auth redirect loops from background calls.
-  if (isAuthenticated) {
-    console.log('🔐 [HomeView] Authenticated session detected - running full prefetch');
+  // ── Stale-while-revalidate: render immediately from any cache (fresh OR stale),
+  // then refresh in the background. Never block initial mount on unified API.
+  const _revisitCacheKey = (frameworkStore.selectedFrameworkId && frameworkStore.selectedFrameworkId !== 'all')
+    ? String(frameworkStore.selectedFrameworkId)
+    : 'all';
+  const _cachedHomepageData = homepageStore.getHomepageData(_revisitCacheKey);
 
-    console.log('🚀 [HomeView] Starting risk data prefetch...');
-    const riskPrefetchPromise = riskDataService.fetchAllRiskData()
-      .then(() => {
-        risksData.value = riskDataService.getData('risks') || [];
-        riskCount.value = risksData.value.length;
-        console.log(`✅ [HomeView] Risk data prefetch complete - Total risks: ${riskCount.value}`);
-      })
-      .catch((error) => {
-        console.error('❌ [HomeView] Risk data prefetch failed:', error);
-        risksData.value = [];
-        riskCount.value = 0;
-      });
-    window.riskDataFetchPromise = riskPrefetchPromise;
-
-    console.log('🚀 [HomeView] Starting compliance data prefetch...');
-    const compliancePrefetchPromise = complianceDataService.fetchAllComplianceData()
-      .then(() => {
-        const frameworks = complianceDataService.getData('frameworks') || [];
-        const compliances = complianceDataService.getData('compliances') || [];
-        console.log(`✅ [HomeView] Compliance data prefetch complete - Total frameworks: ${frameworks.length}, Total compliances: ${compliances.length}`);
-      })
-      .catch((error) => {
-        console.error('❌ [HomeView] Compliance data prefetch failed:', error);
-      });
-    window.complianceDataFetchPromise = compliancePrefetchPromise;
-  
-    console.log('🚀 [HomeView] Starting auditor data prefetch...');
-    const auditorPrefetchPromise = auditorDataService.fetchAllAuditorData()
-    .then(() => {
-      const audits = auditorDataService.getData('audits') || [];
-      const businessUnits = auditorDataService.getData('businessUnits') || [];
-      console.log(`✅ [HomeView] Auditor data prefetch complete - Total audits: ${audits.length}, Total business units: ${businessUnits.length}`);
-    })
-    .catch((error) => {
-      console.error('❌ [HomeView] Auditor data prefetch failed:', error);
-    });
-
-    window.auditorDataFetchPromise = auditorPrefetchPromise;
-  
-    console.log('🚀 [HomeView] Starting event data prefetch...');
-    const eventPrefetchPromise = eventDataService.fetchAllEventData()
-    .then(() => {
-      const events = eventDataService.getData('events') || [];
-      console.log(`✅ [HomeView] Event data prefetch complete - Total events: ${events.length}`);
-    })
-    .catch((error) => {
-      console.error('❌ [HomeView] Event data prefetch failed:', error);
-    });
-
-    window.eventDataFetchPromise = eventPrefetchPromise;
-  
-    console.log('🚀 [HomeView] Starting policy data prefetch...');
-    const policyPrefetchPromise = policyDataService.fetchAllPolicyData()
-    .then(() => {
-      const policyFrameworks = policyDataService.getAllPoliciesFrameworks() || [];
-      console.log(`✅ [HomeView] Policy data prefetch complete - Total policy frameworks: ${policyFrameworks.length}`);
-    })
-    .catch((error) => {
-      console.error('❌ [HomeView] Policy data prefetch failed:', error);
-    });
-
-    window.policyDataFetchPromise = policyPrefetchPromise;
-  
-    console.log('🚀 [HomeView] Starting tree data prefetch...');
-    const treePrefetchPromise = treeDataService.fetchAllTreeData()
-    .then(() => {
-      const frameworks = treeDataService.getData('frameworks') || [];
-      console.log(`✅ [HomeView] Tree data prefetch complete - Total frameworks: ${frameworks.length}`);
-    })
-    .catch((error) => {
-      console.error('❌ [HomeView] Tree data prefetch failed:', error);
-    });
-
-    window.treeDataFetchPromise = treePrefetchPromise;
-  
-    console.log('🚀 [HomeView] Starting document data prefetch...');
-    const documentPrefetchPromise = documentDataService.fetchAllDocumentData()
-    .then(() => {
-      const documents = documentDataService.getData('documents') || [];
-      console.log(`✅ [HomeView] Document data prefetch complete - Total documents: ${documents.length}`);
-    })
-    .catch((error) => {
-      console.error('❌ [HomeView] Document data prefetch failed:', error);
-    });
-
-    window.documentDataFetchPromise = documentPrefetchPromise;
-  
-    console.log('🚀 [HomeView] Starting integrations data prefetch...');
-    const integrationsPrefetchPromise = integrationsDataService.fetchAllIntegrationData()
-    .then(() => {
-      const applications = integrationsDataService.getData('applications') || [];
-      console.log(`✅ [HomeView] Integrations data prefetch complete - Total applications: ${applications.length}`);
-    })
-    .catch((error) => {
-      console.error('❌ [HomeView] Integrations data prefetch failed:', error);
-    });
-
-    window.integrationsDataFetchPromise = integrationsPrefetchPromise;
-
-    console.log('🚀 [HomeView] Starting homepage data prefetch...');
-    const homepagePrefetchPromise = homepageDataService.fetchAllHomepageData()
-    .then(() => {
-      const approvedFrameworks = homepageDataService.getData('approvedFrameworks') || [];
-      console.log(`✅ [HomeView] Homepage data prefetch complete - Total approved frameworks: ${approvedFrameworks.length}`);
-    })
-    .catch((error) => {
-      console.error('❌ [HomeView] Homepage data prefetch failed:', error);
-    });
-
-    window.homepageDataFetchPromise = homepagePrefetchPromise;
+  if (_cachedHomepageData) {
+    if (!homepageData.value) {
+      homepageData.value = _cachedHomepageData;
+      homeDataSource.value = 'pinia-cache';
+    }
+    console.log('[HomeView] ⚡ Cache hit — serving instantly, background refreshing unified API');
+    // Ensure framework selection is up-to-date from Pinia
+    const storeFramework = frameworkStore.selectedFrameworkId;
+    if (storeFramework && storeFramework !== 'all') {
+      selectedFrameworkId.value = storeFramework;
+    }
+    // Silent background refresh (non-blocking, no loading state shown)
+    setTimeout(() => {
+      fetchAllDashboardMetrics().catch(e => console.warn('[HomeView] Background refresh error:', e));
+    }, 100);
   } else {
-    console.log('ℹ️ [HomeView] Session not authenticated - skipping private prefetch calls');
+    // First visit/no cache: still do non-blocking fetch so shell renders immediately.
+    setTimeout(() => {
+      fetchAllDashboardMetrics().catch(e => console.warn('[HomeView] Initial background load error:', e));
+    }, 0);
+
+    // Load framework selection from Pinia store
+    const storeFramework = frameworkStore.selectedFrameworkId;
+    if (storeFramework && storeFramework !== 'all') {
+      selectedFrameworkId.value = storeFramework;
+      console.log('🔄 HomeView: Loaded framework from Pinia:', storeFramework);
+    }
+  }
+
+  if (isAuthenticated) {
+    // Keep login/home render path light: do not fire cross-module bulk prefetch here.
+    // Other module pages read Pinia first and fetch only their own data as needed.
+    risksData.value = appDataStore.risks.length ? appDataStore.risks : risksData.value;
+    riskCount.value = risksData.value.length || 0;
+    startHomeAutoRefresh();
   }
   
   // Add click outside handler for popup
@@ -3468,17 +3856,42 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  stopHomeAutoRefresh();
   if (typeof window !== 'undefined') {
     window.removeEventListener('resize', handleResize);
   }
 });
 
-// Watch for Vuex store framework changes
+// Called each time the user navigates back to the home page (keep-alive).
+// Silently refreshes data in the background without showing a loading state.
+onActivated(() => {
+  startHomeAutoRefresh();
+  console.log('[HomeView] ♻️ Activated (keep-alive) — triggering silent background refresh');
+  const _cacheKey = (frameworkStore.selectedFrameworkId && frameworkStore.selectedFrameworkId !== 'all')
+    ? String(frameworkStore.selectedFrameworkId)
+    : 'all';
+  const _fresh = homepageStore.getFreshHomepageData(_cacheKey);
+  if (_fresh) {
+    // Data is still within TTL — skip refresh entirely
+    console.log('[HomeView] ✅ Cache still fresh on re-activate, no refresh needed');
+    return;
+  }
+  // Cache has expired — refresh silently in the background
+  setTimeout(() => {
+    fetchAllDashboardMetrics().catch(e => console.warn('[HomeView] onActivated refresh error:', e));
+  }, 100);
+});
+
+onDeactivated(() => {
+  stopHomeAutoRefresh();
+});
+
+// Watch for Pinia framework changes
 watch(
-  () => store.state.framework.selectedFrameworkId,
+  () => frameworkStore.selectedFrameworkId,
   (newFrameworkId) => {
     if (newFrameworkId !== selectedFrameworkId.value) {
-      console.log('🔄 HomeView: Vuex store framework changed to:', newFrameworkId);
+      console.log('🔄 HomeView: Pinia framework changed to:', newFrameworkId);
       selectedFrameworkId.value = newFrameworkId || 'all';
     }
   }
@@ -6013,6 +6426,10 @@ watch(
 
 .frameworks-header {
   margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
 }
 
 .frameworks-title {
@@ -6023,6 +6440,41 @@ watch(
   letter-spacing: 0.05em;
   text-transform: uppercase;
   padding-left: 0.5rem;
+}
+
+.data-source-badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  border-radius: 999px;
+  padding: 0.32rem 0.6rem;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #334155;
+  white-space: nowrap;
+}
+.source-pinia-fresh,
+.source-pinia-cache {
+  background: #ecfeff;
+  border-color: #67e8f9;
+  color: #0e7490;
+}
+.source-service-cache {
+  background: #f0f9ff;
+  border-color: #93c5fd;
+  color: #1d4ed8;
+}
+.source-unified-api,
+.source-unified-api-retry {
+  background: #ecfdf5;
+  border-color: #86efac;
+  color: #15803d;
+}
+.source-fallback-synth {
+  background: #fff7ed;
+  border-color: #fdba74;
+  color: #c2410c;
 }
 
 .frameworks-subtitle {

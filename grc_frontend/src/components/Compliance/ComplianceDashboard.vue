@@ -5,6 +5,7 @@
         <h1>Compliance Dashboard</h1>
       </div>
       <div class="header-actions">
+        <span v-if="dataSourceBadge" class="data-source-badge">{{ dataSourceBadge }}</span>
         <!-- Export controls - use global styles from main.css (custom dropdown + button) -->
         <div class="export-controls">
           <div class="export-controls-inner">
@@ -133,8 +134,24 @@
       </div>
     </div>
 
+    <!-- Skeleton Screen: shown only while KPIs load and no Pinia cache exists -->
+    <div v-if="showSkeleton" class="dashboard-skeleton">
+      <div class="skeleton-kpi-grid">
+        <div v-for="n in 4" :key="'kpi-'+n" class="skeleton-kpi-card">
+          <div class="skeleton-block skeleton-kpi-value"></div>
+          <div class="skeleton-block skeleton-kpi-label"></div>
+        </div>
+      </div>
+      <div class="skeleton-charts-grid">
+        <div v-for="n in 4" :key="'chart-'+n" class="skeleton-chart-card">
+          <div class="skeleton-block skeleton-chart-title"></div>
+          <div class="skeleton-block skeleton-chart-area"></div>
+        </div>
+      </div>
+    </div>
+
     <!-- Dashboard Content -->
-    <div class="dashboard-content">
+    <div v-show="!showSkeleton" class="dashboard-content">
       <!-- KPI Summary Cards using global styles from main.css -->
       <div class="kpi-grid">
         <!-- Approval Rate -->
@@ -325,6 +342,8 @@ import {
 } from 'chart.js'
 import { mapState, mapActions } from 'vuex'
 import '@fortawesome/fontawesome-free/css/all.min.css'
+import { useDashboardsStore } from '@/stores/dashboards'
+import { useAppDataStore } from '@/stores/appData'
 import { complianceService } from '@/services/api'
 import complianceDataService from '@/services/complianceService' // NEW: Use cached compliance data
 import apiService from '@/services/apiService.js'
@@ -356,10 +375,24 @@ const axios = {
   delete: async (url, config = {}) => ({ data: await apiService.delete(url, config) })
 }
 
+const COMPLIANCE_DASHBOARD_CACHE_TTL_MS = 5 * 60 * 1000
+const complianceDashboardViewCache = {
+  frameworks: null,
+  frameworksFetchedAt: 0,
+  recentActivities: null,
+  recentActivitiesFetchedAt: 0,
+  dashboardByKey: {}
+}
+
 export default {
   name: 'ComplianceDashboard',
   components: {
     CustomDropdown
+  },
+  setup() {
+    const dashboardsStore = useDashboardsStore()
+    const appDataStore = useAppDataStore()
+    return { dashboardsStore, appDataStore }
   },
   data() {
     return {
@@ -409,7 +442,9 @@ export default {
       recentActivities: [],
       loadingActivities: false,
       activityRefreshInterval: null,
-      loadingDashboard: false, // Start without loading state
+      selectedFrameworkRequestPromise: null,
+      loadingDashboard: true, // true until KPIs load (drives skeleton screen)
+      dataSourceBadge: '',
       isExporting: false,
       exportSuccess: false,
       colorblindMode: null, // Colorblindness mode tracking
@@ -417,6 +452,10 @@ export default {
     }
   },
   computed: {
+    // Skeleton: show only when dashboard KPIs are not yet loaded AND no Pinia cache
+    showSkeleton() {
+      return this.loadingDashboard && !this.dashboardsStore.hasData('compliance')
+    },
     // Vuex store computed properties
     ...mapState('framework', {
       storeFrameworkId: state => state.selectedFrameworkId,
@@ -486,38 +525,147 @@ export default {
   },
   async mounted() {
     console.log('🚀 ComplianceDashboard mounted - starting instant loading...')
-    
-    // Check if FontAwesome is loaded (non-blocking)
+
     this.checkFontAwesome()
-    
-    // Initialize colorblindness mode tracking
     this.initColorblindnessTracking()
-    
+
     // Load framework from Vuex store
     if (this.storeFrameworkId && this.storeFrameworkId !== 'all') {
       this.selectedFramework = this.storeFrameworkId
       console.log('🔄 ComplianceDashboard: Loaded framework from Vuex store:', this.storeFrameworkId)
     }
-    
-    // Start all data loading immediately without waiting
-    console.log('📊 Starting instant data loading...')
-    
-    // Load all data in parallel including recent activities
-    Promise.all([
-      this.fetchFrameworks(),
-      this.fetchDashboardData(),
-      this.fetchRecentActivities() // Load activities with charts
-    ]).then(() => {
-      // Check for selected framework from session after loading
-      this.checkSelectedFrameworkFromSession()
-    })
-    
-    // Auto-refresh activities every 5 minutes
-    this.activityRefreshInterval = setInterval(() => {
+
+    // ── Pinia appData summary: fastest restore (saved after first API call) ─
+    if (this.appDataStore.complianceSummary) {
+      console.log('⚡ [ComplianceDashboard] Instant restore from Pinia appData summary')
+      this.dashboardData = { ...this.appDataStore.complianceSummary }
+      this.loadingDashboard = false
+      this.dataSourceBadge = 'Loaded from Pinia (fast)'
+      // Background: silent refresh + frameworks + activities
+      this.fetchDashboardData()
+      this.fetchFrameworks()
       this.fetchRecentActivities()
-    }, 300000) // 5 minutes
-    
-    console.log('✅ ComplianceDashboard initialization started instantly!')
+      this.activityRefreshInterval = setInterval(() => this.fetchRecentActivities(), 300000)
+      return
+    }
+
+    // ── Pinia cache-first: instant display on return visits ─────────────────
+    const piniaData = this.dashboardsStore.get('compliance')
+    if (piniaData) {
+      this.dataSourceBadge = 'Loaded from Pinia (fast)'
+      console.log('⚡ [ComplianceDashboard] Restoring from Pinia dashboards cache')
+      this.dashboardData = { ...piniaData }
+      const piniaFw = this.dashboardsStore.getFrameworks('compliance')
+      if (piniaFw?.length) this.frameworks = piniaFw.map(f => ({ ...f }))
+      this.loadingDashboard = false
+      // Background: activities + charts + silent revalidation
+      this.fetchRecentActivities()
+      this.fetchFrameworks()
+      if (!this.dashboardsStore.isFresh('compliance')) {
+        this.fetchDashboardData()
+      } else {
+        // Restore charts from page cache if available
+        const cacheKey = this.getDashboardCacheKey()
+        const cachedDashboard = this.getCachedDashboardPayload(cacheKey)
+        if (cachedDashboard) {
+          this.chartData = { ...cachedDashboard.chartData }
+          await this.$nextTick()
+          this.renderChartsAfterDataLoad()
+        } else {
+          // Fetch charts only (KPIs already from Pinia)
+          Promise.all([
+            this.fetchChartData('Criticality', 'bar'),
+            this.fetchChartData('Status', 'doughnut'),
+            this.fetchChartData('ActiveInactive', 'bar'),
+            this.fetchChartData('ManualAutomatic', 'doughnut'),
+            this.fetchChartData('MaturityLevel', 'bar')
+          ]).then(([c, s, ai, ma, ml]) => {
+            this.chartData = { criticality: c, status: s, activeInactive: ai, manualAutomatic: ma, maturityLevel: ml }
+            this.renderChartsAfterDataLoad()
+          })
+        }
+      }
+      this.activityRefreshInterval = setInterval(() => this.fetchRecentActivities(), 300000)
+      return
+    }
+
+    // First-visit fast paint from appData Pinia cache.
+    if (this.hydrateComplianceKpisFromAppData()) {
+      this.dataSourceBadge = 'Loaded from Pinia (fast)'
+      this.loadingDashboard = false
+      this.dashboardsStore.set('compliance', { ...this.dashboardData })
+      // Silent exact refresh in background
+      this.fetchDashboardData()
+      this.fetchFrameworks()
+      this.fetchRecentActivities()
+      this.activityRefreshInterval = setInterval(() => this.fetchRecentActivities(), 300000)
+      return
+    }
+    // ────────────────────────────────────────────────────────────────────────
+
+    // Fast page-cache restore on re-visit (in-memory, survives navigation)
+    const cacheKey = this.getDashboardCacheKey()
+    const cachedDashboard = this.getCachedDashboardPayload(cacheKey)
+    if (cachedDashboard) {
+      this.dashboardData = { ...cachedDashboard.dashboardData }
+      this.chartData = { ...cachedDashboard.chartData }
+      this.loadingDashboard = false
+      await this.$nextTick()
+      await this.renderChartsAfterDataLoad()
+    }
+    if (
+      Array.isArray(complianceDashboardViewCache.frameworks) &&
+      complianceDashboardViewCache.frameworks.length > 0 &&
+      (Date.now() - complianceDashboardViewCache.frameworksFetchedAt) < COMPLIANCE_DASHBOARD_CACHE_TTL_MS
+    ) {
+      this.frameworks = complianceDashboardViewCache.frameworks.map(f => ({ ...f }))
+    }
+    if (
+      Array.isArray(complianceDashboardViewCache.recentActivities) &&
+      (Date.now() - complianceDashboardViewCache.recentActivitiesFetchedAt) < COMPLIANCE_DASHBOARD_CACHE_TTL_MS
+    ) {
+      this.recentActivities = complianceDashboardViewCache.recentActivities.map(a => ({ ...a }))
+    }
+
+    // No cache path: critical KPI first, then background items
+    console.log('📊 Starting instant data loading...')
+    await this.fetchDashboardData() // sets dashboardData + loadingDashboard=false internally
+    // Non-critical background fetches (don't block KPI display)
+    this.fetchFrameworks()
+    this.fetchRecentActivities()
+    Promise.resolve().then(() => this.checkSelectedFrameworkFromSession())
+
+    this.activityRefreshInterval = setInterval(() => this.fetchRecentActivities(), 300000)
+    console.log('✅ ComplianceDashboard initialization complete!')
+  },
+  async activated() {
+    // keep-alive re-entry: update badge to reflect the current data source.
+    if (!this.loadingDashboard && this.dashboardData) {
+      if (this.appDataStore.complianceSummary) {
+        this.dataSourceBadge = 'Loaded from Pinia (fast)'
+      } else if (this.dashboardsStore.get('compliance')) {
+        this.dataSourceBadge = 'Loaded from Pinia (fast)'
+      }
+    }
+    // Rebuild charts from existing component state (mounted() does not re-run)
+    if (this.chartData && this.chartData.criticality) {
+      await this.$nextTick()
+      await this.renderChartsAfterDataLoad()
+    }
+    this.fetchDashboardData({ silent: true }).catch(() => {})
+    // Restart periodic activity refresh if it was stopped
+    if (!this.activityRefreshInterval) {
+      this.activityRefreshInterval = setInterval(() => {
+        this.fetchRecentActivities()
+      }, 300000)
+    }
+  },
+  deactivated() {
+    // stop background interval while page is inactive
+    if (this.activityRefreshInterval) {
+      clearInterval(this.activityRefreshInterval)
+      this.activityRefreshInterval = null
+    }
   },
   beforeUnmount() {
     this.destroyAllCharts()
@@ -531,10 +679,7 @@ export default {
     }
   },
   beforeRouteLeave(to, from, next) {
-    this.destroyAllCharts()
-    if (this.activityRefreshInterval) {
-      clearInterval(this.activityRefreshInterval)
-    }
+    // keep-alive handles page caching; don't destroy chart instances here.
     next()
   },
   watch: {
@@ -559,7 +704,33 @@ export default {
     }
   },
   methods: {
+    hydrateComplianceKpisFromAppData() {
+      // Use the fast compliance summary stored by appData.fetchCompliances()
+      if (!this.appDataStore.complianceSummary) return false
+      const s = this.appDataStore.complianceSummary
+      this.dashboardData = {
+        status_counts:  s.status_counts  || {},
+        total_count:    s.total_count    || 0,
+        total_findings: s.total_findings || 0,
+        approval_rate:  s.approval_rate  || 0,
+      }
+      return true
+    },
     ...mapActions('framework', ['setFramework']),
+    getDashboardCacheKey() {
+      return JSON.stringify({
+        framework: this.selectedFramework || '',
+        timeRange: this.selectedTimeRange || 'Last 6 Months',
+        category: this.selectedCategory || 'All Categories',
+        priority: this.selectedPriority || 'All Priorities'
+      })
+    },
+    getCachedDashboardPayload(cacheKey) {
+      const entry = complianceDashboardViewCache.dashboardByKey[cacheKey]
+      if (!entry) return null
+      if ((Date.now() - entry.fetchedAt) > COMPLIANCE_DASHBOARD_CACHE_TTL_MS) return null
+      return entry.payload
+    },
     
     // Colorblindness support methods
     initColorblindnessTracking() {
@@ -728,6 +899,10 @@ export default {
     
     // Framework session management methods
     async checkSelectedFrameworkFromSession() {
+      if (this.selectedFrameworkRequestPromise) {
+        return this.selectedFrameworkRequestPromise
+      }
+      this.selectedFrameworkRequestPromise = (async () => {
       try {
         console.log('🔍 DEBUG: Checking for selected framework from session in ComplianceDashboard...')
         const response = await axios.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED)
@@ -765,7 +940,11 @@ export default {
       } catch (error) {
         console.error('❌ DEBUG: Error checking selected framework from session:', error)
         this.sessionFrameworkId = null
+      } finally {
+        this.selectedFrameworkRequestPromise = null
       }
+      })()
+      return this.selectedFrameworkRequestPromise
     },
     
     async saveFrameworkToSession(frameworkId) {
@@ -857,6 +1036,16 @@ export default {
       try {
         this.loadingFrameworks = true
         console.log('🔍 [ComplianceDashboard] Checking for cached framework data...')
+
+        if (
+          Array.isArray(complianceDashboardViewCache.frameworks) &&
+          complianceDashboardViewCache.frameworks.length > 0 &&
+          (Date.now() - complianceDashboardViewCache.frameworksFetchedAt) < COMPLIANCE_DASHBOARD_CACHE_TTL_MS
+        ) {
+          this.frameworks = complianceDashboardViewCache.frameworks.map(f => ({ ...f }))
+          console.log('⚡ [ComplianceDashboard] Using local page cache for frameworks')
+          return
+        }
         
         // Check if prefetch was never started (user came directly to this page)
         if (!window.complianceDataFetchPromise && !complianceDataService.hasFrameworksCache()) {
@@ -930,6 +1119,8 @@ export default {
         }
         
         console.log('Processed frameworks:', this.frameworks)
+        complianceDashboardViewCache.frameworks = this.frameworks.map(f => ({ ...f }))
+        complianceDashboardViewCache.frameworksFetchedAt = Date.now()
       } catch (error) {
         console.error('Error fetching frameworks:', error)
         this.frameworks = []
@@ -940,6 +1131,15 @@ export default {
     
     async fetchRecentActivities() {
       try {
+        if (
+          Array.isArray(complianceDashboardViewCache.recentActivities) &&
+          (Date.now() - complianceDashboardViewCache.recentActivitiesFetchedAt) < COMPLIANCE_DASHBOARD_CACHE_TTL_MS
+        ) {
+          this.recentActivities = complianceDashboardViewCache.recentActivities.map(a => ({ ...a }))
+          console.log('⚡ [ComplianceDashboard] Using local page cache for recent activities')
+          return
+        }
+
         // Only show loading if we don't have any activities yet
         if (this.recentActivities.length === 0) {
           this.loadingActivities = true
@@ -1085,6 +1285,8 @@ export default {
         ).slice(0, 3)
         
         this.recentActivities = uniqueActivities
+        complianceDashboardViewCache.recentActivities = uniqueActivities.map(a => ({ ...a }))
+        complianceDashboardViewCache.recentActivitiesFetchedAt = Date.now()
         console.log(`Loaded ${this.recentActivities.length} recent activities`)
         
         // If no activities found, log a warning but don't show error message
@@ -1163,10 +1365,27 @@ export default {
       this.fetchRecentActivities()
     },
 
-    async fetchDashboardData() {
+    async fetchDashboardData(options = {}) {
+      const silent = !!options.silent
       try {
         console.log('Starting fetchDashboardData for compliance...')
         console.log('Current filters - Framework:', this.selectedFramework, 'Time:', this.selectedTimeRange, 'Category:', this.selectedCategory, 'Priority:', this.selectedPriority)
+
+        const cacheKey = this.getDashboardCacheKey()
+        const cached = this.getCachedDashboardPayload(cacheKey)
+        if (cached) {
+          console.log('⚡ [ComplianceDashboard] Serving dashboard data from local page cache')
+          this.dashboardData = { ...cached.dashboardData }
+          this.chartData = { ...cached.chartData }
+          this.loadingDashboard = false
+          await this.renderChartsAfterDataLoad()
+          return
+        }
+
+        // Silent refresh keeps current UI visible while request runs.
+        if (silent && this.dashboardData) {
+          this.loadingDashboard = false
+        }
 
         // Fetch dashboard summary data
         let dashboardResponse
@@ -1204,41 +1423,50 @@ export default {
           throw new Error(`Dashboard fetch failed: ${err.message}`)
         }
 
-        // Fetch data for each chart
-        const chartPromises = [
-          this.fetchChartData('Criticality', 'bar'),
-          this.fetchChartData('Status', 'doughnut'),
-          this.fetchChartData('ActiveInactive', 'bar'),
-          this.fetchChartData('ManualAutomatic', 'doughnut'),
-          this.fetchChartData('MaturityLevel', 'bar')
-        ]
-
-        const [criticalityData, statusData, activeInactiveData, manualAutomaticData, maturityLevelData] = await Promise.all(chartPromises)
-
         if (dashboardResponse.data && dashboardResponse.data.success) {
           const summary = dashboardResponse.data.data?.summary || {}
           console.log('Dashboard summary data:', summary)
-          
+
+          // ── CRITICAL: set KPI data immediately so skeleton disappears ────
           this.dashboardData = {
             status_counts: summary.status_counts || {},
             total_count: summary.total_count || 0,
             total_findings: summary.total_findings || 0,
             approval_rate: summary.approval_rate || 0
           }
-          
-          // Update chart data
-          this.chartData = {
-            criticality: criticalityData,
-            status: statusData,
-            activeInactive: activeInactiveData,
-            manualAutomatic: manualAutomaticData,
-            maturityLevel: maturityLevelData
-          }
-          
-          console.log('Updated chart data:', this.chartData)
-          
-          // Render charts immediately after data is loaded
-          await this.renderChartsAfterDataLoad()
+          this.loadingDashboard = false
+          this.dataSourceBadge = 'Refreshed from API (latest)'
+          // Save KPI summary to both stores for instant display on next visit
+          this.dashboardsStore.set('compliance', { ...this.dashboardData })
+          this.dashboardsStore.setFrameworks('compliance', this.frameworks.map(f => ({ ...f })))
+          this.appDataStore.setComplianceSummary({ ...this.dashboardData })
+
+          // ── BACKGROUND: fetch charts without blocking KPI display ────────
+          Promise.all([
+            this.fetchChartData('Criticality', 'bar'),
+            this.fetchChartData('Status', 'doughnut'),
+            this.fetchChartData('ActiveInactive', 'bar'),
+            this.fetchChartData('ManualAutomatic', 'doughnut'),
+            this.fetchChartData('MaturityLevel', 'bar')
+          ]).then(([criticalityData, statusData, activeInactiveData, manualAutomaticData, maturityLevelData]) => {
+            this.chartData = {
+              criticality: criticalityData,
+              status: statusData,
+              activeInactive: activeInactiveData,
+              manualAutomatic: manualAutomaticData,
+              maturityLevel: maturityLevelData
+            }
+            // Update page cache with charts
+            complianceDashboardViewCache.dashboardByKey[cacheKey] = {
+              fetchedAt: Date.now(),
+              payload: {
+                dashboardData: { ...this.dashboardData },
+                chartData: { ...this.chartData }
+              }
+            }
+            console.log('Updated chart data:', this.chartData)
+            this.renderChartsAfterDataLoad()
+          }).catch(e => console.warn('[ComplianceDashboard] Background chart fetch failed:', e))
         } else {
           const errorMessage = dashboardResponse.data?.message || 'API request failed'
           console.error('API Error:', errorMessage)
@@ -1246,7 +1474,8 @@ export default {
         }
       } catch (error) {
         console.error('Error in fetchDashboardData:', error)
-        
+        this.loadingDashboard = false // hide skeleton on error too
+
         // Set default values on error
         this.dashboardData = {
           status_counts: { approved: 0, active: 0, under_review: 0 },

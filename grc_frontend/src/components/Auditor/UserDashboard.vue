@@ -8,6 +8,7 @@
         <h1>Auditor Dashboard</h1>
       </div>
       <div class="header-actions">
+        <span v-if="dataSourceBadge" class="data-source-badge">{{ dataSourceBadge }}</span>
         <div class="export-controls">
           <div class="export-controls-inner">
             <!-- Select format dropdown, uses global export styles from main.css -->
@@ -66,9 +67,26 @@
       </div>
     </div>
     
+    <!-- Skeleton Screen: shown only on first load (no Pinia/page cache) -->
+    <div v-if="showSkeleton" class="dashboard-skeleton">
+      <div class="skeleton-kpi-grid">
+        <div v-for="n in 4" :key="'kpi-'+n" class="skeleton-kpi-card">
+          <div class="skeleton-block skeleton-kpi-value"></div>
+          <div class="skeleton-block skeleton-kpi-label"></div>
+        </div>
+      </div>
+      <div class="skeleton-charts-grid">
+        <div v-for="n in 4" :key="'chart-'+n" class="skeleton-chart-card">
+          <div class="skeleton-block skeleton-chart-title"></div>
+          <div class="skeleton-block skeleton-chart-area"></div>
+        </div>
+      </div>
+    </div>
+
     <!-- Performance Summary Cards -->
 
-
+    <!-- Main dashboard content: hidden while skeleton is shown -->
+    <div v-show="!showSkeleton">
     <!-- Filter Dropdowns -->
     <div class="filter-dropdowns">
       <div class="filter-dropdown">
@@ -271,13 +289,16 @@
         </div>
       </div>
     </div>
+    </div> <!-- close v-show wrapper -->
   </div>
 </template>
 
 <script>
-import { ref, reactive, watch, onMounted, computed, nextTick } from 'vue'
+import { ref, reactive, watch, onMounted, onActivated, computed, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useStore } from 'vuex'
+import { useDashboardsStore } from '@/stores/dashboards'
+import { useAppDataStore } from '@/stores/appData'
 import { Chart, ArcElement, BarElement, CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend } from 'chart.js'
 import { Doughnut, Bar, Line } from 'vue-chartjs'
 import '@fortawesome/fontawesome-free/css/all.min.css'
@@ -291,6 +312,11 @@ import CustomDropdown from '../CustomDropdown.vue'
 
 Chart.register(ArcElement, BarElement, CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend)
 
+const AUDIT_DASHBOARD_CACHE_TTL_MS = 5 * 60 * 1000
+const auditorDashboardViewCache = {
+  byKey: {}
+}
+
 export default {
   name: 'AuditorDashboard',
   components: {
@@ -302,8 +328,11 @@ export default {
   setup() {
     const router = useRouter()
     const store = useStore()
+    const dashboardsStore = useDashboardsStore()
+    const appDataStore = useAppDataStore()
     // Loading state
     const isLoading = ref(false)
+    const dataSourceBadge = ref('')
     const isLoadingActivities = ref(false)
     const isDownloading = ref(false)
     const error = ref(null)
@@ -323,6 +352,56 @@ export default {
     const policies = ref([])
     const selectedFramework = ref('all')
     const selectedPolicy = ref('all')
+
+    const getCacheKey = () => JSON.stringify({
+      framework: selectedFramework.value || 'all',
+      policy: selectedPolicy.value || 'all'
+    })
+
+    const getCachedSnapshot = () => {
+      const entry = auditorDashboardViewCache.byKey[getCacheKey()]
+      if (!entry) return null
+      if (Date.now() - entry.ts > AUDIT_DASHBOARD_CACHE_TTL_MS) return null
+      return entry.data
+    }
+
+    const applySnapshot = (snapshot) => {
+      if (!snapshot) return
+      frameworks.value = Array.isArray(snapshot.frameworks) ? snapshot.frameworks : []
+      policies.value = Array.isArray(snapshot.policies) ? snapshot.policies : []
+      recentActivities.value = Array.isArray(snapshot.recentActivities) ? snapshot.recentActivities : []
+      Object.assign(auditCompletionData, snapshot.auditCompletionData || {})
+      Object.assign(totalAuditsData, snapshot.totalAuditsData || {})
+      Object.assign(openAuditsData, snapshot.openAuditsData || {})
+      Object.assign(completedAuditsData, snapshot.completedAuditsData || {})
+      Object.assign(categoryData, snapshot.categoryData || {})
+      Object.assign(statusData, snapshot.statusData || {})
+      Object.assign(completionData, snapshot.completionData || {})
+      Object.assign(findingsData, snapshot.findingsData || {})
+      Object.assign(complianceTrendData, snapshot.complianceTrendData || {})
+      Object.assign(departmentData, snapshot.departmentData || {})
+    }
+
+    const saveSnapshot = () => {
+      auditorDashboardViewCache.byKey[getCacheKey()] = {
+        ts: Date.now(),
+        data: {
+          frameworks: JSON.parse(JSON.stringify(frameworks.value || [])),
+          policies: JSON.parse(JSON.stringify(policies.value || [])),
+          recentActivities: JSON.parse(JSON.stringify(recentActivities.value || [])),
+          auditCompletionData: JSON.parse(JSON.stringify(auditCompletionData)),
+          totalAuditsData: JSON.parse(JSON.stringify(totalAuditsData)),
+          openAuditsData: JSON.parse(JSON.stringify(openAuditsData)),
+          completedAuditsData: JSON.parse(JSON.stringify(completedAuditsData)),
+          categoryData: JSON.parse(JSON.stringify(categoryData)),
+          statusData: JSON.parse(JSON.stringify(statusData)),
+          completionData: JSON.parse(JSON.stringify(completionData)),
+          findingsData: JSON.parse(JSON.stringify(findingsData)),
+          complianceTrendData: JSON.parse(JSON.stringify(complianceTrendData)),
+          departmentData: JSON.parse(JSON.stringify(departmentData))
+        }
+      }
+    }
 
     // Audit Completion Rate data
     const auditCompletionData = reactive({
@@ -641,7 +720,10 @@ export default {
     }
 
     // Check for selected framework from session and set it as default
+    let selectedFrameworkSessionPromise = null
     const checkSelectedFrameworkFromSession = async () => {
+      if (selectedFrameworkSessionPromise) return selectedFrameworkSessionPromise
+      selectedFrameworkSessionPromise = (async () => {
       try {
         console.log('🔍 DEBUG: Checking for selected framework from session in Auditor Dashboard...')
         const data = await apiService.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED)
@@ -686,7 +768,11 @@ export default {
         console.error('❌ DEBUG: Error checking selected framework from session:', error)
         // Default to 'all' on error
         selectedFramework.value = 'all'
+      } finally {
+        selectedFrameworkSessionPromise = null
       }
+      })()
+      return selectedFrameworkSessionPromise
     }
 
     // Fetch policies for selected framework
@@ -1085,22 +1171,85 @@ export default {
     }
 
     // Refresh all dashboard data
-    const refreshData = async () => {
-      isLoading.value = true
+    const refreshData = async (force = false, silent = false) => {
+      if (!force) {
+        // 1. Pinia cache-first (persists across navigations)
+        const piniaData = dashboardsStore.get('audit')
+        if (piniaData) {
+          dataSourceBadge.value = 'Loaded from Pinia (fast)'
+          console.log('⚡ [AuditorDashboard] Restoring KPIs from Pinia cache')
+          if (piniaData.auditCompletionData) Object.assign(auditCompletionData, piniaData.auditCompletionData)
+          if (piniaData.totalAuditsData)  Object.assign(totalAuditsData,  piniaData.totalAuditsData)
+          if (piniaData.openAuditsData)   Object.assign(openAuditsData,   piniaData.openAuditsData)
+          if (piniaData.completedAuditsData) Object.assign(completedAuditsData, piniaData.completedAuditsData)
+          isLoading.value = false
+          // Background: charts + activities + silent revalidation
+          updateAllCharts()
+          fetchRecentActivities()
+          if (!dashboardsStore.isFresh('audit')) {
+            Promise.all([fetchAuditCompletionRate(), fetchTotalAudits(), fetchOpenAudits(), fetchCompletedAudits()])
+              .then(() => {
+                dashboardsStore.set('audit', _auditKpiSnapshot())
+              })
+          }
+          return
+        }
+        // 2. In-memory page cache
+        const cached = getCachedSnapshot()
+        if (cached) {
+          console.log('⚡ [AuditorUserDashboard] Restoring dashboard from page cache')
+          applySnapshot(cached)
+          isLoading.value = false
+          return
+        }
+      }
+      if (!silent) {
+        isLoading.value = true
+      }
       try {
+        // CRITICAL: fetch KPIs first → hide loading indicator
         await Promise.all([
           fetchAuditCompletionRate(),
           fetchTotalAudits(),
           fetchOpenAudits(),
-          fetchCompletedAudits(),
-          updateAllCharts(),
-          fetchRecentActivities()
+          fetchCompletedAudits()
         ])
+        if (!silent) {
+          isLoading.value = false
+        }
+        // Save KPIs to both Pinia stores for instant display on next visit
+        dashboardsStore.set('audit', _auditKpiSnapshot())
+        appDataStore.setAuditSummary(_auditKpiSnapshot())
+        // BACKGROUND: charts + activities (non-blocking)
+        updateAllCharts()
+        fetchRecentActivities().then(() => saveSnapshot())
       } catch (error) {
         console.error('Error refreshing dashboard data:', error)
-      } finally {
-        isLoading.value = false
+        if (!silent) {
+          isLoading.value = false
+        }
       }
+    }
+
+    // Helper: snapshot KPI reactive objects for Pinia storage
+    const _auditKpiSnapshot = () => ({
+      auditCompletionData: { ...auditCompletionData },
+      totalAuditsData: { ...totalAuditsData },
+      openAuditsData: { ...openAuditsData },
+      completedAuditsData: { ...completedAuditsData }
+    })
+
+    const hydrateAuditKpisFromAppData = () => {
+      // Use the fast audit summary stored by appData.fetchAudits()
+      if (appDataStore.auditSummary) {
+        const s = appDataStore.auditSummary
+        if (s.auditCompletionData) Object.assign(auditCompletionData, s.auditCompletionData)
+        if (s.totalAuditsData)     Object.assign(totalAuditsData,     s.totalAuditsData)
+        if (s.openAuditsData)      Object.assign(openAuditsData,      s.openAuditsData)
+        if (s.completedAuditsData) Object.assign(completedAuditsData, s.completedAuditsData)
+        return true
+      }
+      return false
     }
 
     // Fetch data on component mount
@@ -1111,8 +1260,35 @@ export default {
         selectedFramework.value = storeFrameworkId
         console.log('🔄 UserDashboard: Loaded framework from Vuex store:', storeFrameworkId)
       }
-      
-      refreshData()
+
+      // ── Pinia appData summary: fastest restore (saved after first API call) ─
+      if (appDataStore.auditSummary) {
+        console.log('⚡ [UserDashboard] Instant restore from Pinia appData summary')
+        const s = appDataStore.auditSummary
+        if (s.auditCompletionData) Object.assign(auditCompletionData, s.auditCompletionData)
+        if (s.totalAuditsData)     Object.assign(totalAuditsData,     s.totalAuditsData)
+        if (s.openAuditsData)      Object.assign(openAuditsData,      s.openAuditsData)
+        if (s.completedAuditsData) Object.assign(completedAuditsData, s.completedAuditsData)
+        isLoading.value = false
+        dataSourceBadge.value = 'Loaded from Pinia (fast)'
+        dashboardsStore.set('audit', _auditKpiSnapshot())
+        updateAllCharts()
+        fetchRecentActivities()
+        const fwLoaded = await fetchFrameworks()
+        if (fwLoaded) await checkSelectedFrameworkFromSession()
+        return
+      }
+
+      // Instant first paint from Pinia appData (if available), then refresh exact API values.
+      if (hydrateAuditKpisFromAppData()) {
+        dataSourceBadge.value = 'Loaded from Pinia (fast)'
+        isLoading.value = false
+        dashboardsStore.set('audit', _auditKpiSnapshot())
+      }
+
+      // First load path (no usable cache) can show loading once.
+      await refreshData(false)
+      dataSourceBadge.value = 'Refreshed from API (latest)'
       
       // Fetch frameworks first, then check for selected framework from session
       const frameworksLoaded = await fetchFrameworks()
@@ -1121,6 +1297,23 @@ export default {
         // Check for selected framework from session and set it
         await checkSelectedFrameworkFromSession()
       }
+    })
+
+    onActivated(async () => {
+      // keep-alive return path: update badge to reflect current data source.
+      if (appDataStore.auditSummary) {
+        dataSourceBadge.value = 'Loaded from Pinia (fast)'
+      } else if (dashboardsStore.get('audit')) {
+        dataSourceBadge.value = 'Loaded from Pinia (fast)'
+      }
+      // Show previous data instantly if we have it in the in-memory snapshot cache.
+      const cached = getCachedSnapshot()
+      if (cached) {
+        applySnapshot(cached)
+        refreshData(false, true).catch(() => {})
+        return
+      }
+      await refreshData(false, true)
     })
 
     // Watch for filter changes
@@ -1598,7 +1791,12 @@ export default {
       }
     }
 
+      // Skeleton: show only on first load when no Pinia cache
+      const showSkeleton = computed(() => isLoading.value && !dashboardsStore.hasData('audit'))
+
       return {
+      showSkeleton,
+      dataSourceBadge,
       isLoading,
       isLoadingActivities,
       isDownloading,
@@ -1722,5 +1920,62 @@ export default {
 .activity-author {
   color: #4f6cff;
   font-weight: 500;
+}
+
+/* ── Skeleton screens ─────────────────────────────────────────────── */
+@keyframes skeleton-shimmer {
+  0%   { background-position: -600px 0; }
+  100% { background-position: 600px 0; }
+}
+.skeleton-block {
+  background: linear-gradient(90deg, #ececec 25%, #d8d8d8 50%, #ececec 75%);
+  background-size: 1200px 100%;
+  animation: skeleton-shimmer 1.5s infinite linear;
+  border-radius: 6px;
+}
+.dashboard-skeleton { padding: 24px; }
+.skeleton-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.skeleton-kpi-card {
+  background: #fff;
+  border-radius: 10px;
+  padding: 20px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.07);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.skeleton-kpi-value { height: 38px; width: 60%; }
+.skeleton-kpi-label { height: 14px; width: 45%; }
+.skeleton-charts-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+.skeleton-chart-card {
+  background: #fff;
+  border-radius: 10px;
+  padding: 20px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.07);
+}
+.skeleton-chart-title { height: 16px; width: 40%; margin-bottom: 16px; }
+.skeleton-chart-area  { height: 220px; }
+@media (max-width: 900px) {
+  .skeleton-kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .skeleton-charts-grid { grid-template-columns: 1fr; }
+}
+
+.data-source-badge {
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(79, 108, 255, 0.12);
+  color: #334155;
+  border: 1px solid rgba(79, 108, 255, 0.2);
+  margin-right: 8px;
 }
 </style> 

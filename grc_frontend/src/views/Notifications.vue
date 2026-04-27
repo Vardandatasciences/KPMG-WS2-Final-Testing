@@ -184,11 +184,8 @@ const loadNotifications = async () => {
   loading.value = true;
   error.value = null;
   try {
-    // Get current user ID from localStorage
-    const userId = localStorage.getItem('user_id') || 'default_user';
-    
     // Try to load from backend first
-    const response = await fetch(`${API_BASE_URL}/api/get-notifications/?user_id=${userId}`, {
+    const response = await fetch(`${API_BASE_URL}/api/get-notifications/`, {
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
         'Content-Type': 'application/json'

@@ -29,7 +29,16 @@ class GrcConfig(AppConfig):
         # MULTI-TENANCY: Import tenant signals for automatic tenant_id assignment
         import grc.tenant_signals  # This registers the auto_set_tenant signal
 
-        # Start background scheduler for AI audit schedules when running under runserver
-        if "runserver" in sys.argv and os.environ.get("RUN_MAIN") == "true":
+        # Start background scheduler for AI audit schedules when running under runserver.
+        # In local debug, default OFF to avoid adding DB load to request latency tests.
+        scheduler_enabled = os.environ.get("ENABLE_INLINE_AUDIT_SCHEDULER")
+        if scheduler_enabled is None:
+            scheduler_enabled = "false" if os.environ.get("DJANGO_DEBUG", "false").lower() == "true" else "true"
+
+        if (
+            scheduler_enabled.lower() == "true"
+            and "runserver" in sys.argv
+            and os.environ.get("RUN_MAIN") == "true"
+        ):
             thread = threading.Thread(target=_run_scheduled_ai_audits_loop, daemon=True)
             thread.start()

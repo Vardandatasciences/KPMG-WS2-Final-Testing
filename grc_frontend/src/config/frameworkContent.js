@@ -2978,8 +2978,10 @@ function generateGenericFrameworkContent(frameworkName) {
 export function getFrameworkContent(frameworkId) {
   console.log('🔍 getFrameworkContent called with:', frameworkId);
   
-  // Handle 'all' or null/undefined
-  if (!frameworkId || frameworkId === 'all') {
+  // Handle 'all', null/undefined, and API aggregate label from homepage/all-frameworks
+  const idStr = frameworkId != null ? String(frameworkId).trim() : '';
+  const idLower = idStr.toLowerCase();
+  if (!idStr || frameworkId === 'all' || idLower === 'all frameworks') {
     console.log('📦 Returning "All Frameworks" content');
     return frameworkContent['all'];
   }

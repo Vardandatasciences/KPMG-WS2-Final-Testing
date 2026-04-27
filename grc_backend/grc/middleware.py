@@ -659,6 +659,9 @@ class AuditLoggingMiddleware(MiddlewareMixin):
         """Log request details to database"""
         # Skip logging for certain paths
         skip_paths = [
+            '/api/jwt/login/',
+            '/api/jwt/refresh/',
+            '/api/jwt/logout/',
             '/api/jwt/verify/',
             '/api/test-connection/',
             '/api/ai-incident-upload/',
@@ -692,6 +695,9 @@ class AuditLoggingMiddleware(MiddlewareMixin):
         
         # Skip logging for certain paths
         skip_paths = [
+            '/api/jwt/login/',
+            '/api/jwt/refresh/',
+            '/api/jwt/logout/',
             '/api/jwt/verify/',
             '/api/test-connection/',
             '/api/ai-incident-upload/',

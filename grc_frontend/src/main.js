@@ -2,6 +2,7 @@ import { createApp } from 'vue'
 import App from './App.vue'
 import router from './router'
 import store from './store'
+import { createPinia } from 'pinia'
 import axios from 'axios'
 import '@fortawesome/fontawesome-free/css/all.min.css'
 import ElementPlus from 'element-plus'
@@ -33,6 +34,27 @@ axios.defaults.baseURL = API_BASE_URL  // Use centralized API configuration
 axios.defaults.headers.common['Content-Type'] = 'application/json'
 axios.defaults.timeout = 120000  // 2 minutes timeout (increased for long-running operations)
 
+// Global dedupe/cache for frequently repeated framework GETs across modules.
+const SHARED_GET_CACHE_TTL_MS = 5000
+const SHARED_GET_ENDPOINT_HINTS = [
+  '/api/frameworks/get-selected/',
+  '/api/frameworks/approved-active/',
+]
+const sharedGetCache = new Map()
+
+const isSharedGetCandidate = (config) => {
+  const method = String(config?.method || 'get').toLowerCase()
+  if (method !== 'get') return false
+  const url = String(config?.url || '')
+  return SHARED_GET_ENDPOINT_HINTS.some((hint) => url.includes(hint))
+}
+
+const buildSharedGetCacheKey = (config) => {
+  const url = String(config?.url || '')
+  const params = config?.params ? JSON.stringify(config.params) : ''
+  return `${url}::${params}`
+}
+
 // CRITICAL: Enable credentials (cookies) for session management
 axios.defaults.withCredentials = true
 console.log('🍪 Axios configured to send cookies with requests (withCredentials: true)')
@@ -40,6 +62,47 @@ console.log('🍪 Axios configured to send cookies with requests (withCredential
 // Cookie-first: strip any per-call Authorization and legacy storage (raw `axios.get` usage).
 axios.interceptors.request.use(
   (config) => {
+    if (isSharedGetCandidate(config)) {
+      const key = buildSharedGetCacheKey(config)
+      const now = Date.now()
+      const existing = sharedGetCache.get(key)
+
+      if (existing?.response && (now - existing.timestamp) < SHARED_GET_CACHE_TTL_MS) {
+        config.adapter = () => Promise.resolve({
+          data: existing.response.data,
+          status: existing.response.status,
+          statusText: existing.response.statusText,
+          headers: existing.response.headers,
+          config,
+          request: null,
+        })
+        return config
+      }
+
+      if (existing?.promise) {
+        config.adapter = () =>
+          existing.promise.then((response) => ({
+            data: response.data,
+            status: response.status,
+            statusText: response.statusText,
+            headers: response.headers,
+            config,
+            request: null,
+          }))
+        return config
+      }
+
+      const defaultAdapter = config.adapter || axios.defaults.adapter
+      const networkPromise = Promise.resolve().then(() => defaultAdapter(config))
+      sharedGetCache.set(key, {
+        timestamp: now,
+        promise: networkPromise,
+        response: null,
+      })
+      config.__sharedGetCacheKey = key
+      config.adapter = () => networkPromise
+    }
+
     clearLegacyClientJwtKeys()
     try {
       if (config.headers) {
@@ -54,6 +117,34 @@ axios.interceptors.request.use(
   (error) => Promise.reject(error)
 )
 console.log('✅ Global axios: HttpOnly cookies only; no Bearer from storage')
+
+axios.interceptors.response.use(
+  (response) => {
+    const config = response?.config || {}
+    if (isSharedGetCandidate(config)) {
+      const key = config.__sharedGetCacheKey || buildSharedGetCacheKey(config)
+      sharedGetCache.set(key, {
+        timestamp: Date.now(),
+        promise: null,
+        response: {
+          data: response.data,
+          status: response.status,
+          statusText: response.statusText,
+          headers: response.headers,
+        },
+      })
+    }
+    return response
+  },
+  (error) => {
+    const config = error?.config || {}
+    if (isSharedGetCandidate(config)) {
+      const key = config.__sharedGetCacheKey || buildSharedGetCacheKey(config)
+      sharedGetCache.delete(key)
+    }
+    return Promise.reject(error)
+  }
+)
 
 // Initialize auth service (cookie-first, no token storage)
 import './services/authService.js'
@@ -96,10 +187,12 @@ console.log('🛡️ Setting up HTTP interceptor for access control')
 // );
 
 const app = createApp(App)
+const pinia = createPinia()
 app.config.performance = true
 app.config.warnHandler = () => null 
 app.use(router)
 app.use(store)
+app.use(pinia)
 app.use(ElementPlus)
 app.use(vuetify)
 app.use(Popup)
@@ -107,6 +200,7 @@ app.use(Popup)
 // Make router and store available globally for AccessUtils
 window.router = router
 window.store = store
+window.pinia = pinia
 
 // Global error handler to suppress reCAPTCHA timeout errors
 window.addEventListener('unhandledrejection', (event) => {

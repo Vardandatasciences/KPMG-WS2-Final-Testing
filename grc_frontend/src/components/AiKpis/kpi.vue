@@ -206,7 +206,7 @@
 </template>
 
 <script>
-import { ref, onMounted, onUnmounted, computed, nextTick, watch } from 'vue';
+import { ref, onMounted, onUnmounted, onActivated, computed, nextTick, watch } from 'vue';
 import axios from 'axios';
 import { API_ENDPOINTS } from '../../config/api.js';
 import { Chart, registerables } from 'chart.js';
@@ -216,6 +216,13 @@ import { convertColorForColorblind as convertColorFromUtil } from '@/utils/color
 
 // Register all Chart.js components
 Chart.register(...registerables);
+
+const KPI_VIEW_CACHE_TTL_MS = 5 * 60 * 1000;
+const kpiViewCache = {
+  kpis: null,
+  frameworks: null,
+  fetchedAt: 0,
+};
 
 export default {
   name: 'KPIDashboard',
@@ -901,7 +908,30 @@ export default {
     };
 
     // Fetch all KPIs
-    const fetchKPIs = async () => {
+    const hasFreshKpiCache = () => {
+      if (!Array.isArray(kpiViewCache.kpis) || !Array.isArray(kpiViewCache.frameworks)) return false;
+      return (Date.now() - kpiViewCache.fetchedAt) < KPI_VIEW_CACHE_TTL_MS;
+    };
+
+    const hydrateFromCache = async () => {
+      if (!hasFreshKpiCache()) return false;
+      kpis.value = JSON.parse(JSON.stringify(kpiViewCache.kpis));
+      frameworks.value = JSON.parse(JSON.stringify(kpiViewCache.frameworks));
+      loading.value = false;
+      error.value = null;
+      await nextTick();
+      renderCharts();
+      return true;
+    };
+
+    const fetchKPIs = async (force = false) => {
+      if (!force) {
+        const restored = await hydrateFromCache();
+        if (restored) {
+          console.log('⚡ [KPIDashboard] Restored KPIs from cache');
+          return;
+        }
+      }
       loading.value = true;
       error.value = null;
       
@@ -910,6 +940,11 @@ export default {
         
         if (response.data.status === 'success') {
           kpis.value = response.data.data;
+          kpiViewCache.kpis = JSON.parse(JSON.stringify(response.data.data || []));
+          if (!Array.isArray(kpiViewCache.frameworks)) {
+            kpiViewCache.frameworks = JSON.parse(JSON.stringify(frameworks.value || []));
+          }
+          kpiViewCache.fetchedAt = Date.now();
           
           // Wait for DOM update then render charts
           await nextTick();
@@ -926,11 +961,20 @@ export default {
     };
 
     // Fetch frameworks
-    const fetchFrameworks = async () => {
+    const fetchFrameworks = async (force = false) => {
+      if (!force && hasFreshKpiCache()) {
+        frameworks.value = JSON.parse(JSON.stringify(kpiViewCache.frameworks || []));
+        return;
+      }
       try {
         const response = await axios.get(API_ENDPOINTS.KPIS_FRAMEWORKS);
         if (response.data.status === 'success') {
           frameworks.value = response.data.data;
+          kpiViewCache.frameworks = JSON.parse(JSON.stringify(response.data.data || []));
+          if (!Array.isArray(kpiViewCache.kpis)) {
+            kpiViewCache.kpis = JSON.parse(JSON.stringify(kpis.value || []));
+          }
+          kpiViewCache.fetchedAt = Date.now();
         }
       } catch (err) {
         console.error('Error fetching frameworks:', err);
@@ -950,7 +994,8 @@ export default {
 
     // Refresh KPIs
     const refreshKPIs = () => {
-      fetchKPIs();
+      fetchKPIs(true);
+      fetchFrameworks(true);
     };
 
     // Format value based on data type
@@ -1182,6 +1227,18 @@ export default {
           console.log('🎨 [KPIDashboard] Initial colorblindness mode detected, ensuring charts use correct colors');
         }
       });
+    });
+
+    // keep-alive return: re-render charts instantly from cached state
+    onActivated(() => {
+      if (kpis.value.length > 0) {
+        nextTick(() => {
+          renderCharts();
+        });
+        return;
+      }
+      fetchKPIs();
+      fetchFrameworks();
     });
 
     // Cleanup

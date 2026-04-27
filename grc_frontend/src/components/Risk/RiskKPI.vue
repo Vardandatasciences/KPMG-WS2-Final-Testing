@@ -401,13 +401,13 @@
           </div>
         </div>
         <div class="kpi-number">
-          ₹{{ mitigationCostData.totalCost || kpiData.mitigationCost || '184' }}K
-          <span class="trend-indicator" :class="{ 'up': (mitigationCostData.percentageChange > 0), 'down': (mitigationCostData.percentageChange < 0) }">
-            {{ mitigationCostData.percentageChange > 0 ? '↑' : '↓' }} {{ Math.abs(mitigationCostData.percentageChange || 0) }}%
+          ₹{{ mitigationCostData?.totalCost || kpiData?.mitigationCost || '184' }}K
+          <span class="trend-indicator" :class="{ 'up': ((mitigationCostData?.percentageChange || 0) > 0), 'down': ((mitigationCostData?.percentageChange || 0) < 0) }">
+            {{ (mitigationCostData?.percentageChange || 0) > 0 ? '↑' : '↓' }} {{ Math.abs(mitigationCostData?.percentageChange || 0) }}%
           </span>
         </div>
         <div class="cost-chart">
-          <div class="cost-bars" v-if="mitigationCostData.monthlyData && mitigationCostData.monthlyData.length > 0">
+          <div class="cost-bars" v-if="mitigationCostData?.monthlyData && mitigationCostData.monthlyData.length > 0">
             <div 
               v-for="(item, index) in mitigationCostData.monthlyData" 
               :key="'cost-bar-'+index"
@@ -418,18 +418,18 @@
       </div>
           </div>
           <div class="cost-labels">
-            <span v-for="(item, index) in mitigationCostData.monthlyData" :key="'cost-month-'+index">
+            <span v-for="(item, index) in (mitigationCostData?.monthlyData || [])" :key="'cost-month-'+index">
               {{ item.month }}
             </span>
           </div>
           <div class="cost-breakdown">
             <div class="cost-metric">
               <div class="metric-label">Avg Cost</div>
-              <div class="metric-value">₹{{ mitigationCostData.avgCost || '31' }}K</div>
+              <div class="metric-value">₹{{ mitigationCostData?.avgCost || '31' }}K</div>
             </div>
             <div class="cost-metric">
               <div class="metric-label">Highest</div>
-              <div class="metric-value high-cost">₹{{ mitigationCostData.highestCost || '42' }}K</div>
+              <div class="metric-value high-cost">₹{{ mitigationCostData?.highestCost || '42' }}K</div>
             </div>
           </div>
         </div>

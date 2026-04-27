@@ -42,7 +42,8 @@ class IncidentService {
    * Main method to fetch ALL incident-related data in parallel
    * Called from HomeView.vue on login
    */
-  async fetchAllIncidentData() {
+  async fetchAllIncidentData(options = {}) {
+    const { includeIncidents = false } = options;
     if (this.dataStore.isFetching) {
       return {
         success: true,
@@ -53,6 +54,7 @@ class IncidentService {
     
     this.dataStore.isFetching = true;
     this.dataStore.fetchErrors = {};
+    this.dataStore.incidents = [];
     this.dataStore.auditFindings = [];
     this.dataStore.incidentUsers = [];
     this.dataStore.incidentBusinessUnits = [];
@@ -61,10 +63,7 @@ class IncidentService {
     
     try {
       console.log('🚀 [IncidentService] Starting comprehensive data prefetch...');
-      // IMPORTANT PERFORMANCE CHANGE:
-      // Do NOT prefetch ALL incidents here (that looped over every page and was very heavy).
-      // Only prefetch lightweight supporting data (audit findings, users).
-      const [auditFindings, users] = await Promise.all([
+      const prefetchTasks = [
         this.fetchAuditFindings().catch(err => {
           console.warn('Failed to fetch audit findings during prefetch:', err);
           return [];
@@ -72,16 +71,31 @@ class IncidentService {
         this.fetchIncidentUsers().catch(err => {
           console.warn('Failed to fetch users during prefetch:', err);
           return [];
-        })
-      ]);
+        }),
+      ];
+
+      // For app-wide cache priming we optionally include full incidents.
+      if (includeIncidents) {
+        prefetchTasks.push(
+          this.fetchIncidents().catch(err => {
+            console.warn('Failed to fetch incidents during prefetch:', err);
+            return [];
+          })
+        );
+      }
+
+      const [auditFindings, users, prefetchedIncidents = []] = await Promise.all(prefetchTasks);
       
       this.dataStore.auditFindings = auditFindings || [];
       this.dataStore.incidentUsers = users || [];
+      if (includeIncidents && Array.isArray(prefetchedIncidents)) {
+        this.dataStore.incidents = prefetchedIncidents;
+      }
       this.dataStore.lastFetchTime = Date.now();
       
       const total = this.dataStore.incidents.length;
       const auditFindingsTotal = this.dataStore.auditFindings.length;
-      console.log(`✅ [IncidentService] Incidents fetched (prefetch disabled for performance): ${total}`);
+      console.log(`✅ [IncidentService] Incidents fetched: ${total} (includeIncidents: ${includeIncidents})`);
       console.log(`✅ [IncidentService] Audit Findings fetched: ${auditFindingsTotal}`);
       
       // Also prefetch basic KPI data in background (non-blocking)

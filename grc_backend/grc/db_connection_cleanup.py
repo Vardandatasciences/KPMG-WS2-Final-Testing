@@ -6,6 +6,7 @@ to prevent connection leaks, especially important when CONN_MAX_AGE is set.
 """
 from django.db import connections
 from django.db import close_old_connections
+from django.conf import settings
 from django.core.signals import request_finished
 from django.dispatch import receiver
 from django.utils.deprecation import MiddlewareMixin
@@ -16,6 +17,17 @@ logger = logging.getLogger(__name__)
  
 # Thread-local storage to track connection cleanup
 _local = threading.local()
+
+
+def _aggressive_cleanup_enabled():
+    """
+    Keep aggressive per-request hard-closing configurable.
+    Default OFF in DEBUG to avoid expensive reconnect/SSL handshakes.
+    """
+    configured = getattr(settings, "DB_AGGRESSIVE_CONNECTION_CLEANUP", None)
+    if configured is not None:
+        return bool(configured)
+    return not bool(getattr(settings, "DEBUG", False))
  
  
 def _force_close_all_connections():
@@ -69,7 +81,10 @@ def close_db_connections_signal(sender, **kwargs):
     This is a backup to ensure connections are closed even if middleware fails.
     """
     try:
-        _force_close_all_connections()
+        if _aggressive_cleanup_enabled():
+            _force_close_all_connections()
+        else:
+            close_old_connections()
     except Exception as e:
         logger.debug(f"Error in signal handler closing connections: {e}")
  
@@ -109,7 +124,11 @@ class DatabaseConnectionCleanupMiddleware(MiddlewareMixin):
        
         # Only cleanup once per request (in case middleware is called multiple times)
         if not _local.cleanup_done:
-            closed_count = _force_close_all_connections()
+            if _aggressive_cleanup_enabled():
+                closed_count = _force_close_all_connections()
+            else:
+                close_old_connections()
+                closed_count = 0
             _local.cleanup_done = True
            
             # Log connection cleanup periodically (every 50th request to avoid spam)
@@ -128,7 +147,10 @@ class DatabaseConnectionCleanupMiddleware(MiddlewareMixin):
         """
         # Reset cleanup flag so we can cleanup on exception
         _local.cleanup_done = False
-        _force_close_all_connections()
+        if _aggressive_cleanup_enabled():
+            _force_close_all_connections()
+        else:
+            close_old_connections()
         return None
  
  

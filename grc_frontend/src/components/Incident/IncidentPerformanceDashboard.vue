@@ -10,6 +10,7 @@
           <p v-if="dataSourceMessage" class="data-source-message">{{ dataSourceMessage }}</p>
         </div>
       </div>
+      <span v-if="dataSourceBadge" class="data-source-badge">{{ dataSourceBadge }}</span>
       <div class="export-controls">
         <div class="export-controls-inner">
           <!-- Select format: custom dropdown from main.css (.export-select-*) -->
@@ -108,7 +109,23 @@
       </div>
     </div>
     
-    <div class="kpi-grid">
+    <!-- Skeleton Screen: shown only while KPIs load and no Pinia cache -->
+    <div v-if="showSkeleton" class="dashboard-skeleton">
+      <div class="skeleton-kpi-grid">
+        <div v-for="n in 4" :key="'kpi-'+n" class="skeleton-kpi-card">
+          <div class="skeleton-block skeleton-kpi-value"></div>
+          <div class="skeleton-block skeleton-kpi-label"></div>
+        </div>
+      </div>
+      <div class="skeleton-charts-grid">
+        <div v-for="n in 4" :key="'chart-'+n" class="skeleton-chart-card">
+          <div class="skeleton-block skeleton-chart-title"></div>
+          <div class="skeleton-block skeleton-chart-area"></div>
+        </div>
+      </div>
+    </div>
+
+    <div v-show="!showSkeleton" class="kpi-grid">
       <div
         v-for="card in kpiCards"
         :key="card.id"
@@ -235,6 +252,8 @@ import {
   Legend
 } from 'chart.js'
 import '@fortawesome/fontawesome-free/css/all.min.css'
+import { useDashboardsStore } from '@/stores/dashboards'
+import { useAppDataStore } from '@/stores/appData'
 import apiService from '@/services/apiService.js'
 import { API_ENDPOINTS } from '@/config/api.js'
 import { PopupModal } from '@/modules/popup'
@@ -265,6 +284,11 @@ export default {
     PopupModal,
     CustomDropdown
   },
+  setup() {
+    const dashboardsStore = useDashboardsStore()
+    const appDataStore = useAppDataStore()
+    return { dashboardsStore, appDataStore }
+  },
   data() {
     return {
       // Export controls (shared styles from main.css)
@@ -281,8 +305,12 @@ export default {
       selectedPriority: 'All Priorities',
       frameworks: [],
       loadingFrameworks: false,
+      incidentKpiLoaded: false, // true after first KPI fetch completes
+      selectedFrameworkRequestPromise: null,
+      frameworksRequestPromise: null,
       isDownloading: false,
       dataSourceMessage: '', // Data source indicator
+      dataSourceBadge: 'Loading...',
       dashboardData: {
         status_counts: {
           scheduled: 0,
@@ -314,6 +342,10 @@ export default {
     }
   },
   computed: {
+    // Skeleton screen: show only on first load when no Pinia cache exists
+    showSkeleton() {
+      return !this.incidentKpiLoaded && !this.dashboardsStore.hasData('incident')
+    },
     frameworkOptions() {
       return [
         { value: '', label: 'All Frameworks' },
@@ -401,10 +433,8 @@ export default {
     console.log('🚀 [IncidentPerformanceDashboard] Component mounted');
     this.isComponentAlive = true
 
-    // Initialize colorblindness tracking
     this.initColorblindnessTracking()
 
-    // Close export dropdown when clicking outside (uses main.css export-select-wrapper)
     this._exportDropdownClickOutside = (e) => {
       if (this.$refs.exportSelectRef && !this.$refs.exportSelectRef.contains(e.target)) {
         this.isExportDropdownOpen = false
@@ -412,8 +442,37 @@ export default {
     }
     document.addEventListener('click', this._exportDropdownClickOutside)
 
-    // Recent incidents can load in parallel; resolve framework + selection first to avoid
-    // duplicate dashboard/chart API bursts (previously: fetchDashboardData + fetchSelectedFramework both fetched).
+    // ── Pinia cache-first: instant KPI display on return visits ─────────────
+    const piniaData = this.dashboardsStore.get('incident')
+    if (piniaData) {
+      this.dataSourceBadge = 'Loaded from Pinia (fast)'
+      console.log('⚡ [IncidentDashboard] Restoring KPIs from Pinia cache')
+      this.dashboardData = { ...piniaData }
+      this.incidentKpiLoaded = true
+      const piniaFw = this.dashboardsStore.getFrameworks('incident')
+      if (piniaFw?.length) this.frameworks = piniaFw.map(f => ({ ...f }))
+      // Background: recent incidents, framework, full refresh if stale
+      this.fetchRecentIncidents()
+      this.fetchFrameworks()
+      if (!this.dashboardsStore.isFresh('incident')) {
+        this.fetchSelectedFramework().then(() => this.fetchDashboardData())
+      }
+      return
+    }
+
+    // First-visit fast paint using appData Pinia cache when available.
+    if (this.hydrateIncidentKpisFromAppData()) {
+      this.dataSourceBadge = 'Loaded from Pinia (fast)'
+      this.incidentKpiLoaded = true
+      this.dashboardsStore.set('incident', { ...this.dashboardData })
+      this.fetchRecentIncidents()
+      this.fetchFrameworks()
+      this.fetchSelectedFramework().then(() => this.fetchDashboardData())
+      return
+    }
+    // ────────────────────────────────────────────────────────────────────────
+
+    // Recent incidents: fire-and-forget (non-blocking)
     this.fetchRecentIncidents()
     try {
       await this.fetchFrameworks()
@@ -421,6 +480,23 @@ export default {
     } catch (e) {
       console.warn('[IncidentPerformanceDashboard] Framework load failed:', e)
     }
+    await this.fetchDashboardData()
+    // KPIs now loaded (fetchDashboardData sets dashboardData)
+    this.incidentKpiLoaded = true
+  },
+  async activated() {
+    // keep-alive re-entry: keep existing KPI/charts on screen, refresh silently in background.
+    if (this.chartData && this.chartData.status) {
+      await this.$nextTick()
+      await this.safeUpdateAllCharts()
+      this.fetchDashboardData({ silent: true }).catch(() => {})
+      return
+    }
+    if (this.dashboardData && this.incidentKpiLoaded) {
+      this.fetchDashboardData({ silent: true }).catch(() => {})
+      return
+    }
+    // Safety fallback only when no prior data exists.
     await this.fetchDashboardData()
   },
   beforeUnmount() {
@@ -433,10 +509,31 @@ export default {
     }
   },
   beforeRouteLeave(to, from, next) {
-    this.destroyAllCharts()
+    // keep-alive handles component caching; don't tear charts down on route change.
     next()
   },
   methods: {
+    hydrateIncidentKpisFromAppData() {
+      if (!this.appDataStore.incidentsLoaded || !Array.isArray(this.appDataStore.incidents) || this.appDataStore.incidents.length === 0) return false
+      const incidents = this.appDataStore.incidents
+      const normalize = (v) => (v || '').toString().trim().toLowerCase()
+      const counts = { approved: 0, rejected: 0, resolved: 0, scheduled: 0 }
+      incidents.forEach((it) => {
+        const s = normalize(it?.IncidentStatus || it?.status)
+        if (s.includes('approved')) counts.approved += 1
+        else if (s.includes('rejected')) counts.rejected += 1
+        else if (s.includes('resolved') || s.includes('closed')) counts.resolved += 1
+        else counts.scheduled += 1
+      })
+      const total = incidents.length
+      this.dashboardData = {
+        status_counts: counts,
+        total_count: total,
+        change_percentage: 0,
+        resolution_rate: total ? Number(((counts.resolved / total) * 100).toFixed(1)) : 0
+      }
+      return true
+    },
     // Colorblindness support methods
     initColorblindnessTracking() {
       // Get current colorblindness mode
@@ -528,9 +625,22 @@ export default {
     },
     
     async fetchFrameworks() {
+      if (this.frameworksRequestPromise) {
+        return this.frameworksRequestPromise
+      }
+      this.frameworksRequestPromise = (async () => {
       try {
         this.loadingFrameworks = true
         console.log('🔍 Fetching frameworks...')
+        const cachedFrameworks = incidentDataService.getData('incidentFrameworks') || []
+        if (Array.isArray(cachedFrameworks) && cachedFrameworks.length > 0) {
+          this.frameworks = cachedFrameworks.map(framework => ({
+            id: framework.id || framework.FrameworkId,
+            name: framework.name || framework.FrameworkName || 'Unknown Framework'
+          }))
+          console.log('⚡ [IncidentPerformanceDashboard] Using cached frameworks from incident service')
+          return
+        }
         let responseData
         try {
           responseData = await apiService.get('/api/compliance/frameworks/public/', {}, { timeout: 30000, skipCache: true })
@@ -571,6 +681,7 @@ export default {
           id: framework.id || framework.FrameworkId,
           name: framework.name || framework.FrameworkName || 'Unknown Framework'
         }))
+        incidentDataService.setData('incidentFrameworks', this.frameworks)
         
         console.log('✅ Processed frameworks:', this.frameworks)
         
@@ -582,10 +693,17 @@ export default {
         this.frameworks = []
       } finally {
         this.loadingFrameworks = false
+        this.frameworksRequestPromise = null
       }
+      })()
+      return this.frameworksRequestPromise
     },
 
     async fetchSelectedFramework() {
+      if (this.selectedFrameworkRequestPromise) {
+        return this.selectedFrameworkRequestPromise
+      }
+      this.selectedFrameworkRequestPromise = (async () => {
       try {
         console.log('🔍 Fetching selected framework from home page...')
         const responseData = await apiService.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED)
@@ -625,7 +743,11 @@ export default {
             await this.setSelectedFrameworkIfAvailable()
           }
         }
+      } finally {
+        this.selectedFrameworkRequestPromise = null
       }
+      })()
+      return this.selectedFrameworkRequestPromise
     },
 
     async setSelectedFrameworkIfAvailable() {
@@ -772,6 +894,38 @@ export default {
         
         // Complex filters that require API calls (time range requires server-side date filtering)
         const hasComplexFilters = hasTimeRangeFilter;
+
+        // Instant path: if all dashboard + chart data is already cached, use it immediately
+        // without waiting for any in-flight prefetch promise.
+        if (!hasComplexFilters) {
+          const cachedDashboard = incidentDataService.getKPIData('dashboardSummary');
+          const cachedStatusChart = incidentDataService.getKPIData('statusChart');
+          const cachedOriginChart = incidentDataService.getKPIData('originChart');
+          const cachedCategoryChart = incidentDataService.getKPIData('categoryChart');
+          const cachedPriorityChart = incidentDataService.getKPIData('priorityChart');
+          const allCachedNow = cachedDashboard && cachedStatusChart && cachedOriginChart && cachedCategoryChart && cachedPriorityChart;
+          if (allCachedNow) {
+            console.log('⚡ [IncidentPerformanceDashboard] Instant cache restore (no prefetch wait)');
+            const summary = cachedDashboard.data?.summary || {};
+            this.dashboardData = {
+              status_counts: summary.status_counts || {},
+              total_count: summary.total_count || 0,
+              change_percentage: summary.change_percentage || 0,
+              resolution_rate: summary.resolution_rate || 0
+            };
+            this.incidentKpiLoaded = true
+            this.dataSourceBadge = 'Service Cache'
+            this.chartData = {
+              status: cachedStatusChart.chartData || cachedStatusChart,
+              origin: cachedOriginChart.chartData || cachedOriginChart,
+              category: cachedCategoryChart.chartData || cachedCategoryChart,
+              priority: cachedPriorityChart.chartData || cachedPriorityChart
+            };
+            await this.$nextTick();
+            await this.safeUpdateAllCharts();
+            return;
+          }
+        }
         
         // Check if prefetch is in progress or cache is available
         if (!window.incidentDataFetchPromise && !incidentDataService.hasValidIncidentsCache()) {
@@ -849,7 +1003,8 @@ export default {
               change_percentage: summary.change_percentage || 0,
               resolution_rate: summary.resolution_rate || 0
             };
-            
+            this.incidentKpiLoaded = true
+
             // Set chart data
             this.chartData = {
               status: statusChart.chartData || statusChart,
@@ -857,15 +1012,16 @@ export default {
               category: categoryChart.chartData || categoryChart,
               priority: priorityChart.chartData || priorityChart
             };
-            
+
             // Set data source message with timing
             const timeTaken = getTimeTaken();
             this.dataSourceMessage = `✅ Loaded ${this.dashboardData.total_count} incidents from cache (prefetched on Home page) - ${timeTaken}`;
-            
+            this.dataSourceBadge = 'Service Cache'
+
             // Update charts
             await this.$nextTick();
             await this.safeUpdateAllCharts();
-            
+
             console.log(`✅✅✅ [IncidentPerformanceDashboard] Dashboard loaded from cache - ${timeTaken}`);
             return;
           }
@@ -900,10 +1056,12 @@ export default {
             change_percentage: basicKPIs.change_percentage,
             resolution_rate: basicKPIs.resolution_rate
           };
-          
+          this.incidentKpiLoaded = true
+
           // Set data source message with timing
           const timeTaken = getTimeTaken();
           this.dataSourceMessage = `✅ Loaded ${basicKPIs.totalCount} incidents from cache (prefetched on Home page) - ${timeTaken}`;
+          this.dataSourceBadge = 'Service Cache'
           
           // Compute chart data from cache INSTANTLY with filters (no API calls needed!)
           console.log('⚡ [IncidentPerformanceDashboard] Computing chart data from cache with filters - INSTANT!');
@@ -975,46 +1133,45 @@ export default {
           throw new Error(`Dashboard fetch failed: ${err.message}`)
         }
 
-        // Fetch data for each chart
-        const chartPromises = [
-          this.fetchChartData('Status', 'doughnut'),
-          this.fetchChartData('Origin', 'bar'),
-          this.fetchChartData('RiskCategory', 'line'),
-          this.fetchChartData('RiskPriority', 'bar')
-        ]
-
-        const [statusData, originData, categoryData, priorityData] = await Promise.all(chartPromises)
-
         if (dashboardResponse && dashboardResponse.success) {
           const summary = dashboardResponse.data?.summary || {}
           console.log('Dashboard summary data:', summary)
-          
+
+          // ── CRITICAL: set KPI data immediately so skeleton disappears ────
           this.dashboardData = {
             status_counts: summary.status_counts || {},
             total_count: summary.total_count || 0,
             change_percentage: summary.change_percentage || 0,
             resolution_rate: summary.resolution_rate || 0
           }
-          
-          // Set data source message for API fetch with timing
+          this.incidentKpiLoaded = true
+          // Save KPIs to Pinia for instant display on next visit
+          this.dashboardsStore.set('incident', { ...this.dashboardData })
+          this.dashboardsStore.setFrameworks('incident', this.frameworks.map(f => ({ ...f })))
+
           const timeTaken = getTimeTaken();
-          this.dataSourceMessage = `📊 Loaded ${this.dashboardData.total_count} incidents from API (cache unavailable or filters applied) - ${timeTaken}`;
+          this.dataSourceMessage = `📊 Loaded ${this.dashboardData.total_count} incidents from API - ${timeTaken}`;
+          this.dataSourceBadge = 'Refreshed from API (latest)'
+
+          // ── BACKGROUND: fetch charts without blocking KPI display ────────
+          Promise.all([
+            this.fetchChartData('Status', 'doughnut'),
+            this.fetchChartData('Origin', 'bar'),
+            this.fetchChartData('RiskCategory', 'line'),
+            this.fetchChartData('RiskPriority', 'bar')
+          ]).then(([statusData, originData, categoryData, priorityData]) => {
+            this.chartData = {
+              status: statusData,
+              origin: originData,
+              category: categoryData,
+              priority: priorityData
+            }
           
-          // Update chart data
-          this.chartData = {
-            status: statusData,
-            origin: originData,
-            category: categoryData,
-            priority: priorityData
-          }
-          
-          const timeTaken3 = getTimeTaken();
-          console.log(`✅ [IncidentPerformanceDashboard] Dashboard loaded from API - ${timeTaken3}`)
-          console.log('Updated chart data:', this.chartData)
-          
-          // Wait for the next tick to ensure DOM is updated
-          await this.$nextTick()
-          await this.safeUpdateAllCharts()
+            const timeTaken3 = getTimeTaken()
+            console.log(`✅ [IncidentPerformanceDashboard] Charts loaded - ${timeTaken3}`)
+            console.log('Updated chart data:', this.chartData)
+            this.$nextTick().then(() => this.safeUpdateAllCharts())
+          }).catch(e => console.warn('[IncidentDashboard] Background chart fetch failed:', e))
         } else {
           const errorMessage = dashboardResponse?.message || 'API request failed'
           const timeTakenError = getTimeTaken();
@@ -1024,11 +1181,12 @@ export default {
       } catch (error) {
         const timeTakenError2 = getTimeTaken();
         console.error(`❌ Error in fetchDashboardData after ${timeTakenError2}:`, error)
-        
+        this.incidentKpiLoaded = true // hide skeleton on error
+
         if (AccessUtils.handleApiError(error)) {
           return
         }
-        
+
         // Set default values on error with timing message
         this.dashboardData = {
           status_counts: { scheduled: 0, approved: 0, rejected: 0 },
@@ -1057,6 +1215,7 @@ export default {
         
         // Set error message with timing
         this.dataSourceMessage = `❌ Error loading data - ${timeTakenError2}`;
+        this.dataSourceBadge = 'API Error'
         
         await this.$nextTick()
         await this.safeUpdateAllCharts()
@@ -1531,7 +1690,7 @@ export default {
         console.log('Loading data for all frameworks')
       }
       
-      this.fetchDashboardData()
+      this.fetchDashboardData({ silent: true })
     },
 
     debugFramework() {
@@ -1557,7 +1716,7 @@ export default {
         const firstFramework = this.frameworks[0]
         console.log('Testing with first framework:', firstFramework)
         this.selectedFramework = firstFramework.id
-        this.fetchDashboardData()
+        this.fetchDashboardData({ silent: true })
       }
       
       alert('Framework debug info logged to console. Check browser console for details.')
@@ -1565,7 +1724,7 @@ export default {
 
     refreshData() {
       this.fetchFrameworks()
-      this.fetchDashboardData()
+      this.fetchDashboardData({ silent: true })
       this.fetchRecentIncidents()
     },
     
@@ -1574,7 +1733,7 @@ export default {
       this.selectedTimeRange = 'Last 6 Months'
       this.selectedCategory = 'All Categories'
       this.selectedPriority = 'All Priorities'
-      this.fetchDashboardData()
+      this.fetchDashboardData({ silent: true })
     },
     
     // Download/export dashboard in selected format
@@ -1794,5 +1953,63 @@ export default {
   font-size: 0.85rem;
   color: #2563eb;
   font-weight: 500;
+}
+
+.data-source-badge {
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(79, 108, 255, 0.12);
+  color: #334155;
+  border: 1px solid rgba(79, 108, 255, 0.2);
+  margin-right: 8px;
+  align-self: center;
+}
+
+/* ── Skeleton screens ─────────────────────────────────────────────── */
+@keyframes skeleton-shimmer {
+  0%   { background-position: -600px 0; }
+  100% { background-position: 600px 0; }
+}
+.skeleton-block {
+  background: linear-gradient(90deg, #ececec 25%, #d8d8d8 50%, #ececec 75%);
+  background-size: 1200px 100%;
+  animation: skeleton-shimmer 1.5s infinite linear;
+  border-radius: 6px;
+}
+.dashboard-skeleton { padding: 0 0 24px; }
+.skeleton-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.skeleton-kpi-card {
+  background: #fff;
+  border-radius: 10px;
+  padding: 20px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.07);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.skeleton-kpi-value { height: 38px; width: 60%; }
+.skeleton-kpi-label { height: 14px; width: 45%; }
+.skeleton-charts-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+.skeleton-chart-card {
+  background: #fff;
+  border-radius: 10px;
+  padding: 20px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.07);
+}
+.skeleton-chart-title { height: 16px; width: 40%; margin-bottom: 16px; }
+.skeleton-chart-area  { height: 220px; }
+@media (max-width: 900px) {
+  .skeleton-kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .skeleton-charts-grid { grid-template-columns: 1fr; }
 }
 </style>

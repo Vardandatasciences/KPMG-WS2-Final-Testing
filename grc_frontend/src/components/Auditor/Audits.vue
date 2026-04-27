@@ -337,12 +337,16 @@ import { AccessUtils } from '@/utils/accessUtils';
 export default {
   name: 'AuditsView',
   data() {
+    // Pre-populate from cache so re-visits are instant (stale-while-revalidate)
+    const cachedAudits = auditorDataService.hasAuditsCache()
+      ? (auditorDataService.getData('audits') || [])
+      : [];
     return {
       searchQuery: '',
-      auditData: [],
-      filteredAuditData: [],
+      auditData: cachedAudits,
+      filteredAuditData: cachedAudits,
       error: '',
-      loading: true,
+      loading: cachedAudits.length === 0, // skip loading spinner if we already have data
       showAuditDetails: false,
       currentAudit: null,
       loadingAuditDetails: false,
@@ -369,11 +373,25 @@ export default {
     },
     async fetchAuditData() {
       console.log('🔍 [Audits] Checking for cached audits data...');
-      this.loading = true;
       this.error = '';
+
+      // Fast path: if cache already has data, serve it immediately without showing loading state
+      if (auditorDataService.hasAuditsCache()) {
+        console.log('✅ [Audits] Cache hit — serving instantly');
+        const cachedAudits = auditorDataService.getData('audits') || [];
+        if (Array.isArray(cachedAudits)) {
+          this.auditData = cachedAudits;
+          this.filteredAuditData = cachedAudits;
+        }
+        this.loading = false;
+        return; // data is fresh enough, no need to re-fetch
+      }
+
+      // No cache — show loading spinner and fetch
+      this.loading = true;
       
       // Check if prefetch was never started (user came directly to this page)
-      if (!window.auditorDataFetchPromise && !auditorDataService.hasAuditsCache()) {
+      if (!window.auditorDataFetchPromise) {
         console.log('🚀 [Audits] Starting prefetch now (user came directly to this page)...');
         window.auditorDataFetchPromise = auditorDataService.fetchAllAuditorData();
       }
@@ -406,15 +424,19 @@ export default {
       } else {
         // Fallback: Fetch from API if cache is empty
         console.log('⚠️ [Audits] No cached data found, fetching from API...');
-      apiService.get('/api/audits/')
+      apiService.get(API_ENDPOINTS.AUDIT_MY_AUDITS)
         .then(data => {
             console.log("Audit data received from API:", data);
-          if (Array.isArray(data)) {
-            this.auditData = data;
-            this.filteredAuditData = data;
-              // Update cache
-              auditorDataService.setData('audits', data);
-              console.log('ℹ️ [Audits] Cache updated after direct API fetch');
+          const audits = Array.isArray(data)
+            ? data
+            : (Array.isArray(data?.audits) ? data.audits : []);
+
+          if (audits.length > 0) {
+            this.auditData = audits;
+            this.filteredAuditData = audits;
+            // Update cache
+            auditorDataService.setData('audits', audits);
+            console.log('ℹ️ [Audits] Cache updated after direct API fetch');
           } else {
             console.warn("Received non-array audit data:", data);
             this.auditData = [];

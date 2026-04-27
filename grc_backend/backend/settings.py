@@ -292,6 +292,8 @@ DATABASES = {
             "auth_plugin": "caching_sha2_password",
             "connection_timeout": 10,
         },
+        # Keep connections warm in dev/prod to avoid reconnect + SSL handshake per request.
+        "CONN_MAX_AGE": int(os.environ.get("DB_CONN_MAX_AGE", "60")),
     },
 
     # =========================================================================

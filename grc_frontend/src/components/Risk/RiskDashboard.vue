@@ -1,4 +1,4 @@
-8<template>
+<template>
   <div class="risk-dashboard-container">
     <!-- Header Section -->
     <div class="risk-dashboard-header">
@@ -6,6 +6,7 @@
         <h2 class="risk-dashboard-heading">Risk Dashboard</h2>
       </div>
       <div class="risk-dashboard-actions">
+        <span v-if="dataSourceBadge" class="data-source-badge">{{ dataSourceBadge }}</span>
         <div class="export-controls">
           <div class="export-controls-inner">
             <div
@@ -133,8 +134,24 @@
       </div>
     </div>
     
+    <!-- Skeleton Screen: shown only while KPIs load and no Pinia cache -->
+    <div v-if="showSkeleton" class="dashboard-skeleton">
+      <div class="skeleton-kpi-grid">
+        <div v-for="n in 5" :key="'kpi-'+n" class="skeleton-kpi-card">
+          <div class="skeleton-block skeleton-kpi-value"></div>
+          <div class="skeleton-block skeleton-kpi-label"></div>
+        </div>
+      </div>
+      <div class="skeleton-charts-grid">
+        <div v-for="n in 4" :key="'chart-'+n" class="skeleton-chart-card">
+          <div class="skeleton-block skeleton-chart-title"></div>
+          <div class="skeleton-block skeleton-chart-area"></div>
+        </div>
+      </div>
+    </div>
+
     <!-- Metrics Cards Section (using global KPI cards from main.css) -->
-    <div class="risk-metrics-section">
+    <div v-show="!showSkeleton" class="risk-metrics-section">
       <div class="kpi-grid">
         <!-- Total Risks -->
         <div class="kpi-card">
@@ -482,6 +499,8 @@
 import { ref, reactive, watch, onMounted, onActivated, onUnmounted, computed, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useStore } from 'vuex'
+import { useDashboardsStore } from '@/stores/dashboards'
+import { useAppDataStore } from '@/stores/appData'
 import { Chart, ArcElement, BarElement, CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend } from 'chart.js'
 import { Doughnut, Bar, Line as LineChart } from 'vue-chartjs'
 import '@fortawesome/fontawesome-free/css/all.min.css'
@@ -517,6 +536,8 @@ export default {
 
     const router = useRouter()
     const store = useStore()
+    const dashboardsStore = useDashboardsStore()
+    const appDataStore = useAppDataStore()
     const showRiskDetails = ref(true)
     const selectedXAxis = ref('time')
     const selectedYAxis = ref('performance')
@@ -955,6 +976,10 @@ export default {
       mitigated: 0,
       inProgress: 0
     })
+    const riskKpiLoaded = ref(false)
+    const dataSourceBadge = ref('')
+    // Skeleton: show only when KPIs not yet loaded AND no Pinia cache
+    const showSkeleton = computed(() => !riskKpiLoaded.value && !dashboardsStore.hasData('risk'))
     
     // Update fetchRiskMetrics function to be called on filter change
     const fetchRiskMetrics = async () => {
@@ -996,12 +1021,15 @@ export default {
         
         // Update priority distribution
         if (response.data.data.priority_distribution) {
-          // Update any priority-based charts here
           console.log('Priority distribution updated:', response.data.data.priority_distribution)
         }
+        // Mark KPIs as loaded and cache in Pinia
+        riskKpiLoaded.value = true
+        dashboardsStore.set('risk', { ...metrics })
         }
       } catch (error) {
         console.error('Error fetching risk metrics:', error)
+        riskKpiLoaded.value = true // hide skeleton even on error
         
         // Check for access denied first
         if (AccessUtils.handleApiError(error)) {
@@ -1021,6 +1049,28 @@ export default {
         categoryDistributionData.datasets[0].backgroundColor = []
         categoryChartKey.value += 1
       }
+    }
+
+    const hydrateRiskKpisFromAppData = () => {
+      if (!appDataStore.risksLoaded || !Array.isArray(appDataStore.riskInstances) || appDataStore.riskInstances.length === 0) return false
+      const instances = appDataStore.riskInstances
+      const text = (v) => (v || '').toString().trim().toLowerCase()
+      const accepted = instances.filter((r) => text(r?.MitigationStatus || r?.status).includes('accepted')).length
+      const mitigated = instances.filter((r) => {
+        const s = text(r?.MitigationStatus || r?.status)
+        return s.includes('mitigated') || s.includes('completed')
+      }).length
+      const inProgress = instances.filter((r) => {
+        const s = text(r?.MitigationStatus || r?.status)
+        return s.includes('progress') || s.includes('ongoing')
+      }).length
+      const rejected = instances.filter((r) => text(r?.MitigationStatus || r?.status).includes('rejected')).length
+      metrics.total = Array.isArray(appDataStore.risks) ? appDataStore.risks.length : instances.length
+      metrics.accepted = accepted
+      metrics.rejected = rejected
+      metrics.mitigated = mitigated
+      metrics.inProgress = inProgress
+      return true
     }
 
     // Reactive data for filters
@@ -1088,7 +1138,10 @@ export default {
     ])
 
     // Fetch frameworks for dropdown
+    let fetchFrameworksPromise = null
     const fetchFrameworks = async () => {
+      if (fetchFrameworksPromise) return fetchFrameworksPromise
+      fetchFrameworksPromise = (async () => {
       try {
         loadingFrameworks.value = true
         const response = await axios.get('/api/risk/frameworks-for-filter/')
@@ -1108,99 +1161,72 @@ export default {
         return false
       } finally {
         loadingFrameworks.value = false
+        fetchFrameworksPromise = null
       }
+      })()
+      return fetchFrameworksPromise
     }
 
     // Check for selected framework from session and set it as default
+    // Helper: fire background (non-critical) risk chart/data fetches
+    const _fetchRiskBackground = () => {
+      fetchRiskTrendData()
+      fetchCategoryDistribution()
+      fetchCustomAnalysisData()
+      fetchHeatmapData()
+      fetchCategoryOptions()
+    }
+
+    let selectedFrameworkSessionPromise = null
     const checkSelectedFrameworkFromSession = async () => {
+      if (selectedFrameworkSessionPromise) return selectedFrameworkSessionPromise
+      selectedFrameworkSessionPromise = (async () => {
       try {
         console.log('🔍 DEBUG: Checking for selected framework from session in RiskDashboard...')
         const response = await axios.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED)
         console.log('📊 DEBUG: Selected framework response:', response.data)
-        
+
         if (response.data && response.data.success) {
-          // Check if a framework is selected (not null)
           if (response.data.frameworkId) {
             const sessionFrameworkId = response.data.frameworkId
-            console.log('✅ DEBUG: Found selected framework in session:', sessionFrameworkId)
-            
-            // Check if this framework exists in our loaded frameworks
             const frameworkExists = frameworks.value.find(f => f.FrameworkId == sessionFrameworkId)
-            
+
             if (frameworkExists) {
               filters.framework = sessionFrameworkId
               console.log('✅ DEBUG: Set framework filter from session:', frameworkExists.FrameworkName)
-              console.log('🔍 DEBUG: Framework ID being used:', sessionFrameworkId)
-              console.log('🔍 DEBUG: Framework object:', frameworkExists)
-              
-              // Fetch policies for this framework and update all data
-              await fetchPolicies(sessionFrameworkId)
-              await fetchRiskMetrics()
-              await fetchRiskTrendData()
-              await fetchCategoryDistribution()
-              await fetchCustomAnalysisData()
-              await fetchHeatmapData()
+              // CRITICAL: fetch KPIs first
+              fetchPolicies(sessionFrameworkId)   // background – filter dropdown only
+              await fetchRiskMetrics()            // critical – KPI cards
+              _fetchRiskBackground()              // background – charts
             } else {
-              console.log('⚠️ DEBUG: Framework from session not found in available frameworks')
-              console.log('🔍 DEBUG: Session framework ID:', sessionFrameworkId)
-              console.log('🔍 DEBUG: Available frameworks:', frameworks.value.map(f => ({ FrameworkId: f.FrameworkId, FrameworkName: f.FrameworkName })))
-              
-              // Framework not found, default to "All Frameworks" and fetch data
               filters.framework = 'all'
-              console.log('🔄 DEBUG: Defaulting to All Frameworks and fetching data...')
-              await fetchPolicies()
+              fetchPolicies()
               await fetchRiskMetrics()
-              await fetchRiskTrendData()
-              await fetchCategoryDistribution()
-              await fetchCustomAnalysisData()
-              await fetchHeatmapData()
-              fetchCategoryOptions()
+              _fetchRiskBackground()
             }
           } else {
-            // "All Frameworks" is selected (frameworkId is null)
-            console.log('ℹ️ DEBUG: No framework selected in session (All Frameworks selected)')
-            console.log('🌐 DEBUG: Setting framework filter to "all"')
             filters.framework = 'all'
-            
-            // Fetch all data for "All Frameworks" view
-            console.log('🔄 DEBUG: Fetching data for All Frameworks...')
-            await fetchPolicies()
+            fetchPolicies()
             await fetchRiskMetrics()
-            await fetchRiskTrendData()
-            await fetchCategoryDistribution()
-            await fetchCustomAnalysisData()
-            await fetchHeatmapData()
-            fetchCategoryOptions()
+            _fetchRiskBackground()
           }
         } else {
-          console.log('ℹ️ DEBUG: No framework found in session')
           filters.framework = 'all'
-          
-          // Fetch all data for "All Frameworks" view
-          console.log('🔄 DEBUG: Fetching data for All Frameworks (no session)...')
-          await fetchPolicies()
+          fetchPolicies()
           await fetchRiskMetrics()
-          await fetchRiskTrendData()
-          await fetchCategoryDistribution()
-          await fetchCustomAnalysisData()
-          await fetchHeatmapData()
-          fetchCategoryOptions()
+          _fetchRiskBackground()
         }
       } catch (error) {
         console.error('❌ DEBUG: Error checking selected framework from session:', error)
-        // Default to 'all' on error
         filters.framework = 'all'
-        
-        // Fetch all data even on error (default to All Frameworks)
-        console.log('🔄 DEBUG: Fetching data for All Frameworks (after error)...')
-        await fetchPolicies()
+        fetchPolicies()
         await fetchRiskMetrics()
-        await fetchRiskTrendData()
-        await fetchCategoryDistribution()
-        await fetchCustomAnalysisData()
-        await fetchHeatmapData()
-        fetchCategoryOptions()
+        _fetchRiskBackground()
+      } finally {
+        selectedFrameworkSessionPromise = null
       }
+      })()
+      return selectedFrameworkSessionPromise
     }
 
     // Fetch policies for dropdown
@@ -1322,22 +1348,44 @@ export default {
         filters.framework = storeFrameworkId
         console.log('🔄 RiskDashboard: Loaded framework from Vuex store:', storeFrameworkId)
       }
-      
+
+      // ── Pinia cache-first: instant KPI display on return visits ────────────
+      const piniaData = dashboardsStore.get('risk')
+      if (piniaData) {
+        dataSourceBadge.value = 'Loaded from Pinia (fast)'
+        console.log('⚡ [RiskDashboard] Restoring KPIs from Pinia cache')
+        Object.assign(metrics, piniaData)
+        riskKpiLoaded.value = true
+        // Background: refresh all data silently
+        fetchFrameworks().then(() => {
+          checkSelectedFrameworkFromSession()
+        })
+        return
+      }
+
+      if (hydrateRiskKpisFromAppData()) {
+        dataSourceBadge.value = 'Loaded from Pinia (fast)'
+        riskKpiLoaded.value = true
+        dashboardsStore.set('risk', { ...metrics })
+        // Refresh exact values and charts in background.
+        fetchFrameworks().then(() => {
+          checkSelectedFrameworkFromSession()
+        })
+        return
+      }
+      // ───────────────────────────────────────────────────────────────────────
+
       // Fetch frameworks first
       const frameworksLoaded = await fetchFrameworks()
-      
+
       if (frameworksLoaded) {
-        // Check for selected framework from session and set it
+        dataSourceBadge.value = 'Refreshed from API (latest)'
         await checkSelectedFrameworkFromSession()
-        } else {
-          // Still try to fetch policies even if frameworks fail
-        await fetchPolicies()
-      // Fetch other data
-      fetchRiskTrendData();
-      fetchCategoryDistribution();
-      fetchRiskMetrics();
-      fetchCustomAnalysisData();
-      fetchCategoryOptions();
+      } else {
+        // Frameworks failed – still load risk KPIs
+        dataSourceBadge.value = 'Refreshed from API (latest)'
+        await fetchRiskMetrics()
+        _fetchRiskBackground()
       }
     })
 
@@ -2093,20 +2141,23 @@ export default {
         if (!colorblindnessObserver) {
           colorblindnessObserver = initColorblindnessTracking()
         }
-        
-        await checkSelectedFrameworkFromSession()
-        if (filters.framework && filters.framework !== 'all') {
-          await fetchPolicies(filters.framework)
-        } else {
-          await fetchPolicies()
-        }
-        fetchRiskMetrics()
-        fetchRiskTrendData()
-        fetchCategoryDistribution()
-        fetchCustomAnalysisData()
-        await fetchHeatmapData()
-        // Re-initialize heatmap with current colorblindness mode
-        initializeHeatmap()
+
+        // Keep previous data visible and refresh silently in background.
+        checkSelectedFrameworkFromSession().then(() => {
+          if (filters.framework && filters.framework !== 'all') {
+            fetchPolicies(filters.framework)
+          } else {
+            fetchPolicies()
+          }
+          fetchRiskMetrics()
+          fetchRiskTrendData()
+          fetchCategoryDistribution()
+          fetchCustomAnalysisData()
+          fetchHeatmapData().then(() => {
+            // Re-initialize heatmap with current colorblindness mode
+            initializeHeatmap()
+          })
+        })
       } catch (e) {
         console.error('Error refreshing framework context on activation:', e)
       }
@@ -2678,6 +2729,8 @@ export default {
     }
 
     return {
+      dataSourceBadge,
+      showSkeleton,
       lineChartData,
       lineChartOptions,
       donutChartData,
@@ -2986,5 +3039,62 @@ export default {
   .risk-dashboard-charts {
     grid-template-columns: 1fr;
   }
+}
+
+/* ── Skeleton screens ─────────────────────────────────────────────── */
+@keyframes skeleton-shimmer {
+  0%   { background-position: -600px 0; }
+  100% { background-position: 600px 0; }
+}
+.skeleton-block {
+  background: linear-gradient(90deg, #ececec 25%, #d8d8d8 50%, #ececec 75%);
+  background-size: 1200px 100%;
+  animation: skeleton-shimmer 1.5s infinite linear;
+  border-radius: 6px;
+}
+.dashboard-skeleton { padding: 24px; }
+.skeleton-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.skeleton-kpi-card {
+  background: #fff;
+  border-radius: 10px;
+  padding: 20px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.07);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.skeleton-kpi-value { height: 38px; width: 60%; }
+.skeleton-kpi-label { height: 14px; width: 45%; }
+.skeleton-charts-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+.skeleton-chart-card {
+  background: #fff;
+  border-radius: 10px;
+  padding: 20px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.07);
+}
+.skeleton-chart-title { height: 16px; width: 40%; margin-bottom: 16px; }
+.skeleton-chart-area  { height: 220px; }
+@media (max-width: 900px) {
+  .skeleton-kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .skeleton-charts-grid { grid-template-columns: 1fr; }
+}
+
+.data-source-badge {
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(79, 108, 255, 0.12);
+  color: #334155;
+  border: 1px solid rgba(79, 108, 255, 0.2);
+  margin-right: 8px;
 }
 </style>

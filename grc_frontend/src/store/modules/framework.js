@@ -1,6 +1,8 @@
 import axios from 'axios'
 import { API_ENDPOINTS } from '../../config/api.js'
 
+let loadFrameworkFromSessionPromise = null
+
 export default {
   namespaced: true,
   
@@ -86,47 +88,57 @@ export default {
     },
     
     async loadFrameworkFromSession({ commit }) {
-      try {
-        const userId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || 'default_user'
-        console.log('🔄 Loading framework from session for user:', userId)
-        
-        const response = await axios.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED, {
-          params: { userId },
-          withCredentials: true,
-        })
-        
-        console.log('📥 Backend response:', response.data)
-        
-        if (response.data && response.data.success) {
-          if (response.data.frameworkId) {
-            commit('SET_SELECTED_FRAMEWORK', {
-              id: response.data.frameworkId,
-              name: response.data.frameworkName || 'Selected Framework'
-            })
-            console.log('✅ Loaded framework from session:', {
-              id: response.data.frameworkId,
-              name: response.data.frameworkName
-            })
-            
-            // Emit event for immediate UI update
-            window.dispatchEvent(new CustomEvent('framework-changed', { 
-              detail: { 
-                id: response.data.frameworkId, 
-                name: response.data.frameworkName 
-              } 
-            }))
+      if (loadFrameworkFromSessionPromise) {
+        return loadFrameworkFromSessionPromise
+      }
+
+      loadFrameworkFromSessionPromise = (async () => {
+        try {
+          const userId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || 'default_user'
+          console.log('🔄 Loading framework from session for user:', userId)
+          
+          const response = await axios.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED, {
+            params: { userId },
+            withCredentials: true,
+          })
+          
+          console.log('📥 Backend response:', response.data)
+          
+          if (response.data && response.data.success) {
+            if (response.data.frameworkId) {
+              commit('SET_SELECTED_FRAMEWORK', {
+                id: response.data.frameworkId,
+                name: response.data.frameworkName || 'Selected Framework'
+              })
+              console.log('✅ Loaded framework from session:', {
+                id: response.data.frameworkId,
+                name: response.data.frameworkName
+              })
+              
+              // Emit event for immediate UI update
+              window.dispatchEvent(new CustomEvent('framework-changed', { 
+                detail: { 
+                  id: response.data.frameworkId, 
+                  name: response.data.frameworkName 
+                } 
+              }))
+            } else {
+              commit('RESET_FRAMEWORK')
+              console.log('ℹ️ No framework in session, defaulting to All Frameworks')
+            }
           } else {
             commit('RESET_FRAMEWORK')
             console.log('ℹ️ No framework in session, defaulting to All Frameworks')
           }
-        } else {
+        } catch (error) {
+          console.error('❌ Error loading framework from session:', error)
           commit('RESET_FRAMEWORK')
-          console.log('ℹ️ No framework in session, defaulting to All Frameworks')
+        } finally {
+          loadFrameworkFromSessionPromise = null
         }
-      } catch (error) {
-        console.error('❌ Error loading framework from session:', error)
-        commit('RESET_FRAMEWORK')
-      }
+      })()
+
+      return loadFrameworkFromSessionPromise
     },
     
     async resetFramework({ commit }) {

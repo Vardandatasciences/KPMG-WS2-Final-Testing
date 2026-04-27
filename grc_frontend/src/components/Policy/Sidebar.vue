@@ -1159,7 +1159,7 @@ import authService from '../../services/authService.js'
 
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { useStore } from 'vuex'
+import { useFrameworkStore } from '@/stores/framework'
 import logo from '../../assets/RiskaVaire.png'
 import '@fortawesome/fontawesome-free/css/all.min.css'
 import eventBus, { LOGOUT_EVENT } from '../../utils/eventBus.js'
@@ -1169,7 +1169,7 @@ export default {
   setup() {
     const router = useRouter()
     const route = useRoute()
-    const store = useStore()
+    const frameworkStore = useFrameworkStore()
     const isCollapsed = ref(false)
     const themeMenuOpen = ref(false)
     const currentTheme = ref('light')
@@ -1180,7 +1180,7 @@ export default {
     // Compute current route path for active highlighting
     const currentPath = computed(() => route.path)
     const selectedFrameworkName = computed(() => {
-      const framework = store.getters['framework/selectedFramework']
+      const framework = frameworkStore.selectedFramework
       const name = framework?.name?.trim()
       return name && name.toLowerCase() !== 'all frameworks' ? name : 'All Frameworks'
     })

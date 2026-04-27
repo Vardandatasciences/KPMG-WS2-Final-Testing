@@ -19,6 +19,116 @@ from ..changemanagement.login_framework_checking import auto_check_all_framework
 from rest_framework.request import Request
 from ...debug_utils import debug_print
 
+# Audits in these states are not shown as "next" upcoming work
+AUDIT_TERMINAL_STATUSES = ('Completed', 'Cancelled', 'Canceled')
+
+
+def select_next_audit(audits_qs):
+    """
+    Pick the next audit by DueDate: earliest open audit due today or later;
+    if none, earliest open audit overall (e.g. overdue). Excludes terminal statuses.
+    """
+    open_qs = audits_qs.exclude(Status__in=AUDIT_TERMINAL_STATUSES)
+    if not open_qs.exists():
+        return None
+    today = timezone.now().date()
+    future = open_qs.filter(DueDate__gte=today).order_by('DueDate').first()
+    if future:
+        return future
+    return open_qs.order_by('DueDate').first()
+
+
+def aggregate_homepage_risk_metrics(framework_filter, framework_id):
+    """
+    Combine the risk register (`Risk` → table `risk`, FrameworkId int) with operational
+    `RiskInstance` rows. Totals dedupe by RiskId so catalog-only risks still count.
+    Mitigated / in-progress / accepted metrics stay instance-based (MitigationStatus etc.).
+    """
+    if framework_id is not None:
+        risk_register_qs = Risk.objects.filter(FrameworkId=framework_id)
+    else:
+        risk_register_qs = Risk.objects.all()
+
+    if framework_filter:
+        risk_instances_qs = RiskInstance.objects.filter(framework_filter)
+    else:
+        risk_instances_qs = RiskInstance.objects.all()
+
+    register_risk_ids = set(risk_register_qs.values_list('RiskId', flat=True))
+    instance_risk_ids = set(
+        risk_instances_qs.exclude(RiskId__isnull=True).values_list('RiskId', flat=True)
+    )
+    orphan_instances = risk_instances_qs.filter(RiskId__isnull=True).count()
+    total_risks = len(register_risk_ids | instance_risk_ids) + orphan_instances
+
+    mitigated_risks = risk_instances_qs.filter(MitigationStatus='Completed').count()
+    accepted_risks = risk_instances_qs.filter(RiskStatus='Approved').count()
+    in_progress_risks = risk_instances_qs.filter(MitigationStatus='Work In Progress').count()
+
+    if hasattr(RiskInstance, 'ActiveInactive'):
+        active_risks = risk_instances_qs.filter(ActiveInactive='Active').count()
+        inactive_risks = max(0, risk_instances_qs.count() - active_risks)
+    else:
+        inst_cnt = risk_instances_qs.count()
+        active_risks = inst_cnt
+        inactive_risks = 0
+
+    return {
+        'total_risks': total_risks,
+        'mitigated_risks': mitigated_risks,
+        'accepted_risks': accepted_risks,
+        'in_progress_risks': in_progress_risks,
+        'active_risks': active_risks,
+        'inactive_risks': inactive_risks,
+        'risk_instances_qs': risk_instances_qs,
+    }
+
+
+def aggregate_homepage_risk_metrics_multi(framework_ids):
+    """Same as aggregate_homepage_risk_metrics for many frameworks (IDs must be non-empty)."""
+    if not framework_ids:
+        return {
+            'total_risks': 0,
+            'mitigated_risks': 0,
+            'accepted_risks': 0,
+            'in_progress_risks': 0,
+            'active_risks': 0,
+            'inactive_risks': 0,
+            'risk_instances_qs': RiskInstance.objects.none(),
+        }
+    agg_fw = Q(FrameworkId__in=framework_ids)
+    risk_register_qs = Risk.objects.filter(FrameworkId__in=framework_ids)
+    risk_instances_qs = RiskInstance.objects.filter(agg_fw)
+
+    register_risk_ids = set(risk_register_qs.values_list('RiskId', flat=True))
+    instance_risk_ids = set(
+        risk_instances_qs.exclude(RiskId__isnull=True).values_list('RiskId', flat=True)
+    )
+    orphan_instances = risk_instances_qs.filter(RiskId__isnull=True).count()
+    total_risks = len(register_risk_ids | instance_risk_ids) + orphan_instances
+
+    mitigated_risks = risk_instances_qs.filter(MitigationStatus='Completed').count()
+    accepted_risks = risk_instances_qs.filter(RiskStatus='Approved').count()
+    in_progress_risks = risk_instances_qs.filter(MitigationStatus='Work In Progress').count()
+
+    if hasattr(RiskInstance, 'ActiveInactive'):
+        active_risks = risk_instances_qs.filter(ActiveInactive='Active').count()
+        inactive_risks = max(0, risk_instances_qs.count() - active_risks)
+    else:
+        inst_cnt = risk_instances_qs.count()
+        active_risks = inst_cnt
+        inactive_risks = 0
+
+    return {
+        'total_risks': total_risks,
+        'mitigated_risks': mitigated_risks,
+        'accepted_risks': accepted_risks,
+        'in_progress_risks': in_progress_risks,
+        'active_risks': active_risks,
+        'inactive_risks': inactive_risks,
+        'risk_instances_qs': risk_instances_qs,
+    }
+
 
 def get_homepage_data(request):
     """
@@ -195,23 +305,17 @@ def get_homepage_data(request):
                 total_compliances = Compliance.objects.filter(
                     compliance_filter
                 ).count()
-                
-                # Compliant compliances: Those with AuditFinding Check='2' (Fully Compliant)
-                # Query AuditFinding directly for better accuracy
-                # Filter by PolicyId through Compliance -> SubPolicy -> Policy
-                # And filter by FrameworkId to ensure correct framework
-                compliant_filter = Q(
-                    ComplianceId__SubPolicy__PolicyId=policy_id,
-                    Check='2'  # Fully Compliant/Completed
+
+                # "Implemented" = compliances that are Active AND Approved
+                # (mirrors the implementation progress % shown in the hero card)
+                implemented_filter = compliance_filter & Q(
+                    Status='Approved',
+                    ActiveInactive='Active',
                 )
-                if framework_id:
-                    compliant_filter &= Q(FrameworkId=framework_id)
-                
-                # Count distinct compliances that have audit findings with Check='2'
-                compliant_compliances = AuditFinding.objects.filter(
-                    compliant_filter
-                ).values('ComplianceId').distinct().count()
-                
+                compliant_compliances = Compliance.objects.filter(
+                    implemented_filter
+                ).count()
+
                 policy['totalCompliances'] = total_compliances
                 policy['implementedCompliances'] = compliant_compliances
             
@@ -402,27 +506,16 @@ def get_homepage_data(request):
         }
         
         # ====================================================================
-        # MODULE METRICS - RISK
+        # MODULE METRICS - RISK (register `risk` + operational `risk_instance`)
         # ====================================================================
-        risk_instances_qs = RiskInstance.objects.filter(framework_filter) if framework_filter else RiskInstance.objects.all()
-        
-        total_risks = risk_instances_qs.count()
-        accepted_risks = risk_instances_qs.filter(
-            RiskStatus='Approved'
-        ).count()
-        
-        mitigated_risks = risk_instances_qs.filter(
-            MitigationStatus='Completed'
-        ).count()
-        
-        in_progress_risks = risk_instances_qs.filter(
-            MitigationStatus='Work In Progress'
-        ).count()
-        
-        # Count active vs inactive risks (if ActiveInactive field exists)
-        active_risks = risk_instances_qs.filter(ActiveInactive='Active').count() if hasattr(RiskInstance, 'ActiveInactive') else total_risks
-        inactive_risks = total_risks - active_risks if hasattr(RiskInstance, 'ActiveInactive') else 0
-        
+        _risk_agg = aggregate_homepage_risk_metrics(framework_filter, framework_id)
+        total_risks = _risk_agg['total_risks']
+        accepted_risks = _risk_agg['accepted_risks']
+        mitigated_risks = _risk_agg['mitigated_risks']
+        in_progress_risks = _risk_agg['in_progress_risks']
+        active_risks = _risk_agg['active_risks']
+        inactive_risks = _risk_agg['inactive_risks']
+
         risk_metrics = {
             'totalRisks': total_risks,
             'total': total_risks,  # Keep for backward compatibility
@@ -540,33 +633,61 @@ def get_homepage_data(request):
         }
         
         # ====================================================================
-        # PREVIEW METRICS (for hero card)
+        # PREVIEW METRICS (for hero card) — all values DB-sourced for this framework
         # ====================================================================
-        # Calculate compliance percentage
         total_controls = compliances_qs.count()
         implemented_controls = compliances_qs.filter(
             Status='Approved',
             ActiveInactive='Active'
         ).count()
-        compliance_percentage = round((implemented_controls / total_controls * 100), 1) if total_controls > 0 else 0
-        
-        # Remaining controls to implement
-        remaining_controls = total_controls - implemented_controls
-        
-        # Next audit due
-        next_audit = audits_qs.filter(
-            DueDate__gte=timezone.now().date(),
-            Status__in=['Assigned', 'In Progress']
-        ).order_by('DueDate').first()
-        
+        implementation_pct = round(
+            min(max(implemented_controls / total_controls, 0), 1) * 100, 1
+        ) if total_controls > 0 else 0
+        remaining_controls_count = total_controls - implemented_controls
+        remaining_controls_pct = round(
+            (remaining_controls_count / total_controls * 100), 1
+        ) if total_controls > 0 else 0
+
+        next_audit = select_next_audit(audits_qs)
         next_audit_date = next_audit.DueDate.strftime('%Y-%m-%d') if next_audit else None
-        
+        next_audit_title = None
+        if next_audit:
+            next_audit_title = (next_audit.Title or next_audit.Scope or '').strip() or None
+            if next_audit_title and len(next_audit_title) > 120:
+                next_audit_title = next_audit_title[:117] + '...'
+
+        audit_verified_pct = round(
+            (compliant_compliances / total_compliances_all * 100), 1
+        ) if total_compliances_all > 0 else 0
+        # Risk Coverage = % of compliance controls that have an identified risk.
+        # Uses total_risks / total_compliances (capped at 100%) so the metric
+        # always reflects how well the risk register covers compliance requirements,
+        # even when no risks have been mitigated yet.
+        if total_compliances_all > 0:
+            risk_cov_pct = round(min(total_risks / total_compliances_all, 1.0) * 100, 1)
+        else:
+            risk_cov_pct = 0.0
+
         preview_metrics = {
-            'compliancePercentage': compliance_percentage,
-            'remainingControls': remaining_controls,
+            # Explicit fields (preferred by frontend)
+            'implementationProgressPercent': implementation_pct,
+            'remainingControlsCount': remaining_controls_count,
+            'remainingControlsPercent': remaining_controls_pct,
+            'totalControlsCount': total_controls,
+            'implementedControlsCount': implemented_controls,
+            'auditVerifiedCompliancePercent': audit_verified_pct,
+            'compliantControlsCount': compliant_compliances,
+            'riskCoveragePercent': risk_cov_pct,
+            'totalActivePoliciesCount': total_policies,
+            'approvedActivePoliciesCount': active_policies,
+            'nextAuditTitle': next_audit_title,
+            'nextAuditStatus': next_audit.Status if next_audit else None,
+            # Legacy keys (same semantics as above for older clients)
+            'compliancePercentage': implementation_pct,
+            'remainingControls': remaining_controls_count,
             'nextAudit': next_audit_date,
-            'policiesLabel': 'Active Policies',
-            'policiesValue': active_policies
+            'policiesLabel': 'Security Policies',
+            'policiesValue': total_policies,
         }
         
         # ====================================================================
@@ -730,106 +851,216 @@ def get_homepage_data(request):
 def get_all_frameworks_data(request):
     """
     GET /api/homepage/all-frameworks
-    Returns aggregated data for ALL frameworks
-    Shows combined statistics across all frameworks
+    Returns aggregated data for ALL frameworks.
+    Uses bulk ORM aggregation (≈10 queries total) instead of per-framework loops.
     """
-    # NOTE: Auto framework check on "all frameworks" view has been disabled.
-    # To re-enable, restore the background thread that calls auto_check_all_frameworks.
-    # debug_print("🚀 [All Frameworks] Auto framework check is currently DISABLED")
-    
     debug_print("=" * 80)
     debug_print("🌐 BACKEND: get_all_frameworks_data() CALLED")
     debug_print("=" * 80)
-    
+
     try:
-        # Get all active frameworks
-        all_frameworks = Framework.objects.filter(
-            Status='Approved',
-            ActiveInactive='Active'
+        # ── 1. Fetch framework metadata (1 query) ─────────────────────────────
+        fw_rows = list(
+            Framework.objects.filter(Status='Approved', ActiveInactive='Active')
+            .values('FrameworkId', 'FrameworkName', 'FrameworkDescription', 'Category')
         )
-        
-        debug_print(f"📋 Found {all_frameworks.count()} active frameworks")
-        
-        # Aggregate data across all frameworks
+        fw_ids = [row['FrameworkId'] for row in fw_rows]
+        debug_print(f"📋 Found {len(fw_ids)} active frameworks")
+
+        if not fw_ids:
+            empty_stats = {
+                'totalPolicies': 0, 'totalPoliciesAll': 0, 'activePolicies': 0,
+                'inactivePolicies': 0, 'totalCompliances': 0, 'totalCompliancesAll': 0,
+                'activeCompliances': 0, 'inactiveCompliances': 0, 'compliantCompliances': 0,
+                'totalRisks': 0, 'activeRisks': 0, 'inactiveRisks': 0, 'mitigatedRisks': 0,
+                'totalIncidents': 0, 'activeIncidents': 0, 'inactiveIncidents': 0, 'resolvedIncidents': 0,
+                'totalAudits': 0, 'activeAudits': 0, 'inactiveAudits': 0, 'completedAudits': 0,
+            }
+            empty_preview = {
+                'implementationProgressPercent': 0, 'remainingControlsCount': 0,
+                'remainingControlsPercent': 0, 'totalControlsCount': 0,
+                'implementedControlsCount': 0, 'auditVerifiedCompliancePercent': 0,
+                'compliantControlsCount': 0, 'riskCoveragePercent': 0,
+                'totalActivePoliciesCount': 0, 'approvedActivePoliciesCount': 0,
+                'nextAuditTitle': None, 'nextAuditStatus': None, 'compliancePercentage': 0,
+                'remainingControls': 0, 'nextAudit': None,
+                'policiesLabel': 'Security Policies', 'policiesValue': 0,
+            }
+            return JsonResponse({
+                'success': True,
+                'framework': {'id': None, 'name': 'All Frameworks', 'description': '', 'category': 'All'},
+                'hero': {'stats': empty_stats, 'previewMetrics': empty_preview},
+                'policies': {'applied': {'policies': [], 'count': 0, 'percentage': 0},
+                             'in_progress': {'policies': [], 'count': 0, 'percentage': 0},
+                             'pending': {'policies': [], 'count': 0, 'percentage': 0},
+                             'rejected': {'policies': [], 'count': 0, 'percentage': 0}},
+                'frameworks': [],
+                'moduleMetrics': {
+                    'policy': {'activePolicies': 0, 'approvalRate': 0, 'totalPolicies': 0, 'avgApprovalTime': 0},
+                    'compliance': {'activeCompliances': 0, 'inactiveCompliances': 0, 'totalCompliances': 0,
+                                   'approvalRate': 0, 'totalFindings': 0, 'underReview': 0},
+                    'risk': {'totalRisks': 0, 'total': 0, 'active': 0, 'inactive': 0,
+                             'acceptedRisks': 0, 'accepted': 0, 'mitigatedRisks': 0, 'mitigated': 0,
+                             'inProgressRisks': 0, 'inProgress': 0},
+                    'incident': {'totalIncidents': 0, 'total': 0, 'active': 0, 'inactive': 0,
+                                 'resolved': 0, 'mttd': 0, 'mttr': 0, 'closureRate': 0},
+                    'audit': {'completionRate': 0, 'totalAudits': 0, 'active': 0, 'inactive': 0,
+                              'openAudits': 0, 'completedAudits': 0},
+                },
+                'timestamp': timezone.now().isoformat(),
+            })
+
+        agg_fw = Q(FrameworkId__in=fw_ids)
+
+        # ── 2. Policy stats grouped by framework (1 query) ───────────────────
+        policy_by_fw = {
+            row['FrameworkId']: row
+            for row in Policy.objects.filter(agg_fw)
+                .values('FrameworkId')
+                .annotate(
+                    total_all=Count('PolicyId'),
+                    active=Count('PolicyId', filter=Q(ActiveInactive='Active')),
+                    approved_active=Count('PolicyId', filter=Q(ActiveInactive='Active', Status='Approved')),
+                )
+        }
+
+        # ── 3. Compliance stats grouped by framework (1 query) ───────────────
+        compliance_by_fw = {
+            row['FrameworkId']: row
+            for row in Compliance.objects.filter(agg_fw)
+                .values('FrameworkId')
+                .annotate(
+                    total_all=Count('ComplianceId'),
+                    active=Count('ComplianceId', filter=Q(Status='Approved', ActiveInactive='Active')),
+                    inactive=Count('ComplianceId', filter=Q(ActiveInactive='Inactive')),
+                )
+        }
+
+        # ── 4. Compliant (audited) compliance counts grouped by framework (1 query)
+        try:
+            compliant_by_fw = {
+                row['FrameworkId_id']: row['compliant']
+                for row in AuditFinding.objects.filter(agg_fw, Check='2')
+                    .values('FrameworkId_id')
+                    .annotate(compliant=Count('ComplianceId', distinct=True))
+            }
+        except Exception:
+            compliant_by_fw = {}
+
+        # ── 5. Incident stats grouped by framework (1 query) ─────────────────
+        incident_by_fw = {
+            row['FrameworkId']: row
+            for row in Incident.objects.filter(agg_fw)
+                .values('FrameworkId')
+                .annotate(
+                    total=Count('IncidentId'),
+                    resolved=Count('IncidentId', filter=Q(Status='Completed')),
+                )
+        }
+
+        # ── 6. Audit stats grouped by framework (1 query) ────────────────────
+        try:
+            audit_by_fw = {
+                row['FrameworkId_id']: row
+                for row in Audit.objects.filter(agg_fw)
+                    .values('FrameworkId_id')
+                    .annotate(
+                        total=Count('AuditId'),
+                        completed=Count('AuditId', filter=Q(Status='Completed')),
+                    )
+            }
+        except Exception:
+            audit_by_fw = {}
+
+        # ── 7. Risk metrics (bulk, 3-4 queries via existing helper) ──────────
+        risk_multi = aggregate_homepage_risk_metrics_multi(fw_ids)
+        # In some tenants, actionable risk-instance statuses (Approved / WIP / Completed)
+        # are recorded under approved-but-inactive frameworks. If active-scope statuses
+        # are all zero, fall back to all approved frameworks for status-only counters.
+        if fw_ids and (
+            risk_multi.get('accepted_risks', 0) == 0
+            and risk_multi.get('in_progress_risks', 0) == 0
+            and risk_multi.get('mitigated_risks', 0) == 0
+        ):
+            approved_any_fw_ids = list(
+                Framework.objects.filter(Status='Approved').values_list('FrameworkId', flat=True)
+            )
+            if approved_any_fw_ids:
+                risk_multi_any = aggregate_homepage_risk_metrics_multi(approved_any_fw_ids)
+                if (
+                    risk_multi_any.get('accepted_risks', 0) > 0
+                    or risk_multi_any.get('in_progress_risks', 0) > 0
+                    or risk_multi_any.get('mitigated_risks', 0) > 0
+                ):
+                    debug_print(
+                        f"⚠️ [All Frameworks] Using approved-any scope for risk status counters "
+                        f"(accepted={risk_multi_any.get('accepted_risks', 0)}, "
+                        f"in_progress={risk_multi_any.get('in_progress_risks', 0)}, "
+                        f"mitigated={risk_multi_any.get('mitigated_risks', 0)})"
+                    )
+                    # Keep total risk volume from active scope, but use richer status counters.
+                    risk_multi['accepted_risks'] = risk_multi_any.get('accepted_risks', 0)
+                    risk_multi['in_progress_risks'] = risk_multi_any.get('in_progress_risks', 0)
+                    risk_multi['mitigated_risks'] = risk_multi_any.get('mitigated_risks', 0)
+
+        total_risks_global = risk_multi['total_risks']
+        mitigated_risks_global = risk_multi['mitigated_risks']
+        accepted_risks_global = risk_multi['accepted_risks']
+        in_progress_risks_global = risk_multi['in_progress_risks']
+        active_risks_global = risk_multi['active_risks']
+        inactive_risks_global = risk_multi['inactive_risks']
+
+        # Per-framework risk totals (register only, for the card display)
+        risk_by_fw_reg = {
+            row['FrameworkId']: row['cnt']
+            for row in Risk.objects.filter(FrameworkId__in=fw_ids)
+                .values('FrameworkId')
+                .annotate(cnt=Count('RiskId'))
+        }
+
+        # ── 8. Build per-framework list + totals (Python loop, no extra queries)
         all_frameworks_list = []
         total_stats = {
-            'totalPolicies': 0,
-            'totalPoliciesAll': 0,
-            'activePolicies': 0,
-            'inactivePolicies': 0,
-            'totalCompliances': 0,
-            'totalCompliancesAll': 0,
-            'activeCompliances': 0,
-            'inactiveCompliances': 0,
-            'compliantCompliances': 0,  # New: Count of compliances with Check='2' in audit findings
-            'totalRisks': 0,
-            'activeRisks': 0,
-            'inactiveRisks': 0,
-            'mitigatedRisks': 0,
-            'totalIncidents': 0,
-            'activeIncidents': 0,
-            'inactiveIncidents': 0,
-            'resolvedIncidents': 0,
-            'totalAudits': 0,
-            'activeAudits': 0,
-            'inactiveAudits': 0,
-            'completedAudits': 0
+            'totalPolicies': 0, 'totalPoliciesAll': 0,
+            'activePolicies': 0, 'inactivePolicies': 0,
+            'totalCompliances': 0, 'totalCompliancesAll': 0,
+            'activeCompliances': 0, 'inactiveCompliances': 0,
+            'compliantCompliances': 0,
+            'totalRisks': 0, 'activeRisks': 0, 'inactiveRisks': 0, 'mitigatedRisks': 0,
+            'totalIncidents': 0, 'activeIncidents': 0, 'inactiveIncidents': 0, 'resolvedIncidents': 0,
+            'totalAudits': 0, 'activeAudits': 0, 'inactiveAudits': 0, 'completedAudits': 0,
         }
-        
-        # Get data for each framework
-        for framework in all_frameworks:
-            framework_id = framework.FrameworkId
-            framework_filter = Q(FrameworkId=framework_id)
-            
-            # Policies
-            policies_qs = Policy.objects.filter(framework_filter)
-            total_policies_all = policies_qs.count()
-            active_policies = policies_qs.filter(ActiveInactive='Active').count()
+
+        for fw in fw_rows:
+            fw_id = fw['FrameworkId']
+
+            p = policy_by_fw.get(fw_id, {})
+            total_policies_all = p.get('total_all', 0)
+            active_policies = p.get('active', 0)
             inactive_policies = total_policies_all - active_policies
-            
-            # Compliances - Get all compliances for the framework
-            compliances_qs = Compliance.objects.filter(framework_filter)
-            total_compliances_all = compliances_qs.count()
-            active_compliances = compliances_qs.filter(
-                Status='Approved',
-                ActiveInactive='Active'
-            ).count()
-            inactive_compliances = compliances_qs.filter(ActiveInactive='Inactive').count()
-            
-            # NEW: Calculate compliant compliances based on audit findings
-            # Count compliances that have audit findings with Check='2' (Completed/Compliant)
-            from grc.models import AuditFinding
-            compliant_compliances = AuditFinding.objects.filter(
-                framework_filter,
-                Check='2'  # Completed = Compliant
-            ).values('ComplianceId').distinct().count()
-            
-            # Risks
-            risks_qs = RiskInstance.objects.filter(framework_filter)
-            total_risks = risks_qs.count()
-            active_risks = risks_qs.filter(ActiveInactive='Active').count() if hasattr(RiskInstance, 'ActiveInactive') else total_risks
-            inactive_risks = total_risks - active_risks if hasattr(RiskInstance, 'ActiveInactive') else 0
-            mitigated_risks = risks_qs.filter(MitigationStatus='Completed').count()
-            
-            # Incidents
-            incidents_qs = Incident.objects.filter(framework_filter)
-            total_incidents = incidents_qs.count()
-            active_incidents = incidents_qs.filter(ActiveInactive='Active').count() if hasattr(Incident, 'ActiveInactive') else total_incidents
-            inactive_incidents = total_incidents - active_incidents if hasattr(Incident, 'ActiveInactive') else 0
-            resolved_incidents = incidents_qs.filter(Status='Completed').count()
-            
-            # Audits
-            audits_qs = Audit.objects.filter(framework_filter)
-            total_audits = audits_qs.count()
-            active_audits = audits_qs.filter(ActiveInactive='Active').count() if hasattr(Audit, 'ActiveInactive') else total_audits
-            inactive_audits = total_audits - active_audits if hasattr(Audit, 'ActiveInactive') else 0
-            completed_audits = audits_qs.filter(Status='Completed').count()
-            
+
+            c = compliance_by_fw.get(fw_id, {})
+            total_compliances_all = c.get('total_all', 0)
+            active_compliances = c.get('active', 0)
+            inactive_compliances = c.get('inactive', 0)
+            compliant_compliances = compliant_by_fw.get(fw_id, 0)
+
+            i = incident_by_fw.get(fw_id, {})
+            total_incidents = i.get('total', 0)
+            resolved_incidents = i.get('resolved', 0)
+
+            a = audit_by_fw.get(fw_id, {})
+            total_audits = a.get('total', 0)
+            completed_audits = a.get('completed', 0)
+
+            # Use register-based risk count for per-framework display
+            fw_total_risks = risk_by_fw_reg.get(fw_id, 0)
+
             framework_data = {
-                'id': framework_id,
-                'name': framework.FrameworkName,
-                'description': framework.FrameworkDescription,
-                'category': framework.Category,
+                'id': fw_id,
+                'name': fw['FrameworkName'],
+                'description': fw['FrameworkDescription'],
+                'category': fw['Category'],
                 'stats': {
                     'totalPolicies': active_policies,
                     'totalPoliciesAll': total_policies_all,
@@ -839,25 +1070,23 @@ def get_all_frameworks_data(request):
                     'totalCompliancesAll': total_compliances_all,
                     'activeCompliances': active_compliances,
                     'inactiveCompliances': inactive_compliances,
-                    'compliantCompliances': compliant_compliances,  # NEW: Compliant controls count
-                    'totalRisks': total_risks,
-                    'activeRisks': active_risks,
-                    'inactiveRisks': inactive_risks,
-                    'mitigatedRisks': mitigated_risks,
+                    'compliantCompliances': compliant_compliances,
+                    'totalRisks': fw_total_risks,
+                    'activeRisks': fw_total_risks,
+                    'inactiveRisks': 0,
+                    'mitigatedRisks': 0,
                     'totalIncidents': total_incidents,
-                    'activeIncidents': active_incidents,
-                    'inactiveIncidents': inactive_incidents,
+                    'activeIncidents': total_incidents,
+                    'inactiveIncidents': 0,
                     'resolvedIncidents': resolved_incidents,
                     'totalAudits': total_audits,
-                    'activeAudits': active_audits,
-                    'inactiveAudits': inactive_audits,
-                    'completedAudits': completed_audits
-                }
+                    'activeAudits': total_audits,
+                    'inactiveAudits': 0,
+                    'completedAudits': completed_audits,
+                },
             }
-            
             all_frameworks_list.append(framework_data)
-            
-            # Aggregate totals
+
             total_stats['totalPolicies'] += active_policies
             total_stats['totalPoliciesAll'] += total_policies_all
             total_stats['activePolicies'] += active_policies
@@ -866,305 +1095,207 @@ def get_all_frameworks_data(request):
             total_stats['totalCompliancesAll'] += total_compliances_all
             total_stats['activeCompliances'] += active_compliances
             total_stats['inactiveCompliances'] += inactive_compliances
-            total_stats['compliantCompliances'] += compliant_compliances  # NEW: Add to total
-            total_stats['totalRisks'] += total_risks
-            total_stats['activeRisks'] += active_risks
-            total_stats['inactiveRisks'] += inactive_risks
-            total_stats['mitigatedRisks'] += mitigated_risks
+            total_stats['compliantCompliances'] += compliant_compliances
             total_stats['totalIncidents'] += total_incidents
-            total_stats['activeIncidents'] += active_incidents
-            total_stats['inactiveIncidents'] += inactive_incidents
             total_stats['resolvedIncidents'] += resolved_incidents
             total_stats['totalAudits'] += total_audits
-            total_stats['activeAudits'] += active_audits
-            total_stats['inactiveAudits'] += inactive_audits
             total_stats['completedAudits'] += completed_audits
-        
-        # Module metrics (same shape as get_homepage_data) for unified dashboard cards
-        fw_ids = list(all_frameworks.values_list('FrameworkId', flat=True))
-        if not fw_ids:
-            module_metrics_payload = {
-                'policy': {
-                    'activePolicies': 0,
-                    'approvalRate': 0,
-                    'totalPolicies': 0,
-                    'avgApprovalTime': 0,
-                },
-                'compliance': {
-                    'activeCompliances': 0,
-                    'inactiveCompliances': 0,
-                    'totalCompliances': 0,
-                    'approvalRate': 0,
-                    'totalFindings': 0,
-                    'underReview': 0,
-                },
-                'risk': {
-                    'totalRisks': 0,
-                    'total': 0,
-                    'active': 0,
-                    'inactive': 0,
-                    'acceptedRisks': 0,
-                    'accepted': 0,
-                    'mitigatedRisks': 0,
-                    'mitigated': 0,
-                    'inProgressRisks': 0,
-                    'inProgress': 0,
-                },
-                'incident': {
-                    'totalIncidents': 0,
-                    'total': 0,
-                    'active': 0,
-                    'inactive': 0,
-                    'resolved': 0,
-                    'mttd': 0,
-                    'mttr': 0,
-                    'closureRate': 0,
-                },
-                'audit': {
-                    'completionRate': 0,
-                    'totalAudits': 0,
-                    'active': 0,
-                    'inactive': 0,
-                    'openAudits': 0,
-                    'completedAudits': 0,
-                },
-            }
-        else:
-            agg_fw = Q(FrameworkId__in=fw_ids)
-            policies_qs_m = Policy.objects.filter(agg_fw)
-            active_policies_qs_m = policies_qs_m.filter(ActiveInactive='Active')
-            total_policies_m = active_policies_qs_m.count()
-            active_policies_mod = active_policies_qs_m.filter(Status='Approved').count()
 
+        # Use the more accurate bulk risk totals for the aggregate stats
+        total_stats['totalRisks'] = total_risks_global
+        total_stats['activeRisks'] = active_risks_global
+        total_stats['inactiveRisks'] = inactive_risks_global
+        total_stats['mitigatedRisks'] = mitigated_risks_global
+        
+        # ── 9. Module metrics — reuse data already fetched above ─────────────
+        # Policy module card
+        total_policies_m = total_stats['totalPoliciesAll']
+        active_policies_mod = sum(
+            p.get('approved_active', 0) for p in policy_by_fw.values()
+        )
+        try:
             policy_approvals_m = PolicyApproval.objects.filter(PolicyId__FrameworkId__in=fw_ids)
             total_approvals_m = policy_approvals_m.count()
             approved_count_m = policy_approvals_m.filter(ApprovedNot=True).count()
             approval_rate_m = round((approved_count_m / total_approvals_m * 100), 1) if total_approvals_m > 0 else 0
+            avg_approval_time_m = 7 if policy_approvals_m.filter(ApprovedNot=True, ApprovedDate__isnull=False).exists() else 0
+        except Exception:
+            approval_rate_m = 0
+            avg_approval_time_m = 0
 
-            recent_approvals_m = policy_approvals_m.filter(
-                ApprovedNot=True,
-                ApprovedDate__isnull=False,
-            ).order_by('-ApprovedDate')[:50]
-            avg_approval_time_m = 7 if recent_approvals_m.exists() else 0
+        policy_metrics = {
+            'activePolicies': active_policies_mod,
+            'approvalRate': approval_rate_m,
+            'totalPolicies': total_policies_m,
+            'avgApprovalTime': avg_approval_time_m,
+        }
 
-            policy_metrics = {
-                'activePolicies': active_policies_mod,
-                'approvalRate': approval_rate_m,
-                'totalPolicies': total_policies_m,
-                'avgApprovalTime': avg_approval_time_m,
-            }
-
-            compliances_qs_m = Compliance.objects.filter(agg_fw)
-            total_compliances_all_m = compliances_qs_m.count()
-            active_compliances_m = compliances_qs_m.filter(
-                Status='Approved',
-                ActiveInactive='Active',
-            ).count()
-            inactive_compliances_m = compliances_qs_m.filter(ActiveInactive='Inactive').count()
-
+        # Compliance module card (reuse totals already computed)
+        total_compliances_all_m = total_stats['totalCompliancesAll']
+        active_compliances_m = total_stats['activeCompliances']
+        inactive_compliances_m = total_stats['inactiveCompliances']
+        try:
             compliance_approvals_m = ComplianceApproval.objects.filter(FrameworkId__in=fw_ids)
             total_comp_approvals_m = compliance_approvals_m.count()
             approved_comp_count_m = compliance_approvals_m.filter(ApprovedNot=True).count()
             compliance_approval_rate_m = round(
                 (approved_comp_count_m / total_comp_approvals_m * 100), 1
             ) if total_comp_approvals_m > 0 else 0
+        except Exception:
+            compliance_approval_rate_m = 0
+        try:
+            under_review_m = Compliance.objects.filter(agg_fw, Status='Under Review').count()
+        except Exception:
+            under_review_m = 0
 
-            total_findings_m = compliances_qs_m.count()
-            under_review_m = compliances_qs_m.filter(Status='Under Review').count()
-
-            compliance_metrics = {
-                'activeCompliances': active_compliances_m,
-                'inactiveCompliances': inactive_compliances_m,
-                'totalCompliances': total_compliances_all_m,
-                'approvalRate': compliance_approval_rate_m,
-                'totalFindings': total_findings_m,
-                'underReview': under_review_m,
-            }
-
-            risk_instances_qs_m = RiskInstance.objects.filter(agg_fw)
-            total_risks_m = risk_instances_qs_m.count()
-            accepted_risks_m = risk_instances_qs_m.filter(RiskStatus='Approved').count()
-            mitigated_risks_m = risk_instances_qs_m.filter(MitigationStatus='Completed').count()
-            in_progress_risks_m = risk_instances_qs_m.filter(MitigationStatus='Work In Progress').count()
-            active_risks_m = (
-                risk_instances_qs_m.filter(ActiveInactive='Active').count()
-                if hasattr(RiskInstance, 'ActiveInactive')
-                else total_risks_m
-            )
-            inactive_risks_m = (
-                total_risks_m - active_risks_m if hasattr(RiskInstance, 'ActiveInactive') else 0
-            )
-
-            risk_metrics = {
-                'totalRisks': total_risks_m,
-                'total': total_risks_m,
-                'active': active_risks_m,
-                'inactive': inactive_risks_m,
-                'acceptedRisks': accepted_risks_m,
-                'accepted': accepted_risks_m,
-                'mitigatedRisks': mitigated_risks_m,
-                'mitigated': mitigated_risks_m,
-                'inProgressRisks': in_progress_risks_m,
-                'inProgress': in_progress_risks_m,
-            }
-
-            incidents_qs_m = Incident.objects.filter(agg_fw)
-            total_incidents_m = incidents_qs_m.count()
-            active_incidents_m = (
-                incidents_qs_m.filter(ActiveInactive='Active').count()
-                if hasattr(Incident, 'ActiveInactive')
-                else total_incidents_m
-            )
-            inactive_incidents_m = (
-                total_incidents_m - active_incidents_m if hasattr(Incident, 'ActiveInactive') else 0
-            )
-
-            mttd_m = 0
-            incidents_with_detection_m = incidents_qs_m.filter(
-                IdentifiedAt__isnull=False,
-                Date__isnull=False,
-            )
-            if incidents_with_detection_m.exists():
-                mttd_m = 24
-
-            mttr_m = 0
-            resolved_incidents_m = incidents_qs_m.filter(
-                Status='Completed',
-                MitigationCompletedDate__isnull=False,
-            )
-            if resolved_incidents_m.exists():
-                mttr_m = 72
-
-            completed_incidents_m = incidents_qs_m.filter(Status='Completed').count()
-            closure_rate_m = (
-                round((completed_incidents_m / total_incidents_m * 100), 1) if total_incidents_m > 0 else 0
-            )
-
-            incident_metrics = {
-                'totalIncidents': total_incidents_m,
-                'total': total_incidents_m,
-                'active': active_incidents_m,
-                'inactive': inactive_incidents_m,
-                'resolved': completed_incidents_m,
-                'mttd': mttd_m,
-                'mttr': mttr_m,
-                'closureRate': closure_rate_m,
-            }
-
-            audits_qs_m = Audit.objects.filter(agg_fw)
-            total_audits_m = audits_qs_m.count()
-            completed_audits_m = audits_qs_m.filter(Status='Completed').count()
-            open_audits_m = audits_qs_m.exclude(Status__in=['Completed', 'Cancelled']).count()
-            active_audits_m = (
-                audits_qs_m.filter(ActiveInactive='Active').count()
-                if hasattr(Audit, 'ActiveInactive')
-                else total_audits_m
-            )
-            inactive_audits_m = (
-                total_audits_m - active_audits_m if hasattr(Audit, 'ActiveInactive') else 0
-            )
-            completion_rate_m = (
-                round((completed_audits_m / total_audits_m * 100), 1) if total_audits_m > 0 else 0
-            )
-
-            audit_metrics = {
-                'completionRate': completion_rate_m,
-                'totalAudits': total_audits_m,
-                'active': active_audits_m,
-                'inactive': inactive_audits_m,
-                'openAudits': open_audits_m,
-                'completedAudits': completed_audits_m,
-            }
-
-            module_metrics_payload = {
-                'policy': policy_metrics,
-                'compliance': compliance_metrics,
-                'risk': risk_metrics,
-                'incident': incident_metrics,
-                'audit': audit_metrics,
-            }
-
-        # Get aggregated policy data for donut chart
-        all_policies_qs = Policy.objects.all()
-        active_policies_qs = all_policies_qs.filter(ActiveInactive='Active')
-        total_active_policies = active_policies_qs.count()
-        
-        # Categorize policies by status for donut chart
-        applied_policies_qs = active_policies_qs.filter(Status='Approved')
-        in_progress_policies_qs = active_policies_qs.filter(Status='Under Review')
-        pending_policies_qs = active_policies_qs.filter(Status__in=['Draft', 'Pending'])
-        rejected_policies_qs = active_policies_qs.filter(Status='Rejected')
-        
-        applied_count = applied_policies_qs.count()
-        in_progress_count = in_progress_policies_qs.count()
-        pending_count = pending_policies_qs.count()
-        rejected_count = rejected_policies_qs.count()
-        
-        # Calculate percentages
-        applied_pct = round((applied_count / total_active_policies * 100), 1) if total_active_policies > 0 else 0
-        in_progress_pct = round((in_progress_count / total_active_policies * 100), 1) if total_active_policies > 0 else 0
-        pending_pct = round((pending_count / total_active_policies * 100), 1) if total_active_policies > 0 else 0
-        rejected_pct = round((rejected_count / total_active_policies * 100), 1) if total_active_policies > 0 else 0
-        
-        debug_print("")
-        debug_print("📊 ========================================")
-        debug_print("📊 ALL FRAMEWORKS AGGREGATED DATA")
-        debug_print("📊 ========================================")
-        debug_print(f"📋 Total Frameworks: {len(all_frameworks_list)}")
-        debug_print(f"📋 POLICIES:")
-        debug_print(f"   Total (All): {total_stats['totalPoliciesAll']}")
-        debug_print(f"   Active: {total_stats['activePolicies']}")
-        debug_print(f"   Inactive: {total_stats['inactivePolicies']}")
-        debug_print(f"   Applied: {applied_count} ({applied_pct}%)")
-        debug_print(f"   In Progress: {in_progress_count} ({in_progress_pct}%)")
-        debug_print(f"   Pending: {pending_count} ({pending_pct}%)")
-        debug_print(f"   Rejected: {rejected_count} ({rejected_pct}%)")
-        debug_print(f"✅ COMPLIANCES:")
-        debug_print(f"   Total (All): {total_stats['totalCompliancesAll']}")
-        debug_print(f"   Active: {total_stats['activeCompliances']}")
-        debug_print(f"   Inactive: {total_stats['inactiveCompliances']}")
-        debug_print(f"   Compliant (Audited): {total_stats['compliantCompliances']}")
-        debug_print(f"⚠️ RISKS:")
-        debug_print(f"   Total: {total_stats['totalRisks']}")
-        debug_print(f"   Active: {total_stats['activeRisks']}")
-        debug_print(f"   Inactive: {total_stats['inactiveRisks']}")
-        debug_print(f"   Mitigated: {total_stats['mitigatedRisks']}")
-        debug_print(f"🚨 INCIDENTS:")
-        debug_print(f"   Total: {total_stats['totalIncidents']}")
-        debug_print(f"   Active: {total_stats['activeIncidents']}")
-        debug_print(f"   Inactive: {total_stats['inactiveIncidents']}")
-        debug_print(f"   Resolved: {total_stats['resolvedIncidents']}")
-        debug_print(f"🔍 AUDITS:")
-        debug_print(f"   Total: {total_stats['totalAudits']}")
-        debug_print(f"   Active: {total_stats['activeAudits']}")
-        debug_print(f"   Inactive: {total_stats['inactiveAudits']}")
-        debug_print(f"   Completed: {total_stats['completedAudits']}")
-        debug_print("📊 ========================================")
-        debug_print("")
-        
-        # Build policy data for donut chart
-        policy_data = {
-            'applied': {
-                'policies': list(applied_policies_qs.values('PolicyId', 'PolicyName', 'Status', 'FrameworkId')),
-                'count': applied_count,
-                'percentage': applied_pct
-            },
-            'in_progress': {
-                'policies': list(in_progress_policies_qs.values('PolicyId', 'PolicyName', 'Status', 'FrameworkId')),
-                'count': in_progress_count,
-                'percentage': in_progress_pct
-            },
-            'pending': {
-                'policies': list(pending_policies_qs.values('PolicyId', 'PolicyName', 'Status', 'FrameworkId')),
-                'count': pending_count,
-                'percentage': pending_pct
-            },
-            'rejected': {
-                'policies': list(rejected_policies_qs.values('PolicyId', 'PolicyName', 'Status', 'FrameworkId')),
-                'count': rejected_count,
-                'percentage': rejected_pct
-            }
+        compliance_metrics = {
+            'activeCompliances': active_compliances_m,
+            'inactiveCompliances': inactive_compliances_m,
+            'totalCompliances': total_compliances_all_m,
+            'approvalRate': compliance_approval_rate_m,
+            'totalFindings': total_compliances_all_m,
+            'underReview': under_review_m,
         }
+
+        # Risk module card — reuse bulk result from step 7
+        risk_metrics = {
+            'totalRisks': total_risks_global,
+            'total': total_risks_global,
+            'active': active_risks_global,
+            'inactive': inactive_risks_global,
+            'acceptedRisks': accepted_risks_global,
+            'accepted': accepted_risks_global,
+            'mitigatedRisks': mitigated_risks_global,
+            'mitigated': mitigated_risks_global,
+            'inProgressRisks': in_progress_risks_global,
+            'inProgress': in_progress_risks_global,
+        }
+
+        # Incident module card — reuse totals
+        total_incidents_m = total_stats['totalIncidents']
+        completed_incidents_m = total_stats['resolvedIncidents']
+        closure_rate_m = round((completed_incidents_m / total_incidents_m * 100), 1) if total_incidents_m > 0 else 0
+        incident_metrics = {
+            'totalIncidents': total_incidents_m,
+            'total': total_incidents_m,
+            'active': total_incidents_m,
+            'inactive': 0,
+            'resolved': completed_incidents_m,
+            'mttd': 0,
+            'mttr': 0,
+            'closureRate': closure_rate_m,
+        }
+
+        # Audit module card — reuse totals
+        total_audits_m = total_stats['totalAudits']
+        completed_audits_m = total_stats['completedAudits']
+        try:
+            open_audits_m = Audit.objects.filter(agg_fw).exclude(Status__in=['Completed', 'Cancelled']).count()
+        except Exception:
+            open_audits_m = total_audits_m - completed_audits_m
+        completion_rate_m = round((completed_audits_m / total_audits_m * 100), 1) if total_audits_m > 0 else 0
+        audit_metrics = {
+            'completionRate': completion_rate_m,
+            'totalAudits': total_audits_m,
+            'active': total_audits_m,
+            'inactive': 0,
+            'openAudits': open_audits_m,
+            'completedAudits': completed_audits_m,
+        }
+
+        module_metrics_payload = {
+            'policy': policy_metrics,
+            'compliance': compliance_metrics,
+            'risk': risk_metrics,
+            'incident': incident_metrics,
+            'audit': audit_metrics,
+        }
+
+        # ── 10. Policy donut (counts only — no full policy lists to avoid huge payload)
+        active_policies_qs = Policy.objects.filter(agg_fw, ActiveInactive='Active')
+        total_active_policies = active_policies_qs.count()
+        policy_status_counts = {
+            row['Status']: row['cnt']
+            for row in active_policies_qs.values('Status').annotate(cnt=Count('PolicyId'))
+        }
+        applied_count = policy_status_counts.get('Approved', 0)
+        in_progress_count = policy_status_counts.get('Under Review', 0)
+        pending_count = policy_status_counts.get('Draft', 0) + policy_status_counts.get('Pending', 0)
+        rejected_count = policy_status_counts.get('Rejected', 0)
+
+        def _pct(n, total):
+            return round(n / total * 100, 1) if total > 0 else 0
+
+        policy_data = {
+            'applied':     {'policies': [], 'count': applied_count,     'percentage': _pct(applied_count, total_active_policies)},
+            'in_progress': {'policies': [], 'count': in_progress_count, 'percentage': _pct(in_progress_count, total_active_policies)},
+            'pending':     {'policies': [], 'count': pending_count,     'percentage': _pct(pending_count, total_active_policies)},
+            'rejected':    {'policies': [], 'count': rejected_count,    'percentage': _pct(rejected_count, total_active_policies)},
+        }
+
+        # ── 11. Hero preview metrics (reuse already-aggregated compliance totals)
+        total_c_all = total_stats['totalCompliancesAll']
+        impl_c_all  = total_stats['activeCompliances']
+        impl_pct_all = round(
+            min(max(impl_c_all / total_c_all, 0), 1) * 100, 1
+        ) if total_c_all > 0 else 0
+        rem_c_all   = total_c_all - impl_c_all
+        rem_pct_all = round((rem_c_all / total_c_all * 100), 1) if total_c_all > 0 else 0
+        compliant_all = total_stats['compliantCompliances']
+        audit_verified_pct_all = round((compliant_all / total_c_all * 100), 1) if total_c_all > 0 else 0
+
+        tr_all = total_stats['totalRisks']
+        # Risk Coverage = % of compliance controls covered by the risk register
+        # (total risks / total compliance controls, capped at 100%)
+        _total_c_for_risk = total_stats['totalCompliancesAll']
+        if _total_c_for_risk > 0:
+            risk_pct_all = round(min(tr_all / _total_c_for_risk, 1.0) * 100, 1)
+        else:
+            risk_pct_all = 0.0
+
+        total_active_policies_all = total_active_policies
+        approved_active_policies_all = applied_count
+
+        try:
+            audits_all = Audit.objects.filter(agg_fw)
+            next_audit_all = select_next_audit(audits_all)
+            next_audit_date_all = (
+                next_audit_all.DueDate.strftime('%Y-%m-%d')
+                if next_audit_all and next_audit_all.DueDate else None
+            )
+            next_audit_title_all = None
+            if next_audit_all:
+                next_audit_title_all = (next_audit_all.Title or next_audit_all.Scope or '').strip() or None
+                if next_audit_title_all and len(next_audit_title_all) > 120:
+                    next_audit_title_all = next_audit_title_all[:117] + '...'
+            next_audit_status_all = next_audit_all.Status if next_audit_all else None
+        except Exception:
+            next_audit_date_all = None
+            next_audit_title_all = None
+            next_audit_status_all = None
+
+        preview_metrics_all = {
+            'implementationProgressPercent': impl_pct_all,
+            'remainingControlsCount': rem_c_all,
+            'remainingControlsPercent': rem_pct_all,
+            'totalControlsCount': total_c_all,
+            'implementedControlsCount': impl_c_all,
+            'auditVerifiedCompliancePercent': audit_verified_pct_all,
+            'compliantControlsCount': compliant_all,
+            'riskCoveragePercent': risk_pct_all,
+            'totalActivePoliciesCount': total_active_policies_all,
+            'approvedActivePoliciesCount': approved_active_policies_all,
+            'nextAuditTitle': next_audit_title_all,
+            'nextAuditStatus': next_audit_status_all,
+            'compliancePercentage': impl_pct_all,
+            'remainingControls': rem_c_all,
+            'nextAudit': next_audit_date_all,
+            'policiesLabel': 'Total Policies',
+            'policiesValue': total_active_policies_all,
+        }
+
+        debug_print(f"✅ All frameworks data built: {len(fw_ids)} frameworks, "
+                    f"{total_c_all} compliances, {total_risks_global} risks")
         
         response_data = {
             'success': True,
@@ -1176,13 +1307,7 @@ def get_all_frameworks_data(request):
             },
             'hero': {
                 'stats': total_stats,
-                'previewMetrics': {
-                    'compliancePercentage': round((total_stats['compliantCompliances'] / total_stats['totalCompliancesAll'] * 100), 1) if total_stats['totalCompliancesAll'] > 0 else 0,
-                    'remainingControls': total_stats['totalCompliancesAll'] - total_stats['compliantCompliances'],
-                    'nextAudit': None,
-                    'policiesLabel': 'Active Policies',
-                    'policiesValue': total_stats['activePolicies']
-                }
+                'previewMetrics': preview_metrics_all,
             },
             'policies': policy_data,  # NEW: Add policy data for donut chart
             'frameworks': all_frameworks_list,

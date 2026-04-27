@@ -2,7 +2,7 @@
 // Change this variable to switch between different environments
 
 // Environment Configuration
-const ENVIRONMENT = 'aws';
+const ENVIRONMENT = 'development';
 // Options: 'aws', 'local', 'development'
 
 // API Base URLs for different environments
@@ -121,11 +121,9 @@ export const API_ENDPOINTS = {
   PORTABILITY_OTP_CHECK: `${API_BASE_URL}/api/portability-otp/check/`,
   EXPORT_USER_DATA_PORTABILITY: `${API_BASE_URL}/api/export-user-data-portability/`,
 
-  // Notifications - FIXED: Proper function implementation
-  GET_NOTIFICATIONS: (userId = null) => {
-    const user = userId || localStorage.getItem('user_id') || 'default_user';
-    return `${API_BASE_URL}/api/get-notifications/?user_id=${user}`;
-  },
+  // Notifications - backend derives user from authenticated session/JWT context.
+  // Do not pass user_id from client to avoid IDOR-protection 403s.
+  GET_NOTIFICATIONS: () => `${API_BASE_URL}/api/get-notifications/`,
   MARK_AS_READ: `${API_BASE_URL}/api/mark-as-read/`,
   MARK_ALL_AS_READ: `${API_BASE_URL}/api/mark-all-as-read/`,
   PUSH_NOTIFICATION: `${API_BASE_URL}/api/push-notification/`,

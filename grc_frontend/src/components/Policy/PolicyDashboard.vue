@@ -5,12 +5,23 @@
       <button @click="fetchDashboardData" class="retry-btn">Retry</button>
     </div>
 
-    <div v-if="loading" class="loading-overlay">
-      <div class="spinner"></div>
-      <span>Loading dashboard data...</span>
+    <!-- Skeleton screen: shown only on first load (no Pinia cache) -->
+    <div v-if="showSkeleton" class="dashboard-skeleton">
+      <div class="skeleton-kpi-grid">
+        <div v-for="n in 4" :key="'kpi-'+n" class="skeleton-kpi-card">
+          <div class="skeleton-block skeleton-kpi-value"></div>
+          <div class="skeleton-block skeleton-kpi-label"></div>
+        </div>
+      </div>
+      <div class="skeleton-charts-grid">
+        <div v-for="n in 4" :key="'chart-'+n" class="skeleton-chart-card">
+          <div class="skeleton-block skeleton-chart-title"></div>
+          <div class="skeleton-block skeleton-chart-area"></div>
+        </div>
+      </div>
     </div>
 
-    <div v-if="!loading && !error">
+    <div v-if="!showSkeleton && !error">
       <!-- Breadcrumb Section for Selected Filters - Positioned above dashboard-header -->
       <div v-if="(selectedFramework && selectedFramework !== 'all' && getSelectedFrameworkName !== '') || (selectedPolicy && selectedPolicy !== 'all' && getSelectedPolicyName !== '')" class="filter-breadcrumbs">
         <div v-if="selectedFramework && selectedFramework !== 'all' && getSelectedFrameworkName !== ''" class="filter-breadcrumbs__item">
@@ -41,6 +52,7 @@
           <h1>Policy Dashboard</h1>
         </div>
         <div class="policy-header-actions">
+          <span v-if="dataSourceBadge" class="data-source-badge">{{ dataSourceBadge }}</span>
           <!-- Export controls using global styles from main.css (custom dropdown + button) -->
           <div class="export-controls">
             <div class="export-controls-inner">
@@ -283,8 +295,10 @@
 
 <script>
 import dashboardService from '@/services/dashboardService';
-import { ref, reactive, watch, onMounted, onUnmounted, computed } from 'vue'
-import { useStore } from 'vuex'
+import { ref, reactive, watch, onMounted, onUnmounted, onActivated, computed } from 'vue'
+import { useFrameworkStore } from '@/stores/framework'
+import { useDashboardsStore } from '@/stores/dashboards'
+import { useAppDataStore } from '@/stores/appData'
 import { Chart, ArcElement, BarElement, CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend } from 'chart.js'
 import DashboardChartCard from '@/assets/css/DashboardChartCard.vue'
 import apiService from '@/services/apiService'
@@ -305,7 +319,9 @@ export default {
     DashboardChartCard
   },
   setup() {
-    const store = useStore()
+    const frameworkStore = useFrameworkStore()
+    const dashboardsStore = useDashboardsStore()
+    const appDataStore = useAppDataStore()
     const showPolicyDetails = ref(true)
     const selectedFramework = ref('all')
     const selectedPolicy = ref('all')
@@ -335,6 +351,8 @@ export default {
     const statusDistribution = ref([])
     const reviewerWorkload = ref([])
     const loading = ref(true)
+    // showSkeleton: show skeleton only when loading AND no Pinia cache to fall back on
+    const showSkeleton = computed(() => loading.value && !dashboardsStore.hasData('policy'))
     const error = ref(null)
     const isExporting = ref(false)
     const exportSuccess = ref(false)
@@ -342,6 +360,7 @@ export default {
     const chartsLoading = ref(false)
     const initialDataLoaded = ref(false)
     const chartDataCache = ref(new Map())
+    const dataSourceBadge = ref('')
 
     // Export controls (shared button styles from main.css – same pattern as FrameworkExplorer)
     const selectedExportFormat = ref('')
@@ -618,7 +637,10 @@ export default {
     }
 
     // Framework session management methods
+    let selectedFrameworkSessionPromise = null
     const checkSelectedFrameworkFromSession = async () => {
+      if (selectedFrameworkSessionPromise) return selectedFrameworkSessionPromise
+      selectedFrameworkSessionPromise = (async () => {
       try {
         console.log('🔍 DEBUG: Checking for selected framework from session in PolicyDashboard...')
         
@@ -652,15 +674,12 @@ export default {
             // Automatically select the framework from session
             selectedFramework.value = frameworkExists.id.toString()
             console.log('✅ DEBUG: Auto-selected framework from session:', selectedFramework.value)
-            // Refresh policies and dashboard data with the selected framework
-            await fetchPolicies(frameworkExists.id.toString())
-            await refreshDashboardSummary(frameworkExists.id.toString())
-            await updateAllCharts()
           } else {
             console.log('⚠️ DEBUG: Framework from session (ID:', frameworkIdFromSession, ') not found in loaded frameworks')
             console.log('📋 DEBUG: Available frameworks:', frameworks.value.map(f => ({ id: f.id, name: f.name })))
             // Clear the session framework ID since it doesn't exist
             sessionFrameworkId.value = null
+            selectedFramework.value = 'all'
             }
           } else {
             // "All Frameworks" is selected (frameworkId is null)
@@ -668,10 +687,6 @@ export default {
             console.log('🌐 DEBUG: Clearing framework selection to show all frameworks')
             sessionFrameworkId.value = null
             selectedFramework.value = 'all'
-            // Refresh policies and dashboard data for all frameworks
-            await fetchPolicies(null)
-            await refreshDashboardSummary(null)
-            await updateAllCharts()
           }
         } else {
           console.log('ℹ️ DEBUG: No framework found in session')
@@ -680,7 +695,11 @@ export default {
       } catch (error) {
         console.error('❌ DEBUG: Error checking selected framework from session:', error)
         sessionFrameworkId.value = null
+      } finally {
+        selectedFrameworkSessionPromise = null
       }
+      })()
+      return selectedFrameworkSessionPromise
     }
     
     const saveFrameworkToSession = async (frameworkId) => {
@@ -714,13 +733,13 @@ export default {
       // Find the framework name from the frameworks list
       const frameworkName = frameworks.value.find(f => f.id === selectedFramework.value)?.name || 'All Frameworks'
       
-      // Update Vuex store (this will also save to backend session)
-      await store.dispatch('framework/setFramework', {
+      // Pinia framework store (also persists backend session)
+      await frameworkStore.setFramework({
         id: selectedFramework.value !== 'all' ? selectedFramework.value : 'all',
         name: frameworkName
       })
       
-      console.log('✅ DEBUG: Framework saved to Vuex store in PolicyDashboard:', selectedFramework.value)
+      console.log('✅ DEBUG: Framework saved to Pinia store in PolicyDashboard:', selectedFramework.value)
       
       // Call the original onFrameworkChange logic
       await onFrameworkChange()
@@ -1108,14 +1127,54 @@ export default {
     // Fetch critical dashboard data first (summary, frameworks)
     const fetchCriticalData = async () => {
       try {
-        loading.value = true
         error.value = null
 
-        // Load only critical data first - summary and frameworks
+        // Stale-while-revalidate: if we already have cached data, serve it instantly
         const summaryParams = {}
         if (selectedFramework.value && selectedFramework.value !== 'all') {
           summaryParams.framework_id = selectedFramework.value
         }
+        const hasSummaryCache = dashboardService.hasSummaryCache(summaryParams);
+        const hasFrameworksCache = dashboardService.hasFrameworksCache();
+
+        if (hasSummaryCache && hasFrameworksCache) {
+          // Restore from cache immediately — no loading spinner shown
+          const cachedSummary = dashboardService.getSummaryCached(summaryParams);
+          const cachedFrameworks = dashboardService.getFrameworksCached();
+          dashboardData.value = cachedSummary || {};
+          let fwData = Array.isArray(cachedFrameworks) ? cachedFrameworks
+            : (cachedFrameworks?.frameworks || cachedFrameworks?.data || []);
+          frameworks.value = fwData.map(fw => ({
+            id: fw.id || fw.FrameworkId,
+            name: fw.name || fw.FrameworkName,
+            category: fw.category || fw.Category || '',
+            status: fw.status || fw.ActiveInactive || '',
+            description: fw.description || fw.FrameworkDescription || ''
+          }));
+          initialDataLoaded.value = true;
+          loading.value = false;
+          // Background refresh — updates cache silently without showing spinner
+          Promise.all([
+            dashboardService.getDashboardSummary(summaryParams),
+            dashboardService.getAllFrameworks()
+          ]).then(([summaryRes, frameworksRes]) => {
+            dashboardData.value = summaryRes || {};
+            let fwD = Array.isArray(frameworksRes) ? frameworksRes
+              : (frameworksRes?.frameworks || frameworksRes?.data || []);
+            frameworks.value = fwD.map(fw => ({
+              id: fw.id || fw.FrameworkId,
+              name: fw.name || fw.FrameworkName,
+              category: fw.category || fw.Category || '',
+              status: fw.status || fw.ActiveInactive || '',
+              description: fw.description || fw.FrameworkDescription || ''
+            }));
+          }).catch(e => console.warn('[PolicyDashboard] Background refresh failed:', e));
+          loadBackgroundData();
+          return;
+        }
+
+        // No cache — show loading and wait for API
+        loading.value = true
 
         const [summaryRes, frameworksRes] = await Promise.all([
           dashboardService.getDashboardSummary(summaryParams),
@@ -1153,6 +1212,32 @@ export default {
         error.value = 'Failed to load dashboard data'
         loading.value = false
       }
+    }
+
+    const hydratePolicyKpisFromAppData = () => {
+      if (!appDataStore.policiesLoaded) return false
+      // Use precomputed policy summary from appData store to avoid transient zero KPIs.
+      if (!appDataStore.policySummary) return false
+      const s = appDataStore.policySummary
+      dashboardData.value = {
+        ...dashboardData.value,
+        total_policies: s.total_policies || 0,
+        total_subpolicies: s.total_subpolicies || 0,
+        active_policies: s.active_policies || 0,
+        inactive_policies: s.inactive_policies || 0,
+        active_subpolicies: s.active_subpolicies || 0,
+        approval_rate: s.approval_rate || 0
+      }
+      if (Array.isArray(appDataStore.frameworksList) && appDataStore.frameworksList.length) {
+        frameworks.value = appDataStore.frameworksList.map(fw => ({
+          id: fw.id || fw.FrameworkId,
+          name: fw.name || fw.FrameworkName,
+          category: fw.category || fw.Category || '',
+          status: fw.status || fw.ActiveInactive || '',
+          description: fw.description || fw.FrameworkDescription || ''
+        }))
+      }
+      return true
     }
 
     // Load non-critical data in background
@@ -1316,22 +1401,72 @@ export default {
 
     // Fetch data on component mount
     onMounted(async () => {
-      // Load framework from Vuex store
-      const storeFrameworkId = store.state.framework.selectedFrameworkId
+      // Load framework from Pinia store
+      const storeFrameworkId = frameworkStore.selectedFrameworkId
       if (storeFrameworkId && storeFrameworkId !== 'all') {
         selectedFramework.value = storeFrameworkId
-        console.log('🔄 PolicyDashboard: Loaded framework from Vuex store:', storeFrameworkId)
+        console.log('🔄 PolicyDashboard: Loaded framework from Pinia:', storeFrameworkId)
       }
-      
-      // Load critical data and activities in parallel for faster loading
-      await Promise.all([
-        fetchCriticalData(),
-        fetchRecentActivities() // Load activities in parallel with charts
-      ])
-      
+
+      // ── Cache-first: instant display on return visits ──────────────────────
+      const piniaData = dashboardsStore.get('policy')
+      if (piniaData) {
+        dataSourceBadge.value = 'Loaded from Pinia (fast)'
+        console.log('⚡ [PolicyDashboard] Restoring from Pinia dashboards cache')
+        dashboardData.value = piniaData
+        const piniaFw = dashboardsStore.getFrameworks('policy')
+        if (piniaFw?.length) frameworks.value = piniaFw
+        initialDataLoaded.value = true
+        loading.value = false
+        // Background: activities, charts, and silent revalidation
+        fetchRecentActivities()
+        loadBackgroundData()
+        if (!dashboardsStore.isFresh('policy')) {
+          // Stale – refresh silently without showing spinner
+          fetchCriticalData().then(() => {
+            dashboardsStore.set('policy', dashboardData.value)
+            dashboardsStore.setFrameworks('policy', frameworks.value)
+            dataSourceBadge.value = 'Refreshed from API (latest)'
+          })
+        }
+        activityRefreshInterval.value = setInterval(() => fetchRecentActivities(), 300000)
+        return
+      }
+
+      // First-visit fast paint from appData Pinia cache.
+      if (hydratePolicyKpisFromAppData()) {
+        dataSourceBadge.value = 'Loaded from Pinia (fast)'
+        initialDataLoaded.value = true
+        loading.value = false
+        dashboardsStore.set('policy', dashboardData.value)
+        dashboardsStore.setFrameworks('policy', frameworks.value)
+        // Refresh exact API metrics in background without blocking UI.
+        fetchCriticalData().then(() => {
+          dashboardsStore.set('policy', dashboardData.value)
+          dashboardsStore.setFrameworks('policy', frameworks.value)
+          dataSourceBadge.value = 'Refreshed from API (latest)'
+        })
+        fetchRecentActivities()
+        await checkSelectedFrameworkFromSession()
+        activityRefreshInterval.value = setInterval(() => {
+          fetchRecentActivities()
+        }, 300000)
+        return
+      }
+      // ───────────────────────────────────────────────────────────────────────
+
+      // No cache – load critical data (KPIs) then background (charts, activities)
+      await fetchCriticalData()
+      dataSourceBadge.value = 'Refreshed from API (latest)'
+      // Save to Pinia after successful critical fetch
+      dashboardsStore.set('policy', dashboardData.value)
+      dashboardsStore.setFrameworks('policy', frameworks.value)
+
+      fetchRecentActivities() // fire-and-forget (non-blocking)
+
       // Check for selected framework from session after loading frameworks
       await checkSelectedFrameworkFromSession()
-      
+
       // Auto-refresh activities every 5 minutes
       activityRefreshInterval.value = setInterval(() => {
         fetchRecentActivities()
@@ -1347,15 +1482,26 @@ export default {
         clearTimeout(updateTimeout.value)
       }
     })
+
+    onActivated(() => {
+      // Keep previous data visible, only refresh in background.
+      fetchCriticalData()
+        .then(() => {
+          dashboardsStore.set('policy', dashboardData.value)
+          dashboardsStore.setFrameworks('policy', frameworks.value)
+          dataSourceBadge.value = 'Refreshed from API (latest)'
+        })
+        .catch(() => {})
+    })
     
-    // Watch for Vuex store framework changes
+    // Watch for Pinia framework store changes
     watch(
-      () => store.state.framework.selectedFrameworkId,
+      () => frameworkStore.selectedFrameworkId,
       async (newFrameworkId, oldFrameworkId) => {
         // Only update if value actually changed
         if (newFrameworkId === oldFrameworkId) return
         
-        console.log('🔄 PolicyDashboard: Vuex store framework changed to:', newFrameworkId)
+        console.log('🔄 PolicyDashboard: Pinia framework changed to:', newFrameworkId)
         // Update local filter to match store
         if (newFrameworkId === 'all' || !newFrameworkId) {
           selectedFramework.value = 'all'
@@ -1363,10 +1509,7 @@ export default {
           selectedFramework.value = newFrameworkId
         }
         
-        // Force data refresh
-        const frameworkId = selectedFramework.value !== 'all' ? selectedFramework.value : null
-        await refreshDashboardSummary(frameworkId)
-        await updateAllCharts()
+        // selectedFramework watch already refreshes summary and charts.
       }
     )
 
@@ -1889,6 +2032,8 @@ export default {
       activityRefreshInterval,
       avgApprovalTime,
       loading,
+      showSkeleton,
+      dataSourceBadge,
       error,
       activeInactiveData,
       categoryData,
@@ -2018,5 +2163,62 @@ export default {
 .activity-author {
   color: #4f6cff;
   font-weight: 500;
+}
+
+.data-source-badge {
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(79, 108, 255, 0.12);
+  color: #334155;
+  border: 1px solid rgba(79, 108, 255, 0.2);
+  margin-right: 8px;
+}
+
+/* ── Skeleton screens ─────────────────────────────────────────────────────── */
+@keyframes skeleton-shimmer {
+  0%   { background-position: -600px 0; }
+  100% { background-position: 600px 0; }
+}
+.skeleton-block {
+  background: linear-gradient(90deg, #ececec 25%, #d8d8d8 50%, #ececec 75%);
+  background-size: 1200px 100%;
+  animation: skeleton-shimmer 1.5s infinite linear;
+  border-radius: 6px;
+}
+.dashboard-skeleton { padding: 24px; }
+.skeleton-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.skeleton-kpi-card {
+  background: #fff;
+  border-radius: 10px;
+  padding: 20px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.07);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.skeleton-kpi-value { height: 38px; width: 60%; }
+.skeleton-kpi-label { height: 14px; width: 45%; }
+.skeleton-charts-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+.skeleton-chart-card {
+  background: #fff;
+  border-radius: 10px;
+  padding: 20px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.07);
+}
+.skeleton-chart-title { height: 16px; width: 40%; margin-bottom: 16px; }
+.skeleton-chart-area  { height: 220px; }
+@media (max-width: 900px) {
+  .skeleton-kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .skeleton-charts-grid { grid-template-columns: 1fr; }
 }
 </style> 

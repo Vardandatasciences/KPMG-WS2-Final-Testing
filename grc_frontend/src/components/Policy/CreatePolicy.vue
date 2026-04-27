@@ -1961,7 +1961,7 @@
 <script>
 
 import { ref, watch, onMounted, onActivated, nextTick, computed, reactive } from 'vue'
-import { useStore } from 'vuex'
+import { useFrameworkStore } from '@/stores/framework'
 import apiService from '@/services/apiService'
 import { useRouter, useRoute } from 'vue-router'
 import { PopupService, PopupModal } from '@/modules/popus'
@@ -1977,7 +1977,7 @@ export default {
   },
   setup() {
     const selectedSubPolicyIdx = ref([]) // <-- Declare this at the very top!
-    const store = useStore()
+    const frameworkStore = useFrameworkStore()
     const router = useRouter()
     const route = useRoute()
     const selectedFramework = ref('')
@@ -2315,11 +2315,11 @@ export default {
         // Set flag to prevent watcher from saving during load
         isLoadingFramework.value = true
 
-        // Respect the in-app Vuex selection first.
+        // Respect the in-app Pinia framework selection first.
         // When Home has "All Frameworks" selected, Create Policy should not auto-pick any framework.
-        const storeFrameworkId = store.state.framework?.selectedFrameworkId
+        const storeFrameworkId = frameworkStore.selectedFrameworkId
         if (!storeFrameworkId || storeFrameworkId === 'all') {
-          console.log('ℹ️ DEBUG: Vuex indicates All Frameworks is active - clearing Create Policy selection')
+          console.log('ℹ️ DEBUG: Pinia indicates All Frameworks is active - clearing Create Policy selection')
           selectedFramework.value = ''
           return
         }
@@ -2393,23 +2393,15 @@ export default {
         }
         // Only save if user actually changed it (not programmatic load)
         if (oldValue !== undefined && oldValue !== newValue) {
-          // Save the selected framework to session
           try {
-            const userId = currentUser.value.UserId || localStorage.getItem('user_id') || 'default_user'
-            console.log('💾 DEBUG: User changed framework, saving to backend:', newValue)
-            
-            const data = await apiService.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, {
-              frameworkId: newValue,
-              userId: userId
-            })
-            
-            if (data && data.success) {
-              console.log('✅ DEBUG: Framework saved to session successfully')
-            } else {
-              console.error('❌ DEBUG: Failed to save framework to session')
-            }
+            const frameworkName =
+              frameworks.value.find((f) => String(f.id) === String(newValue) || f.id == newValue)?.name ||
+              'Selected Framework'
+            console.log('💾 DEBUG: User changed framework, syncing Pinia + session:', newValue)
+            await frameworkStore.setFramework({ id: newValue, name: frameworkName })
+            console.log('✅ DEBUG: Framework saved via Pinia')
           } catch (error) {
-            console.error('❌ DEBUG: Error saving framework to session:', error)
+            console.error('❌ DEBUG: Error saving framework:', error)
           }
         } else {
           console.log('🔄 DEBUG: Framework set programmatically (oldValue:', oldValue, '), skipping save')
@@ -2424,11 +2416,11 @@ export default {
     })
 
     watch(
-      () => store.state.framework?.selectedFrameworkId,
+      () => frameworkStore.selectedFrameworkId,
       (newFrameworkId) => {
         if (newFrameworkId === 'all' || !newFrameworkId) {
           if (selectedFramework.value !== '') {
-            console.log('🔄 DEBUG: Vuex framework reset to All Frameworks - clearing Create Policy dropdown')
+            console.log('🔄 DEBUG: Pinia framework reset to All Frameworks - clearing Create Policy dropdown')
             selectedFramework.value = ''
           }
         }

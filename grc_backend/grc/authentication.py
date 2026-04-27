@@ -3,6 +3,7 @@ import json
 import logging
 import time
 import uuid
+import threading
 import requests
 from datetime import datetime, timedelta
 from django.conf import settings
@@ -25,6 +26,102 @@ from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from .mfa_service import MfaService
 
 logger = logging.getLogger(__name__)
+
+
+def _run_in_background(task_name, fn, *args, **kwargs):
+    """
+    Run non-critical login follow-up tasks asynchronously.
+
+    These tasks should never block auth response delivery.
+    """
+    def _runner():
+        try:
+            fn(*args, **kwargs)
+        except Exception as exc:
+            logger.debug("background task failed (%s): %s", task_name, exc, exc_info=True)
+
+    threading.Thread(target=_runner, name=f"auth-bg-{task_name}", daemon=True).start()
+
+
+def _log_successful_login_async(user_id, user_name, login_type, client_ip, mfa_enabled, user_was_inactive):
+    """
+    Persist login audit record asynchronously so login response is not delayed.
+    """
+    log_saved = False
+    try:
+        from .routes.Global.logging_service import send_log
+        logger.info(f"🔍 Attempting to log successful login for user {user_name} (ID: {user_id})")
+        log_id = send_log(
+            module='Authentication',
+            actionType='LOGIN_SUCCESS',
+            description=f'User {user_name} (ID: {user_id}) logged in successfully using JWT with {login_type}',
+            userId=str(user_id),
+            userName=user_name,
+            logLevel='INFO',
+            ipAddress=client_ip,
+            additionalInfo={
+                'login_type': login_type,
+                'license_verified': True,
+                'mfa_enabled': mfa_enabled,
+                'user_activated': user_was_inactive,
+                'auth_method': 'JWT'
+            },
+            frameworkId=None
+        )
+        if log_id:
+            logger.info(f"✅ Successfully logged login to grc_logs with ID: {log_id}")
+            log_saved = True
+        else:
+            logger.warning(f"⚠️  send_log returned None for user {user_name} - trying direct database save")
+    except Exception as log_error:
+        logger.error(f"❌ Error in send_log: {str(log_error)}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+
+    if not log_saved:
+        try:
+            logger.info("🔄 Attempting direct database save for login log")
+            framework = _get_default_framework()
+            if framework:
+                log_entry = GRCLog(
+                    Module='Authentication',
+                    ActionType='LOGIN_SUCCESS',
+                    Description=f'User {user_name} (ID: {user_id}) logged in successfully using JWT with {login_type}',
+                    UserId=str(user_id),
+                    UserName=user_name,
+                    LogLevel='INFO',
+                    IPAddress=client_ip,
+                    FrameworkId=framework,
+                    AdditionalInfo={
+                        'login_type': login_type,
+                        'license_verified': True,
+                        'mfa_enabled': mfa_enabled,
+                        'user_activated': user_was_inactive,
+                        'auth_method': 'JWT',
+                        'logged_via': 'direct_database_save'
+                    }
+                )
+                log_entry.save()
+                logger.info(f"✅ DIRECT SAVE SUCCESS: Logged login to grc_logs with ID: {log_entry.LogId}")
+            else:
+                logger.error("❌ Cannot save login log: No framework available")
+        except Exception as direct_save_error:
+            logger.error(f"❌ CRITICAL: Direct database save also failed: {str(direct_save_error)}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+
+
+def _link_cookie_preferences_async(user, session_id):
+    """
+    Link anonymous cookie preferences to logged-in user without blocking login.
+    """
+    try:
+        from .routes.Cookie.cookie_views import link_cookie_preferences_to_user
+        linked_count = link_cookie_preferences_to_user(user, session_id)
+        if linked_count > 0:
+            logger.info(f"✅ Linked {linked_count} cookie preference(s) to user {user.UserId} after login")
+    except Exception as cookie_link_error:
+        logger.warning(f"⚠️  Failed to link cookie preferences after login: {str(cookie_link_error)}")
 
 # JWT Settings (Strictly asymmetric RS256)
 JWT_ALGORITHM = getattr(settings, 'JWT_ALGORITHM', 'RS256')
@@ -1134,16 +1231,15 @@ def jwt_login(request):
         request.session['grc_username'] = username_plain
         request.session['session_created_at'] = time.time()  # Store session creation time for timeout check
         
-        # Initialize framework session keys if needed - Set default if None to avoid "Framework context not found"
-        if request.session.get('grc_framework_selected') is None:
-            default_fw = _get_default_framework()
-            if default_fw:
-                request.session['grc_framework_selected'] = default_fw.FrameworkId
-                request.session['selected_framework_id'] = default_fw.FrameworkId
-                logger.info(f"✅ Set default framework context: {default_fw.FrameworkId}")
-            else:
-                request.session['grc_framework_selected'] = None
-                request.session['selected_framework_id'] = None
+        # Always reset framework to "All Frameworks" on login - never auto-select a specific framework
+        try:
+            from grc.framework_context import clear_framework_context
+            clear_framework_context(str(user.UserId))
+        except Exception as fw_clear_ex:
+            logger.warning(f"Could not clear framework context cache on login: {fw_clear_ex}")
+        request.session['grc_framework_selected'] = None
+        request.session['selected_framework_id'] = None
+        logger.info(f"✅ Framework context reset to All Frameworks on login for user {user.UserId}")
 
         
         # CRITICAL: Explicitly save the session to persist changes
@@ -1153,110 +1249,47 @@ def jwt_login(request):
         logger.info(f"JWT login successful for user {user.UserName} (ID: {user.UserId}) using {login_type}")
         logger.info(f"🔑 Session key created: {request.session.session_key}")
         
+        # Run non-critical security/anomaly follow-up in background to keep login fast.
         try:
             from grc.utils.login_anomalies import record_login_security_events
-
-            record_login_security_events(
+            _run_in_background(
+                "login-security-events",
+                record_login_security_events,
                 user.UserId,
                 request,
                 "JWT",
                 username=getattr(user, "UserName_plain", None) or getattr(user, "UserName", None),
             )
         except Exception as sec_ex:
-            logger.warning("login security audit hook failed: %s", sec_ex, exc_info=True)
+            logger.warning("login security audit hook scheduling failed: %s", sec_ex, exc_info=True)
 
         # Per-account anomaly detection and alerting (geo/time heuristics)
+        # This can trigger notification/email work, so execute async.
         try:
             from grc.security.anomaly_service import detect_and_alert_on_login
-            detect_and_alert_on_login(request, user)
+            _run_in_background("anomaly-detect", detect_and_alert_on_login, request, user)
         except Exception as anom_ex:
-            logger.debug("anomaly detector failed: %s", anom_ex, exc_info=True)
+            logger.debug("anomaly detector scheduling failed: %s", anom_ex, exc_info=True)
 
-        # Log successful login to grc_logs - DIRECT DATABASE SAVE (fallback if send_log fails)
-        log_saved = False
-        try:
-            from .routes.Global.logging_service import send_log
-            logger.info(f"🔍 Attempting to log successful login for user {user.UserName} (ID: {user.UserId})")
-            log_id = send_log(
-                module='Authentication',
-                actionType='LOGIN_SUCCESS',
-                description=f'User {user.UserName} (ID: {user.UserId}) logged in successfully using JWT with {login_type}',
-                userId=str(user.UserId),
-                userName=user.UserName,
-                logLevel='INFO',
-                ipAddress=client_ip,
-                additionalInfo={
-                    'login_type': login_type,
-                    'license_verified': True,
-                    'mfa_enabled': mfa_enabled,
-                    'user_activated': user_was_inactive,
-                    'auth_method': 'JWT'
-                },
-                frameworkId=None  # Users model doesn't have FrameworkId field
-            )
-            if log_id:
-                logger.info(f"✅ Successfully logged login to grc_logs with ID: {log_id}")
-                log_saved = True
-            else:
-                logger.warning(f"⚠️  send_log returned None for user {user.UserName} - trying direct database save")
-        except Exception as log_error:
-            logger.error(f"❌ Error in send_log: {str(log_error)}")
-            import traceback
-            logger.error(f"Traceback: {traceback.format_exc()}")
+        # Log successful login asynchronously so response is not blocked by DB/audit work.
+        _run_in_background(
+            "login-success-log",
+            _log_successful_login_async,
+            user.UserId,
+            user.UserName,
+            login_type,
+            client_ip,
+            mfa_enabled,
+            user_was_inactive,
+        )
         
-        # FALLBACK: Direct database save if send_log failed
-        if not log_saved:
-            try:
-                logger.info(f"🔄 Attempting direct database save for login log")
-                framework = _get_default_framework()
-                if framework:
-                    log_entry = GRCLog(
-                        Module='Authentication',
-                        ActionType='LOGIN_SUCCESS',
-                        Description=f'User {user.UserName} (ID: {user.UserId}) logged in successfully using JWT with {login_type}',
-                        UserId=str(user.UserId),
-                        UserName=user.UserName,
-                        LogLevel='INFO',
-                        IPAddress=client_ip,
-                        FrameworkId=framework,
-                        AdditionalInfo={
-                            'login_type': login_type,
-                            'license_verified': True,
-                            'mfa_enabled': mfa_enabled,
-                            'user_activated': user_was_inactive,
-                            'auth_method': 'JWT',
-                            'logged_via': 'direct_database_save'
-                        }
-                    )
-                    log_entry.save()
-                    logger.info(f"✅ DIRECT SAVE SUCCESS: Logged login to grc_logs with ID: {log_entry.LogId}")
-                else:
-                    logger.error(f"❌ Cannot save login log: No framework available")
-            except Exception as direct_save_error:
-                logger.error(f"❌ CRITICAL: Direct database save also failed: {str(direct_save_error)}")
-                import traceback
-                logger.error(f"Traceback: {traceback.format_exc()}")
-                # Don't fail login if logging fails
-        
-        # CRITICAL: Link cookie preferences to user after successful login
-        # This ensures any anonymous preferences created before login are linked to the user
-        try:
-            from .routes.Cookie.cookie_views import link_cookie_preferences_to_user
-            # Try to get session_id from request body (if provided) or cookies
-            session_id = None
-            if hasattr(request, 'data') and request.data:
-                session_id = request.data.get('session_id')
-            if not session_id and hasattr(request, 'COOKIES'):
-                # Try to get from cookies if available
-                session_id = request.COOKIES.get('cookie_session_id')
-            
-            # Link preferences (will use session_id if available, otherwise link recent ones)
-            linked_count = link_cookie_preferences_to_user(user, session_id)
-            if linked_count > 0:
-                logger.info(f"✅ Linked {linked_count} cookie preference(s) to user {user.UserId} after login")
-        except Exception as cookie_link_error:
-            # Don't fail login if cookie linking fails
-            logger.warning(f"⚠️  Failed to link cookie preferences after login: {str(cookie_link_error)}")
+        # Link preferences in background; non-critical for auth success path.
+        session_id = None
+        if hasattr(request, 'data') and request.data:
+            session_id = request.data.get('session_id')
+        if not session_id and hasattr(request, 'COOKIES'):
+            session_id = request.COOKIES.get('cookie_session_id')
+        _run_in_background("cookie-link-after-login", _link_cookie_preferences_async, user, session_id)
         
         # Check if user has accepted consent
         # Handle both string and potential null/None values
@@ -2203,10 +2236,14 @@ def mfa_verify_otp(request):
         request.session['grc_user_id'] = user.UserId
         request.session['grc_username'] = user.UserName
         
-        if 'grc_framework_selected' not in request.session:
-            request.session['grc_framework_selected'] = None
-        if 'selected_framework_id' not in request.session:
-            request.session['selected_framework_id'] = None
+        # Always reset framework to "All Frameworks" on login
+        try:
+            from grc.framework_context import clear_framework_context
+            clear_framework_context(str(user.UserId))
+        except Exception as fw_clear_ex:
+            logger.warning(f"Could not clear framework context cache on MFA login: {fw_clear_ex}")
+        request.session['grc_framework_selected'] = None
+        request.session['selected_framework_id'] = None
         
         request.session.save()
         
@@ -2848,10 +2885,14 @@ def google_oauth_callback(request):
         request.session['grc_username'] = user.UserName
         request.session['session_created_at'] = time.time()  # Store session creation time for timeout check
         
-        if 'grc_framework_selected' not in request.session:
-            request.session['grc_framework_selected'] = None
-        if 'selected_framework_id' not in request.session:
-            request.session['selected_framework_id'] = None
+        # Always reset framework to "All Frameworks" on login
+        try:
+            from grc.framework_context import clear_framework_context
+            clear_framework_context(str(user.UserId))
+        except Exception as fw_clear_ex:
+            logger.warning(f"Could not clear framework context cache on Google SSO login: {fw_clear_ex}")
+        request.session['grc_framework_selected'] = None
+        request.session['selected_framework_id'] = None
         
         request.session.save()
         

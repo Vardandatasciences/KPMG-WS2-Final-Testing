@@ -825,3 +825,60 @@ i.fas.fa-check-circle::after {
   background: linear-gradient(135deg, #FFC107, #ff8f00) !important;
   color: white !important;
 }
+
+.data-source-badge {
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(79, 108, 255, 0.12);
+  color: #334155;
+  border: 1px solid rgba(79, 108, 255, 0.2);
+  margin-right: 8px;
+}
+
+/* -- Skeleton screens ----------------------------------------------- */
+@keyframes skeleton-shimmer {
+  0%   { background-position: -600px 0; }
+  100% { background-position: 600px 0; }
+}
+.skeleton-block {
+  background: linear-gradient(90deg, #ececec 25%, #d8d8d8 50%, #ececec 75%);
+  background-size: 1200px 100%;
+  animation: skeleton-shimmer 1.5s infinite linear;
+  border-radius: 6px;
+}
+.dashboard-skeleton { padding: 24px; }
+.skeleton-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.skeleton-kpi-card {
+  background: #fff;
+  border-radius: 10px;
+  padding: 20px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.07);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.skeleton-kpi-value { height: 38px; width: 60%; }
+.skeleton-kpi-label { height: 14px; width: 45%; }
+.skeleton-charts-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+.skeleton-chart-card {
+  background: #fff;
+  border-radius: 10px;
+  padding: 20px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.07);
+}
+.skeleton-chart-title { height: 16px; width: 40%; margin-bottom: 16px; }
+.skeleton-chart-area  { height: 220px; }
+@media (max-width: 900px) {
+  .skeleton-kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .skeleton-charts-grid { grid-template-columns: 1fr; }
+}

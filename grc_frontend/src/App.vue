@@ -9,7 +9,26 @@
       <!-- Global Navbar for all authenticated pages -->
       <GlobalNavbar />
       <div class="main-content with-sidebar">
-        <router-view></router-view>
+        <!-- keep-alive preserves component state between navigations so cached data
+             is shown instantly on re-visit without re-fetching from the API.
+             Form/create/edit pages are excluded so they always start fresh. -->
+        <router-view v-slot="{ Component }">
+          <keep-alive :exclude="[
+            'CreatePolicy',
+            'CreateCompliance',
+            'EditCompliance',
+            'CreateRisk',
+            'CreateRiskInstance',
+            'UploadFramework',
+            'CreateFramework',
+            'AssignAudit',
+            'IncidentManagement',
+            'EventCreation',
+            'EventEditModal',
+          ]">
+            <component :is="Component" />
+          </keep-alive>
+        </router-view>
       </div>
     </div>
     <div v-else class="login-container">
@@ -35,6 +54,7 @@ import ConsentModal from './components/Consent/ConsentModal.vue'
 import CookieBanner from './components/Cookie/CookieBanner.vue'
 import SessionTimeoutPopup from './components/SessionTimeoutPopup.vue'
 import consentService from './services/consentService.js'
+import { useFrameworkStore } from './stores/framework'
 // import AuthDebug from './components/AuthDebug.vue'
  
 export default {
@@ -62,7 +82,7 @@ export default {
     // Check authentication status on app load
     this.checkAuthStatus()
     
-    // Load framework selection from backend session into Vuex store
+    // Load framework selection from backend session into Pinia store
     this.$nextTick(() => {
       if (this.isAuthenticated) {
         this.loadFrameworkFromSession()
@@ -101,6 +121,13 @@ export default {
   },
   beforeUnmount() {
     window.removeEventListener('authChanged', this.checkAuthStatus)
+  },
+  watch: {
+    '$route.name'(newRouteName) {
+      if (this.isAuthenticated) {
+        this.warmupPerfRoutesPinia(newRouteName)
+      }
+    }
   },
   methods: {
     isLoginRoute(path) {
@@ -180,6 +207,9 @@ export default {
       if (this.isAuthenticated && !this.hasExplicitlyLoggedIn) {
         this.hasExplicitlyLoggedIn = true
       }
+      if (this.isAuthenticated) {
+        this.warmupPerfRoutesPinia(this.$route?.name)
+      }
      
       console.log('🔐 Authentication check:', {
         hasToken: undefined, // HttpOnly cookie (not JS-readable)
@@ -207,10 +237,17 @@ export default {
     async loadFrameworkFromSession() {
       try {
         console.log('🔄 App.vue: Loading framework from backend session...')
-        await this.$store.dispatch('framework/loadFrameworkFromSession')
+        const frameworkStore = useFrameworkStore()
+        await frameworkStore.loadFrameworkFromSession()
       } catch (error) {
         console.error('❌ App.vue: Error loading framework from session:', error)
       }
+    },
+    warmupPerfRoutesPinia(routeName) {
+      // Do not trigger cross-module prefetch from App shell.
+      // Home/login must stay light and only call APIs needed for current screen.
+      // Module-specific pages fetch their own data and now use Pinia-first rendering.
+      if (!routeName) return
     },
     
     // Method to be called when user successfully logs in

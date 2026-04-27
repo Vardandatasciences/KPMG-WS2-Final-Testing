@@ -289,7 +289,7 @@
 </template>
 
 <script>
-import { ref, onMounted, onUnmounted, nextTick, computed, watch } from 'vue'
+import { ref, onMounted, onUnmounted, onActivated, onDeactivated, nextTick, computed, watch } from 'vue'
 import { eventService } from '../../services/api'
 import EventFilters from './EventFilters.vue'
 import { Chart, registerables } from 'chart.js'
@@ -298,6 +298,7 @@ import AccessUtils from '../../utils/accessUtils'
 import apiService from '@/services/apiService.js'
 import eventDataService from '../../services/eventService' // NEW: Centralized event data service
 import { convertColorForColorblind, getColorblindMode } from '../../utils/colorblindness'
+import { useDashboardsStore } from '@/stores/dashboards'
 
 const sanitizeCSVCell = (value) => {
   const text = String(value ?? '')
@@ -316,6 +317,7 @@ export default {
     PopupModal
   },
   setup() {
+    const dashboardsStore = useDashboardsStore()
     const dashboardData = ref(null)
     const loading = ref(false)
     const error = ref(null)
@@ -586,9 +588,10 @@ export default {
       }
     }
 
-    const fetchDashboardData = async () => {
+    const fetchDashboardData = async (options = {}) => {
+      const silent = !!options.silent
       try {
-        loading.value = true
+        if (!silent) loading.value = true
         error.value = null
         
         console.log('[EventsDashboard] Checking for cached event data...')
@@ -634,6 +637,7 @@ export default {
         const response = await eventService.getEventsDashboard(queryString)
         if (response.data.success) {
           dashboardData.value = response.data
+          dashboardsStore.set('event', response.data)
           // Create charts after data is loaded
           await nextTick()
           // Add a small delay to ensure DOM is fully rendered
@@ -654,7 +658,7 @@ export default {
           error.value = 'Failed to fetch dashboard data. Please try again.'
         }
       } finally {
-        loading.value = false
+        if (!silent) loading.value = false
       }
     }
 
@@ -1291,11 +1295,39 @@ export default {
       
       // Check for framework selection from session
       await checkSelectedFrameworkFromSession()
-      
-      // Then fetch dashboard data
-      await fetchDashboardData()
+
+      // Cache-first instant render
+      const cached = dashboardsStore.get('event')
+      if (cached) {
+        dashboardData.value = cached
+        loading.value = false
+        await nextTick()
+        setTimeout(() => createCharts(), 0)
+
+        if (!dashboardsStore.isFresh('event')) {
+          // Silent revalidation for stale cache.
+          fetchDashboardData({ silent: true })
+        }
+      } else {
+        // No cache available yet: fetch normally once.
+        await fetchDashboardData()
+      }
       
       document.addEventListener('click', exportDropdownClickOutside)
+    })
+
+    onActivated(async () => {
+      if (dashboardData.value) {
+        await nextTick()
+        setTimeout(() => createCharts(), 0)
+        fetchDashboardData({ silent: true }).catch(() => {})
+        return
+      }
+      await fetchDashboardData()
+    })
+
+    onDeactivated(() => {
+      // No-op: preserve rendered data; refresh is resumed on activate.
     })
 
     onUnmounted(() => {

@@ -708,8 +708,17 @@ export default {
     CustomDropdown
   },
   data() {
+    // Stale-while-revalidate: skip loading spinner if all KPIs are already cached
+    const kpiKeys = [
+      'mttd', 'mttr', 'mttc', 'mttrv', 'firstResponseTime', 'incidentCount',
+      'reopenedIncidents', 'closureRate', 'falsePositiveRate', 'detectionAccuracy',
+      'slaCompliance', 'severity', 'rootCauses', 'incidentTypes', 'escalationRate',
+      'repeatRate', 'origins', 'cost', 'incidentCounts'
+    ];
+    const allKPIsCached = incidentService.hasValidKPICache() &&
+      kpiKeys.every(key => incidentService.getKPIData(key) !== null);
     return {
-      loading: true,
+      loading: !allKPIsCached, // skip loading spinner when fully cached
       scanningRisks: false,
       dataSourceMessage: '', // Data source indicator
       timeRangeOptions: [
