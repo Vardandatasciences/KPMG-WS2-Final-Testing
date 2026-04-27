@@ -93,6 +93,7 @@ def get_temp_media_root():
             logger.error(f"Could not list directory: {e}")
     logger.info("============================================================")
     
+    print(temp_media_root,"----------------------------")
     return temp_media_root
 
 def get_available_frameworks():
@@ -579,6 +580,7 @@ def _get_policies_for_section_internal(policies_data, section_folder, compliance
             )
             
             if is_match:
+                logger.info(f"[MATCH] ✓ Success: folder_path '{folder_path}' matches section '{section_folder}' (normalized: '{folder_path_normalized}' vs '{section_folder_normalized}')")
                 analysis = policy_entry.get('analysis', {})
                 policies = analysis.get('policies', [])
                 matched_count += len(policies)
@@ -923,21 +925,55 @@ def get_default_pdf_content(request, section_folder, control_id):
         framework_key = request.GET.get('framework', 'PCI_DSS_2')
         framework_key = framework_key.strip()
         
-        # Special handling for dgca_framework which has nested structure
+        # Special handling for frameworks with non-standard structures
         if framework_key == 'dgca_framework':
             # DGCA has a nested structure inside dgca_framework folder
             dgca_base = os.path.join(temp_media_root, 'dgca_framework')
             
             # Find the sections folder inside dgca_framework
             sections_dir = None
-            for item in os.listdir(dgca_base):
-                item_path = os.path.join(dgca_base, item)
-                if os.path.isdir(item_path) and item.startswith('sections_'):
-                    sections_dir = item_path
-                    break
+            if os.path.exists(dgca_base):
+                try:
+                    for item in os.listdir(dgca_base):
+                        item_path = os.path.join(dgca_base, item)
+                        if os.path.isdir(item_path) and item.startswith('sections_'):
+                            sections_dir = item_path
+                            break
+                except Exception as e:
+                    logger.error(f"Error listing DGCA base directory {dgca_base}: {e}")
             
             if not sections_dir:
                 return JsonResponse({"success": False, "error": f"DGCA sections directory not found in {dgca_base}"}, status=404)
+            
+            pdf_path = os.path.join(sections_dir, 'sections', section_folder, f"{control_id}.pdf")
+            
+        elif framework_key == 'rbi_framework':
+            # RBI framework is in "master_rbac" folder
+            rbi_base = os.path.join(temp_media_root, 'master_rbac')
+            
+            # Find the sections folder inside master_rbac
+            sections_dir = None
+            if os.path.exists(rbi_base):
+                try:
+                    for item in os.listdir(rbi_base):
+                        item_path = os.path.join(rbi_base, item)
+                        if os.path.isdir(item_path) and item.startswith('sections_'):
+                            sections_dir = item_path
+                            break
+                except Exception as e:
+                    logger.error(f"Error listing RBI base directory {rbi_base}: {e}")
+            
+            if not sections_dir:
+                logger.error(f"RBI sections directory not found in {rbi_base}. Available: {os.listdir(rbi_base) if os.path.exists(rbi_base) else 'N/A'}")
+                return JsonResponse({
+                    "success": False, 
+                    "error": f"RBI sections directory not found in {rbi_base}",
+                    "debug_info": {
+                        "rbi_base": rbi_base,
+                        "exists": os.path.exists(rbi_base),
+                        "contents": os.listdir(rbi_base) if os.path.exists(rbi_base) else []
+                    }
+                }, status=404)
             
             pdf_path = os.path.join(sections_dir, 'sections', section_folder, f"{control_id}.pdf")
         else:

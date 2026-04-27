@@ -730,7 +730,7 @@ JWT_VERIFYING_KEY = JWT_PUBLIC_KEY
 # Legacy alias retained for existing modules that still reference JWT_SECRET_KEY.
 JWT_SECRET_KEY = JWT_SIGNING_KEY
 JWT_ALLOWED_ALGORITHMS = [JWT_ALGORITHM]
-JWT_ACCESS_TOKEN_LIFETIME = 36000  # 1 hour in seconds
+JWT_ACCESS_TOKEN_LIFETIME = 360000  # 1 hour in seconds
 JWT_REFRESH_TOKEN_LIFETIME = 604800  # 7 days in seconds
 # reCAPTCHA Configuration
 RECAPTCHA_SECRET_KEY = os.environ.get('RECAPTCHA_SECRET_KEY', '6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe')  # Default is Google's test key
@@ -932,7 +932,8 @@ AWS_SECRET_ACCESS_KEY = os.environ.get("AWS_SECRET_ACCESS_KEY", "")
 AWS_REGION = os.environ.get("AWS_REGION", "ap-south-1")
 AWS_S3_REGION_NAME = os.environ.get("AWS_S3_REGION_NAME", "ap-south-1")
 # Toggle between local and deployed environments (define early as it's used in other configs)
-USE_LOCAL_DEVELOPMENT = os.environ.get('USE_LOCAL_DEVELOPMENT', 'true').lower() == 'true'  # Set to False for production
+# Default to False in production; local developers should set this to 'true' in their .env
+USE_LOCAL_DEVELOPMENT = os.environ.get('USE_LOCAL_DEVELOPMENT', 'false').lower() == 'true'
 
 # In local development, it's common to run a single DB and/or not have access to the
 # hosted TPRM RDS. If `TPRM_DB_HOST` is left as the default RDS hostname, Django will
@@ -1002,7 +1003,7 @@ BAMBOOHR_CLIENT_SECRET = clean_env_value(os.environ.get("BAMBOOHR_CLIENT_SECRET"
 if USE_LOCAL_DEVELOPMENT:
     FRONTEND_URL = 'http://localhost:8080'  # Force localhost for local development
 else:
-    FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://example.com')
+    FRONTEND_URL = os.environ.get('FRONTEND_URL', 'https://grc-riskavaire.vardaands.com')
 
 # Base URL for public questionnaire response links (email link; no login). Use hosted TPRM frontend in production.
 PUBLIC_QUESTIONNAIRE_BASE_URL = os.environ.get(
