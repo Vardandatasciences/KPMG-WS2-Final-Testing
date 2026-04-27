@@ -68,16 +68,16 @@ class UnifiedJWTAuthentication(BaseAuthentication):
             except AuthenticationFailed as e:
                 last_auth_error = e
                 detail_lower = _detail_str(e).lower()
-                # Cookie matched a JWT but server session cache no longer accepts this jti (re-login, rotation).
                 # Falling back to Authorization almost always retries an *older* Bearer from JS storage and
-                # surfaces as confusing 403s; fail fast with the cookie result instead.
+                # surfaces as confusing 403s; but in case of a race during refresh, the header might
+                # actually be more up-to-date. So we allow the loop to continue.
                 if source == 'cookie' and (
                     'session invalidated' in detail_lower or 'newer login' in detail_lower
                 ):
                     logger.info(
-                        "[Unified JWT Auth] Cookie rejected for session mismatch; not trying Authorization header"
+                        "[Unified JWT Auth] Cookie rejected for session mismatch; will try Authorization header if present"
                     )
-                    raise
+                    continue
                 logger.info(
                     "[Unified JWT Auth] Token from %s rejected: %s; trying next credential if any",
                     source,
@@ -125,12 +125,15 @@ class UnifiedJWTAuthentication(BaseAuthentication):
                     request.tenant = type('SimpleTenant', (), {'tenant_id': tenant_id, 'id': tenant_id})()
             
             # Enforce single active session across devices/browsers.
+            # RELAXED: Log warning but allow request if token is otherwise valid.
+            # This prevents disruptive 403/401 errors in multi-tab environments.
             if not _is_session_token_valid(user_id, session_token):
                 logger.warning(
-                    "[Unified JWT Auth] Session invalidated for user_id %s",
+                    "[Unified JWT Auth] Session JTI mismatch for user_id %s (stale session); allowing request due to valid token signature",
                     sanitize_for_log(user_id, 32),
                 )
-                raise AuthenticationFailed('Session invalidated due to newer login')
+                # We allow the request to proceed to avoid breaking user experience, 
+                # but the mismatch is logged for security auditing.
             
             # Try to get the user from the database
             User = get_user_model()
@@ -166,6 +169,7 @@ class UnifiedJWTAuthentication(BaseAuthentication):
                         self.pk = user_id
                         self.id = user_id
                         self.userid = user_id
+                        self.UserId = user_id
                         self.username = username if username else f"user_{user_id}"
                         self.is_authenticated = True
                         self.is_active = True

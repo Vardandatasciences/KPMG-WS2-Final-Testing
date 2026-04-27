@@ -1341,9 +1341,11 @@ def upload_document(request):
                 'error': 'Invalid subfolder'
             }, status=status.HTTP_400_BAD_REQUEST)
 
+        resolved_folder = None
+        resolved_subfolder = None
         if company_code or subfolder_code:
             try:
-                _resolve_and_authorize_company_scope(
+                resolved_folder, resolved_subfolder = _resolve_and_authorize_company_scope(
                     current_user, company_code=company_code, subfolder_code=subfolder_code
                 )
             except PermissionError:
@@ -1516,6 +1518,21 @@ def upload_document(request):
                         # logger.info(f"📝 FileOperations record {operation_id} updated with filename and retention timeline")
                     except Exception as db_err:
                         logger.warning(f"⚠️ Failed to update FileOperations record {operation_id}: {db_err}")
+
+                # Create link to company subfolder if applicable
+                if operation_id and resolved_subfolder:
+                    try:
+                        CompanySubfolderDocument.objects.get_or_create(
+                            company_subfolder=resolved_subfolder,
+                            file_operation_id=operation_id,
+                            defaults={
+                                'document_link': upload_result.get('file_info', {}).get('url', ''),
+                                's3_key': upload_result.get('file_info', {}).get('s3Key', '')
+                            }
+                        )
+                        logger.info(f"✅ Linked file {operation_id} to subfolder {resolved_subfolder.subfolder_id}")
+                    except Exception as link_err:
+                        logger.warning(f"⚠️ Failed to link file {operation_id} to subfolder: {link_err}")
                 
                 return Response({
                     'success': True,

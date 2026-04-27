@@ -59,7 +59,46 @@ def get_tenant_id_from_request(request):
         except Exception:
             pass
 
-    # 3. Fallback: try the advanced resolver from tenant_context (JWT/Subdomain resolution)
+    # 3. Fallback: resolve tenant from JWT in cookie/header.
+    # Some endpoints (like multipart uploads) intentionally disable DRF auth classes,
+    # so request.user may not be hydrated even though auth cookies are present.
+    try:
+        token = None
+        if hasattr(request, "COOKIES"):
+            token = request.COOKIES.get("access_token") or request.COOKIES.get("session_token")
+
+        if not token:
+            auth_header = request.headers.get("Authorization", "") or request.META.get("HTTP_AUTHORIZATION", "")
+            if auth_header.startswith("Bearer "):
+                token = auth_header.split(" ", 1)[1].strip()
+
+        if token:
+            from .authentication import verify_jwt_token
+            payload = verify_jwt_token(token)
+            if payload:
+                tid = payload.get("tenant_id") or payload.get("tenantId")
+                if tid:
+                    request.tenant_id = tid
+                    return tid
+    except Exception:
+        pass
+
+    # 4. Fallback: resolve tenant from session user_id when JWT is unavailable.
+    try:
+        from .models import Users
+        session_user_id = None
+        if hasattr(request, "session"):
+            session_user_id = request.session.get("user_id") or request.session.get("userid")
+        if session_user_id:
+            user_obj = Users.objects.filter(UserId=session_user_id).first()
+            if user_obj and user_obj.tenant_id:
+                request.tenant_id = user_obj.tenant_id
+                return user_obj.tenant_id
+    except Exception:
+        pass
+
+    # 5. Fallback: try the advanced resolver from tenant_context (JWT/Subdomain resolution)
+
     try:
         from .utils.tenant_context import (
             get_tenant_id_from_request as resolve_tenant_from_context,
@@ -210,13 +249,13 @@ def require_tenant(view_func):
         if hasattr(request, 'data'):
             from rest_framework.response import Response
             return Response({
-                'error': 'Tenant context not found',
-                'detail': 'This endpoint requires tenant authentication'
-            }, status=403)
+                'error': 'Authentication required',
+                'detail': 'This endpoint requires a valid session or tenant context'
+            }, status=401)
         return JsonResponse({
-            'error': 'Tenant context not found',
-            'detail': 'This endpoint requires tenant authentication'
-        }, status=403)
+            'error': 'Authentication required',
+            'detail': 'This endpoint requires a valid session or tenant context'
+        }, status=401)
 
     # Preserve DRF attributes for @api_view (walk __wrapped__ — csrf_exempt etc. may sit in the chain)
     _chain = []

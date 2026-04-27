@@ -158,6 +158,10 @@
         <div class="risk-register-title-cell" :class="{ 'risk-register-new-row': isNewRisk(row) }">
           {{ row.RiskTitle }}
           <span v-if="isNewRisk(row)" class="risk-register-new-badge">NEW</span>
+          <span v-if="row.Origin === 'SYSTEM-AI'" class="risk-register-ai-badge">
+            <i class="fas fa-robot" aria-hidden="true"></i>
+            <span>AI</span>
+          </span>
         </div>
       </template>
     </DynamicTable>
@@ -195,7 +199,8 @@ export default {
         dataSourceMessage: '',
         label: 'riskTitle',
         sortable: true,
-        defaultVisible: true
+        defaultVisible: true,
+        slot: true
       },
       {
         key: 'RiskId',

@@ -69,12 +69,20 @@ def get_policies_by_framework(request, framework_id):
                 'message': 'Framework not found in your organization'
             }, status=404)
         
-        policies = Policy.objects.filter(
+        policies_qs = Policy.objects.filter(
             FrameworkId=framework_id,
             tenant_id=tenant_id,
             Status='Approved',
             ActiveInactive='Active'
-        ).values(
+        )
+        # Fallback for audits/frameworks where items are not yet in Approved state.
+        if not policies_qs.exists():
+            policies_qs = Policy.objects.filter(
+                FrameworkId=framework_id,
+                tenant_id=tenant_id
+            )
+
+        policies = policies_qs.values(
             'PolicyId',
             'PolicyName',
             'PolicyDescription',
@@ -170,14 +178,21 @@ def get_compliances_by_subpolicy(request, subpolicy_id):
                 'message': 'SubPolicy not found in your organization'
             }, status=404)
         
-        compliances = (
-            Compliance.objects.filter(
+        compliances_qs = Compliance.objects.filter(
+            SubPolicy_id=subpolicy_id,
+            tenant_id=tenant_id,
+            Status='Approved',
+            ActiveInactive='Active',
+        )
+        # Fallback for in-progress compliance scopes so UI does not go empty.
+        if not compliances_qs.exists():
+            compliances_qs = Compliance.objects.filter(
                 SubPolicy_id=subpolicy_id,
                 tenant_id=tenant_id,
-                Status='Approved',
-                ActiveInactive='Active',
             )
-            .values(
+
+        compliances = (
+            compliances_qs.values(
                 'ComplianceId',
                 'ComplianceTitle',
                 'ComplianceItemDescription',

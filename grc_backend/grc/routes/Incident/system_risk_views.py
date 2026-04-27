@@ -15,17 +15,21 @@ import threading
 import uuid
 import time
 
-from ...models import SystemIdentifiedRiskQueue
+from ...models import SystemIdentifiedRiskQueue, Department
 from ...jwt_auth import UnifiedJWTAuthentication
 from ...tenant_utils import get_tenant_id_from_request, require_tenant
 from .system_risk_service import (
     generate_risk_candidates_from_incidents,
+    generate_risk_candidates_from_multiple_sources,
     generate_risk_candidates_from_synthetic_sources,
+    generate_risk_candidates_from_document,
+    find_latest_risk_document,
     create_risk_from_queue_entry,
     create_risk_from_queue_entry_for_workflow,
     get_queue_statistics,
     update_queue_entry_review,
     reject_queue_entry,
+    get_external_portals_list,
 )
 import json
 
@@ -88,16 +92,77 @@ def _derive_confidence_for_response(item):
     return final_score, justification, factors
 
 
+def _get_source_details(risk):
+    """Enrich response with detailed source record information."""
+    tenant_id = risk.tenant_id
+    source_module = risk.source_module
+    source_record_id = risk.source_record_id
+    ai_meta = risk.ai_metadata or {}
+    
+    details = {
+        'module': source_module,
+        'record_id': source_record_id,
+        'title': risk.source_ref,
+        'description': '',
+        'link': '',
+        'extra_info': {}
+    }
+    
+    try:
+        from ...models import Incident, Compliance, FileOperations
+        
+        if source_module == SystemIdentifiedRiskQueue.SOURCE_INCIDENT:
+            # Try to get descriptive metadata from ai_meta first (saved during scan)
+            details['title'] = ai_meta.get('source_title', risk.source_ref)
+            details['description'] = ai_meta.get('source_text', '')
+            
+            # Fallback to database if needed
+            if not details['description']:
+                incident = Incident.objects.filter(IncidentId=source_record_id, tenant_id=tenant_id).first()
+                if incident:
+                    details['title'] = incident.IncidentTitle
+                    details['description'] = incident.Description
+                    details['extra_info']['date'] = incident.Date.isoformat() if hasattr(incident, 'Date') and incident.Date else None
+                    details['extra_info']['category'] = getattr(incident, 'IncidentCategory', '')
+                    
+        elif source_module == SystemIdentifiedRiskQueue.SOURCE_COMPLIANCE:
+            comp = Compliance.objects.filter(ComplianceId=source_record_id, tenant_id=tenant_id).first()
+            if comp:
+                details['title'] = comp.ComplianceTitle
+                details['description'] = comp.ComplianceItemDescription
+                details['extra_info']['type'] = comp.ComplianceType
+                
+        elif source_module == SystemIdentifiedRiskQueue.SOURCE_EXTERNAL or (source_module == 'INTEGRATION' and risk.source_ref.startswith('External:')):
+            details['title'] = ai_meta.get('source_title', risk.source_ref.replace('External:', '').strip())
+            details['description'] = ai_meta.get('source_text', '')
+            details['link'] = ai_meta.get('source_url', '')
+            
+        elif source_module == SystemIdentifiedRiskQueue.SOURCE_INTEGRATION:
+            # Check if it's a document upload
+            file_id = ai_meta.get('file_id')
+            if file_id:
+                file_op = FileOperations.objects.filter(id=file_id, tenant_id=tenant_id).first()
+                if file_op:
+                    details['title'] = file_op.original_name
+                    details['link'] = file_op.s3_url
+                    details['description'] = f"Extracted from document: {file_op.original_name}"
+
+    except Exception as e:
+        print(f"[SYSTEM-RISK] Error fetching source details: {e}")
+        
+    return details
+
+
 # DRF Session auth variant that skips CSRF enforcement for API clients.
 class CsrfExemptSessionAuthentication(SessionAuthentication):
     def enforce_csrf(self, request):
         return
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication, CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([IsAuthenticated])
 @require_tenant
 @csrf_exempt
+@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 def run_incident_risk_scan(request):
     """Run AI scan on incidents to generate risk candidates."""
     tenant_id = get_tenant_id_from_request(request)
@@ -121,6 +186,65 @@ def run_incident_risk_scan(request):
         })
     except Exception as e:
         print(f"[API] run_incident_risk_scan error: {e}")
+        return Response({
+            'status': 'error',
+            'message': f'Scan failed: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['POST'])
+@require_tenant
+@csrf_exempt
+@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+def run_manual_risk_scan(request):
+    """Run AI scan on multiple manually selected sources to generate risk candidates."""
+    tenant_id = get_tenant_id_from_request(request)
+    def _to_int_list(values):
+        if not isinstance(values, list):
+            return []
+        out = []
+        for value in values:
+            try:
+                out.append(int(value))
+            except Exception:
+                continue
+        return list(dict.fromkeys(out))
+    
+    # New multi-source payload
+    source_types = request.data.get('source_types', [])
+    if not source_types and 'source_type' in request.data:
+        source_types = [request.data.get('source_type')]
+        
+    subfolder_ids = _to_int_list(request.data.get('subfolder_ids', []))
+    document_ids = _to_int_list(request.data.get('document_ids', []))
+    run_checklist = request.data.get('run_checklist', False)
+    external_urls = request.data.get('external_urls', [])
+    requested_limit = request.data.get('limit', 5)
+    
+    try:
+        requested_limit = int(requested_limit)
+    except Exception:
+        requested_limit = 5
+    limit = min(requested_limit, 10) # Increased limit for multi-source
+    
+    print(f"[API] run_manual_risk_scan: tenant={tenant_id}, sources={source_types}, subfolders={subfolder_ids}, docs={document_ids}, external_urls={external_urls}, checklist={run_checklist}, limit={limit}")
+    
+    try:
+        results = generate_risk_candidates_from_multiple_sources(
+            tenant_id=tenant_id, 
+            source_types=source_types, 
+            limit=limit,
+            subfolder_ids=subfolder_ids,
+            document_ids=document_ids,
+            run_checklist=run_checklist,
+            external_urls=external_urls
+        )
+        return Response({
+            'status': 'success',
+            'message': f"Scan completed for {', '.join(source_types) if source_types else 'requested sources'}. Created {results['created']} new risk candidates.",
+            'results': results
+        })
+    except Exception as e:
+        print(f"[API] run_manual_risk_scan error: {e}")
         return Response({
             'status': 'error',
             'message': f'Scan failed: {str(e)}'
@@ -183,12 +307,27 @@ def run_synthetic_risk_test_analysis(request):
                 return bool(job and job.get("cancel_requested"))
 
         try:
-            results = generate_risk_candidates_from_synthetic_sources(
-                tenant_id,
-                limit,
-                progress_callback=_update_progress,
-                should_abort=_should_abort
-            )
+            # Smart Scan: Check for document first
+            file_op, link = find_latest_risk_document(tenant_id)
+            
+            if file_op:
+                print(f"[API] Smart Scan: Found document {file_op.original_name}. Using document-based analysis.")
+                results = generate_risk_candidates_from_document(
+                    tenant_id,
+                    file_op,
+                    link=link,
+                    progress_callback=_update_progress,
+                    should_abort=_should_abort
+                )
+            else:
+                print("[API] Smart Scan: No document found. Falling back to synthetic sources.")
+                results = generate_risk_candidates_from_synthetic_sources(
+                    tenant_id,
+                    limit,
+                    progress_callback=_update_progress,
+                    should_abort=_should_abort
+                )
+                
             with _SYNTHETIC_ANALYSIS_LOCK:
                 job = _SYNTHETIC_ANALYSIS_JOBS.get(job_id)
                 if job is not None:
@@ -297,7 +436,11 @@ def list_system_risk_queue(request):
     # Apply filters
     source_filter = request.GET.get('source')
     if source_filter:
-        queryset = queryset.filter(source_module=source_filter)
+        if source_filter == 'EXTERNAL_SOURCES':
+            # Filter for INTEGRATION module but only those with External prefix
+            queryset = queryset.filter(source_module='INTEGRATION', source_ref__startswith='External:')
+        else:
+            queryset = queryset.filter(source_module=source_filter)
         print(f"[API] Filtering by source: {source_filter}")
     
     status_filter = request.GET.get('status')
@@ -309,6 +452,19 @@ def list_system_risk_queue(request):
     if category_filter:
         queryset = queryset.filter(category__icontains=category_filter)
         print(f"[API] Filtering by category: {category_filter}")
+
+    functional_area_filter = request.GET.get('functional_area')
+    if functional_area_filter:
+        queryset = queryset.filter(functional_area=functional_area_filter)
+        print(f"[API] Filtering by functional_area: {functional_area_filter}")
+
+    velocity_filter = request.GET.get('velocity_min')
+    if velocity_filter:
+        try:
+            queryset = queryset.filter(velocity_score__gte=int(velocity_filter))
+            print(f"[API] Filtering by velocity_min: {velocity_filter}")
+        except Exception:
+            pass
     
     # Order by creation date (newest first)
     queryset = queryset.order_by('-created_at')
@@ -390,11 +546,14 @@ def list_system_risk_queue(request):
             'id': item.id,
             'source_module': item.source_module,
             'source_ref': item.source_ref,
+            'source_title': _get_source_details(item).get('title', item.source_ref),
             'risk_title': item.risk_title,
             'risk_type': item.risk_type,
             'category': item.category,
             'criticality': item.criticality,
             'confidence_score': final_score,
+            'velocity_score': item.velocity_score,
+            'functional_area': item.functional_area,
             'likelihood': item.likelihood,
             'impact': item.impact,
             'exposure_rating': item.exposure_rating,
@@ -453,10 +612,13 @@ def get_system_risk_detail(request, risk_id):
         'mitigation_steps': risk.mitigation_steps,
         'ai_reasoning': risk.ai_reasoning,
         'confidence_score': final_score,
+        'velocity_score': risk.velocity_score,
+        'functional_area': risk.functional_area,
         'confidence_justification': confidence_justification,
         'confidence_factors': confidence_factors,
         'ai_metadata': risk.ai_metadata,
         'status': risk.status,
+        'source_details': _get_source_details(risk),
         'review_notes': risk.review_notes,
         'rejection_reason': risk.rejection_reason,
         'created_at': risk.created_at.isoformat(),
@@ -734,6 +896,7 @@ def approve_system_risk_workflow(request, risk_instance_id):
             RiskMultiplierY=risk_instance.RiskMultiplierY,
             RiskPriority=risk_instance.RiskPriority,
             RiskMitigation=risk_instance.RiskMitigation,
+            Origin='SYSTEM-AI',
             CreatedAt=timezone.now().date()
         )
         
@@ -922,3 +1085,118 @@ def get_queue_stats(request):
             'status': 'error',
             'message': f'Failed to get statistics: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+@require_tenant
+def list_risks_exceeding_threshold(request):
+    """
+    List system identified risks that exceed their department's AI confidence threshold.
+    """
+    tenant_id = get_tenant_id_from_request(request)
+    from grc.utils.auto_decrypt_helper import decrypt_any_encrypted_value
+    
+    print(f"[API] list_risks_exceeding_threshold: tenant={tenant_id}")
+    
+    # 1. Fetch all pending review risks for the tenant
+    queryset = SystemIdentifiedRiskQueue.objects.filter(
+        tenant_id=tenant_id, 
+        status='PENDING_REVIEW'
+    ).order_by('-created_at')
+    
+    # 2. Fetch all departments to get thresholds
+    departments = Department.objects.filter(tenant_id=tenant_id)
+    
+    # Map department names (normalized) to their thresholds and original names
+    threshold_map = {}
+    for dept in departments:
+        try:
+            # Decrypt name for matching with functional_area
+            dept_name = decrypt_any_encrypted_value(dept.DepartmentName)
+            if dept_name:
+                normalized_name = dept_name.strip().upper()
+                threshold_map[normalized_name] = {
+                    'threshold': dept.threshold_limit,
+                    'original_name': dept_name.strip()
+                }
+        except Exception as e:
+            print(f"[API] Error decrypting department name for threshold check: {e}")
+            continue
+
+    # 3. Filter risks based on thresholds
+    data = []
+    for item in queryset:
+        # Decrypt functional_area for matching
+        try:
+            area_name = decrypt_any_encrypted_value(item.functional_area)
+            area_name_upper = area_name.strip().upper() if area_name else None
+        except Exception:
+            area_name_upper = None
+
+        # 4. Handle department matching with fallback to random as per user request
+        import random
+        all_dept_keys = list(threshold_map.keys())
+        
+        if not area_name_upper or area_name_upper not in threshold_map:
+            if all_dept_keys:
+                # If area is missing or not in DB, pick a random one from actual departments
+                random_key = random.choice(all_dept_keys)
+                area_name_upper = random_key
+                area_name = threshold_map[random_key]['original_name']
+            else:
+                area_name_upper = "IT"
+                area_name = "IT"
+        else:
+            # Use the original name from the threshold map for better casing
+            area_name = threshold_map[area_name_upper]['original_name']
+
+        # Get threshold
+        dept_info = threshold_map.get(area_name_upper, {'threshold': 50})
+        threshold = dept_info.get('threshold', 50)
+        
+        # Calculate/get confidence score
+        final_score, confidence_justification, confidence_factors = _derive_confidence_for_response(item)
+        
+        # Apply threshold filter
+        if final_score >= threshold:
+            data.append({
+                'id': item.id,
+                'source_module': item.source_module,
+                'source_ref': item.source_ref,
+                'source_title': _get_source_details(item).get('title', item.source_ref),
+                'risk_title': item.risk_title,
+                'risk_type': item.risk_type,
+                'category': item.category,
+                'criticality': item.criticality,
+                'confidence_score': final_score,
+                'threshold_limit': threshold, # Include for UI awareness
+                'velocity_score': item.velocity_score,
+                'functional_area': area_name if 'area_name' in locals() else item.functional_area,
+                'likelihood': item.likelihood,
+                'impact': item.impact,
+                'exposure_rating': item.exposure_rating,
+                'priority': item.priority,
+                'ai_reasoning': item.ai_reasoning,
+                'ai_metadata': item.ai_metadata,
+                'confidence_justification': confidence_justification,
+                'confidence_factors': confidence_factors,
+                'status': item.status,
+                'created_at': item.created_at.isoformat(),
+            })
+    
+    print(f"[API] Found {len(data)} risks exceeding department thresholds")
+    
+    return Response({
+        'status': 'success',
+        'count': len(data),
+        'data': data
+    })
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+@require_tenant
+def list_external_sources(request):
+    """List available external sources for risk scanning."""
+    sources = get_external_portals_list()
+    return Response({'status': 'success', 'data': sources})

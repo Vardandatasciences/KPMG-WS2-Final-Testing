@@ -2163,6 +2163,15 @@ export default {
     },
     selectedSubpolicyIdsMulti: {
       handler() {
+        // Ensure compliances are loaded for currently selected subpolicies.
+        const selectedSubSet = new Set(this.selectedSubpolicyIdsMulti || [])
+        this.auditHierarchyPolicies.forEach(policy => {
+          (policy.subpolicies || []).forEach(sub => {
+            if (selectedSubSet.has(sub.subpolicy_id)) {
+              this.ensureCompliancesForSubpolicy(sub.subpolicy_id, policy.policy_id)
+            }
+          })
+        })
         if (this.hasSelectedAudit) {
           this.loadRelevantDocuments()
         }
@@ -3166,15 +3175,19 @@ export default {
           let policiesResp
           let policies = []
           try {
-            policiesResp = await apiService.get(`/api/tree/frameworks/${fwId}/policies/`, { timeout: 20000 })
-            policies = policiesResp.data?.data || policiesResp.data || []
+            policiesResp = await apiService.get(`/api/tree/frameworks/${fwId}/policies/`, {}, { timeout: 20000 })
+            policies = Array.isArray(policiesResp?.data)
+              ? policiesResp.data
+              : (Array.isArray(policiesResp) ? policiesResp : [])
             console.log('📚 Found', policies.length, 'policies from tree endpoint for framework', fwId)
           } catch (treeError) {
             console.warn('⚠️ Tree endpoint failed, trying fallback endpoint:', treeError.message)
             // Fallback to simpler endpoint
             try {
-              policiesResp = await apiService.get(`/api/frameworks/${fwId}/get-policies/`, { timeout: 20000 })
-              policies = Array.isArray(policiesResp.data) ? policiesResp.data : []
+              policiesResp = await apiService.get(`/api/frameworks/${fwId}/get-policies/`, {}, { timeout: 20000 })
+              policies = Array.isArray(policiesResp?.data)
+                ? policiesResp.data
+                : (Array.isArray(policiesResp) ? policiesResp : [])
               console.log('📚 Found', policies.length, 'policies from fallback endpoint for framework', fwId)
             } catch (fallbackError) {
               console.error('❌ Both endpoints failed:', fallbackError.message)
@@ -3182,10 +3195,10 @@ export default {
             }
           }
 
-          // Build hierarchy: for each policy, get subpolicies, then compliances.
-          // IMPORTANT: avoid request storms that can exhaust DB connections.
+          // Build hierarchy quickly: fetch policies + subpolicies first.
+          // Fetch compliances lazily when user selects subpolicies.
+          // This avoids huge request storms and makes the UI appear quickly.
           const POLICY_CONCURRENCY = 2
-          const SUBPOLICY_CONCURRENCY = 2
 
           // Simple concurrency-limited async mapper (worker pool).
           const mapWithConcurrency = async (items, concurrency, mapper) => {
@@ -3214,42 +3227,24 @@ export default {
               // Get subpolicies for this policy
               const subpoliciesResp = await apiService.get(
                 `/api/tree/policies/${policyId}/subpolicies/`,
+                {},
                 { timeout: 15000 }
               )
-              const subpoliciesData = subpoliciesResp.data?.data || subpoliciesResp.data || []
+              const subpoliciesData = Array.isArray(subpoliciesResp?.data)
+                ? subpoliciesResp.data
+                : (Array.isArray(subpoliciesResp) ? subpoliciesResp : [])
 
-              // For each subpolicy, get compliances (throttled)
-              const subpolicies = await mapWithConcurrency(
-                subpoliciesData,
-                SUBPOLICY_CONCURRENCY,
-                async (subpolicy) => {
-                  const subpolicyId = subpolicy.SubPolicyId || subpolicy.subpolicy_id || subpolicy.id
-                  if (!subpolicyId) return null
-
-                  try {
-                    const compliancesResp = await apiService.get(`/api/tree/subpolicies/${subpolicyId}/compliances/`, { timeout: 15000 })
-                    const compliancesData = compliancesResp.data?.data || compliancesResp.data || []
-                    return {
-                      subpolicy_id: subpolicyId,
-                      subpolicy_name: subpolicy.SubPolicyName || subpolicy.subpolicy_name || subpolicy.name,
-                      compliances: compliancesData.map(c => ({
-                        compliance_id: c.ComplianceId || c.compliance_id || c.id,
-                        compliance_title: c.ComplianceTitle || c.compliance_title || c.title || c.ComplianceItemDescription,
-                        compliance_description: c.ComplianceItemDescription || c.compliance_description || c.description,
-                        Criticality: c.Criticality || c.criticality,
-                        AuditFrequency: c.AuditFrequency || c.audit_frequency || null
-                      }))
-                    }
-                  } catch (e) {
-                    console.warn(`⚠️ Could not load compliances for subpolicy ${subpolicyId}:`, e)
-                    return {
-                      subpolicy_id: subpolicyId,
-                      subpolicy_name: subpolicy.SubPolicyName || subpolicy.subpolicy_name || subpolicy.name,
-                      compliances: []
-                    }
-                  }
+              const subpolicies = (subpoliciesData || []).map(subpolicy => {
+                const subpolicyId = subpolicy.SubPolicyId || subpolicy.subpolicy_id || subpolicy.id
+                if (!subpolicyId) return null
+                return {
+                  subpolicy_id: subpolicyId,
+                  subpolicy_name: subpolicy.SubPolicyName || subpolicy.subpolicy_name || subpolicy.name,
+                  compliances: [],
+                  __compliancesLoaded: false,
+                  __compliancesLoading: false
                 }
-              )
+              }).filter(sp => sp !== null)
 
               return {
                 policy_id: policyId,
@@ -3780,7 +3775,10 @@ export default {
     },
     onSubpolicyMultiChange(subpolicyId, policyId) {
       const isSelected = this.selectedSubpolicyIdsMulti.includes(subpolicyId)
-      if (!isSelected) {
+      if (isSelected) {
+        // Lazy-load compliances only when the user selects a subpolicy.
+        this.ensureCompliancesForSubpolicy(subpolicyId, policyId)
+      } else {
         // If subpolicy deselected, also remove its compliances
         const policy = this.auditHierarchyPolicies.find(
           p => p.policy_id === policyId
@@ -3800,6 +3798,40 @@ export default {
         }
       }
       this.saveSelectionsForAudit()
+    },
+    async ensureCompliancesForSubpolicy(subpolicyId, policyId) {
+      try {
+        const policy = this.auditHierarchyPolicies.find(p => p.policy_id === policyId)
+        if (!policy) return
+        const sub = (policy.subpolicies || []).find(sp => sp.subpolicy_id === subpolicyId)
+        if (!sub) return
+        if (sub.__compliancesLoaded || sub.__compliancesLoading) return
+
+        sub.__compliancesLoading = true
+        const compliancesResp = await apiService.get(
+          `/api/tree/subpolicies/${subpolicyId}/compliances/`,
+          {},
+          { timeout: 15000 }
+        )
+        const compliancesData = Array.isArray(compliancesResp?.data)
+          ? compliancesResp.data
+          : (Array.isArray(compliancesResp) ? compliancesResp : [])
+
+        sub.compliances = (compliancesData || []).map(c => ({
+          compliance_id: c.ComplianceId || c.compliance_id || c.id,
+          compliance_title: c.ComplianceTitle || c.compliance_title || c.title || c.ComplianceItemDescription,
+          compliance_description: c.ComplianceItemDescription || c.compliance_description || c.description,
+          Criticality: c.Criticality || c.criticality,
+          AuditFrequency: c.AuditFrequency || c.audit_frequency || null
+        }))
+        sub.__compliancesLoaded = true
+      } catch (e) {
+        console.warn(`⚠️ Could not load compliances for subpolicy ${subpolicyId}:`, e)
+      } finally {
+        const policy = this.auditHierarchyPolicies.find(p => p.policy_id === policyId)
+        const sub = policy ? (policy.subpolicies || []).find(sp => sp.subpolicy_id === subpolicyId) : null
+        if (sub) sub.__compliancesLoading = false
+      }
     },
     scheduleToggleSelectAllPolicies() {
       if (!this.auditHierarchyPolicies.length) return

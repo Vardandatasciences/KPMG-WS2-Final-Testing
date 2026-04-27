@@ -81,11 +81,16 @@ _default_secure_cookies = not DEBUG
 ALLOWED_HOSTS = [
     'localhost',
     '127.0.0.1',
+    'grc-riskavaire.vardaands.com',
     'riskavaire.vardaands.com',  # Main production domain
+    'riskavairegrc.vardaands.com',  # Hostinger VPS (GRC + TPRM SPA)
+    'riskavaire-grc-tprm.vardaands.com',  # Dedicated subdomain (Docker stack + host nginx)
     'grc-tprm.vardaands.com',
     'grc-backend.vardaands.com',
     '15.207.108.158',
     '13.204.228.21',
+    '193.203.161.212',  # Hostinger VPS public IP
+    'test-riskavaire.vardaands.com',
     'e581-2405-201-c00b-4973-29e6-34b2-9eae-1e0c.ngrok-free.app',
 ]
 
@@ -221,9 +226,6 @@ MIDDLEWARE = [
     # MULTI-TENANCY: Add tenant context middleware (after JWT authentication)
     "grc.tenant_middleware.TenantContextMiddleware",
     "grc.tenant_middleware.TenantIsolationMiddleware",
-    # MULTI-TENANCY: Add TPRM tenant context middleware for TPRM modules
-    "tprm_backend.core.tenant_middleware.TenantContextMiddleware",
-    "tprm_backend.core.tenant_middleware.TenantIsolationMiddleware",
     "grc.middleware.AuditLoggingMiddleware",
     # AUTO-DECRYPT: Automatically decrypt any encrypted data in API responses (safety net)
     "grc.utils.auto_decrypt_middleware.AutoDecryptMiddleware",
@@ -480,7 +482,7 @@ LOGGING = {
         'grc': {
             'handlers': ['console'],
             'level': _DEBUG_LOG_LEVEL,
-            'propagate': True,
+            'propagate': False,
         },
         'grc.rbac': {
             'handlers': ['console'],
@@ -491,7 +493,7 @@ LOGGING = {
         'tprm_backend': {
             'handlers': ['console'],
             'level': _DEBUG_LOG_LEVEL,
-            'propagate': True,
+            'propagate': False,
         },
     },
     # Root logger - catches everything else
@@ -594,6 +596,7 @@ CORS_ALLOW_CREDENTIALS = True
 # Optional env-driven CORS extension:
 # CORS_ALLOWED_ORIGINS_EXTRA="https://app.example.com,https://admin.example.com"
 CORS_ALLOWED_ORIGINS = [
+    "https://grc-riskavaire.vardaands.com",
     "https://grc-tprm.vardaands.com",
     "https://test-riskavaire.vardaands.com",
     "http://localhost:3000",  # TPRM frontend development server
@@ -616,6 +619,9 @@ CORS_ALLOWED_ORIGINS = [
     "https://13.204.228.21:8000",
     "http://13.204.228.21:8000",
     "https://riskavaire.vardaands.com",
+    "https://riskavairegrc.vardaands.com",
+    "https://riskavaire-grc-tprm.vardaands.com",
+    "https://test-riskavaire.vardaands.com",
 ] + _env_csv("CORS_ALLOWED_ORIGINS_EXTRA")
 
 # Support local dev ports without opening wildcard access.
@@ -632,6 +638,7 @@ CORS_ALLOWED_ORIGIN_REGEXES = [
 
 # CSRF settings
 CSRF_TRUSTED_ORIGINS = [
+    "https://grc-riskavaire.vardaands.com",
     "https://riskavaire.vardaands.com",
     "https://test-riskavaire.vardaands.com",
     "http://localhost:3000",  # TPRM frontend development server
@@ -654,6 +661,9 @@ CSRF_TRUSTED_ORIGINS = [
     "https://13.204.228.21:8000",  # New server IP with port (HTTPS)
     "http://13.204.228.21:8000",
     "https://grc-tprm.vardaands.com",
+    "https://riskavairegrc.vardaands.com",
+    "https://riskavaire-grc-tprm.vardaands.com",
+    "https://test-riskavaire.vardaands.com",
 ]
 
 # Additional CORS settings
@@ -719,7 +729,7 @@ JWT_VERIFYING_KEY = JWT_PUBLIC_KEY
 # Legacy alias retained for existing modules that still reference JWT_SECRET_KEY.
 JWT_SECRET_KEY = JWT_SIGNING_KEY
 JWT_ALLOWED_ALGORITHMS = [JWT_ALGORITHM]
-JWT_ACCESS_TOKEN_LIFETIME = 3600  # 1 hour in seconds
+JWT_ACCESS_TOKEN_LIFETIME = 360000  # 1 hour in seconds
 JWT_REFRESH_TOKEN_LIFETIME = 604800  # 7 days in seconds
 # reCAPTCHA Configuration
 RECAPTCHA_SECRET_KEY = os.environ.get('RECAPTCHA_SECRET_KEY', '6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe')  # Default is Google's test key
@@ -789,7 +799,7 @@ DATA_UPLOAD_MAX_NUMBER_FIELDS = 10000
 # Maximum file upload size (for file uploads)
 FILE_UPLOAD_MAX_MEMORY_SIZE = 52428800  # 50MB (increased from 10MB)
 # S3 Microservice settings
-S3_MICROSERVICE_URL = 'http://localhost:3000'  # Default URL for S3 microservice
+S3_MICROSERVICE_URL = os.environ.get('S3_MICROSERVICE_URL', 'http://193.203.161.212:3000')
 
 # Report generation settings
 REPORTS_DIR = Path(BASE_DIR) / 'Reports'
@@ -921,7 +931,8 @@ AWS_SECRET_ACCESS_KEY = os.environ.get("AWS_SECRET_ACCESS_KEY", "")
 AWS_REGION = os.environ.get("AWS_REGION", "ap-south-1")
 AWS_S3_REGION_NAME = os.environ.get("AWS_S3_REGION_NAME", "ap-south-1")
 # Toggle between local and deployed environments (define early as it's used in other configs)
-USE_LOCAL_DEVELOPMENT = os.environ.get('USE_LOCAL_DEVELOPMENT', 'true').lower() == 'true'  # Set to False for production
+# Default to False in production; local developers should set this to 'true' in their .env
+USE_LOCAL_DEVELOPMENT = os.environ.get('USE_LOCAL_DEVELOPMENT', 'false').lower() == 'true'
 
 # In local development, it's common to run a single DB and/or not have access to the
 # hosted TPRM RDS. If `TPRM_DB_HOST` is left as the default RDS hostname, Django will
@@ -991,7 +1002,7 @@ BAMBOOHR_CLIENT_SECRET = clean_env_value(os.environ.get("BAMBOOHR_CLIENT_SECRET"
 if USE_LOCAL_DEVELOPMENT:
     FRONTEND_URL = 'http://localhost:8080'  # Force localhost for local development
 else:
-    FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://example.com')
+    FRONTEND_URL = os.environ.get('FRONTEND_URL', 'https://grc-riskavaire.vardaands.com')
 
 # Base URL for public questionnaire response links (email link; no login). Use hosted TPRM frontend in production.
 PUBLIC_QUESTIONNAIRE_BASE_URL = os.environ.get(

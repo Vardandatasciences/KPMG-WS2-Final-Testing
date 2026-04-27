@@ -1,21 +1,23 @@
 def calculate_optimal_context_size(text_length: int, task_complexity: str = "medium") -> int:
     base_sizes = {
-        "simple": 1000,
-        "medium": 2000,
-        "complex": 4000,
-        "full_document": 16000,  # For ingest tasks - need full doc to extract all incidents
+        "simple": 2000,
+        "medium": 8000,
+        "complex": 12000,
+        "full_document": 32000,
     }
-    base = base_sizes.get(task_complexity, 2000)
+    base = base_sizes.get(task_complexity, 8000)
+    
     if task_complexity == "full_document":
-        size = min(text_length, base)  # Use full document up to base limit
-    elif text_length < 1000:
-        size = min(1000, base)
-    elif text_length < 5000:
+        size = min(text_length, base)
+    elif text_length < 2000:
         size = min(2000, base)
     elif text_length < 10000:
-        size = min(3000, base)
+        size = min(8000, base)
+    elif text_length < 20000:
+        size = min(12000, base)
     else:
-        size = min(4000, base)
+        size = min(16000, base)
+    
     print(f"[AI-CONTEXT] calculate_optimal_context_size: text_len={text_length}, complexity={task_complexity} -> max_context={size}")
     return size
 

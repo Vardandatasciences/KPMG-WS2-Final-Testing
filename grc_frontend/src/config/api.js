@@ -10,7 +10,7 @@ const ENVIRONMENT = 'development';
 // and avoid CORS + "Network Error" when backend is at http://127.0.0.1:8000
 const API_URLS = {
   // AWS: Use domain without port - nginx proxies /api/ to localhost:8000/api/
-  aws: 'https://riskavaire.vardaands.com',
+  aws: 'https://grc-riskavaire.vardaands.com',
   local: '',
   development: 'http://localhost:8000'
 };
@@ -513,6 +513,7 @@ export const API_ENDPOINTS = {
   INCIDENT_AI_TEST: `${API_BASE_URL}/api/ai-incident-test/`,
   // System Identified Risk Queue
   SYSTEM_RISKS_RUN_SCAN_INCIDENT: `${API_BASE_URL}/api/system-risks/run-scan/incident/`,
+  SYSTEM_RISKS_RUN_SCAN_MANUAL: `${API_BASE_URL}/api/system-risks/run-scan/manual/`,
   SYSTEM_RISKS_RUN_TEST_ANALYSIS: `${API_BASE_URL}/api/system-risks/run-test-analysis/`,
   SYSTEM_RISKS_RUN_TEST_ANALYSIS_STATUS: (jobId) => `${API_BASE_URL}/api/system-risks/run-test-analysis/${jobId}/status/`,
   SYSTEM_RISKS_RUN_TEST_ANALYSIS_CANCEL: (jobId) => `${API_BASE_URL}/api/system-risks/run-test-analysis/${jobId}/cancel/`,
@@ -525,6 +526,7 @@ export const API_ENDPOINTS = {
   SYSTEM_RISKS_SEND_FOR_APPROVAL: (id) => `${API_BASE_URL}/api/system-risks/${id}/send-for-approval/`,
   SYSTEM_RISKS_WORKFLOW_APPROVE: (riskInstanceId) => `${API_BASE_URL}/api/system-risks/workflow/${riskInstanceId}/approve/`,
   SYSTEM_RISKS_WORKFLOW_REJECT: (riskInstanceId) => `${API_BASE_URL}/api/system-risks/workflow/${riskInstanceId}/reject/`,
+  SYSTEM_RISKS_EXTERNAL_SOURCES: `${API_BASE_URL}/api/system-risks/external-sources/`,
   // Do not add a second copy of SYSTEM_RISKS_* keys here (eslint no-dupe-keys / duplicate object keys).
 
   // Tree/Data Workflow API endpoints

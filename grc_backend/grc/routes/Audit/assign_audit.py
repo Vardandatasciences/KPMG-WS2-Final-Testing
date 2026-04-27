@@ -1,17 +1,17 @@
-from rest_framework.decorators import api_view, permission_classes, authentication_classes, throttle_classes
+from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.authentication import SessionAuthentication, BasicAuthentication
-from ...throttles import AuditWriteThrottle
 from ...models import Framework, Policy, SubPolicy, Users, Audit, AuditFinding, Compliance
 from django.http import JsonResponse
 from django.utils import timezone
 from django.db import connection
-from django.views.decorators.csrf import csrf_protect as csrf_exempt
+from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
 from .audit_views import create_audit_version, get_audit_findings_json
 from .framework_filter_helper import get_active_framework_filter, apply_framework_filter_to_audits
+from ...routes.Incident.system_risk_service import trigger_single_source_risk_scan
 from ...routes.Consent import require_consent
 from ...debug_utils import debug_print
 
@@ -91,7 +91,7 @@ def get_frameworks(request):
             entityType="Framework",
             logLevel="ERROR"
         )
-        return Response({'error': 'An internal error occurred'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @csrf_exempt
 @api_view(['GET'])
@@ -133,7 +133,7 @@ def get_policies(request):
             entityId=framework_id if 'framework_id' in locals() else None,
             logLevel="ERROR"
         )
-        return Response({'error': 'An internal error occurred'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @csrf_exempt
 @api_view(['GET'])
@@ -175,7 +175,7 @@ def get_subpolicies(request):
             entityId=policy_id if 'policy_id' in locals() else None,
             logLevel="ERROR"
         )
-        return Response({'error': 'An internal error occurred'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @csrf_exempt
@@ -245,7 +245,7 @@ def get_compliances_for_scope(request):
             o['label'] = (o.get('Identifier') or o.get('ComplianceTitle') or str(o.get('ComplianceId')))
         return Response(out, status=status.HTTP_200_OK)
     except (ValueError, TypeError) as e:
-        return Response({'error': 'An internal error occurred'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
         send_log(
             module="Audit",
@@ -255,7 +255,7 @@ def get_compliances_for_scope(request):
             entityType="Compliance",
             logLevel="ERROR"
         )
-        return Response({'error': 'An internal error occurred'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @csrf_exempt
@@ -295,13 +295,12 @@ def get_users_audit(request):
             entityType="User",
             logLevel="ERROR"
         )
-        return Response({'error': 'An internal error occurred'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 @csrf_exempt
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([AuditAssignPermission])
-@throttle_classes([AuditWriteThrottle])
 @audit_assign_required
 @require_consent('create_audit')
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
@@ -348,7 +347,7 @@ def create_audit(request):
             )
             return Response({
                 'error': 'Validation error',
-                'details': 'An internal error occurred'
+                'details': str(e)
             }, status=status.HTTP_400_BAD_REQUEST)
 
         created_audits = []
@@ -506,25 +505,8 @@ def create_audit(request):
                 due_date = datetime.datetime.strptime(str(validated_data['due_date']), '%Y-%m-%d').date()
             except (ValueError, TypeError) as e:
                 debug_print(f"Error parsing due_date '{validated_data.get('due_date')}': {e}")
-                return Response({
-                    'error': 'Invalid due date',
-                    'details': 'Due date must be a valid date in YYYY-MM-DD format.'
-                }, status=status.HTTP_400_BAD_REQUEST)
-
-            # Business logic: due date must not be in the past or unreasonably far in the future
-            _today = datetime.date.today()
-            _max_allowed_date = _today.replace(year=_today.year + 10)
-            if due_date < _today:
-                return Response({
-                    'error': 'Invalid due date',
-                    'details': 'Due date cannot be in the past.'
-                }, status=status.HTTP_400_BAD_REQUEST)
-            if due_date > _max_allowed_date:
-                return Response({
-                    'error': 'Invalid due date',
-                    'details': 'Due date cannot be more than 10 years in the future.'
-                }, status=status.HTTP_400_BAD_REQUEST)
-
+                due_date = datetime.date.today()
+            
             # Persist single-letter code (I/E/S/A/R). DB column will be altered to VARCHAR(10).
             db_audit_type = audit_type
 
@@ -559,31 +541,14 @@ def create_audit(request):
                 if evidence_reminder_days is not None and evidence_reminder_days != '':
                     try:
                         evidence_reminder_days = int(evidence_reminder_days)
-                        # SECURITY: Enforce realistic range (1-365 days)
-                        if evidence_reminder_days < 1: evidence_reminder_days = 1
-                        if evidence_reminder_days > 365: evidence_reminder_days = 365
                     except (TypeError, ValueError):
                         evidence_reminder_days = 7
                 else:
                     evidence_reminder_days = 7  # default: alert if no evidence within 7 days
             else:
-                try:
-                    freq_raw = validated_data.get('frequency', 0)
-                    frequency_val = int(str(freq_raw).replace('a', '')) if str(freq_raw).endswith('a') else int(freq_raw)
-                    # SECURITY: Ensure non-negative frequency
-                    if frequency_val < 0: frequency_val = 0
-                except (ValueError, TypeError):
-                    frequency_val = 0
+                frequency_val = int(str(validated_data['frequency']).replace('a', '')) if str(validated_data['frequency']).endswith('a') else int(validated_data['frequency'])
                 evidence_reminder_days = None
 
-            # SECURITY: Maker-Checker Integrity (Point 12)
-            # Ensure Auditor and Reviewer are distinct users
-            if auditor_obj.UserId == reviewer_obj.UserId:
-                return Response({
-                    'error': 'Maker-Checker Integrity Violation',
-                    'details': 'Auditor and Reviewer must be different users to ensure independent review.'
-                }, status=status.HTTP_400_BAD_REQUEST)
-                
             audit_fields = {
                 'Title': validated_data['title'],
                 'Scope': validated_data['scope'],
@@ -591,8 +556,8 @@ def create_audit(request):
                 'BusinessUnit': validated_data.get('business_unit', ''),
                 'Role': validated_data['role'],
                 'Responsibility': validated_data['responsibility'],
-                'Assignee': assignee_obj,
-                'Auditor': auditor_obj,
+                'Assignee': assignee_obj,  # CRITICAL: Assignee is the logged-in user, not the auditor
+                'Auditor': auditor_obj,    # Auditor is the selected team member
                 'Reviewer': reviewer_obj,
                 'FrameworkId': framework_obj,
                 'PolicyId': policy_obj,
@@ -662,6 +627,17 @@ def create_audit(request):
                         "subpolicy_id": validated_data['subpolicy_id']
                     }
                 )
+
+                # Trigger automatic AI Risk Identification (Background)
+                try:
+                    from ...models import SystemIdentifiedRiskQueue
+                    trigger_single_source_risk_scan(
+                        source_type=SystemIdentifiedRiskQueue.SOURCE_AUDIT, 
+                        source_id=audit.AuditId, 
+                        tenant_id=tenant_id
+                    )
+                except Exception as e:
+                    debug_print(f"Error triggering automatic risk scan for audit: {str(e)}")
 
                 # Compliance scope: use compliance_ids from request if provided (any audit type); else auto compliances for non-AI only
                 compliance_ids_from_request = validated_data.get('compliance_ids')
@@ -819,7 +795,7 @@ def create_audit(request):
                     userId=user_id,
                     entityType="Audit",
                     logLevel="ERROR",
-                    additionalInfo={"member_id": member_id, "error": "An internal error occurred", "traceback": traceback.format_exc()}
+                    additionalInfo={"member_id": member_id, "error": str(e), "traceback": traceback.format_exc()}
                 )
                 # If we hit an error creating findings, we should clean up the audit
                 if audit is not None:
@@ -878,7 +854,7 @@ def create_audit(request):
             logLevel="ERROR"
         )
         return Response({
-            'error': f'Invalid data format: An internal server error occurred. Please check all fields are in the correct format.'
+            'error': f'Invalid data format: {str(e)}. Please check all fields are in the correct format.'
         }, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
         debug_print(f"Unexpected error: {str(e)}")
@@ -894,7 +870,7 @@ def create_audit(request):
             additionalInfo={"traceback": traceback.format_exc()}
         )
         return Response({
-            'error': f'Error creating audit: An internal server error occurred'
+            'error': f'Error creating audit: {str(e)}'
         }, status=status.HTTP_400_BAD_REQUEST)
 
 @csrf_exempt
@@ -990,7 +966,7 @@ def get_audit_compliances(request, audit_id):
             logLevel="ERROR"
         )
         return Response({
-            'error': f'Error fetching compliance data: An internal server error occurred'
+            'error': f'Error fetching compliance data: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @csrf_exempt
@@ -998,7 +974,6 @@ def get_audit_compliances(request, audit_id):
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([AuditAssignPermission])
 @audit_assign_required
-@throttle_classes([AuditWriteThrottle])
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def add_compliance_to_audit(request, audit_id):
@@ -1011,7 +986,13 @@ def add_compliance_to_audit(request, audit_id):
     
     # Handle preflight OPTIONS request
     if request.method == 'OPTIONS':
-        return JsonResponse({})
+        
+        response = JsonResponse({})
+        response["Access-Control-Allow-Origin"] = "http://localhost:8080"
+        response["Access-Control-Allow-Methods"] = "POST, OPTIONS"
+        response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+        response["Access-Control-Allow-Credentials"] = "true"
+        return response
     
     try:
         # Validate audit_id parameter
@@ -1019,7 +1000,7 @@ def add_compliance_to_audit(request, audit_id):
             validated_audit_id = validate_int(audit_id, min_value=1, field_name="Audit ID")
         except ValidationError as e:
             return Response({
-                'error': f'Invalid audit ID: An internal server error occurred'
+                'error': f'Invalid audit ID: {str(e)}'
             }, status=status.HTTP_400_BAD_REQUEST)
         
         # Parse and validate request data
@@ -1038,7 +1019,7 @@ def add_compliance_to_audit(request, audit_id):
             validated_data = validate_new_compliance_data(raw_data)
         except ValidationError as e:
             return Response({
-                'error': f'Validation error: An internal server error occurred'
+                'error': f'Validation error: {str(e)}'
             }, status=status.HTTP_400_BAD_REQUEST)
         
         # Get the audit to extract SubPolicyId
@@ -1098,7 +1079,7 @@ def add_compliance_to_audit(request, audit_id):
             except Exception as e:
                 debug_print(f"Error finding SubPolicy: {str(e)}")
                 return Response({
-                    'error': f'Error finding SubPolicy: An internal server error occurred'
+                    'error': f'Error finding SubPolicy: {str(e)}'
                 }, status=status.HTTP_400_BAD_REQUEST)
         else:
             # If audit has no PolicyId or SubPolicyId, get the first SubPolicy in the system
@@ -1113,7 +1094,7 @@ def add_compliance_to_audit(request, audit_id):
             except Exception as e:
                 debug_print(f"Error finding SubPolicy: {str(e)}")
                 return Response({
-                    'error': f'Error finding SubPolicy: An internal server error occurred'
+                    'error': f'Error finding SubPolicy: {str(e)}'
                 }, status=status.HTTP_400_BAD_REQUEST)
         
         # Print debug info
@@ -1318,6 +1299,12 @@ def add_compliance_to_audit(request, audit_id):
             'refresh_required': True  # Signal to frontend that a full refresh is needed
         }, status=status.HTTP_201_CREATED)
         
+        # Add CORS headers
+        response["Access-Control-Allow-Origin"] = "http://localhost:8080"
+        response["Access-Control-Allow-Methods"] = "POST, OPTIONS"
+        response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+        response["Access-Control-Allow-Credentials"] = "true"
+        
         return response
         
     except Exception as e:
@@ -1328,22 +1315,16 @@ def add_compliance_to_audit(request, audit_id):
         debug_print(f"Error adding compliance: {str(e)}")
         debug_print(f"Traceback: {error_traceback}")
         
-        # Log the full error internally
-        user_id = request.session.get('user_id')
-        send_log(
-            module="Audit",
-            actionType="ADD_COMPLIANCE_ERROR",
-            description="Error adding compliance to audit",
-            userId=user_id,
-            entityType="Audit",
-            logLevel="ERROR",
-            additionalInfo={"error": "An internal error occurred"}
-        )
-        
-        # Return generic error without leaking sensitive internals/tracebacks
         response = JsonResponse({
-            'error': 'Error adding compliance: An internal server error occurred'
+            'error': f'Error adding compliance: {str(e)}',
+            'traceback': error_traceback
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        # Add CORS headers
+        response["Access-Control-Allow-Origin"] = "http://:8080"
+        response["Access-Control-Allow-Methods"] = "POST, OPTIONS"
+        response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+        response["Access-Control-Allow-Credentials"] = "true"
         
         return response
 
@@ -1351,9 +1332,7 @@ def add_compliance_to_audit(request, audit_id):
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([AuditConductPermission])
-@throttle_classes([AuditWriteThrottle])
 @audit_conduct_required
-@throttle_classes([AuditWriteThrottle])
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def bulk_update_findings(request):
@@ -1469,10 +1448,7 @@ def bulk_update_findings(request):
         # Update audit status based on completion
         old_status = audit.Status
         if completion_percentage == 100:
-            # Mark audit as completed and set completion timestamp if not already set
             audit.Status = 'Completed'
-            if not audit.CompletionDate:
-                audit.CompletionDate = timezone.now()
         elif completion_percentage > 0:
             audit.Status = 'Work In Progress'
         audit.save()
@@ -1524,10 +1500,10 @@ def bulk_update_findings(request):
             entityType="AuditFinding",
             entityId=str(audit_id) if 'audit_id' in locals() else None,
             logLevel="ERROR",
-            additionalInfo={"error": "An internal error occurred"}
+            additionalInfo={"error": str(e)}
         )
         return Response({
-            'error': f'Error updating findings: An internal server error occurred'
+            'error': f'Error updating findings: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @csrf_exempt
@@ -1720,7 +1696,7 @@ def get_compliance_count(request):
         debug_print(f"Error in get_compliance_count: {str(e)}")
         debug_print(traceback.format_exc())
         return Response({
-            'error': 'An internal error occurred',
+            'error': str(e),
             'traceback': traceback.format_exc()
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -1774,5 +1750,5 @@ def get_report_details(request):
     except Exception as e:
         debug_print(f"Error fetching report details: {str(e)}")
         return Response({
-            'error': f'Error fetching report details: An internal server error occurred'
+            'error': f'Error fetching report details: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

@@ -3,14 +3,64 @@ import json
 import logging
 from django.conf import settings
 from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_protect as csrf_exempt
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from pathlib import Path
 
+from pathlib import Path
+import platform
+import socket
+
 logger = logging.getLogger(__name__)
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def debug_paths_view(request):
+    """Debug endpoint to see absolute paths on the server"""
+    try:
+        base_dir = getattr(settings, 'BASE_DIR', 'Not Set')
+        media_root = getattr(settings, 'MEDIA_ROOT', 'Not Set')
+        temp_media_root = getattr(settings, 'TEMP_MEDIA_ROOT', 'Not Set')
+        
+        # Check if they exist
+        temp_exists = os.path.exists(str(temp_media_root)) if temp_media_root != 'Not Set' else False
+        media_exists = os.path.exists(str(media_root)) if media_root != 'Not Set' else False
+        
+        # List contents of BASE_DIR to see where we are
+        base_contents = []
+        if os.path.exists(str(base_dir)):
+            base_contents = os.listdir(str(base_dir))
+            
+        return Response({
+            "status": "success",
+            "server_info": {
+                "os": platform.system(),
+                "hostname": socket.gethostname(),
+                "python_version": platform.python_version(),
+                "is_docker": os.path.exists('/.dockerenv') or 'docker' in open('/proc/self/cgroup', 'r').read() if os.path.exists('/proc/self/cgroup') else False
+            },
+            "paths": {
+                "BASE_DIR": str(base_dir),
+                "MEDIA_ROOT": str(media_root),
+                "TEMP_MEDIA_ROOT": str(temp_media_root),
+                "TEMP_MEDIA_ROOT_RESOLVED": os.path.abspath(str(temp_media_root)) if temp_media_root != 'Not Set' else 'N/A',
+                "CWD": os.getcwd()
+            },
+            "existence": {
+                "MEDIA_ROOT_EXISTS": media_exists,
+                "TEMP_MEDIA_ROOT_EXISTS": temp_exists,
+            },
+            "base_dir_contents": base_contents,
+            "hint": "Compare these absolute paths with where you uploaded the folders on your VPS."
+        })
+    except Exception as e:
+        return Response({
+            "status": "error",
+            "message": str(e)
+        }, status=500)
 
 def get_temp_media_root():
     """Get the TEMP_MEDIA_ROOT path - defaults to backend/TEMP_MEDIA_ROOT"""
@@ -30,8 +80,20 @@ def get_temp_media_root():
     
     # Normalize the path (resolve any relative paths, symlinks, etc.)
     temp_media_root = os.path.abspath(os.path.expanduser(temp_media_root))
-    logger.info(f"TEMP_MEDIA_ROOT resolved to: {temp_media_root}")
     
+    # CRITICAL LOGGING: Print the absolute path to help identify missing folders on VPS
+    logger.info("============================================================")
+    logger.info(f"DIRECTORY CHECK: TEMP_MEDIA_ROOT")
+    logger.info(f"Target Path: {temp_media_root}")
+    logger.info(f"Path Exists: {os.path.exists(temp_media_root)}")
+    if os.path.exists(temp_media_root):
+        try:
+            logger.info(f"Contents: {os.listdir(temp_media_root)}")
+        except Exception as e:
+            logger.error(f"Could not list directory: {e}")
+    logger.info("============================================================")
+    
+    print(temp_media_root,"----------------------------")
     return temp_media_root
 
 def get_available_frameworks():
@@ -154,20 +216,27 @@ def load_default_data(request):
             logger.info(f"TEMP_MEDIA_ROOT exists: {os.path.exists(temp_media_root)}")
             
             if not os.path.exists(temp_media_root):
-                # List what's actually in the parent directory
+                # List what's actually in the parent directory to help user verify VPS deployment
                 parent_dir = os.path.dirname(temp_media_root)
+                parent_items = []
                 if os.path.exists(parent_dir):
                     try:
-                        items = [item for item in os.listdir(parent_dir) if 'TEMP' in item.upper() or 'MEDIA' in item.upper()]
-                        logger.info(f"Found TEMP/MEDIA related items in {parent_dir}: {items}")
+                        parent_items = os.listdir(parent_dir)
+                        logger.info(f"Parent directory contents: {parent_items}")
                     except:
                         pass
+                
+                error_msg = f"TEMP_MEDIA_ROOT directory not found: '{temp_media_root}'"
+                logger.error(error_msg)
+                
                 return JsonResponse({
                     "success": False, 
-                    "error": f"TEMP_MEDIA_ROOT directory not found: {temp_media_root}",
+                    "error": error_msg,
                     "debug_info": {
-                        "temp_media_root": temp_media_root,
-                        "parent_dir": parent_dir if 'parent_dir' in locals() else None
+                        "absolute_path": temp_media_root,
+                        "parent_dir": parent_dir,
+                        "parent_contents": parent_items,
+                        "hint": "Check if the TEMP_MEDIA_ROOT folder exists in your project root on the VPS."
                     }
                 }, status=404)
             
@@ -205,22 +274,25 @@ def load_default_data(request):
                     
                     # If still not found, return error with helpful info
                     if not os.path.exists(rbi_base):
+                        error_msg = f"RBI framework directory 'master_rbac' not found in '{temp_media_root}'"
+                        logger.error(error_msg)
                         return JsonResponse({
                             "success": False, 
-                            "error": f"RBI framework directory not found. Expected: 'master_rbac'",
+                            "error": error_msg,
                             "debug_info": {
                                 "temp_media_root": temp_media_root,
                                 "rbi_base_attempted": rbi_base,
                                 "temp_media_root_exists": os.path.exists(temp_media_root),
                                 "items_in_temp": items_in_temp,
-                                "rbi_candidates": rbi_candidates if rbi_candidates else "None found"
+                                "rbi_candidates": rbi_candidates if rbi_candidates else "None found",
+                                "hint": "Ensure the 'master_rbac' folder is present inside 'TEMP_MEDIA_ROOT'."
                             }
                         }, status=404)
                 except Exception as e:
                     logger.error(f"Error searching for RBI folder: {e}")
                     return JsonResponse({
                         "success": False, 
-                        "error": f"Error accessing TEMP_MEDIA_ROOT: An internal server error occurred"
+                        "error": f"Error accessing TEMP_MEDIA_ROOT: {str(e)}"
                     }, status=500)
             
             # Find the sections and policies folders inside RBI folder
@@ -245,7 +317,7 @@ def load_default_data(request):
                 logger.error(f"Error listing RBI folder contents: {e}")
                 return JsonResponse({
                     "success": False, 
-                    "error": f"Error accessing RBI framework folder: An internal server error occurred"
+                    "error": f"Error accessing RBI framework folder: {str(e)}"
                 }, status=500)
             
             if not sections_dir:
@@ -508,6 +580,7 @@ def _get_policies_for_section_internal(policies_data, section_folder, compliance
             )
             
             if is_match:
+                logger.info(f"[MATCH] ✓ Success: folder_path '{folder_path}' matches section '{section_folder}' (normalized: '{folder_path_normalized}' vs '{section_folder_normalized}')")
                 analysis = policy_entry.get('analysis', {})
                 policies = analysis.get('policies', [])
                 matched_count += len(policies)
@@ -852,21 +925,55 @@ def get_default_pdf_content(request, section_folder, control_id):
         framework_key = request.GET.get('framework', 'PCI_DSS_2')
         framework_key = framework_key.strip()
         
-        # Special handling for dgca_framework which has nested structure
+        # Special handling for frameworks with non-standard structures
         if framework_key == 'dgca_framework':
             # DGCA has a nested structure inside dgca_framework folder
             dgca_base = os.path.join(temp_media_root, 'dgca_framework')
             
             # Find the sections folder inside dgca_framework
             sections_dir = None
-            for item in os.listdir(dgca_base):
-                item_path = os.path.join(dgca_base, item)
-                if os.path.isdir(item_path) and item.startswith('sections_'):
-                    sections_dir = item_path
-                    break
+            if os.path.exists(dgca_base):
+                try:
+                    for item in os.listdir(dgca_base):
+                        item_path = os.path.join(dgca_base, item)
+                        if os.path.isdir(item_path) and item.startswith('sections_'):
+                            sections_dir = item_path
+                            break
+                except Exception as e:
+                    logger.error(f"Error listing DGCA base directory {dgca_base}: {e}")
             
             if not sections_dir:
                 return JsonResponse({"success": False, "error": f"DGCA sections directory not found in {dgca_base}"}, status=404)
+            
+            pdf_path = os.path.join(sections_dir, 'sections', section_folder, f"{control_id}.pdf")
+            
+        elif framework_key == 'rbi_framework':
+            # RBI framework is in "master_rbac" folder
+            rbi_base = os.path.join(temp_media_root, 'master_rbac')
+            
+            # Find the sections folder inside master_rbac
+            sections_dir = None
+            if os.path.exists(rbi_base):
+                try:
+                    for item in os.listdir(rbi_base):
+                        item_path = os.path.join(rbi_base, item)
+                        if os.path.isdir(item_path) and item.startswith('sections_'):
+                            sections_dir = item_path
+                            break
+                except Exception as e:
+                    logger.error(f"Error listing RBI base directory {rbi_base}: {e}")
+            
+            if not sections_dir:
+                logger.error(f"RBI sections directory not found in {rbi_base}. Available: {os.listdir(rbi_base) if os.path.exists(rbi_base) else 'N/A'}")
+                return JsonResponse({
+                    "success": False, 
+                    "error": f"RBI sections directory not found in {rbi_base}",
+                    "debug_info": {
+                        "rbi_base": rbi_base,
+                        "exists": os.path.exists(rbi_base),
+                        "contents": os.listdir(rbi_base) if os.path.exists(rbi_base) else []
+                    }
+                }, status=404)
             
             pdf_path = os.path.join(sections_dir, 'sections', section_folder, f"{control_id}.pdf")
         else:
@@ -888,7 +995,7 @@ def get_default_pdf_content(request, section_folder, control_id):
             return response
         except Exception as e:
             logger.exception(f"Error opening PDF file: {str(e)}")
-            return JsonResponse({"success": False, "error": f"Error opening PDF file: An internal server error occurred"}, status=500)
+            return JsonResponse({"success": False, "error": f"Error opening PDF file: {str(e)}"}, status=500)
         
     except Exception as e:
         logger.exception(f"Error getting default PDF content: {str(e)}")

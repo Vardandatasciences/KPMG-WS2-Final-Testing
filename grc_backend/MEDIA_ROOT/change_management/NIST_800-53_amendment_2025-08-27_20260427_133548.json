@@ -1,0 +1,99 @@
+{
+  "amendment_metadata": {
+    "framework_id": 3,
+    "framework_name": "NIST 800-53",
+    "amendment_date": "2025-08-27",
+    "processing_date": "2026-04-27T13:35:48.706176",
+    "framework_info": {
+      "framework_name": "NIST SP 800-53 Security and Privacy Controls",
+      "current_version": "5.0",
+      "framework_description": "NIST Special Publication 800-53 provides a catalog of security and privacy controls for federal information systems and organizations to protect organizational operations and assets, individuals, other organizations, and the Nation from a diverse set of threats including hostile attacks, human errors, natural disasters, structural failures, foreign intelligence entities, and privacy risks.",
+      "category": "Security and Privacy Controls",
+      "start_date": "2020-09-23",
+      "end_date": null
+    }
+  },
+  "extraction_summary": {
+    "total_sections": 1,
+    "total_policies": 1,
+    "total_subpolicies": 4,
+    "total_compliance_records": 0,
+    "policy_type_distribution": {
+      "General": 1
+    }
+  },
+  "sections": [
+    {
+      "section_info": {
+        "title": "Amendment Content",
+        "level": 1,
+        "start_page": 1,
+        "end_page": 2,
+        "folder_path": "full_document"
+      },
+      "policies": [
+        {
+          "policy_id": "NIST-800-53-GEN-001",
+          "policy_title": "NIST SP 800-53 Release 5.2.0 - Software Updates and Patches",
+          "policy_description": "",
+          "policy_text": "",
+          "scope": "This policy applies to all organizational units, personnel, systems, and processes involved in nist sp 800-53 release 5.2.0 - software updates and patches. The scope encompasses all relevant organizational activities, systems, and personnel as determined by the policy requirements. It includes all operational environments and applies to all stakeholders who may be affected by or responsible for policy implementation.",
+          "objective": "The primary objective of this policy is to establish clear requirements and guidelines for nist sp 800-53 release 5.2.0 - software updates and patches, ensuring organizational compliance and operational effectiveness. Specific objectives include: (1) establishing clear expectations and requirements for organizational behavior; (2) ensuring consistent implementation of best practices across all applicable areas; (3) minimizing operational risks and compliance gaps; (4) promoting accountability and responsibility among all stakeholders; (5) enabling effective monitoring and continuous improvement; and (6) supporting overall organizational objectives and strategic goals.",
+          "policy_type": "General",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": [
+            {
+              "subpolicy_id": "NIST-800-53-GEN-001.01",
+              "subpolicy_title": "Software and System Resiliency by Design",
+              "subpolicy_description": "Ensures that software is designed to be resilient against failures and attacks, supporting continuous operation.",
+              "subpolicy_text": "",
+              "control": "The organization incorporates resilience mechanisms into the design of software components to maintain functionality during disruptions.",
+              "ai_analysis": {
+                "extraction_rationale": "Identifies the requirement for designing software with resilience to ensure continuous operation under adverse conditions.",
+                "source_excerpt": "software and system resiliency by design"
+              },
+              "compliance_records": []
+            },
+            {
+              "subpolicy_id": "NIST-800-53-GEN-001.02",
+              "subpolicy_title": "Developer Testing",
+              "subpolicy_description": "Mandates testing activities performed by developers to verify code quality and security before release.",
+              "subpolicy_text": "",
+              "control": "Developers must conduct testing of software artifacts to validate functionality and security prior to deployment.",
+              "ai_analysis": {
+                "extraction_rationale": "Captures the need for developer‑performed testing to ensure code quality and security.",
+                "source_excerpt": "developer testing"
+              },
+              "compliance_records": []
+            },
+            {
+              "subpolicy_id": "NIST-800-53-GEN-001.03",
+              "subpolicy_title": "Deployment and Management of Updates",
+              "subpolicy_description": "Defines processes for securely deploying and managing software updates and patches throughout their lifecycle.",
+              "subpolicy_text": "",
+              "control": "The organization manages the deployment and ongoing management of software updates to maintain system security and reliability.",
+              "ai_analysis": {
+                "extraction_rationale": "Reflects the focus on managing updates and patches securely and reliably.",
+                "source_excerpt": "deployment and management of updates"
+              },
+              "compliance_records": []
+            },
+            {
+              "subpolicy_id": "NIST-800-53-GEN-001.04",
+              "subpolicy_title": "Software Integrity and Validation",
+              "subpolicy_description": "Requires verification of software integrity and validation of updates to prevent tampering and ensure correct functionality.",
+              "subpolicy_text": "",
+              "control": "Updates must be validated for integrity and correctness before implementation to safeguard against malicious modifications.",
+              "ai_analysis": {
+                "extraction_rationale": "Emphasizes validation of software integrity to prevent tampering and ensure correct operation.",
+                "source_excerpt": "software integrity and validation"
+              },
+              "compliance_records": []
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -26,7 +26,7 @@ def slug(s: str, maxlen: int = 40) -> str:
 
 # ---------- PDF helpers ----------
 def load_doc(pdf_path: str):
-    import fitz  # PyMuPDF
+    import pymupdf as fitz  # PyMuPDF
     return fitz.open(pdf_path)
 
 # ---------- Detect printed page number offset ----------
@@ -203,7 +203,7 @@ def extract_pdf_pages(doc, start_page, end_page, output_path):
     Extract specific pages from a PDF and save as a new PDF file.
     """
     try:
-        import fitz  # PyMuPDF
+        import pymupdf as fitz  # PyMuPDF
         # Create a new PDF document
         new_doc = fitz.open()
         

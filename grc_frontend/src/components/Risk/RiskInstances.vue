@@ -105,7 +105,7 @@
     >
       <!-- Custom cell slots for badges and styling -->
       <template #cell-Origin>
-        <span class="risk-instance-origin-badge">MANUAL</span>
+        <span class="risk-instance-origin-badge">EVENT</span>
       </template>
       
       <template #cell-RiskDescription="{ row }">
@@ -470,7 +470,7 @@ export default {
       // Transform data for DynamicTable
       return filtered.map(instance => ({
         ...instance,
-        Origin: 'MANUAL', // Add Origin field for the table
+        Origin: 'EVENT', // Add Origin field for the table
         RiskInstanceId: instance.RiskInstanceId || 'N/A',
         Category: instance.Category || 'Operational',
         Criticality: instance.Criticality || 'Low',

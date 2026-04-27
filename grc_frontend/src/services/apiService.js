@@ -127,10 +127,12 @@ apiClient.interceptors.response.use((response) => {
     globalLoading.value = false;
   }
  
-  // Standardize Session Expiry (401) with automatic token refresh attempt
+  // Standardize Session Expiry (401/403) with automatic token refresh attempt
   const isRefreshRequest = originalRequest.url?.includes('/api/refresh/');
-  if (error.response?.status === 401 && originalRequest && !originalRequest._retry && !isRefreshRequest) {
-    const detail = error.response.data?.detail || '';
+  const isAuthError = error.response?.status === 401 || (error.response?.status === 403 && error.response.data?.detail?.includes('session'));
+  
+  if (isAuthError && originalRequest && !originalRequest._retry && !isRefreshRequest) {
+    const detail = error.response.data?.detail || error.response.data?.message || '';
    
     // Explicit hard-expiry (do not attempt refresh)
     if (detail.toLowerCase().includes('expired') || error.response.data?.session_expired) {
@@ -157,7 +159,16 @@ apiClient.interceptors.response.use((response) => {
  
     try {
       // Send refresh request. Relies on HttpOnly refresh token cookie sent implicitly.
-      await apiClient.post('/api/refresh/', {}, { background: true });
+      const refreshResponse = await apiClient.post('/api/refresh/', {}, { background: true });
+      
+      // Update non-sensitive session metadata for compatibility with legacy components
+      if (refreshResponse.data && refreshResponse.data.access_token_expires) {
+        localStorage.setItem('access_token_expires', refreshResponse.data.access_token_expires);
+      }
+      
+      // Dispatch event for components that might be listening for session updates
+      window.dispatchEvent(new Event('authChanged'));
+
       processQueue(null);
       return apiClient(originalRequest); // Retry the original request implicitly triggering withCredentials
     } catch (refreshError) {

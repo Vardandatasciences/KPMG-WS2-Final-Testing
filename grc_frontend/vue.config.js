@@ -41,6 +41,12 @@ module.exports = defineConfig({
         onProxyReq: (proxyReq, req, res) => {
           console.log(`[Proxy] ${req.method} ${req.url} -> ${proxyReq.path}`);
         }
+      },
+      '/media': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+        timeout: 120000,
+        proxyTimeout: 120000
       }
     },
     historyApiFallback: true,

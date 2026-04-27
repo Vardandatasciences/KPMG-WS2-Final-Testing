@@ -350,6 +350,60 @@
             <div class="global-form-helper-text">Categorize the risk for better organization and reporting</div>
           </div>
         </div>
+
+        <!-- Row: Department -->
+        <div class="global-form-row">
+          <div class="global-form-group">
+            <SelectInput
+              id="risk-department"
+              v-model="newRisk.functionalArea"
+              label="Department"
+              placeholder="Select Department"
+              :options="departmentOptions"
+              required
+              name="Department"
+              helper-text="Select the department associated with this risk"
+              :loading="loadingDepartments"
+            >
+              <template #label-append>
+                <div class="risk-data-type-circle-toggle-wrapper">
+                  <div class="risk-data-type-circle-toggle">
+                    <div 
+                      class="risk-circle-option personal-circle" 
+                      :class="{ active: fieldDataTypes.functionalArea === 'personal' }"
+                      @click="setDataType('functionalArea', 'personal')"
+                      title="Personal Data"
+                    >
+                      <div class="risk-circle-inner"></div>
+                    </div>
+                    <div 
+                      class="risk-circle-option confidential-circle" 
+                      :class="{ active: fieldDataTypes.functionalArea === 'confidential' }"
+                      @click="setDataType('functionalArea', 'confidential')"
+                      title="Confidential Data"
+                    >
+                      <div class="risk-circle-inner"></div>
+                    </div>
+                    <div 
+                      class="risk-circle-option regular-circle" 
+                      :class="{ active: fieldDataTypes.functionalArea === 'regular' }"
+                      @click="setDataType('functionalArea', 'regular')"
+                      title="Regular Data"
+                    >
+                      <div class="risk-circle-inner"></div>
+                    </div>
+                  </div>
+                </div>
+                <!-- AI Justification Badge for Department -->
+                <div v-if="riskJustifications.functionalArea" class="ai-justification-indicator">
+                  <div class="ai-badge" :title="riskJustifications.functionalArea">
+                    <i class="fas fa-robot"></i> AI
+                  </div>
+                </div>
+              </template>
+            </SelectInput>
+          </div>
+        </div>
         
         <!-- Row: Risk Priority, Risk Likelihood -->
         <div class="global-form-row">
@@ -1126,7 +1180,8 @@ export default {
         RiskMitigation: '',
         RiskTitle: '',
         RiskType: 'Current',
-        BusinessImpact: ''
+        BusinessImpact: '',
+        functionalArea: ''
       },
       businessImpacts: [],
       selectedBusinessImpacts: [],
@@ -1151,6 +1206,10 @@ export default {
       loadingCompliances: false,
       selectedComplianceIdText: '',
       
+      // Department dropdown properties
+      departments: [],
+      loadingDepartments: false,
+      
       showSuccessMessage: false,
       sourceRiskId: null,
       isLoadingSourceRisk: false,
@@ -1171,7 +1230,8 @@ export default {
         riskTitle: 'regular',
         riskDescription: 'regular',
         possibleDamage: 'regular',
-        riskMitigation: 'regular'
+        riskMitigation: 'regular',
+        functionalArea: 'regular'
       },
       aiInput: {
         title: '',
@@ -1189,7 +1249,8 @@ export default {
         category: '',
         riskPriority: '',
         riskDescription: '',
-        riskMitigation: ''
+        riskMitigation: '',
+        functionalArea: ''
       },
       
       // Risk Mitigation properties
@@ -1244,6 +1305,13 @@ export default {
         category.value.toLowerCase().includes(search)
       );
     },
+
+    departmentOptions() {
+      return this.departments.map(dept => ({
+        value: dept.name,
+        label: dept.name
+      }));
+    },
     
     hasAnyJustifications() {
       return Object.values(this.riskJustifications).some(justification => justification && justification.trim() !== '')
@@ -1264,6 +1332,9 @@ export default {
     
     // Fetch categories
     this.fetchCategories();
+
+    // Fetch departments
+    this.fetchDepartments();
     
     // Check if a specific mode is requested via query parameter
     if (this.route.query.mode) {
@@ -1884,6 +1955,10 @@ export default {
       if (!this.newRisk.ComplianceId && this.incidentId) {
         this.newRisk.ComplianceId = this.incidentId
       }
+      
+      // Mark that AI suggestions have been generated to ensure 'SYSTEM-AI' origin
+      this.aiSuggestionGenerated = true
+      this.isGeneratingAi = false
     },
 
     resetForm() {
@@ -1902,7 +1977,8 @@ export default {
         RiskMitigation: '',
         RiskTitle: '',
         RiskType: 'Current',
-        BusinessImpact: ''
+        BusinessImpact: '',
+        functionalArea: ''
       }
       
       // Reset selected compliance ID text
@@ -2054,6 +2130,21 @@ export default {
         }
       } catch (error) {
         console.error('Error fetching categories:', error);
+      }
+    },
+
+    async fetchDepartments() {
+      this.loadingDepartments = true;
+      try {
+        const response = await apiService.get(API_ENDPOINTS.DEPARTMENTS);
+        if (response && response.success) {
+          this.departments = response.departments || [];
+        }
+      } catch (error) {
+        console.error('Error fetching departments:', error);
+        this.$popup.error('Failed to load departments');
+      } finally {
+        this.loadingDepartments = false;
       }
     },
 
@@ -2232,7 +2323,8 @@ export default {
         riskTitle: 'Risk Title',
         riskDescription: 'Risk Description',
         possibleDamage: 'Possible Damage',
-        riskMitigation: 'Risk Mitigation'
+        riskMitigation: 'Risk Mitigation',
+        functionalArea: 'Department'
       };
 
       // Transform fieldDataTypes into data_inventory JSON with labels
@@ -2254,6 +2346,8 @@ export default {
         RiskImpact: parseInt(this.newRisk.RiskImpact) || 1,
         RiskExposureRating: parseFloat(this.newRisk.RiskExposureRating) || 1,
         data_inventory: dataInventory, // Include data inventory JSON with field labels
+        functional_area: this.newRisk.functionalArea,
+        Origin: this.aiSuggestionGenerated ? 'SYSTEM-AI' : 'Manual'
       };
 
       // Include consent data if consent was required and accepted

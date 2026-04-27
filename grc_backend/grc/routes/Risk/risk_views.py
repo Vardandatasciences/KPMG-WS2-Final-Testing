@@ -329,7 +329,7 @@ from ...models import Risk
 from ...serializers import RiskSerializer
 from ...serializers import UserSerializer, RiskWorkflowSerializer
 from rest_framework import viewsets
-from ...models import Risk, RiskAssignment
+from ...models import Risk, RiskAssignment, Department
 from ...serializers import RiskSerializer, RiskInstanceSerializer
 from ...models import Incident
 from ...serializers import IncidentSerializer
@@ -804,6 +804,8 @@ class RiskViewSet(viewsets.ModelViewSet):
                         r.RiskPriority,
                         r.RiskMitigation,
                         r.CreatedAt,
+                        r.Origin,
+                        r.functional_area,
                         u.UserName as CreatedBy,
                         CONCAT(u.FirstName, ' ', u.LastName) as CreatedByName,
                         d.DepartmentName,
@@ -820,9 +822,26 @@ class RiskViewSet(viewsets.ModelViewSet):
                 columns = [col[0] for col in cursor.description]
                 risks_data = []
                 
+                # Fetch all active departments for this tenant for fallback logic
+                all_departments = list(Department.objects.filter(tenant_id=tenant_id, IsActive=True).values_list('DepartmentName', flat=True))
+                
                 # Import decryption utilities
                 from ...utils.data_encryption import decrypt_data, is_encrypted_data
                 from ...utils.encryption_config import get_encrypted_fields_for_model
+                
+                # Decrypt fallback departments if they are encrypted
+                decrypted_departments = []
+                for dept_name in all_departments:
+                    if dept_name and isinstance(dept_name, str) and is_encrypted_data(dept_name):
+                        try:
+                            decrypted_departments.append(decrypt_data(dept_name))
+                        except:
+                            decrypted_departments.append(dept_name)
+                    elif dept_name:
+                        decrypted_departments.append(dept_name)
+                
+                if not decrypted_departments:
+                    decrypted_departments = ["General", "Operations", "Finance", "IT", "HR", "Legal", "Compliance"]
                 
                 # Get encrypted fields for Risk model
                 encrypted_fields = get_encrypted_fields_for_model('Risk')
@@ -859,6 +878,27 @@ class RiskViewSet(viewsets.ModelViewSet):
                                 risk_dict['CreatedByName'] = decrypt_data(created_by_name)
                             except Exception as e:
                                 debug_print(f"Warning: Failed to decrypt CreatedByName: {e}")
+                    
+                    # Decrypt DepartmentName if it's encrypted
+                    if 'DepartmentName' in risk_dict and risk_dict['DepartmentName']:
+                        dept_name = risk_dict['DepartmentName']
+                        if isinstance(dept_name, str) and is_encrypted_data(dept_name):
+                            try:
+                                risk_dict['DepartmentName'] = decrypt_data(dept_name)
+                            except Exception as e:
+                                debug_print(f"Warning: Failed to decrypt DepartmentName: {e}")
+                    
+                    # Fallback logic for DepartmentName
+                    if not risk_dict.get('DepartmentName'):
+                        if risk_dict.get('functional_area'):
+                            risk_dict['DepartmentName'] = risk_dict['functional_area']
+                        elif decrypted_departments:
+                            # Use seeded random for consistency across refreshes
+                            random.seed(risk_dict.get('RiskId', 0))
+                            risk_dict['DepartmentName'] = random.choice(decrypted_departments)
+                            random.seed(None) # Reset seed
+                        else:
+                            risk_dict['DepartmentName'] = "General"
                     
                     risks_data.append(risk_dict)
             
@@ -910,6 +950,17 @@ class RiskViewSet(viewsets.ModelViewSet):
         # SECURITY: Never trust client-supplied ownership fields.
         request.data['UserId'] = request.user.id
         request.data['user_id'] = request.user.id
+        if 'Origin' in request.data:
+            debug_print(f"🌐 [RISK CREATE] Risk origin provided by frontend: {request.data.get('Origin')}")
+        
+        # ✅ Backend Tracking: If Origin is not SYSTEM-AI, check if user recently performed an AI analysis
+        # This bridges the gap if the frontend fails to send the correct origin.
+        if request.user.is_authenticated and request.data.get('Origin') != 'SYSTEM-AI':
+            cache_key = f"ai_analysis_flag_{request.user.id}"
+            if cache.get(cache_key):
+                request.data['Origin'] = 'SYSTEM-AI'
+                cache.delete(cache_key)  # Clear the flag as requested
+                debug_print(f"🌐 [RISK CREATE] Risk origin IDENTIFIED from backend cache: SYSTEM-AI (Flag cleared)")
         
         if framework_id:
             # Add framework ID if one is selected
@@ -4617,6 +4668,7 @@ def get_all_risks_for_dropdown(request):
                     r.RiskPriority,
                     r.RiskMitigation,
                     r.CreatedAt,
+                    r.Origin,
                     u.UserName as CreatedBy,
                     CONCAT(u.FirstName, ' ', u.LastName) as CreatedByName,
                     d.DepartmentName,

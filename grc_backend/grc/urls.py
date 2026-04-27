@@ -212,6 +212,7 @@ from .routes.Policy.policy_ai_service import (
 # Import the default data loader function
 from .routes.uploadNist.default_data_loader import (
     load_default_data,
+    debug_paths_view,
     get_default_data_sections,
     get_default_pdf_content,
     get_policies_for_section,
@@ -399,6 +400,7 @@ from .routes.Incident.incident_ai_import import (
 # System Identified Risk Queue
 from .routes.Incident.system_risk_views import (
     run_incident_risk_scan,
+    run_manual_risk_scan,
     run_synthetic_risk_test_analysis,
     get_synthetic_risk_test_analysis_status,
     cancel_synthetic_risk_test_analysis,
@@ -410,7 +412,15 @@ from .routes.Incident.system_risk_views import (
     send_system_risk_for_approval,
     approve_system_risk_workflow,
     reject_system_risk_workflow,
-    get_queue_stats
+    get_queue_stats,
+    list_risks_exceeding_threshold,
+    list_external_sources
+)
+from .routes.Incident.system_risk_schedule_api import (
+    create_sys_risk_schedule,
+    list_sys_risk_schedules,
+    update_or_delete_sys_risk_schedule,
+    list_sys_risk_schedule_runs,
 )
 
 
@@ -535,11 +545,19 @@ auth_urlpatterns = [
 
     path('register/', views.register_user, name='register'),
 
+    
+
+    path('test-connection/', views.test_connection, name='test-connection'),
+
     path('login/', views.login_user, name='api-login'),
 
     path('logout/', views.logout_user, name='api-logout'),
 
     path('register/', views.register_user, name='api-register'),
+
+    
+
+    path('test-connection/', views.test_connection, name='api-test-connection'),
 
     path('send-otp/', views.send_otp, name='send-otp'),
 
@@ -552,6 +570,12 @@ auth_urlpatterns = [
     path('get-user-email/', views.get_user_email_by_username, name='get-user-email'),
 
     path('rbac/roles/', views.get_rbac_roles, name='api-rbac-roles'),
+
+    # path('departments/', views.get_departments, name='api-departments'),  # Removed duplicate
+
+    path('rbac/role-permissions/<path:role>/', views.get_role_permissions, name='api-role-permissions'),
+
+    
 
     # JWT Authentication endpoints
 
@@ -2078,6 +2102,7 @@ incident_urlpatterns = [
 
     path('ai-audit/<str:audit_id>/download-report/', ai_audit_api.download_audit_report, name='api-download-audit-report'),
 
+    path('ai-audit/<str:audit_id>/test-structured-compliance/', ai_audit_api.test_structured_compliance_api, name='api-test-structured-compliance'),
 
     path('ai-audit/<str:audit_id>/documents/<int:document_id>/', ai_audit_api.delete_audit_document_api, name='api-delete-audit-document'),
 
@@ -2148,6 +2173,7 @@ incident_urlpatterns = [
     path('ai-incident-save/', save_extracted_incidents, name='api-ai-incident-save'),
     
     # Test OpenAI connection for incident module
+    path('ai-incident-test/', test_openai_connection_incident, name='api-ai-incident-test'),
 
     # ========================================================================
     # SYSTEM IDENTIFIED RISK QUEUE
@@ -2155,9 +2181,12 @@ incident_urlpatterns = [
     # Note: this `grc/urls.py` file is included by `backend/urls.py` under `path('api/', include('grc.urls'))`.
     # Therefore these routes must NOT start with another `/api/` prefix.
     path('system-risks/run-scan/incident/', run_incident_risk_scan, name='api-system-risks-scan-incident'),
+    path('system-risks/run-scan/manual/', run_manual_risk_scan, name='api-system-risks-scan-manual'),
+    path('system-risks/run-test-analysis/', run_synthetic_risk_test_analysis, name='api-system-risks-run-test-analysis'),
     path('system-risks/run-test-analysis/<str:job_id>/status/', get_synthetic_risk_test_analysis_status, name='api-system-risks-run-test-analysis-status'),
     path('system-risks/run-test-analysis/<str:job_id>/cancel/', cancel_synthetic_risk_test_analysis, name='api-system-risks-run-test-analysis-cancel'),
     path('system-risks/', list_system_risk_queue, name='api-system-risks-list'),
+    path('system-risks/external-sources/', list_external_sources, name='api-system-risks-external-sources'),
     path('system-risks/stats/', get_queue_stats, name='api-system-risks-stats'),
     path('system-risks/<int:risk_id>/', get_system_risk_detail, name='api-system-risks-detail'),
     path('system-risks/<int:risk_id>/review/', update_system_risk_review, name='api-system-risks-review'),
@@ -2166,6 +2195,13 @@ incident_urlpatterns = [
     path('system-risks/<int:risk_id>/send-for-approval/', send_system_risk_for_approval, name='api-system-risks-send-for-approval'),
     path('system-risks/workflow/<int:risk_instance_id>/approve/', approve_system_risk_workflow, name='api-system-risks-workflow-approve'),
     path('system-risks/workflow/<int:risk_instance_id>/reject/', reject_system_risk_workflow, name='api-system-risks-workflow-reject'),
+    path('system-risks/threshold-exceeded/', list_risks_exceeding_threshold, name='api-system-risks-threshold-exceeded'),
+
+    # System Risk Scheduling
+    path('system-risks/schedules/', list_sys_risk_schedules, name='api-system-risks-schedules'),
+    path('system-risks/schedules/create/', create_sys_risk_schedule, name='api-system-risks-schedules-create'),
+    path('system-risks/schedules/<int:schedule_id>/', update_or_delete_sys_risk_schedule, name='api-system-risks-schedules-detail'),
+    path('system-risks/schedules/<int:schedule_id>/runs/', list_sys_risk_schedule_runs, name='api-system-risks-schedules-runs'),
 
     # File Upload
 
@@ -2342,6 +2378,7 @@ risk_urlpatterns = [
 
     path('user-notifications/<int:user_id>/', risk_views.get_user_notifications, name='user-notifications'),
 
+    path('generate-test-notification/<int:user_id>/', risk_views.generate_test_notification, name='generate-test-notification'),
 
     
 
@@ -2415,6 +2452,7 @@ risk_urlpatterns = [
     path('assign-reviewer/', risk_views.assign_reviewer, name='assign-reviewer'),
 
     path('reviewer-tasks/<int:user_id>/', risk_views.get_reviewer_tasks, name='reviewer-tasks'),
+    path('api/risk/users/', risk_views.get_users, name='api-risk-users'),
 
     path('complete-review/', risk_views.complete_review, name='complete-review'),
 
@@ -2649,6 +2687,7 @@ event_handling_urlpatterns = [
 
     path('riskavaire/webhook/', riskavaire_integration.riskavaire_webhook, name='riskavaire-webhook'),
 
+    path('riskavaire/check-triggers/', riskavaire_integration.check_automated_triggers, name='check-automated-triggers'),
 
     path('riskavaire/events/', riskavaire_integration.get_riskavaire_events, name='get-riskavaire-events'),
 
@@ -3213,6 +3252,7 @@ urlpatterns = [
     # NEW AI-POWERED ENDPOINTS (Point 9 & 10 Implementation)
     path('change-management/framework/<int:framework_id>/ai-gap-analysis/', framework_comparison.perform_ai_gap_analysis, name='ai-gap-analysis'),
     path('change-management/framework/<int:framework_id>/ai-compliance-impact/', framework_comparison.assess_ai_compliance_impact, name='ai-compliance-impact'),
+    path('change-management/compare-versions/', framework_comparison.compare_framework_versions, name='compare-framework-versions'),
     path('change-management/frameworks/update-notifications/', login_framework_checking.get_framework_update_notifications, name='get-framework-update-notifications'),
     path('change-management/auto-check-frameworks/', login_framework_checking.auto_check_all_frameworks, name='auto-check-frameworks'),
 

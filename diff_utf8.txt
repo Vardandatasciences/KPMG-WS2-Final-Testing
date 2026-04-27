@@ -1,0 +1,939 @@
+diff --git a/grc_frontend/src/components/Risk/SystemIdentifiedRisks.vue b/grc_frontend/src/components/Risk/SystemIdentifiedRisks.vue
+index 135fd734..532fdc86 100644
+--- a/grc_frontend/src/components/Risk/SystemIdentifiedRisks.vue
++++ b/grc_frontend/src/components/Risk/SystemIdentifiedRisks.vue
+@@ -1,4 +1,16 @@
+ <template>
++  <!-- Success Popup Modal -->
++  <div v-if="showSuccessModal" class="modal-backdrop success-popup" @click.self="showSuccessModal = false">
++    <div class="success-modal-content">
++      <div class="success-icon">
++        <i class="fas fa-check-circle"></i>
++      </div>
++      <h3>{{ successModalTitle }}</h3>
++      <p>{{ successModalMessage }}</p>
++      <button class="btn primary" @click="showSuccessModal = false">OK</button>
++    </div>
++  </div>
++
+   <div class="system-risk-container" :class="{ 'sidebar-collapsed': isSidebarCollapsed }">
+     <div class="system-risk-header">
+       <div class="system-risk-header-left">
+@@ -140,7 +152,7 @@
+       </div>
+       <div class="stat-card clickable" :class="{ active: filters.status === 'ACCEPTED_PENDING_APPROVAL' }" @click="setStatusFilter('ACCEPTED_PENDING_APPROVAL')">
+         <p class="stat-value pending">{{ pendingApprovalCount }}</p>
+-        <p class="stat-label">Accepted</p>
++        <p class="stat-label">Pending Approval</p>
+       </div>
+       <div class="stat-card clickable" :class="{ active: filters.status === 'APPROVED_ADDED' }" @click="setStatusFilter('APPROVED_ADDED')">
+         <p class="stat-value accepted">{{ acceptedCount }}</p>
+@@ -323,9 +335,10 @@
+ 
+         <div class="risk-mitigation-preview">
+           <strong>Proposed Mitigation:</strong> 
+-          <span v-if="risk.mitigationSteps && risk.mitigationSteps.length > 0">
++          <span v-if="Array.isArray(risk.mitigationSteps) && risk.mitigationSteps.length > 0">
+             {{ risk.mitigationSteps.join('; ') }}
+           </span>
++          <span v-else-if="risk.mitigationSteps">{{ risk.mitigationSteps }}</span>
+           <span v-else>{{ risk.mitigation }}</span>
+         </div>
+ 
+@@ -338,9 +351,12 @@
+               <button type="button" class="btn-reject-ghost" @click="rejectFromList(risk.id)">Reject</button>
+             </template>
+             <template v-else-if="risk.status === 'ACCEPTED_PENDING_APPROVAL'">
+-              <button type="button" class="btn-review pending" disabled>
++              <button v-if="!canApprove(risk)" type="button" class="btn-review pending" disabled>
+                 <i class="fas fa-spinner fa-spin"></i> Approval In Progress
+               </button>
++              <button v-else type="button" class="btn-review approve" @click="openReview(risk)">
++                Review & Approve
++              </button>
+               <button type="button" class="btn-review-ghost" @click="goToWorkflow(risk)">
+                 View Workflow <i class="fas fa-arrow-right"></i>
+               </button>
+@@ -476,7 +492,7 @@
+             </div>
+             <div class="ai-field has-tooltip">
+               <label>Business Impact <span class="ai-badge">AI</span></label>
+-              <div class="ai-value">{{ (selectedRisk.businessImpact || []).join(', ') }}</div>
++              <div class="ai-value">{{ Array.isArray(selectedRisk.businessImpact) ? selectedRisk.businessImpact.join(', ') : (selectedRisk.businessImpact || 'N/A') }}</div>
+               <div class="justification-tooltip">
+                 <div class="tooltip-header"><i class="fas fa-info-circle"></i> Basis</div>
+                 <div class="tooltip-body">{{ getRationale(selectedRisk, 'business_impact') }}</div>
+@@ -549,9 +565,10 @@
+ 
+             <div class="ai-field">
+               <label>Mitigation Steps <span class="ai-badge">AI</span></label>
+-              <ul class="ai-steps">
++              <ul class="ai-steps" v-if="Array.isArray(selectedRisk.mitigationSteps)">
+                 <li v-for="(step, idx) in selectedRisk.mitigationSteps" :key="idx">{{ step }}</li>
+               </ul>
++              <div v-else class="ai-value">{{ selectedRisk.mitigationSteps || 'None identified' }}</div>
+             </div>
+ 
+             <div class="ai-field">
+@@ -616,56 +633,69 @@
+ 
+             <div class="form-group">
+               <label>Risk Title</label>
+-              <input v-model="reviewForm.title" type="text" class="review-input" />
++              <input v-model="reviewForm.title" type="text" class="review-input" :disabled="isReviewerApprovalMode" />
++              <!-- Change Alert for Title -->
++              <div v-if="isReviewerApprovalMode && isFieldChanged('title')" class="field-change-alert">
++                <i class="fas fa-exclamation-triangle"></i> Modified from AI: <span>"{{ getOriginalValueDisplay('title') }}"</span>
++              </div>
+             </div>
+ 
+             <div class="form-group">
+               <label>Risk Type</label>
+-              <select v-model="reviewForm.type" class="review-select">
+-                <option>Current</option>
+-                <option>Residual</option>
+-                <option>Inherent</option>
+-                <option>Emerging</option>
+-                <option>Accepted</option>
++              <select v-model="reviewForm.type" class="review-select" :disabled="isReviewerApprovalMode">
++                <option v-for="opt in typeOptions" :key="opt" :value="opt">{{ opt }}</option>
+               </select>
++              <!-- Change Alert for Type -->
++              <div v-if="isReviewerApprovalMode && isFieldChanged('type')" class="field-change-alert">
++                <i class="fas fa-exclamation-triangle"></i> Modified from AI: <span>{{ getOriginalValueDisplay('type') }}</span>
++              </div>
+             </div>
+ 
+             <div class="form-group">
+               <label>Category</label>
+-              <select v-model="reviewForm.category" class="review-select">
++              <select v-model="reviewForm.category" class="review-select" :disabled="isReviewerApprovalMode">
+                 <option v-for="cat in categoryOptions" :key="cat" :value="cat">{{ cat }}</option>
+               </select>
++              <!-- Change Alert for Category -->
++              <div v-if="isReviewerApprovalMode && isFieldChanged('category')" class="field-change-alert">
++                <i class="fas fa-exclamation-triangle"></i> Modified from AI: <span>{{ getOriginalValueDisplay('category') }}</span>
++              </div>
+             </div>
+ 
+             <div class="form-group">
+               <label>Criticality</label>
+-              <select v-model="reviewForm.criticality" class="review-select">
++              <select v-model="reviewForm.criticality" class="review-select" :disabled="isReviewerApprovalMode">
+                 <option>Low</option>
+                 <option>Medium</option>
+                 <option>High</option>
+                 <option>Critical</option>
+               </select>
++              <!-- Change Alert for Criticality -->
++              <div v-if="isReviewerApprovalMode && isFieldChanged('criticality')" class="field-change-alert">
++                <i class="fas fa-exclamation-triangle"></i> Modified from AI: <span>{{ getOriginalValueDisplay('criticality') }}</span>
++              </div>
+             </div>
+ 
+             <div class="form-group">
+               <label>Description</label>
+-              <textarea v-model="reviewForm.description" rows="3" class="review-textarea"></textarea>
++              <textarea v-model="reviewForm.description" rows="3" class="review-textarea" :disabled="isReviewerApprovalMode"></textarea>
+             </div>
+ 
+             <div class="form-group">
+               <label>Possible Damage</label>
+-              <textarea v-model="reviewForm.possibleDamage" rows="2" class="review-textarea"></textarea>
++              <textarea v-model="reviewForm.possibleDamage" rows="2" class="review-textarea" :disabled="isReviewerApprovalMode"></textarea>
+             </div>
+ 
+             <div class="form-group">
+               <label>Business Impact</label>
+-              <div class="impact-buttons">
++              <div class="impact-buttons" :class="{ disabled: isReviewerApprovalMode }">
+                 <button 
+                   v-for="impact in impactOptions" 
+                   :key="impact" 
+-                  @click="toggleImpact(impact)"
++                  @click="!isReviewerApprovalMode && toggleImpact(impact)"
+                   :class="{ active: reviewForm.businessImpact.includes(impact) }"
+                   class="impact-btn"
++                  :disabled="isReviewerApprovalMode"
+                 >
+                   {{ impact }}
+                 </button>
+@@ -675,16 +705,16 @@
+             <div class="sliders-grid">
+               <div class="slider-item">
+                 <label>Likelihood: {{ reviewForm.likelihood }}/10</label>
+-                <input type="range" v-model.number="reviewForm.likelihood" min="1" max="10" />
++                <input type="range" v-model.number="reviewForm.likelihood" min="1" max="10" :disabled="isReviewerApprovalMode" />
+               </div>
+               <div class="slider-item">
+                 <label>Impact: {{ reviewForm.impact }}/10</label>
+-                <input type="range" v-model.number="reviewForm.impact" min="1" max="10" />
++                <input type="range" v-model.number="reviewForm.impact" min="1" max="10" :disabled="isReviewerApprovalMode" />
+               </div>
+             </div>
+ 
+             <!-- Justification for Likelihood/Impact -->
+-            <div v-if="isFieldChanged('likelihood') || isFieldChanged('impact')" class="justification-box">
++            <div v-if="isReviewerApprovalMode && (isFieldChanged('likelihood') || isFieldChanged('impact'))" class="justification-box">
+               <div class="justification-warning">
+                 <span class="change-label">Changed Risk Metrics</span>
+                 <span class="change-values">
+@@ -706,19 +736,19 @@
+ 
+             <div class="form-group">
+               <label>Velocity: {{ reviewForm.velocity }}/10</label>
+-              <input type="range" v-model.number="reviewForm.velocity" min="1" max="10" class="velocity-slider" />
++              <input type="range" v-model.number="reviewForm.velocity" min="1" max="10" class="velocity-slider" :disabled="isReviewerApprovalMode" />
+               <p class="hint">How quickly this risk can impact the organisation</p>
+             </div>
+ 
+             <div class="form-group">
+               <label>Control Effectiveness</label>
+-              <select v-model="reviewForm.controlEffectiveness" class="review-select">
++              <select v-model="reviewForm.controlEffectiveness" class="review-select" :disabled="isReviewerApprovalMode">
+                 <option v-for="opt in controlEffectivenessOptions" :key="opt" :value="opt">{{ opt }}</option>
+               </select>
+               <p class="hint">Effectiveness of existing controls for this risk</p>
+ 
+               <!-- Justification for Control Effectiveness -->
+-              <div v-if="isFieldChanged('controlEffectiveness')" class="justification-box">
++              <div v-if="isReviewerApprovalMode && isFieldChanged('controlEffectiveness')" class="justification-box">
+                 <div class="justification-warning">
+                   <span class="change-label">Changed Control Effectiveness</span>
+                   <span class="change-values">
+@@ -747,12 +777,12 @@
+ 
+             <div class="form-group">
+               <label>Framework Reference</label>
+-              <select v-model="reviewForm.frameworkReference" class="review-select">
++              <select v-model="reviewForm.frameworkReference" class="review-select" :disabled="isReviewerApprovalMode">
+                 <option v-for="ref in frameworkReferenceOptions" :key="ref" :value="ref">{{ ref }}</option>
+               </select>
+ 
+               <!-- Justification for Framework -->
+-              <div v-if="isFieldChanged('frameworkReference')" class="justification-box">
++              <div v-if="isReviewerApprovalMode && isFieldChanged('frameworkReference')" class="justification-box">
+                 <div class="justification-warning">
+                   <span class="change-label">Changed Framework Reference</span>
+                   <span class="change-values">
+@@ -770,12 +800,12 @@
+ 
+             <div class="form-group">
+               <label>Functional Area</label>
+-              <select v-model="reviewForm.functionalArea" class="review-select">
++              <select v-model="reviewForm.functionalArea" class="review-select" :disabled="isReviewerApprovalMode">
+                 <option v-for="area in functionalAreaOptions" :key="area" :value="area">{{ area }}</option>
+               </select>
+ 
+               <!-- Justification for Functional Area -->
+-              <div v-if="isFieldChanged('functionalArea')" class="justification-box">
++              <div v-if="isReviewerApprovalMode && isFieldChanged('functionalArea')" class="justification-box">
+                 <div class="justification-warning">
+                   <span class="change-label">Changed Functional Area</span>
+                   <span class="change-values">
+@@ -795,16 +825,16 @@
+               <label>Mitigation Steps</label>
+               <div class="mitigation-edit">
+                 <div v-for="(step, i) in reviewForm.mitigationSteps" :key="i" class="step-input-row">
+-                  <input v-model="reviewForm.mitigationSteps[i]" type="text" class="step-input" />
+-                  <button @click="removeMitigationStep(i)" class="remove-step">├ù</button>
++                  <input v-model="reviewForm.mitigationSteps[i]" type="text" class="step-input" :disabled="isReviewerApprovalMode" />
++                  <button @click="removeMitigationStep(i)" class="remove-step" :disabled="isReviewerApprovalMode">├ù</button>
+                 </div>
+-                <button @click="addMitigationStep" class="add-step-link">+ Add Step</button>
++                <button @click="addMitigationStep" class="add-step-link" :disabled="isReviewerApprovalMode">+ Add Step</button>
+               </div>
+             </div>
+ 
+             <div class="form-group">
+               <label>Assign Risk Owner</label>
+-              <select v-model="reviewForm.riskOwner" class="review-select">
++              <select v-model="reviewForm.riskOwner" class="review-select" :disabled="isReviewerApprovalMode">
+                 <option value="">Select...</option>
+                 <option v-for="u in userOptions" :key="u.id" :value="u.id">{{ u.name }}</option>
+               </select>
+@@ -812,23 +842,34 @@
+ 
+             <div class="form-group">
+               <label>Assign Reviewer</label>
+-              <select v-model="reviewForm.reviewer" class="review-select">
++              <select v-model="reviewForm.reviewer" class="review-select" :disabled="isReviewerApprovalMode">
+                 <option value="">Select...</option>
+                 <option v-for="u in userOptions" :key="u.id" :value="u.id">{{ u.name }}</option>
+               </select>
+             </div>
+ 
+             <div class="form-group">
+-              <label>Notes / Comments</label>
+-              <textarea v-model="reviewForm.notes" rows="3" class="review-textarea"></textarea>
++              <label>{{ isReviewerApprovalMode ? 'Reviewer Feedback / Comments' : 'Notes / Comments' }}</label>
++              <textarea 
++                v-model="reviewForm.notes" 
++                rows="3" 
++                class="review-textarea" 
++                :placeholder="isReviewerApprovalMode ? 'Enter your approval/rejection feedback here...' : ''"
++              ></textarea>
+             </div>
+ 
+             <p class="workflow-note">Accepted risks will be routed through the standard approval workflow before being added to the Risk Register.</p>
+ 
+             <div class="drawer-actions">
+-              <button @click="openWorkflowModal" class="btn-accept">Accept & Send for Approval</button>
+-              <button @click="saveDraft" class="btn-draft">Save as Draft</button>
+-              <button @click="rejectCurrent" class="btn-reject">Reject</button>
++              <template v-if="selectedRisk && selectedRisk.status === 'ACCEPTED_PENDING_APPROVAL'">
++                <button @click="approveRisk(selectedRisk)" class="btn-accept">Review & Accept</button>
++                <button @click="rejectRisk(selectedRisk)" class="btn-reject">Reject</button>
++              </template>
++              <template v-else>
++                <button @click="directSendForApproval" class="btn-accept">Accept & Send for Approval</button>
++                <button @click="saveDraft" class="btn-draft">Save as Draft</button>
++                <button @click="rejectCurrent" class="btn-reject">Reject</button>
++              </template>
+               <button @click="closeReview" class="btn-cancel">Cancel</button>
+             </div>
+           </section>
+@@ -838,13 +879,6 @@
+ 
+ 
+ 
+-    <!-- System Risk Workflow Modal -->
+-    <SystemRiskWorkflowModal
+-      :is-visible="showWorkflowModal"
+-      :risk-data="workflowRiskData"
+-      @close="closeWorkflowModal"
+-      @workflow-created="onWorkflowCreated"
+-    />
+ 
+     <!-- Scheduling Modal -->
+     <div v-if="showScheduleModal" class="modal-backdrop" @click.self="closeScheduleModal">
+@@ -923,13 +957,10 @@
+ <script>
+ import apiService from '../../services/apiService.js';
+ import { API_ENDPOINTS } from '../../config/api.js';
+-import SystemRiskWorkflowModal from './SystemRiskWorkflowModal.vue';
+ 
+ export default {
+   name: 'SystemIdentifiedRisks',
+-  components: {
+-    SystemRiskWorkflowModal
+-  },
++  components: {},
+   data() {
+     return {
+       isSidebarCollapsed: false,
+@@ -942,6 +973,7 @@ export default {
+         { label: 'External Integrations', value: 'INTEGRATION' },
+         { label: 'Manual / Events', value: 'MANUAL' }
+       ],
++      typeOptions: ['Current', 'Residual', 'Inherent', 'Emerging', 'Accepted'],
+       categoryOptions: ['IT Security', 'Operational', 'Compliance', 'Financial', 'Strategic', 'Third-Party'],
+       functionalAreaOptions: ['Product', 'Engineering', 'HR', 'Finance', 'Legal', 'Sales', 'Marketing', 'Operations', 'Security'],
+       impactOptions: ['Revenue Loss', 'Reputation', 'Regulatory', 'Operational', 'Strategic'],
+@@ -1049,6 +1081,9 @@ export default {
+       risks: [],
+       expandedReasoning: [],
+       originalAiValues: {},
++      showSuccessModal: false,
++      successModalTitle: '',
++      successModalMessage: ''
+     };
+   },
+   computed: {
+@@ -1139,6 +1174,11 @@ export default {
+     controlEffectText() {
+       const reductionMap = { 'Low': '15% reduction', 'Medium': '45% reduction', 'High': '85% reduction' };
+       return `Control Effect: ${this.reviewForm.controlEffectiveness} (${reductionMap[this.reviewForm.controlEffectiveness] || '0%'})`;
++    },
++    isReviewerApprovalMode() {
++      return this.selectedRisk && 
++             this.selectedRisk.status === 'ACCEPTED_PENDING_APPROVAL' && 
++             this.canApprove(this.selectedRisk);
+     }
+   },
+   methods: {
+@@ -1297,12 +1337,12 @@ export default {
+             priority: item.priority || 'Medium',
+             velocity: item.velocity_score || 0,
+             functionalArea: item.functional_area || 'General',
+-            businessImpact: item.business_impact || [],
++            businessImpact: Array.isArray(item.business_impact) ? item.business_impact : (item.business_impact ? [item.business_impact] : []),
+             possibleDamage: item.possible_damage || '',
+-            mitigation: item.mitigation_steps && item.mitigation_steps.length > 0 
++            mitigation: (Array.isArray(item.mitigation_steps) && item.mitigation_steps.length > 0) 
+               ? item.mitigation_steps[0] 
+-              : 'No mitigation defined',
+-            mitigationSteps: item.mitigation_steps || [],
++              : (item.mitigation_steps || 'No mitigation defined'),
++            mitigationSteps: Array.isArray(item.mitigation_steps) ? item.mitigation_steps : (item.mitigation_steps ? [item.mitigation_steps] : []),
+             status: String(item.status || '').trim().toUpperCase(),
+             riskInstanceId: item.risk_instance_id || null, // Add risk instance ID for workflow
+             reviewerId: item.reviewer_id || null,
+@@ -1387,7 +1427,7 @@ export default {
+       return this.expandedReasoning.includes(riskId);
+     },
+     isFieldChanged(field) {
+-      if (!this.originalAiValues || this.originalAiValues[field] === undefined) return false;
++      if (!this.originalAiValues || this.originalAiValues[field] === undefined || this.originalAiValues[field] === '' || this.originalAiValues[field] === null) return false;
+       const current = this.reviewForm[field];
+       const original = this.originalAiValues[field];
+       
+@@ -1397,7 +1437,9 @@ export default {
+       return current !== original;
+     },
+     getOriginalValueDisplay(field) {
+-      return this.originalAiValues[field] || 'None';
++      const val = this.originalAiValues[field];
++      if (val === undefined || val === '' || val === null) return 'Not suggested by AI';
++      return val;
+     },
+ 
+     async runManualScan() {
+@@ -1472,7 +1514,6 @@ export default {
+       if (this.selectedSubFolderIds.includes(sub.id) && !this.subfolderDocuments[sub.id]) {
+         this.loadingDocuments[sub.id] = true;
+         try {
+-          // Fetch documents for the checked subfolder
+           const response = await apiService.get(`${API_ENDPOINTS.DOCUMENTS_LIST}?subfolder_code=${encodeURIComponent(sub.code)}&page_size=100`);
+           if (response && response.documents) {
+             this.subfolderDocuments[sub.id] = response.documents;
+@@ -1507,8 +1548,6 @@ export default {
+       return icons[source] || 'fas fa-cube';
+     },
+ 
+-
+-
+     startTestAnalysisPolling() {
+       this.stopTestAnalysisPolling();
+       this.testAnalysis.pollTimer = setInterval(async () => {
+@@ -1550,13 +1589,14 @@ export default {
+             this.$notify?.({
+               type: 'error',
+               title: 'Risk Test Analysis Failed',
+-              text: job.error || 'Background analysis failed.'
++              text: job.error || 'An unexpected error occurred during analysis.'
+             });
+           }
+-        } catch (pollError) {
+-          console.error('Error polling risk test analysis status:', pollError);
++        } catch (error) {
++          console.error('Error polling analysis status:', error);
++          this.stopTestAnalysisPolling();
+         }
+-      }, 1500);
++      }, 3000);
+     },
+ 
+     stopTestAnalysisPolling() {
+@@ -1588,43 +1628,60 @@ export default {
+     },
+ 
+     async openReview(risk) {
++      this.selectedRisk = risk;
++      const meta = risk.aiMetadata || {};
++      
++      this.originalAiValues = {
++        title: meta.risk_title || '',
++        type: meta.risk_type || '',
++        category: meta.category || '',
++        criticality: meta.criticality || '',
++        description: meta.risk_description || '',
++        possibleDamage: meta.possible_damage || '',
++        businessImpact: Array.isArray(meta.business_impact) ? [...meta.business_impact] : [],
++        likelihood: meta.likelihood || 5,
++        impact: meta.impact || 5,
++        velocity: meta.velocity_score || 5,
++        controlEffectiveness: meta.control_effectiveness || 'Low',
++        frameworkReference: meta.framework_reference || '',
++        functionalArea: meta.functional_area || 'IT',
++        mitigationSteps: Array.isArray(meta.mitigation_steps) ? [...meta.mitigation_steps] : []
++      };
++
+       try {
+         const response = await apiService.get(API_ENDPOINTS.SYSTEM_RISKS_DETAIL(risk.id));
+-        
+-        if (response) {
++        if (response && response.data) {
+           const data = response.data;
++          const currentMeta = data.ai_metadata || {};
++          
+           this.selectedRisk = {
+             ...risk,
+-            // Add additional details from API
+             description: data.risk_description || risk.description,
+             possibleDamage: data.possible_damage || risk.possibleDamage,
+-            businessImpact: data.business_impact || risk.businessImpact,
+-            mitigationSteps: data.mitigation_steps || risk.mitigationSteps,
+-            aiReasoning: data.ai_reasoning || ''
++            aiReasoning: data.ai_reasoning || risk.aiReasoning
+           };
+-          
+-          const meta = data.ai_metadata || {};
++
+           this.reviewForm = {
+             title: data.risk_title || '',
+-            type: data.risk_type || 'Current',
+-            category: data.category || 'Operational',
+-            criticality: data.criticality || 'Medium',
++            type: this.getValidOption(data.risk_type || risk.type, this.typeOptions, true),
++            category: this.getValidOption(data.category || risk.category, this.categoryOptions, true),
++            criticality: this.getValidOption(data.criticality || risk.criticality, ['Low', 'Medium', 'High', 'Critical']),
+             description: data.risk_description || '',
+             possibleDamage: data.possible_damage || '',
+-            businessImpact: [...(data.business_impact || [])],
++            businessImpact: Array.isArray(data.business_impact) ? [...data.business_impact] : (data.business_impact ? [data.business_impact] : []),
+             likelihood: data.likelihood || 5,
+             impact: data.impact || 5,
+-            velocity: data.velocity_score || meta.velocity_score || 5,
+-            controlEffectiveness: meta.control_effectiveness || 'Low',
+-            frameworkReference: meta.framework_reference || '',
+-            functionalArea: data.functional_area || 'IT',
+-            riskOwner: '',
+-            reviewer: '',
++            velocity: data.velocity_score || currentMeta.velocity_score || 5,
++            controlEffectiveness: this.getValidOption(currentMeta.control_effectiveness || 'Low', this.controlEffectivenessOptions),
++            frameworkReference: currentMeta.framework_reference || '',
++            functionalArea: this.getValidOption(data.functional_area || 'IT', this.functionalAreaOptions, true),
++            riskOwner: data.user_id || this.currentUser?.id || this.currentUser?.UserId || '',
++            reviewer: data.reviewer_id || '',
+             notes: '',
+             priority: data.priority || 'Medium',
+-            mitigationSteps: [...(data.mitigation_steps || risk.mitigationSteps || [])],
+-            complianceId: meta.review_overrides?.compliance_id ?? null,
+-            justifications: {
++            mitigationSteps: Array.isArray(data.mitigation_steps) ? [...data.mitigation_steps] : (data.mitigation_steps ? [data.mitigation_steps] : [...(risk.mitigationSteps || [])]),
++            complianceId: currentMeta.review_overrides?.compliance_id ?? null,
++            justifications: currentMeta.review_overrides?.justifications || {
+               likelihood: '',
+               impact: '',
+               velocity: '',
+@@ -1634,43 +1691,9 @@ export default {
+               businessImpact: ''
+             }
+           };
+-
+-          // Capture original AI values for change detection
+-          this.originalAiValues = {
+-            likelihood: data.likelihood || 5,
+-            impact: data.impact || 5,
+-            velocity: data.velocity_score || meta.velocity_score || 5,
+-            controlEffectiveness: meta.control_effectiveness || 'Low',
+-            frameworkReference: meta.framework_reference || '',
+-            functionalArea: data.functional_area || 'IT',
+-            businessImpact: [...(data.business_impact || [])]
+-          };
+         }
+       } catch (error) {
+         console.error('Error loading risk details:', error);
+-        // Fallback to basic risk data
+-        this.selectedRisk = risk;
+-        this.reviewForm = {
+-          title: risk.title,
+-          type: risk.type,
+-          category: risk.category,
+-          criticality: risk.criticality,
+-          description: risk.description,
+-          possibleDamage: risk.possibleDamage,
+-          businessImpact: [...risk.businessImpact],
+-          likelihood: risk.likelihood,
+-          impact: risk.impact,
+-          velocity: risk.velocity || 5,
+-          controlEffectiveness: 'Low',
+-          frameworkReference: '',
+-          functionalArea: risk.functionalArea || 'IT',
+-          riskOwner: '',
+-          reviewer: '',
+-          notes: '',
+-          priority: risk.priority,
+-          mitigationSteps: [...(risk.mitigationSteps || [])],
+-          complianceId: null
+-        };
+       }
+     },
+ 
+@@ -1862,12 +1885,73 @@ export default {
+         multiplierX: this.reviewForm.multiplierX,
+         multiplierY: this.reviewForm.multiplierY,
+         riskOwner: this.reviewForm.riskOwner,
+-        reviewer: this.reviewForm.reviewer
++        reviewer: this.reviewForm.reviewer,
++        justifications: this.reviewForm.justifications
+       };
+       
+       this.showWorkflowModal = true;
+     },
+ 
++    async directSendForApproval() {
++      if (!this.reviewForm.riskOwner || !this.reviewForm.reviewer) {
++        this.$notify?.({
++          type: 'warning',
++          title: 'Missing Selection',
++          text: 'Please select both a Risk Owner and a Reviewer before sending for approval.'
++        });
++        return;
++      }
++
++      this.loading = true;
++      try {
++        const payload = {
++          user_id: this.reviewForm.riskOwner,
++          reviewer_id: this.reviewForm.reviewer,
++          risk_data: {
++            risk_title: this.reviewForm.title,
++            risk_type: this.reviewForm.type,
++            category: this.reviewForm.category,
++            criticality: this.reviewForm.criticality,
++            risk_description: this.reviewForm.description,
++            possible_damage: this.reviewForm.possibleDamage,
++            business_impact: this.reviewForm.businessImpact,
++            likelihood: this.reviewForm.likelihood,
++            impact: this.reviewForm.impact,
++            exposure_rating: this.selectedRisk.exposure,
++            priority: this.reviewForm.priority,
++            mitigation_steps: this.reviewForm.mitigationSteps,
++            compliance_id: this.reviewForm.complianceId,
++            multiplier_x: this.reviewForm.multiplierX,
++            multiplier_y: this.reviewForm.multiplierY,
++            justifications: this.reviewForm.justifications
++          }
++        };
++
++        const response = await apiService.post(API_ENDPOINTS.SYSTEM_RISKS_SEND_FOR_APPROVAL(this.selectedRisk.id), payload);
++
++        if (response && (response.status === 'success' || response.data?.status === 'success')) {
++          this.$notify?.({
++            type: 'success',
++            title: 'Success',
++            text: 'Risk sent for approval successfully!'
++          });
++          
++          this.closeReview();
++          await this.loadStats();
++          await this.loadRisks();
++        }
++      } catch (error) {
++        console.error('Error creating workflow:', error);
++        this.$notify?.({
++          type: 'error',
++          title: 'Error',
++          text: error.response?.data?.message || 'Failed to create workflow.'
++        });
++      } finally {
++        this.loading = false;
++      }
++    },
++
+     closeWorkflowModal() {
+       this.showWorkflowModal = false;
+       this.workflowRiskData = null;
+@@ -1876,6 +1960,7 @@ export default {
+     async onWorkflowCreated() {
+       // Close the review modal and refresh data
+       this.closeReview();
++      this.closeWorkflowModal();
+       await this.loadStats();
+       await this.loadRisks();
+       
+@@ -1913,19 +1998,16 @@ export default {
+         const response = await apiService.post(API_ENDPOINTS.SYSTEM_RISKS_WORKFLOW_APPROVE(risk.riskInstanceId), {
+           feedback: feedback || ''
+         });
+-
++        
+         if (response) {
+           // Immediate local UI update so user sees the change instantly
+           const idx = (this.risks || []).findIndex((r) => r.id === risk.id);
+           if (idx !== -1) {
+             this.risks[idx].status = 'APPROVED_ADDED';
+           }
+-
+-          this.$notify?.({
+-            type: 'success',
+-            title: 'Approved',
+-            text: response.data.message
+-          });
++          this.successModalTitle = 'Risk Approved';
++          this.successModalMessage = response?.message || response?.data?.message || 'Action completed successfully.';
++          this.showSuccessModal = true;
+ 
+           // Close review modal and refresh server state
+           this.closeReview();
+@@ -1937,7 +2019,7 @@ export default {
+         this.$notify?.({
+           type: 'error',
+           title: 'Error',
+-          text: error.response?.data?.message || 'Failed to approve risk.'
++          text: error.response?.data?.message || error.message || 'Failed to approve risk.'
+         });
+       }
+     },
+@@ -1983,12 +2065,15 @@ export default {
+         this.$notify?.({
+           type: 'error',
+           title: 'Error',
+-          text: error.response?.data?.message || 'Failed to reject risk.'
++          text: error.response?.data?.message || error.message || 'Failed to reject risk.'
+         });
+       }
+     },
+ 
+     toggleImpact(impact) {
++      if (!Array.isArray(this.reviewForm.businessImpact)) {
++        this.reviewForm.businessImpact = [];
++      }
+       if (this.reviewForm.businessImpact.includes(impact)) {
+         this.reviewForm.businessImpact = this.reviewForm.businessImpact.filter((item) => item !== impact);
+       } else {
+@@ -2012,6 +2097,19 @@ export default {
+       if (velocity >= 40) return 'velocity-medium';
+       return 'velocity-low';
+     },
++    getValidOption(val, options, allowCustom = false) {
++      if (!val) return options[0];
++      const match = options.find(opt => String(opt).toLowerCase() === String(val).toLowerCase());
++      if (match) return match;
++      
++      if (allowCustom) {
++        // Add to options if it's a custom value the user/AI wants
++        options.push(val);
++        return val;
++      }
++      return options[0];
++    },
++
+     formatDate(dateString) {
+       if (!dateString) return 'Unknown';
+       
+@@ -2223,51 +2321,22 @@ export default {
+ 
+ /* Scheduling Styles */
+ .btn-schedule {
+-  background: linear-gradient(135deg, #6c5ce7 0%, #a29bfe 100%);
+-  color: white;
+-  border: none;
+-}
+-
+-.btn-schedule:hover {
+-  background: linear-gradient(135deg, #5b4bc4 0%, #8e85e5 100%);
+-  transform: translateY(-1px);
+-  box-shadow: 0 4px 12px rgba(108, 92, 231, 0.3);
++  margin-left: 10px;
+ }
+ 
+-.schedule-modal {
+-  background: white;
+-  width: 500px;
+-  max-width: 95vw;
+-  border-radius: 16px;
+-  display: flex;
+-  flex-direction: column;
+-  box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+-  overflow: hidden;
+-}
+-
+-.schedule-config {
+-  background: #f8f9fa;
+-  padding: 20px;
+-  border-radius: 12px;
+-  margin-bottom: 24px;
++.scheduling-modal .modal-content {
++  max-width: 500px;
+ }
+ 
+ .form-group {
+-  margin-bottom: 16px;
++  margin-bottom: 20px;
+ }
+ 
+ .form-group label {
+   display: block;
+-  font-size: 0.85rem;
++  margin-bottom: 8px;
+   font-weight: 600;
+   color: #4a5568;
+-  margin-bottom: 6px;
+-}
+-
+-.form-row {
+-  display: grid;
+-  grid-template-columns: 1fr 1fr;
+-  gap: 16px;
+ }
+ 
+ .form-control {
+@@ -2303,15 +2372,9 @@ export default {
+   justify-content: space-between;
+   align-items: center;
+   padding: 12px;
+-  background: white;
+-  border: 1px solid #edf2f7;
+-  border-radius: 10px;
++  background: #f8fafc;
++  border-radius: 8px;
+   margin-bottom: 8px;
+-  transition: transform 0.2s;
+-}
+-
+-.schedule-item:hover {
+-  transform: translateX(4px);
+ }
+ 
+ .schedule-info {
+@@ -2320,46 +2383,30 @@ export default {
+ }
+ 
+ .schedule-info strong {
+-  font-size: 0.9rem;
+   color: #2d3748;
++  font-size: 0.9rem;
+ }
+ 
+ .schedule-info span {
+-  font-size: 0.75rem;
+   color: #718096;
++  font-size: 0.8rem;
+ }
+ 
+-.btn-icon.danger {
+-  color: #e53e3e;
+-  background: #fff5f5;
+-  width: 32px;
+-  height: 32px;
+-  border-radius: 8px;
+-  display: flex;
+-  align-items: center;
+-  justify-content: center;
+-  transition: all 0.2s;
+-}
+-
+-.btn-icon.danger:hover {
+-  background: #feb2b2;
+-  color: white;
+-}
+-
+-/* Card Status Badge */
+ .card-status-badge {
+-  font-size: 0.75rem;
+-  font-weight: 700;
++  display: inline-flex;
++  align-items: center;
+   padding: 2px 8px;
+   border-radius: 4px;
++  font-size: 0.7rem;
++  font-weight: 600;
+   text-transform: uppercase;
+-  display: inline-flex;
+-  align-items: center;
+-  gap: 4px;
+-  margin-right: 8px;
++  letter-spacing: 0.5px;
+ }
+ 
+-.card-status-badge i {
++.card-status-badge.pending-review {
++  background: #eff6ff;
++  color: #2563eb;
++  border: 1px solid #dbeafe;
+   font-size: 0.5rem;
+ }
+ 
+@@ -2389,13 +2436,98 @@ export default {
+ /* Pending Button */
+ .btn-review.pending {
+   background: #f3f4f6 !important;
+-  color: #9ca3af !important;
++  color: #6b7280 !important;
+   border: 1px solid #e5e7eb !important;
+   cursor: not-allowed;
++}
++
++.field-change-alert {
++  margin-top: 4px;
++  padding: 6px 10px;
++  background: #fffbeb;
++  border-left: 3px solid #d97706;
++  border-radius: 4px;
++  font-size: 0.75rem;
++  color: #92400e;
++  display: flex;
++  align-items: center;
++  gap: 6px;
++  animation: slideIn 0.3s ease-out;
++}
++
++.field-change-alert i {
++  color: #d97706;
++}
++
++.field-change-alert span {
++  font-weight: 600;
++  text-decoration: line-through;
+   opacity: 0.8;
++  margin-left: 4px;
++}
++
++@keyframes slideIn {
++  from { opacity: 0; transform: translateY(-5px); }
++  to { opacity: 1; transform: translateY(0); }
++}
++
++.impact-buttons.disabled {
++  opacity: 0.8;
++  pointer-events: none;
+ }
+ 
+ .btn-review.pending i {
+   margin-right: 6px;
+ }
++
++/* Success Modal Styles */
++.success-popup .success-modal-content {
++  background: white;
++  border-radius: 20px;
++  padding: 40px;
++  width: 100%;
++  max-width: 400px;
++  text-align: center;
++  box-shadow: 0 20px 40px rgba(0,0,0,0.15);
++  animation: modalScale 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
++  z-index: 10001;
++  position: relative;
++}
++
++@keyframes modalScale {
++  from { transform: scale(0.8); opacity: 0; }
++  to { transform: scale(1); opacity: 1; }
++}
++
++.success-icon {
++  width: 80px;
++  height: 80px;
++  background: #f0fdf4;
++  color: #22c55e;
++  border-radius: 50%;
++  display: flex;
++  align-items: center;
++  justify-content: center;
++  font-size: 40px;
++  margin: 0 auto 24px;
++}
++
++.success-popup h3 {
++  margin: 0 0 12px;
++  font-size: 24px;
++  color: #1a202c;
++}
++
++.success-popup p {
++  margin: 0 0 30px;
++  color: #4a5568;
++  line-height: 1.5;
++}
++
++.success-popup.modal-backdrop {
++  z-index: 10000;
++  display: flex;
++  align-items: center;
++  justify-content: center;
++}
+ </style>

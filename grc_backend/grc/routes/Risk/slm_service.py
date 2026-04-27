@@ -285,7 +285,10 @@ def analyze_risk_comprehensive(risk_title, risk_description):
                 
                 'businessImpact': analysis.get('businessImpact', 'Moderate impact on business operations depending on risk scenario and existing controls.'),
                 'businessImpactJustification': analysis.get('businessImpactJustification',
-                    'Business impact assessment covering revenue effects, operational continuity, customer relationships, and strategic objectives. Based on business impact analysis methodology.')
+                    'Business impact assessment covering revenue effects, operational continuity, customer relationships, and strategic objectives. Based on business impact analysis methodology.'),
+                'functionalArea': analysis.get('functionalArea', 'Operations'),
+                'functionalAreaJustification': analysis.get('functionalAreaJustification', 
+                    'Functional area assigned based on the identified risk category and its primary impact on business operations.')
             }
             
             debug_print(f"✅ Risk comprehensive analysis completed successfully")
@@ -354,6 +357,7 @@ def parse_ai_response(response):
             'criticality',
             'category',
             'riskMitigation',
+            'functionalArea',
         ]
         missing_fields = [field for field in required_fields if field not in incident_analysis]
 
@@ -366,6 +370,9 @@ def parse_ai_response(response):
 
             if 'category' in missing_fields:
                 incident_analysis['category'] = incident_analysis.get('category', 'IT Security')
+
+            if 'functionalArea' in missing_fields:
+                incident_analysis['functionalArea'] = incident_analysis.get('functionalArea', 'IT')
 
             # If scores are missing, default both to 5 so downstream code always has values.
             if 'riskLikelihood' in missing_fields:
@@ -534,7 +541,9 @@ def generate_fallback_analysis(incident_description):
             "Step 5: Implement remediation actions to address the vulnerability",
             "Step 6: Update security controls to prevent similar incidents",
             "Step 7: Conduct post-incident review and update documentation"
-        ]
+        ],
+        "functionalArea": "IT",
+        "functionalAreaJustification": "Primary responsibility for technical security incidents and system-level risk mitigation lies with the Information Technology and Security departments."
     }
 
 
@@ -607,5 +616,8 @@ def generate_risk_fallback_analysis(risk_title, risk_description):
             "Ensure adequate training and awareness programs",
             "Maintain appropriate insurance coverage and risk transfer mechanisms"
         ],
-        "riskMitigationJustification": "Mitigation strategies selected based on risk-control effectiveness analysis, regulatory requirements, and cost-benefit considerations. Implementation prioritized by risk exposure and business criticality."
-    } 
+        "riskMitigationJustification": "Mitigation strategies selected based on risk-control effectiveness analysis, regulatory requirements, and cost-benefit considerations. Implementation prioritized by risk exposure and business criticality.",
+        "functionalArea": "Operations",
+        "functionalAreaJustification": "Operational department assigned as the primary functional area based on general risk categorization and potential impact on business processes."
+    }
+ 

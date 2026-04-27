@@ -7953,6 +7953,122 @@ def get_rbac_roles(request):
             'error': str(e)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_role_permissions(request, role):
+    """
+    Get default permissions for a role
+    """
+    try:
+        from .models import RBAC
+        
+        # Try to find an existing RBAC record for this role to use as a template
+        rbac = RBAC.objects.filter(role=role, is_active='Y').first()
+        
+        if rbac:
+            # Extract permissions from the found record
+            permissions = {
+                'compliance': {
+                    'create_compliance': rbac.create_compliance,
+                    'edit_compliance': rbac.edit_compliance,
+                    'approve_compliance': rbac.approve_compliance,
+                    'view_all_compliance': rbac.view_all_compliance,
+                    'compliance_performance_analytics': rbac.compliance_performance_analytics
+                },
+                'policy': {
+                    'create_policy': rbac.create_policy,
+                    'edit_policy': rbac.edit_policy,
+                    'approve_policy': rbac.approve_policy,
+                    'create_framework': rbac.create_framework,
+                    'approve_framework': rbac.approve_framework,
+                    'view_all_policy': rbac.view_all_policy,
+                    'policy_performance_analytics': rbac.policy_performance_analytics
+                },
+                'audit': {
+                    'assign_audit': rbac.assign_audit,
+                    'conduct_audit': rbac.conduct_audit,
+                    'review_audit': rbac.review_audit,
+                    'view_audit_reports': rbac.view_audit_reports,
+                    'audit_performance_analytics': rbac.audit_performance_analytics
+                },
+                'risk': {
+                    'create_risk': rbac.create_risk,
+                    'edit_risk': rbac.edit_risk,
+                    'approve_risk': rbac.approve_risk,
+                    'assign_risk': rbac.assign_risk,
+                    'evaluate_assigned_risk': rbac.evaluate_assigned_risk,
+                    'view_all_risk': rbac.view_all_risk,
+                    'risk_performance_analytics': rbac.risk_performance_analytics
+                },
+                'incident': {
+                    'create_incident': rbac.create_incident,
+                    'edit_incident': rbac.edit_incident,
+                    'assign_incident': rbac.assign_incident,
+                    'evaluate_assigned_incident': rbac.evaluate_assigned_incident,
+                    'escalate_to_risk': rbac.escalate_to_risk,
+                    'view_all_incident': rbac.view_all_incident,
+                    'incident_performance_analytics': rbac.incident_performance_analytics
+                }
+            }
+        else:
+            # Fallback to defaults if no record exists
+            is_admin = (role == 'GRC Administrator')
+            permissions = {
+                'compliance': {
+                    'create_compliance': is_admin,
+                    'edit_compliance': is_admin,
+                    'approve_compliance': is_admin,
+                    'view_all_compliance': is_admin,
+                    'compliance_performance_analytics': is_admin
+                },
+                'policy': {
+                    'create_policy': is_admin,
+                    'edit_policy': is_admin,
+                    'approve_policy': is_admin,
+                    'create_framework': is_admin,
+                    'approve_framework': is_admin,
+                    'view_all_policy': is_admin,
+                    'policy_performance_analytics': is_admin
+                },
+                'audit': {
+                    'assign_audit': is_admin,
+                    'conduct_audit': is_admin,
+                    'review_audit': is_admin,
+                    'view_audit_reports': is_admin,
+                    'audit_performance_analytics': is_admin
+                },
+                'risk': {
+                    'create_risk': is_admin,
+                    'edit_risk': is_admin,
+                    'approve_risk': is_admin,
+                    'assign_risk': is_admin,
+                    'evaluate_assigned_risk': is_admin,
+                    'view_all_risk': is_admin,
+                    'risk_performance_analytics': is_admin
+                },
+                'incident': {
+                    'create_incident': is_admin,
+                    'edit_incident': is_admin,
+                    'assign_incident': is_admin,
+                    'evaluate_assigned_incident': is_admin,
+                    'escalate_to_risk': is_admin,
+                    'view_all_incident': is_admin,
+                    'incident_performance_analytics': is_admin
+                }
+            }
+
+        return Response({
+            'success': True,
+            'role': role,
+            'data': permissions  # Match get_user_permissions structure
+        })
+    except Exception as e:
+        logger.error(f"Error getting role permissions for {role}: {str(e)}")
+        return Response({
+            'success': False,
+            'error': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 # Removed duplicate get_departments function - using the one from policy.py instead
 
 @api_view(['GET'])
