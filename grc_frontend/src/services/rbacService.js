@@ -137,6 +137,15 @@ class RBACService {
      * @param {string} permission - Permission name (e.g., 'view_all_policy', 'create_policy')
      * @returns {boolean} True if user has permission
      */
+    toPascalCasePermission(permission) {
+        if (!permission) return ''
+        return String(permission)
+            .split('_')
+            .filter(Boolean)
+            .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+            .join('')
+    }
+
     hasPermission(module, permission) {
         if (!this.userPermissions) {
             console.warn('[RBAC_SERVICE] User permissions not loaded');
@@ -144,9 +153,18 @@ class RBACService {
         }
 
         const modulePermissions = this.userPermissions[module] || {};
-        const hasPermission = modulePermissions[permission] === true;
+        const pascalPermission = this.toPascalCasePermission(permission)
+        const rawValue =
+            modulePermissions[permission] ??
+            modulePermissions[pascalPermission]
+        const hasPermission =
+            rawValue === true ||
+            rawValue === 1 ||
+            String(rawValue).toLowerCase() === 'true';
         
-        console.log(`[RBAC_SERVICE] Checking permission: ${module}.${permission} = ${hasPermission}`);
+        console.log(
+            `[RBAC_SERVICE] Checking permission: ${module}.${permission} (alt: ${pascalPermission}) = ${hasPermission}`
+        );
         return hasPermission;
     }
 

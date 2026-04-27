@@ -1268,7 +1268,7 @@ import dashboardService from '@/services/dashboardService';
 import { complianceService } from '@/services/api';
 import homepageDataService from '@/services/homepageService'; // NEW: Centralized homepage data service (updated to class-based)
 import axios from 'axios';
-import { API_ENDPOINTS, AUTO_CHECK_FRAMEWORKS } from '@/config/api.js';
+import { API_ENDPOINTS, AUTO_CHECK_FRAMEWORKS, axiosInstance } from '@/config/api.js';
 import { getFrameworkContent } from '@/config/frameworkContent.js';
 
 ChartJS.register(Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale, PointElement, LineElement, ArcElement);
@@ -1397,9 +1397,13 @@ const handleResize = () => {
 const _initFrameworkId = frameworkStore.selectedFrameworkId || null;
 const _initCacheKey = _initFrameworkId && _initFrameworkId !== 'all' ? String(_initFrameworkId) : 'all';
 const _initHomepageData = homepageStore.getHomepageData(_initCacheKey);
-const _initFrameworks = homepageDataService.hasApprovedFrameworksCache()
-  ? (homepageDataService.getData('approvedFrameworks') || []).map(fw => ({ ...fw }))
-  : [];
+const _initFrameworks = Array.isArray(frameworkStore.frameworks) && frameworkStore.frameworks.length > 0
+  ? frameworkStore.frameworks.map(fw => ({ ...fw }))
+  : (
+    homepageDataService.hasApprovedFrameworksCache()
+      ? (homepageDataService.getData('approvedFrameworks') || []).map(fw => ({ ...fw }))
+      : []
+  );
 
 // Approved Frameworks
 const approvedFrameworks = ref(_initFrameworks);
@@ -3058,50 +3062,140 @@ const fetchPolicyData = async () => {
 
 // Fetch approved and active frameworks
 let approvedFrameworksRequestPromise = null;
-const fetchApprovedFrameworks = async () => {
+let approvedFrameworksRequestWasForced = false;
+const normalizeApprovedActiveFrameworks = (items) => {
+  if (!Array.isArray(items)) return [];
+
+  const normalized = items
+    .map((framework) => {
+      const frameworkId = framework.FrameworkId ?? framework.id ?? framework.frameworkId ?? framework.framework_id;
+      const frameworkName = framework.FrameworkName ?? framework.name ?? framework.frameworkName ?? framework.framework_name;
+      if (frameworkId === undefined || frameworkId === null || !frameworkName) return null;
+
+      return {
+        ...framework,
+        FrameworkId: frameworkId,
+        FrameworkName: frameworkName,
+      };
+    })
+    .filter(Boolean)
+    .filter((framework) => {
+      const statusValue = String(
+        framework.Status ??
+        framework.status ??
+        framework.FrameworkStatus ??
+        framework.frameworkStatus ??
+        ''
+      ).toLowerCase();
+      const approvalValue = String(
+        framework.ApprovalStatus ??
+        framework.approvalStatus ??
+        ''
+      ).toLowerCase();
+
+      const activeFlag = framework.IsActive ?? framework.isActive ?? framework.Active ?? framework.active;
+      const isActive = activeFlag === undefined || activeFlag === null
+        ? !statusValue || statusValue.includes('active')
+        : activeFlag === true || activeFlag === 1 || String(activeFlag).toLowerCase() === 'true';
+
+      const isApproved = !approvalValue || approvalValue.includes('approved');
+      return isActive && isApproved;
+    });
+
+  return normalized.filter(
+    (framework, index, arr) =>
+      index === arr.findIndex((f) => String(f.FrameworkId) === String(framework.FrameworkId))
+  );
+};
+
+const fetchApprovedFrameworks = async ({ forceApi = false } = {}) => {
   if (approvedFrameworksRequestPromise) {
-    return approvedFrameworksRequestPromise;
+    // If the caller explicitly wants API but current in-flight request is cache-based,
+    // wait for it and then start a forced request to guarantee the API call happens.
+    if (!(forceApi && !approvedFrameworksRequestWasForced)) {
+      return approvedFrameworksRequestPromise;
+    }
+    try {
+      await approvedFrameworksRequestPromise;
+    } catch (error) {
+      console.warn('[HomeView] prior frameworks request failed; retrying with forced API call', error);
+    }
   }
+  approvedFrameworksRequestWasForced = forceApi;
   approvedFrameworksRequestPromise = (async () => {
   try {
     console.log('🔍 [HomeView] Checking for cached approved frameworks...');
 
+    if (!forceApi) {
+      // Pinia-first: if global framework list is already present, use it immediately.
+      if (Array.isArray(frameworkStore.frameworks) && frameworkStore.frameworks.length > 0) {
+        const piniaFrameworks = normalizeApprovedActiveFrameworks(frameworkStore.frameworks);
+        if (piniaFrameworks.length > 0) {
+          approvedFrameworks.value = piniaFrameworks.map(fw => ({ ...fw }));
+          console.log('✅ [HomeView] Using approved frameworks from Pinia store');
+          return;
+        }
+      }
+    }
+
     // Check if prefetch is in progress or cache is available
-    if (!window.homepageDataFetchPromise && !homepageDataService.hasApprovedFrameworksCache()) {
+    if (!forceApi && !window.homepageDataFetchPromise && !homepageDataService.hasApprovedFrameworksCache()) {
       console.log('🚀 [HomeView] Starting homepage prefetch (user navigated directly)...');
       window.homepageDataFetchPromise = homepageDataService.fetchAllHomepageData();
     }
 
     // Wait for prefetch if it's in progress
-    if (window.homepageDataFetchPromise) {
+    if (!forceApi && window.homepageDataFetchPromise) {
       console.log('⏳ [HomeView] Waiting for homepage prefetch to complete...');
       try {
-        await window.homepageDataFetchPromise;
+        const PREFETCH_WAIT_TIMEOUT_MS = 5000;
+        await Promise.race([
+          window.homepageDataFetchPromise,
+          new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('Homepage prefetch timed out')), PREFETCH_WAIT_TIMEOUT_MS);
+          }),
+        ]);
         console.log('✅ [HomeView] Homepage prefetch completed');
       } catch (prefetchError) {
         console.warn('⚠️ [HomeView] Homepage prefetch failed, will fetch directly from API', prefetchError);
       }
     }
 
-    // Use cached data if available
-    if (homepageDataService.hasApprovedFrameworksCache()) {
-      console.log('✅ [HomeView] Using cached approved frameworks');
-      const cachedFrameworks = homepageDataService.getData('approvedFrameworks') || [];
-      approvedFrameworks.value = cachedFrameworks.map(fw => ({ ...fw }));
-      console.log('✅ DEBUG: Approved frameworks loaded:', approvedFrameworks.value.length);
-      console.log('📝 DEBUG: Available frameworks:', approvedFrameworks.value.map(f => `${f.FrameworkName} (ID: ${f.FrameworkId})`));
-      return;
+    // Use cached data if available and non-empty.
+    // Empty arrays are treated as cache misses so the API is called.
+    if (!forceApi && homepageDataService.hasApprovedFrameworksCache()) {
+      const cachedFrameworks = normalizeApprovedActiveFrameworks(homepageDataService.getData('approvedFrameworks') || []);
+      if (cachedFrameworks.length > 0) {
+        console.log('✅ [HomeView] Using cached approved frameworks');
+        approvedFrameworks.value = cachedFrameworks.map(fw => ({ ...fw }));
+        frameworkStore.setFrameworks(approvedFrameworks.value.map(fw => ({ ...fw })));
+        console.log('✅ DEBUG: Approved frameworks loaded:', approvedFrameworks.value.length);
+        console.log('📝 DEBUG: Available frameworks:', approvedFrameworks.value.map(f => `${f.FrameworkName} (ID: ${f.FrameworkId})`));
+        return;
+      }
+      console.warn('⚠️ [HomeView] Approved frameworks cache is empty; fetching from API...');
     }
 
     // Fallback: Fetch directly from API
-    console.log('⚠️ [HomeView] No cached data found, fetching approved frameworks from API...');
-    const response = await axios.get(API_ENDPOINTS.FRAMEWORKS_APPROVED_ACTIVE);
+    console.log(forceApi
+      ? '🌐 [HomeView] Force-calling approved frameworks API...'
+      : '⚠️ [HomeView] No cached data found, fetching approved frameworks from API...');
+    const response = await axiosInstance.get(API_ENDPOINTS.FRAMEWORKS_APPROVED_ACTIVE, {
+      withCredentials: true,
+    });
     console.log('📊 DEBUG: Approved frameworks response:', response.data);
     
-    if (response.data && response.data.success) {
-      approvedFrameworks.value = response.data.data;
+    const apiFrameworksRaw =
+      (response.data && response.data.success && Array.isArray(response.data.data))
+        ? response.data.data
+        : (Array.isArray(response.data) ? response.data : []);
+    const apiFrameworks = normalizeApprovedActiveFrameworks(apiFrameworksRaw);
+
+    if (apiFrameworks.length > 0) {
+      approvedFrameworks.value = apiFrameworks;
       // Update cache for subsequent loads
-      homepageDataService.setData('approvedFrameworks', response.data.data);
+      homepageDataService.setData('approvedFrameworks', approvedFrameworks.value);
+      frameworkStore.setFrameworks(approvedFrameworks.value.map(fw => ({ ...fw })));
       console.log('✅ DEBUG: Approved frameworks loaded:', approvedFrameworks.value.length);
       console.log('📝 DEBUG: Available frameworks:', approvedFrameworks.value.map(f => `${f.FrameworkName} (ID: ${f.FrameworkId})`));
     } else {
@@ -3114,6 +3208,7 @@ const fetchApprovedFrameworks = async () => {
     approvedFrameworks.value = [];
   } finally {
     approvedFrameworksRequestPromise = null;
+    approvedFrameworksRequestWasForced = false;
   }
   })();
   return approvedFrameworksRequestPromise;
@@ -3846,6 +3941,11 @@ onMounted(async () => {
     riskCount.value = risksData.value.length || 0;
     startHomeAutoRefresh();
   }
+
+  // Ensure framework dropdown is populated immediately on home load.
+  fetchApprovedFrameworks({ forceApi: true }).catch((e) => {
+    console.warn('[HomeView] immediate frameworks fetch failed:', e);
+  });
   
   // Add click outside handler for popup
   document.addEventListener('click', (event) => {

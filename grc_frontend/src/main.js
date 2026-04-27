@@ -190,6 +190,21 @@ const app = createApp(App)
 const pinia = createPinia()
 app.config.performance = true
 app.config.warnHandler = () => null 
+
+// Compatibility shim for legacy typo calls observed in some Options API components.
+// If a component accidentally calls `this.initializedFramework()`, delegate to
+// `this.initializeFramework()` when present instead of throwing.
+app.mixin({
+  methods: {
+    async initializedFramework(...args) {
+      if (typeof this.initializeFramework === 'function') {
+        return this.initializeFramework(...args)
+      }
+      return true
+    },
+  },
+})
+
 app.use(router)
 app.use(store)
 app.use(pinia)
@@ -294,4 +309,138 @@ router.isReady().then(() => {
 }).catch((e) => {
   console.error('Router isReady failed, mounting anyway:', e)
   app.mount('#app')
+})
+
+// -----------------------------------------------------------------------------
+// Global form draft persistence (route-scoped)
+// Keeps form field values when user navigates away and comes back.
+// -----------------------------------------------------------------------------
+const FORM_DRAFTS_STORAGE_KEY = 'grc_form_drafts_v1'
+let formDraftsSaveTimer = null
+
+const loadFormDrafts = () => {
+  try {
+    const raw = sessionStorage.getItem(FORM_DRAFTS_STORAGE_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw)
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+const persistFormDrafts = (drafts) => {
+  try {
+    sessionStorage.setItem(FORM_DRAFTS_STORAGE_KEY, JSON.stringify(drafts || {}))
+  } catch {
+    // ignore storage failures
+  }
+}
+
+const getCurrentRouteDraftKey = () => {
+  const routePath = router.currentRoute?.value?.path || window.location.pathname
+  return String(routePath || '/')
+}
+
+const isPersistableField = (el) => {
+  if (!el || !el.tagName) return false
+  const tag = String(el.tagName).toLowerCase()
+  if (!['input', 'textarea', 'select'].includes(tag)) return false
+  if (el.disabled || el.readOnly) return false
+
+  if (tag === 'input') {
+    const type = String(el.type || '').toLowerCase()
+    if (['password', 'file', 'hidden', 'submit', 'button', 'image', 'reset'].includes(type)) {
+      return false
+    }
+  }
+  return true
+}
+
+const getElementPersistKey = (el) => {
+  if (!el) return null
+  const name = el.getAttribute('name')
+  const id = el.getAttribute('id')
+  const persistKey = el.getAttribute('data-persist-key')
+  const placeholder = el.getAttribute('placeholder')
+  const ariaLabel = el.getAttribute('aria-label')
+  const tag = String(el.tagName || '').toLowerCase()
+  const type = String(el.type || '').toLowerCase()
+  return persistKey || name || id || `${tag}:${type}:${placeholder || ariaLabel || ''}`
+}
+
+const readElementValue = (el) => {
+  const tag = String(el.tagName || '').toLowerCase()
+  const type = String(el.type || '').toLowerCase()
+  if (tag === 'input' && ['checkbox', 'radio'].includes(type)) {
+    return !!el.checked
+  }
+  return el.value
+}
+
+const writeElementValue = (el, value) => {
+  const tag = String(el.tagName || '').toLowerCase()
+  const type = String(el.type || '').toLowerCase()
+  if (tag === 'input' && ['checkbox', 'radio'].includes(type)) {
+    el.checked = !!value
+  } else {
+    el.value = value ?? ''
+  }
+  el.dispatchEvent(new Event('input', { bubbles: true }))
+  el.dispatchEvent(new Event('change', { bubbles: true }))
+}
+
+const collectRouteDraft = () => {
+  const fields = Array.from(document.querySelectorAll('input, textarea, select'))
+  const draft = {}
+
+  fields.forEach((el) => {
+    if (!isPersistableField(el)) return
+    const key = getElementPersistKey(el)
+    if (!key) return
+    draft[key] = readElementValue(el)
+  })
+
+  return draft
+}
+
+const saveCurrentRouteDraft = () => {
+  const drafts = loadFormDrafts()
+  drafts[getCurrentRouteDraftKey()] = collectRouteDraft()
+  persistFormDrafts(drafts)
+}
+
+const saveCurrentRouteDraftDebounced = () => {
+  if (formDraftsSaveTimer) clearTimeout(formDraftsSaveTimer)
+  formDraftsSaveTimer = setTimeout(saveCurrentRouteDraft, 250)
+}
+
+const restoreCurrentRouteDraft = () => {
+  const drafts = loadFormDrafts()
+  const routeDraft = drafts[getCurrentRouteDraftKey()]
+  if (!routeDraft || typeof routeDraft !== 'object') return
+
+  const fields = Array.from(document.querySelectorAll('input, textarea, select'))
+  fields.forEach((el) => {
+    if (!isPersistableField(el)) return
+    const key = getElementPersistKey(el)
+    if (!key || !(key in routeDraft)) return
+    writeElementValue(el, routeDraft[key])
+  })
+}
+
+// Save while user types/selects across all forms
+document.addEventListener('input', saveCurrentRouteDraftDebounced, true)
+document.addEventListener('change', saveCurrentRouteDraftDebounced, true)
+
+// Save before route switch, then restore after navigation renders
+router.beforeEach(() => {
+  saveCurrentRouteDraft()
+  return true
+})
+
+router.afterEach(() => {
+  setTimeout(() => {
+    restoreCurrentRouteDraft()
+  }, 0)
 })

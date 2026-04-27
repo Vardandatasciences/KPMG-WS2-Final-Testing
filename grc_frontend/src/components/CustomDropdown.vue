@@ -1,5 +1,14 @@
 <template>
   <div class="dropdown">
+    <!-- Draft persistence proxy: allows global form-draft logic to save/restore CustomDropdown -->
+    <input
+      type="text"
+      class="dropdown__draft-proxy"
+      :data-persist-key="draftPersistKey"
+      :value="modelValue ?? ''"
+      @input="handleDraftProxyInput"
+      aria-label="dropdown-draft-proxy"
+    />
     <button 
       class="dropdown__button" 
       :class="{ 'dropdown__button--open': isOpen }" 
@@ -107,6 +116,10 @@ export default {
     showClearButton: {
       type: Boolean,
       default: false
+    },
+    persistKey: {
+      type: String,
+      default: ''
     }
   },
   data() {
@@ -147,6 +160,15 @@ export default {
       return this.normalizedOptions.filter(option =>
         option.label && option.label.toLowerCase().includes(query)
       );
+    },
+    draftPersistKey() {
+      if (this.persistKey) return this.persistKey;
+      const baseName =
+        this.config?.name ||
+        this.config?.label ||
+        this.placeholder ||
+        'custom-dropdown';
+      return `custom-dropdown:${baseName}`;
     },
     hasValue() {
       // Check if modelValue is not empty and not null/undefined
@@ -200,7 +222,26 @@ export default {
       this.$emit('update:modelValue', '');
       // Emit change event with empty value
       this.$emit('change', this.config ? { value: '' } : '');
+    },
+    handleDraftProxyInput(event) {
+      if (this.disabled) return;
+      const value = event?.target?.value ?? '';
+      this.$emit('update:modelValue', value);
+      this.$emit('change', this.config ? { value } : value);
     }
   }
 }
 </script>
+
+<style scoped>
+.dropdown__draft-proxy {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+</style>

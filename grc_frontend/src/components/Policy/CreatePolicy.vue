@@ -2006,6 +2006,10 @@ export default {
     const policyTypes = ref([])
     const entities = ref([])
     const departments = ref([])
+    const hasLoadedReviewerUsers = ref(false)
+    const hasLoadedFrameworkIdentifiers = ref(false)
+    let fetchFrameworksPromise = null
+    let refreshFrameworksInBackgroundPromise = null
     
     // Flag to prevent auto-save during programmatic framework updates
     const isLoadingFramework = ref(false)
@@ -2142,6 +2146,7 @@ export default {
         
         existingFrameworkIdentifiers.value = frameworksData.map(fw => fw.Identifier || fw.identifier).filter(id => id)
         existingFrameworkNames.value = frameworksData.map(fw => fw.FrameworkName || fw.name).filter(name => name)
+        hasLoadedFrameworkIdentifiers.value = true
         console.log('Fetched existing framework identifiers:', existingFrameworkIdentifiers.value)
         console.log('Fetched existing framework names:', existingFrameworkNames.value)
       } catch (err) {
@@ -2266,45 +2271,100 @@ export default {
       })
     }, { deep: true })
 
-    // Fetch all frameworks on component mount
-    async function fetchFrameworks() {
-      try {
-        loading.value = true
-        console.log('🔍 DEBUG: Fetching frameworks for CreatePolicy...')
-        
-        // Add active_only=true parameter to only fetch active frameworks
-        const data = await apiService.get(API_ENDPOINTS.FRAMEWORK_EXPLORER, {
-          params: { active_only: 'true' }
-        })
-        
-        // Check if data is an array (direct response) or has frameworks property (wrapped response)
-        const frameworksData = Array.isArray(data) ? data : data.frameworks || []
-        
-        frameworks.value = frameworksData.map(fw => ({
-          id: fw.FrameworkId || fw.id,
-          name: fw.FrameworkName || fw.name,
-          InternalExternal: fw.InternalExternal || fw.internalExternal
+    const normalizeFrameworkList = (items) => {
+      if (!Array.isArray(items)) return []
+      return items
+        .map((fw) => ({
+          id: fw.FrameworkId ?? fw.id ?? fw.frameworkId,
+          name: fw.FrameworkName ?? fw.name ?? fw.frameworkName,
+          InternalExternal: fw.InternalExternal ?? fw.internalExternal ?? fw.internal_external ?? ''
         }))
-        
-        console.log('✅ DEBUG: Frameworks loaded:', frameworks.value.length)
-        console.log('📝 DEBUG: Available frameworks:', frameworks.value.map(f => `${f.name} (ID: ${f.id})`))
-        
-        // After loading frameworks, check for selected framework from session
-        await checkSelectedFrameworkFromSession()
-        
-      } catch (err) {
-        console.error('❌ DEBUG: Error fetching frameworks:', err)
-        PopupService.error('Failed to fetch frameworks', 'Loading Error')
-        sendPushNotification({
-          title: 'Framework Loading Failed',
-          message: 'Failed to fetch frameworks. Please try again.',
-          category: 'framework',
-          priority: 'medium',
-          user_id: currentUser.value?.UserId || 'default_user'
-        });
-      } finally {
-        loading.value = false
-      }
+        .filter((fw) => fw.id !== undefined && fw.id !== null && !!fw.name)
+    }
+
+    const areFrameworkListsEqual = (a = [], b = []) => {
+      if (a.length !== b.length) return false
+      const sortedA = [...a].sort((x, y) => String(x.id).localeCompare(String(y.id)))
+      const sortedB = [...b].sort((x, y) => String(x.id).localeCompare(String(y.id)))
+      return sortedA.every((item, idx) => {
+        const other = sortedB[idx]
+        return (
+          String(item.id) === String(other.id) &&
+          String(item.name || '') === String(other.name || '') &&
+          String(item.InternalExternal || '') === String(other.InternalExternal || '')
+        )
+      })
+    }
+
+    const refreshFrameworksInBackground = async () => {
+      if (refreshFrameworksInBackgroundPromise) return refreshFrameworksInBackgroundPromise
+      refreshFrameworksInBackgroundPromise = (async () => {
+        try {
+          const data = await apiService.get(API_ENDPOINTS.FRAMEWORK_EXPLORER, {
+            params: { active_only: 'true' }
+          })
+          const frameworksData = Array.isArray(data) ? data : data.frameworks || []
+          const latestFrameworks = normalizeFrameworkList(frameworksData)
+          const hasChanged = !areFrameworkListsEqual(frameworks.value, latestFrameworks)
+
+          frameworkStore.setFrameworks(latestFrameworks.map((fw) => ({ ...fw })))
+          if (hasChanged) {
+            frameworks.value = latestFrameworks
+            console.log('🔄 DEBUG: Framework dropdown updated from background API refresh')
+            await checkSelectedFrameworkFromSession()
+          } else {
+            console.log('✅ DEBUG: Background framework refresh found no changes')
+          }
+        } catch (err) {
+          console.warn('⚠️ DEBUG: Background framework refresh failed:', err?.message || err)
+        } finally {
+          refreshFrameworksInBackgroundPromise = null
+        }
+      })()
+      return refreshFrameworksInBackgroundPromise
+    }
+
+    // Fetch frameworks for dropdown (Pinia-first, API fallback)
+    async function fetchFrameworks({ force = false } = {}) {
+      if (fetchFrameworksPromise && !force) return fetchFrameworksPromise
+      fetchFrameworksPromise = (async () => {
+        try {
+          loading.value = true
+          console.log('🔍 DEBUG: Preparing frameworks for CreatePolicy...')
+
+          // Default path: load from Pinia immediately, then revalidate in background.
+          if (!force) {
+            frameworks.value = normalizeFrameworkList(frameworkStore.frameworks)
+            console.log('✅ DEBUG: Using frameworks from Pinia cache:', frameworks.value.length)
+            refreshFrameworksInBackground()
+          } else {
+            const data = await apiService.get(API_ENDPOINTS.FRAMEWORK_EXPLORER, {
+              params: { active_only: 'true' }
+            })
+            const frameworksData = Array.isArray(data) ? data : data.frameworks || []
+            frameworks.value = normalizeFrameworkList(frameworksData)
+            frameworkStore.setFrameworks(frameworks.value.map((fw) => ({ ...fw })))
+            console.log('✅ DEBUG: Frameworks loaded from API:', frameworks.value.length)
+          }
+
+          console.log('📝 DEBUG: Available frameworks:', frameworks.value.map(f => `${f.name} (ID: ${f.id})`))
+          await checkSelectedFrameworkFromSession()
+        } catch (err) {
+          console.error('❌ DEBUG: Error fetching frameworks:', err)
+          PopupService.error('Failed to fetch frameworks', 'Loading Error')
+          sendPushNotification({
+            title: 'Framework Loading Failed',
+            message: 'Failed to fetch frameworks. Please try again.',
+            category: 'framework',
+            priority: 'medium',
+            user_id: currentUser.value?.UserId || 'default_user'
+          });
+        } finally {
+          loading.value = false
+          fetchFrameworksPromise = null
+        }
+      })()
+      return fetchFrameworksPromise
     }
 
     // Check for selected framework from session and set it as default
@@ -2323,44 +2383,21 @@ export default {
           selectedFramework.value = ''
           return
         }
-        
-        const data = await apiService.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED)
-        console.log('📊 DEBUG: Selected framework response:', data)
-        
-        if (data && data.success) {
-          // Check if a framework is selected (not null)
-          if (data.frameworkId) {
-          const sessionFrameworkId = data.frameworkId
-          console.log('✅ DEBUG: Found selected framework in session:', sessionFrameworkId)
-          
-          // Check if this framework exists in our loaded frameworks
-          const frameworkExists = frameworks.value.find(f => f.id == sessionFrameworkId)
-          
-          if (frameworkExists) {
-            selectedFramework.value = sessionFrameworkId
-            console.log('🎯 DEBUG: Set selected framework from session:', frameworkExists.name)
-            console.log('📝 DEBUG: Framework details:', frameworkExists)
-            
-            // If this is the first load and no policies exist, add the first policy
-            if (policiesForm.value.length === 0) {
-              handleAddPolicy();
-              selectedPolicyIdx.value = 0;
-            }
-          } else {
-            console.log('⚠️ DEBUG: Framework from session not found in available frameworks')
-            console.log('🔍 DEBUG: Session framework ID:', sessionFrameworkId)
-            console.log('📝 DEBUG: Available framework IDs:', frameworks.value.map(f => f.id))
-            selectedFramework.value = ''  // Empty string for dropdown reset
+
+        const frameworkExists = frameworks.value.find(f => String(f.id) === String(storeFrameworkId))
+        if (frameworkExists) {
+          selectedFramework.value = storeFrameworkId
+          console.log('🎯 DEBUG: Set selected framework from Pinia:', frameworkExists.name)
+          console.log('📝 DEBUG: Framework details:', frameworkExists)
+          if (policiesForm.value.length === 0) {
+            handleAddPolicy();
+            selectedPolicyIdx.value = 0;
           }
         } else {
-          // "All Frameworks" is selected (frameworkId is null)
-          console.log('ℹ️ DEBUG: No framework selected in session (All Frameworks selected)')
-          console.log('🌐 DEBUG: Clearing framework selection to show all frameworks')
-          selectedFramework.value = ''  // Empty string for dropdown reset
-        }
-      } else {
-        console.log('ℹ️ DEBUG: No valid response from session')
-        selectedFramework.value = ''  // Empty string for dropdown reset
+          console.log('⚠️ DEBUG: Pinia framework not found in available frameworks')
+          console.log('🔍 DEBUG: Pinia framework ID:', storeFrameworkId)
+          console.log('📝 DEBUG: Available framework IDs:', frameworks.value.map(f => f.id))
+          selectedFramework.value = ''
         }
       } catch (error) {
         console.error('❌ DEBUG: Error checking selected framework from session:', error)
@@ -2384,6 +2421,9 @@ export default {
       }
       
       if (newValue === 'create') {
+        if (!hasLoadedFrameworkIdentifiers.value) {
+          await fetchExistingFrameworkIdentifiers()
+        }
         showFrameworkForm.value = true
         selectedFramework.value = ''
       } else if (newValue && newValue !== '__new__') {
@@ -2651,6 +2691,9 @@ export default {
 
     const handleSubmitPolicy = () => {
       showApprovalForm.value = true
+      if (!hasLoadedReviewerUsers.value) {
+        fetchUsers()
+      }
     }
 
     // Fetch current logged-in user information
@@ -2691,6 +2734,7 @@ export default {
           current_user_id: currentUserId
         })        
         users.value = data || []
+        hasLoadedReviewerUsers.value = true
       } catch (err) {
         console.error('Error fetching users:', err)
         PopupService.error('Failed to fetch users', 'Loading Error')
@@ -2711,7 +2755,13 @@ export default {
       try {
         loading.value = true
         const data = await apiService.get(API_ENDPOINTS.POLICY_CATEGORIES)
-        policyCategories.value = data || []
+        // Support multiple response shapes safely (array or wrapped object payloads)
+        const categoriesPayload = Array.isArray(data)
+          ? data
+          : (Array.isArray(data?.data)
+              ? data.data
+              : (Array.isArray(data?.categories) ? data.categories : []))
+        policyCategories.value = categoriesPayload
         // Extract unique policy types
         policyTypes.value = [...new Set(policyCategories.value.map(cat => cat.PolicyType).filter(Boolean))]
       } catch (err) {
@@ -4033,16 +4083,14 @@ export default {
       }
     }
 
-    // Fetch frameworks and users on mount
+    // Fetch only first-render essentials on mount
     onMounted(async () => {
       // Fetch current user first to ensure we have the logged-in user's name
       await fetchCurrentUser()
       
       // Then fetch other data
       fetchFrameworks()
-      fetchUsers()
       fetchPolicyCategories()
-      fetchExistingFrameworkIdentifiers()
       fetchEntities()
       fetchDepartments()
       // Initialize selectedSubPolicyIdx
