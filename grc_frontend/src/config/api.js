@@ -449,6 +449,7 @@ export const API_ENDPOINTS = {
   ALL_COMPLIANCES_FOR_DROPDOWN: `${API_BASE_URL}/api/compliances-for-dropdown/`,
 
   // Risk Dashboard and Analytics
+  RISK_DASHBOARD_WITH_FILTERS: `${API_BASE_URL}/api/risk/dashboard-with-filters/`,
   RISK_METRICS: (params = '') => `${API_BASE_URL}/api/risk/metrics${params ? `?${params}` : ''}`,
   RISK_CATEGORIES_DROPDOWN: `${API_BASE_URL}/api/risk/categories-for-dropdown/`,
   RISK_METRICS_BY_CATEGORY: (params = '') => `${API_BASE_URL}/api/risk/metrics-by-category${params ? `?${params}` : ''}`,

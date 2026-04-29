@@ -499,8 +499,8 @@
 import { ref, reactive, watch, onMounted, onActivated, onUnmounted, computed, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useStore } from 'vuex'
-import { useDashboardsStore } from '@/stores/dashboards'
 import { useAppDataStore } from '@/stores/appData'
+import { useRiskStore } from '@/stores/risk'
 import { Chart, ArcElement, BarElement, CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend } from 'chart.js'
 import { Doughnut, Bar, Line as LineChart } from 'vue-chartjs'
 import '@fortawesome/fontawesome-free/css/all.min.css'
@@ -536,8 +536,8 @@ export default {
 
     const router = useRouter()
     const store = useStore()
-    const dashboardsStore = useDashboardsStore()
     const appDataStore = useAppDataStore()
+    const riskStore = useRiskStore()
     const showRiskDetails = ref(true)
     const selectedXAxis = ref('time')
     const selectedYAxis = ref('performance')
@@ -969,85 +969,21 @@ export default {
       showRiskDetails.value = !showRiskDetails.value
     }
 
-    const metrics = reactive({
-      total: 0,
-      accepted: 0,
-      rejected: 0,
-      mitigated: 0,
-      inProgress: 0
-    })
+    const metrics = riskStore.metrics
     const riskKpiLoaded = ref(false)
     const dataSourceBadge = ref('')
-    // Skeleton: show only when KPIs not yet loaded AND no Pinia cache
-    const showSkeleton = computed(() => !riskKpiLoaded.value && !dashboardsStore.hasData('risk'))
+    // Skeleton: show only when KPIs not yet loaded AND no store data
+    const showSkeleton = computed(() => !riskKpiLoaded.value && riskStore.metrics.total === 0)
     
     // Update fetchRiskMetrics function to be called on filter change
     const fetchRiskMetrics = async () => {
       try {
-        console.log('Fetching risk metrics with filters:', filters)
-        const params = new URLSearchParams({
-          framework_id: filters.framework,
-          policy_id: filters.policy,
-          timeRange: filters.timeRange,
-          category: filters.category,
-          priority: filters.priority
-        })
-        const response = await axios.get(`/api/risk/dashboard-with-filters/?${params}`)
-        console.log('Received metrics data:', response.data)
-        
-        if (response.data && response.data.success && response.data.data) {
-          const summary = response.data.data.summary
-        
-          // Update metrics (cards show numeric counts, including 0)
-          metrics.total = summary.total_count
-          metrics.accepted = summary.accepted_count
-          metrics.rejected = summary.rejected_count
-          metrics.mitigated = summary.mitigated_count
-          metrics.inProgress = summary.in_progress_count
-        
-        // Update category distribution from the same response
-        if (response.data.data.category_distribution) {
-          categoryDistributionData.labels = response.data.data.category_distribution.map(cat => cat.Category)
-          categoryDistributionData.datasets[0].data = response.data.data.category_distribution.map(cat => cat.count)
-          categoryDistributionData.datasets[0].backgroundColor = generateChartColors(response.data.data.category_distribution.length)
-          categoryChartKey.value += 1
-        }
-        
-        // Update status distribution
-        if (response.data.data.status_distribution) {
-          // Update any status-based charts here
-          console.log('Status distribution updated:', response.data.data.status_distribution)
-        }
-        
-        // Update priority distribution
-        if (response.data.data.priority_distribution) {
-          console.log('Priority distribution updated:', response.data.data.priority_distribution)
-        }
-        // Mark KPIs as loaded and cache in Pinia
+        await riskStore.fetchDashboardMetrics(true)
         riskKpiLoaded.value = true
-        dashboardsStore.set('risk', { ...metrics })
-        }
+        categoryChartKey.value += 1
       } catch (error) {
         console.error('Error fetching risk metrics:', error)
-        riskKpiLoaded.value = true // hide skeleton even on error
-        
-        // Check for access denied first
-        if (AccessUtils.handleApiError(error)) {
-          return
-        }
-        
-        // Set default values if API fails
-        Object.assign(metrics, { 
-          total: 0, 
-          accepted: 0, 
-          rejected: 0, 
-          mitigated: 0, 
-          inProgress: 0 
-        })
-        categoryDistributionData.labels = []
-        categoryDistributionData.datasets[0].data = []
-        categoryDistributionData.datasets[0].backgroundColor = []
-        categoryChartKey.value += 1
+        riskKpiLoaded.value = true
       }
     }
 
@@ -1074,13 +1010,7 @@ export default {
     }
 
     // Reactive data for filters
-    const filters = reactive({
-      framework: 'all',
-      policy: 'all',
-      timeRange: 'all',
-      category: 'all',
-      priority: 'all'
-    })
+    const filters = riskStore.filters
 
     // Time range options
     const timeRangeOptions = computed(() => [
@@ -1349,12 +1279,9 @@ export default {
         console.log('🔄 RiskDashboard: Loaded framework from Vuex store:', storeFrameworkId)
       }
 
-      // ── Pinia cache-first: instant KPI display on return visits ────────────
-      const piniaData = dashboardsStore.get('risk')
-      if (piniaData) {
+      // ── Store cache-first: instant KPI display on return visits ────────────
+      if (riskStore.metrics.total > 0) {
         dataSourceBadge.value = 'Loaded from Pinia (fast)'
-        console.log('⚡ [RiskDashboard] Restoring KPIs from Pinia cache')
-        Object.assign(metrics, piniaData)
         riskKpiLoaded.value = true
         // Background: refresh all data silently
         fetchFrameworks().then(() => {
@@ -1366,7 +1293,6 @@ export default {
       if (hydrateRiskKpisFromAppData()) {
         dataSourceBadge.value = 'Loaded from Pinia (fast)'
         riskKpiLoaded.value = true
-        dashboardsStore.set('risk', { ...metrics })
         // Refresh exact values and charts in background.
         fetchFrameworks().then(() => {
           checkSelectedFrameworkFromSession()
@@ -1397,21 +1323,7 @@ export default {
     ], fetchCategoryDistribution)
 
     // Risk Trend Chart Configuration
-    const riskTrendData = reactive({
-      labels: [],
-      datasets: [
-        {
-          label: 'Risk Count',
-          data: [],
-          borderColor: '#f87171',
-          backgroundColor: 'rgba(248, 113, 113, 0.1)',
-          tension: 0.4,
-          fill: true,
-          pointRadius: 4,
-          pointHoverRadius: 6
-        }
-      ]
-    })
+    const riskTrendData = riskStore.metrics.trendData
 
     const riskTrendOptions = {
       responsive: true,
@@ -1456,58 +1368,9 @@ export default {
     // Fetch risk trend data
     const fetchRiskTrendData = async () => {
       try {
-        console.log('Fetching risk trend data with filters:', filters);
-        
-        // Add query parameters for all filters
-        const params = new URLSearchParams({
-          framework_id: filters.framework,
-          policy_id: filters.policy,
-          timeRange: filters.timeRange,
-          category: filters.category,
-          priority: filters.priority
-        });
-        
-        const response = await axios.get(`/api/risk/trend-over-time/?${params}`);
-        console.log('Risk trend API response:', response.data);
-        
-        // Check if we have valid data
-        if (response.data) {
-          // Handle different response formats
-          if (response.data.months && Array.isArray(response.data.months)) {
-            riskTrendData.labels = response.data.months;
-            
-            // Check which data format we received
-            if (response.data.trendData && Array.isArray(response.data.trendData)) {
-              // Direct trend data array
-              riskTrendData.datasets[0].data = response.data.trendData;
-              console.log('Using trendData array:', response.data.trendData);
-            } 
-            else if (response.data.newRisks && response.data.newRisks.data) {
-              // Object with newRisks.data array
-              riskTrendData.datasets[0].data = response.data.newRisks.data;
-              console.log('Using newRisks.data array:', response.data.newRisks.data);
-            }
-            else {
-              console.warn('No valid trend data found in response');
-              riskTrendData.datasets[0].data = [];
-            }
-          } else {
-            console.warn('No valid months array found in response');
-            riskTrendData.labels = [];
-            riskTrendData.datasets[0].data = [];
-          }
-        }
+        await riskStore.fetchTrendData()
       } catch (error) {
-        console.error('Error fetching risk trend data:', error);
-        
-        // Check for access denied first
-        if (AccessUtils.handleApiError(error)) {
-          return
-        }
-        
-        // Clear data on error
-        riskTrendData.labels = [];
-        riskTrendData.datasets[0].data = [];
+        console.error('Error fetching risk trend data:', error)
       }
     };
 
@@ -2206,15 +2069,7 @@ export default {
     }
 
     // Category Distribution Chart (dynamic, from backend)
-    const categoryDistributionData = reactive({
-      labels: [],
-      datasets: [{
-        data: [],
-        backgroundColor: [],
-        borderWidth: 0,
-        hoverOffset: 5
-      }]
-    })
+    const categoryDistributionData = riskStore.metrics.categoryDistribution
 
     const isLoadingCustomChart = ref(false);
     const hasCustomChartData = ref(false);

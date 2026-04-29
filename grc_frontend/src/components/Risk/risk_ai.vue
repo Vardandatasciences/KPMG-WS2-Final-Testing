@@ -487,6 +487,7 @@
 <script>
 import { API_ENDPOINTS } from '../../config/api.js';
 import apiService from '@/services/apiService.js';
+import { useRiskStore } from '@/stores/risk';
 
 const axios = {
   post: (url, data = {}, config = {}) =>
@@ -495,6 +496,10 @@ const axios = {
 
 export default {
   name: 'RiskRegisterAIDocumentUpload',
+  setup() {
+    const riskStore = useRiskStore();
+    return { riskStore };
+  },
   data() {
     return {
       currentStep: 'upload', // upload, processing, review, success
@@ -535,60 +540,45 @@ export default {
         selectedFile: this.selectedFile ? { name: this.selectedFile.name, size: this.selectedFile.size } : null,
         timestamp: Date.now()
       };
-      try {
-        sessionStorage.setItem('risk_register_ai_processing_state', JSON.stringify(state));
-        console.log('💾 Risk Register AI processing state saved:', state);
-      } catch (error) {
-        console.error('❌ Failed to save risk register AI processing state:', error);
-      }
+      
+      this.riskStore.setAiState(state);
+      console.log('💾 Risk Register AI processing state saved to store:', state);
     },
 
     loadProcessingState() {
-      try {
-        const savedState = sessionStorage.getItem('risk_register_ai_processing_state');
-        if (!savedState) {
-          console.log('❌ No saved risk register AI state found');
-          return false;
-        }
-
-        const state = JSON.parse(savedState);
-
-        // Check if state is not too old (24 hours max)
-        const maxAge = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
-        if (Date.now() - state.timestamp > maxAge) {
-          console.log('❌ Saved risk register AI state is too old, clearing');
-          sessionStorage.removeItem('risk_register_ai_processing_state');
-          return false;
-        }
-
-        // Restore state
-        this.currentStep = state.currentStep || 'upload';
-        this.isProcessing = state.isProcessing || false;
-        this.processingStatus = state.processingStatus || 'Initializing...';
-        this.processingProgress = state.processingProgress || 0;
-        this.currentProcessingStep = state.currentProcessingStep || 0;
-        this.currentProcessingPhase = state.currentProcessingPhase || 'upload';
-        this.extractedRisks = state.extractedRisks || [];
-        this.progressDetails = state.progressDetails || { estimatedFields: 0, estimatedTime: 0, processedItems: 0 };
-        this.selectedFile = null; // Don't restore file object, just clear it
-
-        console.log('✅ Risk Register AI processing state restored:', state);
-        return true;
-      } catch (error) {
-        console.error('❌ Failed to load risk register AI processing state:', error);
-        sessionStorage.removeItem('risk_register_ai_processing_state');
+      const state = this.riskStore.aiState;
+      if (!state || !state.timestamp) {
+        console.log('❌ No saved risk register AI state found in store');
         return false;
       }
+
+      // Check if state is not too old (24 hours max)
+      const maxAge = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+      if (Date.now() - state.timestamp > maxAge) {
+        console.log('❌ Saved risk register AI state is too old, resetting');
+        this.riskStore.resetAiState();
+        return false;
+      }
+
+      // Restore state
+      this.currentStep = state.currentStep || 'upload';
+      this.isProcessing = state.isProcessing || false;
+      this.processingStatus = state.processingStatus || 'Initializing...';
+      this.processingProgress = state.processingProgress || 0;
+      this.currentProcessingStep = state.currentProcessingStep || 0;
+      this.currentProcessingPhase = state.currentProcessingPhase || 'upload';
+      this.extractedRisks = state.extractedRisks || [];
+      this.progressDetails = state.progressDetails || { estimatedFields: 0, estimatedTime: 0, processedItems: 0 };
+      this.selectedFile = null; // Don't restore file object
+
+      console.log('✅ Risk Register AI processing state restored from store:', state);
+      return true;
     },
 
     clearProcessingState() {
-      try {
-        sessionStorage.removeItem('risk_register_ai_processing_state');
-        this.aiJustifications = {};
-        console.log('🗑️ Risk Register AI processing state cleared');
-      } catch (error) {
-        console.error('❌ Failed to clear risk register AI processing state:', error);
-      }
+      this.riskStore.resetAiState();
+      this.aiJustifications = {};
+      console.log('🗑️ Risk Register AI processing state cleared in store');
     },
 
     clearCache() {
