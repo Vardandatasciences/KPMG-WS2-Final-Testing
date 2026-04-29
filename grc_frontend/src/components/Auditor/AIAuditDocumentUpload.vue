@@ -454,7 +454,10 @@
                     <span class="multi-subpolicy-policy">({{ sub.policy_name }})</span>
                   </span>
                 </label>
-                <div v-if="!availableSubpolicies.length" class="empty-text">
+                <div v-if="isAnyPolicySubpoliciesLoading" class="loading-inline">
+                  <div class="inline-spinner"></div> Loading sub-policies...
+                </div>
+                <div v-if="!availableSubpolicies.length && !isAnyPolicySubpoliciesLoading" class="empty-text">
                   Select at least one policy to see its sub‑policies.
                 </div>
               </div>
@@ -495,7 +498,10 @@
                     </span>
                   </span>
                 </label>
-                <div v-if="!availableCompliances.length" class="empty-text">
+                <div v-if="isAnySubpolicyCompliancesLoading" class="loading-inline">
+                  <div class="inline-spinner"></div> Loading compliance items...
+                </div>
+                <div v-if="!availableCompliances.length && !isAnySubpolicyCompliancesLoading" class="empty-text">
                   Select at least one policy or sub‑policy to see compliances.
                 </div>
               </div>
@@ -2150,11 +2156,25 @@ export default {
       if (!this.selectedExistingAuditId) return false
       const sel = this.availableAIAudits.find(a => String(a.audit_id) === String(this.selectedExistingAuditId))
       return sel ? String(sel.status || '').toLowerCase() === 'completed' : false
+    },
+    isAnyPolicySubpoliciesLoading() {
+      return this.auditHierarchyPolicies.some(p => p.__subpoliciesLoading)
+    },
+    isAnySubpolicyCompliancesLoading() {
+      return this.auditHierarchyPolicies.some(p => 
+        (p.subpolicies || []).some(sp => sp.__compliancesLoading)
+      )
     }
   },
   watch: {
     selectedPolicyIdsMulti: {
-      handler() {
+      handler(newVal) {
+        if (newVal && newVal.length > 0) {
+          // Lazy-load sub-policies for all selected policies
+          newVal.forEach(policyId => {
+            this.ensureSubpoliciesForPolicy(policyId)
+          })
+        }
         if (this.hasSelectedAudit) {
           this.loadRelevantDocuments()
         }
@@ -3176,18 +3196,22 @@ export default {
           let policies = []
           try {
             policiesResp = await apiService.get(`/api/tree/frameworks/${fwId}/policies/`, {}, { timeout: 20000 })
-            policies = Array.isArray(policiesResp?.data)
-              ? policiesResp.data
-              : (Array.isArray(policiesResp) ? policiesResp : [])
+            policies = Array.isArray(policiesResp)
+              ? policiesResp
+              : (Array.isArray(policiesResp?.data)
+                ? policiesResp.data
+                : (Array.isArray(policiesResp?.policies) ? policiesResp.policies : []))
             console.log('📚 Found', policies.length, 'policies from tree endpoint for framework', fwId)
           } catch (treeError) {
             console.warn('⚠️ Tree endpoint failed, trying fallback endpoint:', treeError.message)
             // Fallback to simpler endpoint
             try {
               policiesResp = await apiService.get(`/api/frameworks/${fwId}/get-policies/`, {}, { timeout: 20000 })
-              policies = Array.isArray(policiesResp?.data)
-                ? policiesResp.data
-                : (Array.isArray(policiesResp) ? policiesResp : [])
+              policies = Array.isArray(policiesResp)
+                ? policiesResp
+                : (Array.isArray(policiesResp?.data)
+                  ? policiesResp.data
+                  : (Array.isArray(policiesResp?.policies) ? policiesResp.policies : []))
               console.log('📚 Found', policies.length, 'policies from fallback endpoint for framework', fwId)
             } catch (fallbackError) {
               console.error('❌ Both endpoints failed:', fallbackError.message)
@@ -3195,74 +3219,19 @@ export default {
             }
           }
 
-          // Build hierarchy quickly: fetch policies + subpolicies first.
-          // Fetch compliances lazily when user selects subpolicies.
-          // This avoids huge request storms and makes the UI appear quickly.
-          const POLICY_CONCURRENCY = 2
-
-          // Simple concurrency-limited async mapper (worker pool).
-          const mapWithConcurrency = async (items, concurrency, mapper) => {
-            const results = new Array(items.length)
-            if (!items.length) return results
-
-            let index = 0
-            const workerCount = Math.min(concurrency, items.length)
-            const workers = new Array(workerCount).fill(null).map(async () => {
-              while (index < items.length) {
-                const currentIndex = index++
-                if (currentIndex >= items.length) break
-                results[currentIndex] = await mapper(items[currentIndex], currentIndex)
-              }
-            })
-
-            await Promise.all(workers)
-            return results
-          }
-
-          hierarchyPolicies = await mapWithConcurrency(policies, POLICY_CONCURRENCY, async (policy) => {
+          hierarchyPolicies = policies.map(policy => {
             const policyId = policy.PolicyId || policy.policy_id || policy.id
             if (!policyId) return null
-
-            try {
-              // Get subpolicies for this policy
-              const subpoliciesResp = await apiService.get(
-                `/api/tree/policies/${policyId}/subpolicies/`,
-                {},
-                { timeout: 15000 }
-              )
-              const subpoliciesData = Array.isArray(subpoliciesResp?.data)
-                ? subpoliciesResp.data
-                : (Array.isArray(subpoliciesResp) ? subpoliciesResp : [])
-
-              const subpolicies = (subpoliciesData || []).map(subpolicy => {
-                const subpolicyId = subpolicy.SubPolicyId || subpolicy.subpolicy_id || subpolicy.id
-                if (!subpolicyId) return null
-                return {
-                  subpolicy_id: subpolicyId,
-                  subpolicy_name: subpolicy.SubPolicyName || subpolicy.subpolicy_name || subpolicy.name,
-                  compliances: [],
-                  __compliancesLoaded: false,
-                  __compliancesLoading: false
-                }
-              }).filter(sp => sp !== null)
-
-              return {
-                policy_id: policyId,
-                policy_name: policy.PolicyName || policy.policy_name || policy.name,
-                subpolicies: subpolicies.filter(sp => sp !== null)
-              }
-            } catch (e) {
-              console.warn(`⚠️ Could not load subpolicies for policy ${policyId}:`, e)
-              return {
-                policy_id: policyId,
-                policy_name: policy.PolicyName || policy.policy_name || policy.name,
-                subpolicies: []
-              }
+            return {
+              policy_id: policyId,
+              policy_name: policy.PolicyName || policy.policy_name || policy.name,
+              subpolicies: [],
+              __subpoliciesLoaded: false,
+              __subpoliciesLoading: false
             }
-          })
+          }).filter(p => p !== null)
 
-              hierarchyPolicies = hierarchyPolicies.filter(p => p !== null)
-              console.log('📚 Built hierarchy from framework tree. Policies:', hierarchyPolicies.length)
+          console.log('📚 Built hierarchy from framework tree. Policies:', hierarchyPolicies.length)
         } catch (e) {
           console.error('❌ Error building hierarchy from framework tree/framework endpoints:', e)
         }
@@ -3273,6 +3242,34 @@ export default {
         // Restore any saved selections for this audit
         if (this.auditHierarchyPolicies.length) {
           this.restoreSelectionsForAudit()
+          
+          // Auto-select the "native" policy and sub-policy of the audit if nothing is selected yet
+          if (this.selectedPolicyIdsMulti.length === 0 && this.auditInfo) {
+            const nativePolicyName = this.auditInfo.policy || this.selectedPolicyName
+            const nativeSubPolicyName = this.auditInfo.sub_policy || this.selectedSubPolicyName
+            
+            console.log('🔍 Attempting to auto-select native policy:', nativePolicyName)
+            
+            const nativePolicy = this.auditHierarchyPolicies.find(p => 
+              p.policy_name?.toLowerCase() === nativePolicyName?.toLowerCase()
+            )
+            
+            if (nativePolicy) {
+              console.log('✅ Auto-selecting native policy ID:', nativePolicy.policy_id)
+              this.selectedPolicyIdsMulti.push(nativePolicy.policy_id)
+              
+              if (nativeSubPolicyName && nativePolicy.subpolicies) {
+                const nativeSub = nativePolicy.subpolicies.find(sp => 
+                  sp.subpolicy_name?.toLowerCase() === nativeSubPolicyName?.toLowerCase()
+                )
+                if (nativeSub) {
+                  console.log('✅ Auto-selecting native sub-policy ID:', nativeSub.subpolicy_id)
+                  this.selectedSubpolicyIdsMulti.push(nativeSub.subpolicy_id)
+                }
+              }
+            }
+          }
+          
           // If there is no saved selection, auto-select High criticality compliances
           this.autoSelectHighCriticalityCompliances()
         }
@@ -3770,8 +3767,60 @@ export default {
         this.selectedComplianceIds = this.selectedComplianceIds.filter(
           id => !compIdsToRemove.includes(id)
         )
+      } else {
+        // Lazy-load sub-policies when the user selects a policy.
+        this.ensureSubpoliciesForPolicy(changedPolicyId)
       }
       this.saveSelectionsForAudit()
+    },
+    async ensureSubpoliciesForPolicy(policyId) {
+      try {
+        const policy = this.auditHierarchyPolicies.find(p => p.policy_id === policyId)
+        if (!policy) return
+        if (policy.__subpoliciesLoaded || policy.__subpoliciesLoading) return
+
+        policy.__subpoliciesLoading = true
+        console.log(`🔍 Lazy-loading sub-policies for policy ${policyId}...`)
+        const subpoliciesResp = await apiService.get(
+          `/api/tree/policies/${policyId}/subpolicies/`,
+          {},
+          { timeout: 15000 }
+        )
+        const subpoliciesData = Array.isArray(subpoliciesResp)
+          ? subpoliciesResp
+          : (Array.isArray(subpoliciesResp?.data)
+            ? subpoliciesResp.data
+            : (Array.isArray(subpoliciesResp?.subpolicies) ? subpoliciesResp.subpolicies : []))
+
+        policy.subpolicies = (subpoliciesData || []).map(subpolicy => {
+          const subpolicyId = subpolicy.SubPolicyId || subpolicy.subpolicy_id || subpolicy.id
+          if (!subpolicyId) return null
+          return {
+            subpolicy_id: subpolicyId,
+            subpolicy_name: subpolicy.SubPolicyName || subpolicy.subpolicy_name || subpolicy.name,
+            compliances: [],
+            __compliancesLoaded: false,
+            __compliancesLoading: false
+          }
+        }).filter(sp => sp !== null)
+        
+        policy.__subpoliciesLoaded = true
+        console.log(`✅ Loaded ${policy.subpolicies.length} sub-policies for policy ${policyId}`)
+
+        // Trigger compliance load for any newly loaded sub-policies that are already selected
+        // (This handles the race condition where a sub-policy was auto-selected before it was loaded)
+        const selectedSubSet = new Set(this.selectedSubpolicyIdsMulti || [])
+        policy.subpolicies.forEach(sub => {
+          if (selectedSubSet.has(sub.subpolicy_id)) {
+            this.ensureCompliancesForSubpolicy(sub.subpolicy_id, policyId)
+          }
+        })
+      } catch (e) {
+        console.warn(`⚠️ Could not load subpolicies for policy ${policyId}:`, e)
+      } finally {
+        const policy = this.auditHierarchyPolicies.find(p => p.policy_id === policyId)
+        if (policy) policy.__subpoliciesLoading = false
+      }
     },
     onSubpolicyMultiChange(subpolicyId, policyId) {
       const isSelected = this.selectedSubpolicyIdsMulti.includes(subpolicyId)
@@ -3813,9 +3862,11 @@ export default {
           {},
           { timeout: 15000 }
         )
-        const compliancesData = Array.isArray(compliancesResp?.data)
-          ? compliancesResp.data
-          : (Array.isArray(compliancesResp) ? compliancesResp : [])
+        const compliancesData = Array.isArray(compliancesResp)
+          ? compliancesResp
+          : (Array.isArray(compliancesResp?.data)
+            ? compliancesResp.data
+            : (Array.isArray(compliancesResp?.compliances) ? compliancesResp.compliances : []))
 
         sub.compliances = (compliancesData || []).map(c => ({
           compliance_id: c.ComplianceId || c.compliance_id || c.id,
@@ -5208,23 +5259,24 @@ export default {
         }
         
         const response = await apiService.get(API_ENDPOINTS.AI_AUDIT_RELEVANT_DOCS(auditId), { params })
-        console.log('📋 Relevant documents response:', response.data)
+        console.log('📋 Relevant documents response:', response)
         
-        if (response.data.success) {
-          this.relevantDocuments = response.data.documents || []
-          this.relevantDocumentsMessage = response.data.message || null
-          this.relevantDocumentsStats = response.data.stats || null
+        // apiService returns response.data directly
+        if (response && (response.success || response.documents)) {
+          this.relevantDocuments = response.documents || []
+          this.relevantDocumentsMessage = response.message || null
+          this.relevantDocumentsStats = response.stats || null
           console.log('✅ Loaded', this.relevantDocuments.length, 'relevant documents')
-          if (response.data.message) {
-            console.log('📋 Message:', response.data.message)
+          if (response.message) {
+            console.log('📋 Message:', response.message)
           }
-          if (response.data.stats) {
-            console.log('📊 Stats:', response.data.stats)
+          if (response.stats) {
+            console.log('📊 Stats:', response.stats)
           }
         } else {
-          console.warn('📋 Failed to load relevant documents:', response.data.error)
+          console.warn('📋 Failed to load relevant documents:', response?.error)
           this.relevantDocuments = []
-          this.relevantDocumentsMessage = response.data.error || null
+          this.relevantDocumentsMessage = response?.error || null
           this.relevantDocumentsStats = null
         }
       } catch (error) {
@@ -7446,6 +7498,32 @@ export default {
   border-radius: 12px;
   border: 1px solid #e0e0e0;
   background: #f9fafb;
+}
+
+.loading-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  font-size: 0.8125rem;
+  color: #6366f1;
+  font-weight: 500;
+  background: #eff6ff;
+  border-radius: 6px;
+  margin: 8px 0;
+}
+
+.inline-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid #e0e7ff;
+  border-top-color: #6366f1;
+  border-radius: 50%;
+  animation: inline-spin 0.6s linear infinite;
+}
+
+@keyframes inline-spin {
+  to { transform: rotate(360deg); }
 }
 
 /* Schedule AI Audit section — clean layout */
