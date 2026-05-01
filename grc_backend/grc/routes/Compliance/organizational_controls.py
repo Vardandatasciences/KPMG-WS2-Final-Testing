@@ -272,71 +272,58 @@ def get_organizational_control(request, compliance_id):
     tenant_id = get_tenant_id_from_request(request)
 
     try:
-        with connection.cursor() as cursor:
-            cursor.execute("""
-                SELECT oc.OrgControlId, oc.ControlText, oc.ExtractedText, oc.MappingStatus, 
-                       oc.AIAnalysis, oc.ConfidenceScore,
-                       oc.CreatedAt, oc.UpdatedAt, oc.LastAuditedAt,
-                       c.ComplianceTitle, c.ComplianceItemDescription, c.Identifier
-                FROM organizational_controls oc
-                JOIN compliance c ON oc.ComplianceId = c.ComplianceId
-                WHERE oc.ComplianceId = %s AND c.TenantId = %s
-            """, [compliance_id, tenant_id])
+        # Use ORM to benefit from auto-decryption mixin
+        org_control = OrganizationalControl.objects.filter(
+            ComplianceId_id=compliance_id,
+            ComplianceId__tenant_id=tenant_id
+        ).select_related('ComplianceId').first()
+        
+        if org_control:
+            compliance = org_control.ComplianceId
             
-            row = cursor.fetchone()
+            # Get documents for this org control
+            documents = []
+            org_docs = OrganizationalControlDocument.objects.filter(
+                OrgControlId_id=org_control.OrgControlId
+            ).order_by('-IsPrimary', '-UploadedAt')
             
-            if row:
-                # Parse AIAnalysis JSON
-                ai_analysis = row[4] if row[4] else {}
-                if isinstance(ai_analysis, str):
-                    try:
-                        ai_analysis = json.loads(ai_analysis)
-                    except:
-                        ai_analysis = {}
-                
-                # Get documents for this org control
-                documents = []
-                if row[0]:  # If OrgControlId exists
-                    org_docs = OrganizationalControlDocument.objects.filter(
-                        OrgControlId_id=row[0]
-                    ).order_by('-IsPrimary', '-UploadedAt')
-                    documents = [{
-                        'DocumentId': doc.DocumentId,
-                        'DocumentName': doc.DocumentName,
-                        'DocumentPath': doc.DocumentPath,
-                        'DocumentType': doc.DocumentType,
-                        'FileSize': doc.FileSize,
-                        'UploadedAt': doc.UploadedAt.isoformat() if doc.UploadedAt else None,
-                        'IsPrimary': doc.IsPrimary
-                    } for doc in org_docs]
-                
-                return Response({
-                    'success': True,
-                    'org_control': {
-                        'OrgControlId': row[0],
-                        'ControlText': row[1],
-                        'ExtractedText': row[2],
-                        'MappingStatus': row[3],
-                        'AIAnalysis': ai_analysis,
-                        'WhatIsSatisfying': ai_analysis.get('what_is_satisfying'),
-                        'WhatIsLeft': ai_analysis.get('what_is_left'),
-                        'WhyNotMapped': ai_analysis.get('why_not_mapped'),
-                        'ConfidenceScore': row[5],
-                        'CreatedAt': row[6].isoformat() if row[6] else None,
-                        'UpdatedAt': row[7].isoformat() if row[7] else None,
-                        'LastAuditedAt': row[8].isoformat() if row[8] else None,
-                        'ComplianceTitle': row[9],
-                        'ComplianceItemDescription': row[10],
-                        'ComplianceIdentifier': row[11],
-                        'Documents': documents
-                    }
-                })
-            else:
-                return Response({
-                    'success': True,
-                    'org_control': None,
-                    'message': 'No organizational control found for this compliance'
-                })
+            documents = [{
+                'DocumentId': doc.DocumentId,
+                'DocumentName': doc.DocumentName_plain, # Decrypt document name
+                'DocumentPath': doc.DocumentPath_plain, # Decrypt document path
+                'DocumentType': doc.DocumentType,
+                'FileSize': doc.FileSize,
+                'UploadedAt': doc.UploadedAt.isoformat() if doc.UploadedAt else None,
+                'IsPrimary': doc.IsPrimary
+            } for doc in org_docs]
+            
+            return Response({
+                'success': True,
+                'org_control': {
+                    'OrgControlId': org_control.OrgControlId,
+                    'ControlText': org_control.ControlText_plain,
+                    'ExtractedText': org_control.ExtractedText_plain,
+                    'MappingStatus': org_control.MappingStatus,
+                    'AIAnalysis': org_control.AIAnalysis,
+                    'WhatIsSatisfying': org_control.AIAnalysis.get('what_is_satisfying') if org_control.AIAnalysis else None,
+                    'WhatIsLeft': org_control.AIAnalysis.get('what_is_left') if org_control.AIAnalysis else None,
+                    'WhyNotMapped': org_control.AIAnalysis.get('why_not_mapped') if org_control.AIAnalysis else None,
+                    'ConfidenceScore': org_control.ConfidenceScore,
+                    'CreatedAt': org_control.CreatedAt.isoformat() if org_control.CreatedAt else None,
+                    'UpdatedAt': org_control.UpdatedAt.isoformat() if org_control.UpdatedAt else None,
+                    'LastAuditedAt': org_control.LastAuditedAt.isoformat() if org_control.LastAuditedAt else None,
+                    'ComplianceTitle': compliance.ComplianceTitle,
+                    'ComplianceItemDescription': compliance.ComplianceItemDescription_plain,
+                    'ComplianceIdentifier': compliance.Identifier,
+                    'Documents': documents
+                }
+            })
+        else:
+            return Response({
+                'success': True,
+                'org_control': None,
+                'message': 'No organizational control found for this compliance'
+            })
                 
     except Exception as e:
         logger.error(f"Error getting organizational control: {e}")
@@ -603,7 +590,7 @@ def upload_organizational_document(request):
                         OrgControlId_id=org_control.OrgControlId
                     )
                     combined_text = '\n\n'.join([
-                        doc.ExtractedText for doc in all_docs if doc.ExtractedText
+                        doc.ExtractedText_plain for doc in all_docs if doc.ExtractedText_plain
                     ])
                     org_control.ExtractedText = combined_text
                     org_control.MappingStatus = 'not_audited'
@@ -704,7 +691,7 @@ def run_control_mapping_audit(request):
                 compliance = Compliance.objects.get(ComplianceId=org_control.ComplianceId_id, tenant_id=tenant_id)
                 
                 # Prepare organizational control content
-                org_content = org_control.ControlText or org_control.ExtractedText or ""
+                org_content = org_control.ControlText_plain or org_control.ExtractedText_plain or ""
                 
                 if not org_content.strip():
                     results.append({
@@ -721,13 +708,13 @@ You are a GRC compliance expert. Analyze if the organizational control satisfies
 
 **Framework Compliance Requirement:**
 - Title: {compliance.ComplianceTitle}
-- Description: {compliance.ComplianceItemDescription}
+- Description: {compliance.ComplianceItemDescription_plain}
 - Identifier: {compliance.Identifier}
 - Criticality: {compliance.Criticality}
 - Mandatory/Optional: {compliance.MandatoryOptional}
 
 **Organizational Control in Place:**
-{org_content[:5000]}
+{org_content[:10000]}
 
 **Task:**
 Determine if the organizational control FULLY MAPS, PARTIALLY MAPS, or DOES NOT MAP to the framework requirement.

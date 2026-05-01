@@ -371,13 +371,17 @@
               <div class="tooltip-body">{{ getRationale(risk, 'velocity') }}</div>
             </div>
           </div>
+          <div class="score-stat inherent">
+            <span class="stat-label">Inherent Score</span>
+            <span class="stat-value">{{ risk.inherent_risk_score || risk.exposure }}</span>
+          </div>
+          <div class="score-stat residual">
+            <span class="stat-label">Residual Score</span>
+            <span class="stat-value"><strong>{{ risk.residual_risk_score || 'N/A' }}</strong></span>
+          </div>
           <div class="score-stat exposure">
-            <span class="stat-label">Exposure Score</span>
-            <span class="stat-value"><strong>{{ risk.exposure }}</strong></span>
-            <div v-if="hasRationale(risk, 'exposure')" class="justification-tooltip">
-              <div class="tooltip-header"><i class="fas fa-info-circle"></i> Basis</div>
-              <div class="tooltip-body">{{ getRationale(risk, 'exposure') }}</div>
-            </div>
+            <span class="stat-label">Exposure Rating</span>
+            <span class="stat-value">{{ risk.exposure }}</span>
           </div>
         </div>
 
@@ -1424,6 +1428,8 @@ export default {
             detected: this.formatDate(item.created_at),
             likelihood: item.likelihood || 5,
             impact: item.impact || 5,
+            inherent_risk_score: item.inherent_risk_score || 0,
+            residual_risk_score: item.residual_risk_score || 0,
             exposure: item.exposure_rating || 0,
             priority: item.priority || 'Medium',
             velocity: item.velocity_score || 0,
@@ -2000,6 +2006,7 @@ export default {
         likelihood: this.reviewForm.likelihood,
         impact: this.reviewForm.impact,
         exposure: this.reviewForm.likelihood * this.reviewForm.impact,
+        residual_risk_score: this.residualRiskScore,
         priority: this.reviewForm.priority,
         mitigationSteps: this.reviewForm.mitigationSteps,
         complianceId: this.reviewForm.complianceId,
@@ -2039,6 +2046,7 @@ export default {
             likelihood: this.reviewForm.likelihood,
             impact: this.reviewForm.impact,
             exposure_rating: this.selectedRisk.exposure,
+            residual_risk_score: this.residualRiskScore,
             priority: this.reviewForm.priority,
             mitigation_steps: this.reviewForm.mitigationSteps,
             compliance_id: this.reviewForm.complianceId,

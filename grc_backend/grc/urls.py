@@ -414,7 +414,9 @@ from .routes.Incident.system_risk_views import (
     reject_system_risk_workflow,
     get_queue_stats,
     list_risks_exceeding_threshold,
-    list_external_sources
+    list_external_sources,
+    get_department_thresholds,
+    update_department_threshold
 )
 from .routes.Incident.system_risk_schedule_api import (
     create_sys_risk_schedule,
@@ -2196,6 +2198,8 @@ incident_urlpatterns = [
     path('system-risks/workflow/<int:risk_instance_id>/approve/', approve_system_risk_workflow, name='api-system-risks-workflow-approve'),
     path('system-risks/workflow/<int:risk_instance_id>/reject/', reject_system_risk_workflow, name='api-system-risks-workflow-reject'),
     path('system-risks/threshold-exceeded/', list_risks_exceeding_threshold, name='api-system-risks-threshold-exceeded'),
+    path('system-risks/thresholds/', get_department_thresholds, name='api-system-risks-thresholds'),
+    path('system-risks/thresholds/update/', update_department_threshold, name='api-system-risks-thresholds-update'),
 
     # System Risk Scheduling
     path('system-risks/schedules/', list_sys_risk_schedules, name='api-system-risks-schedules'),

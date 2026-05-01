@@ -205,6 +205,7 @@ export default {
             likelihood: this.riskData.likelihood,
             impact: this.riskData.impact,
             exposure_rating: this.riskData.exposure,
+            residual_risk_score: this.riskData.confidence || this.riskData.exposure,
             priority: this.riskData.priority,
             mitigation_steps: this.riskData.mitigationSteps,
             compliance_id: this.riskData.complianceId,

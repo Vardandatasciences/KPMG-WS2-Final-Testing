@@ -15,7 +15,7 @@ import threading
 import uuid
 import time
 
-from ...models import SystemIdentifiedRiskQueue, Department
+from ...models import SystemIdentifiedRiskQueue, Department, Users
 from ...jwt_auth import UnifiedJWTAuthentication
 from ...tenant_utils import get_tenant_id_from_request, require_tenant
 from .system_risk_service import (
@@ -559,6 +559,8 @@ def list_system_risk_queue(request):
             'exposure_rating': item.exposure_rating,
             'priority': item.priority,
             'ai_reasoning': item.ai_reasoning,
+            'inherent_risk_score': item.inherent_risk_score,
+            'residual_risk_score': item.residual_risk_score,
             'ai_metadata': item.ai_metadata,
             'confidence_justification': confidence_justification,
             'confidence_factors': confidence_factors,
@@ -607,6 +609,8 @@ def get_system_risk_detail(request, risk_id):
         'business_impact': risk.business_impact,
         'likelihood': risk.likelihood,
         'impact': risk.impact,
+        'inherent_risk_score': risk.inherent_risk_score,
+        'residual_risk_score': risk.residual_risk_score,
         'exposure_rating': risk.exposure_rating,
         'priority': risk.priority,
         'mitigation_steps': risk.mitigation_steps,
@@ -891,6 +895,8 @@ def approve_system_risk_workflow(request, risk_instance_id):
             BusinessImpact=risk_instance.BusinessImpact,
             RiskLikelihood=risk_instance.RiskLikelihood,
             RiskImpact=risk_instance.RiskImpact,
+            inherent_risk_score=risk_instance.inherent_risk_score,
+            residual_risk_score=risk_instance.residual_risk_score,
             RiskExposureRating=risk_instance.RiskExposureRating,
             RiskMultiplierX=risk_instance.RiskMultiplierX,
             RiskMultiplierY=risk_instance.RiskMultiplierY,
@@ -1155,11 +1161,18 @@ def list_risks_exceeding_threshold(request):
         dept_info = threshold_map.get(area_name_upper, {'threshold': 50})
         threshold = dept_info.get('threshold', 50)
         
-        # Calculate/get confidence score
-        final_score, confidence_justification, confidence_factors = _derive_confidence_for_response(item)
+        # Calculate Residual Risk Score
+        # Priority: Persisted residual_risk_score > fallback calculation
+        if item.residual_risk_score is not None:
+            residual_score = item.residual_risk_score
+        else:
+            residual_score = int(item.exposure_rating or (item.likelihood or 5) * (item.impact or 5))
         
-        # Apply threshold filter
-        if final_score >= threshold:
+        # Apply threshold filter based on Residual Risk Score (0-100 scale)
+        if residual_score >= threshold:
+            # Get confidence details for secondary awareness
+            final_score, confidence_justification, confidence_factors = _derive_confidence_for_response(item)
+            
             data.append({
                 'id': item.id,
                 'source_module': item.source_module,
@@ -1169,12 +1182,15 @@ def list_risks_exceeding_threshold(request):
                 'risk_type': item.risk_type,
                 'category': item.category,
                 'criticality': item.criticality,
-                'confidence_score': final_score,
-                'threshold_limit': threshold, # Include for UI awareness
+                'residual_score': residual_score, # Primary metric
+                'confidence_score': final_score, # Secondary metric
+                'threshold_limit': threshold, 
                 'velocity_score': item.velocity_score,
                 'functional_area': area_name if 'area_name' in locals() else item.functional_area,
                 'likelihood': item.likelihood,
                 'impact': item.impact,
+                'inherent_risk_score': item.inherent_risk_score,
+                'residual_risk_score': residual_score,
                 'exposure_rating': item.exposure_rating,
                 'priority': item.priority,
                 'ai_reasoning': item.ai_reasoning,
@@ -1192,6 +1208,153 @@ def list_risks_exceeding_threshold(request):
         'count': len(data),
         'data': data
     })
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+@require_tenant
+def get_department_thresholds(request):
+    """List all departments with their current AI confidence thresholds."""
+    tenant_id = get_tenant_id_from_request(request)
+    
+    # Verify admin access
+    from ...rbac.utils import RBACUtils
+    user_id = RBACUtils.get_user_id_from_request(request)
+    if not RBACUtils.is_system_admin(user_id):
+        return Response({
+            'status': 'error',
+            'message': 'Only GRC Administrators can manage department thresholds.'
+        }, status=403)
+
+    # Fetch departments with threshold and head info
+    # FIX: IsActive is a BooleanField, use True instead of 'Y'
+    departments = Department.objects.filter(tenant_id=tenant_id, IsActive=True).values(
+        'DepartmentId', 'DepartmentName', 'threshold_limit', 'DepartmentHead'
+    )
+    
+    # Enrich with department head email (decrypted)
+    data = list(departments)
+    for dept in data:
+        head_id = dept.get('DepartmentHead')
+        if head_id:
+            try:
+                head_user = Users.objects.get(UserId=head_id)
+                dept['DepartmentHeadEmail'] = head_user.Email_plain
+                dept['DepartmentHeadName'] = f"{head_user.FirstName} {head_user.LastName}"
+            except Users.DoesNotExist:
+                dept['DepartmentHeadEmail'] = None
+                dept['DepartmentHeadName'] = "Unknown"
+        else:
+            dept['DepartmentHeadEmail'] = None
+            dept['DepartmentHeadName'] = "Not Assigned"
+            
+    return Response({
+        'status': 'success',
+        'data': data
+    })
+
+@api_view(['PUT'])
+@permission_classes([IsAuthenticated])
+@require_tenant
+def update_department_threshold(request):
+    """Update AI confidence threshold for a specific department and notify head."""
+    tenant_id = get_tenant_id_from_request(request)
+    
+    # Verify admin access
+    from ...rbac.utils import RBACUtils
+    user_id = RBACUtils.get_user_id_from_request(request)
+    if not RBACUtils.is_system_admin(user_id):
+        return Response({
+            'status': 'error',
+            'message': 'Only GRC Administrators can manage department thresholds.'
+        }, status=403)
+
+    dept_id = request.data.get('department_id')
+    new_threshold = request.data.get('threshold_limit')
+    
+    if dept_id is None or new_threshold is None:
+        return Response({
+            'status': 'error',
+            'message': 'Department ID and threshold limit are required.'
+        }, status=400)
+        
+    try:
+        new_threshold = int(new_threshold)
+        if not (0 <= new_threshold <= 100):
+            raise ValueError()
+    except ValueError:
+        return Response({
+            'status': 'error',
+            'message': 'Threshold limit must be an integer between 0 and 100.'
+        }, status=400)
+
+    try:
+        dept = Department.objects.get(DepartmentId=dept_id, tenant_id=tenant_id)
+        old_threshold = dept.threshold_limit
+        dept.threshold_limit = new_threshold
+        dept.save()
+        
+        # Send notification email to Department Head
+        email_sent = False
+        head_email = None
+        if dept.DepartmentHead:
+            try:
+                head_user = Users.objects.get(UserId=dept.DepartmentHead)
+                head_email = head_user.Email_plain
+                
+                if head_email:
+                    from ..Global.notification_service import NotificationService
+                    ns = NotificationService()
+                    
+                    subject = f"Security Update: Residual Risk Threshold Adjusted - {dept.DepartmentName}"
+                    body = f"""
+                    <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                        <h2 style="color: #1a73e8;">Risk Threshold Update</h2>
+                        <p>Hello <b>{head_user.FirstName} {head_user.LastName}</b>,</p>
+                        <p>This is to inform you that the Residual Risk Score threshold for the <b>{dept.DepartmentName}</b> department has been updated.</p>
+                        <table style="border-collapse: collapse; width: 100%; max-width: 400px; margin: 20px 0;">
+                            <tr>
+                                <td style="padding: 10px; border: 1px solid #ddd; background-color: #f8f9fa;"><b>Previous Threshold:</b></td>
+                                <td style="padding: 10px; border: 1px solid #ddd;">{old_threshold}</td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 10px; border: 1px solid #ddd; background-color: #f8f9fa;"><b>New Threshold:</b></td>
+                                <td style="padding: 10px; border: 1px solid #ddd; color: #d93025; font-weight: bold;">{new_threshold}</td>
+                            </tr>
+                        </table>
+                        <p>Identified risks with a Residual Risk Score (Likelihood × Impact) below this threshold will no longer be automatically queued for your review.</p>
+                        <p>Updated by: {request.user.username if hasattr(request.user, 'username') else 'Administrator'}</p>
+                        <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+                        <p style="font-size: 12px; color: #777;">This is an automated notification from the RiskAvaire GRC System.</p>
+                    </div>
+                    """
+                    
+                    # Using the direct graph sender for reliability in this specific trigger
+                    ns.azure_email_sender.send_email_via_graph(
+                        to_email=head_email,
+                        subject=subject,
+                        html_body=body
+                    )
+                    email_sent = True
+            except Exception as e:
+                print(f"[SYSTEM-RISK] Failed to send threshold update email to {head_email}: {e}")
+
+        return Response({
+            'status': 'success',
+            'message': f'Threshold for {dept.DepartmentName} updated to {new_threshold}%.',
+            'email_sent': email_sent
+        })
+        
+    except Department.DoesNotExist:
+        return Response({
+            'status': 'error',
+            'message': 'Department not found.'
+        }, status=404)
+    except Exception as e:
+        print(f"[SYSTEM-RISK] update_department_threshold error: {e}")
+        return Response({
+            'status': 'error',
+            'message': 'An unexpected error occurred while updating the threshold.'
+        }, status=500)
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])

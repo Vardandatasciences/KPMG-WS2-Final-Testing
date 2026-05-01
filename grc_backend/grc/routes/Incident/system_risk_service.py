@@ -127,10 +127,16 @@ def _save_risk_candidate(tenant_id, source_module, source_record_id, source_ref,
         if 'source_text' in risk_data:
             ai_metadata['source_text'] = risk_data['source_text']
             
-        # Calculate exposure rating
+        # Calculate scores
         likelihood = _clamp_int(risk_data.get('likelihood'), 1, 10, 5)
         impact = _clamp_int(risk_data.get('impact'), 1, 10, 5)
         exposure = float(likelihood * impact)
+        
+        # Draft residual calculation based on effectiveness
+        eff_map = {'Low': 0.15, 'Medium': 0.45, 'High': 0.85}
+        effectiveness = ai_metadata.get("control_effectiveness", "Low")
+        reduction = eff_map.get(effectiveness, 0.15)
+        residual = round(exposure * (1 - reduction), 2)
 
         # Create the queue entry
         candidate = SystemIdentifiedRiskQueue.objects.create(
@@ -145,6 +151,8 @@ def _save_risk_candidate(tenant_id, source_module, source_record_id, source_ref,
             criticality=risk_data.get('criticality', 'Medium'),
             likelihood=likelihood,
             impact=impact,
+            inherent_risk_score=exposure,
+            residual_risk_score=residual,
             exposure_rating=exposure,
             priority=risk_data.get('criticality', 'Medium'),
             ai_reasoning=risk_data.get('ai_reasoning'),
@@ -810,6 +818,8 @@ def create_risk_from_queue_entry(queue_entry, user_id, review_data=None):
             BusinessImpact=final_business_impact,
             RiskLikelihood=_parse_int(_coalesce(review_data.get("likelihood"), queue_entry.likelihood), 5),
             RiskImpact=_parse_int(_coalesce(review_data.get("impact"), queue_entry.impact), 5),
+            inherent_risk_score=_parse_float(_coalesce(review_data.get("inherent_risk_score"), queue_entry.inherent_risk_score), 25.0),
+            residual_risk_score=_parse_float(_coalesce(review_data.get("residual_risk_score"), queue_entry.residual_risk_score), 0.0),
             RiskExposureRating=_parse_float(_coalesce(review_data.get("exposure_rating"), queue_entry.exposure_rating), 25.0),
             RiskPriority=_coalesce(review_data.get("priority"), queue_entry.priority),
             RiskMitigation=final_mitigation,
@@ -1036,6 +1046,8 @@ def create_risk_from_queue_entry_for_workflow(queue_entry, user_id, review_data=
         BusinessImpact=final_business_impact,
         RiskLikelihood=_parse_int(_coalesce(review_data.get("likelihood"), queue_entry.likelihood), 5),
         RiskImpact=_parse_int(_coalesce(review_data.get("impact"), queue_entry.impact), 5),
+        inherent_risk_score=_parse_float(_coalesce(review_data.get("inherent_risk_score"), queue_entry.inherent_risk_score), 25.0),
+        residual_risk_score=_parse_float(_coalesce(review_data.get("residual_risk_score"), queue_entry.residual_risk_score), 0.0),
         RiskExposureRating=_parse_int(_coalesce(review_data.get("exposure_rating"), queue_entry.exposure_rating), 25),
         RiskPriority=_coalesce(review_data.get("priority"), queue_entry.priority) or "Medium",
         functional_area=final_dept,

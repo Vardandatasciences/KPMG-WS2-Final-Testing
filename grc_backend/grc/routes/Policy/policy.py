@@ -5953,6 +5953,25 @@ def all_policies_get_frameworks(request):
             # Get all frameworks (don't filter the framework list itself) - for table view
             frameworks = Framework.objects.filter(tenant=tenant_id)
         
+        # OPTIMIZATION: Fetch all versions for all relevant frameworks in ONE query to avoid N+1 problem
+        # This significantly reduces database roundtrips and prevents timeout errors
+        framework_ids = [f.FrameworkId for f in frameworks]
+        all_versions = FrameworkVersion.objects.filter(FrameworkId__in=framework_ids).values(
+            'VersionId', 'Version', 'FrameworkId_id'
+        )
+        
+        # Group versions by framework ID for fast lookup
+        versions_map = {}
+        for v in all_versions:
+            fid = v['FrameworkId_id']
+            if fid not in versions_map:
+                versions_map[fid] = []
+            versions_map[fid].append({
+                'id': v['VersionId'],
+                'name': f"v{v['Version']}",
+                'version': v['Version']
+            })
+
         frameworks_data = []
         for framework in frameworks:
             # Additional safety check: skip non-active frameworks for dropdowns when active_only is true
@@ -5965,20 +5984,8 @@ def all_policies_get_frameworks(request):
                 'category': framework.Category,
                 'status': framework.ActiveInactive,
                 'description': framework.FrameworkDescription,
-                'versions': []
+                'versions': versions_map.get(framework.FrameworkId, [])
             }
-            
-            # Get versions for this framework
-            versions = FrameworkVersion.objects.filter(FrameworkId=framework)
-            version_data = []
-            for version in versions:
-                version_data.append({
-                    'id': version.VersionId,
-                    'name': f"v{version.Version}",
-                    'version': version.Version
-                })
-            
-            framework_data['versions'] = version_data
             frameworks_data.append(framework_data)
         
         # Log successful all policies frameworks retrieval

@@ -1478,6 +1478,8 @@ class Risk(EncryptedFieldsMixin, models.Model):
     RiskDescription = models.TextField(null=True)
     RiskLikelihood = models.IntegerField(null=True)
     RiskImpact = models.IntegerField(null=True)
+    inherent_risk_score = models.FloatField(null=True, help_text="Risk score before controls")
+    residual_risk_score = models.FloatField(null=True, help_text="Risk score after controls")
     RiskExposureRating = models.FloatField(null=True)
     RiskMultiplierX = models.FloatField(default=0.1, help_text="Impact multiplier (1-10, stored as 0.1-1.0)")
     RiskMultiplierY = models.FloatField(default=0.1, help_text="Likelihood multiplier (1-10, stored as 0.1-1.0)")
@@ -1545,6 +1547,8 @@ class RiskInstance(EncryptedFieldsMixin, models.Model):
     ReportedBy = models.IntegerField(null=True)
     RiskLikelihood = models.IntegerField(null=True)
     RiskImpact = models.IntegerField(null=True)
+    inherent_risk_score = models.FloatField(null=True, help_text="Risk score before controls")
+    residual_risk_score = models.FloatField(null=True, help_text="Risk score after controls")
     RiskExposureRating = models.FloatField(null=True)
     RiskMultiplierX = models.FloatField(default=0.1, help_text="Impact multiplier (1-10, stored as 0.1-1.0)")
     RiskMultiplierY = models.FloatField(default=0.1, help_text="Likelihood multiplier (1-10, stored as 0.1-1.0)")
@@ -1715,6 +1719,8 @@ class SystemIdentifiedRiskQueue(EncryptedFieldsMixin, models.Model):
                                      help_text="1-10 scale")
     impact = models.IntegerField(null=True, blank=True, 
                                  help_text="1-10 scale")
+    inherent_risk_score = models.FloatField(null=True, blank=True, help_text="Risk score before controls")
+    residual_risk_score = models.FloatField(null=True, blank=True, help_text="Risk score after controls")
     exposure_rating = models.FloatField(null=True, blank=True, 
                                         help_text="Auto-calculated from likelihood * impact")
     priority = models.CharField(max_length=50, null=True, blank=True,
