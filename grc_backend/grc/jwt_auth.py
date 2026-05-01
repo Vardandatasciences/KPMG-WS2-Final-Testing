@@ -165,11 +165,12 @@ class UnifiedJWTAuthentication(BaseAuthentication):
                 
                 # Create a mock user for cases where user might not exist in local DB
                 class MockUser:
-                    def __init__(self, user_id, username):
+                    def __init__(self, user_id, username, tenant_id=None):
                         self.pk = user_id
                         self.id = user_id
                         self.userid = user_id
                         self.UserId = user_id
+                        self.tenant_id = tenant_id  # MULTI-TENANCY: Propagate tenant ID
                         self.username = username if username else f"user_{user_id}"
                         self.is_authenticated = True
                         self.is_active = True
@@ -185,7 +186,7 @@ class UnifiedJWTAuthentication(BaseAuthentication):
                     def get_short_name(self):
                         return self.username
                 
-                mock_user = MockUser(user_id, username)
+                mock_user = MockUser(user_id, username, tenant_id)
                 logger.info(
                     "[Unified JWT Auth] MockUser created: %s",
                     sanitize_for_log(mock_user.username, 128),

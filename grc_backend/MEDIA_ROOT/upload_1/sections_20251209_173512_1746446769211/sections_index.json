@@ -1,0 +1,63 @@
+{
+  "source_pdf": "C:\\Users\\Admin\\Desktop\\KPMG-WS2-Final-Testing\\grc_backend\\MEDIA_ROOT\\upload_1\\20251209_173512_1746446769211.pdf",
+  "index_json": "C:\\Users\\Admin\\Desktop\\KPMG-WS2-Final-Testing\\grc_backend\\MEDIA_ROOT\\upload_1\\20251209_173512_1746446769211_index.json",
+  "structure_type": "hierarchical",
+  "sections_written": [
+    {
+      "folder": "002-Act_1992_15_of_1992_read_with_section_31/001-CHAPTER",
+      "title": "CHAPTER",
+      "level": 5,
+      "start_page": 0,
+      "end_page": 2,
+      "printed_page": 1,
+      "has_children": false,
+      "pdf_file": "CHAPTER.pdf",
+      "out_of_range": false
+    },
+    {
+      "folder": "001-PART_-_III_-_SECTION",
+      "title": "PART - III - SECTION",
+      "level": 4,
+      "start_page": 3,
+      "end_page": 29,
+      "printed_page": 4,
+      "has_children": false,
+      "pdf_file": "PART_-_III_-_SECTION.pdf",
+      "out_of_range": false
+    },
+    {
+      "folder": "002-Act_1992_15_of_1992_read_with_section_31/003-na_Insolvency_Code_means_the_Insolvency",
+      "title": "[(na) “Insolvency Code” means the Insolvency and Bankruptcy Code, 2016 [No.",
+      "level": 2,
+      "start_page": 30,
+      "end_page": 215,
+      "printed_page": 31,
+      "has_children": false,
+      "pdf_file": "na_Insolvency_Code_means_the_Insolvency.pdf",
+      "out_of_range": false
+    },
+    {
+      "folder": "002-Act_1992_15_of_1992_read_with_section_31",
+      "title": "Act, 1992 (15 of 1992) read with section 31 of the Securities Contracts (Regulation) Act,",
+      "level": 1,
+      "start_page": 215,
+      "end_page": 215,
+      "printed_page": 1956,
+      "has_children": true,
+      "pdf_file": "(empty - page range beyond document)",
+      "out_of_range": true
+    },
+    {
+      "folder": "002-Act_1992_15_of_1992_read_with_section_31/002-of_the_Securities_and_Exchange_Board_of",
+      "title": "of the Securities and Exchange Board of India (Mutual Funds) Regulations,",
+      "level": 3,
+      "start_page": 215,
+      "end_page": 215,
+      "printed_page": 1996,
+      "has_children": false,
+      "pdf_file": "(empty - page range beyond document)",
+      "out_of_range": true
+    }
+  ],
+  "unresolved_titles": []
+}

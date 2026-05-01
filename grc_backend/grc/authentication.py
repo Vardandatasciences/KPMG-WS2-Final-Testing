@@ -1134,16 +1134,12 @@ def jwt_login(request):
         request.session['grc_username'] = username_plain
         request.session['session_created_at'] = time.time()  # Store session creation time for timeout check
         
-        # Initialize framework session keys if needed - Set default if None to avoid "Framework context not found"
-        if request.session.get('grc_framework_selected') is None:
-            default_fw = _get_default_framework()
-            if default_fw:
-                request.session['grc_framework_selected'] = default_fw.FrameworkId
-                request.session['selected_framework_id'] = default_fw.FrameworkId
-                logger.info(f"✅ Set default framework context: {default_fw.FrameworkId}")
-            else:
-                request.session['grc_framework_selected'] = None
-                request.session['selected_framework_id'] = None
+        # Initialize framework session keys to None (All Frameworks) by default
+        # The user's preference will be loaded from cache by get_selected_framework if it exists
+        if 'grc_framework_selected' not in request.session:
+            request.session['grc_framework_selected'] = None
+        if 'selected_framework_id' not in request.session:
+            request.session['selected_framework_id'] = None
 
         
         # CRITICAL: Explicitly save the session to persist changes

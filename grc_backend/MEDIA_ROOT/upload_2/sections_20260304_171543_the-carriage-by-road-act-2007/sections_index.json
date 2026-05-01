@@ -1,0 +1,32 @@
+{
+  "source_pdf": "C:\\Users\\Admin\\Desktop\\KPMG-WS2-Final-Testing\\grc_backend\\MEDIA_ROOT\\upload_2\\20260304_171543_the-carriage-by-road-act-2007.pdf",
+  "index_json": "C:\\Users\\Admin\\Desktop\\KPMG-WS2-Final-Testing\\grc_backend\\MEDIA_ROOT\\upload_2\\20260304_171543_the-carriage-by-road-act-2007_index.json",
+  "structure_type": "hierarchical",
+  "sections_written": [
+    {
+      "folder": "001-Section",
+      "title": "Section",
+      "level": 2,
+      "start_page": 0,
+      "end_page": 9,
+      "printed_page": 1,
+      "has_children": false,
+      "pdf_file": "Section.pdf",
+      "out_of_range": false
+    },
+    {
+      "folder": "002-1_2007_a_rrftcr_T_9",
+      "title": "1, 2007 / a:rrftcr.T 9,",
+      "level": 2,
+      "start_page": 9,
+      "end_page": 9,
+      "printed_page": 1929,
+      "has_children": false,
+      "pdf_file": "(empty - page range beyond document)",
+      "out_of_range": true
+    }
+  ],
+  "unresolved_titles": [
+    "to engage"
+  ]
+}

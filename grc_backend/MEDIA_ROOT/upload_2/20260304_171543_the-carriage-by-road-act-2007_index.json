@@ -1,0 +1,27 @@
+{
+  "source_pdf": "C:\\Users\\Admin\\Desktop\\KPMG-WS2-Final-Testing\\grc_backend\\MEDIA_ROOT\\upload_2\\20260304_171543_the-carriage-by-road-act-2007.pdf",
+  "extraction_method": "toc_text_with_positions",
+  "items": [
+    {
+      "level": 2,
+      "title": "Section",
+      "page_label": "1",
+      "page_number": 1,
+      "source_page": 1
+    },
+    {
+      "level": 2,
+      "title": "1, 2007 / a:rrftcr.T 9,",
+      "page_label": "1929",
+      "page_number": 1929,
+      "source_page": 1
+    },
+    {
+      "level": 1,
+      "title": "to engage",
+      "page_label": "ill",
+      "page_number": null,
+      "source_page": 2
+    }
+  ]
+}

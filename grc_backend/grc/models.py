@@ -1006,7 +1006,7 @@ class Audit(EncryptedFieldsMixin, models.Model):
     Status = models.CharField(max_length=45)
     CompletionDate = models.DateTimeField(null=True)
     ReviewStatus = models.CharField(max_length=45, null=True)
-    ReviewerComments = models.CharField(max_length=255, null=True)
+    ReviewerComments = models.TextField(null=True, blank=True)
     AuditType = models.CharField(max_length=10, default='R')  # R for Regular, A for AI, I for Internal, E for External, S for Self-Audit
     Evidence = models.TextField(null=True, blank=True)
     Comments = models.TextField(null=True, blank=True)
@@ -1645,9 +1645,6 @@ class RiskAssessment(EncryptedFieldsMixin, models.Model):
     
     def __str__(self):
         return f"RiskAssessment {self.job_id} - {self.status}"
-    
-    def __str__(self):
-        return f"Risk {self.risk.RiskId} assigned to {self.assigned_to.UserName}"
 
 class SystemIdentifiedRiskQueue(EncryptedFieldsMixin, models.Model):
     """

@@ -1,0 +1,41 @@
+{
+  "source_pdf": "C:\\Users\\Admin\\Desktop\\KPMG-WS2-Final-Testing\\grc_backend\\MEDIA_ROOT\\upload_2\\20251209_173512_1746446769211.pdf",
+  "extraction_method": "toc_text_with_positions",
+  "items": [
+    {
+      "level": 4,
+      "title": "PART - III - SECTION",
+      "page_label": "4",
+      "page_number": 4,
+      "source_page": 1
+    },
+    {
+      "level": 1,
+      "title": "Act, 1992 (15 of 1992) read with section 31 of the Securities Contracts (Regulation) Act,",
+      "page_label": "1956",
+      "page_number": 1956,
+      "source_page": 1
+    },
+    {
+      "level": 5,
+      "title": "CHAPTER",
+      "page_label": "I",
+      "page_number": 1,
+      "source_page": 1
+    },
+    {
+      "level": 3,
+      "title": "of the Securities and Exchange Board of India (Mutual Funds) Regulations,",
+      "page_label": "1996",
+      "page_number": 1996,
+      "source_page": 1
+    },
+    {
+      "level": 2,
+      "title": "[(na) “Insolvency Code” means the Insolvency and Bankruptcy Code, 2016 [No.",
+      "page_label": "31",
+      "page_number": 31,
+      "source_page": 3
+    }
+  ]
+}

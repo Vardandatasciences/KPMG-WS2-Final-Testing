@@ -3,7 +3,6 @@ Dynamic Homepage API
 Provides aggregated, framework-aware data for the home page dashboard
 """
 import threading
-from django.http import JsonResponse
 from django.db.models import Q, Count, Avg, F, Sum, FloatField
 from django.db.models.functions import Coalesce
 from django.utils import timezone
@@ -16,10 +15,18 @@ from grc.models import (
     PolicyCategory, Users
 )
 from ..changemanagement.login_framework_checking import auto_check_all_frameworks
+from rest_framework.decorators import api_view, permission_classes, authentication_classes
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.response import Response
 from rest_framework.request import Request
 from ...debug_utils import debug_print
+from ...tenant_utils import require_tenant, tenant_filter, get_tenant_id_from_request
 
 
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+@require_tenant
+@tenant_filter
 def get_homepage_data(request):
     """
     GET /api/homepage?frameworkId=<id>
@@ -43,14 +50,17 @@ def get_homepage_data(request):
     debug_print(f"📥 Full Query String: {request.GET.urlencode()}")
     
     try:
+        # MULTI-TENANCY: Extract tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        debug_print(f"🏢 MULTI-TENANCY: Current Tenant ID: {tenant_id}")
+
         # Get framework from query params or session
         framework_id = request.GET.get('frameworkId')
         debug_print(f"📥 Request GET params - frameworkId: {framework_id}")
-        debug_print(f"📥 Request session keys: {list(request.session.keys())}")
         
         if not framework_id:
             # Try to get from session
-            framework_id = request.session.get('selected_framework_id')
+            framework_id = request.session.get('selected_framework_id') or request.session.get('grc_framework_selected')
             debug_print(f"📥 Framework ID from session: {framework_id}")
         
         # Build framework filter
@@ -60,34 +70,47 @@ def get_homepage_data(request):
         if framework_id:
             try:
                 framework_id = int(framework_id)
-                selected_framework = Framework.objects.filter(FrameworkId=framework_id).first()
-                framework_filter = Q(FrameworkId=framework_id)
-                debug_print(f"✅ Framework found: ID={framework_id}, Name={selected_framework.FrameworkName if selected_framework else 'None'}")
+                selected_framework = Framework.objects.filter(
+                    FrameworkId=framework_id,
+                    tenant_id=tenant_id
+                ).first()
+                framework_filter = Q(FrameworkId=framework_id, tenant_id=tenant_id)
+                if selected_framework:
+                    debug_print(f"✅ Framework found: ID={framework_id}, Name={selected_framework.FrameworkName}")
+                else:
+                    debug_print(f"⚠️ Framework ID {framework_id} not found or belongs to different tenant")
+                    framework_id = None
+                    framework_filter = Q(tenant_id=tenant_id)
             except (ValueError, TypeError):
                 debug_print(f"⚠️ Invalid framework_id format: {framework_id}")
+                framework_filter = Q(tenant_id=tenant_id)
                 pass
+        else:
+            framework_filter = Q(tenant_id=tenant_id)
         
-        # If no framework selected, use first active framework or all data
-        if not selected_framework:
+        # If no framework selected, use first active framework for this tenant if available
+        if not selected_framework and framework_id != 0: # 0 or 'all' often used for All Frameworks
             selected_framework = Framework.objects.filter(
+                tenant_id=tenant_id,
                 Status='Approved',
                 ActiveInactive='Active'
             ).first()
             if selected_framework:
                 framework_id = selected_framework.FrameworkId
-                framework_filter = Q(FrameworkId=framework_id)
-                debug_print(f"🔄 Using default framework: ID={framework_id}, Name={selected_framework.FrameworkName}")
+                framework_filter = Q(FrameworkId=framework_id, tenant_id=tenant_id)
+                debug_print(f"🔄 Using default framework for tenant: ID={framework_id}, Name={selected_framework.FrameworkName}")
             else:
-                debug_print("⚠️ No framework selected and no default framework found - using all data")
+                debug_print("⚠️ No framework selected and no default framework found for tenant - using all tenant data")
+                framework_filter = Q(tenant_id=tenant_id)
         
         # ====================================================================
         # FRAMEWORK INFO
         # ====================================================================
         framework_info = {
             'id': selected_framework.FrameworkId if selected_framework else None,
-            'name': selected_framework.FrameworkName if selected_framework else 'All Frameworks',
-            'description': selected_framework.FrameworkDescription if selected_framework else 'Unified GRC Platform',
-            'category': selected_framework.Category if selected_framework else 'Compliance',
+            'name': getattr(selected_framework, 'FrameworkName_plain', selected_framework.FrameworkName) if selected_framework else 'All Frameworks',
+            'description': getattr(selected_framework, 'FrameworkDescription_plain', selected_framework.FrameworkDescription) if selected_framework else 'Unified GRC Platform',
+            'category': getattr(selected_framework, 'Category', 'Compliance') if selected_framework else 'Compliance',
         }
         
         # ====================================================================
@@ -120,7 +143,7 @@ def get_homepage_data(request):
         if selected_framework:
             debug_print(f"📊 Selected Framework Name: {selected_framework.FrameworkName}")
         
-        policies_qs = Policy.objects.filter(framework_filter) if framework_filter else Policy.objects.all()
+        policies_qs = Policy.objects.filter(framework_filter)
         
         # Step 2: Count total policies (all statuses)
         total_policies_all = policies_qs.count()
@@ -338,8 +361,10 @@ def get_homepage_data(request):
         
         # Approval rate from PolicyApproval
         policy_approvals = PolicyApproval.objects.filter(
-            PolicyId__FrameworkId=framework_id
-        ) if framework_id else PolicyApproval.objects.all()
+            PolicyId__tenant_id=tenant_id
+        )
+        if framework_id:
+            policy_approvals = policy_approvals.filter(PolicyId__FrameworkId=framework_id)
         
         total_approvals = policy_approvals.count()
         approved_count = policy_approvals.filter(ApprovedNot=True).count()
@@ -366,7 +391,7 @@ def get_homepage_data(request):
         # ====================================================================
         # MODULE METRICS - COMPLIANCE
         # ====================================================================
-        compliances_qs = Compliance.objects.filter(framework_filter) if framework_filter else Compliance.objects.all()
+        compliances_qs = Compliance.objects.filter(framework_filter)
         
         # Count total compliances (all statuses)
         total_compliances_all = compliances_qs.count()
@@ -382,8 +407,10 @@ def get_homepage_data(request):
         
         # Compliance approval rate
         compliance_approvals = ComplianceApproval.objects.filter(
-            FrameworkId=framework_id
-        ) if framework_id else ComplianceApproval.objects.all()
+            FrameworkId__tenant_id=tenant_id
+        )
+        if framework_id:
+            compliance_approvals = compliance_approvals.filter(FrameworkId=framework_id)
         
         total_comp_approvals = compliance_approvals.count()
         approved_comp_count = compliance_approvals.filter(ApprovedNot=True).count()
@@ -404,7 +431,7 @@ def get_homepage_data(request):
         # ====================================================================
         # MODULE METRICS - RISK
         # ====================================================================
-        risk_instances_qs = RiskInstance.objects.filter(framework_filter) if framework_filter else RiskInstance.objects.all()
+        risk_instances_qs = RiskInstance.objects.filter(framework_filter)
         
         total_risks = risk_instances_qs.count()
         accepted_risks = risk_instances_qs.filter(
@@ -439,7 +466,7 @@ def get_homepage_data(request):
         # ====================================================================
         # MODULE METRICS - INCIDENT
         # ====================================================================
-        incidents_qs = Incident.objects.filter(framework_filter) if framework_filter else Incident.objects.all()
+        incidents_qs = Incident.objects.filter(framework_filter)
         
         total_incidents = incidents_qs.count()
         
@@ -485,7 +512,7 @@ def get_homepage_data(request):
         # ====================================================================
         # MODULE METRICS - AUDIT
         # ====================================================================
-        audits_qs = Audit.objects.filter(framework_filter) if framework_filter else Audit.objects.all()
+        audits_qs = Audit.objects.filter(framework_filter)
         
         total_audits = audits_qs.count()
         completed_audits = audits_qs.filter(Status='Completed').count()
@@ -707,7 +734,7 @@ def get_homepage_data(request):
         debug_print("✅ ========================================")
         debug_print("")
         
-        return JsonResponse(response_data)
+        return Response(response_data)
         
     except Exception as e:
         debug_print("")
@@ -721,12 +748,16 @@ def get_homepage_data(request):
         debug_print("❌ ========================================")
         debug_print("")
         
-        return JsonResponse({
+        return Response({
             'success': False,
             'error': str(e)
         }, status=500)
 
 
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+@require_tenant
+@tenant_filter
 def get_all_frameworks_data(request):
     """
     GET /api/homepage/all-frameworks
@@ -742,8 +773,13 @@ def get_all_frameworks_data(request):
     debug_print("=" * 80)
     
     try:
-        # Get all active frameworks
+        # MULTI-TENANCY: Extract tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        debug_print(f"🏢 MULTI-TENANCY [All Frameworks]: Current Tenant ID: {tenant_id}")
+
+        # Get all active frameworks for this tenant
         all_frameworks = Framework.objects.filter(
+            tenant_id=tenant_id,
             Status='Approved',
             ActiveInactive='Active'
         )
@@ -827,9 +863,9 @@ def get_all_frameworks_data(request):
             
             framework_data = {
                 'id': framework_id,
-                'name': framework.FrameworkName,
-                'description': framework.FrameworkDescription,
-                'category': framework.Category,
+                'name': getattr(framework, 'FrameworkName_plain', framework.FrameworkName),
+                'description': getattr(framework, 'FrameworkDescription_plain', framework.FrameworkDescription),
+                'category': getattr(framework, 'Category', 'Compliance'),
                 'stats': {
                     'totalPolicies': active_policies,
                     'totalPoliciesAll': total_policies_all,
@@ -1084,8 +1120,8 @@ def get_all_frameworks_data(request):
                 'audit': audit_metrics,
             }
 
-        # Get aggregated policy data for donut chart
-        all_policies_qs = Policy.objects.all()
+        # Get aggregated policy data for donut chart - tenant filtered
+        all_policies_qs = Policy.objects.filter(tenant_id=tenant_id)
         active_policies_qs = all_policies_qs.filter(ActiveInactive='Active')
         total_active_policies = active_policies_qs.count()
         
@@ -1190,7 +1226,7 @@ def get_all_frameworks_data(request):
             'timestamp': timezone.now().isoformat()
         }
         
-        return JsonResponse(response_data)
+        return Response(response_data)
         
     except Exception as e:
         debug_print("")
@@ -1204,7 +1240,7 @@ def get_all_frameworks_data(request):
         debug_print("❌ ========================================")
         debug_print("")
         
-        return JsonResponse({
+        return Response({
             'success': False,
             'error': str(e)
         }, status=500)

@@ -1,0 +1,844 @@
+{
+  "framework_info": {
+    "framework_name": "Custom Policy Framework",
+    "current_version": "1.0",
+    "framework_description": "A comprehensive policy framework designed to establish governance, compliance, and operational standards for organizational activities. This framework provides structured guidance for policy development, implementation, and monitoring across various business functions.",
+    "category": "General Policy Framework",
+    "start_date": "2026-04-30",
+    "end_date": null
+  },
+  "sections": [
+    {
+      "section_id": "section_0",
+      "title": "Section",
+      "level": 2,
+      "start_page": 0,
+      "end_page": 9,
+      "folder_path": "001-Section",
+      "policies": [
+        {
+          "policy_id": "POL-GEN-001",
+          "policy_title": "Carriage by Road Act, 2007 – Registration and Definitions",
+          "policy_description": "Regulatory framework for registration of common carriers and related definitions",
+          "policy_text": "",
+          "scope": "India, road transport of goods and services",
+          "objective": "Establish conditions for registration, operation, and compliance of common carriers",
+          "policy_type": "Regulatory Requirement",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": [
+            {
+              "subpolicy_id": "POL-GEN-001.01",
+              "subpolicy_title": "1.1",
+              "subpolicy_description": "Short title and commencement",
+              "subpolicy_text": "",
+              "control": "This Act may be called the Carriage by Road Act, 2007.",
+              "ai_analysis": "Identifies the Act's short title and commencement provisions."
+            },
+            {
+              "subpolicy_id": "POL-GEN-001.02",
+              "subpolicy_title": "1.2",
+              "subpolicy_description": "Extent of application",
+              "subpolicy_text": "",
+              "control": "It extends to the whole of India, except the State of Jammu and Kashmir.",
+              "ai_analysis": "Defines geographic scope of the Act."
+            },
+            {
+              "subpolicy_id": "POL-GEN-001.03",
+              "subpolicy_title": "1.3",
+              "subpolicy_description": "Commencement date",
+              "subpolicy_text": "",
+              "control": "It shall come into force on such date as the Central Government may, by notification in the Official Gazette, appoint.",
+              "ai_analysis": "Specifies when the Act becomes effective."
+            },
+            {
+              "subpolicy_id": "POL-GEN-001.04",
+              "subpolicy_title": "2.a",
+              "subpolicy_description": "Definition of common carrier",
+              "subpolicy_text": "",
+              "control": "Common carrier means a person engaged in the business of collecting, storing, forwarding or distributing goods to be carried by goods carriages under a goods receipt or transporting for hire of goods from place to place by motorised transport on road, for all persons undiscriminatingly and includes a goods booking company, contractor, agent, broker and courier agency engaged in the door-to-door transportation of documents, goods or articles utilising the services of a person, either directly or indirectly, to carry or accompany such documents, goods or articles, but does not include the Government.",
+              "ai_analysis": "Sets the meaning of 'common carrier' for regulatory purposes."
+            },
+            {
+              "subpolicy_id": "POL-GEN-001.05",
+              "subpolicy_title": "2.b",
+              "subpolicy_description": "Definition of consignee",
+              "subpolicy_text": "",
+              "control": "Consignee means the person named as consignee in the goods forwarding note.",
+              "ai_analysis": "Defines who is the consignee."
+            },
+            {
+              "subpolicy_id": "POL-GEN-001.06",
+              "subpolicy_title": "2.c",
+              "subpolicy_description": "Definition of consignment",
+              "subpolicy_text": "",
+              "control": "Consignment means documents, goods or articles entrusted by the consignor to the common carrier for carriage, the description or details of which are given in the goods forwarding note.",
+              "ai_analysis": "Defines the term 'consignment'."
+            },
+            {
+              "subpolicy_id": "POL-GEN-001.07",
+              "subpolicy_title": "2.d",
+              "subpolicy_description": "Definition of consignor",
+              "subpolicy_text": "",
+              "control": "Consignor means a person, named as consignor in the goods forwarding note, by whom or on whose behalf the documents, goods or articles covered by such forwarding note are entrusted to the common carrier for carriage thereof.",
+              "ai_analysis": "Defines the term 'consignor'."
+            },
+            {
+              "subpolicy_id": "POL-GEN-001.08",
+              "subpolicy_title": "2.e",
+              "subpolicy_description": "Definition of goods",
+              "subpolicy_text": "",
+              "control": "Goods includes (i) containers, pallets or similar articles of transport used to consolidate goods; and (ii) animals or livestock.",
+              "ai_analysis": "Broadens the definition of 'goods' to include various items."
+            },
+            {
+              "subpolicy_id": "POL-GEN-001.09",
+              "subpolicy_title": "2.f",
+              "subpolicy_description": "Definition of goods forwarding note",
+              "subpolicy_text": "",
+              "control": "Goods forwarding note means the document executed under section 8.",
+              "ai_analysis": "Defines the term 'goods forwarding note'."
+            },
+            {
+              "subpolicy_id": "POL-GEN-001.10",
+              "subpolicy_title": "2.g",
+              "subpolicy_description": "Definition of goods receipt",
+              "subpolicy_text": "",
+              "control": "Goods receipt means the receipt issued under section 9.",
+              "ai_analysis": "Defines the term 'goods receipt'."
+            },
+            {
+              "subpolicy_id": "POL-GEN-001.11",
+              "subpolicy_title": "2.h",
+              "subpolicy_description": "Definition of person",
+              "subpolicy_text": "",
+              "control": "Person includes any association or body of persons, whether incorporated or not, a road transport booking company, contractor and an agent or a broker carrying on the business of a common carrier.",
+              "ai_analysis": "Expands the meaning of 'person' to cover various entities."
+            },
+            {
+              "subpolicy_id": "POL-GEN-001.12",
+              "subpolicy_title": "2.i",
+              "subpolicy_description": "Definition of prescribed",
+              "subpolicy_text": "",
+              "control": "Prescribed means prescribed by rules made under this Act.",
+              "ai_analysis": "Defines the term 'prescribed'."
+            },
+            {
+              "subpolicy_id": "POL-GEN-001.13",
+              "subpolicy_title": "2.j",
+              "subpolicy_description": "Definition of registering authority",
+              "subpolicy_text": "",
+              "control": "Registering authority means a State Transport Authority or a Regional Transport Authority constituted under section 68 of the Motor Vehicles Act, 1988.",
+              "ai_analysis": "Identifies the authority responsible for registration."
+            },
+            {
+              "subpolicy_id": "POL-GEN-001.14",
+              "subpolicy_title": "2.k",
+              "subpolicy_description": "Definition of registration",
+              "subpolicy_text": "",
+              "control": "Registration means the registration granted or renewed under sub‑section (5) of section 4.",
+              "ai_analysis": "Defines what constitutes registration."
+            },
+            {
+              "subpolicy_id": "POL-GEN-001.15",
+              "subpolicy_title": "3.1",
+              "subpolicy_description": "Prohibition of unregistered operation",
+              "subpolicy_text": "",
+              "control": "No person shall engage in the business of a common carrier, after the commencement of this Act, unless he has been granted a certificate of registration.",
+              "ai_analysis": "Mandates registration before operating as a common carrier."
+            },
+            {
+              "subpolicy_id": "POL-GEN-001.16",
+              "subpolicy_title": "3.2",
+              "subpolicy_description": "Application deadline for existing carriers",
+              "subpolicy_text": "",
+              "control": "Any person who is engaged, whether wholly or partly, in the business of a common carrier, immediately before the commencement of this Act, shall apply for a registration within ninety days from the date of such commencement.",
+              "ai_analysis": "Sets a deadline for existing carriers to apply for registration."
+            },
+            {
+              "subpolicy_id": "POL-GEN-001.17",
+              "subpolicy_title": "3.2.b",
+              "subpolicy_description": "Cease business after 180 days if no registration",
+              "subpolicy_text": "",
+              "control": "Cease to engage in such business on the expiry of one hundred and eighty days from the date of such commencement uniess he has applied for registration and the certificate of registration has been granted by the registering authority.",
+              "ai_analysis": "Requires cessation of operation if registration not obtained within 180 days."
+            },
+            {
+              "subpolicy_id": "POL-GEN-001.18",
+              "subpolicy_title": "4.1",
+              "subpolicy_description": "Application for grant or renewal",
+              "subpolicy_text": "",
+              "control": "Any person, who is engaged or intends to engage in the business of a common carrier, shall apply for the grant or renewal of a certificate of registration for carrying on the business of common carrier to the registering authority.",
+              "ai_analysis": "Requires application for registration or renewal."
+            },
+            {
+              "subpolicy_id": "POL-GEN-001.19",
+              "subpolicy_title": "4.2",
+              "subpolicy_description": "Application jurisdiction and form",
+              "subpolicy_text": "",
+              "control": "An application under sub‑section (1) shall be made, to the registering authority having jurisdiction in the area in which the applicant resides or has his principal place of business stating that the application is for the main office, in such form and manner and accompanied by such fees payable to the registering authority as may be prescribed.",
+              "ai_analysis": "Specifies where and how to submit the application."
+            },
+            {
+              "subpolicy_id": "POL-GEN-001.20",
+              "subpolicy_title": "4.3",
+              "subpolicy_description": "Branch office details in application",
+              "subpolicy_text": "",
+              "control": "An application for grant or renewal of certificate of registration for the main office shall contain the details of branch office, if any, to be operated outside the jurisdiction of the State or Union territory in which the main office is to be registered in such form and manner as may be prescribed: Provided that an application for the purpose to open or close a branch office shall be made to the registering authority having jurisdiction over the main office.",
+              "ai_analysis": "Requires disclosure of branch offices and separate applications for opening/closing them."
+            },
+            {
+              "subpolicy_id": "POL-GEN-001.21",
+              "subpolicy_title": "4.4",
+              "subpolicy_description": "Conditions for granting registration",
+              "subpolicy_text": "",
+              "control": "A registering authority shall, before granting or renewing a certificate of registration, satisfy itself that the applicant fulfills such conditions as may be prescribed.",
+              "ai_analysis": "Mandates verification of prescribed conditions before granting registration."
+            },
+            {
+              "subpolicy_id": "POL-GEN-001.22",
+              "subpolicy_title": "4.5",
+              "subpolicy_description": "Grant or renewal of certificate",
+              "subpolicy_text": "",
+              "control": "The registering authority may, on receipt of an application under sub‑section (2) or sub‑section (3) and after satisfying itself that the applicant fulfills the requirements of sub‑section (4), grant the certificate of registration or renew it, as the case may be, for carrying on the business of a common carrier, in such form and subject to such conditions as may be prescribed: Provided that no application for the grant or renewal of a certificate of registration shall be refused by the registering authority unless the applicant has been given an opportunity of being heard and the reasons for such refusal are given in writing by the registering authority within sixty days from the date of receipt of such application: Provided further that if such refusal has not been communicated within sixty days of the date of application, the registering authority shall grant or renew certificate of registration within a further period of thirty days.",
+              "ai_analysis": "Outlines the process and safeguards for granting or renewing certificates."
+            },
+            {
+              "subpolicy_id": "POL-GEN-001.23",
+              "subpolicy_title": "4.6",
+              "subpolicy_description": "Validity period of certificate",
+              "subpolicy_text": "",
+              "control": "A certificate of registration granted or renewed under sub‑section (5) shall contain the details of branch offices to be operated in various States and Union territories, and shall be valid for a period of ten years from the date of such grant or renewal, as the case may be: Provided that in the case of registration in respect of branch offices referred to in sub‑section (3), the validity of such registration shall be restricted to the validity of the registration granted in respect of the main office.",
+              "ai_analysis": "Specifies the duration and scope of the certificate."
+            },
+            {
+              "subpolicy_id": "POL-GEN-001.24",
+              "subpolicy_title": "4.7.a",
+              "subpolicy_description": "Obligation to maintain register",
+              "subpolicy_text": "",
+              "control": "The holder of a certificate of registration shall maintain a register in such form and manner as may be prescribed.",
+              "ai_analysis": "Requires record‑keeping of registration details."
+            },
+            {
+              "subpolicy_id": "POL-GEN-001.25",
+              "subpolicy_title": "4.7.b",
+              "subpolicy_description": "Application to shift main office",
+              "subpolicy_text": "",
+              "control": "For shifting the main office mentioned in the certificate of registration submit an application to the registering authority which granted the certificate of registration: Provided that such registering authority shall grant or refuse permission for shifting the main office within thirty days from the date of receipt of such application and that no application for shifting the main office shall be refused unless the applicant has been given an opportunity of being heard and reasons for such refusal are given in writing by the registering authority: Provided further that in case the registering authority has not either granted or refused the permission within thirty days it shall be deemed that the permission for shifting has been granted.",
+              "ai_analysis": "Sets procedures for relocating the main office."
+            }
+          ],
+          "ai_analysis": "The section outlines the Act's title, scope, definitions, and registration obligations, which constitute the core policy."
+        },
+        {
+          "policy_id": "POL-GEN-002",
+          "policy_title": "Common Carrier Regulatory Framework",
+          "policy_description": "Comprehensive set of requirements governing registration, notice, enquiry, revocation, penalty, appeal, annual return, goods forwarding note, goods receipt, and liability for common carriers of goods by road.",
+          "policy_text": "",
+          "scope": "Common carriers of goods by road operating under the Central Government's road transport framework",
+          "objective": "Ensure compliance, accountability, and consumer protection in road freight transport",
+          "policy_type": "Regulatory Requirement",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": [
+            {
+              "subpolicy_id": "POL-GEN-002.01",
+              "subpolicy_title": "1",
+              "subpolicy_description": "Notice and enquiry for non‑compliance with registration duties",
+              "subpolicy_text": "",
+              "control": "If the registering authority is satisfied that the holder of certificate of registration has failed to comply with any of the provisions of sub‑section (7) of section 4, it may give a notice by registered post or through electronic media or by any verifiable means to the holder of certificate of registration to rectify within a period of thirty days and in case such a holder fails to do so, it may revoke the certificate of registration on completion of enquiry.",
+              "ai_analysis": {
+                "extraction_rationale": "Captures the procedural notice and enquiry requirement for registration non‑compliance",
+                "source_excerpt": "If the registering authority is satisfied that the holder of certificate of registration has failed to comply..."
+              }
+            },
+            {
+              "subpolicy_id": "POL-GEN-002.02",
+              "subpolicy_title": "2",
+              "subpolicy_description": "Complaint handling and notice for various carrier violations",
+              "subpolicy_text": "",
+              "control": "If a complaint is received by the registering authority against a common carrier from a consignor in respect of, - (/) non‑issuance of receipt of goods; (il) non‑disclosure of the whereabouts of the goods in transit when asked by the consignor or consignee; or (iiI) detention of goods for delivery without valid reasons; or (iv) demand for unreasonable additional charges at the time of delivery, which were neither disclosed nor agreed upon between the consignor and the consignee earlier; or (v) non‑payment of charges agreed and payable to truck‑owners, it may give a notice by registered post or through electronic media or by any other verifiable means to the holder of certificate of registration to rectify the same within a period of thirty days and in case such holder fails to do so, it may revoke certificate of registration for a period as may be prescribed under the rules on completion of that enquiry.",
+              "ai_analysis": {
+                "extraction_rationale": "Defines the types of complaints and the notice‑and‑rectify process for common carrier violations",
+                "source_excerpt": "If a complaint is received by the registering authority against a common carrier from a consignor in respect of, - (/) non‑issuance of receipt of goods;"
+              }
+            },
+            {
+              "subpolicy_id": "POL-GEN-002.03",
+              "subpolicy_title": "3",
+              "subpolicy_description": "Penalty imposition for violations of registration provisions",
+              "subpolicy_text": "",
+              "control": "If the registering authority or any other authority so authorised under the Motor Vehicles Act, 1988 has received proof of violation of provision of sub‑section (8) of 1998. section 4, it shall be competent to impose the penalty prescribed under section 194 of the Motor Vehicles Act. 1988 on the common carrier, notwithstanding the fact that such penalty have been already imposed on and realised from the driver or the owner of the goods vehicle or the consignor, as the case may be.",
+              "ai_analysis": {
+                "extraction_rationale": "Authorizes the authority to impose penalties for violations of registration rules",
+                "source_excerpt": "If the registering authority or any other authority so authorised under the Motor Vehicles Act, 1988 has received proof of violation..."
+              }
+            },
+            {
+              "subpolicy_id": "POL-GEN-002.04",
+              "subpolicy_title": "4",
+              "subpolicy_description": "Requirement for opportunity to be heard before revocation",
+              "subpolicy_text": "",
+              "control": "Any action for revocation of certificate of registration shall not be taken under sub‑sections (J) and (2) unless the holder of the certificate of registration is given an opportunity of being heard in the enquiry and reasons for such action are given in writing by the registering authoriry.",
+              "ai_analysis": {
+                "extraction_rationale": "Ensures due process by requiring written reasons and hearing before revocation",
+                "source_excerpt": "Any action for revocation of certificate of registration shall not be taken under sub‑sections (J) and (2) unless the holder of the certificate of registration is given an opportunity of being heard in the enquiry"
+              }
+            },
+            {
+              "subpolicy_id": "POL-GEN-002.05",
+              "subpolicy_title": "5",
+              "subpolicy_description": "Competence of registering authorities and reporting of violations",
+              "subpolicy_text": "",
+              "control": "The registering authority in whose jurisdiction the main office of the common carrier is located shall be competent to take action under sub‑sections (I) and (2) and any other registering authority who has noticed the violations or has received complaints under the said sub‑sections, shall report such matter to the registering authority havingjurisdiction over the main office.",
+              "ai_analysis": {
+                "extraction_rationale": "Allocates jurisdiction and reporting duties among registering authorities",
+                "source_excerpt": "The registering authority in whose jurisdiction the main office of the common carrier is located shall be competent to take action under sub‑sections (I) and (2) and any other registering authority who has noticed the violations..."
+              }
+            },
+            {
+              "subpolicy_id": "POL-GEN-002.06",
+              "subpolicy_title": "6",
+              "subpolicy_description": "Revocation procedure and delivery completion obligations",
+              "subpolicy_text": "",
+              "control": "When the certificate of registration is revoked, the holder of the certificate of registration shall surrender the certificate of registration to the registering authority within a 59 of 1988. 59 of 1988. SEC. 1] THE GAZETIE OF INDIA EXTRAORDINARY 5 period ofthirty days and itwould be incumbent on the holder of the certificate of registration to complete the delivery and transactions in respect of the consignments already accepted by the common carrier from any consignor prior to the revocation of the certificate of registration.",
+              "ai_analysis": {
+                "extraction_rationale": "Sets out the revocation surrender process and obligations to complete pending deliveries",
+                "source_excerpt": "When the certificate of registration is revoked, the holder of the certificate of registration shall surrender the certificate of registration to the registering authority within a 59 of 1988."
+              }
+            },
+            {
+              "subpolicy_id": "POL-GEN-002.07",
+              "subpolicy_title": "7",
+              "subpolicy_description": "Surrender of certificate and branch office deletion",
+              "subpolicy_text": "",
+              "control": "The holder of a certificate of registration may, at any time, surrender the certificate to the registering authority which granted the registration and on such surrender the registering authority shall, after obtaining declaration from the holder of the certificate of registration that no liability is outstanding against him and that he shall discharge such liability, if held liable, revoke the certificate of registration: Provided that if the surrender is in respect of a branch office, the endorsement in respect of the branch office shall be deleted from the certificate of registration and such deletion shall be notified by the registering authority havingjurisdiction over the main office to such other authorities as may be prescribed.",
+              "ai_analysis": {
+                "extraction_rationale": "Allows voluntary surrender and outlines branch office endorsement deletion procedure",
+                "source_excerpt": "The holder of a certificate of registration may, at any time, surrender the certificate to the registering authority which granted the registration and on such surrender the registering authority shall, after obtaining declaration..."
+              }
+            },
+            {
+              "subpolicy_id": "POL-GEN-002.08",
+              "subpolicy_title": "8",
+              "subpolicy_description": "Loading weight limitation for motor vehicles",
+              "subpolicy_text": "",
+              "control": "A common carrier shall not load the motor vehicle beyond the gross vehicle weight mentioned in the registration certificate whose registration number is mentioned in the goods forwarding note or goods receipt, and the common carrier shall not allow such vehicle to be loaded beyond the gross vehicle weight.",
+              "ai_analysis": {
+                "extraction_rationale": "Imposes a maximum load limit based on vehicle registration weight",
+                "source_excerpt": "A common carrier shall not load the motor vehicle beyond the gross vehicle weight mentioned in the registration certificate..."
+              }
+            },
+            {
+              "subpolicy_id": "POL-GEN-002.09",
+              "subpolicy_title": "9",
+              "subpolicy_description": "Execution of goods forwarding note by consignor",
+              "subpolicy_text": "",
+              "control": "Every consignor shall execute a goods forwarding note, in such form and manner as may be prescribed, which shall include a declaration about the value of the consignment and goods of dangerous or hazardous nature.",
+              "ai_analysis": {
+                "extraction_rationale": "Mandates that consignors complete a prescribed forwarding note with value and hazard declarations",
+                "source_excerpt": "Every consignor shall execute a goods forwarding note, in such form and manner as may be prescribed, which shall include a declaration about the value of the consignment and goods of dangerous or hazardous nature."
+              }
+            },
+            {
+              "subpolicy_id": "POL-GEN-002.10",
+              "subpolicy_title": "10",
+              "subpolicy_description": "Consignor responsibility for forwarding note accuracy",
+              "subpolicy_text": "",
+              "control": "The consignor shall be responsible for the correctness of the particulars furnished by him in the goods forwarding note.",
+              "ai_analysis": {
+                "extraction_rationale": "Places accountability on the consignor for the accuracy of the forwarded details",
+                "source_excerpt": "The consignor shall be responsible for the correctness of the particulars furnished by him in the goods forwarding note."
+              }
+            },
+            {
+              "subpolicy_id": "POL-GEN-002.11",
+              "subpolicy_title": "11",
+              "subpolicy_description": "Consignor indemnity for forwarding note errors",
+              "subpolicy_text": "",
+              "control": "The consignor shall indemnify the common carrier against any damage suffered by him by reason of incorrectness or incompleteness of the particulars on the goods fcrforwarding note.",
+              "ai_analysis": {
+                "extraction_rationale": "Requires consignor to compensate the carrier for errors in the forwarding note",
+                "source_excerpt": "The consignor shall indemnify the common carrier against any damage suffered by him by reason of incorrectness or incompleteness of the particulars on the goods fcrforwarding note."
+              }
+            },
+            {
+              "subpolicy_id": "POL-GEN-002.12",
+              "subpolicy_title": "12",
+              "subpolicy_description": "Issuance of goods receipt by carrier",
+              "subpolicy_text": "",
+              "control": "A common carrier shall, - (a) in case where the goods are to be loaded by the consignor, on the completion of such loading; or (b) in any other case, on the acceptance of the goods by him, issue a goods receipt in such form and manner as may be prescribed.",
+              "ai_analysis": {
+                "extraction_rationale": "Requires carriers to issue a goods receipt upon loading or acceptance of goods",
+                "source_excerpt": "A common carrier shall, - (a) in case where the goods are to be loaded by the consignor, on the completion of such loading; or (b) in any other case, on the acceptance of the goods by him, issue a goods receipt in such form and manner as may be prescribed."
+              }
+            },
+            {
+              "subpolicy_id": "POL-GEN-002.13",
+              "subpolicy_title": "13",
+              "subpolicy_description": "Goods receipt issuance in triplicate",
+              "subpolicy_text": "",
+              "control": "The goods receipt shall be issued in triplicate and the original shall be given to the consignor.",
+              "ai_analysis": {
+                "extraction_rationale": "Specifies the format and distribution of the goods receipt",
+                "source_excerpt": "The goods receipt shall be issued in triplicate and the original shall be given to the consignor."
+              }
+            },
+            {
+              "subpolicy_id": "POL-GEN-002.14",
+              "subpolicy_title": "14",
+              "subpolicy_description": "Goods receipt as prima facie evidence",
+              "subpolicy_text": "",
+              "control": "The goods receipt shall be prima facie evidence of the weight or measure and other particulars of the goods and the number of packages stated therein.",
+              "ai_analysis": {
+                "extraction_rationale": "Establishes the receipt as legal evidence of shipment details",
+                "source_excerpt": "The goods receipt shall be prima facie evidence of the weight or measure and other particulars of the goods and the number of packages stated therein."
+              }
+            },
+            {
+              "subpolicy_id": "POL-GEN-002.15",
+              "subpolicy_title": "15",
+              "subpolicy_description": "Undertaking of liability in goods receipt",
+              "subpolicy_text": "",
+              "control": "The goods receipt shall include an undertaking by the common carrier about the liability under section 10 or section 11.",
+              "ai_analysis": {
+                "extraction_rationale": "Requires the receipt to contain a liability undertaking for carrier",
+                "source_excerpt": "The goods receipt shall include an undertaking by the common carrier about the liability under section 10 or section 11."
+              }
+            },
+            {
+              "subpolicy_id": "POL-GEN-002.16",
+              "subpolicy_title": "16",
+              "subpolicy_description": "Limitation of carrier liability",
+              "subpolicy_text": "",
+              "control": "The liability of the common carrier for loss of, or damage to any consignment, shall be limited to such amount as may be prescribed having regard to the value, freight and nature of goods, documents or articles of the consignment, unless the consignor or any person duly authorised in that behalf have expressly undertaken to pay higher risk rate fixed by the common carrier under section 11.",
+              "ai_analysis": {
+                "extraction_rationale": "Sets the maximum liability limit for carriers, subject to optional higher risk agreements",
+                "source_excerpt": "The liability of the common carrier for loss of, or damage to any consignment, shall be limited to such amount as may be prescribed having regard to the value, freight and nature of goods, documents or articles of the consignment, unless the consignor or any person duly authorised in that behalf have expressly undertaken to pay higher risk rate fixed by the common carrier under section 11."
+              }
+            }
+          ],
+          "ai_analysis": {
+            "extraction_rationale": "Identifies the overall regulatory structure covering registration, procedural safeguards, penalties, and carrier obligations as presented in the source text.",
+            "source_excerpt": "A common carrier shall not load the motor vehicle beyond the gross vehicle weight mentioned in the registration certificate"
+          }
+        },
+        {
+          "policy_id": "POL-GEN-003",
+          "policy_title": "Custom Policy Framework - Common Carrier Regulations",
+          "policy_description": "Comprehensive policy covering liability, rates, dangerous goods, prohibited goods, unclaimed consignments, notice requirements, and penalties for common carriers as outlined in the excerpt.",
+          "policy_text": "",
+          "scope": "Applies to common carriers and consignors in the context of goods forwarding and liability for loss, damage, or delay.",
+          "objective": "Define responsibilities, liabilities, and procedural requirements for common carriers handling goods, including risk rates, dangerous goods transport, and dispute resolution.",
+          "policy_type": "Regulatory",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": [
+            {
+              "subpolicy_id": "POL-GEN-003.01",
+              "subpolicy_title": "11. Rates of charge",
+              "subpolicy_description": "Requirement for higher risk rates and notice obligations.",
+              "subpolicy_text": "",
+              "control": "Every common carrier may require payment for the higher risk undertaken to be fixed by him in carrying a particular consignment at such rate of charge as he may fix and common earner di hi I· bili ld b . d . h I b d for carriage of correspon mg y, IS. ia 1 ity wou e In accor ance Wit t te terms as may e agree consignment at upon with the consignor: . a higher risk rate. Conditions limiting exonerating the liability of the common carrier. Provided that to entitle such carrier to claim payment at a rate higher than his ordinary rate of charge, he should have exhibited a printed or written notice, in English and the vernacular language of the State, of the higher rate of charge in the • place or premises where he carries on the business of common carrier.",
+              "ai_analysis": {
+                "extraction_rationale": "This clause defines the conditions under which a carrier may charge a higher rate and the notice requirement.",
+                "source_excerpt": "Every common carrier may require payment for the higher risk undertaken to be fixed by him in carrying a particular consignment at such rate of charge as he may fix ... Provided that to entitle such carrier to claim payment at a rate higher than his ordinary rate of charge, he should have exhibited a printed or written notice..."
+              }
+            },
+            {
+              "subpolicy_id": "POL-GEN-003.02",
+              "subpolicy_title": "12. Liability for loss or damage",
+              "subpolicy_description": "Carrier liability for loss/damage due to criminal acts and procedural rules for suits.",
+              "subpolicy_text": "",
+              "control": "(1) Every common carrier shall be liable to the consignor for the loss or damage to any consignment in accordance with the goods forwarding note, where such loss or damage has arisen on account of any criminal act of the common carrier, or any of his servants or agents. (2) In any suit brought against the common carrier for the loss, damage or non‑delivery of consignment, it shall not be necessary for the plaintiff to prove that such loss, damage or non‑delivery was owing to the negligence or criminal act of the common carrier, or any of his servants or agents. (3) Where any consignment has been detained for examination or scrutiny ... the cost of such examination or scrutiny shall be borne by the consignor and the common carrier shall not be liable for any loss, damage or deterioration caused by such detention of the consignment for examination or scrutiny ... Provided that the onus of proving that such incorrect description of goods in the goods forwarding note was received from the consignor shall be on the common carrier.",
+              "ai_analysis": {
+                "extraction_rationale": "This sets out the carrier's liability, exceptions, and evidentiary standards for loss or damage claims.",
+                "source_excerpt": "(1) Every common carrier shall be liable to the consignor for the loss or damage to any consignment in accordance with the goods forwarding note, where such loss or damage has arisen on account of any criminal act of the common carrier, or any of his servants or agents. (2) In any suit ... it shall not be necessary for the plaintiff to prove that such loss, damage or non‑delivery was owing to the negligence or criminal act ... (3) Where any consignment has been detained ... the cost of such examination or scrutiny shall be borne by the consignor ..."
+              }
+            },
+            {
+              "subpolicy_id": "POL-GEN-003.03",
+              "subpolicy_title": "13. Dangerous or hazardous goods transport",
+              "subpolicy_description": "Procedures and insurance requirements for carrying dangerous goods.",
+              "subpolicy_text": "",
+              "control": "(1) No goods of dangerous or hazardous nature to human life shall be carried by a common carrier except in accordance with such procedure and after complying with such safeguards as may be prescribed. (2) The Central Government may, by rules made in this behalf, specify the goods of dangerous or hazardous nature to human life and the label or class of labels to be carried in, or displayed on, the motor vehicle or such goods in the course of transportation. (3) Notwithstanding anything contained in any other law for the time being in force, every common carrier shall scrutinise and ensure before starting transportation of any consignment containing goods of dangerous or hazardous nature to human life that the consignment is covered by, one or more insurance policies under a contract of insurance in respect of such goods providing relief in case of death or injury to a person or damage to any property or the consignment, if an accident takes place.",
+              "ai_analysis": {
+                "extraction_rationale": "Mandates specific procedures, labeling, and insurance for dangerous/hazardous goods.",
+                "source_excerpt": "(1) No goods of dangerous or hazardous nature to human life shall be carried by a common carrier except in accordance with such procedure and after complying with such safeguards as may be prescribed. (2) The Central Government may, by rules ... (3) Notwithstanding anything contained in any other law ... every common carrier shall scrutinise and ensure before starting transportation ... that the consignment is covered by, one or more insurance policies ..."
+              }
+            },
+            {
+              "subpolicy_id": "POL-GEN-003.04",
+              "subpolicy_title": "14. Prohibited goods",
+              "subpolicy_description": "Authority to specify goods that cannot be carried.",
+              "subpolicy_text": "",
+              "control": "The Central Government may, by notification in the Official Gazette, specify, in public interest, the goods or class or classes of goods which shall not be carried by a common carrier.",
+              "ai_analysis": {
+                "extraction_rationale": "Grants the Central Government power to prohibit certain goods from being transported.",
+                "source_excerpt": "The Central Government may, by notification in the Official Gazette, specify, in public interest, the goods or class or classes of goods which shall not be carried by a common carrier."
+              }
+            },
+            {
+              "subpolicy_id": "POL-GEN-003.05",
+              "subpolicy_title": "15. Unclaimed consignment handling",
+              "subpolicy_description": "Procedures for perishable and non‑perishable unclaimed goods after notice periods.",
+              "subpolicy_text": "",
+              "control": "(1) If the consignee fails to take delivery of any consignment of goods within a period of thirty days from the date of notice given by the common carrier, such consignment may be deemed as unclaimed: Provided that in case of perishable consignment, the period of thirty days shall not apply and the consignment shall be deemed unclaimed after a period of twenty‑four hours of service of notice or any lesser period as may be mutually agreed to by and between the common carrier and the consignor. (2) In the case of an unclaimed consignment under sub‑section (1), the common carrier may, (a) if such consignment is perishable in nature, have the right to sell the consignment; or (b) if such consignment is not perishable in nature, cause a notice to be served upon the consignee or upon the consignor if the consignee is not available, requiring him to remove the goods within a period of fifteen days from the date of receipt of the notice and in case of failure to comply with the notice, the common carrier shall have the right to sell such consignment without any further notice to the consignee or the consignor, as the case may be. (3) The common carrier shall, out of the sale proceeds received under sub‑section (2), retain a sum equal to the freight, storage and other charges due including expenses incurred for the sale, and the surplus, if any, from such sale proceeds shall be returned to the consignee or the consignor, as the case may be. (4) Unless otherwise agreed upon between the common carrier and consignor, the common carrier shall be entitled to detain or dispose off the consignment in part or full to recover his dues in the event of the consignee failing to make payment of the freight and other charges payable to the common carrier at the time of taking delivery.",
+              "ai_analysis": {
+                "extraction_rationale": "Details the rights and duties of carriers when consignments remain unclaimed, including sale and disposition powers.",
+                "source_excerpt": "(1) If the consignee fails to take delivery ... (2) In the case of an unclaimed consignment under sub‑section (1), the common carrier may, (a) if such consignment is perishable ... (b) if such consignment is not perishable ... (3) The common carrier shall, out of the sale proceeds ... (4) Unless otherwise agreed ... the common carrier shall be entitled to detain or dispose off the consignment ..."
+              }
+            },
+            {
+              "subpolicy_id": "POL-GEN-003.06",
+              "subpolicy_title": "16. Notice for suit",
+              "subpolicy_description": "Requirement to serve written notice of loss/damage before legal action.",
+              "subpolicy_text": "",
+              "control": "No suit or other legal proceeding shall be instituted against a common carrier for any loss of, or damage to, the consignment, unless notice in writing of the loss or damage to the consignment has been served on the common carrier before the institution of the suit or other legal proceeding and within one hundred and eighty days from the date of booking of the consignment by the consignor.",
+              "ai_analysis": {
+                "extraction_rationale": "Sets a procedural prerequisite for suing a carrier, requiring written notice within a specific timeframe.",
+                "source_excerpt": "No suit or other legal proceeding shall be instituted against a common carrier for any loss of, or damage to, the consignment, unless notice in writing of the loss or damage to the consignment has been served on the common carrier before the institution of the suit or other legal proceeding and within one hundred and eighty days from the date of booking of the consignment by the consignor."
+              }
+            },
+            {
+              "subpolicy_id": "POL-GEN-003.07",
+              "subpolicy_title": "17. General responsibility and exceptions",
+              "subpolicy_description": "Basis of carrier liability and exceptions (act of God, war, etc.).",
+              "subpolicy_text": "",
+              "control": "Except as otherwise provided in this Act, a common carrier shall be responsible for the loss, destruction, damage or deterioration in transit or non‑delivery of any consignment entrusted to him for carriage, arising from any cause except the following, namely:- (a) act of God; (b) act of war or public enemy; (c) riots and civil commotion; (d) arrest, restraint or seizure under legal process; (e) order or restriction or prohibition imposed by the Central Government or a State Government or by an officer or authority subordinate to the Central Government or a State Government authorised by it in this behalf: Provided that the common carrier shall not be relieved of its responsibility for the loss, destruction, damage or deterioration or non‑delivery of the consignment if the common carrier could have avoided such loss, destruction, damage or deterioration or non‑delivery had the common carrier exercised due deligence and care in the carriage of the consignment.",
+              "ai_analysis": {
+                "extraction_rationale": "Enumerates the limited set of exceptions under which a carrier may not be liable, subject to due diligence.",
+                "source_excerpt": "Except as otherwise provided in this Act, a common carrier shall be responsible for the loss, destruction, damage or deterioration in transit or non‑delivery of any consignment entrusted to him for carriage, arising from any cause except the following, namely:- (a) act of God; (b) act of war or public enemy; (c) riots and civil commotion; (d) arrest, restraint or seizure under legal process; (e) order or restriction or prohibition imposed by the Central Government ... Provided that the common carrier shall not be relieved of its responsibility ... if the common carrier could have avoided such loss ... had the common carrier exercised due deligence and care in the carriage of the consignment."
+              }
+            },
+            {
+              "subpolicy_id": "POL-GEN-003.08",
+              "subpolicy_title": "18. Punishment for contravention",
+              "subpolicy_description": "Penalties for violating sections on dangerous goods and other provisions.",
+              "subpolicy_text": "",
+              "control": "Whoever contravenes the provisions of section 3, section 13 or a contravention",
+              "ai_analysis": {
+                "extraction_rationale": "Provides for criminal liability or punishment for breaches of the earlier sections.",
+                "source_excerpt": "Whoever contravenes the provisions of section 3, section 13 or a contravention"
+              }
+            }
+          ],
+          "ai_analysis": {
+            "extraction_rationale": "The section enumerates multiple regulatory provisions governing common carrier duties, liabilities, and procedural safeguards, which collectively form a single policy framework.",
+            "source_excerpt": ""
+          }
+        },
+        {
+          "policy_id": "POL-GEN-004",
+          "policy_title": "Offences and Penalties",
+          "policy_description": "Defines punishable offences, fines, and liabilities for companies and individuals under the Act.",
+          "policy_text": "",
+          "scope": "All persons and companies subject to the Act",
+          "objective": "Establish criminal liability and sanctions for violations",
+          "policy_type": "Penalty",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": [
+            {
+              "subpolicy_id": "POL-GEN-004.01",
+              "subpolicy_title": "18.1",
+              "subpolicy_description": "First offence fine limit",
+              "subpolicy_text": "",
+              "control": "notification issued under section 14 shall be punishable for the first offence with fine in relation to which may extend to five thousand rupees",
+              "ai_analysis": {
+                "extraction_rationale": "Extracts the fine amount for the first offence as a distinct requirement.",
+                "source_excerpt": "notification issued under section 14 shall be punishable for the first offence with fine ... may extend to five thousand rupees"
+              }
+            },
+            {
+              "subpolicy_id": "POL-GEN-004.02",
+              "subpolicy_title": "18.2",
+              "subpolicy_description": "Company officer liability",
+              "subpolicy_text": "",
+              "control": "If the person committing an offence under this Act is a company, every person who, at the time the offence was committed, was in charge of, and was responsible to, the company for the conduct of the business of the company, as well as the company, shall be deemed to be guilty of the offence and shall be liable to be proceeded against and punished accordingly: Provided that nothing contained in this sub-section shall render any such person liable to any punishment, if he proves that the offence was committed without his knowledge or that he had exercised all due diligence to prevent the commission of such offence.",
+              "ai_analysis": {
+                "extraction_rationale": "Captures the liability of company officers as a separate control.",
+                "source_excerpt": "If the person committing an offence under this Act is a company, every person who, at the time the offence was committed, was in charge of, and was responsible to, the company..."
+              }
+            },
+            {
+              "subpolicy_id": "POL-GEN-004.03",
+              "subpolicy_title": "18.3",
+              "subpolicy_description": "Director/officer liability for company offences",
+              "subpolicy_text": "",
+              "control": "Notwithstanding anything contained in sub-section (1), where any offence under this Act has been committed by a company and it is proved that the offence has been committed with the consent or connivance of, or is attributable to any neglect on the part of, any director, manager, secretary or other officer of the company, such director, manager, secretary or other officer shall be proceeded against and punished accordingly.",
+              "ai_analysis": {
+                "extraction_rationale": "Extracts the specific liability of directors and officers for company offences.",
+                "source_excerpt": "Notwithstanding anything contained in sub-section (1), where any offence under this Act has been committed by a company and it is proved that the offence has been committed with the consent or connivance of, or is attributable to any neglect on the part of, any director, manager, secretary or other officer of the company..."
+              }
+            }
+          ],
+          "ai_analysis": {
+            "extraction_rationale": "Identifies the sections that prescribe fines and liability for offences.",
+            "source_excerpt": "notification issued under section 14 shall be punishable for the first offence with fine ... may extend to five thousand rupees"
+          }
+        },
+        {
+          "policy_id": "POL-GEN-005",
+          "policy_title": "Compounding of Offences",
+          "policy_description": "Allows compounding of offences under section 18 and the procedure for discharge.",
+          "policy_text": "",
+          "scope": "Offenders and the State Government",
+          "objective": "Enable settlement of offences without trial under specified conditions",
+          "policy_type": "Procedure",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": [
+            {
+              "subpolicy_id": "POL-GEN-005.01",
+              "subpolicy_title": "19.1",
+              "subpolicy_description": "Power to compound offences",
+              "subpolicy_text": "",
+              "control": "Any offence committed under section 18, may either before or after the institution of the prosecution, be compounded by such officers or authorities and for such amount as the State Government may, by notification in the Official Gazette, specify.",
+              "ai_analysis": {
+                "extraction_rationale": "Identifies the authority to compound offences as a distinct requirement.",
+                "source_excerpt": "Any offence committed under section 18, may either before or after the institution of the prosecution, be compounded by such officers or authorities and for such amount as the State Government may, by notification in the Official Gazette, specify."
+              }
+            },
+            {
+              "subpolicy_id": "POL-GEN-005.02",
+              "subpolicy_title": "19.2",
+              "subpolicy_description": "Discharge upon compounding",
+              "subpolicy_text": "",
+              "control": "Where an offence has been compounded under sub-section (1), the offender shall be discharged and no further proceedings shall be taken against him in respect of such offence.",
+              "ai_analysis": {
+                "extraction_rationale": "Describes the legal effect of compounding, i.e., discharge and cessation of proceedings.",
+                "source_excerpt": "Where an offence has been compounded under sub-section (1), the offender shall be discharged and no further proceedings shall be taken against him in respect of such offence."
+              }
+            }
+          ],
+          "ai_analysis": {
+            "extraction_rationale": "Covers the provisions that permit compounding of offences and the resulting discharge.",
+            "source_excerpt": "Any offence committed under section 18, may either before or after the institution of the prosecution, be compounded by such officers or authorities and for such amount as the State Government may, by notification in the Official Gazette, specify."
+          }
+        },
+        {
+          "policy_id": "POL-GEN-006",
+          "policy_title": "Rule Making Power",
+          "policy_description": "Authorizes the Central Government to make rules for implementing the Act.",
+          "policy_text": "",
+          "scope": "Central Government and all stakeholders",
+          "objective": "Provide detailed procedural and substantive rules for various aspects of the Act",
+          "policy_type": "Regulation",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": [
+            {
+              "subpolicy_id": "POL-GEN-006.01",
+              "subpolicy_title": "20.a",
+              "subpolicy_description": "Application for certificate of registration",
+              "subpolicy_text": "",
+              "control": "(a) the form and manner of making an application for grant or renewal of a certificate of registration for main office or branch office and the fee thereof under sub-sections (2) and (3) of section 4;",
+              "ai_analysis": {
+                "extraction_rationale": "Specifies the form and manner of application for registration as a separate rule.",
+                "source_excerpt": "(a) the form and manner of making an application for grant or renewal of a certificate of registration for main office or branch office and the fee thereof under sub-sections (2) and (3) of section 4;"
+              }
+            },
+            {
+              "subpolicy_id": "POL-GEN-006.02",
+              "subpolicy_title": "20.b",
+              "subpolicy_description": "Eligibility conditions",
+              "subpolicy_text": "",
+              "control": "(b) the other conditions of eligibility which are required to be fulfilled by an applicant under clause (d) of sub-section (4) of section 4;",
+              "ai_analysis": {
+                "extraction_rationale": "Sets out additional eligibility conditions for registration applicants.",
+                "source_excerpt": "(b) the other conditions of eligibility which are required to be fulfilled by an applicant under clause (d) of sub-section (4) of section 4;"
+              }
+            },
+            {
+              "subpolicy_id": "POL-GEN-006.03",
+              "subpolicy_title": "20.c",
+              "subpolicy_description": "Grant of certificate",
+              "subpolicy_text": "",
+              "control": "(c) the form in which and the conditions subject to which certificate of registration or renewal may be granted under sub-section (5) of section 4;",
+              "ai_analysis": {
+                "extraction_rationale": "Defines the form and conditions for granting certificates.",
+                "source_excerpt": "(c) the form in which and the conditions subject to which certificate of registration or renewal may be granted under sub-section (5) of section 4;"
+              }
+            },
+            {
+              "subpolicy_id": "POL-GEN-006.04",
+              "subpolicy_title": "20.d",
+              "subpolicy_description": "Maintenance of register",
+              "subpolicy_text": "",
+              "control": "(d) the form and manner of maintaining a register under clause (a) of sub- section (7) of section 4;",
+              "ai_analysis": {
+                "extraction_rationale": "Specifies how a register must be maintained.",
+                "source_excerpt": "(d) the form and manner of maintaining a register under clause (a) of sub- section (7) of section 4;"
+              }
+            },
+            {
+              "subpolicy_id": "POL-GEN-006.05",
+              "subpolicy_title": "20.e",
+              "subpolicy_description": "Information return to authority",
+              "subpolicy_text": "",
+              "control": "(e) the information and return which may be furnish.ed to the registering authority and the transport research wing under clause (c) of sub-section (7) of section 4;",
+              "ai_analysis": {
+                "extraction_rationale": "Details the information and returns to be furnished.",
+                "source_excerpt": "(e) the information and return which may be furnish.ed to the registering authority and the transport research wing under clause (c) of sub-section (7) of section 4;"
+              }
+            },
+            {
+              "subpolicy_id": "POL-GEN-006.06",
+              "subpolicy_title": "20.j_fee",
+              "subpolicy_description": "Fee for memorandum of appeal",
+              "subpolicy_text": "",
+              "control": "(j) fee for submitting the memorandum of appeal under sub-section (2) of section 6;",
+              "ai_analysis": {
+                "extraction_rationale": "Sets the fee for filing an appeal memorandum.",
+                "source_excerpt": "(j) fee for submitting the memorandum of appeal under sub-section (2) of section 6;"
+              }
+            },
+            {
+              "subpolicy_id": "POL-GEN-006.07",
+              "subpolicy_title": "20.g",
+              "subpolicy_description": "Form of goods forwarding note",
+              "subpolicy_text": "",
+              "control": "(g) the form and manner in which a goods forwarding note shall be executed by the consignor under sub-section (I) of section 8;",
+              "ai_analysis": {
+                "extraction_rationale": "Defines the execution form of a goods forwarding note.",
+                "source_excerpt": "(g) the form and manner in which a goods forwarding note shall be executed by the consignor under sub-section (I) of section 8;"
+              }
+            },
+            {
+              "subpolicy_id": "POL-GEN-006.08",
+              "subpolicy_title": "20.h",
+              "subpolicy_description": "Common carrier receipt",
+              "subpolicy_text": "",
+              "control": "(h) the form and manner in which a common carrier shall issue goods receipt under sub-section (1) of section 9;",
+              "ai_analysis": {
+                "extraction_rationale": "Specifies the form of receipt issued by a common carrier.",
+                "source_excerpt": "(h) the form and manner in which a common carrier shall issue goods receipt under sub-section (1) of section 9;"
+              }
+            },
+            {
+              "subpolicy_id": "POL-GEN-006.09",
+              "subpolicy_title": "20.i",
+              "subpolicy_description": "Carrier liability for loss or damage",
+              "subpolicy_text": "",
+              "control": "(i) liability of the common carrier for loss Of, or damage to any consignment under sub-section (1) of section 10;",
+              "ai_analysis": {
+                "extraction_rationale": "Sets the liability of carriers for loss or damage.",
+                "source_excerpt": "(i) liability of the common carrier for loss Of, or damage to any consignment under sub-section (1) of section 10;"
+              }
+            },
+            {
+              "subpolicy_id": "POL-GEN-006.10",
+              "subpolicy_title": "20.k",
+              "subpolicy_description": "Specification of dangerous or hazardous goods",
+              "subpolicy_text": "",
+              "control": "(k) the specification of the goods of dangerous or hazardous nature to human life and the label or c",
+              "ai_analysis": {
+                "extraction_rationale": "Describes the specification of dangerous or hazardous goods.",
+                "source_excerpt": "(k) the specification of the goods of dangerous or hazardous nature to human life and the label or c"
+              }
+            }
+          ],
+          "ai_analysis": {
+            "extraction_rationale": "Covers the provision granting rule‑making authority to the Central Government.",
+            "source_excerpt": "The Central Government may, by notification in the Official Gazette, make rules for carrying out the provisions of this Act."
+          }
+        },
+        {
+          "policy_id": "POL-GEN-007",
+          "policy_title": "Procedure for Removal of Difficulties",
+          "policy_description": "Allows the Central Government to issue orders to remove difficulties in implementing the Act.",
+          "policy_text": "",
+          "scope": "Central Government",
+          "objective": "Resolve operational challenges while ensuring consistency with the Act",
+          "policy_type": "Procedure",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": [
+            {
+              "subpolicy_id": "POL-GEN-007.01",
+              "subpolicy_title": "21.1",
+              "subpolicy_description": "Power to remove difficulties",
+              "subpolicy_text": "",
+              "control": "If any difficulty arises in giving effect to the provisions of this Act, the Central Government may, by general or special order published in the Official Gazette, make such provisions.",
+              "ai_analysis": {
+                "extraction_rationale": "Extracts the authority to issue orders for difficulty removal.",
+                "source_excerpt": "If any difficulty arises in giving effect to the provisions of this Act, the Central Government may, by general or special order published in the Official Gazette, make such provisions."
+              }
+            },
+            {
+              "subpolicy_id": "POL-GEN-007.02",
+              "subpolicy_title": "21.2",
+              "subpolicy_description": "Laying of orders before Parliament",
+              "subpolicy_text": "",
+              "control": "Every order made under sub-section (1) shall be laid, as soon as may be, after it is made, before each House of Parliament.",
+              "ai_analysis": {
+                "extraction_rationale": "Specifies the requirement to present orders before Parliament.",
+                "source_excerpt": "Every order made under sub-section (1) shall be laid, as soon as may be, after it is made, before each House of Parliament."
+              }
+            }
+          ],
+          "ai_analysis": {
+            "extraction_rationale": "Covers the power to issue orders for removing difficulties under the Act.",
+            "source_excerpt": "If any difficulty arises in giving effect to the provisions of this Act, the Central Government may, by general or special order published in the Official Gazette, make such provisions."
+          }
+        },
+        {
+          "policy_id": "POL-GEN-008",
+          "policy_title": "Repeal and Saving",
+          "policy_description": "Repeals the Carriers Act, 1865 and provides saving provisions for existing actions.",
+          "policy_text": "",
+          "scope": "All parties affected by the repeal",
+          "objective": "Replace the old Act while preserving lawful prior actions",
+          "policy_type": "Legal",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": [
+            {
+              "subpolicy_id": "POL-GEN-008.01",
+              "subpolicy_title": "22.1",
+              "subpolicy_description": "Repeal of Carriers Act",
+              "subpolicy_text": "",
+              "control": "The Carriers Act, 1865, is hereby repealed.",
+              "ai_analysis": {
+                "extraction_rationale": "Identifies the explicit repeal of the previous Act.",
+                "source_excerpt": "The Carriers Act, 1865, is hereby repealed."
+              }
+            },
+            {
+              "subpolicy_id": "POL-GEN-008.02",
+              "subpolicy_title": "22.2",
+              "subpolicy_description": "Continuance of actions under repealed Act",
+              "subpolicy_text": "",
+              "control": "Anything done or any action taken under the said Act shall, in so far as such thing or action is not inconsistent with the provisions of this Act, be deemed to have been done or taken under the provisions of this Act and shall continue in force accordingly until superseded.",
+              "ai_analysis": {
+                "extraction_rationale": "Preserves lawful actions taken under the repealed Act.",
+                "source_excerpt": "Anything done or any action taken under the said Act shall, in so far as such thing or action is not inconsistent with the provisions of this Act, be deemed to have been done or taken under the provisions of this Act..."
+              }
+            },
+            {
+              "subpolicy_id": "POL-GEN-008.03",
+              "subpolicy_title": "22.3",
+              "subpolicy_description": "Effect of mention of particular matters",
+              "subpolicy_text": "",
+              "control": "The mention of particular matters in this section shall not be held to prejudice or affect the general application of section 6 of the General Clauses Act, 1897 with regard to the effect of repeals.",
+              "ai_analysis": {
+                "extraction_rationale": "Clarifies that specific mentions do not affect the general repeal rules.",
+                "source_excerpt": "The mention of particular matters in this section shall not be held to prejudice or affect the general application of section 6 of the General Clauses Act, 1897 with regard to the effect of repeals."
+              }
+            }
+          ],
+          "ai_analysis": {
+            "extraction_rationale": "Contains the repeal of the Carriers Act and the saving clauses for continuity.",
+            "source_excerpt": "The Carriers Act, 1865, is hereby repealed. Notwithstanding the repeal ... anything done or any action taken under the said Act shall, in so far as such thing or action is not inconsistent with the provisions of this Act, be deemed to have been done or taken under the provisions of this Act."
+          }
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "total_sections": 1,
+    "total_policies": 8,
+    "total_subpolicies": 69
+  }
+}

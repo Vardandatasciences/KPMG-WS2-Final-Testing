@@ -3966,7 +3966,6 @@ def get_frameworks(request):
 @api_view(['GET'])
 @permission_classes([AllowAny])  # Allow all users to see approved frameworks on homepage
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
-@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_approved_active_frameworks(request):
     """
     Get all approved and active frameworks for display on homepage
@@ -3975,6 +3974,7 @@ def get_approved_active_frameworks(request):
     try:
         # MULTI-TENANCY: Query for frameworks that are both Approved and Active, filtered by tenant
         tenant_id = get_tenant_id_from_request(request)
+        debug_print(f"DEBUG: get_approved_active_frameworks called for tenant {tenant_id}")
         
         # Handle case where tenant_id might be None (shouldn't happen with @require_tenant, but defensive)
         if tenant_id is None:
@@ -3987,30 +3987,29 @@ def get_approved_active_frameworks(request):
         
         # Query frameworks without ordering to avoid MySQL sort memory issues
         # We'll sort in Python after fetching and decrypting
-        # Query frameworks without ordering to avoid MySQL sort memory issues
-        # We'll sort in Python after fetching and decrypting
         frameworks = Framework.objects.filter(
             tenant_id=tenant_id, 
             Status='Approved',
             ActiveInactive='Active'
         )
         
+        frameworks_count = frameworks.count()
+        debug_print(f"DEBUG: Found {frameworks_count} approved/active frameworks for tenant {tenant_id}")
+        
         # Convert frameworks to list of dictionaries
         frameworks_list = []
         for framework in frameworks:
             try:
-                # Safely access fields, handling potential encryption/decryption issues
-                framework_dict = {
+                # Use decrypted properties if available (EncryptedFieldsMixin provides _plain)
+                frameworks_list.append({
                     'FrameworkId': framework.FrameworkId,
-                    'FrameworkName': getattr(framework, 'FrameworkName', '') or '',
-                    'FrameworkDescription': getattr(framework, 'FrameworkDescription', '') or '',
-                    'Category': getattr(framework, 'Category', '') or '',
-                    'CurrentVersion': getattr(framework, 'CurrentVersion', 1.0) or 1.0,
-                    'EffectiveDate': framework.EffectiveDate.isoformat() if hasattr(framework, 'EffectiveDate') and framework.EffectiveDate else None,
-                    'Identifier': getattr(framework, 'Identifier', '') or '',
-                    'InternalExternal': getattr(framework, 'InternalExternal', '') or ''
-                }
-                frameworks_list.append(framework_dict)
+                    'FrameworkName': getattr(framework, 'FrameworkName_plain', getattr(framework, 'FrameworkName', '')) or '',
+                    'FrameworkDescription': getattr(framework, 'FrameworkDescription_plain', getattr(framework, 'FrameworkDescription', '')) or '',
+                    'Identifier': getattr(framework, 'Identifier_plain', getattr(framework, 'Identifier', '')) or '',
+                    'DocURL': getattr(framework, 'DocURL_plain', getattr(framework, 'DocURL', '')) or '',
+                    'Status': framework.Status,
+                    'ActiveInactive': framework.ActiveInactive
+                })
             except Exception as framework_error:
                 # Log error for this specific framework but continue processing others
                 logger.error(f"Error processing framework {getattr(framework, 'FrameworkId', 'unknown')}: {str(framework_error)}")
