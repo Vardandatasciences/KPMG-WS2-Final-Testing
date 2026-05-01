@@ -81,7 +81,7 @@ _default_secure_cookies = not DEBUG
 ALLOWED_HOSTS = [
     'localhost',
     '127.0.0.1',
-    'grc-riskavaire.vardaands.com',
+    'test-riskavaire.vardaands.com',
     'riskavaire.vardaands.com',  # Main production domain
     'riskavairegrc.vardaands.com',  # Hostinger VPS (GRC + TPRM SPA)
     'riskavaire-grc-tprm.vardaands.com',  # Dedicated subdomain (Docker stack + host nginx)
@@ -596,7 +596,7 @@ CORS_ALLOW_CREDENTIALS = True
 # Optional env-driven CORS extension:
 # CORS_ALLOWED_ORIGINS_EXTRA="https://app.example.com,https://admin.example.com"
 CORS_ALLOWED_ORIGINS = [
-    "https://grc-riskavaire.vardaands.com",
+    "https://test-riskavaire.vardaands.com",
     "https://grc-tprm.vardaands.com",
     "https://test-riskavaire.vardaands.com",
     "http://localhost:3000",  # TPRM frontend development server
@@ -638,7 +638,7 @@ CORS_ALLOWED_ORIGIN_REGEXES = [
 
 # CSRF settings
 CSRF_TRUSTED_ORIGINS = [
-    "https://grc-riskavaire.vardaands.com",
+    "https://test-riskavaire.vardaands.com",
     "https://riskavaire.vardaands.com",
     "https://test-riskavaire.vardaands.com",
     "http://localhost:3000",  # TPRM frontend development server
@@ -1002,7 +1002,7 @@ BAMBOOHR_CLIENT_SECRET = clean_env_value(os.environ.get("BAMBOOHR_CLIENT_SECRET"
 if USE_LOCAL_DEVELOPMENT:
     FRONTEND_URL = 'http://localhost:8080'  # Force localhost for local development
 else:
-    FRONTEND_URL = os.environ.get('FRONTEND_URL', 'https://grc-riskavaire.vardaands.com')
+    FRONTEND_URL = os.environ.get('FRONTEND_URL', 'https://test-riskavaire.vardaands.com')
 
 # Base URL for public questionnaire response links (email link; no login). Use hosted TPRM frontend in production.
 PUBLIC_QUESTIONNAIRE_BASE_URL = os.environ.get(
