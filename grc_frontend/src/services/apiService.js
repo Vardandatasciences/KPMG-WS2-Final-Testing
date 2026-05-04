@@ -19,6 +19,11 @@ const pendingRequests = new Map(); // For deduplication: url -> promise
 const responseCache = new Map();   // For caching: url -> { data, timestamp }
  
 const CACHE_TTL = 30000; // 30 seconds default TTL
+const FRAMEWORKS_LIST_CACHE_TTL = 15 * 60 * 1000; // 15 minutes
+const FRAMEWORKS_LIST_CACHE_KEY = 'api_cache_frameworks_list_v1';
+/** Slow incident list GET — dedupe identical params in apiService (Pinia still leads for UX). */
+const INCIDENT_INCIDENTS_LIST_CACHE_TTL_MS = 60 * 1000;
+const AUDIT_FINDINGS_LIST_CACHE_TTL_MS = 60 * 1000;
  
 // --- Helpers ---
  
@@ -44,10 +49,69 @@ const getSessionUserId = () => {
   }
   return userId || null;
 };
+
+const isFrameworksListEndpoint = (url) => {
+  const normalized = String(url || '').toLowerCase();
+  return (
+    normalized.endsWith('/api/frameworks/') ||
+    normalized.includes('/api/frameworks/?') ||
+    normalized.endsWith('/api/frameworks/approved-active/') ||
+    normalized.includes('/api/frameworks/approved-active/?') ||
+    normalized.endsWith('/api/compliance/all-policies/frameworks/') ||
+    normalized.includes('/api/compliance/all-policies/frameworks/?')
+  );
+};
+
+const isIncidentIncidentsListEndpoint = (url) => {
+  const normalized = String(url || '').toLowerCase();
+  return normalized.includes('incident-incidents');
+};
+
+/** List GET /api/audit-findings/ — not incident sub-resource or legacy details path */
+const isAuditFindingsListEndpoint = (url) => {
+  const n = String(url || '').toLowerCase();
+  if (!n.includes('audit-findings')) return false;
+  if (n.includes('audit-findings/incident')) return false;
+  if (n.includes('audit-findings-details')) return false;
+  if (n.includes('user-audit-findings')) return false;
+  return n.includes('/api/audit-findings') || n.includes('api/audit-findings');
+};
+
+const readPersistedFrameworksListCache = () => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.sessionStorage.getItem(FRAMEWORKS_LIST_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    if (!parsed.timestamp || parsed.data == null) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+};
+
+const persistFrameworksListCache = (data, timestamp) => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.sessionStorage.setItem(
+      FRAMEWORKS_LIST_CACHE_KEY,
+      JSON.stringify({ data, timestamp })
+    );
+  } catch {
+    // best-effort persistence only
+  }
+};
  
 // --- Core Axios Instance ---
 const apiClient = createAxiosInstance(API_BASE_URL);
-apiClient.defaults.timeout = 120000; // 2 minutes
+// Must not override createAxiosInstance timeout: policy/framework submit-review and
+// subpolicy review can exceed 2 minutes server-side; a short timeout aborts the XHR
+// ("canceled") while Django is still working and surfaces "No response from server".
+apiClient.defaults.timeout = Math.max(
+  Number(apiClient.defaults.timeout) || 0,
+  600000
+); // at least 10 minutes for long approval workflows
  
 // --- Interceptors ---
  
@@ -192,6 +256,13 @@ apiClient.interceptors.response.use((response) => {
  */
 const request = async (method, url, data = null, config = {}) => {
   const cacheKey = `${method}:${url}:${JSON.stringify(config.params || {})}`;
+  const ttlMs = isFrameworksListEndpoint(url)
+    ? FRAMEWORKS_LIST_CACHE_TTL
+    : isIncidentIncidentsListEndpoint(url)
+      ? INCIDENT_INCIDENTS_LIST_CACHE_TTL_MS
+      : isAuditFindingsListEndpoint(url)
+        ? AUDIT_FINDINGS_LIST_CACHE_TTL_MS
+        : (config.ttl || CACHE_TTL);
  
   // 1. Deduplication: If an identical GET is already pending, return it
   if (method === 'get' && pendingRequests.has(cacheKey)) {
@@ -202,9 +273,19 @@ const request = async (method, url, data = null, config = {}) => {
   // 2. Caching: Return fresh cached data if available
   if (method === 'get' && !config.skipCache && responseCache.has(cacheKey)) {
     const cached = responseCache.get(cacheKey);
-    if (Date.now() - cached.timestamp < (config.ttl || CACHE_TTL)) {
+    if (Date.now() - cached.timestamp < ttlMs) {
       console.log(`🎯 [API] Serving from cache: ${url}`);
       return cached.data;
+    }
+  }
+
+  // 2b. Session-persisted cache restore for expensive frameworks list endpoint.
+  if (method === 'get' && !config.skipCache && isFrameworksListEndpoint(url)) {
+    const persisted = readPersistedFrameworksListCache();
+    if (persisted && Date.now() - persisted.timestamp < ttlMs) {
+      responseCache.set(cacheKey, { data: persisted.data, timestamp: persisted.timestamp });
+      console.log(`⚡ [API] Serving frameworks list from session cache: ${url}`);
+      return persisted.data;
     }
   }
  
@@ -222,7 +303,11 @@ const request = async (method, url, data = null, config = {}) => {
  
       // Cache successful GET results
       if (method === 'get' && !config.skipCache) {
-        responseCache.set(cacheKey, { data: result, timestamp: Date.now() });
+        const timestamp = Date.now();
+        responseCache.set(cacheKey, { data: result, timestamp });
+        if (isFrameworksListEndpoint(url)) {
+          persistFrameworksListCache(result, timestamp);
+        }
       }
  
       return result;

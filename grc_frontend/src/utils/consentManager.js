@@ -4,19 +4,44 @@
  */
 
 import { apiService } from '../services/apiService.js';
-import { getFrameworkIdForClient, getSessionFrameworkId } from './frameworkContextStorage.js';
+import {
+  getFrameworkIdForClient,
+  getSessionFrameworkId,
+  getDefaultFrameworkId,
+} from './frameworkContextStorage.js';
 
 /**
- * Framework id for consent APIs: session-scoped only + env default (no localStorage).
+ * Framework id for consent POST bodies. Prefer explicit override (e.g. form's framework),
+ * then session, then env default — `/api/consent/check/` returns 400 if framework_id is missing.
  */
-function getFrameworkId() {
-  const id = getFrameworkIdForClient();
-  if (!getSessionFrameworkId()) {
-    console.warn(
-      '⚠️ [Consent] No session framework_id; using default for this request'
-    );
+export function resolveFrameworkIdForConsent(frameworkIdOverride) {
+  if (
+    frameworkIdOverride != null &&
+    frameworkIdOverride !== '' &&
+    String(frameworkIdOverride).trim() !== '' &&
+    String(frameworkIdOverride).toLowerCase() !== 'all'
+  ) {
+    const raw = String(frameworkIdOverride).trim()
+    const asNum = Number(raw)
+    if (!Number.isNaN(asNum) && asNum > 0) return asNum
+    return raw
   }
-  return id;
+  const fromSession = getFrameworkIdForClient()
+  if (
+    fromSession != null &&
+    String(fromSession).trim() !== '' &&
+    String(fromSession).toLowerCase() !== 'all'
+  ) {
+    const n = Number(fromSession)
+    if (!Number.isNaN(n) && n > 0) return n
+    return fromSession
+  }
+  const fallback = getDefaultFrameworkId()
+  if (!getSessionFrameworkId()) {
+    console.warn('⚠️ [Consent] No session framework_id; using default for consent request:', fallback)
+  }
+  const fn = Number(fallback)
+  return !Number.isNaN(fn) && fn > 0 ? fn : fallback
 }
 
 /**
@@ -38,15 +63,40 @@ function getUserId() {
   return sessionStorage.getItem('user_id');
 }
 
-export async function checkConsentRequired(actionType) {
+/** Short-lived cache so repeated checks (e.g. same flow / re-renders) do not stack duplicate `/api/consent/check/` calls. */
+const consentCheckResultCache = new Map()
+const CONSENT_CHECK_CACHE_MS = 5 * 60 * 1000
+
+function consentCheckCacheKey(actionType, resolvedFrameworkId) {
+  return `${actionType}|${resolvedFrameworkId}|${getUserId()}`
+}
+
+export function invalidateConsentCheckCache(actionType = null) {
+  if (!actionType) {
+    consentCheckResultCache.clear()
+    return
+  }
+  const prefix = `${actionType}|`
+  for (const k of [...consentCheckResultCache.keys()]) {
+    if (k.startsWith(prefix)) consentCheckResultCache.delete(k)
+  }
+}
+
+export async function checkConsentRequired(actionType, frameworkIdOverride = undefined) {
   try {
-    const frameworkId = getFrameworkId();
-    const userId = getUserId();
+    const resolvedFrameworkId = resolveFrameworkIdForConsent(frameworkIdOverride)
+    const cacheKey = consentCheckCacheKey(actionType, resolvedFrameworkId)
+    const hit = consentCheckResultCache.get(cacheKey)
+    if (hit && Date.now() - hit.t < CONSENT_CHECK_CACHE_MS) {
+      return hit.value
+    }
+
+    const userId = getUserId()
 
     const payload = {
       action_type: actionType,
-      framework_id: frameworkId
-    };
+      framework_id: resolvedFrameworkId,
+    }
 
     if (userId) {
       payload.user_id = userId;
@@ -55,14 +105,16 @@ export async function checkConsentRequired(actionType) {
     // Use apiService for secure, cookie-first authentication and logging
     const response = await apiService.post('/api/consent/check/', payload);
 
+    let value = { required: false, config: null }
     if (response && response.status === 'success') {
-      return {
+      value = {
         required: response.required,
         config: response.config
       };
     }
 
-    return { required: false, config: null };
+    consentCheckResultCache.set(cacheKey, { t: Date.now(), value })
+    return value
   } catch (error) {
     // In case of error, we fail-open for UX but log the issue securely
     console.error('❌ [Consent] Error checking consent requirement:', error.message);
@@ -78,9 +130,15 @@ export async function checkConsentRequired(actionType) {
  * @param {string} ipAddress - IP address (optional)
  * @returns {Promise<boolean>} - Success status
  */
-export async function recordConsentAcceptance(userId, configId, actionType, ipAddress = null) {
+export async function recordConsentAcceptance(
+  userId,
+  configId,
+  actionType,
+  ipAddress = null,
+  frameworkIdOverride = undefined
+) {
   try {
-    const frameworkId = getFrameworkId();
+    const frameworkId = resolveFrameworkIdForConsent(frameworkIdOverride)
 
     // The backend will extract IP and User Agent securely if passed as null
     const response = await apiService.post('/api/consent/accept/', {
@@ -92,7 +150,9 @@ export async function recordConsentAcceptance(userId, configId, actionType, ipAd
       user_agent: navigator.userAgent
     });
 
-    return response && response.status === 'success';
+    const ok = response && response.status === 'success'
+    if (ok) invalidateConsentCheckCache(actionType)
+    return ok
   } catch (error) {
     console.error('Error recording consent acceptance:', error.message);
     return false;
@@ -234,16 +294,25 @@ export function useConsent() {
  */
 export async function withdrawConsent(userId, actionType, reason = null, frameworkId = null) {
   try {
-    const fwId = frameworkId || getFrameworkId();
+    const fwId =
+      frameworkId != null &&
+      String(frameworkId).trim() !== '' &&
+      String(frameworkId).toLowerCase() !== 'all'
+        ? resolveFrameworkIdForConsent(frameworkId)
+        : getFrameworkIdForClient()
 
-    return await apiService.post('/api/consent/withdraw/', {
+    const body = {
       user_id: userId,
       action_type: actionType,
-      framework_id: fwId,
       ip_address: null,
       user_agent: navigator.userAgent,
-      reason: reason
-    });
+      reason: reason,
+    }
+    if (fwId != null && String(fwId).trim() !== '') {
+      body.framework_id = fwId
+    }
+
+    return await apiService.post('/api/consent/withdraw/', body)
   } catch (error) {
     console.error('Error withdrawing consent:', error.message);
     throw error;
@@ -255,7 +324,12 @@ export async function withdrawConsent(userId, actionType, reason = null, framewo
  */
 export async function withdrawAllConsents(userId, frameworkId = null, reason = null) {
   try {
-    const fwId = frameworkId || getFrameworkId();
+    const fwId =
+      frameworkId != null &&
+      String(frameworkId).trim() !== '' &&
+      String(frameworkId).toLowerCase() !== 'all'
+        ? resolveFrameworkIdForConsent(frameworkId)
+        : getFrameworkIdForClient()
 
     const payload = {
       user_id: userId,
@@ -264,8 +338,8 @@ export async function withdrawAllConsents(userId, frameworkId = null, reason = n
       reason: reason
     };
 
-    if (fwId) {
-      payload.framework_id = fwId;
+    if (fwId != null && String(fwId).trim() !== '') {
+      payload.framework_id = fwId
     }
 
     return await apiService.post('/api/consent/withdraw-all/', payload);
@@ -329,6 +403,8 @@ export async function checkConsentStatus(userId, frameworkId, actionType = null)
 
 export default {
   checkConsentRequired,
+  resolveFrameworkIdForConsent,
+  invalidateConsentCheckCache,
   recordConsentAcceptance,
   withdrawConsent,
   withdrawAllConsents,

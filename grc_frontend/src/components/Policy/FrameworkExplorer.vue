@@ -81,6 +81,23 @@
 
     <!-- Main Framework Explorer Content -->
     <div v-else>
+      <div
+        v-if="showExplorerSkeleton"
+        class="policy-page-skeleton policy-explorer-skeleton"
+        aria-busy="true"
+        aria-label="Loading framework explorer"
+      >
+        <div class="policy-skeleton-summary">
+          <div v-for="n in 2" :key="'pex-sum-' + n" class="policy-skeleton-card"></div>
+        </div>
+        <div class="policy-skeleton-controls">
+          <div v-for="n in 4" :key="'pex-ctl-' + n" class="policy-skeleton-pill"></div>
+        </div>
+        <div class="policy-skeleton-table">
+          <div v-for="n in 8" :key="'pex-row-' + n" class="policy-skeleton-row"></div>
+        </div>
+      </div>
+      <template v-else>
       <div class="export-controls framework-export-controls">
         <div class="export-controls-inner">
           <div class="export-select-wrapper" @click.stop="isExportDropdownOpen = !isExportDropdownOpen">
@@ -231,7 +248,11 @@
             <div class="framework-status-cell">
               <div class="status-controls">
                 <label class="switch" @click.stop>
-                  <input type="checkbox" :checked="fw.status === 'Active'" @change.stop="toggleStatus(fw)" />
+                  <input
+                    type="checkbox"
+                    :checked="fw.status === 'Active'"
+                    @change.stop="toggleStatus(fw, $event)"
+                  />
                   <span class="slider"></span>
                 </label>
                 <span class="switch-label" :class="fw.status === 'Active' ? 'active' : 'inactive'">{{ fw.status }}</span>
@@ -379,7 +400,11 @@
             </div>
             <div class="framework-card-status">
               <label class="switch" @click.stop>
-                <input type="checkbox" :checked="fw.status === 'Active'" @change.stop="toggleStatus(fw)" />
+                <input
+                  type="checkbox"
+                  :checked="fw.status === 'Active'"
+                  @change.stop="toggleStatus(fw, $event)"
+                />
                 <span class="slider"></span>
               </label>
             </div>
@@ -413,6 +438,7 @@
         </div>
       </div>
     </div>
+      </template>
     </div>
 
     <!-- Acknowledgement Request Modal -->
@@ -421,7 +447,7 @@
       :isVisible="showAcknowledgementModal"
       :policy="selectedPolicyForAck"
       @close="closeAcknowledgementModal"
-      @created="handleAcknowledgementCreated"
+      @submit="handleAcknowledgementSubmit"
     />
 
     <!-- Popup Modal -->
@@ -440,6 +466,12 @@ import CustomDropdown from '@/components/CustomDropdown.vue'
 import CreateAcknowledgementModal from './CreateAcknowledgementModal.vue'
 import { API_ENDPOINTS } from '@/config/api.js'
 import { openDownloadInNewTabWithAnchorFallback } from '@/utils/safeExternalNavigation'
+import { useFrameworkStore } from '@/stores/framework'
+import { usePolicyStore } from '@/stores/policy'
+import {
+  mapPiniaFrameworksToExplorerRows,
+  summarizeExplorerFromFrameworkRows,
+} from '@/composables/usePolicyExplorerPinia.js'
 
 // Add view state
 const currentView = ref('list') // 'list' or 'card'
@@ -451,6 +483,8 @@ const frameworks = ref([])
 const selectedFrameworkId = ref('')
 const selectedInternalExternal = ref('')
 const selectedEntity = ref('')
+const frameworkStore = useFrameworkStore()
+const policyStore = usePolicyStore()
 const entities = ref([])
 const router = useRouter()
 // Acknowledgement modal state (shared with FrameworkPolicies behaviour)
@@ -471,6 +505,10 @@ const allFrameworksSummary = ref({
   inactive_policies: 0
 })
 const isLoading = ref(false)
+/** Full-area skeleton only when there is nothing to render yet (cache miss). */
+const showExplorerSkeleton = computed(
+  () => isLoading.value && (!frameworks.value || frameworks.value.length === 0)
+)
 const statusFilter = ref(null)
 const typeFilter = ref(null)
  
@@ -512,7 +550,9 @@ const selectExportFormatOption = (opt) => {
 // Add push notification function
 const sendPushNotification = async (notificationData) => {
   try {
-    await apiService.post(API_ENDPOINTS.PUSH_NOTIFICATION, notificationData);
+    await apiService.post(API_ENDPOINTS.PUSH_NOTIFICATION, notificationData, {
+      background: true,
+    });
     console.log('Push notification sent successfully');
   } catch (error) {
     console.error('Error sending push notification:', error);
@@ -583,7 +623,11 @@ const formatDate = (dateString) => {
 const checkSelectedFrameworkFromSession = async () => {
   try {
     console.log('🔍 [FrameworkExplorer] Checking session framework...');
-    const data = await apiService.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED);
+    await frameworkStore.loadFrameworkFromSession();
+    const data = {
+      success: true,
+      frameworkId: frameworkStore.selectedFrameworkId,
+    };
     
     if (data && data.success) {
       if (data.frameworkId) {
@@ -602,6 +646,46 @@ const checkSelectedFrameworkFromSession = async () => {
   } catch (error) {
     console.error('Error checking selected framework from session:', error);
     selectedFrameworkId.value = null;
+  }
+}
+
+/** Background sync: authoritative FRAMEWORK_EXPLORER + Pinia frameworks TTL refresh */
+const refreshExplorerFromNetworkAndPinia = async () => {
+  try {
+    const hasFilters = Boolean(
+      selectedEntity.value ||
+      statusFilter.value ||
+      typeFilter.value ||
+      selectedInternalExternal.value
+    )
+    if (hasFilters) return
+
+    const data = await apiService.get(API_ENDPOINTS.FRAMEWORK_EXPLORER)
+    frameworks.value = data.frameworks || []
+    const sm =
+      data.summary || {
+        active_frameworks: 0,
+        inactive_frameworks: 0,
+        active_policies: 0,
+        inactive_policies: 0,
+      }
+    summary.value = sm
+    allFrameworksSummary.value = { ...sm }
+
+    policyDataService.setFrameworkExplorerData(frameworks.value, summary.value)
+    void policyStore.getAllFrameworks({ force: true }).catch(() => {})
+
+    await checkSelectedFrameworkFromSession()
+    if (selectedFrameworkId.value) {
+      summary.value = {
+        active_frameworks: 1,
+        inactive_frameworks: 0,
+        active_policies: 0,
+        inactive_policies: 0,
+      }
+    }
+  } catch (error) {
+    console.warn('[FrameworkExplorer] Background explorer refresh failed:', error)
   }
 }
 
@@ -625,13 +709,9 @@ const fetchFrameworks = async () => {
       }
 
       if (window.policyDataFetchPromise) {
-        console.log('⏳ [FrameworkExplorer] Waiting for policy prefetch to complete...')
-        try {
-          await window.policyDataFetchPromise
-          console.log('✅ [FrameworkExplorer] Prefetch completed')
-        } catch (prefetchError) {
-          console.warn('⚠️ [FrameworkExplorer] Prefetch failed, will fetch directly from API', prefetchError)
-        }
+        void window.policyDataFetchPromise.catch((prefetchError) => {
+          console.warn('⚠️ [FrameworkExplorer] Prefetch failed (non-blocking)', prefetchError)
+        })
       }
 
       if (policyDataService.hasFrameworkExplorerCache()) {
@@ -658,6 +738,30 @@ const fetchFrameworks = async () => {
 
         return
       }
+
+      // Pinia frameworks cache → instant paint; FRAMEWORK_EXPLORER refreshes in background
+      if (policyStore.hasFrameworksCache()) {
+        const raw = policyStore.getFrameworksCached()
+        const mapped = mapPiniaFrameworksToExplorerRows(raw)
+        if (mapped.length > 0) {
+          frameworks.value = mapped
+          const sm = summarizeExplorerFromFrameworkRows(mapped)
+          summary.value = { ...sm }
+          allFrameworksSummary.value = { ...sm }
+          await checkSelectedFrameworkFromSession()
+          if (selectedFrameworkId.value) {
+            summary.value = {
+              active_frameworks: 1,
+              inactive_frameworks: 0,
+              active_policies: 0,
+              inactive_policies: 0
+            }
+          }
+          isLoading.value = false
+          void refreshExplorerFromNetworkAndPinia()
+          return
+        }
+      }
     }
 
     const params = {}
@@ -682,6 +786,7 @@ const fetchFrameworks = async () => {
 
     if (!hasFilters) {
       policyDataService.setFrameworkExplorerData(frameworks.value, summary.value)
+      void policyStore.getAllFrameworks({ force: true }).catch(() => {})
     }
 
     await checkSelectedFrameworkFromSession()
@@ -696,6 +801,18 @@ const fetchFrameworks = async () => {
     }
   } catch (error) {
     console.error('Error fetching frameworks:', error)
+    if (!selectedEntity.value && !statusFilter.value && !typeFilter.value && !selectedInternalExternal.value) {
+      try {
+        const fallbackFrameworks = await policyStore.getAllFrameworks()
+        frameworks.value = (fallbackFrameworks || []).map((fw) => ({
+          ...fw,
+          id: fw.id || fw.FrameworkId,
+          name: fw.name || fw.FrameworkName
+        }))
+      } catch (fallbackError) {
+        console.error('Framework explorer store fallback failed:', fallbackError)
+      }
+    }
   } finally {
     isLoading.value = false
   }
@@ -983,25 +1100,45 @@ const acknowledgePolicy = async (policy) => {
   showAcknowledgementModal.value = true
 }
 
-// Handle acknowledgement request created
+// Optimistic: modal closes immediately; API runs in background
+const handleAcknowledgementSubmit = ({ requestData, policy_name, total_users }) => {
+  closeAcknowledgementModal()
+  void apiService
+    .post(API_ENDPOINTS.CREATE_ACKNOWLEDGEMENT_REQUEST, requestData, { background: true })
+    .then((response) => {
+      void handleAcknowledgementCreated({
+        ...response,
+        policy_name: response.policy_name || policy_name,
+        total_users: response.total_users ?? total_users,
+        acknowledgement_request_id: response.acknowledgement_request_id,
+      })
+    })
+    .catch((error) => {
+      console.error('Error creating acknowledgement request:', error)
+      PopupService.error(
+        error.response?.data?.error || 'Failed to create acknowledgement request',
+        'Error'
+      )
+    })
+}
+
+// After API success: push, optional navigation to report
 const handleAcknowledgementCreated = async (data) => {
   showAcknowledgementModal.value = false
   selectedPolicyForAck.value = null
 
-  // Notify user (reusing generic push notification helper)
   try {
     await sendPushNotification({
       title: 'Acknowledgement Request Created',
       message: `Acknowledgement request created for "${data.policy_name || 'policy'}". ${data.total_users} users assigned.`,
       category: 'policy',
       priority: 'high',
-      user_id: 'default_user'
+      user_id: 'default_user',
     })
   } catch (e) {
     console.error('Error sending acknowledgement request notification:', e)
   }
 
-  // Offer navigation to report page if an acknowledgement_request_id exists
   if (data.acknowledgement_request_id) {
     PopupService.confirm(
       `Acknowledgement request created successfully. ${data.total_users} users assigned.\n\nWould you like to view the report now?`,
@@ -1009,12 +1146,10 @@ const handleAcknowledgementCreated = async (data) => {
       async () => {
         router.push({
           name: 'AcknowledgementReport',
-          params: { requestId: data.acknowledgement_request_id }
+          params: { requestId: data.acknowledgement_request_id },
         })
       },
-      async () => {
-        // No-op for now; inline list does not need a refresh
-      }
+      async () => {}
     )
   }
 }
@@ -1059,7 +1194,10 @@ const showPolicyDetails = (policyId, frameworkId) => {
 }
 
 // Toggle framework status
-const toggleStatus = async (fw) => {
+const toggleStatus = async (fw, event) => {
+  // Avoid firing backend calls for synthetic / initial-render checkbox changes.
+  // `isTrusted` is true only for real user-generated events.
+  if (event && event.isTrusted === false) return
   try {
     // Check if we're deactivating (Active -> Inactive)
     if (fw.status === 'Active') {
@@ -1299,19 +1437,15 @@ watch(selectedEntity, () => {
 watch(selectedFrameworkId, async (newVal) => {
   console.log('selectedFrameworkId changed:', newVal);
   if (newVal) {
-    // Save the selected framework to session
     try {
-      const data = await apiService.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, {
-        frameworkId: newVal
+      const selected = frameworks.value.find((fw) => String(fw.id) === String(newVal))
+      await frameworkStore.setFramework({
+        id: newVal,
+        name: selected?.name || 'Selected Framework',
       })
-      
-      if (data && data.success) {
-        console.log('✅ [FrameworkExplorer] Framework saved to session successfully')
-      } else {
-        console.error('❌ [FrameworkExplorer] Failed to save framework to session')
-      }
+      console.log('✅ [FrameworkExplorer] Framework saved via frameworkStore')
     } catch (error) {
-      console.error('❌ DEBUG: Error saving framework to session in FrameworkExplorer:', error)
+      console.error('❌ DEBUG: Error saving framework via frameworkStore in FrameworkExplorer:', error)
     }
     
     console.log('Framework selected:', newVal);
@@ -1323,6 +1457,11 @@ watch(selectedFrameworkId, async (newVal) => {
       inactive_policies: 0
     }
   } else {
+    try {
+      await frameworkStore.resetFramework()
+    } catch (error) {
+      console.error('❌ DEBUG: Error resetting framework via frameworkStore in FrameworkExplorer:', error)
+    }
     console.log('No framework selected, reverting to all frameworks summary');
     // If no framework is selected (e.g., cleared), revert summary to show all frameworks
     summary.value = allFrameworksSummary.value
@@ -3249,6 +3388,61 @@ h1 {
   .summary-section-title {
     font-size: 1.2rem;
     margin-bottom: 16px;
+  }
+}
+
+/* ── Policy module skeleton (aligned with Compliance pulse pattern) ─────── */
+.policy-page-skeleton.policy-explorer-skeleton {
+  padding: 8px 0 24px;
+}
+.policy-skeleton-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.policy-skeleton-card {
+  height: 88px;
+  border-radius: 12px;
+  background: linear-gradient(90deg, #eef2f7 0%, #f8fafc 50%, #eef2f7 100%);
+  background-size: 200% 100%;
+  animation: policySkeletonPulse 1.35s ease infinite;
+}
+.policy-skeleton-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.policy-skeleton-pill {
+  height: 40px;
+  width: min(100%, 200px);
+  border-radius: 10px;
+  background: linear-gradient(90deg, #eef2f7 0%, #f8fafc 50%, #eef2f7 100%);
+  background-size: 200% 100%;
+  animation: policySkeletonPulse 1.35s ease infinite;
+}
+.policy-skeleton-table {
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #e8ecf2;
+}
+.policy-skeleton-row {
+  height: 48px;
+  border-bottom: 1px solid #eef2f7;
+  background: linear-gradient(90deg, #f4f6fa 0%, #fafbfd 50%, #f4f6fa 100%);
+  background-size: 200% 100%;
+  animation: policySkeletonPulse 1.35s ease infinite;
+}
+.policy-skeleton-row:last-child {
+  border-bottom: none;
+}
+@keyframes policySkeletonPulse {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
   }
 }
 </style>

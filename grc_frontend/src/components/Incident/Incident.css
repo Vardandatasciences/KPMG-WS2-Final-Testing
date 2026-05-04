@@ -32,6 +32,11 @@
 }
 
 /* Global Styles for Incident Table */
+.incident-list-skeleton {
+  margin-bottom: 16px;
+  max-width: 100%;
+}
+
 .incident-view-container {
   padding-top: 40px;
   padding-left: 60px;

@@ -1,6 +1,11 @@
 import { API_BASE_URL, createAxiosInstance } from '../config/api.js'
 import { navigateTopLevelToGoogleOAuth } from '../utils/safeExternalNavigation'
 import { clearLegacyClientJwtKeys } from '../utils/legacyAuthStorage.js'
+import { clearAllFrameworkCaches } from '@/stores/frameworkGlobalCache'
+import { useComplianceStore } from '@/stores/compliance'
+import { usePermissionStore } from '@/stores/permission'
+import { useRiskStore } from '@/stores/risk'
+import legacyVuexStore from '@/store'
  
 const TOKEN_STORAGE_KEYS = [
   'session_token',
@@ -329,8 +334,34 @@ export default {
     try {
       sessionStorage.removeItem('framework_id')
       sessionStorage.removeItem('selectedFrameworkId')
+      const incidentListSessionPrefix = 'grc_incident_server_list_v1::'
+      Object.keys(sessionStorage).forEach((k) => {
+        if (k.startsWith(incidentListSessionPrefix)) sessionStorage.removeItem(k)
+      })
     } catch (e) {
       /* ignore storage access errors */
+    }
+    clearAllFrameworkCaches()
+    try {
+      useComplianceStore().resetState()
+    } catch (e) {
+      console.warn('Unable to reset compliance Pinia state during logout:', e?.message || e)
+    }
+    try {
+      useRiskStore().fullReset()
+    } catch (e) {
+      console.warn('Unable to reset risk Pinia state during logout:', e?.message || e)
+    }
+    try {
+      usePermissionStore().reset()
+    } catch (e) {
+      console.warn('Unable to reset permission Pinia state during logout:', e?.message || e)
+    }
+    try {
+      legacyVuexStore.commit('framework/RESET_FRAMEWORK')
+      legacyVuexStore.commit('framework/SET_FRAMEWORKS', [])
+    } catch (e) {
+      console.warn('Unable to reset legacy framework Vuex state during logout:', e?.message || e)
     }
     // MULTI-TENANCY: Clear tenant data
     localStorage.removeItem('tenant_id')

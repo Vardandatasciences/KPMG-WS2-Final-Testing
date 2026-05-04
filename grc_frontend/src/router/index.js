@@ -189,6 +189,27 @@ import ScoringDetails from '../components/Risk/ScoringDetails.vue'
 import RiskResolution from '../components/Risk/RiskResolution.vue'
 import ViewRisk from '../components/Risk/ViewRisk.vue'
 import ViewInstance from '../components/Risk/ViewInstance.vue'
+
+/** Warm Pinia + legacy risk caches before list/detail mounts (non-blocking; store dedupes in-flight fetches). */
+function warmRiskListsFromCache() {
+  import('../stores/risk')
+    .then(({ useRiskStore }) => {
+      const rs = useRiskStore()
+      rs.hydrateFromLegacyService()
+      void rs.prefetchRiskRegisterAndInstances({ force: false })
+    })
+    .catch(() => {})
+}
+
+function warmRiskScoringPrefetch() {
+  import('../stores/risk')
+    .then(({ useRiskStore }) => {
+      const rs = useRiskStore()
+      rs.hydrateFromLegacyService()
+      void rs.fetchScoringInstances({ force: false })
+    })
+    .catch(() => {})
+}
 import RiskAIDocumentUpload from '../components/Risk/risk_ai.vue'
 import RiskInstanceAIUpload from '../components/Risk/risk_ai_instance.vue'
 import SystemIdentifiedRisks from '../components/Risk/SystemIdentifiedRisks.vue'
@@ -529,7 +550,8 @@ const routes = [
   {
     path: '/risk/riskregister-list',
     name: 'RiskRegisterList',
-    component: RiskRegisterList
+    component: RiskRegisterList,
+    beforeEnter: warmRiskListsFromCache,
   },
   {
     path: '/risk/create-risk',
@@ -549,12 +571,14 @@ const routes = [
   {
     path: '/risk/riskinstances-list',
     name: 'RiskInstancesList',
-    component: RiskInstances
+    component: RiskInstances,
+    beforeEnter: warmRiskListsFromCache,
   },
   {
     path: '/risk/create-instance',
     name: 'CreateRiskInstance',
-    component: CreateRiskInstance
+    component: CreateRiskInstance,
+    beforeEnter: warmRiskListsFromCache,
   },
   {
     path: '/risk/resolution',
@@ -564,12 +588,14 @@ const routes = [
   {
     path: '/risk/workflow',
     name: 'RiskWorkflow',
-    component: RiskWorkflow
+    component: RiskWorkflow,
+    beforeEnter: warmRiskListsFromCache,
   },
   {
     path: '/risk/scoring',
     name: 'RiskScoring',
-    component: RiskScoring
+    component: RiskScoring,
+    beforeEnter: warmRiskScoringPrefetch,
   },
   {
     path: '/risk/scoring-details/:riskId',
@@ -615,12 +641,14 @@ const routes = [
   {
     path: '/view-risk/:id',
     name: 'ViewRisk',
-    component: ViewRisk
+    component: ViewRisk,
+    beforeEnter: warmRiskListsFromCache,
   },
   {
     path: '/view-instance/:id',
     name: 'ViewInstance',
-    component: ViewInstance
+    component: ViewInstance,
+    beforeEnter: warmRiskListsFromCache,
   },
  
   {
@@ -1072,7 +1100,7 @@ const routes = [
         meta: { requiresAuth: true }
       },
       {
-        path: 'details',
+        path: 'details/:eventId?',
         name: 'EventDetails',
         component: () => import('../components/EventHandling/EventDetails.vue'),
         meta: { requiresAuth: true }

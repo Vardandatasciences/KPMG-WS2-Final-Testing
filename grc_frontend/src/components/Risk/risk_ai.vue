@@ -487,6 +487,7 @@
 <script>
 import { API_ENDPOINTS } from '../../config/api.js';
 import apiService from '@/services/apiService.js';
+import { useRiskStore } from '@/stores/risk';
 
 const axios = {
   post: (url, data = {}, config = {}) =>
@@ -1322,6 +1323,11 @@ export default {
     }
   },
   mounted() {
+    try {
+      void useRiskStore().prefetchRiskRegisterAndInstances({ force: false });
+    } catch {
+      /* non-fatal */
+    }
     // Check sidebar state on mount
     this.checkSidebarState();
     

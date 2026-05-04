@@ -133,7 +133,7 @@
     <div v-if="selectedTab === 'framework' && selectedFramework">
       <div class="TT-container global-form-box">
         <!-- Framework Form -->
-        <form @submit.prevent="submitFramework">
+        <form @submit.prevent="submitTailoredFramework">
           <div class="global-form-group">
             <label class="global-form-label">
               Framework Name <span class="global-form-label-required">*</span>
@@ -533,7 +533,7 @@
             </div>
         <div v-if="policyTabs.length && policyTabs[activePolicyTab]" class="TT-policy-form-container">
           <button class="TT-exclude-policy-btn" @click="excludePolicyTab(activePolicyTab)">Exclude</button>
-          <form @submit.prevent="submitPolicy(activePolicyTab)" :key="policyTabs[activePolicyTab].id">
+          <form @submit.prevent="submitTailoredFramework" :key="policyTabs[activePolicyTab].id">
             <div class="global-form-row">
               <div class="global-form-group">
                 <label class="global-form-label">
@@ -1479,7 +1479,7 @@
       <!-- Optionally, you can show a message here: Please select a framework -->
     </div>
     <div v-if="selectedTab === 'framework' && selectedFramework" class="TT-universal-submit-wrapper">
-      <button class="btn-submit" @click="submitTailoredFramework" :disabled="isFrameworkCreatorReviewerSame">Submit</button>
+      <button class="btn-submit" @click="submitTailoredFramework" :disabled="isFrameworkCreatorReviewerSame || ttFrameworkCreateInFlight">Submit</button>
     </div>
     <div v-if="selectedTab === 'policy' && selectedFramework && selectedPolicy">
       <div class="TT-policy-tabs-container">
@@ -1498,7 +1498,7 @@
         <div v-if="policyTabs.length && policyTabs[activePolicyTab]" class="TT-policy-form-container">
           <!-- Only show Exclude in framework mode -->
           <button v-if="selectedTab === 'framework'" class="TT-exclude-policy-btn" @click="excludePolicyTab(activePolicyTab)">Exclude</button>
-          <form @submit.prevent="submitPolicy(activePolicyTab)" :key="policyTabs[activePolicyTab].id">
+          <form @submit.prevent="submitTailoredPolicy" :key="policyTabs[activePolicyTab].id">
             <!-- Same policy form as above -->
             <div class="global-form-row">
               <div class="global-form-group">
@@ -2519,7 +2519,7 @@
       </div>
     <!-- Add submit button for policy tab -->
     <div v-if="selectedTab === 'policy' && selectedFramework && selectedPolicy" class="TT-universal-submit-wrapper">
-      <button class="btn-submit" @click="submitTailoredPolicy" :disabled="isPolicyCreatorReviewerSame">Submit</button>
+      <button class="btn-submit" @click="submitTailoredPolicy" :disabled="isPolicyCreatorReviewerSame || ttPolicyCreateInFlight">Submit</button>
       </div>
     </div>
   </template>
@@ -2531,6 +2531,8 @@ import apiService from '@/services/apiService'
 import policyDataService from '@/services/policyService'
 import { PopupService, PopupModal } from '@/modules/popup'  // Fix the import path
 import {  API_ENDPOINTS } from '../../config/api.js'
+import { useFrameworkStore } from '@/stores/framework'
+import { usePolicyStore } from '@/stores/policy'
 
 
   export default {
@@ -2575,6 +2577,8 @@ import {  API_ENDPOINTS } from '../../config/api.js'
       policyTabs: [],
       activePolicyTab: 0,
       loading: false,
+      ttFrameworkCreateInFlight: false,
+      ttPolicyCreateInFlight: false,
       error: null,
       entities: [], // Initialize as empty array
       existingFrameworkIdentifiers: [], // Add this to track existing identifiers
@@ -2727,24 +2731,17 @@ import {  API_ENDPOINTS } from '../../config/api.js'
     },
     async selectedFramework(newVal) {
       if (newVal && newVal !== '' && newVal !== '__new__') {
-        // Save the selected framework to session
         try {
-          const userId = this.currentUser.UserId || localStorage.getItem('user_id') || 'default_user'
-          console.log('🔍 DEBUG: Saving framework to session in TT:', newVal)
-          
-          const response = await apiService.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, {
-            frameworkId: newVal,
-            userId: userId
+          console.log('🔍 DEBUG: Saving framework via frameworkStore in TT:', newVal)
+          const frameworkStore = useFrameworkStore()
+          const selected = this.frameworks.find((f) => String(f.id) === String(newVal))
+          await frameworkStore.setFramework({
+            id: newVal,
+            name: selected?.name || 'Selected Framework',
           })
-          
-          if (response.success) {
-            console.log('✅ DEBUG: Framework saved to session successfully in TT')
-            console.log('🔑 DEBUG: Session key:', response.sessionKey)
-          } else {
-            console.error('❌ DEBUG: Failed to save framework to session in TT')
-          }
+          console.log('✅ DEBUG: Framework saved via frameworkStore in TT')
         } catch (error) {
-          console.error('❌ DEBUG: Error saving framework to session in TT:', error)
+          console.error('❌ DEBUG: Error saving framework via frameworkStore in TT:', error)
         }
       }
       
@@ -2786,16 +2783,19 @@ import {  API_ENDPOINTS } from '../../config/api.js'
   async created() {
     try {
       // Initialize frameworkForm.createdByName with loggedInUsername
-      this.frameworkForm.createdByName = this.loggedInUsername;
-      
+      this.frameworkForm.createdByName = this.loggedInUsername
+
+      // Frameworks first (Pinia/cache-first — do not block on heavy policyService prefetch)
+      await this.fetchFrameworks()
+      // Second frameworks/? call for identifiers — run in background so it does not add 20s to first paint
+      void this.fetchExistingFrameworkIdentifiers()
+
       await Promise.all([
-        this.fetchCurrentUser(), // Fetch current user first
-        this.fetchFrameworks(),
+        this.fetchCurrentUser(),
         this.fetchPolicyCategories(),
         this.fetchEntities(),
         this.fetchUsers(),
-        this.fetchDepartments(),
-        this.fetchExistingFrameworkIdentifiers() // Add this to fetch existing identifiers
+        this.fetchDepartments()
       ])
     } catch (error) {
       console.error('Error in component creation:', error)
@@ -2959,63 +2959,75 @@ import {  API_ENDPOINTS } from '../../config/api.js'
     },
     async sendPushNotification(notificationData) {
       try {
-        await apiService.post(API_ENDPOINTS.PUSH_NOTIFICATION, notificationData);
+        await apiService.post(API_ENDPOINTS.PUSH_NOTIFICATION, notificationData, {
+          background: true
+        });
         console.log('Push notification sent successfully');
       } catch (error) {
         console.error('Error sending push notification:', error);
       }
     },
+    mapRawFrameworksToTT(frameworksSource) {
+      const src = Array.isArray(frameworksSource) ? frameworksSource : []
+      return src.map((fw) => ({
+        id: fw.FrameworkId || fw.id,
+        name: fw.FrameworkName || fw.name,
+        description: fw.FrameworkDescription || fw.description,
+        category: fw.Category || fw.category,
+        internalExternal: fw.InternalExternal || fw.internalExternal,
+        startDate: fw.StartDate || fw.startDate,
+        endDate: fw.EndDate || fw.endDate,
+        status: fw.Status || fw.status
+      }))
+    },
+    applyTTFrameworkFilter(allFrameworks) {
+      return this.selectedTab === 'framework'
+        ? allFrameworks.filter((fw) => fw.internalExternal === 'Internal')
+        : allFrameworks
+    },
     async fetchFrameworks() {
       try {
         this.loading = true
-        console.log('🔍 DEBUG: Checking for cached frameworks in TT...')
+        const policyStore = usePolicyStore()
+        console.log('🔍 TT: frameworks — Pinia/cache first (no await on policyService prefetch)')
 
-        if (!window.policyDataFetchPromise && !policyDataService.hasFrameworksListCache()) {
-          console.log('🚀 DEBUG: Starting policy prefetch from TT (user navigated directly)...')
+        // Warm other policy pages in background only — never block TT on fetchAllPolicyData()
+        if (!window.policyDataFetchPromise && !policyStore.hasFrameworksCache() && !policyDataService.hasFrameworksListCache()) {
           window.policyDataFetchPromise = policyDataService.fetchAllPolicyData()
         }
 
-        if (window.policyDataFetchPromise) {
-          console.log('⏳ DEBUG: Waiting for policy prefetch to complete in TT...')
-          try {
-            await window.policyDataFetchPromise
-            console.log('✅ DEBUG: Policy prefetch completed for TT')
-          } catch (prefetchError) {
-            console.warn('⚠️ DEBUG: Policy prefetch failed in TT, will fetch directly', prefetchError)
-          }
-        }
-
         let frameworksSource = []
+        let usedWarmCache = false
 
-        if (policyDataService.hasFrameworksListCache()) {
-          console.log('✅ DEBUG: Using cached frameworks in TT')
+        if (policyStore.hasFrameworksCache()) {
+          usedWarmCache = true
+          frameworksSource = policyStore.getFrameworksCached() || []
+          console.log('✅ TT: using Pinia frameworks cache', frameworksSource.length)
+        } else if (policyDataService.hasFrameworksListCache()) {
+          usedWarmCache = true
           frameworksSource = policyDataService.getFrameworksList() || []
+          console.log('✅ TT: using policyDataService frameworks list cache', frameworksSource.length)
         } else {
-          console.log('⚠️ DEBUG: No cached frameworks, fetching via API in TT...')
-          const response = await apiService.get(API_ENDPOINTS.FRAMEWORKS)
-          console.log('Raw framework response:', response)
-          frameworksSource = response || []
-          policyDataService.setFrameworksList(frameworksSource)
+          console.log('⚠️ TT: cold cache — single getAllFrameworks() via Pinia')
+          frameworksSource = await policyStore.getAllFrameworks({ force: false })
+          policyDataService.setFrameworksList(frameworksSource || [])
         }
 
-        const allFrameworks = frameworksSource.map(fw => ({
-          id: fw.FrameworkId || fw.id,
-          name: fw.FrameworkName || fw.name,
-          description: fw.FrameworkDescription || fw.description,
-          category: fw.Category || fw.category,
-          internalExternal: fw.InternalExternal || fw.internalExternal,
-          startDate: fw.StartDate || fw.startDate,
-          endDate: fw.EndDate || fw.endDate,
-          status: fw.Status || fw.status
-        }))
-
-        this.frameworks = this.selectedTab === 'framework'
-          ? allFrameworks.filter(fw => fw.internalExternal === 'Internal')
-          : allFrameworks
-
-        console.log('Mapped frameworks:', this.frameworks)
+        const allFrameworks = this.mapRawFrameworksToTT(frameworksSource)
+        this.frameworks = this.applyTTFrameworkFilter(allFrameworks)
+        console.log('TT mapped frameworks:', this.frameworks.length)
 
         await this.checkSelectedFrameworkFromSession()
+
+        // Revalidate only when we showed cached data (cold path already hit the network once)
+        if (usedWarmCache) {
+          void policyStore.getAllFrameworks({ force: true }).then((fresh) => {
+            if (!Array.isArray(fresh) || !fresh.length) return
+            policyDataService.setFrameworksList(fresh)
+            const mapped = this.mapRawFrameworksToTT(fresh)
+            this.frameworks = this.applyTTFrameworkFilter(mapped)
+          }).catch(() => {})
+        }
       } catch (error) {
         console.error('Error fetching frameworks:', error)
         this.error = 'Failed to fetch frameworks'
@@ -3028,7 +3040,12 @@ import {  API_ENDPOINTS } from '../../config/api.js'
     async checkSelectedFrameworkFromSession() {
       try {
         console.log('🔍 DEBUG: Checking for selected framework from session in TT...')
-        const response = await apiService.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED)
+        const frameworkStore = useFrameworkStore()
+        await frameworkStore.loadFrameworkFromSession()
+        const response = {
+          success: true,
+          frameworkId: frameworkStore.selectedFrameworkId,
+        }
         console.log('📊 DEBUG: Selected framework response:', response)
         
         if (response && response.success) {
@@ -3082,22 +3099,20 @@ import {  API_ENDPOINTS } from '../../config/api.js'
     async fetchPoliciesByFramework(frameworkId) {
       try {
         this.loading = true
-        console.log('Fetching policies for framework:', frameworkId)
-        console.log('API endpoint:', API_ENDPOINTS.FRAMEWORK_GET_POLICIES(frameworkId))
-        
-        const response = await apiService.get(API_ENDPOINTS.FRAMEWORK_GET_POLICIES(frameworkId))
-        console.log('Raw policies response:', response)
-        
-        // Ensure response is an array
-        let policiesData = response
+        const policyStore = usePolicyStore()
+        console.log('TT: policies for framework (Pinia cache first):', frameworkId)
+
+        let policiesData = await policyStore.getFrameworkPoliciesForTailoring(frameworkId, { force: false })
+        console.log('TT: raw policies from Pinia/API:', policiesData?.length)
+
         if (!policiesData) {
-          console.error('No response data received')
+          console.error('No policies data received')
           this.policies = []
           return
         }
-        
+
         if (!Array.isArray(policiesData)) {
-          console.error('Response data is not an array:', policiesData)
+          console.error('Policies data is not an array:', policiesData)
           this.policies = []
           return
         }
@@ -3249,15 +3264,23 @@ import {  API_ENDPOINTS } from '../../config/api.js'
       if (!this.validateForm('framework')) {
         return;
       }
+      if (this.isFrameworkCreatorReviewerSame) {
+        return;
+      }
+      if (this.ttFrameworkCreateInFlight) {
+        return;
+      }
 
+      const loggedInUser = this.loggedInUsername || 'default_user';
 
       try {
         this.loading = true;
-        
-        // Save any new departments and policy categories first
+
         await this.saveNewDepartments();
         await this.saveNewPolicyCategories();
-        
+
+        this.loading = false;
+
         // Format framework data
         // Convert reviewer ID to reviewer name
         const reviewerUser = this.users.find(u => u.id === this.frameworkForm.reviewer);
@@ -3276,13 +3299,18 @@ import {  API_ENDPOINTS } from '../../config/api.js'
           frameworkCreatedBy: 'Created By',
           frameworkReviewer: 'Reviewer'
         };
-        
+
         const frameworkDataInventory = {};
         Object.keys(frameworkFieldLabelMap).forEach(key => {
           if (this.fieldDataTypes[key]) {
             frameworkDataInventory[frameworkFieldLabelMap[key]] = this.fieldDataTypes[key];
           }
         });
+
+        const frameworkNameSnapshot = this.frameworkForm.name;
+        const frameworkDescSnapshot = this.frameworkForm.description;
+        const frameworkCategorySnapshot = this.frameworkForm.category;
+        const frameworkInternalExternalSnapshot = this.frameworkForm.internalExternal;
 
         const frameworkData = {
           title: this.frameworkForm.name,
@@ -3299,15 +3327,12 @@ import {  API_ENDPOINTS } from '../../config/api.js'
             // Convert entities to proper format
             let entities = policy.entities;
             if (Array.isArray(entities)) {
-              // Convert Proxy array to regular array and ensure numeric values
               entities = Array.from(entities).map(Number);
             }
-            // If empty array or invalid, default to empty array
             if (!entities || (Array.isArray(entities) && entities.length === 0)) {
               entities = [];
             }
 
-            // Build data inventory for policy
             const policyFieldLabelMap = {
               policyName: 'Policy Name',
               policyIdentifier: 'Policy Identifier',
@@ -3327,7 +3352,7 @@ import {  API_ENDPOINTS } from '../../config/api.js'
               policyCreatedBy: 'Created By',
               policyReviewer: 'Reviewer'
             };
-            
+
             const policyDataInventory = {};
             if (this.policyFieldDataTypes[policyIndex]) {
               Object.keys(policyFieldLabelMap).forEach(key => {
@@ -3337,7 +3362,6 @@ import {  API_ENDPOINTS } from '../../config/api.js'
               });
             }
 
-            // Build data inventory for subpolicies
             const subPoliciesWithInventory = policy.subPolicies.map((sub, subIndex) => {
               const subPolicyFieldLabelMap = {
                 subPolicyName: 'Sub Policy Name',
@@ -3345,7 +3369,7 @@ import {  API_ENDPOINTS } from '../../config/api.js'
                 subPolicyDescription: 'Description',
                 subPolicyControl: 'Control'
               };
-              
+
               const subPolicyDataInventory = {};
               if (this.subPolicyFieldDataTypes[policyIndex] && this.subPolicyFieldDataTypes[policyIndex][subIndex]) {
                 Object.keys(subPolicyFieldLabelMap).forEach(key => {
@@ -3391,90 +3415,77 @@ import {  API_ENDPOINTS } from '../../config/api.js'
           })
         };
 
-        const response = await apiService.post(
-          `/api/tailoring/create-framework/`,
-          frameworkData
-        );
+        this.ttFrameworkCreateInFlight = true;
 
-        console.log('Framework creation response:', response);
-        this.$emit('framework-created');
-        this.resetForm();
-        this.error = null;
-
-        // Show success popup
         PopupService.success(
           'Framework created successfully!',
           'Success'
         );
+        this.resetForm();
+        this.error = null;
 
-        // Send push notification for framework creation
-        this.sendPushNotification({
-          title: 'New Framework Created',
-          message: `A new framework "${this.frameworkForm.name}" has been created in the Tailoring & Templating module.`,
-          category: 'framework',
-          priority: 'high',
-          user_id: this.loggedInUsername || 'default_user'
-        });
-
+        void apiService
+          .post(`/api/tailoring/create-framework/`, frameworkData, { background: true })
+          .then((response) => {
+            console.log('Framework creation response:', response);
+            const ps = usePolicyStore();
+            if (response.FrameworkId) {
+              ps.mergeFrameworkRowFromCreate({
+                FrameworkId: response.FrameworkId,
+                FrameworkName: response.FrameworkName || frameworkNameSnapshot,
+                Category: frameworkCategorySnapshot,
+                InternalExternal: frameworkInternalExternalSnapshot || 'Internal',
+                ActiveInactive: 'Inactive',
+                Status: response.Status || 'Under Review',
+                CurrentVersion: 1,
+                FrameworkDescription: frameworkDescSnapshot
+              });
+              policyDataService.mergeExplorerFrameworkRow({
+                id: response.FrameworkId,
+                name: response.FrameworkName || frameworkNameSnapshot,
+                category: frameworkCategorySnapshot || '',
+                description: frameworkDescSnapshot || '',
+                status: 'Inactive',
+                internalExternal: frameworkInternalExternalSnapshot || 'Internal',
+                versions: [{ version: 1 }]
+              });
+            }
+            this.$emit('framework-created');
+            void this.sendPushNotification({
+              title: 'New Framework Created',
+              message: `A new framework "${frameworkNameSnapshot}" has been created in the Tailoring & Templating module.`,
+              category: 'framework',
+              priority: 'high',
+              user_id: loggedInUser
+            });
+          })
+          .catch((error) => {
+            console.error('Error submitting framework:', error);
+            const errMsg = error.response?.data?.error || 'Failed to submit framework';
+            PopupService.error(errMsg, 'Error Creating Framework');
+            void this.sendPushNotification({
+              title: 'Framework Creation Failed',
+              message: `Failed to create framework "${frameworkNameSnapshot}": ${errMsg}`,
+              category: 'framework',
+              priority: 'high',
+              user_id: loggedInUser
+            });
+          })
+          .finally(() => {
+            this.ttFrameworkCreateInFlight = false;
+          });
       } catch (error) {
-        console.error('Error submitting framework:', error);
-        this.error = error.response?.data?.error || 'Failed to submit framework';
-        
-        // Show error popup
-        PopupService.error(
-          this.error,
-          'Error Creating Framework'
-        );
-
-        // Send push notification for framework creation error
-        this.sendPushNotification({
+        console.error('Error preparing framework submission:', error);
+        this.loading = false;
+        this.error = error.response?.data?.error || error.message || 'Failed to submit framework';
+        PopupService.error(this.error, 'Error Creating Framework');
+        void this.sendPushNotification({
           title: 'Framework Creation Failed',
           message: `Failed to create framework "${this.frameworkForm.name}": ${this.error}`,
           category: 'framework',
           priority: 'high',
-          user_id: this.loggedInUsername || 'default_user'
+          user_id: loggedInUser
         });
-      } finally {
-        this.loading = false;
-      }
-    },
-    async submitPolicy(idx) {
-      if (!this.validateForm('policy')) {
-        return;
-      }
-      try {
-        this.loading = true
-        const formData = new FormData()
-        const policy = this.policyTabs[idx]
-
-        // Append policy data
-        Object.keys(policy).forEach(key => {
-          if (key === 'file' && policy[key]) {
-            formData.append('file', policy[key])
-          } else if (key !== 'subPolicies' && key !== 'activeSubPolicyTab') {
-            formData.append(key, policy[key])
-          }
-        })
-
-        // Append subpolicies data
-        policy.subPolicies.forEach((subpolicy, subIndex) => {
-          Object.keys(subpolicy).forEach(key => {
-            formData.append(`subPolicies[${subIndex}][${key}]`, subpolicy[key])
-          })
-        })
-
-        const response = await apiService.post(`/api/tailoring/create-policy/`, formData, {
-          isMultipart: true
-        })
-
-        console.log('Policy creation response:', response);
-        this.$emit('policy-created')
-        this.resetForm()
-      } catch (error) {
-        console.error('Error submitting policy:', error)
-        this.error = 'Failed to submit policy'
-      } finally {
-        this.loading = false
       }
     },
     async handleFrameworkSelection(newVal) {
@@ -4660,27 +4671,33 @@ import {  API_ENDPOINTS } from '../../config/api.js'
       if (!this.validateForm('policy')) {
         return;
       }
+      if (this.isPolicyCreatorReviewerSame) {
+        return;
+      }
+      if (this.ttPolicyCreateInFlight) {
+        return;
+      }
 
-
+      const loggedInUser = this.loggedInUsername || 'default_user';
 
       try {
         this.loading = true;
-        
-        // Save any new departments and policy categories first
+
         await this.saveNewDepartments();
         await this.saveNewPolicyCategories();
-        
+
+        this.loading = false;
+
         // Validate coverage rate
         const coverageRate = parseFloat(currentPolicy.coverageRate);
         if (isNaN(coverageRate) || coverageRate < 0 || coverageRate > 100) {
           throw new Error('Coverage Rate must be a number between 0 and 100');
         }
-        
+
         // Convert reviewer ID to reviewer name
         const policyReviewerUser = this.users.find(u => u.id === currentPolicy.reviewer);
         const policyReviewerName = policyReviewerUser ? policyReviewerUser.name : '';
 
-        // Build data inventory for policy
         const policyFieldLabelMap = {
           policyName: 'Policy Name',
           policyIdentifier: 'Policy Identifier',
@@ -4700,7 +4717,7 @@ import {  API_ENDPOINTS } from '../../config/api.js'
           policyCreatedBy: 'Created By',
           policyReviewer: 'Reviewer'
         };
-        
+
         const policyDataInventory = {};
         if (this.policyFieldDataTypes[this.activePolicyTab]) {
           Object.keys(policyFieldLabelMap).forEach(key => {
@@ -4710,7 +4727,6 @@ import {  API_ENDPOINTS } from '../../config/api.js'
           });
         }
 
-        // Build data inventory for subpolicies
         const subPolicyFieldLabelMap = {
           subPolicyName: 'Sub Policy Name',
           subPolicyIdentifier: 'Sub Policy Identifier',
@@ -4718,7 +4734,9 @@ import {  API_ENDPOINTS } from '../../config/api.js'
           subPolicyControl: 'Control'
         };
 
-        // Format policy data
+        const policyNameSnapshot = currentPolicy.name;
+        const policyDescSnapshot = currentPolicy.description;
+
         const policyData = {
           TargetFrameworkId: this.selectedFramework,
           PolicyName: currentPolicy.name,
@@ -4739,7 +4757,6 @@ import {  API_ENDPOINTS } from '../../config/api.js'
           Identifier: currentPolicy.identifier,
           data_inventory: policyDataInventory,
           subpolicies: currentPolicy.subPolicies ? currentPolicy.subPolicies.map((sub, subIndex) => {
-            // Build data inventory for each subpolicy
             const subPolicyDataInventory = {};
             if (this.subPolicyFieldDataTypes[this.activePolicyTab] && this.subPolicyFieldDataTypes[this.activePolicyTab][subIndex]) {
               Object.keys(subPolicyFieldLabelMap).forEach(key => {
@@ -4748,12 +4765,12 @@ import {  API_ENDPOINTS } from '../../config/api.js'
                 }
               });
             }
-            
+
             return {
-            SubPolicyName: sub.name,
-            Identifier: sub.identifier,
-            Description: sub.description,
-            Control: sub.control,
+              SubPolicyName: sub.name,
+              Identifier: sub.identifier,
+              Description: sub.description,
+              Control: sub.control,
               exclude: false,
               data_inventory: subPolicyDataInventory
             };
@@ -4762,51 +4779,65 @@ import {  API_ENDPOINTS } from '../../config/api.js'
 
         console.log('Submitting policy data:', policyData);
 
-        const response = await apiService.post(
-          `/api/tailoring/create-policy/`,
-          policyData
-        );
+        this.ttPolicyCreateInFlight = true;
 
-        console.log('Policy creation response:', response);
-        this.$emit('policy-created');
-        this.resetForm();
-        this.error = null;
-
-        // Show success popup
         PopupService.success(
           'Policy created successfully!',
           'Success'
         );
+        this.resetForm();
+        this.error = null;
 
-        // Send push notification for policy creation
-        this.sendPushNotification({
-          title: 'New Policy Created',
-          message: `A new policy "${currentPolicy.name}" has been created in the Tailoring & Templating module.`,
-          category: 'policy',
-          priority: 'high',
-          user_id: this.loggedInUsername || 'default_user'
-        });
-
+        void apiService
+          .post(`/api/tailoring/create-policy/`, policyData, { background: true })
+          .then((response) => {
+            console.log('Policy creation response:', response);
+            if (response.PolicyId && response.FrameworkId) {
+              usePolicyStore().prependPolicyTailoringCache(response.FrameworkId, {
+                PolicyId: response.PolicyId,
+                PolicyName: response.PolicyName || policyNameSnapshot,
+                PolicyDescription: policyDescSnapshot,
+                Status: response.Status || 'Under Review',
+                FrameworkId: response.FrameworkId,
+                ActiveInactive: 'Inactive'
+              });
+            }
+            this.$emit('policy-created');
+            void this.sendPushNotification({
+              title: 'New Policy Created',
+              message: `A new policy "${policyNameSnapshot}" has been created in the Tailoring & Templating module.`,
+              category: 'policy',
+              priority: 'high',
+              user_id: loggedInUser
+            });
+          })
+          .catch((error) => {
+            console.error('Error submitting policy:', error);
+            const errMsg = error.response?.data?.error || 'Failed to submit policy';
+            PopupService.error(errMsg, 'Error Creating Policy');
+            void this.sendPushNotification({
+              title: 'Policy Creation Failed',
+              message: `Failed to create policy "${policyNameSnapshot}": ${errMsg}`,
+              category: 'policy',
+              priority: 'high',
+              user_id: loggedInUser
+            });
+          })
+          .finally(() => {
+            this.ttPolicyCreateInFlight = false;
+          });
       } catch (error) {
-        console.error('Error submitting policy:', error);
-        this.error = error.response?.data?.error || 'Failed to submit policy';
-        
-        // Show error popup
-        PopupService.error(
-          this.error,
-          'Error Creating Policy'
-        );
-
-        // Send push notification for policy creation error
-        this.sendPushNotification({
+        console.error('Error preparing policy submission:', error);
+        this.loading = false;
+        this.error = error.response?.data?.error || error.message || 'Failed to submit policy';
+        PopupService.error(this.error, 'Error Creating Policy');
+        void this.sendPushNotification({
           title: 'Policy Creation Failed',
           message: `Failed to create policy "${currentPolicy.name}": ${this.error}`,
           category: 'policy',
           priority: 'high',
-          user_id: this.loggedInUsername || 'default_user'
+          user_id: loggedInUser
         });
-      } finally {
-        this.loading = false;
       }
     },
     // Add validation method

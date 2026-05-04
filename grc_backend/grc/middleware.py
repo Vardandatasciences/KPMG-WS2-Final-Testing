@@ -18,6 +18,10 @@ import hashlib
 import json
 from urllib.parse import urlparse
 from .utils.log_sanitize import sanitize_for_log, mask_sensitive_data
+from backend.tprm_router import (
+    clear_tprm_router_debug_scope,
+    set_tprm_router_debug_scope_from_path,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -110,21 +114,21 @@ class RequestLoggingMiddleware(MiddlewareMixin):
     
     def process_request(self, request):
         """Log every incoming request (only when ENABLE_DEBUG_LOGGING=true)"""
-        if not getattr(settings, 'ENABLE_DEBUG_LOGGING', False):
-            return None
-        timestamp = datetime.now().strftime('%d/%b/%Y %H:%M:%S')
-        print(f"🔵 [{timestamp}] {request.method} {request.path}", file=sys.stdout, flush=True)
+        # Scope TPRM router debug logs to TPRM module requests only.
+        set_tprm_router_debug_scope_from_path(request.path)
+        # Avoid duplicate per-request terminal spam; Django server/request logs + audit logs remain.
         return None
     
     def process_response(self, request, response):
         """Log response status (only when ENABLE_DEBUG_LOGGING=true)"""
-        if not getattr(settings, 'ENABLE_DEBUG_LOGGING', False):
-            return response
-        timestamp = datetime.now().strftime('%d/%b/%Y %H:%M:%S')
-        status_code = response.status_code
-        status_emoji = "✅" if 200 <= status_code < 300 else "❌"
-        print(f"{status_emoji} [{timestamp}] {request.method} {request.path} - {status_code}", file=sys.stdout, flush=True)
+        clear_tprm_router_debug_scope()
+        # Avoid duplicate per-request terminal spam; Django server/request logs + audit logs remain.
         return response
+
+    def process_exception(self, request, exception):
+        # Ensure request-scoped debug flag does not leak across threads on unhandled exceptions.
+        clear_tprm_router_debug_scope()
+        return None
 
 class JWTAuthenticationMiddleware(MiddlewareMixin):
     """

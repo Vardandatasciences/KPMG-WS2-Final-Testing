@@ -202,23 +202,15 @@
 
 <script>
 import { ref, computed, onMounted, watch } from 'vue'
-import apiService from '@/services/apiService.js'
-import { API_ENDPOINTS } from '../../config/api.js'
 import { ElMessage } from 'element-plus'
 import CustomDropdown from '../CustomDropdown.vue'
-
-const axios = {
-  get: async (url, config = {}) => ({ data: await apiService.get(url, config.params || {}, { ...config, params: undefined }) }),
-  post: async (url, data, config = {}) => ({ data: await apiService.post(url, data, config) }),
-  put: async (url, data, config = {}) => ({ data: await apiService.put(url, data, config) }),
-  patch: async (url, data, config = {}) => ({ data: await apiService.patch(url, data, config) }),
-  delete: async (url, config = {}) => ({ data: await apiService.delete(url, config) })
-}
+import { useComplianceStore } from '@/stores/compliance'
 
 export default {
   name: 'BaselineConfiguration',
   components: { CustomDropdown },
   setup() {
+    const complianceStore = useComplianceStore()
     const frameworks = ref([])
     const selectedFrameworkId = ref('')
     const compliances = ref([])
@@ -245,8 +237,8 @@ export default {
 
     async function loadFrameworks() {
       try {
-        const response = await axios.get(API_ENDPOINTS.COMPLIANCE_ALL_POLICIES_FRAMEWORKS)
-        frameworks.value = response.data.map(fw => ({
+        await complianceStore.fetchFrameworks()
+        frameworks.value = complianceStore.frameworks.map(fw => ({
           id: fw.FrameworkId || fw.id,
           name: fw.FrameworkName || fw.name
         }))
@@ -310,10 +302,9 @@ export default {
       
       loading.value = true
       try {
-        // Fetch flat list of all baseline rows for the selected framework
-        const response = await axios.get(API_ENDPOINTS.BASELINE_CONFIGURATIONS(selectedFrameworkId.value) + '?flat=true')
-        if (response.data.success) {
-          const baselineData = response.data.data || []
+        await complianceStore.fetchBaselineConfigs(selectedFrameworkId.value, { force: true })
+        const baselineData = complianceStore.baselineConfigsByFrameworkId[selectedFrameworkId.value] || []
+        if (Array.isArray(baselineData)) {
           // Transform the data for display
           compliances.value = baselineData.map(setting => {
             // Support both new format (ComplianceStatus) and old format (IsMandatory/IsOptional/IsIgnored)
@@ -429,7 +420,7 @@ export default {
       saving.value = true
       try {
         // Call the API to create new version for only this single row
-        const response = await axios.post(API_ENDPOINTS.CREATE_SINGLE_BASELINE_VERSION, {
+        const responseData = await complianceStore.createSingleBaselineVersion({
           BaselineId: editingBaseline.value.baselineId,
           FrameworkId: selectedFrameworkId.value,
           BaselineLevel: editingBaseline.value.baselineLevel,
@@ -438,13 +429,13 @@ export default {
           CurrentVersion: editingBaseline.value.version
         })
 
-        if (response.data.success) {
-          ElMessage.success(`Baseline version ${response.data.data?.Version || 'V2'} created successfully`)
+        if (responseData.success) {
+          ElMessage.success(`Baseline version ${responseData.data?.Version || 'V2'} created successfully`)
           closeEditModal()
           // Reload the baseline configurations
           await loadBaselineConfigurations()
         } else {
-          ElMessage.error(response.data.error || 'Failed to save as new version')
+          ElMessage.error(responseData.error || 'Failed to save as new version')
         }
       } catch (error) {
         console.error('Error saving as new version:', error)

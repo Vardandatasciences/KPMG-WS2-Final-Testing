@@ -1,7 +1,28 @@
 import axios from 'axios'
 import { API_ENDPOINTS } from '../../config/api.js'
+import { useFrameworkGlobalCacheStore } from '@/stores/frameworkGlobalCache'
 
 let loadFrameworkFromSessionPromise = null
+
+const syncGlobalSelection = ({ id, name }) => {
+  try {
+    const globalCache = useFrameworkGlobalCacheStore()
+    globalCache.hydrate()
+    globalCache.setSelectedFramework({ id, name: name || 'All Frameworks' })
+  } catch (error) {
+    console.warn('[framework/vuex] Global cache sync skipped:', error?.message || error)
+  }
+}
+
+const syncGlobalFrameworks = (frameworks) => {
+  try {
+    const globalCache = useFrameworkGlobalCacheStore()
+    globalCache.hydrate()
+    globalCache.setFrameworks(Array.isArray(frameworks) ? frameworks : [])
+  } catch (error) {
+    console.warn('[framework/vuex] Global frameworks sync skipped:', error?.message || error)
+  }
+}
 
 export default {
   namespaced: true,
@@ -56,6 +77,7 @@ export default {
       
       // Update local state immediately for instant UI feedback
       commit('SET_SELECTED_FRAMEWORK', { id, name })
+      syncGlobalSelection({ id, name })
       
       // Save to backend session
       try {
@@ -87,13 +109,23 @@ export default {
       }
     },
     
-    async loadFrameworkFromSession({ commit }) {
+    async loadFrameworkFromSession({ commit, state }) {
       if (loadFrameworkFromSessionPromise) {
         return loadFrameworkFromSessionPromise
       }
 
       loadFrameworkFromSessionPromise = (async () => {
+        const globalCache = useFrameworkGlobalCacheStore()
         try {
+          // Instant paint from persisted global cache before backend call.
+          globalCache.hydrate()
+          if (globalCache.selectedFrameworkId) {
+            commit('SET_SELECTED_FRAMEWORK', {
+              id: globalCache.selectedFrameworkId,
+              name: globalCache.selectedFrameworkName || 'Selected Framework',
+            })
+          }
+
           const userId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || 'default_user'
           console.log('🔄 Loading framework from session for user:', userId)
           
@@ -110,6 +142,10 @@ export default {
                 id: response.data.frameworkId,
                 name: response.data.frameworkName || 'Selected Framework'
               })
+              syncGlobalSelection({
+                id: response.data.frameworkId,
+                name: response.data.frameworkName || 'Selected Framework',
+              })
               console.log('✅ Loaded framework from session:', {
                 id: response.data.frameworkId,
                 name: response.data.frameworkName
@@ -123,16 +159,32 @@ export default {
                 } 
               }))
             } else {
-              commit('RESET_FRAMEWORK')
-              console.log('ℹ️ No framework in session, defaulting to All Frameworks')
+              const hasHydratedSelection = !!(state.selectedFrameworkId || globalCache.selectedFrameworkId)
+              if (!hasHydratedSelection) {
+                commit('RESET_FRAMEWORK')
+                syncGlobalSelection({ id: null, name: 'All Frameworks' })
+                console.log('ℹ️ No framework in session, defaulting to All Frameworks')
+              } else {
+                console.log('ℹ️ Backend returned no framework; preserving hydrated selection')
+              }
             }
           } else {
-            commit('RESET_FRAMEWORK')
-            console.log('ℹ️ No framework in session, defaulting to All Frameworks')
+            const hasHydratedSelection = !!(state.selectedFrameworkId || globalCache.selectedFrameworkId)
+            if (!hasHydratedSelection) {
+              commit('RESET_FRAMEWORK')
+              syncGlobalSelection({ id: null, name: 'All Frameworks' })
+              console.log('ℹ️ No framework in session, defaulting to All Frameworks')
+            } else {
+              console.log('ℹ️ Backend response not successful; preserving hydrated selection')
+            }
           }
         } catch (error) {
           console.error('❌ Error loading framework from session:', error)
-          commit('RESET_FRAMEWORK')
+          const hasHydratedSelection = !!(state.selectedFrameworkId || globalCache.selectedFrameworkId)
+          if (!hasHydratedSelection) {
+            commit('RESET_FRAMEWORK')
+            syncGlobalSelection({ id: null, name: 'All Frameworks' })
+          }
         } finally {
           loadFrameworkFromSessionPromise = null
         }
@@ -143,6 +195,7 @@ export default {
     
     async resetFramework({ commit }) {
       commit('RESET_FRAMEWORK')
+      syncGlobalSelection({ id: null, name: 'All Frameworks' })
       
       // Save "All Frameworks" (null) to backend session
       try {
@@ -172,6 +225,7 @@ export default {
     
     setFrameworks({ commit }, frameworks) {
       commit('SET_FRAMEWORKS', frameworks)
+      syncGlobalFrameworks(frameworks)
     }
   }
 }

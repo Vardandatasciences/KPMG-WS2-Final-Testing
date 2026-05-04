@@ -1962,6 +1962,8 @@
 
 import { ref, watch, onMounted, onActivated, nextTick, computed, reactive } from 'vue'
 import { useFrameworkStore } from '@/stores/framework'
+import { usePolicyStore } from '@/stores/policy'
+import policyDataService from '@/services/policyService'
 import apiService from '@/services/apiService'
 import { useRouter, useRoute } from 'vue-router'
 import { PopupService, PopupModal } from '@/modules/popus'
@@ -1978,6 +1980,7 @@ export default {
   setup() {
     const selectedSubPolicyIdx = ref([]) // <-- Declare this at the very top!
     const frameworkStore = useFrameworkStore()
+    const policyStore = usePolicyStore()
     const router = useRouter()
     const route = useRoute()
     const selectedFramework = ref('')
@@ -1999,6 +2002,8 @@ export default {
     })
     const frameworks = ref([])
     const loading = ref(false)
+    /** Prevents double submit while a background create request is running */
+    const submitForReviewInFlight = ref(false)
     const error = ref(null)
     const users = ref([])
     const frameworkFormData = ref(null)
@@ -2463,6 +2468,17 @@ export default {
             console.log('🔄 DEBUG: Pinia framework reset to All Frameworks - clearing Create Policy dropdown')
             selectedFramework.value = ''
           }
+          return
+        }
+
+        const frameworkExists = frameworks.value.find((f) => String(f.id) === String(newFrameworkId))
+        if (frameworkExists) {
+          if (String(selectedFramework.value) !== String(newFrameworkId)) {
+            console.log('🔄 DEBUG: Pinia framework changed - applying to Create Policy dropdown:', newFrameworkId)
+            selectedFramework.value = newFrameworkId
+          }
+        } else {
+          console.log('⚠️ DEBUG: Pinia framework not available in Create Policy framework list:', newFrameworkId)
         }
       }
     )
@@ -3333,64 +3349,28 @@ export default {
       handleDepartmentSelection(idx, departmentId, !isSelected)
     }
     
-    // Add function to save new policy categories before form submission
-    const saveNewPolicyCategories = async () => {
-      try {
-        console.log('Checking for new policy categories to save...');
-        const newCombinations = [];
-        
-        // Process all policies to find new category combinations
-        for (const policy of policiesForm.value) {
-          const type = policy.PolicyType?.trim();
-          const category = policy.PolicyCategory?.trim();
-          const subcategory = policy.PolicySubCategory?.trim();
-          
-          // Skip if any part of the combination is missing
-          if (!type || !category || !subcategory) {
-            continue;
-          }
-          
-          // Check if this combination exists in our local data
-          const exists = policyCategories.value.some(pc => 
-            pc.PolicyType === type && 
-            pc.PolicyCategory === category && 
-            pc.PolicySubCategory === subcategory
-          );
-          
-          if (!exists) {
-            console.log(`Found new combination: ${type} > ${category} > ${subcategory}`);
-            newCombinations.push({
-              PolicyType: type,
-              PolicyCategory: category,
-              PolicySubCategory: subcategory
-            });
-          }
+    const uploadPolicyDocuments = async (policies, creatorUser) => {
+      const uploadTasks = policies.map(async (policy) => {
+        if (!(policy.DocURL && policy.DocURL instanceof File)) return;
+        const formData = new FormData()
+        formData.append('file', policy.DocURL)
+        formData.append('userId', creatorUser.UserId)
+        formData.append('fileName', policy.DocURL.name)
+        formData.append('type', 'policy')
+        formData.append('policyName', policy.PolicyName)
+
+        const uploadResponse = await apiService.post(API_ENDPOINTS.UPLOAD_POLICY_DOCUMENT, formData, {
+          isMultipart: true,
+          timeout: 1000000
+        })
+        if (!uploadResponse.success) {
+          throw new Error(uploadResponse.error || 'Upload failed')
         }
-        
-        // Save new combinations to the database
-        if (newCombinations.length > 0) {
-          console.log(`Saving ${newCombinations.length} new policy category combinations...`);
-          
-          for (const combination of newCombinations) {
-            // Include framework context when saving policy categories
-            const combinationWithFramework = {
-              ...combination,
-              frameworkId: selectedFramework.value
-            };
-            console.log('Saving policy category with framework:', combinationWithFramework);
-            await apiService.post(`${API_ENDPOINTS.POLICY_CATEGORIES}save/`, combinationWithFramework);
-          }
-          
-          // Refresh policy categories after saving
-          await fetchPolicyCategories();
-          console.log('Policy categories refreshed');
-        } else {
-          console.log('No new policy category combinations to save');
-        }
-      } catch (err) {
-        console.error('Error saving policy categories:', err);
-      }
-    };
+        policy.DocURL = uploadResponse.file.url
+      })
+
+      await Promise.all(uploadTasks)
+    }
 
     // Add push notification method
     const sendPushNotification = async (notificationData) => {
@@ -3401,6 +3381,18 @@ export default {
         console.error('Error sending push notification:', error);
       }
     };
+
+    const resetFormAfterSubmit = () => {
+      policiesForm.value = []
+      approvalForm.value = {
+        createdBy: currentUser.value.UserId || '',
+        createdByName: currentUser.value.UserName || localStorage.getItem('username') || '',
+        reviewer: ''
+      }
+      selectedFramework.value = ''
+      showApprovalForm.value = false
+      frameworkFormData.value = null
+    }
 
     const handleFinalSubmit = async () => {
       try {
@@ -3418,11 +3410,13 @@ export default {
           return;
         }
 
+        if (submitForReviewInFlight.value) {
+          PopupService.warning('A submission is already in progress. Please wait.', 'Submit for review')
+          return
+        }
+
         loading.value = true
         error.value = null
-
-        // Save any new policy categories first
-        await saveNewPolicyCategories();
 
         // Only check framework fields if creating a new framework
         const isCreatingNewFramework = selectedFramework.value === '__new__';
@@ -3636,40 +3630,21 @@ export default {
             }
           }
 
-          // Upload all policy documents before building the payload
-          for (const policy of policiesForm.value) {
-            if (policy.DocURL && policy.DocURL instanceof File) {
-              const formData = new FormData()
-              formData.append('file', policy.DocURL)
-              formData.append('userId', creatorUser.UserId)
-              formData.append('fileName', policy.DocURL.name)
-              formData.append('type', 'policy')
-              formData.append('policyName', policy.PolicyName)
-
-              try {
-                const uploadResponse = await apiService.post(API_ENDPOINTS.UPLOAD_POLICY_DOCUMENT, formData, {
-                  isMultipart: true,
-                  timeout: 1000000
-                })
-                if (uploadResponse.success) {
-                  policy.DocURL = uploadResponse.file.url
-                } else {
-                  throw new Error(uploadResponse.error || 'Upload failed')
-                }
-              } catch (uploadError) {
-                console.error('Error uploading policy document:', uploadError)
-                PopupService.error('Failed to upload policy document: ' + (uploadError.message || 'Unknown error'), 'Upload Error')
-                sendPushNotification({
-                  title: 'Policy Document Upload Failed',
-                  message: `Failed to upload policy document: ${uploadError.response?.data?.error || uploadError.message}`,
-                  category: 'policy',
-                  priority: 'high',
-                  user_id: creatorUser?.UserId || 'default_user'
-                });
-                loading.value = false
-                return
-              }
-            }
+          // Upload all policy documents in parallel before payload creation
+          try {
+            await uploadPolicyDocuments(policiesForm.value, creatorUser)
+          } catch (uploadError) {
+            console.error('Error uploading policy document:', uploadError)
+            PopupService.error('Failed to upload policy document: ' + (uploadError.message || 'Unknown error'), 'Upload Error')
+            sendPushNotification({
+              title: 'Policy Document Upload Failed',
+              message: `Failed to upload policy document: ${uploadError.response?.data?.error || uploadError.message}`,
+              category: 'policy',
+              priority: 'high',
+              user_id: creatorUser?.UserId || 'default_user'
+            });
+            loading.value = false
+            return
           }
 
           // Debug: Log policies form data before creating payload
@@ -3775,60 +3750,119 @@ export default {
           // Debug: Log final payload
           console.log('Final payload being sent:', JSON.stringify(payload, null, 2))
 
-          // Send a single API call to create the framework with policies and subpolicies
-          const data = await apiService.post(API_ENDPOINTS.FRAMEWORKS, payload)
-          if (data.error) {
-            throw new Error(data.error)
+          submitForReviewInFlight.value = true
+          const formForMerge = {
+            FrameworkName: payload.FrameworkName,
+            FrameworkDescription: payload.FrameworkDescription,
+            Category: payload.Category,
+            InternalExternal: payload.InternalExternal,
           }
-          PopupService.success(
-            'Successfully created new framework and policies! Redirecting to Framework Explorer...',
-            'Framework Created'
-          );
-          sendPushNotification({
-            title: 'Framework and Policies Created Successfully',
-            message: `New framework "${frameworkFormData.value.FrameworkName}" with ${policiesForm.value.length} policies has been created successfully.`,
-            category: 'framework',
-            priority: 'medium',
-            user_id: creatorUser?.UserId || 'default_user'
-          });
+          const policyCount = policiesForm.value.length
+
+          PopupService.show({
+            type: 'success',
+            heading: 'Submitted for review',
+            message: 'Redirecting to Framework Explorer now…',
+            buttons: [],
+            autoClose: 0,
+          })
+
+          resetFormAfterSubmit()
+          loading.value = false
+          await nextTick()
+          try {
+            await router.push('/framework-explorer')
+          } finally {
+            PopupService.hide()
+          }
+
+          void (async () => {
+            try {
+              const data = await apiService.post(API_ENDPOINTS.FRAMEWORKS, payload)
+              if (data.error) {
+                throw new Error(data.error)
+              }
+              const newFwId = data.FrameworkId ?? data.framework_id
+              if (newFwId != null && formForMerge) {
+                policyStore.mergeFrameworkRowFromCreate({
+                  FrameworkId: newFwId,
+                  FrameworkName: formForMerge.FrameworkName,
+                  Category: formForMerge.Category,
+                  InternalExternal: formForMerge.InternalExternal,
+                  ActiveInactive: 'Inactive',
+                  Status: 'Under Review',
+                  CurrentVersion: data.Version ?? 1,
+                  FrameworkDescription: formForMerge.FrameworkDescription,
+                })
+                policyDataService.mergeExplorerFrameworkRow({
+                  id: newFwId,
+                  name: formForMerge.FrameworkName,
+                  category: formForMerge.Category || '',
+                  description: formForMerge.FrameworkDescription || '',
+                  status: 'Inactive',
+                  internalExternal: formForMerge.InternalExternal || 'Internal',
+                  versions: data.Version != null ? [{ version: data.Version }] : [],
+                })
+                const norm = normalizeFrameworkList([
+                  {
+                    FrameworkId: newFwId,
+                    FrameworkName: formForMerge.FrameworkName,
+                    InternalExternal: formForMerge.InternalExternal,
+                  },
+                ])
+                if (norm.length) {
+                  const merged = [norm[0], ...frameworks.value.filter((f) => String(f.id) !== String(norm[0].id))]
+                  frameworks.value = merged
+                  frameworkStore.setFrameworks(merged.map((fw) => ({ ...fw })))
+                }
+              }
+              void sendPushNotification({
+                title: 'Framework and Policies Created Successfully',
+                message: `New framework "${formForMerge.FrameworkName}" with ${policyCount} policies has been created successfully.`,
+                category: 'framework',
+                priority: 'medium',
+                user_id: creatorUser?.UserId || 'default_user'
+              })
+            } catch (err) {
+              console.error('Error submitting policies (background):', err)
+              const errorMessage =
+                err.response?.data?.details || err.response?.data?.error || err.message || 'Failed to submit policies'
+              PopupService.error(
+                typeof errorMessage === 'object' ? JSON.stringify(errorMessage) : errorMessage,
+                'Submission Error'
+              )
+              void sendPushNotification({
+                title: 'Policy Submission Failed',
+                message: typeof errorMessage === 'object' ? JSON.stringify(errorMessage) : errorMessage,
+                category: 'policy',
+                priority: 'high',
+                user_id: currentUser.value?.UserId || 'default_user'
+              })
+            } finally {
+              submitForReviewInFlight.value = false
+            }
+          })()
+
+          return
         } else {
           // Add policies to existing framework (batch mode)
           const frameworkId = selectedFramework.value;
 
-          // Upload all policy documents before building the payload
-          for (const policy of policiesForm.value) {
-            if (policy.DocURL && policy.DocURL instanceof File) {
-              const formData = new FormData()
-              formData.append('file', policy.DocURL)
-              formData.append('userId', creatorUser.UserId)
-              formData.append('fileName', policy.DocURL.name)
-              formData.append('type', 'policy')
-              formData.append('policyName', policy.PolicyName)
-
-              try {
-                const uploadResponse = await apiService.post(API_ENDPOINTS.UPLOAD_POLICY_DOCUMENT, formData, {
-                  isMultipart: true,
-                  timeout: 1000000
-                })
-                if (uploadResponse.success) {
-                  policy.DocURL = uploadResponse.file.url
-                } else {
-                  throw new Error(uploadResponse.error || 'Upload failed')
-                }
-              } catch (uploadError) {
-                console.error('Error uploading policy document:', uploadError)
-                PopupService.error('Failed to upload policy document: ' + (uploadError.message || 'Unknown error'), 'Upload Error')
-                sendPushNotification({
-                  title: 'Policy Document Upload Failed',
-                  message: `Failed to upload policy document: ${uploadError.response?.data?.error || uploadError.message}`,
-                  category: 'policy',
-                  priority: 'high',
-                  user_id: creatorUser?.UserId || 'default_user'
-                });
-                loading.value = false
-                return
-              }
-            }
+          // Upload all policy documents in parallel before payload creation
+          try {
+            await uploadPolicyDocuments(policiesForm.value, creatorUser)
+          } catch (uploadError) {
+            console.error('Error uploading policy document:', uploadError)
+            PopupService.error('Failed to upload policy document: ' + (uploadError.message || 'Unknown error'), 'Upload Error')
+            sendPushNotification({
+              title: 'Policy Document Upload Failed',
+              message: `Failed to upload policy document: ${uploadError.response?.data?.error || uploadError.message}`,
+              category: 'policy',
+              priority: 'high',
+              user_id: creatorUser?.UserId || 'default_user'
+            });
+            loading.value = false
+            return
           }
 
           // Build the batch payload
@@ -3895,53 +3929,63 @@ export default {
             }
           });
 
+          submitForReviewInFlight.value = true
+          const batchPolicyCount = policiesForm.value.length
+
+          PopupService.show({
+            type: 'success',
+            heading: 'Submitted for review',
+            message: 'Redirecting to Framework Explorer now…',
+            buttons: [],
+            autoClose: 0,
+          })
+
+          resetFormAfterSubmit()
+          loading.value = false
+          await nextTick()
           try {
-            const data = await apiService.post(API_ENDPOINTS.FRAMEWORK_ADD_POLICIES(frameworkId), { policies: policiesPayload });
-            if (data.error) {
-              throw new Error(data.error)
-            }
-            PopupService.success(
-              'Successfully added policies! Redirecting to Framework Explorer...',
-              'Policies Added'
-            );
-            sendPushNotification({
-              title: 'Policies Added Successfully',
-              message: `Successfully added ${policiesForm.value.length} policies to the existing framework.`,
-              category: 'policy',
-              priority: 'medium',
-              user_id: creatorUser?.UserId || 'default_user'
-            });
-          } catch (err) {
-            console.error('Error submitting policies:', err);
-            const errorMessage = err.response?.data?.details || err.response?.data?.error || 'Failed to submit policies';
-            PopupService.error(typeof errorMessage === 'object' ? JSON.stringify(errorMessage) : errorMessage, 'Submission Error');
-            sendPushNotification({
-              title: 'Policy Submission Failed',
-              message: typeof errorMessage === 'object' ? JSON.stringify(errorMessage) : errorMessage,
-              category: 'policy',
-              priority: 'high',
-              user_id: creatorUser?.UserId || 'default_user'
-            });
-            loading.value = false;
-            return;
+            await router.push('/framework-explorer')
+          } finally {
+            PopupService.hide()
           }
-        }
 
-        // Reset forms
-        policiesForm.value = []
-        approvalForm.value = {
-          createdBy: currentUser.value.UserId || '',
-          createdByName: currentUser.value.UserName || localStorage.getItem('username') || '',
-          reviewer: ''
-        }
-        selectedFramework.value = ''
-        showApprovalForm.value = false
-        frameworkFormData.value = null
+          void (async () => {
+            try {
+              const data = await apiService.post(API_ENDPOINTS.FRAMEWORK_ADD_POLICIES(frameworkId), {
+                policies: policiesPayload,
+              })
+              if (data.error) {
+                throw new Error(data.error)
+              }
+              void sendPushNotification({
+                title: 'Policies Added Successfully',
+                message: `Successfully added ${batchPolicyCount} policies to the existing framework.`,
+                category: 'policy',
+                priority: 'medium',
+                user_id: creatorUser?.UserId || 'default_user'
+              })
+            } catch (err) {
+              console.error('Error submitting policies (background):', err)
+              const errorMessage =
+                err.response?.data?.details || err.response?.data?.error || 'Failed to submit policies'
+              PopupService.error(
+                typeof errorMessage === 'object' ? JSON.stringify(errorMessage) : errorMessage,
+                'Submission Error'
+              )
+              void sendPushNotification({
+                title: 'Policy Submission Failed',
+                message: typeof errorMessage === 'object' ? JSON.stringify(errorMessage) : errorMessage,
+                category: 'policy',
+                priority: 'high',
+                user_id: creatorUser?.UserId || 'default_user'
+              })
+            } finally {
+              submitForReviewInFlight.value = false
+            }
+          })()
 
-        // Redirect to Framework Explorer after successful creation
-        setTimeout(() => {
-          router.push('/framework-explorer')
-        }, 1500) // Wait 1.5 seconds to allow user to see the success message
+          return
+        }
 
       } catch (err) {
         console.error('Error submitting policies:', err)

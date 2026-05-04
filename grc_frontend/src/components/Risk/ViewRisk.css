@@ -506,6 +506,28 @@
   font-style: italic;
 }
 
+.risk-view-detail-skeleton {
+  min-height: 280px;
+}
+
+.risk-view-not-found {
+  font-style: normal;
+}
+
+.risk-view-not-found-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--risk-gray-800);
+  margin: 0 0 8px;
+}
+
+.risk-view-not-found-hint {
+  font-size: 0.95rem;
+  color: var(--risk-gray-600);
+  margin: 0 0 20px;
+  line-height: 1.5;
+}
+
 /* Priority styling */
 .risk-view-priority-critical {
   background-color: #fff1f1;

@@ -257,7 +257,7 @@ export const frameworkContent = {
           change: '+12%'
         }
       ],
-      showBaselKPIs: true
+      showBaselKPIs: false
     }
   },
 

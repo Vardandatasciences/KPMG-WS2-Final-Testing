@@ -89,8 +89,18 @@
                   @click.stop
                 >
               </div>
-              <div class="risk-instance-dropdown-list" v-if="loadingRisks">
-                <div class="loading-spinner">Loading risks...</div>
+              <div
+                class="risk-instance-dropdown-list risk-instance-dropdown-skeleton-wrap"
+                v-if="loadingRisks && risks.length === 0"
+                role="status"
+                aria-busy="true"
+                aria-label="Loading risks"
+              >
+                <div
+                  v-for="n in 6"
+                  :key="'rsk-' + n"
+                  class="grc-skeleton-row grc-skeleton-pulse"
+                />
               </div>
               <div class="risk-instance-dropdown-list" v-else-if="filteredRisks.length === 0">
                 <div class="no-results">No risks found</div>
@@ -1405,7 +1415,7 @@
 <script>
 import { PopupModal } from '@/modules/popup'
 import { API_ENDPOINTS, API_BASE_URL } from '../../config/api.js'
-import riskDataService from '@/services/riskService'
+import { useRiskStore } from '@/stores/risk'
 import apiService from '@/services/apiService.js'
 import '@/assets/css/form.css'
 // Note: JWT authentication is handled automatically by axios interceptors in authService.js
@@ -1549,12 +1559,15 @@ export default {
         PossibleDamage: 'regular',
         RiskResponseDescription: 'regular',
         RiskMitigation: 'regular'
-      }
+      },
+      instanceSubmitInFlight: false,
     }
   },
   computed: {
     validFilteredRisks() {
-      return this.filteredRisks.filter(risk => risk && risk.RiskId);
+      return this.filteredRisks.filter(
+        (risk) => risk && risk.RiskId != null && Number(risk.RiskId) > 0
+      );
     },
     filteredBusinessImpacts() {
       if (!this.businessImpactSearch) {
@@ -1629,72 +1642,82 @@ export default {
         console.log(`Data type selected for ${fieldName}:`, type);
       }
     },
-    fetchRisks() {
-      this.loadingRisks = true;
-      
-      // API endpoint for fetching risks for dropdown
-      const API_ENDPOINT = API_ENDPOINTS.RISKS_FOR_DROPDOWN;
-      
-      // Use axios with JWT authentication - the interceptor will automatically add the token
-      apiService.get(API_ENDPOINT)
-        .then(response => {
-          console.log('✅ Risks fetched successfully:', response);
-          // Accept both response formats:
-          // 1) { success: true, risks: [...] }
-          // 2) [...] (legacy/plain array)
-          const rawRisks = Array.isArray(response)
-            ? response
-            : (response?.risks || (Array.isArray(response?.data) ? response.data : response?.data?.risks) || []);
-
-          // Normalize RiskId key variants to avoid empty dropdown due to payload shape differences.
-          const normalizedRisks = rawRisks
-            .filter(risk => risk && typeof risk === 'object')
-            .map(risk => {
-              const normalizedRiskId = risk.RiskId ?? risk.risk_id ?? risk.riskId ?? risk.RiskID ?? null;
-              return {
-                ...risk,
-                RiskId: normalizedRiskId
-              };
-            })
-            .filter(risk => risk.RiskId !== null && risk.RiskId !== undefined && `${risk.RiskId}`.trim() !== '');
-
-          this.risks = normalizedRisks;
-          this.filteredRisks = [...this.risks];
-          this.loadingRisks = false;
-          
-          // If a risk ID is already selected, update the text
-          if (this.newInstance.RiskId) {
-            this.updateSelectedRiskIdText();
-          }
+    normalizeRisksFromStore(rawRisks) {
+      return (Array.isArray(rawRisks) ? rawRisks : [])
+        .filter((risk) => risk && typeof risk === 'object')
+        .map((risk) => {
+          const normalizedRiskId =
+            risk.RiskId ?? risk.risk_id ?? risk.riskId ?? risk.RiskID ?? null;
+          return {
+            ...risk,
+            RiskId: normalizedRiskId,
+          };
         })
-        .catch(error => {
-          console.error('❌ Error fetching risks:', error);
-          this.loadingRisks = false;
+        .filter(
+          (risk) =>
+            risk.RiskId !== null &&
+            risk.RiskId !== undefined &&
+            `${risk.RiskId}`.trim() !== '' &&
+            Number(risk.RiskId) > 0
+        );
+    },
+    applyRisksFromPiniaStore(riskStore) {
+      const normalizedRisks = this.normalizeRisksFromStore(riskStore.risks);
+      this.risks = normalizedRisks;
+      this.filteredRisks = [...normalizedRisks];
+      if (this.newInstance.RiskId) {
+        this.updateSelectedRiskIdText();
+      }
+    },
+    async fetchRisks() {
+      const riskStore = useRiskStore();
+      try {
+        riskStore.hydrateFromLegacyService();
+      } catch {
+        /* non-fatal */
+      }
+
+      this.applyRisksFromPiniaStore(riskStore);
+      const hadRows = this.risks.length > 0;
+      this.loadingRisks = !hadRows;
+
+      try {
+        await riskStore.fetchRisks({ force: false });
+        this.applyRisksFromPiniaStore(riskStore);
+      } catch (error) {
+        console.error('❌ Error fetching risks:', error);
+        if (!this.risks.length) {
           this.risks = [];
           this.filteredRisks = [];
-          
-          // Show user-friendly error message
-          if (error.response && error.response.status === 401) {
-            this.$popup.error('Authentication failed. Please log in again.');
-          } else {
-            this.$popup.error('Failed to load risks. Please try again.');
-          }
-        });
+        }
+        if (error.response && error.response.status === 401) {
+          this.$popup.error('Authentication failed. Please log in again.');
+        } else if (!hadRows) {
+          this.$popup.error('Failed to load risks. Please try again.');
+        }
+      } finally {
+        this.loadingRisks = false;
+      }
     },
     filterRisks() {
+      const base = [...this.risks].filter(
+        (risk) => risk && risk.RiskId != null && Number(risk.RiskId) > 0
+      );
       if (!this.riskSearchQuery) {
-        this.filteredRisks = [...this.risks].filter(risk => risk && risk.RiskId);
+        this.filteredRisks = base;
         return;
       }
-      
+
       const query = this.sanitizeHTML(this.riskSearchQuery.toLowerCase());
-      this.filteredRisks = this.risks.filter(risk => 
-        risk && risk.RiskId && (
+      this.filteredRisks = base.filter(
+        (risk) =>
           (risk.RiskId && risk.RiskId.toString().includes(query)) ||
-          (risk.RiskTitle && this.sanitizeHTML(risk.RiskTitle.toLowerCase()).includes(query)) ||
-          (risk.Category && this.sanitizeHTML(risk.Category.toLowerCase()).includes(query)) ||
-          (risk.RiskDescription && this.sanitizeHTML(risk.RiskDescription.toLowerCase()).includes(query))
-        )
+          (risk.RiskTitle &&
+            this.sanitizeHTML(risk.RiskTitle.toLowerCase()).includes(query)) ||
+          (risk.Category &&
+            this.sanitizeHTML(risk.Category.toLowerCase()).includes(query)) ||
+          (risk.RiskDescription &&
+            this.sanitizeHTML(risk.RiskDescription.toLowerCase()).includes(query))
       );
     },
     selectRisk(risk) {
@@ -2091,54 +2114,76 @@ export default {
         submissionData.framework_id = consentConfig.framework_id || getFrameworkIdForClient();
       }
 
-      apiService.post(API_ENDPOINTS.CREATE_RISK_INSTANCE, submissionData, { 
-        headers
-      })
-        .then(response => {
-          console.log('Risk instance created successfully:', response);
+      if (this.instanceSubmitInFlight) {
+        return;
+      }
+      this.instanceSubmitInFlight = true;
 
-          // Keep RiskInstances cache in sync so the new item is visible without manual reload.
-          const createdInstance =
-            response?.risk_instance ||
-            response?.data ||
-            (response?.RiskInstanceId ? response : null);
-          const cachedInstances = riskDataService.getData('riskInstances');
-          if (createdInstance && Array.isArray(cachedInstances)) {
-            const exists = cachedInstances.some(i => i?.RiskInstanceId === createdInstance?.RiskInstanceId);
-            if (!exists) {
-              riskDataService.setData('riskInstances', [createdInstance, ...cachedInstances]);
-            }
-          } else if (createdInstance) {
-            riskDataService.setData('riskInstances', [createdInstance]);
+      const riskStore = useRiskStore();
+      const tempInstanceId = -Math.abs(Date.now() % 2147483640 || 1);
+      const optimisticInstance = {
+        ...submissionData,
+        RiskInstanceId: tempInstanceId,
+        RiskStatus:
+          submissionData.RiskStatus && submissionData.RiskStatus !== 'Not Assigned'
+            ? submissionData.RiskStatus
+            : 'Open',
+        Criticality: submissionData.Criticality || 'Medium',
+        Category: submissionData.Category || '',
+        RiskDescription: submissionData.RiskDescription || '',
+        Origin: submissionData.Origin || 'MANUAL',
+        DepartmentName: submissionData.DepartmentName || '',
+      };
+      riskStore.mergeCreatedRiskInstance(optimisticInstance);
+
+      this.$popup.success('Risk instance created successfully!');
+      this.resetForm();
+      this.sendPushNotification(submissionData);
+
+      try {
+        const response = await apiService.post(
+          API_ENDPOINTS.CREATE_RISK_INSTANCE,
+          submissionData,
+          { headers }
+        );
+        console.log('Risk instance created successfully:', response);
+
+        const createdInstance =
+          response?.risk_instance ||
+          response?.data ||
+          (response?.RiskInstanceId ? response : null);
+        riskStore.finalizeOptimisticRiskInstance(tempInstanceId, createdInstance);
+        if (
+          !createdInstance?.RiskInstanceId ||
+          Number(createdInstance.RiskInstanceId) <= 0
+        ) {
+          this.$popup.error(
+            'Instance may have been created but the server response was incomplete. Please refresh the instances list.'
+          );
+        }
+      } catch (error) {
+        console.error('Error creating risk instance:', error);
+        riskStore.rollbackOptimisticRiskInstance(tempInstanceId);
+
+        let errorMessage = 'Unknown error occurred';
+        if (error.response && error.response.data) {
+          if (error.response.data.error) {
+            errorMessage = error.response.data.error;
+          } else if (error.response.data.message) {
+            errorMessage = error.response.data.message;
+          } else if (typeof error.response.data === 'string') {
+            errorMessage = error.response.data;
           } else {
-            // Fallback to force fresh fetch on list page when response shape is unexpected.
-            riskDataService.clearCache();
+            errorMessage = JSON.stringify(error.response.data);
           }
+        } else if (error.message) {
+          errorMessage = error.message;
+        }
 
-          this.$popup.success('Risk instance created successfully!');
-          this.resetForm();
-          this.sendPushNotification(submissionData);
-        })
-        .catch(error => {
-          console.error('Error creating risk instance:', error);
-          let errorMessage = 'Unknown error occurred';
-          
-          if (error.response && error.response.data) {
-            if (error.response.data.error) {
-              errorMessage = error.response.data.error;
-            } else if (error.response.data.message) {
-              errorMessage = error.response.data.message;
-            } else if (typeof error.response.data === 'string') {
-              errorMessage = error.response.data;
-            } else {
-              errorMessage = JSON.stringify(error.response.data);
-            }
-          } else if (error.message) {
-            errorMessage = error.message;
-          }
-          
-          this.$popup.error('Error: ' + errorMessage);
-        });
+        this.$popup.error('Error: ' + errorMessage);
+      } finally {
+        this.instanceSubmitInFlight = false;
+      }
     },
     resetForm() {
       this.newInstance = {
@@ -2795,5 +2840,11 @@ export default {
   .form-section {
     grid-template-columns: 1fr !important;
   }
+}
+
+.risk-instance-dropdown-skeleton-wrap {
+  padding: 8px 0;
+  max-height: 280px;
+  overflow: hidden;
 }
 </style>

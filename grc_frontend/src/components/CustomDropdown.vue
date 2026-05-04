@@ -2,6 +2,7 @@
   <div class="dropdown">
     <!-- Draft persistence proxy: allows global form-draft logic to save/restore CustomDropdown -->
     <input
+      v-if="shouldPersistDraft"
       type="text"
       class="dropdown__draft-proxy"
       :data-persist-key="draftPersistKey"
@@ -45,8 +46,8 @@
         />
       </div>
       <div 
-        v-for="option in filteredOptions" 
-        :key="option.value"
+        v-for="(option, idx) in filteredOptions" 
+        :key="`dropdown-opt-${idx}-${String(option?.value ?? '')}`"
         class="dropdown__item"
         :class="{ 'dropdown__item--selected': showSelectedCheckmark && option.value === modelValue }"
         @click="selectOption(option)"
@@ -70,6 +71,7 @@
 
 <script>
 import { PhCalendar, PhCaretDown } from '@phosphor-icons/vue';
+import { useFrameworkStore } from '@/stores/framework';
 
 export default {
   name: 'CustomDropdown',
@@ -120,29 +122,74 @@ export default {
     persistKey: {
       type: String,
       default: ''
+    },
+    persistDraft: {
+      type: Boolean,
+      default: true
+    },
+    /**
+     * When false, do not narrow framework dropdown options to the session-selected framework.
+     * Use on screens that must list all approved frameworks (e.g. Policy KPI) while v-model may be "all".
+     */
+    lockToSessionFramework: {
+      type: Boolean,
+      default: true
     }
   },
   data() {
     return {
       isOpen: false,
-      searchQuery: ''
+      searchQuery: '',
+      lockedFrameworkId: '',
+      lockedFrameworkName: ''
     }
   },
   computed: {
     // Normalize options from either config or options prop
     normalizedOptions() {
+      let raw = []
       if (this.options) {
-        return this.options;
+        raw = Array.isArray(this.options) ? this.options : []
+      } else if (this.config) {
+        raw = this.config.values || this.config.options || []
       }
-      if (this.config) {
-        return this.config.values || this.config.options || [];
+      return raw.filter((o) => o && typeof o === 'object' && 'value' in o)
+    },
+    frameworkConstrainedOptions() {
+      if (!this.isFrameworkSelector) return this.normalizedOptions;
+      if (!this.lockToSessionFramework) return this.normalizedOptions;
+      if (!this.lockedFrameworkId && !this.lockedFrameworkName) return this.normalizedOptions;
+
+      const id = String(this.lockedFrameworkId || '').trim();
+      const name = String(this.lockedFrameworkName || '').trim().toLowerCase();
+      const constrained = this.normalizedOptions.filter(option => {
+        const optionValue = String(option?.value ?? '').trim();
+        const optionLabel = String(option?.label ?? '').trim().toLowerCase();
+        if (id && optionValue === id) return true;
+        if (name && (optionValue.toLowerCase() === name || optionLabel === name)) return true;
+        return false;
+      });
+
+      if (constrained.length > 0) return constrained;
+
+      // Hard lock: if a global framework is selected but current options are in a
+      // different shape (ID vs name), do not fall back to showing all frameworks.
+      if (this.lockedFrameworkName || this.lockedFrameworkId) {
+        return [{
+          value: this.modelValue || this.lockedFrameworkId || this.lockedFrameworkName,
+          label: this.lockedFrameworkName || String(this.modelValue || this.lockedFrameworkId),
+        }];
       }
-      return [];
+
+      return this.normalizedOptions;
     },
     selectedLabel() {
-      const selectedOption = this.normalizedOptions.find(option => option.value === this.modelValue);
+      const selectedOption = this.frameworkConstrainedOptions.find(option => String(option.value) === String(this.modelValue));
       if (selectedOption) {
         return selectedOption.label;
+      }
+      if (this.isFrameworkSelector && this.lockedFrameworkName) {
+        return this.lockedFrameworkName;
       }
       // No selection - use placeholder or config defaults
       if (this.config) {
@@ -155,13 +202,14 @@ export default {
       return (this.config.label || this.config.name) === 'Due Date';
     },
     filteredOptions() {
-      if (!this.searchQuery) return this.normalizedOptions;
+      if (!this.searchQuery) return this.frameworkConstrainedOptions;
       const query = this.searchQuery.toLowerCase();
-      return this.normalizedOptions.filter(option =>
+      return this.frameworkConstrainedOptions.filter(option =>
         option.label && option.label.toLowerCase().includes(query)
       );
     },
     draftPersistKey() {
+      if (!this.shouldPersistDraft) return '';
       if (this.persistKey) return this.persistKey;
       const baseName =
         this.config?.name ||
@@ -169,6 +217,21 @@ export default {
         this.placeholder ||
         'custom-dropdown';
       return `custom-dropdown:${baseName}`;
+    },
+    isFrameworkSelector() {
+      const label = String(this.config?.label || this.config?.name || '').toLowerCase();
+      const placeholder = String(this.placeholder || '').toLowerCase();
+      const firstOptionLabel = String(this.normalizedOptions?.[0]?.label || '').toLowerCase();
+      return (
+        label.includes('framework') ||
+        placeholder.includes('framework') ||
+        firstOptionLabel.includes('framework')
+      );
+    },
+    shouldPersistDraft() {
+      // Prevent stale form-draft restore from overriding global framework selection.
+      // Framework context is already handled centrally via Pinia/session.
+      return this.persistDraft && !this.isFrameworkSelector;
     },
     hasValue() {
       // Check if modelValue is not empty and not null/undefined
@@ -188,13 +251,32 @@ export default {
   mounted() {
     // Add event listener for clicking outside
     document.addEventListener('click', this.closeDropdown);
+    this.syncLockedFramework();
+    window.addEventListener('framework-changed', this.syncLockedFramework);
   },
   // eslint-disable-next-line vue/no-deprecated-destroyed-lifecycle
   beforeDestroy() {
     // Remove event listener
     document.removeEventListener('click', this.closeDropdown);
+    window.removeEventListener('framework-changed', this.syncLockedFramework);
   },
   methods: {
+    async syncLockedFramework() {
+      try {
+        const frameworkStore = useFrameworkStore();
+        await frameworkStore.loadFrameworkFromSession();
+        if (frameworkStore.selectedFrameworkId && frameworkStore.selectedFrameworkId !== 'all') {
+          this.lockedFrameworkId = String(frameworkStore.selectedFrameworkId);
+          this.lockedFrameworkName = frameworkStore.selectedFrameworkName || '';
+        } else {
+          this.lockedFrameworkId = '';
+          this.lockedFrameworkName = '';
+        }
+      } catch (error) {
+        this.lockedFrameworkId = '';
+        this.lockedFrameworkName = '';
+      }
+    },
     toggleDropdown() {
       if (this.disabled) return;
       this.isOpen = !this.isOpen;
@@ -204,6 +286,9 @@ export default {
     },
     selectOption(option) {
       if (this.disabled) return;
+      if (!option || typeof option !== 'object' || !('value' in option)) {
+        return;
+      }
       this.$emit('update:modelValue', option.value);
       // Emit change event - for backward compatibility with old usage (config prop), emit full option
       // For new usage (options prop), components can access the value from modelValue

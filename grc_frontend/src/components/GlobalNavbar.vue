@@ -14,7 +14,29 @@
       </nav>
       
       <div class="header-actions">
-        
+        <label
+          class="framework-mode-toggle"
+          title="Specific framework changes are done on Home"
+        >
+          <span class="framework-mode-main">
+            <span class="framework-mode-label">All Frameworks</span>
+            <input
+              type="checkbox"
+              class="framework-mode-checkbox"
+              :checked="isAllFrameworksMode"
+              :disabled="isSwitchingFrameworkMode"
+              @change="handleFrameworkModeToggle"
+            >
+            <span class="framework-mode-slider"></span>
+          </span>
+          <span class="framework-mode-badge" aria-label="framework mode info">
+            Framework Mode
+          </span>
+          <span class="framework-mode-tooltip" role="tooltip">
+            Specific framework changes are done on Home
+          </span>
+        </label>
+
         <!-- Notification Bell -->
         <div class="notification-bell" @click="navigateToNotifications">
           <i class="fas fa-bell"></i>
@@ -36,6 +58,7 @@
 import logo from '../assets/RiskaVaire.png'
 import { API_ENDPOINTS, axiosInstance } from '../config/api.js'
 import authService from '../services/authService.js'
+import { useFrameworkStore } from '@/stores/framework'
 
 export default {
   name: 'GlobalNavbar',
@@ -46,16 +69,23 @@ export default {
       userInitials: '',
       logo,
       unreadCount: 0,
-      pollInterval: null
+      pollInterval: null,
+      frameworkStore: null,
+      isAllFrameworksMode: true,
+      isSwitchingFrameworkMode: false
     }
   },
-  mounted() {
+  async mounted() {
+    this.frameworkStore = useFrameworkStore()
     this.setupScrollListener()
     this.loadUserData()
     this.startNotificationPolling()
+    await this.syncFrameworkModeState()
+    window.addEventListener('framework-changed', this.syncFrameworkModeState)
   },
   beforeUnmount() {
     window.removeEventListener('scroll', this.handleScroll)
+    window.removeEventListener('framework-changed', this.syncFrameworkModeState)
     if (this.pollInterval) {
       clearInterval(this.pollInterval)
     }
@@ -77,6 +107,40 @@ export default {
     },
     navigateToNotifications() {
       this.$router.push('/notifications')
+    },
+    async syncFrameworkModeState() {
+      try {
+        if (!this.frameworkStore) {
+          this.frameworkStore = useFrameworkStore()
+        }
+        await this.frameworkStore.loadFrameworkFromSession()
+        this.isAllFrameworksMode = !this.frameworkStore.selectedFrameworkId || this.frameworkStore.selectedFrameworkId === 'all'
+      } catch (error) {
+        console.warn('[GlobalNavbar] Unable to sync framework mode state:', error?.message || error)
+      }
+    },
+    async handleFrameworkModeToggle(event) {
+      const checked = !!event?.target?.checked
+      if (!checked) {
+        // Keep toggle ON unless a specific framework is selected from Home.
+        // Users should not turn this OFF directly from navbar.
+        this.isAllFrameworksMode = true
+        return
+      }
+
+      this.isSwitchingFrameworkMode = true
+      try {
+        if (!this.frameworkStore) {
+          this.frameworkStore = useFrameworkStore()
+        }
+        await this.frameworkStore.resetFramework()
+        this.isAllFrameworksMode = true
+      } catch (error) {
+        console.error('[GlobalNavbar] Failed to enable all frameworks mode:', error)
+        await this.syncFrameworkModeState()
+      } finally {
+        this.isSwitchingFrameworkMode = false
+      }
     },
     async fetchUnreadCount() {
       try {
@@ -216,7 +280,7 @@ export default {
   align-items: center;
   padding-top: -20px;
   gap: 2rem;
-  margin-left: -13rem; /* Move nav to the left */
+  margin-left: -7rem; /* Shift nav links a bit to the right */
 }
 
 .nav-link {
@@ -320,6 +384,117 @@ export default {
   position: relative;
   top: -1px; /* nudge icon upward */
   margin-right: 0;
+}
+
+.framework-mode-toggle {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  user-select: none;
+  position: relative;
+}
+
+.framework-mode-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.framework-mode-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #4b5563;
+}
+
+.framework-mode-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.12);
+  border: 1px solid rgba(37, 99, 235, 0.25);
+  color: #1d4ed8;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+
+.framework-mode-checkbox {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.framework-mode-slider {
+  position: relative;
+  width: 40px;
+  height: 22px;
+  background: #d1d5db;
+  border-radius: 999px;
+  transition: background 0.2s ease;
+}
+
+.framework-mode-slider::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.2s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.framework-mode-checkbox:checked + .framework-mode-slider {
+  background: #2563eb;
+}
+
+.framework-mode-checkbox:checked + .framework-mode-slider::before {
+  transform: translateX(18px);
+}
+
+.framework-mode-tooltip {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  min-width: 230px;
+  max-width: 280px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #111827;
+  color: #f9fafb;
+  font-size: 11px;
+  line-height: 1.35;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-4px);
+  transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s ease;
+  z-index: 3500;
+  pointer-events: none;
+}
+
+.framework-mode-tooltip::before {
+  content: '';
+  position: absolute;
+  top: -5px;
+  left: 14px;
+  width: 10px;
+  height: 10px;
+  background: #111827;
+  transform: rotate(45deg);
+}
+
+.framework-mode-toggle:hover .framework-mode-tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
 }
 
 /* Responsive adjustments */

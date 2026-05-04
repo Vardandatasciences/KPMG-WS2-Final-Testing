@@ -26,7 +26,7 @@
             'EventCreation',
             'EventEditModal',
           ]">
-            <component :is="Component" />
+            <component :is="Component" :key="`${$route.fullPath}::${frameworkRenderKey}`" />
           </keep-alive>
         </router-view>
       </div>
@@ -128,6 +128,12 @@ export default {
         this.warmupPerfRoutesPinia(newRouteName)
       }
     }
+  },
+  computed: {
+    frameworkRenderKey() {
+      const frameworkStore = useFrameworkStore()
+      return frameworkStore.selectedFrameworkId || 'all'
+    },
   },
   methods: {
     isLoginRoute(path) {

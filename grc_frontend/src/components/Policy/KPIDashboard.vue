@@ -8,9 +8,18 @@
     <div v-if="error" class="Policy-kpi-error-state">
       <i class="fas fa-exclamation-circle"></i>
       <p>{{ error }}</p>
-      <button @click="fetchKPIData" class="Policy-kpi-retry-button">
+      <button type="button" @click="fetchKPIData({ force: true })" class="Policy-kpi-retry-button">
         <i class="fas fa-redo"></i> Retry
       </button>
+    </div>
+
+    <!-- Skeleton -->
+    <div v-else-if="showSkeleton" class="Policy-kpi-dashboard-skeleton">
+      <div v-for="n in 6" :key="`policy-kpi-skeleton-${n}`" class="Policy-kpi-skeleton-card">
+        <div class="Policy-kpi-skeleton-title"></div>
+        <div class="Policy-kpi-skeleton-chart"></div>
+        <div class="Policy-kpi-skeleton-meta"></div>
+      </div>
     </div>
 
     <!-- Content -->
@@ -34,6 +43,7 @@
                   <CustomDropdown
                     v-model="selectedFrameworkId"
                     :options="frameworkOptions"
+                    :lock-to-session-framework="false"
                     @change="handleFrameworkChange"
                     :showLabel="false"
                     :placeholder="'-- Choose a Framework --'"
@@ -636,7 +646,9 @@
 <script>
 import { API_ENDPOINTS } from '../../config/api.js'
 import apiService from '@/services/apiService'
-import policyDataService from '@/services/policyService'
+import { useFrameworkStore } from '@/stores/framework'
+import { usePolicyStore } from '@/stores/policy'
+import { normalizeApprovedActiveFrameworks } from '@/utils/frameworkApprovedActive'
 import { ref, onMounted, computed, watch, nextTick, onUnmounted, shallowRef } from 'vue'
 import CustomDropdown from '../CustomDropdown.vue'
 import '@/assets/css/dropdown.css'
@@ -649,6 +661,8 @@ export default {
     CustomDropdown
   },
   setup() {
+    const frameworkStore = useFrameworkStore()
+    const policyStore = usePolicyStore()
     const kpiData = shallowRef({})
     const error = ref(null)
     const loading = ref(false)
@@ -667,6 +681,9 @@ export default {
     const complianceData = ref({})
     const complianceLoading = ref(false)
     const complianceError = ref(null)
+    const hasInitialPayload = ref(false)
+    /** Full-page skeleton only until framework list + session selection are ready; KPI and policies load in background. */
+    const initialBootstrapComplete = ref(false)
     const frameworkComplianceData = ref({
       framework_name: '',
       total_compliance_items: 0,
@@ -681,15 +698,8 @@ export default {
     // Framework session filtering properties
     const sessionFrameworkId = ref(null)
     
-    // Framework filtering computed properties
-    const filteredFrameworks = computed(() => {
-      if (sessionFrameworkId.value) {
-        // If there's a session framework ID, show only that framework
-        return availableFrameworks.value.filter(fw => fw.id.toString() === sessionFrameworkId.value.toString())
-      }
-      // If no session framework ID, show all frameworks
-      return availableFrameworks.value
-    })
+    // Full approved/active list for the dropdown (do not limit to session "framework mode")
+    const filteredFrameworks = computed(() => availableFrameworks.value)
     
     // Filtered KPI data based on selected framework
     const filteredKPIData = computed(() => {
@@ -821,6 +831,14 @@ export default {
       })
       
       return filtered
+    })
+
+    /** Hide skeleton early when Pinia already has KPI + frameworks (policies may still load in background). */
+    const showSkeleton = computed(() => {
+      if (error.value) return false
+      if (initialBootstrapComplete.value) return false
+      if (hasInitialPayload.value && availableFrameworks.value.length > 0) return false
+      return true
     })
 
     // Basel KPIs data (S26, S27)
@@ -1287,53 +1305,41 @@ export default {
       }
     })
 
-    // Check for selected framework from session
+    // Apply session framework to local selection only — policies/KPI/compliance load after bootstrap (no duplicate awaits).
     const checkSelectedFrameworkFromSession = async () => {
       try {
         console.log('🔍 DEBUG: Checking for selected framework from session...')
-        const response = await apiService.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED)
-        
+        await frameworkStore.loadFrameworkFromSession()
+        const response = {
+          success: true,
+          frameworkId: frameworkStore.selectedFrameworkId,
+        }
+
         console.log('🔍 DEBUG: Framework response:', response)
-        
+
         if (response && response.success) {
-          // Check if a framework is selected (not null)
           if (response.frameworkId) {
             const frameworkIdFromSession = response.frameworkId.toString()
             console.log('✅ DEBUG: Found selected framework in session:', frameworkIdFromSession)
             sessionFrameworkId.value = frameworkIdFromSession
-            
-            // Check if this framework exists in our loaded frameworks
+
             const frameworkExists = availableFrameworks.value.find(f => f.id.toString() === frameworkIdFromSession.toString())
-            
+
             if (frameworkExists) {
               console.log('✅ DEBUG: Framework exists in loaded frameworks:', frameworkExists.name)
-              // Automatically select the framework from session
               selectedFrameworkId.value = frameworkExists.id.toString()
               selectedFrameworkName.value = frameworkExists.name
               console.log('✅ DEBUG: Auto-selected framework from session:', selectedFrameworkId.value)
-              // Fetch policies for the selected framework
-              await fetchAvailablePolicies(selectedFrameworkId.value)
-              // Fetch compliance data for the selected framework
-              await fetchFrameworkComplianceData()
-              // Refresh KPI data with framework filter
-              await fetchKPIData()
             } else {
               console.log('⚠️ DEBUG: Framework from session (ID:', frameworkIdFromSession, ') not found in loaded frameworks')
               console.log('📋 DEBUG: Available frameworks:', availableFrameworks.value.map(f => ({ id: f.id, name: f.name })))
-              // Clear the session framework ID since it doesn't exist
               sessionFrameworkId.value = null
             }
           } else {
-            // "All Frameworks" is selected (frameworkId is null)
             console.log('ℹ️ DEBUG: No framework selected in session (All Frameworks selected)')
-            console.log('🌐 DEBUG: Clearing framework selection to show all frameworks')
             sessionFrameworkId.value = null
             selectedFrameworkId.value = 'all'
             selectedFrameworkName.value = ''
-            // Fetch all policies
-            await fetchAvailablePolicies('all')
-            // Fetch data for all frameworks
-            await fetchKPIData()
           }
         } else {
           console.log('ℹ️ DEBUG: No framework found in session')
@@ -1347,15 +1353,21 @@ export default {
     
     const saveFrameworkToSession = async (frameworkId) => {
       try {
-        console.log('🔍 DEBUG: Saving framework to session:', frameworkId)
-        const userId = localStorage.getItem('user_id') || 'default_user'
-        await apiService.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, {
-          frameworkId: frameworkId,
-          userId: userId
-        })
-        console.log('✅ DEBUG: Framework saved to session successfully')
+        console.log('🔍 DEBUG: Saving framework via frameworkStore:', frameworkId)
+        if (frameworkId && frameworkId !== 'all') {
+          const selected = availableFrameworks.value.find(
+            (f) => String(f.id) === String(frameworkId)
+          )
+          await frameworkStore.setFramework({
+            id: frameworkId,
+            name: selected?.name || 'Selected Framework',
+          })
+        } else {
+          await frameworkStore.resetFramework()
+        }
+        console.log('✅ DEBUG: Framework saved via frameworkStore successfully')
       } catch (error) {
-        console.error('❌ DEBUG: Error saving framework to session:', error)
+        console.error('❌ DEBUG: Error saving framework via frameworkStore:', error)
       }
     }
     
@@ -1380,68 +1392,80 @@ export default {
     }
 
     // Fetch available frameworks for the dropdown
+    const mapToAvailableFrameworks = (rawList) => {
+      const list = Array.isArray(rawList) ? rawList : []
+      return list.map((framework) => ({
+        id: framework.FrameworkId || framework.id,
+        name: framework.FrameworkName || framework.name,
+        category: framework.Category || '',
+        status: framework.ActiveInactive || framework.status || '',
+        description: framework.FrameworkDescription || framework.description || ''
+      }))
+    }
+
     const fetchAvailableFrameworks = async () => {
       try {
-        console.log('🔍 [PolicyKPI] Checking for cached frameworks...')
+        frameworkStore.ensureUserScopedState()
+        let source = []
 
-        if (!window.policyDataFetchPromise && !policyDataService.hasFrameworksListCache()) {
-          console.log('🚀 [PolicyKPI] Starting policy prefetch (user navigated directly)...')
-          window.policyDataFetchPromise = policyDataService.fetchAllPolicyData()
-        }
-
-        if (window.policyDataFetchPromise) {
-          console.log('⏳ [PolicyKPI] Waiting for policy prefetch to complete...')
+        const piniaRaw = Array.isArray(frameworkStore.frameworks) ? frameworkStore.frameworks : []
+        const fromPinia = normalizeApprovedActiveFrameworks(piniaRaw)
+        if (fromPinia.length > 0) {
+          source = fromPinia
+          console.log('🔍 [PolicyKPI] frameworks — from Pinia (approved/active)', source.length)
+        } else {
           try {
-            await window.policyDataFetchPromise
-            console.log('✅ [PolicyKPI] Prefetch completed')
-          } catch (prefetchError) {
-            console.warn('⚠️ [PolicyKPI] Prefetch failed, will fetch frameworks directly', prefetchError)
+            const response = await apiService.get(API_ENDPOINTS.FRAMEWORKS_APPROVED_ACTIVE)
+            const raw =
+              response?.success && Array.isArray(response.data)
+                ? response.data
+                : Array.isArray(response)
+                  ? response
+                  : []
+            const normalized = normalizeApprovedActiveFrameworks(raw)
+            if (normalized.length > 0) {
+              source = normalized
+              frameworkStore.setFrameworks(normalized.map((fw) => ({ ...fw })))
+              console.log('🔍 [PolicyKPI] frameworks — approved-active API', source.length)
+            }
+          } catch (apiErr) {
+            console.warn('[PolicyKPI] approved-active API failed, falling back to policy store', apiErr)
           }
         }
 
-        if (policyDataService.hasFrameworksListCache()) {
-          console.log('✅ [PolicyKPI] Using cached frameworks')
-          const cachedFrameworks = policyDataService.getFrameworksList() || []
-          availableFrameworks.value = cachedFrameworks.map(framework => ({
-            id: framework.FrameworkId || framework.id,
-            name: framework.FrameworkName || framework.name,
-            category: framework.Category || '',
-            status: framework.ActiveInactive || framework.status || '',
-            description: framework.FrameworkDescription || framework.description || ''
-          }))
-
-          if (availableFrameworks.value.length > 0 && !selectedFrameworkId.value) {
-            selectedFrameworkId.value = availableFrameworks.value[0].id
-            selectedFrameworkName.value = availableFrameworks.value[0].name
-            await fetchFrameworkComplianceData()
+        if (source.length === 0) {
+          const fallback = await policyStore.getAllFrameworks({ force: false }).catch(() => [])
+          source = normalizeApprovedActiveFrameworks(Array.isArray(fallback) ? fallback : [])
+          if (!source.length && Array.isArray(policyStore.frameworks)) {
+            source = normalizeApprovedActiveFrameworks(policyStore.frameworks)
           }
-
-          return
-        }
-
-        console.log('⚠️ [PolicyKPI] No cached frameworks, fetching via API...')
-        const response = await apiService.get(API_ENDPOINTS.FRAMEWORKS)
-        
-        console.log('Raw frameworks response:', response)
-        
-        if (response && Array.isArray(response)) {
-          availableFrameworks.value = response.map(framework => ({
-            id: framework.FrameworkId,
-            name: framework.FrameworkName,
-            category: framework.Category || '',
-            status: framework.ActiveInactive || '',
-            description: framework.FrameworkDescription || ''
-          }))
-          console.log('Mapped frameworks:', availableFrameworks.value)
-
-          policyDataService.setFrameworksList(response)
-          
-          if (availableFrameworks.value.length > 0 && !selectedFrameworkId.value) {
-            selectedFrameworkId.value = availableFrameworks.value[0].id
-            selectedFrameworkName.value = availableFrameworks.value[0].name
-            await fetchFrameworkComplianceData()
+          if (source.length) {
+            console.warn('[PolicyKPI] frameworks — fallback filtered from policy store getAllFrameworks', source.length)
           }
         }
+
+        availableFrameworks.value = mapToAvailableFrameworks(source)
+        if (availableFrameworks.value.length > 0 && !selectedFrameworkId.value) {
+          selectedFrameworkId.value = availableFrameworks.value[0].id
+          selectedFrameworkName.value = availableFrameworks.value[0].name
+          await fetchFrameworkComplianceData()
+        }
+
+        void apiService
+          .get(API_ENDPOINTS.FRAMEWORKS_APPROVED_ACTIVE, {}, { skipCache: true, background: true })
+          .then((response) => {
+            const raw =
+              response?.success && Array.isArray(response.data)
+                ? response.data
+                : Array.isArray(response)
+                  ? response
+                  : []
+            const normalized = normalizeApprovedActiveFrameworks(raw)
+            if (!normalized.length) return
+            frameworkStore.setFrameworks(normalized.map((fw) => ({ ...fw })))
+            availableFrameworks.value = mapToAvailableFrameworks(normalized)
+          })
+          .catch(() => {})
       } catch (err) {
         console.error('Error fetching frameworks:', err)
       }
@@ -1492,7 +1516,7 @@ export default {
         
         // If no framework-specific data or "All Frameworks" selected, fetch all policies
         if (policiesData.length === 0 || !frameworkId || frameworkId === 'all') {
-          response = await apiService.get(API_ENDPOINTS.POLICIES)
+          response = await policyStore.getAllPolicies()
           
           console.log('Raw policies response:', response)
           
@@ -1598,10 +1622,15 @@ export default {
       const options = [
         { value: 'all', label: 'All Frameworks' }
       ]
-      filteredFrameworks.value.forEach(framework => {
+      const seen = new Set(['all'])
+      filteredFrameworks.value.forEach((framework) => {
+        if (framework?.id == null || framework?.name == null) return
+        const v = String(framework.id)
+        if (seen.has(v)) return
+        seen.add(v)
         options.push({
-          value: framework.id.toString(),
-          label: framework.name
+          value: v,
+          label: String(framework.name)
         })
       })
       return options
@@ -1787,7 +1816,17 @@ export default {
     }
 
 
-    const fetchKPIData = async () => {
+    const getKpiParams = () => {
+      const params = {}
+      if (selectedFrameworkId.value && selectedFrameworkId.value !== '' && selectedFrameworkId.value !== 'all') {
+        params.framework_id = selectedFrameworkId.value
+      }
+      return params
+    }
+
+    const currentPolicyKpiStoreKey = computed(() => JSON.stringify(getKpiParams() || {}))
+
+    const fetchKPIData = async ({ force = false } = {}) => {
       // Prevent multiple simultaneous fetches
       if (loading.value) {
         console.log('🔍 DEBUG: KPI data fetch already in progress, skipping...')
@@ -1798,26 +1837,24 @@ export default {
       error.value = null
 
       try {
-        console.log('🔍 DEBUG: Fetching KPI data...')
-        
-        // Prepare parameters for framework filtering
-        const params = {}
-        if (selectedFrameworkId.value && selectedFrameworkId.value !== '' && selectedFrameworkId.value !== 'all') {
-          params.framework_id = selectedFrameworkId.value
-          console.log('🔍 DEBUG: Applying framework filter to KPI data:', selectedFrameworkId.value)
+        console.log('🔍 DEBUG: Fetching KPI data...', force ? '(force refresh)' : '(cache ok)')
+        const params = getKpiParams()
+        if (params.framework_id) {
+          console.log('🔍 DEBUG: Applying framework filter to KPI data:', params.framework_id)
         } else {
           console.log('🔍 DEBUG: No framework filter applied to KPI data')
         }
         
-        const response = await apiService.get(API_ENDPOINTS.POLICY_KPIS, params)
-        
+        const response = await policyStore.getPolicyKpis(params, { force })
+
         console.log('KPI data received:', response)
-        
+
         if (!response || typeof response !== 'object') {
           throw new Error('Invalid response format')
         }
-        
+
         kpiData.value = response
+        hasInitialPayload.value = true
         
         console.log('🔍 DEBUG: KPI data loaded with framework filter:', selectedFrameworkId.value)
         console.log('🔍 DEBUG: Raw KPI response data:', response)
@@ -1888,6 +1925,17 @@ export default {
         loading.value = false
       }
     }
+
+    watch(
+      () => policyStore.policyKpisByKey[currentPolicyKpiStoreKey.value],
+      (next) => {
+        if (next && typeof next === 'object' && Object.keys(next).length) {
+          kpiData.value = next
+          hasInitialPayload.value = true
+        }
+      },
+      { deep: true }
+    )
 
     const sparklineData = computed(() => {
       if (!kpiData.value?.active_policies_trend) return []
@@ -1975,17 +2023,25 @@ export default {
 
 
     onMounted(async () => {
-      // Set default to "All Frameworks"
+      initialBootstrapComplete.value = false
       selectedFrameworkId.value = 'all'
-      // Fetch frameworks first
-      await fetchAvailableFrameworks()
-      // Check for selected framework from session after loading frameworks
-      await checkSelectedFrameworkFromSession()
-      // Fetch policies and KPI data based on selected framework
-      await Promise.all([
-        fetchKPIData(), 
+      try {
+        await fetchAvailableFrameworks()
+        await checkSelectedFrameworkFromSession()
+        const peekedKpi = policyStore.peekPolicyKpis(getKpiParams())
+        if (peekedKpi && typeof peekedKpi === 'object' && Object.keys(peekedKpi).length) {
+          kpiData.value = peekedKpi
+          hasInitialPayload.value = true
+        }
+      } catch (e) {
+        console.error('KPI dashboard bootstrap error:', e)
+      } finally {
+        initialBootstrapComplete.value = true
+      }
+      void Promise.all([
+        fetchKPIData(),
         fetchAvailablePolicies(selectedFrameworkId.value)
-      ])
+      ]).catch((err) => console.error('KPI dashboard background load:', err))
     })
 
     // Auto-fetch framework compliance when framework selection changes
@@ -2025,6 +2081,7 @@ export default {
     return {
       kpiData,
       filteredKPIData,
+      showSkeleton,
       error,
       loading,
       fetchKPIData,
@@ -2115,6 +2172,51 @@ export default {
   font-weight: 600;
   margin-left:20px;
   text-align: left;
+}
+
+.Policy-kpi-dashboard-skeleton {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.Policy-kpi-skeleton-card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.Policy-kpi-skeleton-title,
+.Policy-kpi-skeleton-chart,
+.Policy-kpi-skeleton-meta {
+  border-radius: 8px;
+  background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 37%, #f1f5f9 63%);
+  background-size: 400% 100%;
+  animation: policy-kpi-shimmer 1.2s ease-in-out infinite;
+}
+
+.Policy-kpi-skeleton-title {
+  height: 16px;
+  width: 60%;
+  margin-bottom: 14px;
+}
+
+.Policy-kpi-skeleton-chart {
+  height: 120px;
+  width: 100%;
+  margin-bottom: 14px;
+}
+
+.Policy-kpi-skeleton-meta {
+  height: 12px;
+  width: 45%;
+}
+
+@keyframes policy-kpi-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: 0 0; }
 }
 
 .Policy-kpi-refresh-button {

@@ -7,7 +7,7 @@
     
     <div v-else-if="error" class="error-message">
       <p>{{ error }}</p>
-      <button @click="fetchReviewTasks" class="btn-retry">Retry</button>
+      <button @click="() => fetchReviewTasks(true)" class="btn-retry">Retry</button>
     </div>
     
     <div v-else-if="audits.length === 0" class="no-data">
@@ -156,9 +156,11 @@
 <script>
 import apiService from '@/services/apiService';
 import auditorDataService from '@/services/auditorService';
+import { useAuditStore } from '@/stores/audit';
 import DynamicTable from '../DynamicTable.vue';
 import { AccessUtils } from '@/utils/accessUtils';
 import { API_ENDPOINTS } from '@/config/api.js';
+import { useFrameworkStore } from '@/stores/framework';
 
 export default {
   name: 'ReviewerPage',
@@ -172,6 +174,8 @@ export default {
       statusFilter: '',
       businessUnitFilter: '',
       businessUnits: [],
+      activeFrameworkId: '',
+      activeFrameworkName: '',
       // Column chooser properties
       showColumnEditor: false,
       columnSearchQuery: '',
@@ -236,6 +240,26 @@ export default {
   computed: {
     filteredAudits() {
       let audits = this.audits;
+      if (this.activeFrameworkId && this.activeFrameworkId !== 'all') {
+        const activeId = String(this.activeFrameworkId);
+        const activeName = (this.activeFrameworkName || '').toLowerCase();
+        audits = audits.filter(audit => {
+          const auditFrameworkId = String(
+            audit.framework_id ||
+            audit.frameworkId ||
+            audit.FrameworkId ||
+            ''
+          );
+          const auditFrameworkName = String(
+            audit.framework ||
+            audit.framework_name ||
+            audit.FrameworkName ||
+            ''
+          ).toLowerCase();
+          if (auditFrameworkId && auditFrameworkId === activeId) return true;
+          return !!activeName && auditFrameworkName === activeName;
+        });
+      }
       // Status filter (handled by DynamicTable filterFunction)
       // Search filter - search in framework, policy, auditor, business unit
       if (this.searchQuery) {
@@ -270,18 +294,34 @@ export default {
     },
   },
   created() {
-    this.fetchReviewTasks();
+    this.syncActiveFramework();
+    window.addEventListener('framework-changed', this.syncActiveFramework);
+    this.fetchReviewTasks(true);
     this.fetchBusinessUnits();
   },
+  beforeUnmount() {
+    window.removeEventListener('framework-changed', this.syncActiveFramework);
+  },
   methods: {
-    async fetchReviewTasks() {
+    async syncActiveFramework() {
+      try {
+        const frameworkStore = useFrameworkStore();
+        await frameworkStore.loadFrameworkFromSession();
+        this.activeFrameworkId = frameworkStore.selectedFrameworkId || '';
+        this.activeFrameworkName = frameworkStore.selectedFrameworkName || '';
+      } catch (error) {
+        console.warn('[Reviewer] Failed to sync framework from store:', error);
+      }
+    },
+    async fetchReviewTasks(force = false) {
       this.loading = true;
       this.error = null;
       
       try {
-        console.log('Fetching review tasks...');
-        const data = await apiService.get(API_ENDPOINTS.MY_REVIEWS);
-        this.audits = data.audits;
+        console.log('Fetching review tasks (Pinia auditStore)...');
+        const auditStore = useAuditStore();
+        await auditStore.fetchReviewQueue({ force });
+        this.audits = auditStore.reviews.queue;
         console.log(`Fetched ${this.audits.length} review tasks`);
         // Push notification for successful fetch (optional, can be omitted if not needed)
       } catch (error) {
@@ -314,14 +354,23 @@ export default {
           this.businessUnits = auditorDataService.getData('businessUnits') || [];
           console.log(`[Reviewer] Loaded ${this.businessUnits.length} business units from cache`);
         } else {
-          // Fallback: Fetch from API if cache is empty
-          console.log('⚠️ [Reviewer] No cached business units found, fetching from API...');
-          const data = await apiService.get(API_ENDPOINTS.BUSINESS_UNITS);
-          this.businessUnits = data;
-          
-          // Update cache
-          auditorDataService.setData('businessUnits', this.businessUnits);
-          console.log('ℹ️ [Reviewer] Business units cache updated after direct API fetch');
+          const auditStore = useAuditStore();
+          try {
+            await auditStore.prefetchAuditDomain({ scope: 'my', force: false });
+          } catch (e) {
+            console.warn('⚠️ [Reviewer] auditStore prefetch for lookups failed:', e);
+          }
+          if (auditStore.businessUnits.length) {
+            this.businessUnits = auditStore.businessUnits;
+            auditorDataService.setData('businessUnits', this.businessUnits);
+            console.log('ℹ️ [Reviewer] Business units loaded via Pinia auditStore');
+          } else {
+            console.log('⚠️ [Reviewer] No cached business units found, fetching from API...');
+            const data = await apiService.get(API_ENDPOINTS.BUSINESS_UNITS);
+            this.businessUnits = data;
+            auditorDataService.setData('businessUnits', this.businessUnits);
+            console.log('ℹ️ [Reviewer] Business units cache updated after direct API fetch');
+          }
         }
         
         // Update the business unit filter values
@@ -402,7 +451,7 @@ export default {
           // to avoid any method inconsistencies
           try {
             console.log(`Making request to update status to 'Under review'`);
-            await apiService.post(API_ENDPOINTS.AUDIT_STATUS(audit.audit_id), {
+            await useAuditStore().postAuditLifecycleStatus(audit.audit_id, {
               status: 'Under review'
             });
             
@@ -424,7 +473,7 @@ export default {
           review_comments = await this.$popup.comment('Please provide rejection comments:', 'Rejection Comments');
           if (review_comments === null) {
             // User cancelled the prompt, revert the status change
-            this.fetchReviewTasks();
+            this.fetchReviewTasks(true);
             await this.sendPushNotification({
               title: 'Review Rejection Cancelled',
               message: `Rejection for audit ID ${audit.audit_id} was cancelled by the user.`,
@@ -439,7 +488,7 @@ export default {
           review_comments = await this.$popup.comment('Please provide any approval comments (optional):', 'Approval Comments');
           if (review_comments === null) {
             // User cancelled the prompt, revert the status change
-            this.fetchReviewTasks();
+            this.fetchReviewTasks(true);
             await this.sendPushNotification({
               title: 'Review Approval Cancelled',
               message: `Approval for audit ID ${audit.audit_id} was cancelled by the user.`,
@@ -451,7 +500,7 @@ export default {
           }
         }
         
-        const data = await apiService.post(API_ENDPOINTS.UPDATE_AUDIT_REVIEW_STATUS(audit.audit_id), {
+        const data = await useAuditStore().submitAuditReviewStatus(audit.audit_id, {
           review_status: audit.review_status,
           review_comments: review_comments
         });
@@ -486,7 +535,7 @@ export default {
       } catch (error) {
         console.error('Error updating review status:', error);
         // Revert the status change on error
-        this.fetchReviewTasks(); // Reload data from server
+        this.fetchReviewTasks(true); // Reload data from server
         this.$popup.error(error.response?.data?.error || 'Failed to update review status. Please try again.');
         await this.sendPushNotification({
           title: 'Review Status Update Failed',

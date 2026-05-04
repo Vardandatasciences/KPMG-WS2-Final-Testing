@@ -311,7 +311,7 @@ import { PopupService } from '../../modules/popus/popupService'
 import PopupModal from '../../modules/popus/PopupModal.vue'
 import AccessUtils from '../../utils/accessUtils'
 import { useEventPermissions } from '../../composables/useEventPermissions'
-import eventDataService from '../../services/eventService' // NEW: Centralized event data service
+import { useEventsStore } from '@/stores/events'
 import CustomDropdown from '@/components/CustomDropdown.vue'
 import '@/assets/css/dropdown.css'
 
@@ -323,6 +323,7 @@ export default {
   },
   setup() {
     const router = useRouter()
+    const eventsStore = useEventsStore()
     
     // Event permissions
     const {
@@ -494,64 +495,38 @@ export default {
       }
     })
 
+    const queueItemToDetailsPayload = (item) => ({
+      id: item.id,
+      title: item.title,
+      framework: item.framework,
+      module: item.module,
+      category: item.category,
+      source: item.source,
+      timestamp: item.timestamp,
+      status: item.status,
+      linkedRecordType: item.linkedRecordType,
+      linkedRecordId: item.linkedRecordId,
+      linkedRecordName: item.linkedRecordName,
+      priority: item.priority,
+      description: item.description,
+      owner: item.owner,
+      reviewer: item.reviewer,
+      evidence: item.evidence || [],
+      rawData: item.rawData || item,
+      metadata: item.metadata,
+      suggestedType: item.suggestedType,
+      isFromQueue: true,
+      queueType: activeTab.value,
+    })
+
     const handleTakeAction = (item) => {
-      // Store the event data in sessionStorage for the event details page
-      sessionStorage.setItem('eventDetailsData', JSON.stringify({
-        id: item.id,
-        title: item.title,
-        framework: item.framework,
-        module: item.module,
-        category: item.category,
-        source: item.source,
-        timestamp: item.timestamp,
-        status: item.status,
-        linkedRecordType: item.linkedRecordType,
-        linkedRecordId: item.linkedRecordId,
-        linkedRecordName: item.linkedRecordName,
-        priority: item.priority,
-        description: item.description,
-        owner: item.owner,
-        reviewer: item.reviewer,
-        evidence: item.evidence || [],
-        rawData: item.rawData || item,
-        metadata: item.metadata,  // Add metadata field
-        suggestedType: item.suggestedType,
-        isFromQueue: true,
-        queueType: activeTab.value
-      }))
-      
-      // Navigate to event details page
-      router.push('/event-handling/details')
+      eventsStore.setActiveDetailsPayload(queueItemToDetailsPayload(item))
+      router.push({ name: 'EventDetails' })
     }
 
     const handleEventClick = (event) => {
-      // Store the event data in sessionStorage for the event details page
-      sessionStorage.setItem('eventDetailsData', JSON.stringify({
-        id: event.id,
-        title: event.title,
-        framework: event.framework,
-        module: event.module,
-        category: event.category,
-        source: event.source,
-        timestamp: event.timestamp,
-        status: event.status,
-        linkedRecordType: event.linkedRecordType,
-        linkedRecordId: event.linkedRecordId,
-        linkedRecordName: event.linkedRecordName,
-        priority: event.priority,
-        description: event.description,
-        owner: event.owner,
-        reviewer: event.reviewer,
-        evidence: event.evidence || [],
-        rawData: event.rawData || event,
-        metadata: event.metadata,  // Add metadata field
-        suggestedType: event.suggestedType,
-        isFromQueue: true,
-        queueType: activeTab.value
-      }))
-      
-      // Navigate to event details page
-      router.push('/event-handling/details')
+      eventsStore.setActiveDetailsPayload(queueItemToDetailsPayload(event))
+      router.push({ name: 'EventDetails' })
     }
 
     const closePopup = () => {
@@ -628,8 +603,7 @@ export default {
         
                  console.log('Integration data prepared:', integrationData)
         
-        // Store in sessionStorage to pass to event creation form
-        sessionStorage.setItem('integrationEventData', JSON.stringify(integrationData))
+        eventsStore.setCreationDraft('integration', integrationData)
          
          // Update the status in the integration events list
          const eventIndex = integrationEvents.value.findIndex(e => e.id === selectedItem.value.id)
@@ -643,6 +617,7 @@ export default {
            }
            integrationEvents.value = updatedEvents
            selectedItem.value.status = 'Processing'
+           eventsStore.patchIntegrationEventInList(selectedItem.value.id, { status: 'Processing' })
            console.log('Updated event status:', integrationEvents.value[eventIndex])
          } else {
            console.error('Event not found in integration events list:', selectedItem.value.id)
@@ -688,8 +663,7 @@ export default {
         
         console.log('RiskaVaire data prepared:', riskavaireData)
         
-        // Store in sessionStorage to pass to event creation form
-        sessionStorage.setItem('riskavaireEventData', JSON.stringify(riskavaireData))
+        eventsStore.setCreationDraft('riskavaire', riskavaireData)
          
          // Update the status in the RiskaVaire events list
          const eventIndex = riskavaireEvents.value.findIndex(e => e.id === selectedItem.value.id)
@@ -941,93 +915,51 @@ export default {
       }
     }
 
+    const mapMainEventsToRiskQueueRows = (cachedEvents) => {
+      const events = cachedEvents.filter((event) => event.source === 'RiskaVaire Module' || !event.source)
+      return events.map((event) => ({
+        id: event.event_id || event.id,
+        title: event.event_title || event.title,
+        framework: event.framework,
+        module: event.module,
+        category: event.category,
+        source: event.source || 'RiskaVaire Module',
+        timestamp: event.created_at
+          ? new Date(event.created_at).toLocaleDateString('en-US', {
+              month: '2-digit',
+              day: '2-digit',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+            })
+          : 'N/A',
+        status: event.status,
+        linkedRecordType: event.linked_record_type,
+        linkedRecordId: event.linked_record_id,
+        linkedRecordName: event.linked_record_name,
+        priority: event.priority,
+        description: event.description,
+        owner: event.owner,
+        reviewer: event.reviewer,
+        evidence: event.evidence || [],
+      }))
+    }
+
     const fetchRiskaVaireEvents = async () => {
       try {
         loading.value = true
         error.value = null
-        
-        console.log('[EventsQueue] Checking for cached event data...')
-        
-        // ==========================================
-        // NEW: Check if data is already cached from HomeView prefetch
-        // ==========================================
-        if (eventDataService.hasValidCache()) {
-          console.log('[EventsQueue] ✅ Using cached event data from HomeView prefetch')
-          const cachedEvents = eventDataService.getData('events') || []
-          // Filter for RiskaVaire events from cache
-          const events = cachedEvents.filter(event => event.source === 'RiskaVaire Module' || !event.source)
-          
-          // Transform events to match the queue format
-          riskavaireEvents.value = events.map(event => ({
-            id: event.event_id || event.id,
-            title: event.event_title || event.title,
-            framework: event.framework,
-            module: event.module,
-            category: event.category,
-            source: event.source || 'RiskaVaire Module',
-            timestamp: event.created_at ? new Date(event.created_at).toLocaleDateString('en-US', {
-              month: '2-digit',
-              day: '2-digit',
-              year: 'numeric',
-              hour: '2-digit',
-              minute: '2-digit'
-            }) : 'N/A',
-            status: event.status,
-            linkedRecordType: event.linked_record_type,
-            linkedRecordId: event.linked_record_id,
-            linkedRecordName: event.linked_record_name,
-            priority: event.priority,
-            description: event.description,
-            owner: event.owner,
-            reviewer: event.reviewer,
-            evidence: event.evidence || []
-          }))
-          
-          console.log('[EventsQueue] Loaded', riskavaireEvents.value.length, 'RiskaVaire events from cache')
+
+        console.log('[EventsQueue] Loading RiskaVaire slice via Pinia events store...')
+        await eventsStore.fetchEventsList({ force: false })
+        const cachedEvents = eventsStore.events || []
+        if (cachedEvents.length) {
+          riskavaireEvents.value = mapMainEventsToRiskQueueRows(cachedEvents)
+          console.log('[EventsQueue] Loaded', riskavaireEvents.value.length, 'RiskaVaire events from store')
           loading.value = false
           return
         }
-        
-        // ==========================================
-        // Fallback: If cache is empty, wait for prefetch or fetch directly
-        // ==========================================
-        console.log('[EventsQueue] No cache found, checking for ongoing prefetch...')
-        
-        if (window.eventDataFetchPromise) {
-          console.log('[EventsQueue] ⏳ Waiting for ongoing prefetch to complete...')
-          await window.eventDataFetchPromise
-          const cachedEvents = eventDataService.getData('events') || []
-          const events = cachedEvents.filter(event => event.source === 'RiskaVaire Module' || !event.source)
-          
-          riskavaireEvents.value = events.map(event => ({
-            id: event.event_id || event.id,
-            title: event.event_title || event.title,
-            framework: event.framework,
-            module: event.module,
-            category: event.category,
-            source: event.source || 'RiskaVaire Module',
-            timestamp: event.created_at ? new Date(event.created_at).toLocaleDateString('en-US', {
-              month: '2-digit',
-              day: '2-digit',
-              year: 'numeric',
-              hour: '2-digit',
-              minute: '2-digit'
-            }) : 'N/A',
-            status: event.status,
-            linkedRecordType: event.linked_record_type,
-            linkedRecordId: event.linked_record_id,
-            linkedRecordName: event.linked_record_name,
-            priority: event.priority,
-            description: event.description,
-            owner: event.owner,
-            reviewer: event.reviewer,
-            evidence: event.evidence || []
-          }))
-          
-          loading.value = false
-          return
-        }
-        
+
         console.log('DEBUG: Starting to fetch RiskaVaire events from API (cache miss)...')
         
         // Last resort: Fetch RiskaVaire events from the API
@@ -1103,142 +1035,49 @@ export default {
       }
     }
 
+    const mapIntegrationRawToQueueRows = (events) =>
+      events.map((event) => ({
+        id: event.id,
+        title: event.title,
+        framework: event.framework || 'Integration',
+        module: event.module || 'Integration',
+        category: event.category || 'Integration',
+        source: event.source || 'Integration',
+        timestamp: event.timestamp,
+        status: event.status || 'New',
+        linkedRecordType: event.linkedRecordType || 'Integration Event',
+        linkedRecordId: event.linkedRecordId,
+        linkedRecordName: event.linkedRecordName,
+        priority: event.priority || 'Medium',
+        description: event.description,
+        owner: event.owner || 'Unassigned',
+        reviewer: event.reviewer || 'Pending Assignment',
+        evidence: event.evidence || [],
+        metadata: event.metadata,
+        suggestedType: event.suggestedType || 'General Event',
+        rawData: event.rawData || event,
+      }))
+
     const fetchIntegrationEvents = async () => {
       try {
         loading.value = true
         error.value = null
-        
-        console.log('[EventsQueue] Checking for cached integration event data...')
-        
-        // ==========================================
-        // NEW: Check if data is already cached from HomeView prefetch
-        // ==========================================
-        if (eventDataService.hasIntegrationEventsCache()) {
-          console.log('[EventsQueue] ✅ Using cached integration event data from HomeView prefetch')
-          const events = eventDataService.getData('integrationEvents') || []
-          console.log('DEBUG: Integration events from cache:', events)
-          console.log('DEBUG: Total events count:', events.length)
-          
-          // Filter Microsoft Sentinel events for debugging
-          const sentinelEvents = events.filter(event => event.source === 'Microsoft Sentinel')
-          console.log('DEBUG: Microsoft Sentinel events:', sentinelEvents)
-          console.log('DEBUG: Microsoft Sentinel events count:', sentinelEvents.length)
-          
-          // Transform events to match the queue format
-          integrationEvents.value = events.map(event => ({
-            id: event.id,
-            title: event.title,
-            framework: event.framework || 'Integration',
-            module: event.module || 'Integration',
-            category: event.category || 'Integration',
-            source: event.source || 'Integration',
-            timestamp: event.timestamp,
-            status: event.status || 'New',
-            linkedRecordType: event.linkedRecordType || 'Integration Event',
-            linkedRecordId: event.linkedRecordId,
-            linkedRecordName: event.linkedRecordName,
-            priority: event.priority || 'Medium',
-            description: event.description,
-            owner: event.owner || 'Unassigned',
-            reviewer: event.reviewer || 'Pending Assignment',
-            evidence: event.evidence || [],
-            metadata: event.metadata,
-            suggestedType: event.suggestedType || 'General Event',
-            rawData: event.rawData || event
-          }))
-          
-          console.log('[EventsQueue] Loaded', integrationEvents.value.length, 'integration events from cache')
-          loading.value = false
-          return
+        console.log('[EventsQueue] Loading integration events via Pinia store...')
+        await eventsStore.fetchIntegrationEvents({ force: false })
+        let events = eventsStore.integrationEvents || []
+        if (!events.length) {
+          await eventsStore.fetchIntegrationEvents({ force: true })
+          events = eventsStore.integrationEvents || []
         }
-        
-        // ==========================================
-        // Fallback: If cache is empty, wait for prefetch or fetch directly
-        // ==========================================
-        console.log('[EventsQueue] No cache found, checking for ongoing prefetch...')
-        
-        if (window.eventDataFetchPromise) {
-          console.log('[EventsQueue] ⏳ Waiting for ongoing prefetch to complete...')
-          await window.eventDataFetchPromise
-          const events = eventDataService.getData('integrationEvents') || []
-          
-          // Transform events to match the queue format
-          integrationEvents.value = events.map(event => ({
-            id: event.id,
-            title: event.title,
-            framework: event.framework || 'Integration',
-            module: event.module || 'Integration',
-            category: event.category || 'Integration',
-            source: event.source || 'Integration',
-            timestamp: event.timestamp,
-            status: event.status || 'New',
-            linkedRecordType: event.linkedRecordType || 'Integration Event',
-            linkedRecordId: event.linkedRecordId,
-            linkedRecordName: event.linkedRecordName,
-            priority: event.priority || 'Medium',
-            description: event.description,
-            owner: event.owner || 'Unassigned',
-            reviewer: event.reviewer || 'Pending Assignment',
-            evidence: event.evidence || [],
-            metadata: event.metadata,
-            suggestedType: event.suggestedType || 'General Event',
-            rawData: event.rawData || event
-          }))
-          
-          loading.value = false
-          return
-        }
-        
-        // Last resort: Fetch directly from API
-        console.log('[EventsQueue] 🔄 Fetching integration event data from API (cache miss)...')
-        const response = await eventService.getIntegrationEvents()
-        
-        if (response.data.success) {
-          const events = response.data.events || []
-          console.log('DEBUG: Integration events received from API:', events)
-          console.log('DEBUG: Total events count:', events.length)
-          
-          // Filter Microsoft Sentinel events for debugging
-          const sentinelEvents = events.filter(event => event.source === 'Microsoft Sentinel')
-          console.log('DEBUG: Microsoft Sentinel events:', sentinelEvents)
-          console.log('DEBUG: Microsoft Sentinel events count:', sentinelEvents.length)
-          
-          // Transform events to match the queue format
-          integrationEvents.value = events.map(event => ({
-            id: event.id,
-            title: event.title,
-            framework: event.framework || 'Integration',
-            module: event.module || 'Integration',
-            category: event.category || 'Integration',
-            source: event.source || 'Integration',  // Use actual source from database
-            timestamp: event.timestamp,
-            status: event.status || 'New',
-            linkedRecordType: event.linkedRecordType || 'Integration Event',
-            linkedRecordId: event.linkedRecordId,
-            linkedRecordName: event.linkedRecordName,
-            priority: event.priority || 'Medium',
-            description: event.description,
-            owner: event.owner || 'Unassigned',
-            reviewer: event.reviewer || 'Pending Assignment',
-            evidence: event.evidence || [],
-            metadata: event.metadata,  // Add metadata field
-            suggestedType: event.suggestedType || 'General Event',
-            rawData: event.rawData || event
-          }))
-          
-          // Cache the fetched data for future use
-          eventDataService.setData('integrationEvents', events)
-          console.log('[EventsQueue] ✅ Cached', events.length, 'integration events')
-          
-        } else {
-          PopupService.error(response.data.message || 'Failed to fetch integration events', 'Error')
-        }
+        integrationEvents.value = mapIntegrationRawToQueueRows(events)
+        console.log('[EventsQueue] Loaded', integrationEvents.value.length, 'integration events')
       } catch (err) {
         console.error('Error fetching integration events:', err)
-        
-        // Check if it's an access denied error (403)
         if (err.response && err.response.status === 403) {
-          AccessUtils.showAccessDenied('Event Management - Events Queue', 'You don\'t have permission to view the events queue. Required permission: event.view_all_event or event.view_module_event')
+          AccessUtils.showAccessDenied(
+            'Event Management - Events Queue',
+            "You don't have permission to view the events queue. Required permission: event.view_all_event or event.view_module_event"
+          )
         } else {
           PopupService.error('Failed to fetch integration events. Please try again.', 'Error')
         }
@@ -1316,89 +1155,45 @@ export default {
 
     // Check for event creation completion when component mounts
     const checkEventCreationStatus = () => {
-      const eventCreationStatus = sessionStorage.getItem('eventCreationStatus')
-      if (eventCreationStatus) {
-        try {
-          const statusData = JSON.parse(eventCreationStatus)
-          if (statusData.success) {
-            // Handle integration events
-            if (statusData.integrationItemId) {
-              const eventIndex = integrationEvents.value.findIndex(e => e.id === statusData.integrationItemId)
-              if (eventIndex !== -1) {
-                console.log('Updating status to Completed for integration event:', statusData.integrationItemId)
-                const updatedEvents = [...integrationEvents.value]
-                updatedEvents[eventIndex] = {
-                  ...updatedEvents[eventIndex],
-                  status: 'Completed'
-                }
-                integrationEvents.value = updatedEvents
-                console.log('Updated integration event status to Completed:', updatedEvents[eventIndex])
-              }
-            }
-            
-            // Handle RiskaVaire events
-            if (statusData.riskavaireItemId) {
-              const eventIndex = riskavaireEvents.value.findIndex(e => e.id === statusData.riskavaireItemId)
-              if (eventIndex !== -1) {
-                console.log('Updating status to Completed for RiskaVaire event:', statusData.riskavaireItemId)
-                const updatedEvents = [...riskavaireEvents.value]
-                updatedEvents[eventIndex] = {
-                  ...updatedEvents[eventIndex],
-                  status: 'Completed'
-                }
-                riskavaireEvents.value = updatedEvents
-                console.log('Updated RiskaVaire event status to Completed:', updatedEvents[eventIndex])
-              }
-            }
-          }
-          // Clear the status from sessionStorage
-          sessionStorage.removeItem('eventCreationStatus')
-      } catch (error) {
-          console.error('Error parsing event creation status:', error)
+      const statusData = eventsStore.consumeCompletionNotice()
+      if (!statusData || !statusData.success) return
+      if (statusData.integrationItemId) {
+        const eventIndex = integrationEvents.value.findIndex((e) => e.id === statusData.integrationItemId)
+        if (eventIndex !== -1) {
+          const updatedEvents = [...integrationEvents.value]
+          updatedEvents[eventIndex] = { ...updatedEvents[eventIndex], status: 'Completed' }
+          integrationEvents.value = updatedEvents
+          eventsStore.patchIntegrationEventInList(statusData.integrationItemId, { status: 'Completed' })
+        }
+      }
+      if (statusData.riskavaireItemId) {
+        const eventIndex = riskavaireEvents.value.findIndex((e) => e.id === statusData.riskavaireItemId)
+        if (eventIndex !== -1) {
+          const updatedEvents = [...riskavaireEvents.value]
+          updatedEvents[eventIndex] = { ...updatedEvents[eventIndex], status: 'Completed' }
+          riskavaireEvents.value = updatedEvents
         }
       }
     }
 
-    // Check for status updates from Events List page
     const checkStatusUpdates = () => {
-      const statusUpdates = sessionStorage.getItem('eventStatusUpdates')
-      if (statusUpdates) {
-        try {
-          const updates = JSON.parse(statusUpdates)
-          console.log('Found status updates:', updates)
-          
-          updates.forEach(update => {
-            // Update integration events
-            const integrationIndex = integrationEvents.value.findIndex(e => e.id === update.id)
-            if (integrationIndex !== -1) {
-              console.log('Updating integration event status:', update.id, 'to', update.status)
-              const updatedEvents = [...integrationEvents.value]
-              updatedEvents[integrationIndex] = {
-                ...updatedEvents[integrationIndex],
-                status: update.status
-              }
-              integrationEvents.value = updatedEvents
-            }
-            
-            // Update RiskaVaire events
-            const riskavaireIndex = riskavaireEvents.value.findIndex(e => e.id === update.id)
-            if (riskavaireIndex !== -1) {
-              console.log('Updating RiskaVaire event status:', update.id, 'to', update.status)
-              const updatedEvents = [...riskavaireEvents.value]
-              updatedEvents[riskavaireIndex] = {
-                ...updatedEvents[riskavaireIndex],
-                status: update.status
-              }
-              riskavaireEvents.value = updatedEvents
-            }
-          })
-          
-          // Clear the updates from sessionStorage
-          sessionStorage.removeItem('eventStatusUpdates')
-      } catch (error) {
-          console.error('Error parsing status updates:', error)
+      const updates = eventsStore.consumeStatusUpdates()
+      if (!updates.length) return
+      updates.forEach((update) => {
+        const integrationIndex = integrationEvents.value.findIndex((e) => e.id === update.id)
+        if (integrationIndex !== -1) {
+          const updatedEvents = [...integrationEvents.value]
+          updatedEvents[integrationIndex] = { ...updatedEvents[integrationIndex], status: update.status }
+          integrationEvents.value = updatedEvents
+          eventsStore.patchIntegrationEventInList(update.id, { status: update.status })
         }
-      }
+        const riskavaireIndex = riskavaireEvents.value.findIndex((e) => e.id === update.id)
+        if (riskavaireIndex !== -1) {
+          const updatedEvents = [...riskavaireEvents.value]
+          updatedEvents[riskavaireIndex] = { ...updatedEvents[riskavaireIndex], status: update.status }
+          riskavaireEvents.value = updatedEvents
+        }
+      })
     }
 
     onMounted(async () => {

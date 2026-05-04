@@ -2620,7 +2620,7 @@
         <button 
           class="VV-universal-submit-btn" 
           @click.prevent="showVersionModal = true" 
-          :disabled="selectedTab === 'framework' ? isFrameworkCreatorReviewerSame : isPolicyCreatorReviewerSame"
+          :disabled="selectedTab === 'framework' ? (isFrameworkCreatorReviewerSame || vvFrameworkVersionInFlight) : (isPolicyCreatorReviewerSame || vvPolicyVersionInFlight)"
         >
           Submit
         </button>
@@ -2633,9 +2633,12 @@
 import './VV.css'
 import CustomDropdown from '../CustomDropdown.vue'
 import apiService from '@/services/apiService'
+import policyDataService from '@/services/policyService'
 import { PopupService } from '@/modules/popup'  // Fix the import path
 
 import { API_ENDPOINTS } from '../../config/api.js'
+import { useFrameworkStore } from '@/stores/framework'
+import { usePolicyStore } from '@/stores/policy'
 
 
   export default {
@@ -2679,6 +2682,8 @@ name: 'VV',
       policyTabs: [],
       activePolicyTab: 0,
       loading: false,
+      vvFrameworkVersionInFlight: false,
+      vvPolicyVersionInFlight: false,
       error: null,
       showVersionModal: false,
       selectedVersionType: 'minor', // Default version type
@@ -2768,24 +2773,17 @@ name: 'VV',
   watch: {
     async selectedFramework(newVal) {
       if (newVal && newVal !== '' && newVal !== '__new__') {
-        // Save the selected framework to session
         try {
-          const userId = this.currentUser.UserId || localStorage.getItem('user_id') || 'default_user'
-          console.log('🔍 DEBUG: Saving framework to session in VV:', newVal)
-          
-          const response = await apiService.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, {
-            frameworkId: newVal,
-            userId: userId
+          console.log('🔍 DEBUG: Saving framework via frameworkStore in VV:', newVal)
+          const frameworkStore = useFrameworkStore()
+          const selected = this.frameworks.find((f) => String(f.id) === String(newVal))
+          await frameworkStore.setFramework({
+            id: newVal,
+            name: selected?.name || 'Selected Framework',
           })
-          
-          if (response.success) {
-            console.log('✅ DEBUG: Framework saved to session successfully in VV')
-            console.log('🔑 DEBUG: Session key:', response.sessionKey)
-          } else {
-            console.error('❌ DEBUG: Failed to save framework to session in VV')
-          }
+          console.log('✅ DEBUG: Framework saved via frameworkStore in VV')
         } catch (error) {
-          console.error('❌ DEBUG: Error saving framework to session in VV:', error)
+          console.error('❌ DEBUG: Error saving framework via frameworkStore in VV:', error)
         }
       }
       
@@ -3170,31 +3168,77 @@ name: 'VV',
     this.activePolicyTab = this.policyTabs.length - 1;
   },
 
-  async fetchFrameworks() {
+  async hydrateFrameworksFromExplorerApi() {
     try {
-      this.loading = true
-      this.error = null // Clear any previous errors
-      
-      console.log('=== Fetching frameworks...')
-      // Align with Create Policy source so both pages show same framework set.
       const response = await apiService.get(API_ENDPOINTS.FRAMEWORK_EXPLORER, {
-        params: { active_only: 'true' }
+        params: { active_only: 'true' },
       })
-      console.log('Raw framework response (framework_explorer):', response)
       const frameworksData = Array.isArray(response)
         ? response
-        : (Array.isArray(response?.frameworks) ? response.frameworks : [])
-      
-      // Map frameworks
-      this.frameworks = frameworksData.map(fw => ({ 
-        id: fw.FrameworkId ?? fw.id, 
+        : Array.isArray(response?.frameworks)
+          ? response.frameworks
+          : []
+      this.frameworks = frameworksData.map((fw) => ({
+        id: fw.FrameworkId ?? fw.id,
         name: fw.FrameworkName ?? fw.name,
         description: fw.FrameworkDescription ?? fw.description,
         category: fw.Category ?? fw.category,
         internalExternal: fw.InternalExternal ?? fw.internalExternal,
         startDate: fw.StartDate ?? fw.startDate,
         endDate: fw.EndDate ?? fw.endDate,
-        status: fw.Status ?? fw.status
+        status: fw.Status ?? fw.status,
+      }))
+      await this.checkSelectedFrameworkFromSession()
+      void usePolicyStore().getAllFrameworks({ force: true }).catch(() => {})
+    } catch (e) {
+      console.warn('[VV] Background framework explorer refresh failed:', e)
+    }
+  },
+
+  async fetchFrameworks() {
+    try {
+      this.loading = true
+      this.error = null // Clear any previous errors
+
+      if (usePolicyStore().hasFrameworksCache()) {
+        const raw = usePolicyStore().getFrameworksCached()
+        const list = Array.isArray(raw) ? raw : []
+        this.frameworks = list.map((fw) => ({
+          id: fw.FrameworkId ?? fw.id,
+          name: fw.FrameworkName ?? fw.name,
+          description: fw.FrameworkDescription ?? fw.description,
+          category: fw.Category ?? fw.category,
+          internalExternal: fw.InternalExternal ?? fw.internalExternal,
+          startDate: fw.StartDate ?? fw.startDate,
+          endDate: fw.EndDate ?? fw.endDate,
+          status: fw.Status ?? fw.status,
+        }))
+        await this.checkSelectedFrameworkFromSession()
+        this.loading = false
+        void this.hydrateFrameworksFromExplorerApi()
+        return
+      }
+
+      console.log('=== Fetching frameworks...')
+      const response = await apiService.get(API_ENDPOINTS.FRAMEWORK_EXPLORER, {
+        params: { active_only: 'true' },
+      })
+      console.log('Raw framework response (framework_explorer):', response)
+      const frameworksData = Array.isArray(response)
+        ? response
+        : Array.isArray(response?.frameworks)
+          ? response.frameworks
+          : []
+
+      this.frameworks = frameworksData.map((fw) => ({
+        id: fw.FrameworkId ?? fw.id,
+        name: fw.FrameworkName ?? fw.name,
+        description: fw.FrameworkDescription ?? fw.description,
+        category: fw.Category ?? fw.category,
+        internalExternal: fw.InternalExternal ?? fw.internalExternal,
+        startDate: fw.StartDate ?? fw.startDate,
+        endDate: fw.EndDate ?? fw.endDate,
+        status: fw.Status ?? fw.status,
       }))
 
       console.log('Mapped frameworks:', this.frameworks)
@@ -3202,19 +3246,34 @@ name: 'VV',
 
       if (this.frameworks.length === 0) {
         console.log('No frameworks found')
-        PopupService.info('No frameworks found', 'No Data');
+        PopupService.info('No frameworks found', 'No Data')
       } else {
         console.log('Frameworks loaded successfully')
       }
 
-      // Check for selected framework from session after loading frameworks
       await this.checkSelectedFrameworkFromSession()
-
+      void usePolicyStore().getAllFrameworks({ force: true }).catch(() => {})
     } catch (error) {
       console.error('Error fetching frameworks:', error)
-      this.error = 'Failed to fetch frameworks'
-      this.frameworks = [] // Clear frameworks on error
-      PopupService.error('Failed to fetch frameworks', 'Error')
+      try {
+        const fallbackFrameworks = await usePolicyStore().getAllFrameworks()
+        this.frameworks = (fallbackFrameworks || []).map((fw) => ({
+          id: fw.FrameworkId ?? fw.id,
+          name: fw.FrameworkName ?? fw.name,
+          description: fw.FrameworkDescription ?? fw.description,
+          category: fw.Category ?? fw.category,
+          internalExternal: fw.InternalExternal ?? fw.internalExternal,
+          startDate: fw.StartDate ?? fw.startDate,
+          endDate: fw.EndDate ?? fw.endDate,
+          status: fw.Status ?? fw.status,
+        }))
+        this.error = null
+      } catch (fallbackError) {
+        console.error('Policy store fallback failed:', fallbackError)
+        this.error = 'Failed to fetch frameworks'
+        this.frameworks = []
+        PopupService.error('Failed to fetch frameworks', 'Error')
+      }
     } finally {
       this.loading = false
     }
@@ -3224,7 +3283,12 @@ name: 'VV',
   async checkSelectedFrameworkFromSession() {
     try {
       console.log('🔍 DEBUG: Checking for selected framework from session in VV...')
-      const response = await apiService.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED)
+      const frameworkStore = useFrameworkStore()
+      await frameworkStore.loadFrameworkFromSession()
+      const response = {
+        success: true,
+        frameworkId: frameworkStore.selectedFrameworkId,
+      }
       console.log('📊 DEBUG: Selected framework response:', response)
       
       if (response && response.success) {
@@ -4042,20 +4106,38 @@ name: 'VV',
       const user = this.users.find(u => u.name === userName);
       return user ? user.id : '';
     },
+    submitFramework() {
+      this.showVersionModal = true;
+    },
+    submitPolicy() {
+      this.showVersionModal = true;
+    },
     async submitFrameworkVersion() {
+      if (this.vvFrameworkVersionInFlight) {
+        return;
+      }
+      console.log('Submitting framework version with policies:', this.policyTabs);
+
       try {
         this.loading = true;
-        console.log('Submitting framework version with policies:', this.policyTabs);
-        
-        // Save any new departments and policy categories first
         await this.saveNewDepartments();
         await this.saveNewPolicyCategories();
-        
-        // Validate required fields
-        if (!this.validateForm('framework')) {
-          return;
-        }
+      } catch (error) {
+        console.error('Error preparing framework version:', error);
+        PopupService.error(
+          error.response?.data?.error || error.message || 'Failed to prepare framework version',
+          'Error'
+        );
+        return;
+      } finally {
+        this.loading = false;
+      }
 
+      if (!this.validateForm('framework')) {
+        return;
+      }
+
+      try {
         // Build data inventory for framework
         const frameworkFieldLabelMap = {
           frameworkName: 'Framework Name',
@@ -4209,29 +4291,62 @@ name: 'VV',
         });
 
         console.log('Submitting version data:', versionData);
-        
-        const response = await apiService.post(
-          `/api/frameworks/${this.selectedFramework}/create-version/`,
-          versionData
-        );
 
-        console.log('Framework version creation response:', response);
-        
-        // Show success message with popup
+        const selectedFwId = this.selectedFramework;
+        const fwNameSnap = this.frameworkForm.name;
+        const fwDescSnap = this.frameworkForm.description;
+        const fwCatSnap = this.frameworkForm.category;
+        const fwIeSnap = this.frameworkForm.internalExternal;
+
+        this.vvFrameworkVersionInFlight = true;
         PopupService.success('Framework version created successfully!', 'Success');
-        
-        // Reset form and redirect to framework explorer
-        setTimeout(() => {
-          this.resetForm();
-          this.$router.push('/framework-explorer');
-        }, 1500);
+        this.resetForm();
+        this.$router.push('/framework-explorer');
 
+        void apiService
+          .post(`/api/frameworks/${selectedFwId}/create-version/`, versionData, { background: true })
+          .then((response) => {
+            console.log('Framework version creation response:', response);
+            if (response.FrameworkId) {
+              const ps = usePolicyStore();
+              ps.mergeFrameworkRowFromCreate({
+                FrameworkId: response.FrameworkId,
+                FrameworkName: response.FrameworkName || fwNameSnap,
+                Category: fwCatSnap,
+                InternalExternal: fwIeSnap || 'Internal',
+                ActiveInactive: 'Inactive',
+                Status: 'Under Review',
+                CurrentVersion: response.NewVersion,
+                FrameworkDescription: fwDescSnap,
+              });
+              policyDataService.mergeExplorerFrameworkRow({
+                id: response.FrameworkId,
+                name: response.FrameworkName || fwNameSnap,
+                category: fwCatSnap || '',
+                description: fwDescSnap || '',
+                status: 'Inactive',
+                internalExternal: fwIeSnap || 'Internal',
+                versions:
+                  response.NewVersion != null ? [{ version: response.NewVersion }] : [],
+              });
+            }
+          })
+          .catch((error) => {
+            console.error('Error submitting framework version:', error);
+            const errorMessage =
+              error.response?.data?.error || 'Failed to submit framework version';
+            PopupService.error(errorMessage, 'Error Creating Framework Version');
+          })
+          .finally(() => {
+            this.vvFrameworkVersionInFlight = false;
+          });
       } catch (error) {
-        console.error('Error submitting framework version:', error);
-        const errorMessage = error.response?.data?.error || 'Failed to submit framework version';
+        console.error('Error building framework version payload:', error);
+        const errorMessage =
+          error.response?.data?.error ||
+          error.message ||
+          'Failed to build framework version';
         PopupService.error(errorMessage, 'Error Creating Framework Version');
-      } finally {
-        this.loading = false;
       }
     },
     validateForm(type) {
@@ -4354,19 +4469,31 @@ name: 'VV',
         this.frameworkFormLoaded = false
     },
     async submitPolicyVersion() {
+      if (this.vvPolicyVersionInFlight) {
+        return;
+      }
+      console.log('Submitting policy version with data:', this.policyTabs[0]);
+
       try {
         this.loading = true;
-        console.log('Submitting policy version with data:', this.policyTabs[0]);
-        
-        // Save any new departments and policy categories first
         await this.saveNewDepartments();
         await this.saveNewPolicyCategories();
+      } catch (error) {
+        console.error('Error preparing policy version:', error);
+        PopupService.error(
+          error.response?.data?.error || error.message || 'Failed to prepare policy version',
+          'Error'
+        );
+        return;
+      } finally {
+        this.loading = false;
+      }
 
-        // Validate required fields
-        if (!this.validateForm('policy')) {
-          return;
-        }
+      if (!this.validateForm('policy')) {
+        return;
+      }
 
+      try {
         // Build data inventory for policy
         const policyFieldLabelMap = {
           policyName: 'Policy Name',
@@ -4475,77 +4602,79 @@ name: 'VV',
 
         console.log('Submitting version data:', versionData);
 
-        // Make API call to create policy version
-        const response = await apiService.post(
-          `/api/policies/${this.selectedPolicy}/create-version/`,
-          versionData
-        );
+        const selectedPolId = this.selectedPolicy;
+        const policyNameSnap = this.policyTabs[0]?.name;
 
-        console.log('Policy version created:', response);
-        
-        // Show success message with popup
+        this.vvPolicyVersionInFlight = true;
         PopupService.success('Policy version created successfully!', 'Success');
-        
-        // Reset form and redirect to framework explorer
-        setTimeout(() => {
-          this.resetForm();
-          this.$router.push('/framework-explorer');
-        }, 1500);
+        this.resetForm();
+        this.$router.push('/framework-explorer');
 
+        void apiService
+          .post(`/api/policies/${selectedPolId}/create-version/`, versionData, { background: true })
+          .then((response) => {
+            console.log('Policy version created:', response);
+            if (response.PolicyId && response.FrameworkId) {
+              usePolicyStore().prependPolicyTailoringCache(response.FrameworkId, {
+                PolicyId: response.PolicyId,
+                PolicyName: response.PolicyName || policyNameSnap,
+                Status: 'Under Review',
+                FrameworkId: response.FrameworkId,
+                ActiveInactive: 'Inactive',
+                CurrentVersion: response.NewVersion,
+              });
+            }
+          })
+          .catch((error) => {
+            console.error('Error creating policy version:', error);
+            const errorMessage =
+              error.response?.data?.error || 'Failed to create policy version';
+            PopupService.error(errorMessage, 'Error Creating Policy Version');
+          })
+          .finally(() => {
+            this.vvPolicyVersionInFlight = false;
+          });
       } catch (error) {
-        console.error('Error creating policy version:', error);
-        const errorMessage = error.response?.data?.error || 'Failed to create policy version';
+        console.error('Error building policy version payload:', error);
+        const errorMessage =
+          error.response?.data?.error ||
+          error.message ||
+          'Failed to build policy version';
         PopupService.error(errorMessage, 'Error Creating Policy Version');
-      } finally {
-        this.loading = false;
       }
     },
     async confirmVersionType() {
       this.showVersionModal = false;
-      
+
       try {
         this.loading = true;
-        
-        // Check if names have been changed based on the selected tab
+
         if (this.selectedTab === 'framework') {
-          // Fetch previous framework data if not already loaded
           if (!this.previousFrameworkData) {
             await this.fetchPreviousFrameworkData();
           }
-          
-          // Note: Removed strict name change validation
-          // Versioning is allowed with any changes, not just name changes
-          // Excluded policies are automatically skipped as they are filtered out
-          
-          // Check if there are any included policies (at least one policy should be included)
+
           const includedPolicies = this.policyTabs.filter(policy => !policy.exclude);
           if (includedPolicies.length === 0) {
             PopupService.error(
               'At least one policy must be included in the version.',
               'Version Error'
             );
-            this.loading = false;
             return;
           }
-          
+
           await this.submitFrameworkVersion();
-          
         } else if (this.selectedTab === 'policy') {
-          // Fetch previous policy data if not already loaded
           if (!this.previousPolicyData) {
             await this.fetchPreviousPolicyData();
           }
-          
-          // Note: Removed strict name change validation
-          // Versioning is allowed with any changes, not just name changes
-          // Excluded subpolicies are automatically skipped - they can keep the same name
-          // Any change to the policy or its included subpolicies is sufficient for versioning
-          
+
           await this.submitPolicyVersion();
         }
       } catch (error) {
         console.error('Error in confirmVersionType:', error);
         PopupService.error('An error occurred while checking version requirements', 'Error');
+      } finally {
         this.loading = false;
       }
     },

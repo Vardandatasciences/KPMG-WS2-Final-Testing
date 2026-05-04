@@ -8,7 +8,7 @@ from rest_framework.views import APIView
 from django.contrib.auth import authenticate, login as auth_login
 from rest_framework_simplejwt.tokens import RefreshToken
 from ...serializers import (
-    UserSerializer, IncidentSerializer, AuditFindingSerializer, 
+    UserSerializer, IncidentSerializer, IncidentListSerializer, AuditFindingSerializer,
     PolicySerializer, SubPolicySerializer, ComplianceCreateSerializer, PolicyAllocationSerializer, FrameworkSerializer,
     PolicyApprovalSerializer, LastChecklistItemVerifiedSerializer, RiskInstanceSerializer  # Add RiskInstanceSerializer
 )
@@ -68,6 +68,7 @@ from ...routes.Global.validation import SecureValidator, ValidationError, Incide
 from ...utils.csv_security import sanitize_csv_dataset
 from contextlib import contextmanager
 import logging
+import threading
 import requests
 from ...utils.file_compression import decompress_if_needed
 from ...debug_utils import debug_print
@@ -1694,41 +1695,48 @@ def list_incidents(request):
     
     client_ip = get_client_ip(request)
     user_id = request.GET.get('userId')
-    
-    # Log list incidents request - use RBACUtils to get current user
-    try:
-        current_user_id = RBACUtils.get_user_id_from_request(request)
-        if not current_user_id and user_id:
-            current_user_id = user_id
-        current_user_name = request.GET.get('userName', 'Unknown')
-        if current_user_id:
+
+    # Do not block the list response on audit logging or user display-name lookup (can be very slow).
+    def _log_incident_list_opened():
+        try:
             try:
-                current_user = Users.objects.filter(UserId=current_user_id).first()
-                if current_user:
-                    current_user_name = getattr(current_user, 'UserName_plain', None) or getattr(current_user, 'UserName', None) or current_user_name
-            except:
-                pass
-    except:
-        current_user_id = user_id
-        current_user_name = request.GET.get('userName', 'Unknown')
-    
-    send_log(
-        module="Incident",
-        actionType="VIEW_INCIDENTS",
-        description="User viewed incidents list",
-        userId=str(current_user_id) if current_user_id else None,
-        userName=current_user_name,
-        entityType="Incident",
-        ipAddress=client_ip,
-        additionalInfo={
-            'status_filter': request.GET.get('status', 'all'),
-            'time_range': request.GET.get('timeRange', 'all'),
-            'category': request.GET.get('category', 'all')
-        }
-    )
-    # RBAC Debug - Log user access attempt
-    debug_info = debug_user_permissions(request, "LIST_INCIDENTS", "incident", None)
-    
+                cuid = RBACUtils.get_user_id_from_request(request)
+                if not cuid and user_id:
+                    cuid = user_id
+                cname = request.GET.get('userName', 'Unknown')
+                if cuid:
+                    try:
+                        cu = Users.objects.filter(UserId=cuid).only('UserId', 'UserName').first()
+                        if cu:
+                            cname = getattr(cu, 'UserName_plain', None) or getattr(cu, 'UserName', None) or cname
+                    except Exception:
+                        pass
+            except Exception:
+                cuid = user_id
+                cname = request.GET.get('userName', 'Unknown')
+            send_log(
+                module="Incident",
+                actionType="VIEW_INCIDENTS",
+                description="User viewed incidents list",
+                userId=str(cuid) if cuid else None,
+                userName=cname,
+                entityType="Incident",
+                ipAddress=client_ip,
+                additionalInfo={
+                    'status_filter': request.GET.get('status', 'all'),
+                    'time_range': request.GET.get('timeRange', 'all'),
+                    'category': request.GET.get('category', 'all'),
+                },
+            )
+        except Exception as e:
+            logger.warning('VIEW_INCIDENTS async log failed: %s', e)
+
+    threading.Thread(target=_log_incident_list_opened, daemon=True).start()
+
+    # RBAC debug hits the database heavily — keep it DEBUG-only.
+    if settings.DEBUG:
+        debug_user_permissions(request, "LIST_INCIDENTS", "incident", None)
+
     # Define allowed GET parameters with validation rules
     allowed_params = {
         'status': {
@@ -1987,12 +1995,11 @@ def list_incidents(request):
     try:
         # Use iterator() for memory efficiency and faster initial query
         if limit:
-            # Apply pagination slice first, then use iterator
-            paginated_queryset = incidents[offset:offset + limit]
-            # Convert to list immediately - iterator helps with memory but we need list for serializer
-            incident_list = list(paginated_queryset.iterator(chunk_size=50))
+            # Slice is already bounded by limit — materialize once (iterator adds overhead for small pages).
+            paginated_queryset = incidents[offset : offset + limit]
+            incident_list = list(paginated_queryset)
             if settings.DEBUG:
-                debug_print(f"✅ [INCIDENT API] Fetched {len(incident_list)} incidents from database using iterator")
+                debug_print(f"✅ [INCIDENT API] Fetched {len(incident_list)} incidents from database")
         else:
             incident_list = list(incidents[:1000].iterator(chunk_size=50))
             if settings.DEBUG:
@@ -2016,7 +2023,7 @@ def list_incidents(request):
         if settings.DEBUG:
             debug_print(f"🔥 [INCIDENT API] Starting serialization of {len(incident_list)} incidents...")
         
-        serializer = IncidentSerializer(incident_list, many=True, context={
+        serializer = IncidentListSerializer(incident_list, many=True, context={
             'risk_instance_incident_ids': risk_instance_incident_ids
         })
         serialized_data = serializer.data
@@ -2100,7 +2107,6 @@ def list_incidents(request):
     
     # Log successful incident list retrieval (non-blocking - don't wait for it)
     # Use threading to avoid blocking the response
-    import threading
     def log_async():
         try:
             # Get current user info for logging
@@ -2111,15 +2117,15 @@ def list_incidents(request):
                 current_user_name = request.GET.get('userName', 'Unknown')
                 if current_user_id:
                     try:
-                        current_user = Users.objects.filter(UserId=current_user_id).first()
+                        current_user = Users.objects.filter(UserId=current_user_id).only('UserId', 'UserName').first()
                         if current_user:
                             current_user_name = getattr(current_user, 'UserName_plain', None) or getattr(current_user, 'UserName', None) or current_user_name
-                    except:
+                    except Exception:
                         pass
-            except:
+            except Exception:
                 current_user_id = user_id
                 current_user_name = request.GET.get('userName', 'Unknown')
-            
+
             send_log(
                 module="Incident",
                 actionType="VIEW_INCIDENTS_SUCCESS",
@@ -2873,19 +2879,35 @@ def assign_incident(request, incident_id):
             # Fallback to the provided assigner_id if no session (should not happen in normal operation)
             incident.AssignerId = validated_data.get('assigner_id')
             debug_print(f"WARNING: No authenticated user found in session, using provided assigner_id: {incident.AssignerId}")
-            
-        reviewer_id = validated_data.get('reviewer_id')
+        
+        def _coerce_incident_user_id(val):
+            if val is None or val == '':
+                return None
+            try:
+                return int(val)
+            except (TypeError, ValueError):
+                return None
+
+        # Resolve reviewer: validated snake_case first, then raw body (camelCase / legacy clients).
+        # CRITICAL: If reviewer_id is missing from validated_data, do NOT assign None — that was
+        # overwriting ReviewerId in the DB with NULL on every partial-style PUT.
+        reviewer_id = _coerce_incident_user_id(validated_data.get('reviewer_id'))
+        if reviewer_id is None and isinstance(data, dict):
+            reviewer_id = _coerce_incident_user_id(data.get('reviewer_id'))
+        if reviewer_id is None and isinstance(data, dict):
+            reviewer_id = _coerce_incident_user_id(data.get('ReviewerId'))
         
         # SECURITY: Maker-Checker Integrity (Point 12)
         # A user should not be able to review their own assignment
-        if reviewer_id and incident.AssignerId and int(reviewer_id) == int(incident.AssignerId):
+        if reviewer_id is not None and incident.AssignerId and int(reviewer_id) == int(incident.AssignerId):
             debug_print(f"SECURITY: Blocking self-assignment review for user {reviewer_id}")
             return Response(
                 {"error": "Maker-Checker violation: Reviewer cannot be the same as the Assigner."},
                 status=status.HTTP_400_BAD_REQUEST
             )
-            
-        incident.ReviewerId = reviewer_id
+        
+        if reviewer_id is not None:
+            incident.ReviewerId = reviewer_id
         incident.AssignmentNotes = validated_data.get('assignment_notes', '')
         
         debug_print(f"🔍 DEBUG: assign_incident - Setting ReviewerId to: {reviewer_id}")
@@ -5148,10 +5170,11 @@ def user_incidents(request, user_id):
             debug_print(f"✅ Framework filter applied. Found {incidents.count()} incidents.")
         
         incidents = incidents.values(
-            'IncidentId', 'IncidentTitle', 'Origin', 'RiskPriority', 'Status', 
-            'MitigationDueDate', 'AssignerId', 'ReviewerId', 'RejectionSource'
+            'IncidentId', 'IncidentTitle', 'Origin', 'RiskPriority', 'Status',
+            'MitigationDueDate', 'AssignerId', 'ReviewerId', 'RejectionSource',
+            'Mitigation',
         )
-        
+
         # Convert to the expected format for frontend
         incident_list = []
         for incident in incidents:
@@ -5164,7 +5187,8 @@ def user_incidents(request, user_id):
                 'MitigationDueDate': incident['MitigationDueDate'],
                 'AssignerId': incident['AssignerId'],
                 'ReviewerId': incident['ReviewerId'],
-                'RejectionSource': incident.get('RejectionSource')
+                'RejectionSource': incident.get('RejectionSource'),
+                'Mitigation': incident.get('Mitigation'),
             })
         
         debug_print(f"✅ DEBUG: Returning {len(incident_list)} incidents to frontend")
@@ -5226,10 +5250,10 @@ def incident_reviewer_tasks(request, user_id):
             debug_print(f"✅ Framework filter applied. Found {incidents.count()} reviewer tasks.")
         
         incidents = incidents.values(
-            'IncidentId', 'IncidentTitle', 'Origin', 'RiskPriority', 'Status', 
-            'AssignerId', 'ReviewerId', 'MitigationDueDate'
+            'IncidentId', 'IncidentTitle', 'Origin', 'RiskPriority', 'Status',
+            'AssignerId', 'ReviewerId', 'MitigationDueDate', 'Mitigation',
         )
-        
+
         # Convert to the expected format for frontend
         incident_list = []
         for incident in incidents:
@@ -5241,9 +5265,10 @@ def incident_reviewer_tasks(request, user_id):
                 'Status': incident['Status'],
                 'AssignerId': incident['AssignerId'],
                 'ReviewerId': incident['ReviewerId'],
-                'MitigationDueDate': incident['MitigationDueDate']
+                'MitigationDueDate': incident['MitigationDueDate'],
+                'Mitigation': incident.get('Mitigation'),
             })
-        
+
         return JsonResponse(incident_list, safe=False)
     except Exception as e:
         debug_print(f"Error fetching incident reviewer tasks: {str(e)}")
@@ -6580,10 +6605,11 @@ def user_audit_findings(request, user_id):
             debug_print(f"✅ Framework filter applied. Found {incidents.count()} audit findings.")
         
         incidents = incidents.values(
-            'IncidentId', 'IncidentTitle', 'Origin', 'RiskPriority', 'Status', 
-            'MitigationDueDate', 'AssignerId', 'ReviewerId', 'RejectionSource'
+            'IncidentId', 'IncidentTitle', 'Origin', 'RiskPriority', 'Status',
+            'MitigationDueDate', 'AssignerId', 'ReviewerId', 'RejectionSource',
+            'Mitigation',
         )
-        
+
         # Convert to the expected format for frontend
         audit_finding_list = []
         for incident in incidents:
@@ -6597,9 +6623,10 @@ def user_audit_findings(request, user_id):
                 'AssignerId': incident['AssignerId'],
                 'ReviewerId': incident['ReviewerId'],
                 'RejectionSource': incident.get('RejectionSource'),
+                'Mitigation': incident.get('Mitigation'),
                 'type': 'audit_finding'
             })
-        
+
         return JsonResponse(audit_finding_list, safe=False)
     except Exception as e:
         debug_print(f"Error fetching user audit findings: {str(e)}")
@@ -6639,10 +6666,10 @@ def audit_finding_reviewer_tasks(request, user_id):
             debug_print(f"✅ Framework filter applied. Found {incidents.count()} audit finding reviewer tasks.")
         
         incidents = incidents.values(
-            'IncidentId', 'IncidentTitle', 'Origin', 'RiskPriority', 'Status', 
-            'AssignerId', 'ReviewerId', 'MitigationDueDate'
+            'IncidentId', 'IncidentTitle', 'Origin', 'RiskPriority', 'Status',
+            'AssignerId', 'ReviewerId', 'MitigationDueDate', 'Mitigation',
         )
-        
+
         # Convert to the expected format for frontend
         audit_finding_list = []
         for incident in incidents:
@@ -6655,9 +6682,10 @@ def audit_finding_reviewer_tasks(request, user_id):
                 'AssignerId': incident['AssignerId'],
                 'ReviewerId': incident['ReviewerId'],
                 'MitigationDueDate': incident['MitigationDueDate'],
+                'Mitigation': incident.get('Mitigation'),
                 'type': 'audit_finding'
             })
-        
+
         return JsonResponse(audit_finding_list, safe=False)
     except Exception as e:
         debug_print(f"Error fetching audit finding reviewer tasks: {str(e)}")
@@ -6822,6 +6850,14 @@ def assign_audit_finding_reviewer(request):
         data = request.data
         incident_id = data.get('incident_id')
         reviewer_id = data.get('reviewer_id')
+        if reviewer_id in (None, ''):
+            reviewer_id = data.get('ReviewerId')
+        try:
+            reviewer_id = int(reviewer_id) if reviewer_id not in (None, '') else None
+        except (TypeError, ValueError):
+            reviewer_id = None
+        if reviewer_id is None:
+            return JsonResponse({'error': 'reviewer_id is required'}, status=400)
         user_id = data.get('user_id')
         mitigations = data.get('mitigations', {})
         if mitigations:

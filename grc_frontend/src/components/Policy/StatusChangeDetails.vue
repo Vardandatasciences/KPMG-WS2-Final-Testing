@@ -29,9 +29,11 @@
     </div>
 
     <!-- Loading State -->
-    <div v-if="loading" class="loading-container">
-      <div class="loading-spinner"></div>
-      <p>Loading status change request details...</p>
+    <div v-if="loading" class="policy-mod-sk" aria-busy="true" aria-label="Loading request details">
+      <div class="policy-mod-sk__hero"></div>
+      <div class="policy-mod-sk__table">
+        <div v-for="n in 8" :key="'scd-sk-' + n" class="policy-mod-sk__row"></div>
+      </div>
     </div>
 
     <!-- Error State -->
@@ -76,11 +78,21 @@
             <span>This {{ selectedRequest.ItemType }} is currently under review by the assigned reviewer. Only the assigned reviewer can approve or reject this status change request.</span>
           </div>
           <div v-else class="approval-buttons">
-            <button class="btn-approve" @click="approveRequest(selectedRequest)">
+            <button
+              class="btn-approve"
+              type="button"
+              :disabled="statusChangeSubmitInFlight"
+              @click="approveRequest(selectedRequest)"
+            >
               Approve
             </button>
-            <button class="btn-reject" @click="rejectRequest(selectedRequest)">
-             Reject
+            <button
+              class="btn-reject"
+              type="button"
+              :disabled="statusChangeSubmitInFlight"
+              @click="rejectRequest(selectedRequest)"
+            >
+              Reject
             </button>
           </div>
         </div>
@@ -255,6 +267,7 @@ import '../../assets/css/main.css'
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import apiService from '@/services/apiService'
+import { usePolicyStore } from '@/stores/policy'
 import { API_ENDPOINTS } from '../../config/api.js'
 import { PopupService } from '@/modules/popus/popupService'
 import PopupModal from '@/modules/popus/PopupModal.vue'
@@ -266,6 +279,8 @@ const selectedRequest = ref(null)
 const loading = ref(true)
 const error = ref(null)
 const currentUserId = ref(null)
+const policyStore = usePolicyStore()
+const statusChangeSubmitInFlight = ref(false)
 
 // Get current user ID from session or localStorage
 const getCurrentUserId = () => {
@@ -310,14 +325,12 @@ const formatDate = (dateString) => {
 
 const sendPushNotification = async (notificationData) => {
   try {
-    const response = await apiService.post(API_ENDPOINTS.PUSH_NOTIFICATION, notificationData);
-    if (response) {
-      console.log('Push notification sent successfully');
-    } else {
-      console.error('Failed to send push notification');
-    }
-  } catch (error) {
-    console.error('Error sending push notification:', error);
+    await apiService.post(API_ENDPOINTS.PUSH_NOTIFICATION, notificationData, {
+      background: true,
+    })
+    console.log('Push notification sent successfully')
+  } catch (err) {
+    console.error('Error sending push notification:', err)
   }
 }
 
@@ -339,70 +352,79 @@ const approveRequest = async (request) => {
         'Enter any remarks (optional):',
         'Approval Remarks',
         async (remarks) => {
-          try {
-            const endpoint = request.ItemType === 'policy' 
+          if (statusChangeSubmitInFlight.value) return
+          const prevRequestState = selectedRequest.value
+            ? JSON.parse(JSON.stringify(selectedRequest.value))
+            : null
+
+          statusChangeSubmitInFlight.value = true
+          if (selectedRequest.value && selectedRequest.value.ApprovalId === request.ApprovalId) {
+            selectedRequest.value.Status = 'Approved'
+            selectedRequest.value.ApprovedNot = true
+            selectedRequest.value.Remarks = remarks || 'Status change approved'
+            selectedRequest.value.ApprovedDate = new Date().toISOString()
+          }
+
+          const endpoint =
+            request.ItemType === 'policy'
               ? `/api/policy-approvals/${request.ApprovalId}/approve-status-change/`
               : `/api/framework-approvals/${request.ApprovalId}/approve-status-change/`
-            
-            await apiService.post(endpoint, {
-              approved: true,
-              remarks: remarks || 'Status change approved'
-            })
-            
-            const affectedCount = request.ItemType === 'policy' ? request.SubpolicyCount : request.PolicyCount
-            const affectedType = request.ItemType === 'policy' ? 'subpolicies' : 'policies'
-            
-            // Send push notification for successful approval
-            await sendPushNotification({
-              title: 'Status Change Request Approved',
-              message: `${itemType.charAt(0).toUpperCase() + itemType.slice(1)} "${itemName}" has been set to Inactive.${affectedCount > 0 ? ` ${affectedCount} ${affectedType} were also made inactive.` : ''}`,
-              category: 'status_change',
-              priority: 'high',
-              user_id: 'default_user'
-            });
-            
-            // Update the selectedRequest status immediately
-            if (selectedRequest.value && selectedRequest.value.ApprovalId === request.ApprovalId) {
-              selectedRequest.value.Status = 'Approved'
-              selectedRequest.value.ApprovedNot = true
-              selectedRequest.value.Remarks = remarks || 'Status change approved'
-              selectedRequest.value.ApprovedDate = new Date().toISOString()
-            }
-            
-            PopupService.success(
-              `${itemType.charAt(0).toUpperCase() + itemType.slice(1)} "${itemName}" has been set to Inactive.${affectedCount > 0 ? ` ${affectedCount} ${affectedType} were also made inactive.` : ''}`,
-              'Status Changed'
-            )
-            
-            // Navigate back to StatusChangeRequests after a short delay
-            setTimeout(() => {
-              router.push({ name: 'StatusChangeRequests' });
-            }, 1500);
-          } catch (error) {
-            console.error('Error approving request:', error)
-            
-            // Handle specific error for reviewer restriction
-            if (error.response?.status === 403) {
-              PopupService.error(
-                'You are not the assigned reviewer for this request. Only the assigned reviewer can approve or reject status change requests.',
-                'Access Denied'
-              )
-            } else {
-              PopupService.error(
-                error.response?.data?.error || 'Failed to approve request. Please try again.',
-                'Approval Failed'
-              )
-            }
-            
-            // Send push notification for failed approval
-            await sendPushNotification({
-              title: 'Status Change Approval Failed',
-              message: `Failed to approve status change request for "${itemName}". Please try again.`,
-              category: 'status_change',
-              priority: 'high',
-              user_id: 'default_user'
-            });
+
+          const payload = {
+            approved: true,
+            remarks: remarks || 'Status change approved',
           }
+
+          const affectedCount =
+            request.ItemType === 'policy' ? request.SubpolicyCount : request.PolicyCount
+          const affectedType =
+            request.ItemType === 'policy' ? 'subpolicies' : 'policies'
+          const successMsg = `${itemType.charAt(0).toUpperCase() + itemType.slice(1)} "${itemName}" has been set to Inactive.${affectedCount > 0 ? ` ${affectedCount} ${affectedType} were also made inactive.` : ''}`
+
+          PopupService.success(successMsg, 'Status Changed')
+          setTimeout(() => {
+            router.push({ name: 'StatusChangeRequests' })
+          }, 1200)
+
+          void apiService
+            .post(endpoint, payload, { background: true })
+            .then(() => {
+              void sendPushNotification({
+                title: 'Status Change Request Approved',
+                message: successMsg,
+                category: 'status_change',
+                priority: 'high',
+                user_id: 'default_user',
+              })
+            })
+            .catch(async (error) => {
+              console.error('Error approving request:', error)
+              if (prevRequestState) {
+                selectedRequest.value = prevRequestState
+              }
+              if (error.response?.status === 403) {
+                PopupService.error(
+                  'You are not the assigned reviewer for this request. Only the assigned reviewer can approve or reject status change requests.',
+                  'Access Denied'
+                )
+              } else {
+                PopupService.error(
+                  error.response?.data?.error ||
+                    'Failed to approve request. Please try again.',
+                  'Approval Failed'
+                )
+              }
+              await sendPushNotification({
+                title: 'Status Change Approval Failed',
+                message: `Failed to approve status change request for "${itemName}". Please try again.`,
+                category: 'status_change',
+                priority: 'high',
+                user_id: 'default_user',
+              })
+            })
+            .finally(() => {
+              statusChangeSubmitInFlight.value = false
+            })
         }
       )
     }
@@ -423,67 +445,75 @@ const rejectRequest = async (request) => {
         'Enter rejection reason (optional):',
         'Rejection Reason',
         async (remarks) => {
-          try {
-            const endpoint = request.ItemType === 'policy' 
+          if (statusChangeSubmitInFlight.value) return
+          const prevRequestState = selectedRequest.value
+            ? JSON.parse(JSON.stringify(selectedRequest.value))
+            : null
+
+          statusChangeSubmitInFlight.value = true
+          if (selectedRequest.value && selectedRequest.value.ApprovalId === request.ApprovalId) {
+            selectedRequest.value.Status = 'Rejected'
+            selectedRequest.value.ApprovedNot = false
+            selectedRequest.value.Remarks = remarks || 'Status change rejected'
+            selectedRequest.value.ApprovedDate = new Date().toISOString()
+          }
+
+          const endpoint =
+            request.ItemType === 'policy'
               ? `/api/policy-approvals/${request.ApprovalId}/approve-status-change/`
               : `/api/framework-approvals/${request.ApprovalId}/approve-status-change/`
-            
-            await apiService.post(endpoint, {
-              approved: false,
-              remarks: remarks || 'Status change rejected'
-            })
-            
-            // Send push notification for successful rejection
-            await sendPushNotification({
-              title: 'Status Change Request Rejected',
-              message: `Status change request for "${itemName}" has been rejected. The ${itemType} remains Active.`,
-              category: 'status_change',
-              priority: 'medium',
-              user_id: 'default_user'
-            });
-            
-            // Update the selectedRequest status immediately
-            if (selectedRequest.value && selectedRequest.value.ApprovalId === request.ApprovalId) {
-              selectedRequest.value.Status = 'Rejected'
-              selectedRequest.value.ApprovedNot = false
-              selectedRequest.value.Remarks = remarks || 'Status change rejected'
-              selectedRequest.value.ApprovedDate = new Date().toISOString()
-            }
-            
-            PopupService.success(
-              `Status change request for "${itemName}" has been rejected. The ${itemType} remains Active.`,
-              'Request Rejected'
-            )
-            
-            // Navigate back to StatusChangeRequests after a short delay
-            setTimeout(() => {
-              router.push({ name: 'StatusChangeRequests' });
-            }, 1500);
-          } catch (error) {
-            console.error('Error rejecting status change request:', error)
-            
-            // Handle specific error for reviewer restriction
-            if (error.response?.status === 403) {
-              PopupService.error(
-                'You are not the assigned reviewer for this request. Only the assigned reviewer can approve or reject status change requests.',
-                'Access Denied'
-              )
-            } else {
-              PopupService.error(
-                error.response?.data?.error || 'Failed to reject request. Please try again.',
-                'Rejection Failed'
-              )
-            }
-            
-            // Send push notification for failed rejection
-            await sendPushNotification({
-              title: 'Status Change Rejection Failed',
-              message: `Failed to reject status change request for "${itemName}". Please try again.`,
-              category: 'status_change',
-              priority: 'high',
-              user_id: 'default_user'
-            });
+
+          const payload = {
+            approved: false,
+            remarks: remarks || 'Status change rejected',
           }
+
+          const successMsg = `Status change request for "${itemName}" has been rejected. The ${itemType} remains Active.`
+
+          PopupService.success(successMsg, 'Request Rejected')
+          setTimeout(() => {
+            router.push({ name: 'StatusChangeRequests' })
+          }, 1200)
+
+          void apiService
+            .post(endpoint, payload, { background: true })
+            .then(() => {
+              void sendPushNotification({
+                title: 'Status Change Request Rejected',
+                message: successMsg,
+                category: 'status_change',
+                priority: 'medium',
+                user_id: 'default_user',
+              })
+            })
+            .catch(async (error) => {
+              console.error('Error rejecting status change request:', error)
+              if (prevRequestState) {
+                selectedRequest.value = prevRequestState
+              }
+              if (error.response?.status === 403) {
+                PopupService.error(
+                  'You are not the assigned reviewer for this request. Only the assigned reviewer can approve or reject status change requests.',
+                  'Access Denied'
+                )
+              } else {
+                PopupService.error(
+                  error.response?.data?.error ||
+                    'Failed to reject request. Please try again.',
+                  'Rejection Failed'
+                )
+              }
+              await sendPushNotification({
+                title: 'Status Change Rejection Failed',
+                message: `Failed to reject status change request for "${itemName}". Please try again.`,
+                category: 'status_change',
+                priority: 'high',
+                user_id: 'default_user',
+              })
+            })
+            .finally(() => {
+              statusChangeSubmitInFlight.value = false
+            })
         }
       )
     }
@@ -520,9 +550,32 @@ const fetchRequestDetails = async () => {
       }
     }
 
-    // If no stored data, we need to fetch from API
-    console.error('No request data found in sessionStorage');
-    error.value = 'Please navigate to this page from the Status Change Requests to view request details.';
+    // Fallback: resolve details from store-backed cached lists.
+    if (currentUserId.value) {
+      const requestId = Number(route.params.requestId)
+      const [frameworkUser, policyUser, frameworkReviewer, policyReviewer] = await Promise.all([
+        policyStore.getFrameworkStatusChangeRequestsUser(currentUserId.value),
+        policyStore.getPolicyStatusChangeRequestsUser(currentUserId.value),
+        policyStore.getFrameworkStatusChangeRequestsReviewer(currentUserId.value),
+        policyStore.getPolicyStatusChangeRequestsReviewer(currentUserId.value),
+      ])
+
+      const allRequests = [
+        ...(Array.isArray(frameworkUser) ? frameworkUser : []),
+        ...(Array.isArray(policyUser) ? policyUser : []),
+        ...(Array.isArray(frameworkReviewer) ? frameworkReviewer : []),
+        ...(Array.isArray(policyReviewer) ? policyReviewer : []),
+      ]
+
+      const resolved = allRequests.find((item) => Number(item?.ApprovalId) === requestId)
+      if (resolved) {
+        selectedRequest.value = resolved
+        return
+      }
+    }
+
+    console.error('No request data found in sessionStorage or policy store');
+    error.value = 'Request details were not found. Please reopen from Status Change Requests.';
   } catch (error) {
     console.error('Error fetching request details:', error);
     error.value = 'Failed to load request details. Please try again.';

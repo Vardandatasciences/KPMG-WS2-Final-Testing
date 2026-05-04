@@ -77,6 +77,7 @@ import re
 from typing import Dict, Any, List, Optional, Union, TYPE_CHECKING
 from django.core.exceptions import ValidationError
 import math
+import threading
 
 from ...debug_utils import debug_print
 
@@ -132,6 +133,114 @@ def create_in_app_notification(user_id, title, message, category: str = "complia
     except Exception as e:
         # Never break core flows because of in-app notification issues
         debug_print(f"Error creating in-app notification for user {user_id}: {str(e)}")
+
+
+def _run_compliance_create_notifications(compliance_id, reviewer_id, tenant_id, session_user_id):
+    """Email + in-app notifications after compliance create; does not block the HTTP response."""
+    from django.db import connection
+    connection.close()
+    try:
+        new_compliance = Compliance.objects.get(ComplianceId=compliance_id, tenant_id=tenant_id)
+        notification_service = NotificationService()
+        notification_result = notification_service.send_compliance_clone_notification(
+            compliance=new_compliance,
+            reviewer_id=reviewer_id
+        )
+        try:
+            reviewer_email, _ = notification_service.get_user_email_by_id(reviewer_id)
+            if reviewer_email:
+                Notification.objects.create(
+                    recipient=reviewer_email,
+                    type='compliance_clone',
+                    channel='email',
+                    success=notification_result.get('success', False)
+                )
+        except Exception as db_error:
+            debug_print(f"ERROR creating notification record: {str(db_error)}")
+        if session_user_id:
+            create_in_app_notification(
+                user_id=session_user_id,
+                title="Compliance Submitted for Review",
+                message=(
+                    f"Compliance {compliance_id} has been created and sent to reviewer {reviewer_id}."
+                ),
+                category="compliance",
+                priority="medium",
+            )
+        if reviewer_id:
+            create_in_app_notification(
+                user_id=reviewer_id,
+                title="Compliance Review Assigned",
+                message=f"You have been assigned to review compliance {compliance_id}.",
+                category="compliance",
+                priority="high",
+            )
+    except Exception as e:
+        debug_print(f"Error sending async compliance notifications: {str(e)}")
+        import traceback
+        debug_print(traceback.format_exc())
+
+def _run_compliance_review_notification(compliance_id, reviewer_decision, creator_id, remarks, tenant_id):
+    """Send compliance review notification asynchronously (non-blocking for review API)."""
+    from django.db import connection
+    connection.close()
+    try:
+        current_compliance = Compliance.objects.filter(
+            ComplianceId=compliance_id,
+            tenant_id=tenant_id
+        ).first()
+        if not current_compliance:
+            return
+        notification_service = NotificationService()
+        creator_email, creator_name = notification_service.get_user_email_by_id(creator_id)
+        if creator_email:
+            notification_result = notification_service.send_compliance_review_notification(
+                compliance=current_compliance,
+                reviewer_decision=reviewer_decision,
+                creator_id=creator_id,
+                remarks=remarks
+            )
+            debug_print(f"Review notification sent to {creator_name} ({creator_email}): {notification_result}")
+        else:
+            debug_print(f"No email found for creator ID {creator_id}")
+    except Exception as e:
+        debug_print(f"Error sending compliance review notification: {str(e)}")
+
+def _run_compliance_deactivation_request_notification(compliance_id, reviewer_id, tenant_id):
+    """Send deactivation request notification asynchronously (non-blocking for deactivate API)."""
+    from django.db import connection
+    connection.close()
+    try:
+        compliance = Compliance.objects.filter(
+            ComplianceId=compliance_id,
+            tenant_id=tenant_id
+        ).first()
+        if not compliance:
+            return
+
+        notification_service = NotificationService()
+        reviewer_email, reviewer_name = notification_service.get_user_email_by_id(reviewer_id)
+        if not reviewer_email:
+            debug_print(f"No email found for reviewer ID {reviewer_id}")
+            return
+
+        notification_data = {
+            'notification_type': 'compliance_creation',
+            'email': reviewer_email,
+            'email_type': 'gmail',
+            'template_data': [
+                reviewer_name or reviewer_email.split('@')[0],
+                compliance.ComplianceId,
+                f"REQUEST TO DEACTIVATE: {compliance.ComplianceItemDescription or 'No description provided'}",
+                compliance.ComplianceVersion,
+                compliance.CreatedByName or "Unknown",
+                datetime.now().strftime('%Y-%m-%d')
+            ]
+        }
+        result = notification_service.send_multi_channel_notification(notification_data)
+        debug_print(f"Deactivation request notification sent to {reviewer_email}: {result}")
+    except Exception as e:
+        debug_print(f"Error sending deactivation request notification: {str(e)}")
 
 # Django ORM type checking suppression for all model operations in this file
 # mypy: disable-error-code="attr-defined"
@@ -1314,73 +1423,12 @@ def create_compliance(request):
             # ApprovalDueDate=approval_due_date
         )
         
-        # Send notification to reviewer (email)
-        try:
-            debug_print("=== NOTIFICATION DEBUGGING - COMPLIANCE CLONE ===")
-            from ...routes.Global.notification_service import NotificationService
-            notification_service = NotificationService()
-            
-            reviewer = reviewer_user
-            debug_print(f"Found reviewer: {reviewer.UserName} with email: {reviewer.Email}")
-            
-            # Send email notification to reviewer
-            debug_print(f"Sending clone notification for compliance {new_compliance.ComplianceId} to reviewer {reviewer_id}")
-            notification_result = notification_service.send_compliance_clone_notification(
-                compliance=new_compliance,
-                reviewer_id=reviewer_id
-            )
-            
-            if notification_result.get('success'):
-                debug_print(f"Successfully sent compliance clone notification to reviewer {reviewer_id}")
-            else:
-                debug_print(f"Failed to send notification: {notification_result.get('error', 'Unknown error')}")
-                debug_print(f"Error details: {notification_result.get('errors', [])}") 
-            
-            # Log the notification directly in the database
-            from ...models import Notification
-            try:
-                reviewer_email, reviewer_name = notification_service.get_user_email_by_id(reviewer_id)
-                if reviewer_email:
-                    Notification.objects.create(
-                        recipient=reviewer_email,
-                        type='compliance_clone',
-                        channel='email',
-                        success=notification_result.get('success', False)
-                    )
-                    debug_print(f"Created clone notification record for {reviewer_email}")
-            except Exception as db_error:
-                debug_print(f"ERROR creating notification record: {str(db_error)}")
-                
-            debug_print("=== END NOTIFICATION DEBUGGING ===")
-        except Exception as e:
-            debug_print(f"Error sending compliance clone notification: {str(e)}")
-            import traceback
-            debug_print(f"Traceback: {traceback.format_exc()}")
-            # Continue even if notification fails
-
-        # In-app notifications (push-style) for creator and reviewer
-        try:
-            # Creator gets a "submitted" notification
-            if session_user_id:
-                create_in_app_notification(
-                    user_id=session_user_id,
-                    title="Compliance Submitted for Review",
-                    message=f"Compliance {new_compliance.ComplianceId} has been created and sent to reviewer {reviewer_id}.",
-                    category="compliance",
-                    priority="medium",
-                )
-
-            # Reviewer gets an "assigned" notification
-            if reviewer_id:
-                create_in_app_notification(
-                    user_id=reviewer_id,
-                    title="Compliance Review Assigned",
-                    message=f"You have been assigned to review compliance {new_compliance.ComplianceId}.",
-                    category="compliance",
-                    priority="high",
-                )
-        except Exception as e:
-            debug_print(f"Error creating in-app notifications for compliance creation: {str(e)}")
+        # Email + in-app notifications (non-blocking — keeps create response fast)
+        threading.Thread(
+            target=_run_compliance_create_notifications,
+            args=(new_compliance.ComplianceId, reviewer_id, tenant_id, session_user_id),
+            daemon=True,
+        ).start()
 
         # Trigger automatic AI Risk Identification (Background)
         try:
@@ -2307,13 +2355,15 @@ def submit_compliance_review(request, approval_id):
             bool(approval.Version)
             and str(approval.Version).startswith('u')
             and approval.ApprovedNot is None
+            and approval.ApprovedDate is None
         )
         if not is_pending_user_submission:
             pending_u_approval = ComplianceApproval.objects.filter(
                 Identifier=approval.Identifier,
                 ReviewerId=approval_reviewer_id_int,
                 Version__startswith='u',
-                ApprovedNot=None
+                ApprovedNot=None,
+                ApprovedDate__isnull=True
             ).order_by('-ApprovalId').first()
             if pending_u_approval:
                 approval = pending_u_approval
@@ -2399,11 +2449,11 @@ def submit_compliance_review(request, approval_id):
                 'message': f'Review for {reviewer_version} already exists.'
             }, status=status.HTTP_409_CONFLICT)
 
-        # Close the pending user submission so it disappears from reviewer pending queue.
+        # Keep user versions (uN) immutable for approval flagging:
+        # ApprovedNot must remain NULL on user rows and only be set on reviewer rows (rN).
         approval.ExtractedData = extracted_data
-        approval.ApprovedNot = approved_not
         approval.ApprovedDate = datetime.date.today()
-        approval.save(update_fields=['ExtractedData', 'ApprovedNot', 'ApprovedDate'])
+        approval.save(update_fields=['ExtractedData', 'ApprovedDate'])
 
         # Create reviewer decision record (history row).
         new_approval = ComplianceApproval.objects.create(
@@ -2517,29 +2567,12 @@ def submit_compliance_review(request, approval_id):
                     updated_compliance = Compliance.objects.get(ComplianceId=current_compliance.ComplianceId, tenant_id=tenant_id)
                     debug_print(f"Verification - Compliance {updated_compliance.ComplianceId} now has Status: {updated_compliance.Status}, ActiveInactive: {updated_compliance.ActiveInactive}")
 
-                    # Send notification to compliance creator (email)
-                    try:
-                        from ...routes.Global.notification_service import NotificationService
-                        notification_service = NotificationService()
-                        
-                        # Get creator's email
-                        creator_id = approval.UserId
-                        creator_email, creator_name = notification_service.get_user_email_by_id(creator_id)
-                        
-                        if creator_email:
-                            # Send notification email
-                            notification_result = notification_service.send_compliance_review_notification(
-                                compliance=current_compliance,
-                                reviewer_decision=approved_not,
-                                creator_id=creator_id,
-                                remarks=remarks
-                            )
-                            debug_print(f"Review notification sent to {creator_name} ({creator_email}): {notification_result}")
-                        else:
-                            debug_print(f"No email found for creator ID {creator_id}")
-                    except Exception as e:
-                        debug_print(f"Error sending compliance review notification: {str(e)}")
-                        # Continue even if notification fails
+                    # Send notification to compliance creator asynchronously (do not block API response)
+                    threading.Thread(
+                        target=_run_compliance_review_notification,
+                        args=(current_compliance.ComplianceId, approved_not, approval.UserId, remarks, tenant_id),
+                        daemon=True,
+                    ).start()
                     
                 else:
                     debug_print(f"❌ ERROR: No compliance found")
@@ -2721,23 +2754,21 @@ def resubmit_compliance_approval(request, approval_id):
             except Exception:
                 current_user_name = 'Unknown User'
         
-        # CRITICAL: Keep BOTH UserId and ReviewerId consistent throughout the approval flow
-        # Get the FIRST user version (u1) to preserve the original creator and reviewer
-        first_user_version = ComplianceApproval.objects.filter(
+        # Use current actor as the resubmitter UserId and preserve/update reviewer assignment.
+        latest_user_version = ComplianceApproval.objects.filter(
             Identifier=approval.Identifier,
             Version__startswith='u'
-        ).order_by('ApprovalId').only('UserId', 'ReviewerId').first()  # Order by ApprovalId to get the first u1
+        ).order_by('-ApprovalId').only('ReviewerId').first()
+        requested_reviewer_id = request.data.get('reviewer_id') or request.data.get('ReviewerId')
+        effective_reviewer_id = requested_reviewer_id or approval.ReviewerId
+        if not effective_reviewer_id and latest_user_version:
+            effective_reviewer_id = latest_user_version.ReviewerId
         
-        # Preserve ORIGINAL UserId and ReviewerId from the first submission (u1)
-        if first_user_version:
-            original_user_id = first_user_version.UserId
-            original_reviewer_id = first_user_version.ReviewerId
-        else:
-            # Fallback to the approval being resubmitted
-            original_user_id = approval.UserId
-            original_reviewer_id = approval.ReviewerId
+        effective_user_id = current_user_id or approval.UserId
         
-        debug_print(f"🔄 RESUBMISSION: Preserving original UserId={original_user_id}, ReviewerId={original_reviewer_id} from first version")
+        debug_print(
+            f"🔄 RESUBMISSION: Using UserId={effective_user_id}, ReviewerId={effective_reviewer_id} for new resubmission"
+        )
         
         # Update CreatedByName in extracted_data to the current user
         extracted_data['CreatedByName'] = current_user_name
@@ -2822,23 +2853,31 @@ def resubmit_compliance_approval(request, approval_id):
         
         # Normalize reviewer_id and user_id to integers
         try:
-            original_reviewer_id = int(original_reviewer_id) if original_reviewer_id else None
-            original_user_id = int(original_user_id) if original_user_id else None
+            effective_reviewer_id = int(effective_reviewer_id) if effective_reviewer_id else None
+            effective_user_id = int(effective_user_id) if effective_user_id else None
         except (ValueError, TypeError) as e:
             return Response({
                 'error': f'Invalid ReviewerId or UserId: An internal server error occurred. Both must be valid integers.'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        if not original_reviewer_id:
+        if not effective_reviewer_id:
             return Response({
                 'error': 'ReviewerId is required. Cannot resubmit without a reviewer.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        if not effective_user_id:
+            return Response({
+                'error': 'UserId is required. Cannot resubmit without a valid user.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        if effective_user_id == effective_reviewer_id:
+            return Response({
+                'error': 'UserId and ReviewerId must be different users for maker-checker flow.'
             }, status=status.HTTP_400_BAD_REQUEST)
         
         new_approval = ComplianceApproval.objects.create(
             Identifier=approval.Identifier,
             ExtractedData=extracted_data,
-            UserId=original_user_id,
-            ReviewerId=original_reviewer_id,  # Ensure this is an integer
+            UserId=effective_user_id,
+            ReviewerId=effective_reviewer_id,
             # Pending resubmission must be NULL so reviewer queue picks it up.
             ApprovedNot=None,
             Version=new_version,
@@ -3050,6 +3089,7 @@ def get_policy_approvals_by_reviewer(request):
             ReviewerId=reviewer_id,
             Version__startswith='u',
             ApprovedNot=None,
+            ApprovedDate__isnull=True,
             FrameworkId__tenant_id=tenant_id  # Filter by tenant through Framework
         )
         
@@ -3132,6 +3172,7 @@ def get_policy_approvals_by_reviewer(request):
                 ReviewerId=reviewer_id,
                 Version__startswith='u',
                 ApprovedNot=None,
+                ApprovedDate__isnull=True,
                 FrameworkId__tenant_id=tenant_id  # MULTI-TENANCY: Filter by tenant
             ).order_by('-ApprovalId')  # Order by newest first to get latest version
 
@@ -3185,6 +3226,7 @@ def get_policy_approvals_by_reviewer(request):
                     Identifier=compliance.Identifier,
                     Version__startswith='u',
                     ApprovedNot=None,
+                    ApprovedDate__isnull=True,
                     FrameworkId__tenant_id=tenant_id,
                 ).order_by('-ApprovalId').first()
                 if any_pending_u:
@@ -3305,6 +3347,7 @@ def get_policy_approvals_by_reviewer(request):
                 ReviewerId=reviewer_id,
                 Version__startswith='u',
                 ApprovedNot=None,
+                ApprovedDate__isnull=True,
                 FrameworkId__tenant_id=tenant_id  # MULTI-TENANCY: Filter by tenant
             ).order_by('-ApprovalId')  # Order by newest first
             
@@ -4174,15 +4217,21 @@ def deactivate_compliance(request, compliance_id):
             }, status=status.HTTP_400_BAD_REQUEST)
         debug_print(f"Using reviewer_id: {reviewer_id}, user_id: {user_id}")
         
-        # Create a unique identifier for this deactivation request
-        deactivation_identifier = f"COMP-DEACTIVATE-{compliance.Identifier}"
+        # Create a deactivation identifier scoped to this ComplianceId to avoid
+        # mixing requests across different versions sharing the same base Identifier.
+        deactivation_identifier = f"COMP-DEACTIVATE-{compliance.Identifier}-{compliance.ComplianceId}"
         debug_print(f"Created deactivation identifier: {deactivation_identifier}")
         
         # Build the ExtractedData for the deactivation request
         extracted_data = {
             'type': 'compliance_deactivation',
             'compliance_id': compliance_id,
+            # Canonical business identifier for UI/data consistency.
+            # Keep internal request identifier separately in top-level Identifier column.
+            'Identifier': compliance.Identifier,
             'identifier': compliance.Identifier,
+            'request_identifier': deactivation_identifier,
+            'compliance_identifier': compliance.Identifier,
             'version': compliance.ComplianceVersion,
             'reason': reason,
             'current_status': 'Active',
@@ -4245,38 +4294,15 @@ def deactivate_compliance(request, compliance_id):
         except Exception as ve:
             debug_print(f"Error verifying approval: {str(ve)}")
             
-        # Send notification to reviewer
+        # Send notification asynchronously so API returns quickly.
         try:
-            from ...routes.Global.notification_service import NotificationService
-            notification_service = NotificationService()
-            
-            # Get reviewer's email
-            reviewer_email, reviewer_name = notification_service.get_user_email_by_id(reviewer_id)
-            
-            if reviewer_email:
-                # Send notification
-                notification_data = {
-                    'notification_type': 'compliance_creation',  # Reuse creation template
-                    'email': reviewer_email,
-                    'email_type': 'gmail',  # Default to gmail
-                    'template_data': [
-                        reviewer_name or reviewer_email.split('@')[0],  # Use name or extract from email
-                        compliance.ComplianceId,
-                        f"REQUEST TO DEACTIVATE: {compliance.ComplianceItemDescription or 'No description provided'}",
-                        compliance.ComplianceVersion,
-                        compliance.CreatedByName or "Unknown",
-                        datetime.now().strftime('%Y-%m-%d')
-                    ]
-                }
-                
-                # Send the notification
-                result = notification_service.send_multi_channel_notification(notification_data)
-                debug_print(f"Deactivation request notification sent to {reviewer_email}: {result}")
-            else:
-                debug_print(f"No email found for reviewer ID {reviewer_id}")
+            threading.Thread(
+                target=_run_compliance_deactivation_request_notification,
+                args=(compliance.ComplianceId, reviewer_id, tenant_id),
+                daemon=True
+            ).start()
         except Exception as e:
-            debug_print(f"Error sending deactivation request notification: {str(e)}")
-            # Continue even if notification fails
+            debug_print(f"Error scheduling deactivation request notification: {str(e)}")
         
         debug_print("==== END DEBUGGING DEACTIVATE_COMPLIANCE ====\n\n")
         
@@ -4372,24 +4398,21 @@ def approve_compliance_deactivation(request, approval_id):
         reviewer_approval = ComplianceApproval.objects.create(**creation_data)
         debug_print(f"Created reviewer ComplianceApproval record: {reviewer_approval.ApprovalId}, Version: {reviewer_approval.Version}")
         # The user (uN) row remains with ApprovedNot=NULL
-        # Send notification to compliance creator
+        # Send notification asynchronously so API returns quickly.
         try:
-            from ...routes.Global.notification_service import NotificationService
-            notification_service = NotificationService()
-            creator_id = approval.UserId
-            creator_email, creator_name = notification_service.get_user_email_by_id(creator_id)
-            if creator_email:
-                notification_result = notification_service.send_compliance_review_notification(
-                    compliance=compliance,
-                    reviewer_decision=True,  # Approved
-                    creator_id=creator_id,
-                    remarks="Your request to deactivate this compliance item has been approved."
-                )
-                debug_print(f"Deactivation approval notification result: {notification_result}")
-            else:
-                debug_print(f"No email found for creator ID {creator_id}")
+            threading.Thread(
+                target=_run_compliance_review_notification,
+                args=(
+                    compliance.ComplianceId,
+                    True,
+                    approval.UserId,
+                    "Your request to deactivate this compliance item has been approved.",
+                    tenant_id,
+                ),
+                daemon=True
+            ).start()
         except Exception as e:
-            debug_print(f"Error sending deactivation approval notification: {str(e)}")
+            debug_print(f"Error scheduling deactivation approval notification: {str(e)}")
         debug_print("==== END DEBUGGING APPROVE_DEACTIVATION ====\n\n")
         return Response({
             'success': True,
@@ -4510,25 +4533,22 @@ def reject_compliance_deactivation(request, approval_id):
         reviewer_approval = ComplianceApproval.objects.create(**creation_data)
         debug_print(f"Created reviewer ComplianceApproval record: {reviewer_approval.ApprovalId}, Version: {reviewer_approval.Version}")
         # The user (uN) row remains with ApprovedNot=NULL
-        # Send notification to compliance creator
+        # Send notification asynchronously so API returns quickly.
         if compliance:
             try:
-                from ...routes.Global.notification_service import NotificationService
-                notification_service = NotificationService()
-                creator_id = approval.UserId
-                creator_email, creator_name = notification_service.get_user_email_by_id(creator_id)
-                if creator_email:
-                    notification_result = notification_service.send_compliance_review_notification(
-                        compliance=compliance,
-                        reviewer_decision=False,  # Rejected
-                        creator_id=creator_id,
-                        remarks=f"Your request to deactivate this compliance item has been rejected. Reason: {remarks}"
-                    )
-                    debug_print(f"Deactivation rejection notification result: {notification_result}")
-                else:
-                    debug_print(f"No email found for creator ID {creator_id}")
+                threading.Thread(
+                    target=_run_compliance_review_notification,
+                    args=(
+                        compliance.ComplianceId,
+                        False,
+                        approval.UserId,
+                        f"Your request to deactivate this compliance item has been rejected. Reason: {remarks}",
+                        tenant_id,
+                    ),
+                    daemon=True
+                ).start()
             except Exception as e:
-                debug_print(f"Error sending deactivation rejection notification: {str(e)}")
+                debug_print(f"Error scheduling deactivation rejection notification: {str(e)}")
         debug_print("==== END DEBUGGING REJECT_DEACTIVATION ====\n\n")
         return Response({
             'success': True,
@@ -4775,6 +4795,7 @@ def get_compliance_analytics(request):
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_compliance_kpi(request):
     try:
+        tenant_id = get_tenant_id_from_request(request)
         # Get framework_id from query parameters
         framework_id = request.GET.get('framework_id', None)
         
@@ -6649,9 +6670,11 @@ def get_compliance_details(request, compliance_id):
             tenant_id=tenant_id
         ).first()
 
-        # Fallback path: some screens send ApprovalId in this route param.
-        # Resolve ApprovalId -> Compliance using extracted compliance id or identifier.
-        if not compliance:
+        # Optional fallback path (explicit opt-in only): some legacy screens sent
+        # ApprovalId in this route param. Keep disabled by default to avoid
+        # cross-record mismatches (wrong compliance details page).
+        allow_approval_fallback = request.GET.get('allow_approval_fallback', 'false').lower() == 'true'
+        if not compliance and allow_approval_fallback:
             debug_print(f"⚠️ ComplianceId {compliance_id} not found; trying ComplianceApproval fallback")
             approval = ComplianceApproval.objects.filter(ApprovalId=compliance_id).first()
 
@@ -6708,6 +6731,21 @@ def get_compliance_details(request, compliance_id):
                 Identifier=compliance.Identifier,
                 Version__startswith='u'  # User versions only
             ).order_by('-ApprovalId')
+
+            # STRICT SCOPING: only keep approval rows that point to this exact ComplianceId.
+            # This prevents identifier-family collisions (e.g. 7084 route showing 7087 data).
+            target_compliance_id = str(compliance.ComplianceId)
+            scoped_user_versions = []
+            for a in all_user_versions:
+                data = a.ExtractedData if isinstance(a.ExtractedData, dict) else {}
+                mapped_id = data.get('compliance_id') or data.get('ComplianceId')
+                if mapped_id is None:
+                    # Keep legacy rows with no explicit mapping for backward compatibility.
+                    scoped_user_versions.append(a)
+                    continue
+                if str(mapped_id) == target_compliance_id:
+                    scoped_user_versions.append(a)
+            all_user_versions = scoped_user_versions
             
             debug_print(f"🔍 DEBUG: Found {all_user_versions.count()} total user versions")
             
@@ -6779,6 +6817,13 @@ def get_compliance_details(request, compliance_id):
                         ApprovedNot=None,  # Pending approvals
                         Version__startswith='u'
                     ).order_by('-ApprovalId')
+                    # Keep only pending approvals mapped to this exact ComplianceId.
+                    pending_approvals = [
+                        a for a in pending_approvals
+                        if not isinstance(a.ExtractedData, dict)
+                        or (a.ExtractedData.get('compliance_id') is None and a.ExtractedData.get('ComplianceId') is None)
+                        or str(a.ExtractedData.get('compliance_id') or a.ExtractedData.get('ComplianceId')) == str(compliance.ComplianceId)
+                    ]
                     
                     if pending_approvals.exists():
                         latest_approval = get_latest_version(pending_approvals)
@@ -7897,41 +7942,23 @@ def edit_compliance(request, compliance_id):
             'Probability': new_compliance.Probability  # Add Probability field
         }
 
-        # Create PolicyApproval for the new version
-        # CRITICAL: Check if this compliance already has approval records to preserve original UserId and ReviewerId
+        # Create approval for the new user version.
+        # UserId must be the current editor; ReviewerId should come from current request selection.
         identifier = compliance.Identifier
-        first_user_version = ComplianceApproval.objects.filter(
-            Identifier=identifier,
-            Version__startswith='u'
-        ).order_by('ApprovalId').only('UserId', 'ReviewerId').first()
-        
-        # If this is an edit of an existing compliance with approvals, preserve original UserId and ReviewerId
-        if first_user_version:
-            effective_user_id = first_user_version.UserId
-            reviewer_id = first_user_version.ReviewerId
-            debug_print(f"✅ EDIT: Preserving original UserId={effective_user_id}, ReviewerId={reviewer_id} from first version")
-        else:
-            # This is a NEW compliance being edited before any approval, use current user and requested reviewer
-            reviewer_id = request.data.get('reviewer_id') or request.data.get('ReviewerId')
-            effective_user_id = None
-            try:
-                effective_user_id = RBACUtils.get_user_id_from_request(request)
-            except Exception:
-                effective_user_id = None
-            if not effective_user_id and hasattr(request, 'user') and getattr(request.user, 'UserId', None):
-                effective_user_id = request.user.UserId
-            if not effective_user_id:
-                effective_user_id = request.session.get('user_id')
-            if not effective_user_id:
-                effective_user_id = request.data.get('UserId')
-            # Normalize to int when possible
-            try:
-                if isinstance(effective_user_id, str):
-                    effective_user_id = int(effective_user_id)
-            except Exception:
-                pass
-            
-            debug_print(f"✅ EDIT: New compliance, using current UserId={effective_user_id}, ReviewerId={reviewer_id}")
+        reviewer_id = request.data.get('reviewer_id') or request.data.get('ReviewerId')
+        effective_user_id = current_user_id
+        if not effective_user_id:
+            effective_user_id = request.data.get('UserId')
+
+        # If reviewer not provided in payload, fallback to latest existing user version reviewer.
+        if not reviewer_id:
+            latest_user_version = ComplianceApproval.objects.filter(
+                Identifier=identifier,
+                Version__startswith='u'
+            ).order_by('-ApprovalId').only('ReviewerId').first()
+            reviewer_id = latest_user_version.ReviewerId if latest_user_version else None
+
+        debug_print(f"✅ EDIT: Using current UserId={effective_user_id}, ReviewerId={reviewer_id}")
         
         # Enforce that both user_id and reviewer_id are provided/derived
         if not effective_user_id:
@@ -8321,58 +8348,15 @@ def clone_compliance(request, compliance_id):
         
         debug_print(f"Created compliance approval with ID: {compliance_approval.ApprovalId}")
         
-        # Send notification to reviewer
+        # Send notification in background so clone API returns immediately.
         try:
-            debug_print("=== NOTIFICATION DEBUGGING - COMPLIANCE CLONE ===")
-            from ...routes.Global.notification_service import NotificationService
-            notification_service = NotificationService()
-            
-            # Make sure reviewer has a valid email (reviewer_user already validated above)
-            try:
-                reviewer = reviewer_user
-                if not reviewer.Email or '@' not in reviewer.Email:
-                    reviewer.Email = f"reviewer{reviewer_id_int}@example.com"
-                    reviewer.save()
-                    debug_print(f"Updated reviewer {reviewer_id_int} with email {reviewer.Email}")
-                
-                debug_print(f"Found reviewer: {reviewer.UserName} with email: {reviewer.Email}")
-            except Exception:
-                debug_print(f"ERROR: Reviewer with ID {reviewer_id_int} could not be loaded for notification")
-            
-            # Send notification
-            debug_print(f"Sending clone notification for compliance {new_compliance.ComplianceId} to reviewer {reviewer_id_int}")
-            notification_result = notification_service.send_compliance_clone_notification(
-                compliance=new_compliance,
-                reviewer_id=reviewer_id_int
-            )
-            
-            if notification_result.get('success'):
-                debug_print(f"Successfully sent compliance clone notification to reviewer {reviewer_id_int}")
-            else:
-                debug_print(f"Failed to send notification: {notification_result.get('error', 'Unknown error')}")
-                debug_print(f"Error details: {notification_result.get('errors', [])}") 
-            
-            # Log the notification directly in the database
-            from ...models import Notification
-            try:
-                reviewer_email, reviewer_name = notification_service.get_user_email_by_id(reviewer_id_int)
-                if reviewer_email:
-                    Notification.objects.create(
-                        recipient=reviewer_email,
-                        type='compliance_clone',
-                        channel='email',
-                        success=notification_result.get('success', False)
-                    )
-                    debug_print(f"Created clone notification record for {reviewer_email}")
-            except Exception as db_error:
-                debug_print(f"ERROR creating notification record: {str(db_error)}")
-                
-            debug_print("=== END NOTIFICATION DEBUGGING ===")
+            threading.Thread(
+                target=_run_compliance_create_notifications,
+                args=(new_compliance.ComplianceId, reviewer_id_int, tenant_id, created_by_id_int),
+                daemon=True
+            ).start()
         except Exception as e:
-            debug_print(f"Error sending compliance clone notification: {str(e)}")
-            import traceback
-            debug_print(f"Traceback: {traceback.format_exc()}")
-            # Continue even if notification fails
+            debug_print(f"Error scheduling async clone notification: {str(e)}")
         
         debug_print("=== END CLONE_COMPLIANCE DEBUG ===\n")
         return Response({
@@ -8774,26 +8758,7 @@ def get_compliance_approvals_by_user(request, user_id):
             return Response({'error': 'Invalid user id'}, status=400)
         if int(requester_user_id) != target_user_id and not RBACUtils.is_system_admin(requester_user_id):
             return Response({'error': 'Forbidden'}, status=403)
-        
-        # Helper function to get user name by ID
-        def get_user_name_by_id(user_id):
-            """Get user's full name or username by UserId"""
-            if not user_id:
-                return None
-            try:
-                user = Users.objects.get(UserId=user_id, tenant_id=tenant_id)
-                # Try to get full name first
-                if user.FirstName or user.LastName:
-                    full_name = f"{user.FirstName or ''} {user.LastName or ''}".strip()
-                    if full_name:
-                        return full_name
-                # Fallback to username
-                return user.UserName if user.UserName else None
-            except Users.DoesNotExist:
-                return None
-            except Exception:
-                return None
-        
+
         # Check for explicit framework filter in query params
         framework_id = request.GET.get('framework_id', None)
         
@@ -8817,22 +8782,29 @@ def get_compliance_approvals_by_user(request, user_id):
         # Serialize the approvals first
         serializer = ComplianceApprovalSerializer(approvals, many=True)
         serialized_data = serializer.data
-        
-        # Ensure CreatedByName is present in ExtractedData for all serialized approvals
+
+        # Batch-resolve creator names (avoids N+1 Users.objects.get per row — same pattern as reviewer endpoint)
+        user_ids = {item.get('UserId') for item in serialized_data if item.get('UserId')}
+        users_map = {}
+        if user_ids:
+            for u in Users.objects.filter(UserId__in=user_ids, tenant_id=tenant_id).only(
+                'UserId', 'FirstName', 'LastName', 'UserName'
+            ):
+                full_name = f"{u.FirstName or ''} {u.LastName or ''}".strip()
+                users_map[u.UserId] = full_name or u.UserName or None
+
         for approval_data in serialized_data:
             if approval_data.get('ExtractedData'):
-                # Ensure CreatedByName is present
                 if 'CreatedByName' not in approval_data['ExtractedData'] or not approval_data['ExtractedData'].get('CreatedByName'):
-                    user_name = get_user_name_by_id(approval_data.get('UserId'))
-                    if user_name:
-                        approval_data['ExtractedData']['CreatedByName'] = user_name
+                    creator_name = users_map.get(approval_data.get('UserId'))
+                    if creator_name:
+                        approval_data['ExtractedData']['CreatedByName'] = creator_name
             else:
-                # If ExtractedData is None or missing, create it with CreatedByName
                 approval_data['ExtractedData'] = {}
-                user_name = get_user_name_by_id(approval_data.get('UserId'))
-                if user_name:
-                    approval_data['ExtractedData']['CreatedByName'] = user_name
-        
+                creator_name = users_map.get(approval_data.get('UserId'))
+                if creator_name:
+                    approval_data['ExtractedData']['CreatedByName'] = creator_name
+
         return Response(serialized_data, status=200)
     except DatabaseError:
         return Response({'error': 'Database temporarily unavailable. Please try again.'}, status=503)
@@ -8882,7 +8854,9 @@ def get_compliance_approvals_by_reviewer(request, user_id):
         base_qs = ComplianceApproval.objects.filter(
             FrameworkId__tenant_id=tenant_id,
             ReviewerId=reviewer_id,
-            Version__startswith='u'
+            Version__startswith='u',
+            ApprovedNot=None,
+            ApprovedDate__isnull=True
         )
         if framework_id:
             try:

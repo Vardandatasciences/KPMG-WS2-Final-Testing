@@ -1,5 +1,7 @@
 import { computed, onMounted, onUnmounted, watch } from 'vue'
 import { useStore } from 'vuex'
+import { useFrameworkStore } from '@/stores/framework'
+import { useFrameworkGlobalCacheStore } from '@/stores/frameworkGlobalCache'
 
 /**
  * Composable for managing framework selection across all pages
@@ -7,16 +9,32 @@ import { useStore } from 'vuex'
  */
 export function useFramework() {
   const store = useStore()
+  const frameworkStore = useFrameworkStore()
+  const globalCache = useFrameworkGlobalCacheStore()
+  globalCache.hydrate()
   
-  // Get selected framework from store
-  const selectedFramework = computed(() => store.getters['framework/selectedFramework'])
-  const selectedFrameworkId = computed(() => store.state.framework.selectedFrameworkId)
-  const selectedFrameworkName = computed(() => store.state.framework.selectedFrameworkName)
-  const isAllFrameworks = computed(() => store.getters['framework/isAllFrameworks'])
+  // Prefer Pinia framework store (single source); fallback to Vuex for legacy modules.
+  const selectedFramework = computed(() => {
+    if (frameworkStore.selectedFrameworkId || frameworkStore.selectedFrameworkName !== 'All Frameworks') {
+      return frameworkStore.selectedFramework
+    }
+    return store.getters['framework/selectedFramework']
+  })
+  const selectedFrameworkId = computed(() =>
+    frameworkStore.selectedFrameworkId ?? store.state.framework.selectedFrameworkId
+  )
+  const selectedFrameworkName = computed(() =>
+    frameworkStore.selectedFrameworkName || store.state.framework.selectedFrameworkName
+  )
+  const isAllFrameworks = computed(() =>
+    frameworkStore.isAllFrameworks ?? store.getters['framework/isAllFrameworks']
+  )
   
   // Load framework from session on mount
   const loadFrameworkFromSession = async () => {
     try {
+      await frameworkStore.loadFrameworkFromSession()
+      // Keep legacy Vuex module in sync for modules not migrated yet.
       await store.dispatch('framework/loadFrameworkFromSession')
     } catch (error) {
       console.error('Error loading framework from session:', error)
@@ -25,12 +43,26 @@ export function useFramework() {
   
   // Set framework
   const setFramework = async (id, name) => {
-    await store.dispatch('framework/setFramework', { id, name })
+    await frameworkStore.setFramework({ id, name })
+    globalCache.setSelectedFramework({ id, name })
+    try {
+      // Keep legacy Vuex module in sync for modules not migrated yet.
+      await store.dispatch('framework/setFramework', { id, name })
+    } catch (error) {
+      console.warn('Legacy Vuex framework sync skipped:', error?.message || error)
+    }
   }
   
   // Reset to all frameworks
   const resetFramework = async () => {
-    await store.dispatch('framework/resetFramework')
+    await frameworkStore.resetFramework()
+    globalCache.setSelectedFramework({ id: null, name: 'All Frameworks' })
+    try {
+      // Keep legacy Vuex module in sync for modules not migrated yet.
+      await store.dispatch('framework/resetFramework')
+    } catch (error) {
+      console.warn('Legacy Vuex framework reset sync skipped:', error?.message || error)
+    }
   }
   
   // Watch for framework changes and emit event

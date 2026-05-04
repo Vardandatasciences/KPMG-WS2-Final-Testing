@@ -15,23 +15,43 @@
 import { axiosCompat as axiosInstance } from '@/services/apiServiceCompat.js';
 import { API_ENDPOINTS } from '@/config/api.js';
 
+/** Lazy Pinia access avoids circular import (store imports this service). */
+function incidentPiniaStoreOrNull() {
+  try {
+    // eslint-disable-next-line global-require
+    return require('@/stores/incident').useIncidentStore();
+  } catch {
+    return null;
+  }
+}
+
+/** Must match `INCIDENT_DOMAIN_BULK_KEYS` in `@/stores/incident` (avoid top-level import cycle). */
+const DOMAIN_BULK_KEYS = [
+  'incidents',
+  'auditFindings',
+  'incidentUsers',
+  'incidentBusinessUnits',
+  'incidentCategories',
+  'incidentFrameworks',
+];
+
+/**
+ * Default slice for login/domain prefetch — same shape as `AuditFindings.vue` first fetch.
+ * Avoids `limit=10000` (~multi‑MB, multi‑second) on every home/login prefetch.
+ */
+const AUDIT_FINDINGS_PREFETCH_DEFAULT_PARAMS = {
+  limit: 100,
+  sort: 'Date',
+  order: 'desc',
+};
+
 class IncidentService {
   constructor() {
+    /** KPI blobs when Pinia is not available (rare: tests / pre-boot). */
+    this._legacyKpiStore = { kpiData: {}, kpiDataCacheTime: null };
     // Centralized data store
+    /** Bulk arrays live in Pinia (`useIncidentStore`); only coordination metadata remains here. */
     this.dataStore = {
-      // Main data arrays
-      incidents: [],
-      auditFindings: [],
-      incidentUsers: [],
-      incidentBusinessUnits: [],
-      incidentCategories: [],
-      incidentFrameworks: [],
-      
-      // Cached KPI data
-      kpiData: {},
-      kpiDataCacheTime: null,
-      
-      // Metadata
       lastFetchTime: null,
       isFetching: false,
       fetchErrors: {}
@@ -47,19 +67,17 @@ class IncidentService {
     if (this.dataStore.isFetching) {
       return {
         success: true,
-        total: this.dataStore.incidents.length,
-        auditFindingsTotal: this.dataStore.auditFindings.length
+        total: this.getData('incidents').length,
+        auditFindingsTotal: this.getData('auditFindings').length
       };
     }
     
     this.dataStore.isFetching = true;
     this.dataStore.fetchErrors = {};
-    this.dataStore.incidents = [];
-    this.dataStore.auditFindings = [];
-    this.dataStore.incidentUsers = [];
-    this.dataStore.incidentBusinessUnits = [];
-    this.dataStore.incidentCategories = [];
-    this.dataStore.incidentFrameworks = [];
+    const store = incidentPiniaStoreOrNull();
+    if (store) {
+      store.clearDomainCatalog();
+    }
     
     try {
       console.log('🚀 [IncidentService] Starting comprehensive data prefetch...');
@@ -86,22 +104,20 @@ class IncidentService {
 
       const [auditFindings, users, prefetchedIncidents = []] = await Promise.all(prefetchTasks);
       
-      this.dataStore.auditFindings = auditFindings || [];
-      this.dataStore.incidentUsers = users || [];
+      this.setData('auditFindings', auditFindings || []);
+      this.setData('incidentUsers', users || []);
       if (includeIncidents && Array.isArray(prefetchedIncidents)) {
-        this.dataStore.incidents = prefetchedIncidents;
+        this.setData('incidents', prefetchedIncidents);
       }
       this.dataStore.lastFetchTime = Date.now();
       
-      const total = this.dataStore.incidents.length;
-      const auditFindingsTotal = this.dataStore.auditFindings.length;
+      const total = this.getData('incidents').length;
+      const auditFindingsTotal = this.getData('auditFindings').length;
       console.log(`✅ [IncidentService] Incidents fetched: ${total} (includeIncidents: ${includeIncidents})`);
       console.log(`✅ [IncidentService] Audit Findings fetched: ${auditFindingsTotal}`);
       
-      // Also prefetch basic KPI data in background (non-blocking)
-      this.prefetchBasicKPIs().catch(err => {
-        console.warn('⚠️ [IncidentService] Failed to prefetch KPI data:', err);
-      });
+      // KPIs are loaded on-demand by Incident KPI dashboard (Pinia-backed cache).
+      // Avoid prefetching /dashboard/analytics/* here — it duplicated work and inflated request counts app-wide.
       
       return {
         success: true,
@@ -120,39 +136,11 @@ class IncidentService {
   }
 
   /**
-   * Prefetch ALL dashboard and chart data (runs in background after main data is loaded)
+   * Legacy hook: previously POSTed multiple /dashboard/analytics/ series on every domain prefetch.
+   * Incident KPIs are now loaded only from IncidentDashboard.vue into Pinia (`setKpiApiItem`).
    */
   async prefetchBasicKPIs() {
-    try {
-      console.log('🔄 [IncidentService] Prefetching ALL dashboard and chart data...');
-      
-      // Fetch dashboard data AND all chart data
-      const kpiPromises = {
-        counts: this.fetchIncidentCounts(),
-        origins: this.fetchIncidentOrigins(),
-        dashboardSummary: this.fetchDashboardSummary(),
-        statusChart: this.fetchChartData('Status'),
-        originChart: this.fetchChartData('Origin'),
-        categoryChart: this.fetchChartData('RiskCategory'),
-        priorityChart: this.fetchChartData('RiskPriority')
-      };
-      
-      const results = await Promise.allSettled(Object.values(kpiPromises));
-      const keys = Object.keys(kpiPromises);
-      
-      results.forEach((result, index) => {
-        if (result.status === 'fulfilled') {
-          this.setKPIData(keys[index], result.value);
-          console.log(`✅ [IncidentService] Cached: ${keys[index]}`);
-        } else {
-          console.warn(`⚠️ [IncidentService] Failed to cache: ${keys[index]}`, result.reason);
-        }
-      });
-      
-      console.log('✅ [IncidentService] ALL dashboard and chart data prefetch complete');
-    } catch (error) {
-      console.error('❌ [IncidentService] Error prefetching dashboard data:', error);
-    }
+    return Promise.resolve()
   }
 
   /**
@@ -269,10 +257,9 @@ class IncidentService {
 
       console.log(`✅ [IncidentService] Total incidents fetched: ${allIncidents.length}`);
       
-      // CRITICAL: Store incidents in cache for future use
-      this.dataStore.incidents = allIncidents;
+      this.setData('incidents', allIncidents);
       this.dataStore.lastFetchTime = Date.now();
-      console.log(`💾 [IncidentService] Stored ${allIncidents.length} incidents in cache`);
+      console.log(`💾 [IncidentService] Stored ${allIncidents.length} incidents in Pinia cache`);
       
       return allIncidents;
     } catch (error) {
@@ -282,15 +269,15 @@ class IncidentService {
   }
   
   /**
-   * Fetch all audit findings
+   * Fetch a bounded slice of audit findings for in-memory prefetch (login / domain cache).
+   * Pass `{ limit: N, ... }` only when a caller truly needs a larger slice.
    */
-  async fetchAuditFindings() {
+  async fetchAuditFindings(queryParams = {}) {
     try {
+      const params = { ...AUDIT_FINDINGS_PREFETCH_DEFAULT_PARAMS, ...queryParams }
       const response = await axiosInstance.get(API_ENDPOINTS.AUDIT_FINDINGS, {
-        params: {
-          limit: 10000
-        },
-        timeout: 30000
+        params,
+        timeout: 120000,
       });
       
       if (response.data && response.data.success) {
@@ -312,7 +299,8 @@ class IncidentService {
    * @returns {Object|null} The audit finding or null
    */
   getAuditFindingById(incidentId) {
-    const finding = this.dataStore.auditFindings.find(
+    const rows = this.getData('auditFindings');
+    const finding = rows.find(
       f => f.IncidentId === parseInt(incidentId) || f.IncidentId === incidentId
     );
     return finding || null;
@@ -322,7 +310,7 @@ class IncidentService {
    * Check if audit findings cache is valid
    */
   hasValidAuditFindingsCache() {
-    return this.dataStore.auditFindings.length > 0 && this.isCached();
+    return this.getData('auditFindings').length > 0 && this.isCached();
   }
   
   /**
@@ -337,7 +325,7 @@ class IncidentService {
       });
       
       const users = Array.isArray(response.data) ? response.data : [];
-      this.dataStore.incidentUsers = users;
+      this.setData('incidentUsers', users);
       return users;
     } catch (error) {
       console.error('❌ Error fetching users:', error);
@@ -427,11 +415,22 @@ class IncidentService {
    * @returns {Array} The cached data or empty array
    */
   getData(key) {
-    if (this.dataStore[key]) {
+    if (DOMAIN_BULK_KEYS.includes(key)) {
+      const store = incidentPiniaStoreOrNull();
+      if (store) {
+        const rows = store.getDomainBulkData(key);
+        if (Array.isArray(rows) && rows.length > 0) {
+          console.log(`✅ Returning Pinia cached ${key}:`, rows.length, 'items');
+          return rows;
+        }
+        console.warn(`⚠️ No Pinia cached data for key: ${key}`);
+        return [];
+      }
+    }
+    if (this.dataStore[key] && Array.isArray(this.dataStore[key])) {
       console.log(`✅ Returning cached ${key}:`, this.dataStore[key].length, 'items');
       return this.dataStore[key];
     }
-    
     console.warn(`⚠️ No cached data for key: ${key}`);
     return [];
   }
@@ -440,16 +439,29 @@ class IncidentService {
    * Set data manually (useful for testing or manual updates)
    */
   setData(key, data) {
+    if (DOMAIN_BULK_KEYS.includes(key)) {
+      const store = incidentPiniaStoreOrNull();
+      if (store) {
+        store.setDomainBulkData(key, data);
+        const n = Array.isArray(data) ? data.length : 0;
+        console.log(`💾 Set ${key} (Pinia):`, n, 'items');
+        return;
+      }
+    }
     this.dataStore[key] = data;
-    console.log(`💾 Set ${key}:`, data.length, 'items');
+    const n = Array.isArray(data) ? data.length : 0;
+    console.log(`💾 Set ${key}:`, n, 'items');
   }
   
   /**
    * Get all cached data
    */
   getAllData() {
+    const store = incidentPiniaStoreOrNull();
+    const bulk = store ? store.getDomainBulkSnapshot() : {};
     return {
-      ...this.dataStore
+      ...bulk,
+      ...this.dataStore,
     };
   }
   
@@ -470,14 +482,15 @@ class IncidentService {
    * Check if incidents cache is valid
    */
   hasValidIncidentsCache() {
-    return this.dataStore.incidents.length > 0 && this.isCached();
+    return this.getData('incidents').length > 0 && this.isCached();
   }
 
   /**
    * Check if incident users cache is valid
    */
   hasValidUsersCache() {
-    return Array.isArray(this.dataStore.incidentUsers) && this.dataStore.incidentUsers.length > 0;
+    const u = this.getData('incidentUsers');
+    return Array.isArray(u) && u.length > 0;
   }
 
   /**
@@ -486,12 +499,20 @@ class IncidentService {
    * @returns {Object|null} Cached KPI data or null
    */
   getKPIData(kpiKey) {
-    if (this.dataStore.kpiData && this.dataStore.kpiData[kpiKey]) {
-      // Check if cache is fresh (5 minutes)
-      const cacheAge = Date.now() - (this.dataStore.kpiDataCacheTime || 0);
-      if (cacheAge < 300000) { // 5 minutes
-        console.log(`✅ Returning cached KPI data for: ${kpiKey}`);
-        return this.dataStore.kpiData[kpiKey];
+    const store = incidentPiniaStoreOrNull();
+    if (store) {
+      const v = store.peekKpiApiItem(kpiKey);
+      if (v != null) {
+        console.log(`✅ Returning Pinia cached KPI data for: ${kpiKey}`);
+        return v;
+      }
+      return null;
+    }
+    if (this._legacyKpiStore.kpiData && this._legacyKpiStore.kpiData[kpiKey]) {
+      const cacheAge = Date.now() - (this._legacyKpiStore.kpiDataCacheTime || 0);
+      if (cacheAge < 300000) {
+        console.log(`✅ Returning legacy cached KPI data for: ${kpiKey}`);
+        return this._legacyKpiStore.kpiData[kpiKey];
       }
     }
     return null;
@@ -503,12 +524,18 @@ class IncidentService {
    * @param {Object} data - The KPI data to cache
    */
   setKPIData(kpiKey, data) {
-    if (!this.dataStore.kpiData) {
-      this.dataStore.kpiData = {};
+    const store = incidentPiniaStoreOrNull();
+    if (store) {
+      store.setKpiApiItem(kpiKey, data);
+      console.log(`💾 Cached KPI data (Pinia) for: ${kpiKey}`);
+      return;
     }
-    this.dataStore.kpiData[kpiKey] = data;
-    this.dataStore.kpiDataCacheTime = Date.now();
-    console.log(`💾 Cached KPI data for: ${kpiKey}`);
+    if (!this._legacyKpiStore.kpiData) {
+      this._legacyKpiStore.kpiData = {};
+    }
+    this._legacyKpiStore.kpiData[kpiKey] = data;
+    this._legacyKpiStore.kpiDataCacheTime = Date.now();
+    console.log(`💾 Cached KPI data (legacy) for: ${kpiKey}`);
   }
 
   /**
@@ -517,8 +544,8 @@ class IncidentService {
    * @returns {Object} Basic KPI data computed from cache
    */
   computeBasicKPIsFromCache(filters = {}) {
-    let incidents = this.dataStore.incidents || [];
-    let auditFindings = this.dataStore.auditFindings || [];
+    let incidents = this.getData('incidents') || [];
+    let auditFindings = this.getData('auditFindings') || [];
     let allItems = [...incidents, ...auditFindings];
 
     // Apply filters if provided
@@ -641,8 +668,8 @@ class IncidentService {
    * @returns {Object} Chart data object with labels and datasets
    */
   computeChartDataFromCache(yAxis, filters = {}) {
-    let incidents = this.dataStore.incidents || [];
-    let auditFindings = this.dataStore.auditFindings || [];
+    let incidents = this.getData('incidents') || [];
+    let auditFindings = this.getData('auditFindings') || [];
     let allItems = [...incidents, ...auditFindings];
 
     // Apply filters if provided
@@ -951,11 +978,25 @@ class IncidentService {
    * @returns {boolean} True if cache is valid
    */
   hasValidKPICache(maxAgeMs = 300000) {
-    if (!this.dataStore.kpiDataCacheTime) {
+    const store = incidentPiniaStoreOrNull();
+    if (store) {
+      return store.hasFreshKpiApiCache(maxAgeMs);
+    }
+    if (!this._legacyKpiStore.kpiDataCacheTime) {
       return false;
     }
-    const cacheAge = Date.now() - this.dataStore.kpiDataCacheTime;
-    return cacheAge < maxAgeMs && Object.keys(this.dataStore.kpiData || {}).length > 0;
+    const cacheAge = Date.now() - this._legacyKpiStore.kpiDataCacheTime;
+    return cacheAge < maxAgeMs && Object.keys(this._legacyKpiStore.kpiData || {}).length > 0;
+  }
+
+  /** Clear only KPI slices (incidents / findings lists and users remain). Used after mutations from Pinia. */
+  clearKpiCache() {
+    const store = incidentPiniaStoreOrNull();
+    if (store) {
+      store.clearKpiApiCache();
+    }
+    this._legacyKpiStore.kpiData = {};
+    this._legacyKpiStore.kpiDataCacheTime = null;
   }
   
   /**
@@ -964,18 +1005,16 @@ class IncidentService {
   clearCache() {
     console.log('🗑️ Clearing incident data cache...');
     this.dataStore = {
-      incidents: [],
-      auditFindings: [],
-      incidentUsers: [],
-      incidentBusinessUnits: [],
-      incidentCategories: [],
-      incidentFrameworks: [],
-      kpiData: {},
-      kpiDataCacheTime: null,
       lastFetchTime: null,
       isFetching: false,
       fetchErrors: {}
     };
+    const store = incidentPiniaStoreOrNull();
+    if (store) {
+      store.clearPerformanceSnapshots();
+      store.clearDomainCatalog();
+    }
+    this.clearKpiCache();
   }
   
   /**

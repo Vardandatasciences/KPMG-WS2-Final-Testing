@@ -54,8 +54,11 @@
             </select>
           </div>
           <div class="instance-view-meta-item">
-            <span v-if="!isEditMode" :class="'instance-view-priority-' + instance.Criticality.toLowerCase()">
-              {{ instance.Criticality }}
+            <span
+              v-if="!isEditMode"
+              :class="'instance-view-priority-' + (instance.Criticality || 'medium').toLowerCase()"
+            >
+              {{ instance.Criticality || 'Medium' }}
             </span>
             <select v-if="isEditMode" v-model="editInstance.Criticality" class="instance-view-select export-dropdown">
               <option value="">Select Criticality</option>
@@ -201,8 +204,31 @@
       </div>
     </div>
 
-    <div v-else class="instance-view-no-data">
-      Loading instance details or no instance found...
+    <div
+      v-else-if="showInstanceDetailSkeleton"
+      class="instance-view-details-card instance-view-detail-skeleton"
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+      aria-label="Loading risk instance details"
+    >
+      <div class="grc-skeleton-table-wrap">
+        <div
+          v-for="n in 8"
+          :key="'isk-' + n"
+          class="grc-skeleton-row grc-skeleton-pulse"
+        />
+      </div>
+    </div>
+
+    <div v-else-if="showInstanceDetailNotFound" class="instance-view-no-data instance-view-not-found">
+      <p class="instance-view-not-found-title">Risk instance not found</p>
+      <p class="instance-view-not-found-hint">
+        This instance may have been removed, or the link is invalid.
+      </p>
+      <button type="button" class="btn btn-submit instance-view-edit-button" @click="goBack">
+        Back to Risk Instances
+      </button>
     </div>
 
     <!-- Success/Error Messages -->
@@ -429,6 +455,8 @@ import './ViewInstance.css'
 import { PopupModal, PopupService } from '@/modules/popup'
 import { API_ENDPOINTS } from '../../config/api.js'
 import apiService from '@/services/apiService.js'
+import { mapState } from 'pinia'
+import { useRiskStore } from '@/stores/risk'
 
 const axios = {
   get: (url, config = {}) =>
@@ -473,10 +501,25 @@ export default {
         recommendations: [],
         highRiskAreas: [],
         mitigationSteps: []
-      }
+      },
+      detailFetchFinished: false,
     }
   },
+  computed: {
+    ...mapState(useRiskStore, ['isLoadingRiskInstanceDetail']),
+    showInstanceDetailSkeleton() {
+      return this.isLoadingRiskInstanceDetail && !this.instance
+    },
+    showInstanceDetailNotFound() {
+      return (
+        !this.instance &&
+        !this.isLoadingRiskInstanceDetail &&
+        this.detailFetchFinished
+      )
+    },
+  },
   created() {
+    this.hydrateInstanceFromStoreList()
     this.fetchInstanceDetails()
   },
   methods: {
@@ -488,39 +531,66 @@ export default {
         console.error('Error sending push notification:', error);
       }
     },
-    fetchInstanceDetails() {
+    hydrateInstanceFromStoreList() {
+      const instanceId = this.$route.params.id
+      if (!instanceId) return
+      const riskStore = useRiskStore()
+      try {
+        riskStore.hydrateFromLegacyService()
+      } catch {
+        /* non-fatal */
+      }
+      const row = riskStore.riskInstanceById(instanceId)
+      if (row && typeof row === 'object') {
+        const crit = row.Criticality || 'Medium'
+        const seeded = {
+          ...row,
+          Criticality: crit,
+          RiskStatus: row.RiskStatus || 'Open',
+          Category: row.Category || 'Operational',
+        }
+        this.instance = seeded
+        this.originalInstance = { ...seeded }
+        this.editInstance = { ...seeded }
+      }
+    },
+    async fetchInstanceDetails() {
       const instanceId = this.$route.params.id
       if (!instanceId) {
+        this.detailFetchFinished = true
         this.$router.push('/risk/riskinstances-list')
         return
       }
-
-      axios.get(API_ENDPOINTS.RISK_INSTANCE(instanceId))
-        .then(response => {
-          this.instance = response.data
-          this.originalInstance = { ...response.data }
-          this.editInstance = { ...response.data }
-          // Send push notification for successful instance view
+      this.detailFetchFinished = false
+      const riskStore = useRiskStore()
+      try {
+        const detail = await riskStore.fetchRiskInstanceDetail(instanceId, { force: false })
+        if (detail && typeof detail === 'object') {
+          this.instance = detail
+          this.originalInstance = { ...detail }
+          this.editInstance = { ...detail }
           this.sendPushNotification({
             title: 'Risk Instance Viewed',
-            message: `Risk instance "${response.data.RiskId || 'Unknown Risk'}" has been viewed in the Risk module.`,
+            message: `Risk instance "${detail?.RiskId || 'Unknown Risk'}" has been viewed in the Risk module.`,
             category: 'risk',
-            priority: 'medium'
-          });
-        })
-        .catch(error => {
-          console.error('Error fetching risk instance details:', error)
+            priority: 'medium',
+          })
+        }
+      } catch (error) {
+        console.error('Error fetching risk instance details:', error)
+        if (!this.instance) {
           this.showError('Failed to load risk instance details')
-          // Send push notification for error
           this.sendPushNotification({
             title: 'Risk Instance View Failed',
             message: `Failed to load risk instance details: ${error.response?.data?.error || error.message}`,
             category: 'risk',
-            priority: 'high'
-          });
-          // Try alternative endpoint if the first one fails
-          this.tryAlternativeEndpoint(instanceId)
-        })
+            priority: 'high',
+          })
+          await this.tryAlternativeEndpoint(instanceId)
+        }
+      } finally {
+        this.detailFetchFinished = true
+      }
     },
     
     toggleEditMode() {
@@ -549,7 +619,8 @@ export default {
         this.instance = response.data
         this.originalInstance = { ...response.data }
         this.isEditMode = false
-        
+        useRiskStore().patchRiskInstanceDetailCache(this.instance)
+
         this.showSuccess('Risk instance updated successfully!')
         
         // Send push notification for successful update
@@ -613,31 +684,31 @@ export default {
       this.errorMessage = ''
     },
     
-    tryAlternativeEndpoint(instanceId) {
-      axios.get(API_ENDPOINTS.RISK_INSTANCE(instanceId))
-        .then(response => {
-          this.instance = response.data
-          this.originalInstance = { ...response.data }
-          this.editInstance = { ...response.data }
-          // Send push notification for successful instance view via alternative endpoint
+    async tryAlternativeEndpoint(instanceId) {
+      const riskStore = useRiskStore()
+      try {
+        const detail = await riskStore.fetchRiskInstanceDetail(instanceId, { force: true })
+        if (detail && typeof detail === 'object') {
+          this.instance = detail
+          this.originalInstance = { ...detail }
+          this.editInstance = { ...detail }
           this.sendPushNotification({
             title: 'Risk Instance Viewed',
-            message: `Risk instance "${response.data.RiskId || 'Unknown Risk'}" has been viewed via alternative endpoint.`,
+            message: `Risk instance "${detail?.RiskId || 'Unknown Risk'}" has been viewed via alternative endpoint.`,
             category: 'risk',
-            priority: 'medium'
-          });
+            priority: 'medium',
+          })
+        }
+      } catch (error) {
+        console.error('Error with alternative endpoint:', error)
+        this.showError('Failed to load risk instance details from both endpoints')
+        this.sendPushNotification({
+          title: 'Risk Instance View Failed',
+          message: `Failed to load risk instance details via alternative endpoint: ${error.response?.data?.error || error.message}`,
+          category: 'risk',
+          priority: 'high',
         })
-        .catch(error => {
-          console.error('Error with alternative endpoint:', error)
-          this.showError('Failed to load risk instance details from both endpoints')
-          // Send push notification for alternative endpoint error
-          this.sendPushNotification({
-            title: 'Risk Instance View Failed',
-            message: `Failed to load risk instance details via alternative endpoint: ${error.response?.data?.error || error.message}`,
-            category: 'risk',
-            priority: 'high'
-          });
-        })
+      }
     },
     goBack() {
       this.$router.push('/risk/riskinstances-list')

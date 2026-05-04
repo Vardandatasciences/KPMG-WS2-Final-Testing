@@ -1112,4 +1112,6 @@
   filter: none !important;
 }
 
-
+.risk-instance-skeleton {
+  margin-top: 12px;
+}

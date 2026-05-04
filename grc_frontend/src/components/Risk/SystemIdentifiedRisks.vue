@@ -1042,6 +1042,7 @@
 <script>
 import apiService from '../../services/apiService.js';
 import { API_ENDPOINTS } from '../../config/api.js';
+import { useRiskStore } from '@/stores/risk';
 
 export default {
   name: 'SystemIdentifiedRisks',
@@ -2304,7 +2305,13 @@ export default {
   async mounted() {
     this.checkSidebarState();
     document.addEventListener('click', this.checkSidebarState);
-    
+
+    try {
+      void useRiskStore().prefetchRiskRegisterAndInstances({ force: false });
+    } catch {
+      /* non-fatal */
+    }
+
     // Load initial data
     await this.loadStats();
     await this.loadRisks();

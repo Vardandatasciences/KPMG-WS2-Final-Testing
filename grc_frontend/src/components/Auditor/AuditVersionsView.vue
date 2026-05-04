@@ -114,9 +114,8 @@
 </template>
 
 <script>
-import apiService from '@/services/apiService';
-import { API_ENDPOINTS } from '@/config/api.js';
 import { AccessUtils } from '@/utils/accessUtils';
+import { useAuditStore } from '@/stores/audit';
 
 export default {
   name: 'AuditVersionsView',
@@ -169,7 +168,7 @@ export default {
       try {
         console.log(`Fetching versions for audit ${this.$route.params.auditId}`);
 
-        const data = await apiService.get(API_ENDPOINTS.AUDIT_REPORT_VERSIONS(this.$route.params.auditId));
+        const data = await useAuditStore().fetchReportVersions(this.$route.params.auditId);
         
         if (data && data.versions) {
           this.auditVersions = data.versions;

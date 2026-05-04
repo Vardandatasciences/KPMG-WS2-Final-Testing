@@ -12,6 +12,7 @@ import {
   SESSION_TIMEOUT_SECONDS, 
   SESSION_WARNING_SECONDS 
 } from '../config/api.js'
+import { clearAllFrameworkCaches } from '@/stores/frameworkGlobalCache'
 
 class SessionTimeoutService {
   constructor() {
@@ -219,6 +220,7 @@ class SessionTimeoutService {
     localStorage.removeItem('user_email')
     localStorage.removeItem('user_name')
     localStorage.removeItem('is_logged_in')
+    clearAllFrameworkCaches()
 
     // Redirect to login
     if (window.location.pathname !== '/login') {

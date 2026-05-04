@@ -8,7 +8,7 @@
       <div class="risk-instance-title-section">
         <h2 class="risk-instance-title">Risk Instances</h2>
         <p
-          v-if="dataSourceMessage"
+          v-if="dataSourceMessage && !showRiskInstancesSkeleton"
           class="risk-instance-data-source"
         >
           {{ dataSourceMessage }}
@@ -65,11 +65,11 @@
           <button
             class="export-btn"
             type="button"
-            @click="fetchInstances"
-            :disabled="loading"
+            @click="refreshRiskInstancesList"
+            :disabled="riskInstanceHeaderBusy"
           >
             <i class="fas fa-sync-alt"></i>
-            {{ loading ? 'Refreshing...' : 'Refresh' }}
+            {{ riskInstanceHeaderBusy ? 'Loading…' : 'Refresh' }}
           </button>
         </div>
       </div>
@@ -87,8 +87,24 @@
       </div> -->
     </div>
 
+    <div
+      v-if="showRiskInstancesSkeleton"
+      class="risk-instance-skeleton grc-skeleton-table-wrap"
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+      aria-label="Loading risk instances"
+    >
+      <div
+        v-for="n in 10"
+        :key="'sk-' + n"
+        class="grc-skeleton-row grc-skeleton-pulse"
+      />
+    </div>
+
     <!-- Dynamic Table -->
     <DynamicTable
+      v-show="!showRiskInstancesSkeleton"
       :title="''"
       :data="filteredInstances"
       :columns="tableColumns"
@@ -178,13 +194,14 @@
 </template>
 
 <script>
+import { mapActions, mapState } from 'pinia'
 import DynamicTable from '../DynamicTable.vue'
 // import Dynamicalsearch from '../Dynamicalsearch.vue'
 import { PopupModal } from '@/modules/popup'
 import AccessUtils from '@/utils/accessUtils'
 import { API_ENDPOINTS } from '../../config/api.js'
-import riskDataService from '@/services/riskService'
 import apiService from '@/services/apiService.js'
+import { useRiskStore } from '@/stores/risk'
 import './RiskInstances.css'
 import { openUrlInNewTabSafe } from '@/utils/safeExternalNavigation'
 import { getFrameworkIdForClient } from '@/utils/frameworkContextStorage.js'
@@ -198,7 +215,6 @@ export default {
   },
   data() {
     return {
-      instances: [],
       dataSourceMessage: '',
       searchQuery: '',
       showAddForm: false,
@@ -417,6 +433,24 @@ export default {
     }
   },
   computed: {
+    ...mapState(useRiskStore, {
+      instances: 'riskInstances',
+      isLoadingRiskInstances: 'isLoadingRiskInstances',
+      errorRiskInstances: 'errorRiskInstances'
+    }),
+    /** Only true when there is no cached table yet — background revalidation does not block Refresh. */
+    riskInstanceHeaderBusy() {
+      return (
+        this.isLoadingRiskInstances &&
+        (!Array.isArray(this.instances) || this.instances.length === 0)
+      )
+    },
+    showRiskInstancesSkeleton() {
+      return (
+        this.isLoadingRiskInstances &&
+        (!Array.isArray(this.instances) || this.instances.length === 0)
+      )
+    },
     exportFormatLabel() {
       const match = this.exportFormatOptions.find(
         opt => opt.value === this.selectedExportFormat
@@ -487,6 +521,13 @@ export default {
       );
     }
   },
+  created() {
+    try {
+      useRiskStore().hydrateFromLegacyService()
+    } catch {
+      /* non-fatal */
+    }
+  },
   mounted() {
     // Initialize visible column keys from default values
     const defaultVisibleKeys = this.columnDefinitions
@@ -497,6 +538,10 @@ export default {
     this.fetchInstances()
   },
   methods: {
+    ...mapActions(useRiskStore, { fetchRiskInstancesFromStore: 'fetchRiskInstances' }),
+    refreshRiskInstancesList() {
+      this.fetchInstances(true)
+    },
     selectExportFormatOption(opt) {
       this.selectedExportFormat = opt.value
       this.isExportDropdownOpen = false
@@ -528,48 +573,36 @@ export default {
       return processed
     },
     
-    async fetchInstances() {
-      this.loading = true
-      this.dataSourceMessage = 'Loading risk instances...'
+    async fetchInstances(forceRefresh = false) {
+      const hadRows = Array.isArray(this.instances) && this.instances.length > 0
+      if (!hadRows && !forceRefresh) {
+        this.dataSourceMessage = ''
+      } else if (forceRefresh) {
+        this.dataSourceMessage = ''
+      }
       try {
-        console.log('🔍 [RiskInstances] Checking for cached risk instances...')
-
-        // Wait for global prefetch if it's still running
-        if (typeof window !== 'undefined' && window.riskDataFetchPromise) {
-          try {
-            await window.riskDataFetchPromise
-          } catch (prefetchError) {
-            console.warn('⚠️ [RiskInstances] Prefetch promise rejected:', prefetchError)
-          }
-        }
-
-        if (riskDataService.hasRiskInstancesCache()) {
-          console.log('✅ [RiskInstances] Using cached risk instances')
-          this.instances = riskDataService.getData('riskInstances') || []
-          this.dataSourceMessage = `Loaded ${this.instances.length} risk instances from cache (prefetched on Home page)`
-        } else {
-          console.log('⚠️ [RiskInstances] No cached data found, fetching from API...')
-          const response = await apiService.get(API_ENDPOINTS.RISK_INSTANCES)
-          this.instances = Array.isArray(response) ? response : (response?.data || [])
+        console.log('🔍 [RiskInstances] Loading instances via riskStore...')
+        const meta = await this.fetchRiskInstancesFromStore({ force: forceRefresh })
+        const src = meta?.source || 'network'
+        if (src === 'network') {
           this.dataSourceMessage = `Loaded ${this.instances.length} risk instances directly from API (cache unavailable)`
-
-          // Update cache so subsequent pages benefit
-          riskDataService.setData('riskInstances', this.instances)
-          console.log('ℹ️ [RiskInstances] Cache updated after direct API fetch')
+          console.log('ℹ️ [RiskInstances] riskStore updated after API fetch')
+        } else {
+          console.log('✅ [RiskInstances] Using riskStore / legacy cache')
+          this.dataSourceMessage =
+            hadRows && !forceRefresh
+              ? ''
+              : `Loaded ${this.instances.length} risk instances from cache (prefetched on Home page)`
         }
       } catch (error) {
         console.error('❌ [RiskInstances] Error fetching risk instances:', error)
         this.dataSourceMessage = 'Failed to load risk instances'
-          
-          // Check if it's an access denied error
-          if (AccessUtils.handleApiError(error, 'view risk instances')) {
-            this.loading = false
-            return // Access denied popup already shown
-          }
-          
-          await this.tryAlternativeEndpoint()
-      } finally {
-        this.loading = false
+
+        if (AccessUtils.handleApiError(error, 'view risk instances')) {
+          return
+        }
+
+        await this.tryAlternativeEndpoint()
       }
     },
 
@@ -614,14 +647,12 @@ export default {
     
     async tryAlternativeEndpoint() {
       try {
-        console.log('🔁 [RiskInstances] Trying alternative endpoint...')
-        const response = await apiService.get(API_ENDPOINTS.RISK_INSTANCES)
-        this.instances = Array.isArray(response) ? response : (response?.data || [])
+        console.log('🔁 [RiskInstances] Retrying via riskStore (force)...')
+        await this.fetchRiskInstancesFromStore({ force: true })
         this.dataSourceMessage = `Loaded ${this.instances.length} risk instances directly from API (alternative path)`
-        riskDataService.setData('riskInstances', this.instances)
         console.log('✅ [RiskInstances] Alternative fetch succeeded')
       } catch (error) {
-          console.error('❌ [RiskInstances] Error with alternative endpoint:', error)
+        console.error('❌ [RiskInstances] Error with alternative endpoint:', error)
         this.dataSourceMessage = 'Failed to load risk instances (alternative endpoint failed)'
       }
     },

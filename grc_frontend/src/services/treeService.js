@@ -10,6 +10,7 @@
 import { axiosInstance } from '@/config/api.js';
 import { API_ENDPOINTS } from '@/config/api.js';
 import { getExplicitFrameworkId } from '@/utils/frameworkContextStorage.js';
+import { useFrameworkStore } from '@/stores/framework';
 
 class TreeService {
   constructor() {
@@ -96,9 +97,10 @@ class TreeService {
    */
   async getSelectedFramework() {
     try {
-      // Try to get from backend session first
-      const response = await axiosInstance.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED);
-      const frameworkIdFromSession = response?.data?.frameworkId;
+      // Read from centralized framework store/session sync first.
+      const frameworkStore = useFrameworkStore();
+      await frameworkStore.loadFrameworkFromSession();
+      const frameworkIdFromSession = frameworkStore.selectedFrameworkId;
       if (frameworkIdFromSession) {
         return parseInt(frameworkIdFromSession);
       }

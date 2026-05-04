@@ -3,8 +3,38 @@ Database router for TPRM models
 Routes all TPRM-related models to the tprm_integration database
 """
 import logging
+import threading
 
 logger = logging.getLogger(__name__)
+_router_debug_ctx = threading.local()
+
+
+def set_tprm_router_debug_scope_from_path(path: str) -> None:
+    """
+    Enable verbose TPRM router debug logs only for TPRM request paths.
+    """
+    safe_path = str(path or "")
+    is_tprm_scope = (
+        safe_path.startswith('/api/tprm/')
+        or safe_path.startswith('/api/v1/vendor-')
+        or safe_path.startswith('/tprm/')
+    )
+    _router_debug_ctx.enabled = is_tprm_scope
+
+
+def clear_tprm_router_debug_scope() -> None:
+    """
+    Clear request-scoped router debug flag after response is sent.
+    """
+    if hasattr(_router_debug_ctx, 'enabled'):
+        delattr(_router_debug_ctx, 'enabled')
+
+
+def _is_tprm_router_debug_enabled() -> bool:
+    """
+    Router debug logging is request-scoped to TPRM module traffic only.
+    """
+    return bool(getattr(_router_debug_ctx, 'enabled', False))
 
 class TPRMDatabaseRouter:
     """
@@ -103,7 +133,8 @@ class TPRMDatabaseRouter:
         """
         app_label = model._meta.app_label
         db_name = 'tprm' if app_label in self.tprm_apps else 'default'
-        logger.debug(f"[TPRM Router] db_for_read: model={model.__name__}, app_label={app_label}, database={db_name}")
+        if _is_tprm_router_debug_enabled():
+            logger.debug(f"[TPRM Router] db_for_read: model={model.__name__}, app_label={app_label}, database={db_name}")
         return db_name
     
     def db_for_write(self, model, **hints):

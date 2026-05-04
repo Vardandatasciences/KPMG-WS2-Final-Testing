@@ -1,14 +1,24 @@
 <template>
   <div class="incident-details-page">
-    <div v-if="loading" class="incident-loading-state">
-      Loading incident details...
+    <div
+      v-if="showDetailSkeleton"
+      class="grc-skeleton-dashboard incident-detail-skeleton"
+      aria-busy="true"
+      aria-label="Loading incident details"
+    >
+      <div class="grc-skeleton-kpi-row" style="max-width: 720px;">
+        <div v-for="n in 3" :key="'sk-kpi-'+n" class="grc-skeleton-kpi-card grc-skeleton-pulse" />
+      </div>
+      <div class="grc-skeleton-table-wrap" style="margin-top: 20px; max-width: 900px;">
+        <div v-for="n in 8" :key="'sk-r-'+n" class="grc-skeleton-row grc-skeleton-pulse" />
+      </div>
     </div>
  
     <div v-else-if="error" class="incident-error-state">
       {{ error }}
     </div>
  
-    <div class="incident-details-content" v-else-if="incident">
+    <div class="incident-details-content" v-else-if="incident && !showDetailSkeleton">
       <!-- Back Button -->
       <div class="incident-details-header">
         <router-link to="/incident/incident" class="back-icon-btn">
@@ -296,8 +306,10 @@
 </template>
  
 <script>
-import { axiosCompat as axios, fetchCompat as fetch } from '@/services/apiServiceCompat.js';
+import { mapStores } from 'pinia'
+import { fetchCompat as fetch } from '@/services/apiServiceCompat.js';
 import { API_ENDPOINTS } from '../../config/api.js';
+import { useIncidentStore } from '@/stores/incident'
 import '@/assets/css/main.css';
 import './IncidentDetails.css';
 import { PopupModal } from '@/modules/popup';
@@ -308,12 +320,19 @@ import { PopupModal } from '@/modules/popup';
       PopupModal
     },
     data() {
-    return {
-      incident: null,
-      loading: true,
-      error: null,
+      return {
+        incident: null,
+        loading: true,
+        error: null,
+        detailRefreshing: false,
      
     }
+  },
+  computed: {
+    ...mapStores(useIncidentStore),
+    showDetailSkeleton() {
+      return this.loading && !this.incident
+    },
   },
   async created() {
     await this.fetchIncidentDetails();
@@ -338,77 +357,56 @@ import { PopupModal } from '@/modules/popup';
       }
     },
     async fetchIncidentDetails() {
+      const incidentId = this.$route.params.id
+      this.error = null
+      this.incidentStore.hydrateFullIncidentsFromService()
+      const warm = this.incidentStore.findIncidentInFullList(incidentId)
+      if (warm) {
+        this.incident = { ...warm }
+        this.loading = false
+        this.detailRefreshing = true
+        this.incidentStore
+          .fetchIncidentById(incidentId, { force: true, background: true })
+          .then(({ incident }) => {
+            if (incident && String(incident.IncidentId ?? incident.id) === String(incidentId)) {
+              this.incident = incident
+            }
+          })
+          .catch(() => {})
+          .finally(() => {
+            this.detailRefreshing = false
+          })
+        return
+      }
       try {
-        this.loading = true;
-        this.error = null;
-        const incidentId = this.$route.params.id;
-        console.log('Fetching incident:', incidentId);
-       
-        // Get all incidents and filter for the one we want
-        const response = await axios.get(API_ENDPOINTS.INCIDENT_INCIDENTS);
-       
-        console.log('Full response:', response);
-        console.log('Response status:', response.status);
-        console.log('Response data type:', typeof response.data);
-        console.log('Response data:', response.data);
-       
-        // Handle both paginated and non-paginated responses
-        let allIncidents;
-        if (response.data && Array.isArray(response.data)) {
-          // Non-paginated response - data is directly an array
-          allIncidents = response.data;
-          console.log('Using direct array response');
-        } else if (response.data && response.data.incidents && Array.isArray(response.data.incidents)) {
-          // Paginated response - data has an 'incidents' property
-          allIncidents = response.data.incidents;
-          console.log('Using paginated response with incidents property');
-        } else {
-          // Fallback - try to handle any other format
-          allIncidents = Array.isArray(response.data) ? response.data : [];
-          console.log('Using fallback response handling');
-        }
-       
-        console.log('All incidents received:', allIncidents);
-        console.log('All incidents type:', typeof allIncidents);
-        console.log('Is array?', Array.isArray(allIncidents));
-       
-        // Additional safety check
-        if (!Array.isArray(allIncidents)) {
-          console.error('allIncidents is not an array:', allIncidents);
-          throw new Error('Invalid response format from server');
-        }
-       
-        // Find the specific incident
-        this.incident = allIncidents.find(inc => inc.IncidentId.toString() === incidentId.toString());
-       
+        this.loading = true
+        const { incident } = await this.incidentStore.fetchIncidentById(incidentId, {
+          force: false,
+          background: false,
+        })
+        this.incident = incident
         if (!this.incident) {
-          throw new Error('Incident not found');
+          throw new Error('Incident not found')
         }
-       
-        console.log('Fetched incident:', this.incident);
       } catch (error) {
-        console.error('Failed to fetch incident details:', error);
-        console.error('Error response:', error.response);
-        console.error('Error message:', error.message);
-       
-        // Provide more specific error messages
+        console.error('Failed to fetch incident details:', error)
         if (error.response) {
           if (error.response.status === 401) {
-            this.error = 'Authentication required. Please log in again.';
+            this.error = 'Authentication required. Please log in again.'
           } else if (error.response.status === 403) {
-            this.error = 'Access denied. You do not have permission to view incidents.';
+            this.error = 'Access denied. You do not have permission to view incidents.'
           } else if (error.response.status === 404) {
-            this.error = 'Incident not found.';
+            this.error = 'Incident not found.'
           } else {
-            this.error = `Server error (${error.response.status}). Please try again.`;
+            this.error = `Server error (${error.response.status}). Please try again.`
           }
-        } else if (error.message === 'Invalid response format from server') {
-          this.error = 'Invalid response from server. Please try again.';
+        } else if (error.message === 'Incident not found') {
+          this.error = 'Incident not found.'
         } else {
-          this.error = 'Failed to load incident details. Please try again.';
+          this.error = 'Failed to load incident details. Please try again.'
         }
       } finally {
-        this.loading = false;
+        this.loading = false
       }
     },
     getPriorityClass(priority) {

@@ -35,10 +35,17 @@
       </div>
     </div>
 
-    <!-- Loading State -->
-    <div v-if="loading" class="loading-container">
-      <i class="fas fa-spinner fa-spin"></i>
-      <p>Loading data...</p>
+    <!-- Loading State — skeleton matches hierarchy table layout -->
+    <div v-if="loading" class="data-workflow-skeleton" aria-busy="true" aria-label="Loading workflow data">
+      <div class="dw-sk-toolbar">
+        <div class="dw-sk-pill"></div>
+        <div class="dw-sk-btn"></div>
+        <div class="dw-sk-btn dw-sk-btn--muted"></div>
+      </div>
+      <div class="dw-sk-tree-table">
+        <div class="dw-sk-row dw-sk-row--head"></div>
+        <div v-for="n in 7" :key="'dw-sk-' + n" class="dw-sk-row"></div>
+      </div>
     </div>
 
     <!-- Error State -->
@@ -355,6 +362,7 @@ import axios from 'axios'
 import CustomDropdown from '../CustomDropdown.vue'
 import '@/assets/css/dropdown.css'
 import { getExplicitFrameworkId } from '@/utils/frameworkContextStorage.js'
+import { useFrameworkStore } from '@/stores/framework'
 
 export default {
   name: 'TreeView',
@@ -490,9 +498,10 @@ export default {
   methods: {
     async applySelectedFrameworkFromSession() {
       try {
-        // 1) Ask backend which framework is currently selected in session
-        const response = await axios.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED)
-        const frameworkIdFromSession = response?.data?.frameworkId
+        // 1) Read selected framework from centralized framework store/session sync.
+        const frameworkStore = useFrameworkStore()
+        await frameworkStore.loadFrameworkFromSession()
+        const frameworkIdFromSession = frameworkStore.selectedFrameworkId
         if (frameworkIdFromSession) {
           this.selectedFramework = parseInt(frameworkIdFromSession)
           const fw = this.frameworks.find(f => f.FrameworkId === this.selectedFramework)

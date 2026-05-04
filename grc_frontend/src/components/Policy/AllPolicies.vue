@@ -65,7 +65,13 @@
         </div>
         <!-- Framework heading removed -->
 
-      <table class="table-view">
+      <div v-if="showFrameworkTabSkeleton" class="policy-mod-sk" aria-busy="true">
+        <div class="policy-mod-sk__controls"><div class="policy-mod-sk__pill" style="max-width: 260px"></div></div>
+        <div class="policy-mod-sk__table">
+          <div v-for="n in 8" :key="'ap-fwsk-' + n" class="policy-mod-sk__row"></div>
+        </div>
+      </div>
+      <table v-else class="table-view">
         <thead>
           <tr>
             <th>Name</th>
@@ -193,7 +199,12 @@
         </div>
       </div>
 
-      <table class="table-view">
+      <div v-if="showPoliciesTabSkeleton" class="policy-mod-sk" aria-busy="true">
+        <div class="policy-mod-sk__table">
+          <div v-for="n in 8" :key="'ap-psk-' + n" class="policy-mod-sk__row"></div>
+        </div>
+      </div>
+      <table v-else class="table-view">
         <thead>
           <tr>
             <th>Name</th>
@@ -286,7 +297,12 @@
         </div>
       </div>
 
-      <table class="table-view">
+      <div v-if="showSubpoliciesTabSkeleton" class="policy-mod-sk" aria-busy="true">
+        <div class="policy-mod-sk__table">
+          <div v-for="n in 8" :key="'ap-spsk-' + n" class="policy-mod-sk__row"></div>
+        </div>
+      </div>
+      <table v-else class="table-view">
         <thead>
           <tr>
             <th>Name</th>
@@ -543,6 +559,9 @@ import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import apiService from '@/services/apiService.js'
 import CustomDropdown from '../CustomDropdown.vue'
 import policyDataService from '@/services/policyService'
+import { useFrameworkStore } from '@/stores/framework'
+import { usePolicyStore } from '@/stores/policy'
+import { mapPiniaFrameworksForAllPoliciesList } from '@/composables/usePolicyExplorerPinia.js'
 // Remove RBAC import
 // import { usePolicyRbac } from '@/mixins/policyRbacMixin'
 
@@ -555,6 +574,8 @@ import policyDataService from '@/services/policyService'
 // } = usePolicyRbac()
 
 const activeTab = ref('framework')
+const frameworkStore = useFrameworkStore()
+const policyStore = usePolicyStore()
 const selectedFramework = ref(null)
 const selectedFrameworkVersion = ref(null)
 const selectedPolicy = ref(null)
@@ -583,6 +604,20 @@ const frameworks = ref([])
 const policies = ref([])
 const subpolicies = ref([])
 const policiesCache = ref({ lastFetched: null, data: null, frameworkFilter: null })
+
+const showFrameworkTabSkeleton = computed(
+  () =>
+    loading.value &&
+    !selectedFramework.value &&
+    activeTab.value === 'framework' &&
+    frameworks.value.length === 0
+)
+const showPoliciesTabSkeleton = computed(
+  () => policiesLoading.value && activeTab.value === 'policies' && policies.value.length === 0
+)
+const showSubpoliciesTabSkeleton = computed(
+  () => subpoliciesLoading.value && activeTab.value === 'subpolicies' && subpolicies.value.length === 0
+)
 
 // Fetch all frameworks from API
 const fetchFrameworks = async () => {
@@ -616,18 +651,55 @@ const fetchFrameworks = async () => {
       return
     }
 
+    // Pinia frameworks → instant framework tab; full hierarchy loads in background
+    if (policyStore.hasFrameworksCache()) {
+      const mapped = mapPiniaFrameworksForAllPoliciesList(policyStore.getFrameworksCached())
+      if (mapped.length > 0) {
+        frameworks.value = mapped
+        await checkSelectedFrameworkFromSession()
+        loading.value = false
+        void (async () => {
+          try {
+            const response = await apiService.get(API_ENDPOINTS.POLICY_ALL_POLICIES_FRAMEWORKS)
+            frameworks.value = response || []
+            policyDataService.setAllPoliciesFrameworks(frameworks.value)
+            await policyStore.getAllFrameworks({ force: true })
+            await checkSelectedFrameworkFromSession()
+          } catch (e) {
+            console.warn('[AllPolicies] Background framework hierarchy refresh failed:', e)
+          }
+        })()
+        return
+      }
+    }
+
     console.log('⚠️ [AllPolicies] No cached data found, fetching from API...')
     const response = await apiService.get(API_ENDPOINTS.POLICY_ALL_POLICIES_FRAMEWORKS)
     frameworks.value = response || []
 
     // Update cache for subsequent loads
     policyDataService.setAllPoliciesFrameworks(frameworks.value)
+    void policyStore.getAllFrameworks({ force: true }).catch(() => {})
 
     await checkSelectedFrameworkFromSession()
   } catch (err) {
     console.error('Error fetching frameworks:', err)
-    error.value = 'Failed to load frameworks. Please try again.'
-    frameworks.value = []
+    // Cache-first fallback to Pinia store framework list.
+    try {
+      const cachedFrameworks = await policyStore.getAllFrameworks()
+      frameworks.value = (cachedFrameworks || []).map((fw) => ({
+        id: fw.FrameworkId || fw.id,
+        FrameworkId: fw.FrameworkId || fw.id,
+        name: fw.FrameworkName || fw.name,
+        FrameworkName: fw.FrameworkName || fw.name,
+        ...fw
+      }))
+      error.value = null
+    } catch (storeErr) {
+      console.error('Policy store fallback failed:', storeErr)
+      error.value = 'Failed to load frameworks. Please try again.'
+      frameworks.value = []
+    }
   } finally {
     loading.value = false
   }
@@ -637,7 +709,11 @@ const fetchFrameworks = async () => {
 const checkSelectedFrameworkFromSession = async () => {
   try {
     console.log('🔍 DEBUG: Checking for selected framework from session in AllPolicies...')
-    const response = await apiService.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED)
+    await frameworkStore.loadFrameworkFromSession()
+    const response = {
+      success: true,
+      frameworkId: frameworkStore.selectedFrameworkId,
+    }
     console.log('📊 DEBUG: Selected framework response:', response)
     
     if (response && response.success) {
@@ -1241,7 +1317,11 @@ const navigateToTab = async (tabName) => {
   
   // Check if we have a stored framework in session
   try {
-    const response = await apiService.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED)
+    await frameworkStore.loadFrameworkFromSession()
+    const response = {
+      success: true,
+      frameworkId: frameworkStore.selectedFrameworkId,
+    }
     
     if (response && response.success && response.frameworkId) {
       const sessionFrameworkId = response.frameworkId
@@ -1308,21 +1388,14 @@ const handlePolicyFrameworkChange = async () => {
   // Save the selected framework to session
   if (selectedPolicyFramework.value) {
     try {
-      const userId = localStorage.getItem('user_id') || 'default_user'
-      console.log('🔍 DEBUG: Saving policy framework to session in AllPolicies:', selectedPolicyFramework.value)
-      
-      const response = await apiService.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, {
-        frameworkId: selectedPolicyFramework.value,
-        userId: userId
+      const fw = frameworks.value.find(f => String(f.id) === String(selectedPolicyFramework.value))
+      await frameworkStore.setFramework({
+        id: selectedPolicyFramework.value,
+        name: fw?.name || 'Selected Framework'
       })
-      
-      if (response && response.success) {
-        console.log('✅ DEBUG: Policy framework saved to session successfully')
-      } else {
-        console.error('❌ DEBUG: Failed to save policy framework to session')
-      }
+      console.log('✅ DEBUG: Policy framework saved via frameworkStore')
     } catch (error) {
-      console.error('❌ DEBUG: Error saving policy framework to session:', error)
+      console.error('❌ DEBUG: Error saving policy framework via frameworkStore:', error)
     }
   }
   
@@ -1334,21 +1407,14 @@ const handleSubpolicyFrameworkChange = async () => {
   // Save the selected framework to session
   if (selectedSubpolicyFramework.value) {
     try {
-      const userId = localStorage.getItem('user_id') || 'default_user'
-      console.log('🔍 DEBUG: Saving subpolicy framework to session in AllPolicies:', selectedSubpolicyFramework.value)
-      
-      const response = await apiService.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, {
-        frameworkId: selectedSubpolicyFramework.value,
-        userId: userId
+      const fw = frameworks.value.find(f => String(f.id) === String(selectedSubpolicyFramework.value))
+      await frameworkStore.setFramework({
+        id: selectedSubpolicyFramework.value,
+        name: fw?.name || 'Selected Framework'
       })
-      
-      if (response && response.success) {
-        console.log('✅ DEBUG: Subpolicy framework saved to session successfully')
-      } else {
-        console.error('❌ DEBUG: Failed to save subpolicy framework to session')
-      }
+      console.log('✅ DEBUG: Subpolicy framework saved via frameworkStore')
     } catch (error) {
-      console.error('❌ DEBUG: Error saving subpolicy framework to session:', error)
+      console.error('❌ DEBUG: Error saving subpolicy framework via frameworkStore:', error)
     }
   }
   
@@ -1377,22 +1443,14 @@ const handleFrameworkSelection = async () => {
       
       // Save the selected framework to session
       try {
-        const userId = localStorage.getItem('user_id') || 'default_user'
-        console.log('🔍 DEBUG: Saving framework to session in AllPolicies:', fwId)
-        
-        const response = await apiService.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, {
-          frameworkId: fwId,
-          userId: userId
+        console.log('🔍 DEBUG: Saving framework via frameworkStore in AllPolicies:', fwId)
+        await frameworkStore.setFramework({
+          id: fwId,
+          name: fw.name || 'Selected Framework'
         })
-        
-        if (response && response.success) {
-          console.log('✅ DEBUG: Framework saved to session successfully in AllPolicies')
-          console.log('🔑 DEBUG: Session key:', response.sessionKey)
-        } else {
-          console.error('❌ DEBUG: Failed to save framework to session in AllPolicies')
-        }
+        console.log('✅ DEBUG: Framework saved via frameworkStore in AllPolicies')
       } catch (error) {
-        console.error('❌ DEBUG: Error saving framework to session in AllPolicies:', error)
+        console.error('❌ DEBUG: Error saving framework via frameworkStore in AllPolicies:', error)
       }
       
       // Wait for the next tick to avoid reactivity issues

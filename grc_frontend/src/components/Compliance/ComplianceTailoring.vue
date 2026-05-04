@@ -38,7 +38,7 @@
           :config="frameworkDropdownConfig"
           v-model="selectedFrameworkId"
           :showClearButton="true"
-          :disabled="loading"
+          :disabled="false"
           @change="onFrameworkChange"
         />
       </div>
@@ -48,7 +48,7 @@
           :config="policyDropdownConfig"
           v-model="selectedPolicyId"
           :showClearButton="true"
-          :disabled="!selectedFrameworkId || loading"
+          :disabled="!selectedFrameworkId"
           @change="onPolicyChange"
         />
       </div>
@@ -58,7 +58,7 @@
           :config="subPolicyDropdownConfig"
           v-model="selectedSubPolicyId"
           :showClearButton="true"
-          :disabled="!selectedPolicyId || loading"
+          :disabled="!selectedPolicyId"
           @change="onSubPolicyChange"
         />
       </div>
@@ -106,20 +106,10 @@
 import { PopupModal, PopupService } from '../../modules/popup';
 import PopupMixin from './mixins/PopupMixin';
 import { CompliancePopups } from './utils/popupUtils';
-import { complianceService } from '@/services/api';
-import complianceDataService from '@/services/complianceService'; // NEW: Use cached compliance data
 import CustomDropdown from '../CustomDropdown.vue';
+import { useComplianceStore } from '@/stores/compliance';
+import { useFrameworkStore } from '@/stores/framework';
 import DynamicTable from '../DynamicTable.vue';
-import { API_ENDPOINTS } from '../../config/api.js';
-import apiService from '@/services/apiService.js';
-
-const axios = {
-  get: async (url, config = {}) => ({ data: await apiService.get(url, config.params || {}, { ...config, params: undefined }) }),
-  post: async (url, data, config = {}) => ({ data: await apiService.post(url, data, config) }),
-  put: async (url, data, config = {}) => ({ data: await apiService.put(url, data, config) }),
-  patch: async (url, data, config = {}) => ({ data: await apiService.patch(url, data, config) }),
-  delete: async (url, config = {}) => ({ data: await apiService.delete(url, config) })
-};
 export default {
   name: 'ComplianceTailoring',
   components: {
@@ -128,6 +118,11 @@ export default {
     DynamicTable
   },
   mixins: [PopupMixin],
+  setup() {
+    const complianceStore = useComplianceStore()
+    const frameworkStore = useFrameworkStore()
+    return { complianceStore, frameworkStore }
+  },
   data() {
     return {
       frameworks: [],
@@ -189,9 +184,9 @@ export default {
     // Check for selected framework from session after loading frameworks
     await this.checkSelectedFrameworkFromSession();
     
-    // Load other data
-    await this.loadUsers();
-    await this.loadCategoryOptions();
+    // Load non-blocking data in background so selectors remain interactive.
+    void this.loadUsers();
+    void this.loadCategoryOptions();
     
     document.addEventListener('click', this.handleClickOutside);
   },
@@ -199,6 +194,12 @@ export default {
     document.removeEventListener('click', this.handleClickOutside);
   },
   watch: {
+    'frameworkStore.selectedFrameworkId': {
+      async handler(newFrameworkId, oldFrameworkId) {
+        if (newFrameworkId === oldFrameworkId) return;
+        await this.checkSelectedFrameworkFromSession();
+      },
+    },
     // Watch for filteredFrameworks changes to update dropdown config
     filteredFrameworks: {
       handler() {
@@ -208,32 +209,35 @@ export default {
     },
     
     selectedFrameworkId(newId) {
-      const fw = this.frameworks.find(fw => fw.id === newId);
+      const fw = this.frameworks.find(fw => String(fw.id) === String(newId));
       this.selectedFramework = fw || '';
       if (fw) {
-        this.loadPolicies(fw.id);
         this.selectedPolicy = '';
         this.selectedPolicyId = '';
         this.selectedSubPolicy = '';
         this.selectedSubPolicyId = '';
         this.policies = [];
+        this.policyDropdownConfig.values = [];
         this.complianceSubPolicies = [];
+        this.subPolicyDropdownConfig.values = [];
         this.complianceList = [];
+        this.loadPolicies(fw.id);
       }
     },
     selectedPolicyId(newId) {
-      const p = this.policies.find(p => p.id === newId);
+      const p = this.policies.find(p => String(p.id) === String(newId));
       this.selectedPolicy = p || '';
       if (p) {
-        this.loadSubPolicies(p.id);
         this.selectedSubPolicy = '';
         this.selectedSubPolicyId = '';
         this.complianceSubPolicies = [];
+        this.subPolicyDropdownConfig.values = [];
         this.complianceList = [];
+        this.loadSubPolicies(p.id);
       }
     },
     selectedSubPolicyId(newId) {
-      const sp = this.complianceSubPolicies.find(sp => sp.id === newId);
+      const sp = this.complianceSubPolicies.find(sp => String(sp.id) === String(newId));
       this.selectedSubPolicy = sp || '';
       if (sp) {
         this.loadCompliances();
@@ -254,53 +258,38 @@ export default {
     },
   },
   methods: {
-    // Framework session management methods
+    // Framework session management — delegated to frameworkStore (no direct FRAMEWORK_* API calls)
     async checkSelectedFrameworkFromSession() {
-      try {
-        console.log('🔍 DEBUG: Checking for selected framework from session in ComplianceTailoring...')
-        const response = await axios.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED)
-        console.log('📊 DEBUG: Selected framework response:', response.data)
-        
-        if (response.data && response.data.success && response.data.frameworkId) {
-          const frameworkIdFromSession = response.data.frameworkId
-          console.log('✅ DEBUG: Found selected framework in session:', frameworkIdFromSession)
-          
-          // Store the session framework ID for filtering
-          this.sessionFrameworkId = frameworkIdFromSession
-          
-          // Check if this framework exists in our loaded frameworks
-          const frameworkExists = this.frameworks.find(f => f.id.toString() === frameworkIdFromSession.toString())
-          
-          if (frameworkExists) {
-            console.log('✅ DEBUG: Framework exists in loaded frameworks:', frameworkExists.name)
-            // Automatically select the framework from session
-            this.selectedFrameworkId = frameworkExists.id.toString()
-            this.selectedFramework = frameworkExists
-            console.log('✅ DEBUG: Auto-selected framework from session:', this.selectedFrameworkId)
-          } else {
-            console.log('⚠️ DEBUG: Framework from session (ID:', frameworkIdFromSession, ') not found in loaded frameworks')
-            console.log('📋 DEBUG: Available frameworks:', this.frameworks.map(f => ({ id: f.id, name: f.name })))
-            // Clear the session framework ID since it doesn't exist
-            this.sessionFrameworkId = null
-          }
+      if (!this.frameworkStore.selectedFrameworkId) {
+        await this.frameworkStore.loadFrameworkFromSession()
+      }
+      const frameworkIdFromSession = this.frameworkStore.selectedFrameworkId
+      if (frameworkIdFromSession && frameworkIdFromSession !== 'all') {
+        this.sessionFrameworkId = frameworkIdFromSession
+        const frameworkExists = this.frameworks.find(f => f.id.toString() === frameworkIdFromSession.toString())
+        if (frameworkExists) {
+          this.selectedFrameworkId = frameworkExists.id.toString()
+          this.selectedFramework = frameworkExists
         } else {
-          console.log('ℹ️ DEBUG: No framework found in session')
           this.sessionFrameworkId = null
         }
-      } catch (error) {
-        console.error('❌ DEBUG: Error checking selected framework from session:', error)
+      } else {
         this.sessionFrameworkId = null
+        this.selectedFrameworkId = ''
+        this.selectedFramework = ''
+        this.selectedPolicyId = ''
+        this.selectedPolicy = ''
+        this.selectedSubPolicyId = ''
+        this.selectedSubPolicy = ''
+        this.policies = []
+        this.complianceSubPolicies = []
+        this.complianceList = []
       }
     },
-    
+
     async saveFrameworkToSession(frameworkId) {
-      try {
-        console.log('💾 DEBUG: Saving framework to session:', frameworkId)
-        await axios.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, { frameworkId })
-        console.log('✅ DEBUG: Framework saved to session successfully')
-      } catch (error) {
-        console.error('❌ DEBUG: Error saving framework to session:', error)
-      }
+      const fw = this.frameworks.find(f => f.id.toString() === String(frameworkId))
+      await this.frameworkStore.setFramework({ id: frameworkId, name: fw?.name ?? 'Selected Framework' })
     },
     
     handleFrameworkChange(option) {
@@ -337,79 +326,32 @@ export default {
       try {
         this.loading = true;
         console.log('🔍 [ComplianceTailoring] Checking for cached framework data...');
-        
-        // ==========================================
-        // NEW: Ensure compliance prefetch is running
-        // ==========================================
-        if (!window.complianceDataFetchPromise && !complianceDataService.hasFrameworksCache()) {
-          console.log('🚀 [ComplianceTailoring] Starting compliance prefetch (user navigated directly)...');
-          window.complianceDataFetchPromise = complianceDataService.fetchAllComplianceData();
-        }
 
-        if (window.complianceDataFetchPromise) {
-          console.log('⏳ [ComplianceTailoring] Waiting for compliance prefetch to complete...');
-          try {
-            await window.complianceDataFetchPromise;
-            console.log('✅ [ComplianceTailoring] Prefetch completed');
-          } catch (prefetchError) {
-            console.warn('⚠️ [ComplianceTailoring] Prefetch failed, will fetch directly from API', prefetchError);
-          }
+        const mapActive = (rows) => (rows || [])
+          .filter(fw => {
+            const status = fw.ActiveInactive ?? fw.status ?? '';
+            return status.toLowerCase() === 'active';
+          })
+          .map(fw => ({
+            id: fw.FrameworkId ?? fw.id,
+            name: fw.FrameworkName ?? fw.name,
+          }));
+
+        if (Array.isArray(this.complianceStore.frameworks) && this.complianceStore.frameworks.length > 0) {
+          this.frameworks = mapActive(this.complianceStore.frameworks);
+          this.updateFrameworkConfig();
+          this.loading = false;
+          void this.complianceStore.fetchFrameworks().then(() => {
+            this.frameworks = mapActive(this.complianceStore.frameworks);
+            this.updateFrameworkConfig();
+          });
+          return;
         }
         
-        // FIRST: Try to get data from cache
-        if (complianceDataService.hasFrameworksCache()) {
-          console.log('✅ [ComplianceTailoring] Using cached framework data');
-          const cachedFrameworks = complianceDataService.getData('frameworks') || [];
-          
-          // Filter to only show active frameworks
-          const activeFrameworks = cachedFrameworks.filter(fw => {
-            const status = fw.ActiveInactive || fw.status || '';
-            return status.toLowerCase() === 'active';
-          });
-          
-          this.frameworks = activeFrameworks.map(fw => ({
-            id: fw.FrameworkId || fw.id,
-            name: fw.FrameworkName || fw.name
-          }));
-          
-          console.log(`[ComplianceTailoring] Loaded ${this.frameworks.length} frameworks from cache (prefetched on Home page)`);
-          
-          // Update framework config with filtered frameworks
-          this.updateFrameworkConfig();
-        } else {
-          // FALLBACK: Fetch from API if cache is empty
-          console.log('⚠️ [ComplianceTailoring] No cached data found, fetching from API...');
-          // Add active_only=true parameter to only fetch active frameworks
-          const response = await complianceService.getComplianceFrameworks({ active_only: 'true' });
-          console.log('Frameworks response:', response.data);
-          
-          let frameworksData;
-          if (response.data.success && response.data.frameworks) {
-            frameworksData = response.data.frameworks;
-          } else if (Array.isArray(response.data)) {
-            frameworksData = response.data;
-          } else {
-            console.error('Unexpected response format:', response.data);
-            this.error = 'Failed to load frameworks';
-            return;
-          }
-          
-          this.frameworks = frameworksData.map(fw => ({
-            id: fw.id || fw.FrameworkId,
-            name: fw.name || fw.FrameworkName
-          }));
-          
-          console.log(`[ComplianceTailoring] Loaded ${this.frameworks.length} frameworks directly from API (cache unavailable)`);
-          
-          // Update cache so subsequent pages benefit
-          if (frameworksData.length > 0) {
-            complianceDataService.setData('frameworks', frameworksData);
-            console.log('ℹ️ [ComplianceTailoring] Cache updated after direct API fetch');
-          }
-          
-          // Update framework config with filtered frameworks
-          this.updateFrameworkConfig();
-        }
+        // Use complianceStore — replaces window.complianceDataFetchPromise + complianceDataService
+        await this.complianceStore.fetchFrameworks();
+        this.frameworks = mapActive(this.complianceStore.frameworks);
+        this.updateFrameworkConfig();
       } catch (error) {
         this.error = 'Failed to load frameworks';
         console.error('Error loading frameworks:', error);
@@ -420,7 +362,7 @@ export default {
     async loadPolicies(frameworkId) {
       try {
         this.loading = true;
-        const response = await complianceService.getCompliancePolicies(frameworkId);
+        const response = await this.complianceStore.getCompliancePolicies(frameworkId);
         console.log('Policies response:', response.data);
         
         let policiesData;
@@ -454,7 +396,7 @@ export default {
     async loadSubPolicies(policyId) {
       try {
         this.loading = true;
-        const response = await complianceService.getComplianceSubPolicies(policyId);
+        const response = await this.complianceStore.getComplianceSubPolicies(policyId);
         console.log('SubPolicies response:', response);
         
         let subpoliciesData;
@@ -491,7 +433,7 @@ export default {
         // Get current user ID to exclude from reviewer list
         const currentUserId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || ''
         // Fetch reviewers filtered by RBAC permissions (ApproveCompliance) for compliance module
-        const responseData = await apiService.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
+        const responseData = await this.complianceStore.fetchUsersForReviewerSelection({
           module: 'compliance',
           current_user_id: currentUserId
         });
@@ -517,7 +459,7 @@ export default {
       try {
         this.loading = true;
         
-        const rcResponse = await complianceService.getCategoryBusinessUnits('RiskCategory');
+        const rcResponse = await this.complianceStore.getCategoryBusinessUnits('RiskCategory');
         console.log('RiskCategory API response:', rcResponse);
         if (rcResponse.data.success && rcResponse.data.data && Array.isArray(rcResponse.data.data) && rcResponse.data.data.length > 0) {
           // Validate that each item has the expected structure
@@ -536,7 +478,7 @@ export default {
           this.useFallbackRiskCategories();
         }
         
-        const rtResponse = await complianceService.getCategoryBusinessUnits('RiskType');
+        const rtResponse = await this.complianceStore.getCategoryBusinessUnits('RiskType');
         console.log('RiskType API response:', rtResponse);
         if (rtResponse.data.success && rtResponse.data.data && Array.isArray(rtResponse.data.data) && rtResponse.data.data.length > 0) {
           // Validate that each item has the expected structure
@@ -555,7 +497,7 @@ export default {
           this.useFallbackRiskTypes();
         }
         
-        const buResponse = await complianceService.getCategoryBusinessUnits('BusinessUnitsCovered');
+        const buResponse = await this.complianceStore.getCategoryBusinessUnits('BusinessUnitsCovered');
         console.log('BusinessUnitsCovered API response:', buResponse);
         if (buResponse.data.success && buResponse.data.data && Array.isArray(buResponse.data.data) && buResponse.data.data.length > 0) {
           // Validate that each item has the expected structure
@@ -574,7 +516,7 @@ export default {
           this.useFallbackBusinessUnits();
         }
         
-        const rbiResponse = await complianceService.getCategoryBusinessUnits('RiskBusinessImpact');
+        const rbiResponse = await this.complianceStore.getCategoryBusinessUnits('RiskBusinessImpact');
         console.log('RiskBusinessImpact API response:', rbiResponse);
         if (rbiResponse.data.success && rbiResponse.data.data && Array.isArray(rbiResponse.data.data) && rbiResponse.data.data.length > 0) {
           // Validate that each item has the expected structure
@@ -744,7 +686,7 @@ export default {
       try {
         this.loading = true;
         
-        const response = await complianceService.addCategoryBusinessUnit({
+        const response = await this.complianceStore.addCategoryBusinessUnit({
           source: field,
           value: value.trim()
         });
@@ -783,7 +725,7 @@ export default {
       try {
         this.loading = true;
         this.error = null; // Clear any previous errors
-        const response = await complianceService.getCompliancesBySubPolicy(this.selectedSubPolicy.id);
+        const response = await this.complianceStore.getCompliancesBySubPolicy(this.selectedSubPolicy.id);
         console.log('Compliances response:', response);
         
         if (response.data.success && response.data.compliances) {
@@ -981,7 +923,7 @@ export default {
         
         console.log('Submitting form data with mitigation:', formData.mitigation);
         
-        await complianceService.updateCompliance(formData);
+        await this.complianceStore.updateComplianceCompat(formData);
         CompliancePopups.complianceUpdated(formData);
       } catch (error) {
         console.error('Error submitting form:', error);

@@ -69,10 +69,14 @@
 </template>
 
 <script>
-import { complianceService } from '@/services/api';
+import { useComplianceStore } from '@/stores/compliance';
 
 export default {
   name: 'ComplianceDebug',
+  setup() {
+    const complianceStore = useComplianceStore()
+    return { complianceStore }
+  },
   data() {
     return {
       loading: false,
@@ -96,7 +100,7 @@ export default {
       try {
         this.loading = true;
         this.error = null;
-        const response = await complianceService.getComplianceFrameworks();
+        const response = await this.complianceStore.getComplianceFrameworks();
         this.frameworksResult = response.data;
         console.log('Frameworks API Response:', response.data);
       } catch (error) {
@@ -111,7 +115,7 @@ export default {
       try {
         this.loading = true;
         this.error = null;
-        const response = await complianceService.getCompliancePolicies(this.selectedFramework);
+        const response = await this.complianceStore.getCompliancePolicies(this.selectedFramework);
         this.policiesResult = response.data;
         console.log('Policies API Response:', response.data);
       } catch (error) {
@@ -126,7 +130,7 @@ export default {
       try {
         this.loading = true;
         this.error = null;
-        const response = await complianceService.getComplianceSubPolicies(this.selectedPolicy);
+        const response = await this.complianceStore.getComplianceSubPolicies(this.selectedPolicy);
         this.subPoliciesResult = response.data;
         console.log('SubPolicies API Response:', response.data);
       } catch (error) {
@@ -138,7 +142,7 @@ export default {
     },
     async loadFrameworks() {
       try {
-        const response = await complianceService.getComplianceFrameworks();
+        const response = await this.complianceStore.getComplianceFrameworks();
         if (response.data.success && response.data.frameworks) {
           this.frameworks = response.data.frameworks.map(fw => ({
             id: fw.id || fw.FrameworkId,
@@ -172,7 +176,7 @@ export default {
     },
     async loadPolicies() {
       try {
-        const response = await complianceService.getCompliancePolicies(this.selectedFramework);
+        const response = await this.complianceStore.getCompliancePolicies(this.selectedFramework);
         if (response.data.success && response.data.policies) {
           this.policies = response.data.policies.map(p => ({
             id: p.id || p.PolicyId,
@@ -190,7 +194,7 @@ export default {
     },
     async loadSubPolicies() {
       try {
-        const response = await complianceService.getComplianceSubPolicies(this.selectedPolicy);
+        const response = await this.complianceStore.getComplianceSubPolicies(this.selectedPolicy);
         if (response.data.success && response.data.subpolicies) {
           this.subPolicies = response.data.subpolicies.map(sp => ({
             id: sp.id || sp.SubPolicyId,

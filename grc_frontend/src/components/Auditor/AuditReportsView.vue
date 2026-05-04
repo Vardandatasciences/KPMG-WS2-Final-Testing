@@ -128,8 +128,7 @@
 </template>
 
 <script>
-import apiService from '@/services/apiService';
-import { API_ENDPOINTS } from '@/config/api.js';
+import { useAuditStore } from '@/stores/audit';
 
 export default {
   name: 'AuditReportsView',
@@ -185,7 +184,7 @@ export default {
         // Use the same API endpoint as the original popup
         let data;
         try {
-          data = await apiService.get(API_ENDPOINTS.AUDIT_REPORT(this.$route.params.auditId));
+          data = await useAuditStore().fetchAuditReportDocument(this.$route.params.auditId, { force: false });
         } catch (apiError) {
           console.error('Primary API failed, trying fallback:', apiError);
           

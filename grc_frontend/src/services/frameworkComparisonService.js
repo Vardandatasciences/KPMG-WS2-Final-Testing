@@ -5,6 +5,7 @@
 
 import axios from 'axios';
 import { API_ENDPOINTS } from '../config/api';
+import { useFrameworkStore } from '@/stores/framework';
 
 const frameworkComparisonService = {
   /**
@@ -27,10 +28,13 @@ const frameworkComparisonService = {
    */
   async getSelectedFramework() {
     try {
-      const response = await axios.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED, {
-        withCredentials: true
-      });
-      return response.data;
+      const frameworkStore = useFrameworkStore();
+      await frameworkStore.loadFrameworkFromSession();
+      return {
+        success: true,
+        frameworkId: frameworkStore.selectedFrameworkId,
+        frameworkName: frameworkStore.selectedFrameworkName,
+      };
     } catch (error) {
       console.error('Error fetching selected framework from session:', error);
       throw error;

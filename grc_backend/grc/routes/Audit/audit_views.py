@@ -2192,11 +2192,11 @@ def fix_subpolicy_version_field(request):
 
   
 
-@csrf_exempt
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([AuditReviewPermission])
 @audit_review_required
+@csrf_exempt
 def get_my_reviews(request):
     """
     Fetch audits assigned to the current user (as reviewer)
@@ -4029,12 +4029,37 @@ def get_latest_version_data(audit_id):
     except Exception as e:
         debug_print(f"ERROR in get_latest_version_data: {str(e)}")
         return None
-  
-@csrf_exempt
+
+
+def _normalize_audit_status_for_review_save(status):
+    """Match DB variants (e.g. 'Under Review' vs 'Under review') to allowed review-save states."""
+    if not status:
+        return ''
+    return str(status).strip().lower()
+
+
+def _normalize_review_status_value(review_status):
+    """Frontend sends accept/reject lowercase; DB and branching expect Accept/Reject."""
+    if review_status is None:
+        return 'In Review'
+    s = str(review_status).strip()
+    if not s:
+        return 'In Review'
+    low = s.lower()
+    if low == 'accept':
+        return 'Accept'
+    if low == 'reject':
+        return 'Reject'
+    if low in ('in_review', 'in review'):
+        return 'In Review'
+    return s
+
+
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([AuditReviewPermission])
 @audit_review_required
+@csrf_exempt
 def save_review_progress(request, audit_id):
     """
     Save reviewer progress - always creates new version with reviewer_status and reviewer_comments in JSON format
@@ -4046,9 +4071,12 @@ def save_review_progress(request, audit_id):
         
         # Allow saving review progress when audit is "Under review" or "Work In Progress" 
         # (Work In Progress can happen after rejection, and reviewer may want to continue reviewing)
-        allowed_statuses = ['Under review', 'Work In Progress']
-        if audit.Status not in allowed_statuses:
-            error_msg = f'Cannot save review when audit status is "{audit.Status}". Allowed statuses: {", ".join(allowed_statuses)}'
+        # Case-insensitive: some code paths persist "Under Review" (capital R).
+        status_key = _normalize_audit_status_for_review_save(audit.Status)
+        allowed_normalized = {'under review', 'work in progress'}
+        if status_key not in allowed_normalized:
+            allowed_display = 'Under review, Work In Progress'
+            error_msg = f'Cannot save review when audit status is "{audit.Status}". Allowed statuses: {allowed_display}'
             debug_print(f"DEBUG: {error_msg}")
             return Response({
                 'error': error_msg
@@ -4061,6 +4089,8 @@ def save_review_progress(request, audit_id):
  
         # Extract compliance reviews from request data
         compliance_reviews = request.data.get('compliance_reviews', [])
+        if not compliance_reviews:
+            compliance_reviews = request.data.get('compliance_data', []) or []
         overall_comments = request.data.get('review_comments', '')
         save_only = request.data.get('save_only', False)  # New parameter to control status update
         cancel_action = request.data.get('cancel_action', False)  # Flag to indicate this was a cancel action
@@ -4108,7 +4138,7 @@ def save_review_progress(request, audit_id):
             if compliance_id not in structured_data:
                 structured_data[compliance_id] = {}
                
-            review_status = review.get('review_status', 'In Review')
+            review_status = _normalize_review_status_value(review.get('review_status', 'In Review'))
             review_comments = review.get('review_comments', '')
            
             # Update the status tracking variables
@@ -4172,7 +4202,7 @@ def save_review_progress(request, audit_id):
                         with connection.cursor() as cursor:
                             for review in compliance_reviews:
                                 compliance_id = review.get('compliance_id')
-                                review_status = review.get('review_status', 'Accept')
+                                review_status = _normalize_review_status_value(review.get('review_status', 'Accept'))
                                 review_comments = review.get('review_comments', '')
                                
                                 # Find the compliance in structured_data to get compliance_status
@@ -4276,9 +4306,9 @@ def save_review_progress(request, audit_id):
         return Response({'error': 'An internal error occurred'}, status=status.HTTP_400_BAD_REQUEST)
  
 
-@csrf_exempt
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@csrf_exempt
 def check_audit_version(request, audit_id):
     """
     Debug endpoint to check if an audit version exists for a given audit ID
@@ -4436,11 +4466,11 @@ def get_next_version_number(audit_id, prefix):
         # Fallback to a safe default
         return f"{prefix}1"
 
-@csrf_exempt
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([AuditReviewPermission])
 @audit_review_required
+@csrf_exempt
 def load_review_data(request, audit_id):
     """
     Load the latest audit version data when a reviewer clicks 'Continue Review' button

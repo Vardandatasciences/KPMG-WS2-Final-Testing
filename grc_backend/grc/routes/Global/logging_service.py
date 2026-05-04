@@ -64,7 +64,16 @@ def send_log(module, actionType, description=None, userId=None, userName=None,
                 logger.warning(f"Error processing userId: {e}")
                 numeric_user_id = None
         
-        logger.debug(f"send_log called: module={module}, actionType={actionType}, userId={userId}, numeric_user_id={numeric_user_id}, frameworkId={frameworkId}")
+        is_routine_request_log = actionType == 'GET_REQUEST' and module == 'System'
+        if not is_routine_request_log:
+            logger.debug(
+                "send_log called: module=%s, actionType=%s, userId=%s, numeric_user_id=%s, frameworkId=%s",
+                sanitize_for_log(module, 128),
+                sanitize_for_log(actionType, 128),
+                sanitize_for_log(userId, 64),
+                sanitize_for_log(numeric_user_id, 64),
+                sanitize_for_log(frameworkId, 64),
+            )
         # Prepare data for GRCLog model
         log_data = {
             'Module': module,
@@ -102,16 +111,19 @@ def send_log(module, actionType, description=None, userId=None, userName=None,
         if frameworkId:
             try:
                 framework = Framework.objects.get(FrameworkId=frameworkId)
-                logger.debug(f"Found framework by ID: {frameworkId}")
+                if not is_routine_request_log:
+                    logger.debug("Found framework by ID: %s", sanitize_for_log(frameworkId, 64))
             except Framework.DoesNotExist:
                 logger.warning(f"Framework {frameworkId} not found, using fallback")
                 framework = Framework.objects.filter(Status='Approved', ActiveInactive='Active').first()
         else:
-            logger.debug("No frameworkId provided, searching for approved active framework")
+            if not is_routine_request_log:
+                logger.debug("No frameworkId provided, searching for approved active framework")
             framework = Framework.objects.filter(Status='Approved', ActiveInactive='Active').first()
         
         if not framework:
-            logger.debug("No approved active framework found, using first available")
+            if not is_routine_request_log:
+                logger.debug("No approved active framework found, using first available")
             framework = Framework.objects.first()
         
         # Add framework to log data (required field)
@@ -119,11 +131,12 @@ def send_log(module, actionType, description=None, userId=None, userName=None,
         # by using the first available framework or logging an error
         if framework:
             masked_log_data['FrameworkId'] = framework
-            logger.debug(
-                "Using framework ID: %s Name: %s",
-                sanitize_for_log(framework.FrameworkId, 64),
-                sanitize_for_log(framework.FrameworkName, 256),
-            )
+            if not is_routine_request_log:
+                logger.debug(
+                    "Using framework ID: %s Name: %s",
+                    sanitize_for_log(framework.FrameworkId, 64),
+                    sanitize_for_log(framework.FrameworkName, 256),
+                )
         else:
             # Last resort: Try to get ANY framework, even if inactive
             try:
@@ -153,23 +166,25 @@ def send_log(module, actionType, description=None, userId=None, userName=None,
                 return None
         
         # Create and save the log entry
-        logger.info(
-            "Creating GRCLog entry: module=%s actionType=%s userId=%s frameworkId=%s",
-            sanitize_for_log(module, 128),
-            sanitize_for_log(actionType, 128),
-            sanitize_for_log(numeric_user_id, 64),
-            sanitize_for_log(framework.FrameworkId if framework else None, 64),
-        )
-        logger.debug("Creating GRCLog entry with data: %s", sanitize_for_log(str(masked_log_data), max_len=1500))
+        if not is_routine_request_log:
+            logger.info(
+                "Creating GRCLog entry: module=%s actionType=%s userId=%s frameworkId=%s",
+                sanitize_for_log(module, 128),
+                sanitize_for_log(actionType, 128),
+                sanitize_for_log(numeric_user_id, 64),
+                sanitize_for_log(framework.FrameworkId if framework else None, 64),
+            )
+            logger.debug("Creating GRCLog entry with data: %s", sanitize_for_log(str(masked_log_data), max_len=1500))
         # print(f"[SEND_LOG] Creating GRCLog: module={module}, actionType={actionType}, userId={numeric_user_id}, frameworkId={framework.FrameworkId if framework else None}")
         log_entry = GRCLog(**masked_log_data)
         log_entry.save()
-        logger.info(
-            "Successfully saved log entry with ID: %s for %s on %s",
-            sanitize_for_log(log_entry.LogId, 32),
-            sanitize_for_log(actionType, 128),
-            sanitize_for_log(module, 128),
-        )
+        if not is_routine_request_log:
+            logger.info(
+                "Successfully saved log entry with ID: %s for %s on %s",
+                sanitize_for_log(log_entry.LogId, 32),
+                sanitize_for_log(actionType, 128),
+                sanitize_for_log(module, 128),
+            )
         # print(f"[SEND_LOG] ✅ SUCCESS - Saved log entry with ID: {log_entry.LogId} for {actionType} on {module}")
         
         # Optionally still send to logging service if needed

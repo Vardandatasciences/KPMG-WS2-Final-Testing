@@ -340,14 +340,11 @@ import {
   Tooltip,
   Legend
 } from 'chart.js'
-import { mapState, mapActions } from 'vuex'
 import '@fortawesome/fontawesome-free/css/all.min.css'
 import { useDashboardsStore } from '@/stores/dashboards'
 import { useAppDataStore } from '@/stores/appData'
-import { complianceService } from '@/services/api'
-import complianceDataService from '@/services/complianceService' // NEW: Use cached compliance data
-import apiService from '@/services/apiService.js'
-import { API_ENDPOINTS } from '../../config/api.js'
+import { useComplianceStore } from '@/stores/compliance'
+import { useFrameworkStore } from '@/stores/framework'
 import html2canvas from 'html2canvas'
 import { convertColorForColorblind as convertColorFromUtil } from '@/utils/colorblindness'
 import jsPDF from 'jspdf'
@@ -367,14 +364,6 @@ ChartJS.register(
   Legend
 )
 
-const axios = {
-  get: async (url, config = {}) => ({ data: await apiService.get(url, config.params || {}, { ...config, params: undefined }) }),
-  post: async (url, data, config = {}) => ({ data: await apiService.post(url, data, config) }),
-  put: async (url, data, config = {}) => ({ data: await apiService.put(url, data, config) }),
-  patch: async (url, data, config = {}) => ({ data: await apiService.patch(url, data, config) }),
-  delete: async (url, config = {}) => ({ data: await apiService.delete(url, config) })
-}
-
 const COMPLIANCE_DASHBOARD_CACHE_TTL_MS = 5 * 60 * 1000
 const complianceDashboardViewCache = {
   frameworks: null,
@@ -392,7 +381,9 @@ export default {
   setup() {
     const dashboardsStore = useDashboardsStore()
     const appDataStore = useAppDataStore()
-    return { dashboardsStore, appDataStore }
+    const complianceStore = useComplianceStore()
+    const frameworkStore = useFrameworkStore()
+    return { dashboardsStore, appDataStore, complianceStore, frameworkStore }
   },
   data() {
     return {
@@ -412,9 +403,6 @@ export default {
       
       // Framework session filtering properties
       sessionFrameworkId: null,
-      api: {
-        complianceService
-      },
       dashboardData: {
         status_counts: {
           approved: 0,
@@ -447,21 +435,30 @@ export default {
       dataSourceBadge: '',
       isExporting: false,
       exportSuccess: false,
+      isInitializingFrameworkSelection: true,
       colorblindMode: null, // Colorblindness mode tracking
-      colorblindObserver: null
+      colorblindObserver: null,
+      isComponentActive: false,
+      chartRenderRetryTimeout: null,
+      chartRenderRetryCount: 0,
+      frameworkInitTimeout: null
     }
   },
   computed: {
-    // Skeleton: show only when dashboard KPIs are not yet loaded AND no Pinia cache
+    // Skeleton: keep visible until KPI summary and chart payloads are ready.
     showSkeleton() {
-      return this.loadingDashboard && !this.dashboardsStore.hasData('compliance')
+      return this.loadingDashboard || !this.hasDashboardChartsReady
     },
-    // Vuex store computed properties
-    ...mapState('framework', {
-      storeFrameworkId: state => state.selectedFrameworkId,
-      storeFrameworkName: state => state.selectedFrameworkName
-    }),
-    
+    hasDashboardChartsReady() {
+      const requiredCharts = [
+        this.chartData?.criticality,
+        this.chartData?.status,
+        this.chartData?.activeInactive,
+        this.chartData?.manualAutomatic,
+        this.chartData?.maturityLevel,
+      ]
+      return requiredCharts.every(this.chartHasRenderableData)
+    },
     // Framework filtering computed properties
     filteredFrameworks() {
       if (this.sessionFrameworkId) {
@@ -525,20 +522,31 @@ export default {
   },
   async mounted() {
     console.log('🚀 ComplianceDashboard mounted - starting instant loading...')
+    this.isComponentActive = true
+    this.isInitializingFrameworkSelection = true
 
     this.checkFontAwesome()
     this.initColorblindnessTracking()
 
-    // Load framework from Vuex store
-    if (this.storeFrameworkId && this.storeFrameworkId !== 'all') {
-      this.selectedFramework = this.storeFrameworkId
-      console.log('🔄 ComplianceDashboard: Loaded framework from Vuex store:', this.storeFrameworkId)
+    // Guard against mount-time empty dropdown change events that can reset framework to "All".
+    this.frameworkInitTimeout = setTimeout(() => {
+      this.isInitializingFrameworkSelection = false
+    }, 600)
+
+    // Load framework from frameworkStore first (single source of truth).
+    if (!this.frameworkStore.selectedFrameworkId) {
+      await this.frameworkStore.loadFrameworkFromSession()
+    }
+    if (this.frameworkStore.selectedFrameworkId && this.frameworkStore.selectedFrameworkId !== 'all') {
+      this.selectedFramework = String(this.frameworkStore.selectedFrameworkId)
+      this.sessionFrameworkId = this.frameworkStore.selectedFrameworkId
+      console.log('🔄 ComplianceDashboard: Loaded framework from frameworkStore:', this.frameworkStore.selectedFrameworkId)
     }
 
     // ── Pinia appData summary: fastest restore (saved after first API call) ─
     if (this.appDataStore.complianceSummary) {
       console.log('⚡ [ComplianceDashboard] Instant restore from Pinia appData summary')
-      this.dashboardData = { ...this.appDataStore.complianceSummary }
+      this.dashboardData = this.normalizeDashboardSummary(this.appDataStore.complianceSummary)
       this.loadingDashboard = false
       this.dataSourceBadge = 'Loaded from Pinia (fast)'
       // Background: silent refresh + frameworks + activities
@@ -554,7 +562,7 @@ export default {
     if (piniaData) {
       this.dataSourceBadge = 'Loaded from Pinia (fast)'
       console.log('⚡ [ComplianceDashboard] Restoring from Pinia dashboards cache')
-      this.dashboardData = { ...piniaData }
+      this.dashboardData = this.normalizeDashboardSummary(piniaData)
       const piniaFw = this.dashboardsStore.getFrameworks('compliance')
       if (piniaFw?.length) this.frameworks = piniaFw.map(f => ({ ...f }))
       this.loadingDashboard = false
@@ -607,7 +615,7 @@ export default {
     const cacheKey = this.getDashboardCacheKey()
     const cachedDashboard = this.getCachedDashboardPayload(cacheKey)
     if (cachedDashboard) {
-      this.dashboardData = { ...cachedDashboard.dashboardData }
+      this.dashboardData = this.normalizeDashboardSummary(cachedDashboard.dashboardData)
       this.chartData = { ...cachedDashboard.chartData }
       this.loadingDashboard = false
       await this.$nextTick()
@@ -639,6 +647,8 @@ export default {
     console.log('✅ ComplianceDashboard initialization complete!')
   },
   async activated() {
+    this.isComponentActive = true
+    this.clearChartRenderRetry()
     // keep-alive re-entry: update badge to reflect the current data source.
     if (!this.loadingDashboard && this.dashboardData) {
       if (this.appDataStore.complianceSummary) {
@@ -661,6 +671,8 @@ export default {
     }
   },
   deactivated() {
+    this.isComponentActive = false
+    this.clearChartRenderRetry()
     // stop background interval while page is inactive
     if (this.activityRefreshInterval) {
       clearInterval(this.activityRefreshInterval)
@@ -668,9 +680,15 @@ export default {
     }
   },
   beforeUnmount() {
+    this.isComponentActive = false
+    this.clearChartRenderRetry()
     this.destroyAllCharts()
     if (this.activityRefreshInterval) {
       clearInterval(this.activityRefreshInterval)
+    }
+    if (this.frameworkInitTimeout) {
+      clearTimeout(this.frameworkInitTimeout)
+      this.frameworkInitTimeout = null
     }
     // Clean up colorblindness observer
     if (this.colorblindObserver) {
@@ -683,19 +701,18 @@ export default {
     next()
   },
   watch: {
-    // Watch for Vuex store framework changes
-    storeFrameworkId(newFrameworkId, oldFrameworkId) {
+    'frameworkStore.selectedFrameworkId'(newFrameworkId, oldFrameworkId) {
       // Only update if value actually changed
       if (newFrameworkId === oldFrameworkId) return
       
-      console.log('🔄 ComplianceDashboard: Vuex store framework changed to:', newFrameworkId)
+      console.log('🔄 ComplianceDashboard: framework store changed to:', newFrameworkId)
       console.log('🔄 ComplianceDashboard: Old framework was:', oldFrameworkId)
       
       // Update local selectedFramework to match store
       if (newFrameworkId === 'all' || !newFrameworkId) {
         this.selectedFramework = ''
       } else {
-        this.selectedFramework = newFrameworkId
+        this.selectedFramework = String(newFrameworkId)
       }
       
       // Reload dashboard data with new framework
@@ -704,19 +721,57 @@ export default {
     }
   },
   methods: {
+    chartHasRenderableData(chart) {
+      return !!(
+        chart &&
+        Array.isArray(chart.labels) &&
+        chart.labels.length > 0 &&
+        Array.isArray(chart.datasets) &&
+        chart.datasets.length > 0 &&
+        Array.isArray(chart.datasets[0]?.data)
+      )
+    },
+
+    normalizeDashboardSummary(summary = {}) {
+      const statusCounts = summary.status_counts || {}
+      const approved = statusCounts.approved ?? statusCounts.approved_count ?? summary.approved ?? 0
+      const activeCompliance =
+        statusCounts.active_compliance ??
+        statusCounts.active ??
+        statusCounts.active_count ??
+        summary.active_compliance ??
+        summary.active ??
+        0
+      const underReview =
+        statusCounts.under_review ??
+        statusCounts.underReview ??
+        statusCounts.pending_review ??
+        statusCounts.pending ??
+        summary.under_review ??
+        summary.pending_review ??
+        summary.pending ??
+        0
+
+      return {
+        status_counts: {
+          ...statusCounts,
+          approved,
+          active_compliance: activeCompliance,
+          under_review: underReview,
+        },
+        total_count: summary.total_count ?? summary.total ?? summary.compliance_count ?? 0,
+        total_findings: summary.total_findings ?? summary.findings ?? 0,
+        approval_rate: summary.approval_rate ?? summary.approvalRate ?? 0,
+      }
+    },
+
     hydrateComplianceKpisFromAppData() {
       // Use the fast compliance summary stored by appData.fetchCompliances()
       if (!this.appDataStore.complianceSummary) return false
       const s = this.appDataStore.complianceSummary
-      this.dashboardData = {
-        status_counts:  s.status_counts  || {},
-        total_count:    s.total_count    || 0,
-        total_findings: s.total_findings || 0,
-        approval_rate:  s.approval_rate  || 0,
-      }
+      this.dashboardData = this.normalizeDashboardSummary(s)
       return true
     },
-    ...mapActions('framework', ['setFramework']),
     getDashboardCacheKey() {
       return JSON.stringify({
         framework: this.selectedFramework || '',
@@ -897,124 +952,135 @@ export default {
       }
     },
     
-    // Framework session management methods
+    // Framework session management — delegated to frameworkStore (single source of truth)
     async checkSelectedFrameworkFromSession() {
-      if (this.selectedFrameworkRequestPromise) {
-        return this.selectedFrameworkRequestPromise
+      // Ensure frameworkStore session is loaded (no-op if already done by HomeView/shell)
+      if (!this.frameworkStore.selectedFrameworkId) {
+        await this.frameworkStore.loadFrameworkFromSession()
       }
-      this.selectedFrameworkRequestPromise = (async () => {
-      try {
-        console.log('🔍 DEBUG: Checking for selected framework from session in ComplianceDashboard...')
-        const response = await axios.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED)
-        console.log('📊 DEBUG: Selected framework response:', response.data)
-        
-        if (response.data && response.data.success && response.data.frameworkId) {
-          const frameworkIdFromSession = response.data.frameworkId
-          console.log('✅ DEBUG: Found selected framework in session:', frameworkIdFromSession)
-          
-          // Store the session framework ID for filtering
-          this.sessionFrameworkId = frameworkIdFromSession
-          
-          // Check if this framework exists in our loaded frameworks
-          const frameworkExists = this.frameworks.find(f => f.id.toString() === frameworkIdFromSession.toString())
-          
-          if (frameworkExists) {
-            console.log('✅ DEBUG: Framework exists in loaded frameworks:', frameworkExists.name)
-            // Automatically select the framework from session
-            this.selectedFramework = frameworkExists.id.toString()
-            console.log('✅ DEBUG: Auto-selected framework from session:', this.selectedFramework)
-            // Refresh dashboard data with the selected framework
-            await this.fetchDashboardData()
-          } else {
-            console.log('⚠️ DEBUG: Framework from session (ID:', frameworkIdFromSession, ') not found in loaded frameworks')
-            console.log('📋 DEBUG: Available frameworks:', this.frameworks.map(f => ({ id: f.id, name: f.name })))
-            // Clear the session framework ID since it doesn't exist
-            this.sessionFrameworkId = null
-          }
+      const frameworkIdFromSession = this.frameworkStore.selectedFrameworkId
+      if (frameworkIdFromSession && frameworkIdFromSession !== 'all') {
+        this.sessionFrameworkId = frameworkIdFromSession
+        const frameworkExists = this.frameworks.find(
+          f => f.id.toString() === frameworkIdFromSession.toString()
+        )
+        if (frameworkExists) {
+          this.selectedFramework = frameworkExists.id.toString()
+          await this.fetchDashboardData()
         } else {
-          console.log('ℹ️ DEBUG: No framework found in session - All Frameworks selected')
-          this.sessionFrameworkId = null
-          // Ensure selectedFramework is empty for "All Frameworks"
-          this.selectedFramework = ''
+          // Keep session selection even if current page framework list is stale/incomplete.
+          this.selectedFramework = String(frameworkIdFromSession)
+          this.frameworks = [
+            ...this.frameworks,
+            {
+              id: frameworkIdFromSession,
+              name: this.frameworkStore.selectedFrameworkName || 'Selected Framework',
+            },
+          ]
+          await this.fetchDashboardData()
         }
-      } catch (error) {
-        console.error('❌ DEBUG: Error checking selected framework from session:', error)
+      } else {
         this.sessionFrameworkId = null
-      } finally {
-        this.selectedFrameworkRequestPromise = null
+        this.selectedFramework = ''
       }
-      })()
-      return this.selectedFrameworkRequestPromise
     },
-    
+
     async saveFrameworkToSession(frameworkId) {
-      try {
-        console.log('💾 DEBUG: Saving framework to session:', frameworkId)
-        const userId = localStorage.getItem('user_id') || 'default_user'
-        await axios.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, { 
-          frameworkId,
-          userId
-        })
-        console.log('✅ DEBUG: Framework saved to session successfully')
-      } catch (error) {
-        console.error('❌ DEBUG: Error saving framework to session:', error)
-      }
+      const name = this.frameworks.find(f => f.id.toString() === String(frameworkId))?.name ?? 'Selected Framework'
+      await this.frameworkStore.setFramework({ id: frameworkId, name })
     },
-    
+
     async clearFrameworkFromSession() {
-      try {
-        console.log('🧹 DEBUG: Clearing framework from session')
-        const userId = localStorage.getItem('user_id') || 'default_user'
-        await axios.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, { 
-          frameworkId: null,
-          userId
-        })
-        console.log('✅ DEBUG: Framework cleared from session successfully')
-      } catch (error) {
-        console.error('❌ DEBUG: Error clearing framework from session:', error)
+      await this.frameworkStore.resetFramework()
+    },
+
+    normalizeDropdownValue(input, fallback = '') {
+      if (input == null) return fallback
+      if (typeof input === 'string' || typeof input === 'number') return input
+      if (typeof input === 'object') {
+        // CustomDropdown option shape
+        if (Object.prototype.hasOwnProperty.call(input, 'value')) return input.value
+        // Native DOM event shape
+        if (input?.target && Object.prototype.hasOwnProperty.call(input.target, 'value')) {
+          return input.target.value
+        }
       }
+      return fallback
+    },
+
+    sanitizeFilterValue(value, fallback = '') {
+      if (value == null) return fallback
+      // Guard against accidentally passing DOM Event objects to API params
+      if (typeof value === 'object') return fallback
+      const normalized = String(value).trim()
+      if (!normalized || normalized === '[object Event]') return fallback
+      return normalized
+    },
+
+    // Ensure API always receives a framework ID (never label text).
+    resolveFrameworkIdForApi(rawValue) {
+      const normalized = this.sanitizeFilterValue(rawValue, '')
+      if (!normalized) return ''
+
+      const byId = this.frameworks.find((f) => String(f.id) === normalized)
+      if (byId) return String(byId.id)
+
+      // Fallback: if dropdown/model somehow carries framework name text.
+      const byName = this.frameworks.find((f) => String(f.name || '').trim() === normalized)
+      if (byName) return String(byName.id)
+
+      return ''
     },
     
     onFrameworkChange(option) {
-      // CustomDropdown emits option object with value and label
-      const value = option && option.value !== undefined ? option.value : option
-      this.selectedFramework = value || ''
+      const value = this.normalizeDropdownValue(option, '')
+      const normalized = this.sanitizeFilterValue(value, '')
+      if (this.isInitializingFrameworkSelection && normalized === '') return
+      this.selectedFramework = normalized
       this.handleFrameworkChange()
     },
     
     onTimeRangeChange(option) {
-      const value = option && option.value !== undefined ? option.value : option
-      this.selectedTimeRange = value || 'Last 6 Months'
+      const value = this.normalizeDropdownValue(option, 'Last 6 Months')
+      this.selectedTimeRange = this.sanitizeFilterValue(value, 'Last 6 Months')
       this.fetchDashboardData()
     },
     
     onCategoryChange(option) {
-      const value = option && option.value !== undefined ? option.value : option
-      this.selectedCategory = value || 'All Categories'
+      const value = this.normalizeDropdownValue(option, 'All Categories')
+      this.selectedCategory = this.sanitizeFilterValue(value, 'All Categories')
       this.fetchDashboardData()
     },
     
     onPriorityChange(option) {
-      const value = option && option.value !== undefined ? option.value : option
-      this.selectedPriority = value || 'All Priorities'
+      const value = this.normalizeDropdownValue(option, 'All Priorities')
+      this.selectedPriority = this.sanitizeFilterValue(value, 'All Priorities')
       this.fetchDashboardData()
     },
     
     async handleFrameworkChange() {
+      if (this.isInitializingFrameworkSelection) return
       console.log('🔍 DEBUG: handleFrameworkChange called with:', this.selectedFramework)
       
       // Find the framework name from the frameworks list
-      const frameworkName = this.frameworks.find(f => f.id === this.selectedFramework)?.name || 'All Frameworks'
+      const selectedFrameworkId = this.resolveFrameworkIdForApi(this.selectedFramework)
+      const currentStoreId = this.resolveFrameworkIdForApi(this.frameworkStore.selectedFrameworkId)
+      const frameworkName = this.frameworks.find(
+        f => String(f.id) === String(selectedFrameworkId)
+      )?.name || 'All Frameworks'
       
-      // Update Vuex store (this will also save to backend session)
-      await this.setFramework({
-        id: this.selectedFramework || 'all',
-        name: frameworkName
-      })
+      // Prevent redundant updates when dropdown emits the same selected value.
+      if (String(selectedFrameworkId || '') !== String(currentStoreId || '')) {
+        // Update framework store (single source of truth)
+        await this.frameworkStore.setFramework({
+          id: selectedFrameworkId || 'all',
+          name: frameworkName
+        })
+      }
       
-      console.log('✅ DEBUG: Framework saved to Vuex store:', this.selectedFramework)
-      
-      // Note: Data refresh will be triggered by the watcher
+      console.log('✅ DEBUG: Framework saved to framework store:', selectedFrameworkId)
+      // Refresh directly to avoid watcher timing ambiguity.
+      this.fetchDashboardData()
     },
     
     destroyAllCharts() {
@@ -1030,6 +1096,31 @@ export default {
         manualAutomaticChart: null,
         maturityLevelChart: null
       }
+    },
+    clearChartRenderRetry() {
+      if (this.chartRenderRetryTimeout) {
+        clearTimeout(this.chartRenderRetryTimeout)
+        this.chartRenderRetryTimeout = null
+      }
+      this.chartRenderRetryCount = 0
+    },
+    scheduleChartRenderRetry(callback) {
+      if (!this.isComponentActive) return
+      const maxRetries = 30
+      if (this.chartRenderRetryCount >= maxRetries) {
+        console.warn('⚠️ Chart render retries exhausted; skipping further attempts')
+        return
+      }
+      this.clearChartRenderRetry()
+      this.chartRenderRetryCount += 1
+      this.chartRenderRetryTimeout = setTimeout(() => {
+        this.chartRenderRetryTimeout = null
+        if (!this.isComponentActive) return
+        this.$nextTick(() => {
+          if (!this.isComponentActive) return
+          callback()
+        })
+      }, 100)
     },
     
     async fetchFrameworks() {
@@ -1047,78 +1138,53 @@ export default {
           return
         }
         
-        // Check if prefetch was never started (user came directly to this page)
-        if (!window.complianceDataFetchPromise && !complianceDataService.hasFrameworksCache()) {
-          console.log('🚀 [ComplianceDashboard] Starting prefetch now (user came directly to this page)...')
-          window.complianceDataFetchPromise = complianceDataService.fetchAllComplianceData()
-        }
-        
-        // Wait for prefetch if it's running
-        if (window.complianceDataFetchPromise) {
-          console.log('⏳ [ComplianceDashboard] Waiting for prefetch to complete...')
-          try {
-            await window.complianceDataFetchPromise
-            console.log('✅ [ComplianceDashboard] Prefetch completed')
-          } catch (error) {
-            console.warn('⚠️ [ComplianceDashboard] Prefetch failed, will fetch directly')
-          }
-        }
-        
-        // FIRST: Try to get data from cache
-        if (complianceDataService.hasFrameworksCache()) {
-          console.log('✅ [ComplianceDashboard] Using cached framework data')
-          const cachedFrameworks = complianceDataService.getData('frameworks') || []
-          
-          // Filter to only show active frameworks
-          const activeFrameworks = cachedFrameworks.filter(fw => {
-            const status = fw.ActiveInactive || fw.status || '';
-            return status.toLowerCase() === 'active';
-          });
-          
-          this.frameworks = activeFrameworks.map(framework => ({
-            id: framework.FrameworkId || framework.id,
-            name: framework.FrameworkName || framework.name || 'Unknown Framework'
-          }))
-          console.log(`[ComplianceDashboard] Loaded ${this.frameworks.length} frameworks from cache (prefetched on Home page)`)
-        } else {
-          // FALLBACK: Fetch from API if cache is empty
-          console.log('⚠️ [ComplianceDashboard] No cached data found, fetching from API...')
-          const response = await this.api.complianceService.getComplianceFrameworks()
-          console.log('Frameworks API response:', response.data)
-          
-          // Handle the API response format
-          let frameworksData = []
-          if (response.data.success && response.data.frameworks) {
-            frameworksData = response.data.frameworks
-          } else if (response.data.success && Array.isArray(response.data.data)) {
-            frameworksData = response.data.data
-          } else if (Array.isArray(response.data)) {
-            frameworksData = response.data
-          } else {
-            console.error('Unexpected frameworks response format:', response.data)
-            this.frameworks = []
+        // Instant hydrate from in-memory Pinia cache (if available)
+        if (Array.isArray(this.complianceStore.frameworks) && this.complianceStore.frameworks.length > 0) {
+          const cachedFrameworks = this.complianceStore.frameworks
+            .filter(fw => {
+              const status = fw.ActiveInactive ?? fw.status ?? ''
+              return status.toLowerCase() === 'active'
+            })
+            .map(fw => ({
+              id: fw.FrameworkId ?? fw.id,
+              name: fw.FrameworkName ?? fw.name ?? 'Unknown Framework',
+            }))
+          if (cachedFrameworks.length > 0) {
+            this.frameworks = cachedFrameworks
+            this.loadingFrameworks = false
+            // Keep UX instant; refresh in background.
+            void this.complianceStore.fetchFrameworks().then(() => {
+              const refreshed = this.complianceStore.frameworks
+                .filter(fw => {
+                  const status = fw.ActiveInactive ?? fw.status ?? ''
+                  return status.toLowerCase() === 'active'
+                })
+                .map(fw => ({
+                  id: fw.FrameworkId ?? fw.id,
+                  name: fw.FrameworkName ?? fw.name ?? 'Unknown Framework',
+                }))
+              this.frameworks = refreshed
+              complianceDashboardViewCache.frameworks = refreshed.map(f => ({ ...f }))
+              complianceDashboardViewCache.frameworksFetchedAt = Date.now()
+            })
             return
           }
-          
-          // Filter to only show active frameworks
-          const activeFrameworks = frameworksData.filter(fw => {
-            const status = fw.ActiveInactive || fw.status || '';
-            return status.toLowerCase() === 'active';
-          });
-          
-          this.frameworks = activeFrameworks.map(framework => ({
-            id: framework.id || framework.FrameworkId,
-            name: framework.name || framework.FrameworkName || 'Unknown Framework'
-          }))
-          
-          console.log(`[ComplianceDashboard] Loaded ${this.frameworks.length} frameworks directly from API (cache unavailable)`)
-          
-          // Update cache so subsequent pages benefit
-          complianceDataService.setData('frameworks', frameworksData)
-          console.log('ℹ️ [ComplianceDashboard] Cache updated after direct API fetch')
         }
-        
-        console.log('Processed frameworks:', this.frameworks)
+
+        // Use complianceStore as the single source (replaces window.complianceDataFetchPromise + complianceDataService)
+        await this.complianceStore.fetchFrameworks()
+        const storeFrameworks = this.complianceStore.frameworks
+
+        const activeFrameworks = storeFrameworks.filter(fw => {
+          const status = fw.ActiveInactive ?? fw.status ?? ''
+          return status.toLowerCase() === 'active'
+        })
+
+        this.frameworks = activeFrameworks.map(fw => ({
+          id: fw.FrameworkId ?? fw.id,
+          name: fw.FrameworkName ?? fw.name ?? 'Unknown Framework',
+        }))
+
         complianceDashboardViewCache.frameworks = this.frameworks.map(f => ({ ...f }))
         complianceDashboardViewCache.frameworksFetchedAt = Date.now()
       } catch (error) {
@@ -1159,10 +1225,10 @@ export default {
         // Fetch activities with timeout to prevent hanging
         // Only fetch approvals - frameworks fetch is not needed for activities
         // Backend resolves reviewer from session (RBAC); do not pass client reviewer_id (was misleading in logs).
-        let approvalsResponse = null
+        let approvals = []
         try {
-          approvalsResponse = await Promise.race([
-            this.api.complianceService.getCompliancePolicyApprovals({}),
+          approvals = await Promise.race([
+            this.complianceStore.fetchPolicyApprovalsReviewer({ params: {}, force: true }),
             new Promise((_, reject) => setTimeout(() => reject(new Error('Approvals API timeout')), 10000))
           ])
         } catch (error) {
@@ -1173,9 +1239,7 @@ export default {
         let activities = []
         
         // Process policy approvals for recent activities
-        if (approvalsResponse && approvalsResponse.data && approvalsResponse.data.success && approvalsResponse.data.data) {
-          const approvals = approvalsResponse.data.data
-          
+        if (Array.isArray(approvals) && approvals.length) {
           // Sort approvals by most recent first
           const sortedApprovals = approvals.sort((a, b) => {
             const dateA = new Date(a.ApprovedDate || a.ExtractedData?.CreatedByDate || '1970-01-01')
@@ -1375,7 +1439,7 @@ export default {
         const cached = this.getCachedDashboardPayload(cacheKey)
         if (cached) {
           console.log('⚡ [ComplianceDashboard] Serving dashboard data from local page cache')
-          this.dashboardData = { ...cached.dashboardData }
+          this.dashboardData = this.normalizeDashboardSummary(cached.dashboardData)
           this.chartData = { ...cached.chartData }
           this.loadingDashboard = false
           await this.renderChartsAfterDataLoad()
@@ -1387,53 +1451,25 @@ export default {
           this.loadingDashboard = false
         }
 
-        // Fetch dashboard summary data
-        let dashboardResponse
-        try {
-          const dashboardRequest = {}
-          
-          // Add framework filter if selected
-          if (this.selectedFramework && this.selectedFramework !== '') {
-            dashboardRequest.framework_id = this.selectedFramework
-            console.log('Applying framework filter to dashboard:', this.selectedFramework)
-          } else {
-            console.log('No framework filter applied')
-          }
-          
-          // Add other filters
-          if (this.selectedTimeRange && this.selectedTimeRange !== 'Last 6 Months') {
-            dashboardRequest.timeRange = this.selectedTimeRange
-          }
-          
-          if (this.selectedCategory && this.selectedCategory !== 'All Categories') {
-            dashboardRequest.category = this.selectedCategory
-          }
-          
-          if (this.selectedPriority && this.selectedPriority !== 'All Priorities') {
-            dashboardRequest.priority = this.selectedPriority
-          }
-          
-          console.log('Dashboard request with filters:', dashboardRequest)
-          console.log('Making API call to:', this.api.complianceService.getComplianceDashboard.toString())
-          dashboardResponse = await this.api.complianceService.getComplianceDashboard(dashboardRequest)
-          console.log('Compliance Dashboard API Response:', dashboardResponse.data)
-        } catch (err) {
-          console.error('Error fetching dashboard data:', err)
-          console.error('Error details:', err.response?.data || err.message)
-          throw new Error(`Dashboard fetch failed: ${err.message}`)
-        }
+        const frameworkId = this.resolveFrameworkIdForApi(this.selectedFramework)
+        const filters = {}
+        const timeRange = this.sanitizeFilterValue(this.selectedTimeRange, 'Last 6 Months')
+        if (timeRange !== 'Last 6 Months') filters.timeRange = timeRange
+        const category = this.sanitizeFilterValue(this.selectedCategory, 'All Categories')
+        if (category !== 'All Categories') filters.category = category
+        const priority = this.sanitizeFilterValue(this.selectedPriority, 'All Priorities')
+        if (priority !== 'All Priorities') filters.priority = priority
 
-        if (dashboardResponse.data && dashboardResponse.data.success) {
-          const summary = dashboardResponse.data.data?.summary || {}
+        await this.complianceStore.fetchComplianceDashboard({
+          frameworkId: frameworkId || undefined,
+          filters,
+          force: true
+        })
+        const summary = this.complianceStore.dashboardSummary || {}
           console.log('Dashboard summary data:', summary)
 
           // ── CRITICAL: set KPI data immediately so skeleton disappears ────
-          this.dashboardData = {
-            status_counts: summary.status_counts || {},
-            total_count: summary.total_count || 0,
-            total_findings: summary.total_findings || 0,
-            approval_rate: summary.approval_rate || 0
-          }
+          this.dashboardData = this.normalizeDashboardSummary(summary)
           this.loadingDashboard = false
           this.dataSourceBadge = 'Refreshed from API (latest)'
           // Save KPI summary to both stores for instant display on next visit
@@ -1450,11 +1486,11 @@ export default {
             this.fetchChartData('MaturityLevel', 'bar')
           ]).then(([criticalityData, statusData, activeInactiveData, manualAutomaticData, maturityLevelData]) => {
             this.chartData = {
-              criticality: criticalityData,
-              status: statusData,
-              activeInactive: activeInactiveData,
-              manualAutomatic: manualAutomaticData,
-              maturityLevel: maturityLevelData
+              criticality: criticalityData || this.getDefaultChartData('bar'),
+              status: statusData || this.getDefaultChartData('doughnut'),
+              activeInactive: activeInactiveData || this.getDefaultChartData('bar'),
+              manualAutomatic: manualAutomaticData || this.getDefaultChartData('doughnut'),
+              maturityLevel: maturityLevelData || this.getDefaultChartData('bar')
             }
             // Update page cache with charts
             complianceDashboardViewCache.dashboardByKey[cacheKey] = {
@@ -1467,22 +1503,17 @@ export default {
             console.log('Updated chart data:', this.chartData)
             this.renderChartsAfterDataLoad()
           }).catch(e => console.warn('[ComplianceDashboard] Background chart fetch failed:', e))
-        } else {
-          const errorMessage = dashboardResponse.data?.message || 'API request failed'
-          console.error('API Error:', errorMessage)
-          throw new Error(errorMessage)
-        }
       } catch (error) {
         console.error('Error in fetchDashboardData:', error)
         this.loadingDashboard = false // hide skeleton on error too
 
         // Set default values on error
-        this.dashboardData = {
-          status_counts: { approved: 0, active: 0, under_review: 0 },
+        this.dashboardData = this.normalizeDashboardSummary({
+          status_counts: { approved: 0, active_compliance: 0, under_review: 0 },
           total_count: 0,
           total_findings: 0,
-          approval_rate: 0
-        }
+          approval_rate: 0,
+        })
         
         const defaultChartData = {
           labels: ['No Data'],
@@ -1508,44 +1539,21 @@ export default {
     },
     async fetchChartData(yAxis, chartType) {
       try {
-        const requestData = {
-          xAxis: 'Compliance',
-          yAxis: yAxis
-        }
-        
-        // Add framework filter if selected
-        if (this.selectedFramework && this.selectedFramework !== '') {
-          requestData.frameworkId = this.selectedFramework
-          console.log(`Applying framework filter for ${yAxis} chart:`, this.selectedFramework)
-        } else {
-          console.log(`No framework filter applied for ${yAxis} chart`)
-        }
-        
-        // Add other filters
-        if (this.selectedTimeRange && this.selectedTimeRange !== 'Last 6 Months') {
-          requestData.timeRange = this.selectedTimeRange
-        }
-        
-        if (this.selectedCategory && this.selectedCategory !== 'All Categories') {
-          requestData.category = this.selectedCategory
-        }
-        
-        if (this.selectedPriority && this.selectedPriority !== 'All Priorities') {
-          requestData.priority = this.selectedPriority
-        }
-        
-        console.log(`Fetching ${yAxis} chart data with request:`, requestData)
-        console.log('Making analytics API call to:', this.api.complianceService.getComplianceAnalytics.toString())
-        const response = await this.api.complianceService.getComplianceAnalytics(requestData)
-        
-        console.log(`${yAxis} chart response:`, response.data)
-        
-        if (response.data && response.data.success && response.data.chartData) {
-          return response.data.chartData
-        } else {
-          console.warn(`No data received for ${yAxis} chart`)
-          return this.getDefaultChartData(chartType)
-        }
+        const frameworkId = this.resolveFrameworkIdForApi(this.selectedFramework)
+        const filters = {}
+        const timeRange = this.sanitizeFilterValue(this.selectedTimeRange, 'Last 6 Months')
+        if (timeRange !== 'Last 6 Months') filters.timeRange = timeRange
+        const category = this.sanitizeFilterValue(this.selectedCategory, 'All Categories')
+        if (category !== 'All Categories') filters.category = category
+        const priority = this.sanitizeFilterValue(this.selectedPriority, 'All Priorities')
+        if (priority !== 'All Priorities') filters.priority = priority
+        const chartData = await this.complianceStore.fetchComplianceAnalyticsChart({
+          yAxis,
+          frameworkId: frameworkId || undefined,
+          filters,
+          force: true
+        })
+        return chartData || this.getDefaultChartData(chartType)
       } catch (error) {
         console.error(`Error fetching ${yAxis} chart data:`, error)
         return this.getDefaultChartData(chartType)
@@ -1580,25 +1588,24 @@ export default {
     },
     
     async renderChartsAfterDataLoad() {
-      console.log('🎨 Rendering charts instantly...')
+      if (!this.isComponentActive) return
+      console.log('🎨 Rendering charts...')
       
       // Ensure all canvas elements exist
       const chartIds = ['criticalityChart', 'statusChart', 'activeInactiveChart', 'manualAutomaticChart', 'maturityLevelChart']
       const existingCanvases = chartIds.filter(id => document.getElementById(id))
       
       if (existingCanvases.length === chartIds.length) {
-        console.log('✅ All canvas elements found, rendering charts instantly...')
+        this.clearChartRenderRetry()
+        console.log('✅ All canvas elements found, rendering charts...')
         await this.updateAllCharts()
       } else {
-        console.log('⏳ Canvas elements not ready, retrying instantly...')
-        // Retry immediately without delay
-        this.$nextTick(() => {
-          this.renderChartsAfterDataLoad()
-        })
+        this.scheduleChartRenderRetry(() => this.renderChartsAfterDataLoad())
       }
     },
     
     async updateAllCharts() {
+      if (!this.isComponentActive) return
       console.log('🔄 DEBUG: Updating all charts instantly...')
       console.log('📊 DEBUG: Chart data available:', {
         criticality: !!this.chartData.criticality,
@@ -1614,13 +1621,10 @@ export default {
       
       if (missingCanvases.length > 0) {
         console.warn('⚠️ DEBUG: Some canvas elements not found:', missingCanvases)
-        console.log('🔄 DEBUG: Retrying chart update instantly...')
-        // Retry immediately without delay
-        this.$nextTick(() => {
-          this.updateAllCharts()
-        })
+        this.scheduleChartRenderRetry(() => this.updateAllCharts())
         return
       }
+      this.clearChartRenderRetry()
       
       console.log('✅ DEBUG: All canvas elements found, proceeding with instant chart updates')
       console.log('🎨 DEBUG: Current colorblindness mode:', this.colorblindMode)

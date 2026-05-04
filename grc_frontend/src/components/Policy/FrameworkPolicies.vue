@@ -54,9 +54,23 @@
       </span>
     </div>
 
-    <h1>Policies for {{ frameworkName }}</h1>
+    <h1>Policies for {{ frameworkName || '…' }}</h1>
     <div class="page-header-underline"></div>
 
+    <div
+      v-if="showPoliciesSkeleton"
+      class="policy-page-skeleton policy-fwp-skeleton"
+      aria-busy="true"
+      aria-label="Loading policies"
+    >
+      <div class="policy-skeleton-summary">
+        <div v-for="n in 2" :key="'fwp-sum-' + n" class="policy-skeleton-card"></div>
+      </div>
+      <div class="policy-skeleton-table">
+        <div v-for="n in 8" :key="'fwp-row-' + n" class="policy-skeleton-row"></div>
+      </div>
+    </div>
+    <template v-else>
     <!-- Policy Summary Cards -->
     <div class="summary-section">
       <div class="summary-cards">
@@ -216,6 +230,7 @@
         </div>
       </div>
     </div>
+    </template>
  
     <!-- Popup Modal -->
     <PopupModal />
@@ -226,7 +241,7 @@
       :isVisible="showAcknowledgementModal"
       :policy="selectedPolicyForAck"
       @close="closeAcknowledgementModal"
-      @created="handleAcknowledgementCreated"
+      @submit="handleAcknowledgementSubmit"
     />
   </div>
 </template>
@@ -241,6 +256,8 @@ import CustomDropdown from '@/components/CustomDropdown.vue'
 import CreateAcknowledgementModal from './CreateAcknowledgementModal.vue'
 import {  API_ENDPOINTS } from '../../config/api.js'
 import { openDownloadInNewTabWithAnchorFallback } from '@/utils/safeExternalNavigation'
+import { useFrameworkStore } from '@/stores/framework'
+import { usePolicyStore } from '@/stores/policy'
 
 // Add view state
 const currentView = ref('list') // 'list' or 'card' - default to list view
@@ -256,8 +273,13 @@ const frameworkStatus = ref('')
 const policies = ref([])
 const allPolicies = ref([]) // Store all policies for filtering
 const selectedEntity = ref('')
+const frameworkStore = useFrameworkStore()
+const policyStore = usePolicyStore()
 const entities = ref([])
 const isLoading = ref(false)
+const showPoliciesSkeleton = computed(
+  () => isLoading.value && (!allPolicies.value || allPolicies.value.length === 0)
+)
 
 // Acknowledgement modal state
 const showAcknowledgementModal = ref(false)
@@ -372,7 +394,11 @@ const checkSelectedFrameworkFromSession = async () => {
   try {
     console.log('🔍 DEBUG: Checking for selected framework from session in FrameworkPolicies...')
     console.log('🔍 DEBUG: Current route frameworkId:', frameworkId)
-    const response = await apiService.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED)
+    await frameworkStore.loadFrameworkFromSession()
+    const response = {
+      success: true,
+      frameworkId: frameworkStore.selectedFrameworkId,
+    }
     console.log('📊 DEBUG: Selected framework response:', response)
     
     if (response && response.success) {
@@ -410,39 +436,93 @@ const checkSelectedFrameworkFromSession = async () => {
   }
 }
 
-// Fetch policies for the selected framework
-const fetchPolicies = async () => {
-  isLoading.value = true
-  try {
-    // First check for session framework
-    await checkSelectedFrameworkFromSession()
-    
-    // Use the current frameworkId (which might have been updated from session)
-    const currentFrameworkId = route.params.frameworkId
-    console.log('🔍 DEBUG: Fetching policies for framework:', currentFrameworkId)
-    
-    const response = await apiService.get(API_ENDPOINTS.FRAMEWORK_GET_POLICIES_LIST(currentFrameworkId))
-    allPolicies.value = response.policies
+const applyPoliciesListResponse = (response) => {
+  allPolicies.value = response.policies || []
+  if (response.framework) {
     frameworkName.value = response.framework.name
     frameworkStatus.value = response.framework.status || 'Unknown'
-    
-    // Calculate policy counts from the policies data
-    const activeCount = allPolicies.value.filter(policy => policy.status === 'Active').length
-    const inactiveCount = allPolicies.value.filter(policy => policy.status === 'Inactive').length
-    
-    policyCounts.value = {
-      active: response.policy_counts?.active || activeCount,
-      inactive: response.policy_counts?.inactive || inactiveCount
+  }
+  const activeCount = allPolicies.value.filter((policy) => policy.status === 'Active').length
+  const inactiveCount = allPolicies.value.filter((policy) => policy.status === 'Inactive').length
+  policyCounts.value = {
+    active: response.policy_counts?.active ?? activeCount,
+    inactive: response.policy_counts?.inactive ?? inactiveCount,
+  }
+}
+
+/** Authoritative API refresh; updates Pinia cache for instant return visits */
+const syncPoliciesFromNetwork = async (frameworkId) => {
+  const fid = String(frameworkId)
+  const response = await apiService.get(API_ENDPOINTS.FRAMEWORK_GET_POLICIES_LIST(fid))
+  applyPoliciesListResponse(response)
+  policyStore.setFrameworkPoliciesListCache(fid, allPolicies.value)
+}
+
+// Fetch policies for the selected framework (Pinia cache-first + background sync)
+const fetchPolicies = async () => {
+  isLoading.value = true
+  let currentFrameworkId = route.params.frameworkId
+  try {
+    await checkSelectedFrameworkFromSession()
+    currentFrameworkId = route.params.frameworkId
+    console.log('🔍 DEBUG: Fetching policies for framework:', currentFrameworkId)
+
+    if (policyStore.hasFrameworkPoliciesListCache(currentFrameworkId)) {
+      const cached = policyStore.getFrameworkPoliciesListCached(currentFrameworkId)
+      allPolicies.value = (cached || []).map((policy) => ({
+        ...policy,
+        status: policy.status || policy.ActiveInactive || 'Unknown',
+      }))
+      if (!frameworkName.value) {
+        const frameworks = await policyStore.getAllFrameworks({ force: false })
+        const selectedFramework = (frameworks || []).find(
+          (fw) => Number(fw.FrameworkId || fw.id) === Number(currentFrameworkId)
+        )
+        frameworkName.value =
+          selectedFramework?.FrameworkName || selectedFramework?.name || frameworkName.value
+      }
+      const activeCount = allPolicies.value.filter((policy) => policy.status === 'Active').length
+      const inactiveCount = allPolicies.value.filter((policy) => policy.status === 'Inactive').length
+      policyCounts.value = { active: activeCount, inactive: inactiveCount }
+      isLoading.value = false
+      void syncPoliciesFromNetwork(currentFrameworkId).catch((e) =>
+        console.warn('[FrameworkPolicies] Background policy sync failed:', e)
+      )
+      return
     }
+
+    await syncPoliciesFromNetwork(currentFrameworkId)
   } catch (error) {
     console.error('Error fetching policies:', error)
+    try {
+      const cachedPolicies = await policyStore.getPoliciesByFramework(currentFrameworkId)
+      allPolicies.value = (cachedPolicies || []).map((policy) => ({
+        ...policy,
+        status: policy.status || policy.ActiveInactive || 'Unknown',
+      }))
+
+      if (!frameworkName.value) {
+        const frameworks = await policyStore.getAllFrameworks()
+        const selectedFramework = (frameworks || []).find(
+          (fw) => Number(fw.FrameworkId || fw.id) === Number(currentFrameworkId)
+        )
+        frameworkName.value = selectedFramework?.FrameworkName || selectedFramework?.name || frameworkName.value
+      }
+
+      const activeCount = allPolicies.value.filter((policy) => policy.status === 'Active').length
+      const inactiveCount = allPolicies.value.filter((policy) => policy.status === 'Inactive').length
+      policyCounts.value = { active: activeCount, inactive: inactiveCount }
+      return
+    } catch (fallbackError) {
+      console.error('Policy store fallback failed:', fallbackError)
+    }
     sendPushNotification({
       title: 'Policy List Loading Failed',
       message: `Failed to load policies for framework "${frameworkName.value || 'Unknown Framework'}": ${error.response?.data?.error || error.message}`,
       category: 'policy',
       priority: 'high',
-      user_id: 'default_user'
-    });
+      user_id: 'default_user',
+    })
   } finally {
     isLoading.value = false
   }
@@ -730,8 +810,9 @@ const toggleStatus = async (policy) => {
         user_id: 'default_user'
       });
      
-      // Refresh summary counts
-      await fetchPolicies();
+      // Keep Pinia list cache in sync; background refresh matches server
+      policyStore.setFrameworkPoliciesListCache(route.params.frameworkId, allPolicies.value)
+      void syncPoliciesFromNetwork(route.params.frameworkId).catch(() => {})
     }
   } catch (error) {
     console.error('Error toggling policy status:', error);
@@ -788,39 +869,54 @@ const acknowledgePolicy = async (policy) => {
   showAcknowledgementModal.value = true
 }
 
-// Handle acknowledgement request created
+const handleAcknowledgementSubmit = ({ requestData, policy_name, total_users }) => {
+  closeAcknowledgementModal()
+  void apiService
+    .post(API_ENDPOINTS.CREATE_ACKNOWLEDGEMENT_REQUEST, requestData, { background: true })
+    .then((response) => {
+      void handleAcknowledgementCreated({
+        ...response,
+        policy_name: response.policy_name || policy_name,
+        total_users: response.total_users ?? total_users,
+        acknowledgement_request_id: response.acknowledgement_request_id,
+      })
+    })
+    .catch((error) => {
+      console.error('Error creating acknowledgement request:', error)
+      PopupService.error(
+        error.response?.data?.error || 'Failed to create acknowledgement request',
+        'Error'
+      )
+    })
+}
+
 const handleAcknowledgementCreated = async (data) => {
   showAcknowledgementModal.value = false
   selectedPolicyForAck.value = null
-  
-  // Send notification
+
   sendPushNotification({
     title: 'Acknowledgement Request Created',
     message: `Acknowledgement request created for "${data.policy_name || 'policy'}". ${data.total_users} users assigned.`,
     category: 'policy',
     priority: 'high',
-    user_id: 'default_user'
-  });
-  
-  // Show success with option to view report
+    user_id: 'default_user',
+  })
+
   if (data.acknowledgement_request_id) {
     PopupService.confirm(
       `Acknowledgement request created successfully. ${data.total_users} users assigned.\n\nWould you like to view the report now?`,
       'Request Created',
       async () => {
-        // Navigate to report when "Yes" is clicked
         router.push({
           name: 'AcknowledgementReport',
-          params: { requestId: data.acknowledgement_request_id }
+          params: { requestId: data.acknowledgement_request_id },
         })
       },
       async () => {
-        // Just refresh policies when "No" is clicked
         await fetchPolicies()
       }
     )
   } else {
-    // Fallback: just refresh policies
     await fetchPolicies()
   }
 }
@@ -1971,6 +2067,46 @@ h1 {
     flex-direction: column;
     align-items: stretch;
     gap: 12px;
+  }
+}
+
+.policy-page-skeleton.policy-fwp-skeleton {
+  padding: 8px 0 24px;
+}
+.policy-fwp-skeleton .policy-skeleton-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.policy-fwp-skeleton .policy-skeleton-card {
+  height: 88px;
+  border-radius: 12px;
+  background: linear-gradient(90deg, #eef2f7 0%, #f8fafc 50%, #eef2f7 100%);
+  background-size: 200% 100%;
+  animation: policyFwpSkeletonPulse 1.35s ease infinite;
+}
+.policy-fwp-skeleton .policy-skeleton-table {
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #e8ecf2;
+}
+.policy-fwp-skeleton .policy-skeleton-row {
+  height: 48px;
+  border-bottom: 1px solid #eef2f7;
+  background: linear-gradient(90deg, #f4f6fa 0%, #fafbfd 50%, #f4f6fa 100%);
+  background-size: 200% 100%;
+  animation: policyFwpSkeletonPulse 1.35s ease infinite;
+}
+.policy-fwp-skeleton .policy-skeleton-row:last-child {
+  border-bottom: none;
+}
+@keyframes policyFwpSkeletonPulse {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
   }
 }
 </style>

@@ -170,24 +170,20 @@
 </template>
 
 <script>
-import apiService from '@/services/apiService.js'
 import { PopupService } from '@/modules/popus/popupService'
 import PopupModal from '@/modules/popus/PopupModal.vue'
-import { API_ENDPOINTS } from '../../config/api.js'
-import { complianceService } from '@/services/api.js'
-
-const axios = {
-  get: async (url, config = {}) => ({ data: await apiService.get(url, config.params || {}, { ...config, params: undefined }) }),
-  post: async (url, data, config = {}) => ({ data: await apiService.post(url, data, config) }),
-  put: async (url, data, config = {}) => ({ data: await apiService.put(url, data, config) }),
-  patch: async (url, data, config = {}) => ({ data: await apiService.patch(url, data, config) }),
-  delete: async (url, config = {}) => ({ data: await apiService.delete(url, config) })
-}
+import { useComplianceStore } from '@/stores/compliance'
+import { usePermissionStore } from '@/stores/permission'
 
 export default {
   name: 'ComplianceDetails',
   components: {
     PopupModal
+  },
+  setup() {
+    const complianceStore = useComplianceStore()
+    const permissionStore = usePermissionStore()
+    return { complianceStore, permissionStore }
   },
   props: {
     complianceId: {
@@ -214,8 +210,7 @@ export default {
     }
   },
   async mounted() {
-    await this.initializeUser();
-    await this.fetchComplianceDetails();
+    await Promise.all([this.initializeUser(), this.fetchComplianceDetails()]);
   },
   methods: {
     async initializeUser() {
@@ -223,12 +218,13 @@ export default {
         console.log('Initializing user and checking role...');
         
         // Get current user role
-        const response = await axios.get(API_ENDPOINTS.USER_ROLE);
-        console.log('User role API response:', response.data);
+        const responseData = await this.complianceStore.fetchUserRole({ background: true });
+        console.log('User role API response:', responseData);
         
-        if (response.data.success) {
-          this.currentUserId = response.data.user_id;
-          this.currentUserName = response.data.username || response.data.user_name || '';
+        if (responseData.success) {
+          this.permissionStore.setFromUserRoleResponse(responseData)
+          this.currentUserId = responseData.user_id;
+          this.currentUserName = responseData.username || responseData.user_name || '';
           
           // Store username in localStorage for fallback
           if (this.currentUserName) {
@@ -236,17 +232,19 @@ export default {
           }
           
           // Check specifically for "GRC Administrator" role
-          const userRole = response.data.role;
+          const userRole = responseData.role;
           console.log('User role received:', userRole);
           
-          // Only GRC Administrator should see the user dropdown
-          this.isGRCAdministrator = userRole === 'GRC Administrator';
+          // Use permissionStore gate instead of hard-coded role strings.
+          this.isGRCAdministrator =
+            this.permissionStore.can('compliance.details.adminReview') ||
+            this.permissionStore.can('compliance.review.manageAll');
           
           console.log('Is GRC Administrator:', this.isGRCAdministrator);
           
           this.userInitialized = true;
         } else {
-          console.error('User role API did not return success:', response.data);
+          console.error('User role API did not return success:', responseData);
           // Fallback for development/testing
           console.log('Using fallback user role for testing...');
           this.currentUserId = 2; // Default user ID
@@ -288,7 +286,7 @@ export default {
         }
 
         // Step 2: Always fetch full compliance record directly from the API
-        const compResp = await complianceService.getComplianceById(this.complianceId);
+        const compResp = await this.complianceStore.getComplianceById(this.complianceId);
         const compData = compResp?.data?.data || compResp?.data || null;
 
         if (!compData || (!compData.ComplianceId && !compData.compliance_id)) {
@@ -302,11 +300,12 @@ export default {
           return;
         }
 
-        // Step 3: Merge — DB data is authoritative for all compliance fields;
-        //         approvalMeta supplies workflow fields (ApprovedNot, ReviewerId, compliance_approval)
+        // Step 3: Merge — keep DB data for content fields, but preserve approval-task
+        // workflow metadata from session (ApprovedNot, ApprovalId, ReviewerId, etc.)
+        // so pending deactivation items still show Final Approval / Reject correctly.
         this.selectedApproval = {
-          ...approvalMeta,
           ...compData,
+          ...approvalMeta,
           ComplianceId: compData.ComplianceId || compData.compliance_id || this.complianceId,
           ExtractedData: {
             ...compData,
@@ -334,25 +333,24 @@ export default {
 
     getComplianceId(compliance) {
       if (!compliance) {
-        console.log('getComplianceId: No compliance provided, returning route complianceId:', this.complianceId);
         return this.complianceId;
       }
-      
-      console.log('getComplianceId: Checking compliance object:', {
-        ComplianceId: compliance.ComplianceId,
-        ApprovalId: compliance.ApprovalId,
-        routeComplianceId: this.complianceId
-      });
-      
-      if (compliance.ComplianceId) {
-        const result = typeof compliance.ComplianceId === 'object' ? compliance.ComplianceId.ComplianceId : compliance.ComplianceId;
-        console.log('getComplianceId: Found ComplianceId, returning:', result);
-        return result;
+      const extracted = compliance.ExtractedData || {};
+      const candidate =
+        extracted.compliance_id ??
+        extracted.ComplianceId ??
+        compliance.ComplianceId ??
+        null;
+      if (candidate != null && candidate !== '') {
+        return typeof candidate === 'object'
+          ? (candidate.ComplianceId ?? candidate.compliance_id ?? this.complianceId)
+          : candidate;
       }
-      
-      const result = compliance.ApprovalId || this.complianceId;
-      console.log('getComplianceId: Using ApprovalId or route ID, returning:', result);
-      return result;
+      return this.complianceId;
+    },
+    getApprovalId(compliance) {
+      if (!compliance) return null;
+      return compliance.ApprovalId || compliance.approval_id || null;
     },
 
     formatDate(dateString) {
@@ -415,6 +413,29 @@ export default {
     getFieldValue(key) {
       const extracted = this.selectedApproval?.ExtractedData || {};
       const topLevel = this.selectedApproval || {};
+
+      // Deactivation records may store an internal request identifier at top-level.
+      // For UI display, always prefer the canonical compliance identifier.
+      if (String(key) === 'Identifier' && extracted?.type === 'compliance_deactivation') {
+        const explicitComplianceIdentifier =
+          extracted.compliance_identifier ||
+          extracted.ComplianceIdentifier ||
+          null;
+        if (explicitComplianceIdentifier) return explicitComplianceIdentifier;
+
+        const candidate =
+          extracted.Identifier ||
+          extracted.identifier ||
+          topLevel.Identifier ||
+          null;
+        if (typeof candidate === 'string' && candidate.startsWith('COMP-DEACTIVATE-')) {
+          const withoutPrefix = candidate.replace(/^COMP-DEACTIVATE-/, '');
+          // Newer request IDs may append "-<ComplianceId>" at the end.
+          return withoutPrefix.replace(/-\d+$/, '');
+        }
+        if (candidate != null) return candidate;
+      }
+
       if (extracted[key] !== undefined) return extracted[key];
       if (topLevel[key] !== undefined) return topLevel[key];
 
@@ -432,63 +453,78 @@ export default {
       try {
         const frameworkId = this.getFieldValue('FrameworkId');
         const policyId = this.getFieldValue('PolicyId');
-        const actualComplianceId = this.selectedApproval?.ExtractedData?.ComplianceId;
+        const subPolicyId = this.getFieldValue('SubPolicy');
 
-        // ── 1. Fetch ComplianceTitle from the actual Compliance record ──
-        if (actualComplianceId) {
+        const fwName = this.getFieldValue('FrameworkName');
+        const polName = this.getFieldValue('PolicyName');
+        const subName = this.getFieldValue('SubPolicyName');
+
+        if (frameworkId && fwName) this.frameworkNameById[frameworkId] = fwName;
+        if (policyId && polName) this.policyNameById[policyId] = polName;
+        if (subPolicyId && subName) this.subPolicyNameById[subPolicyId] = subName;
+
+        // API get_compliance_details already returns FrameworkName, PolicyName, SubPolicyName — skip heavy list/public calls.
+        if (fwName && polName && subName) {
+          return;
+        }
+
+        const routeCid = String(this.complianceId);
+        const rawCid =
+          this.selectedApproval?.ExtractedData?.ComplianceId ?? this.selectedApproval?.ComplianceId;
+        const actualComplianceId =
+          rawCid != null && typeof rawCid === 'object' ? rawCid.ComplianceId : rawCid;
+        const actualIdStr = actualComplianceId != null ? String(actualComplianceId) : '';
+
+        const hasTitle = !!(this.getFieldValue('ComplianceTitle') || '').trim();
+        if (!hasTitle && actualIdStr && actualIdStr !== routeCid) {
           try {
-            const compResp = await complianceService.getComplianceById(actualComplianceId);
-            const compData = compResp?.data;
-            if (compData) {
-              const title = compData.ComplianceTitle || compData.compliance_title || null;
-              if (title) {
-                this.selectedApproval = {
-                  ...this.selectedApproval,
-                  ExtractedData: {
-                    ...this.selectedApproval.ExtractedData,
-                    ComplianceTitle: title
-                  }
-                };
-              }
+            const compResp = await this.complianceStore.getComplianceById(actualIdStr);
+            const compData = compResp?.data?.data ?? compResp?.data;
+            const title = compData?.ComplianceTitle || compData?.compliance_title || null;
+            if (title) {
+              this.selectedApproval = {
+                ...this.selectedApproval,
+                ExtractedData: {
+                  ...this.selectedApproval.ExtractedData,
+                  ComplianceTitle: title,
+                },
+              };
             }
           } catch (e) {
             console.warn('Could not fetch ComplianceTitle from DB:', e);
           }
         }
 
-        // ── 2. Resolve Framework name ──
-        if (frameworkId && !this.frameworkNameById[frameworkId]) {
-          const frameworksResp = await complianceService.getComplianceFrameworks();
+        if (frameworkId && !fwName && !this.frameworkNameById[frameworkId]) {
+          const frameworksResp = await this.complianceStore.getComplianceFrameworks();
           const frameworks = Array.isArray(frameworksResp?.data)
             ? frameworksResp.data
-            : (frameworksResp?.data?.frameworks || frameworksResp?.data?.data || []);
-          frameworks.forEach(fw => {
+            : frameworksResp?.data?.frameworks || frameworksResp?.data?.data || [];
+          frameworks.forEach((fw) => {
             const id = fw.FrameworkId || fw.id;
             const name = fw.FrameworkName || fw.name || fw.framework_name;
             if (id && name) this.frameworkNameById[id] = name;
           });
         }
 
-        // ── 3. Resolve Policy name ──
-        if (frameworkId) {
-          const policiesResp = await complianceService.getCompliancePolicies(frameworkId);
+        if (frameworkId && !polName) {
+          const policiesResp = await this.complianceStore.getCompliancePolicies(frameworkId);
           const policiesArr = Array.isArray(policiesResp?.data)
             ? policiesResp.data
-            : (policiesResp?.data?.policies || []);
-          policiesArr.forEach(pol => {
+            : policiesResp?.data?.policies || [];
+          policiesArr.forEach((pol) => {
             const id = pol.PolicyId || pol.id;
             const name = pol.PolicyName || pol.name;
             if (id && name) this.policyNameById[id] = name;
           });
         }
 
-        // ── 4. Resolve SubPolicy name ──
-        if (policyId) {
-          const subPoliciesResp = await complianceService.getComplianceSubPolicies(policyId);
+        if (policyId && !subName) {
+          const subPoliciesResp = await this.complianceStore.getComplianceSubPolicies(policyId);
           const subPoliciesArr = Array.isArray(subPoliciesResp?.data)
             ? subPoliciesResp.data
-            : (subPoliciesResp?.data?.subpolicies || subPoliciesResp?.data?.data || []);
-          subPoliciesArr.forEach(sp => {
+            : subPoliciesResp?.data?.subpolicies || subPoliciesResp?.data?.data || [];
+          subPoliciesArr.forEach((sp) => {
             const id = sp.SubPolicyId || sp.id;
             const name = sp.SubPolicyName || sp.name;
             if (id && name) this.subPolicyNameById[id] = name;
@@ -645,8 +681,9 @@ export default {
       console.log('=== APPROVE COMPLIANCE CALLED ===');
       console.log('Selected approval:', this.selectedApproval);
       
-      if (!this.selectedApproval || !this.getComplianceId(this.selectedApproval)) {
+      if (!this.selectedApproval || !this.getApprovalId(this.selectedApproval)) {
         console.error('No compliance selected for approval');
+        PopupService.warning('Approval context missing. Open this item from Compliance Approver list and try again.', 'Missing Approval');
         return;
       }
 
@@ -662,8 +699,8 @@ export default {
 
     proceedWithComplianceApproval() {
       console.log('=== PROCEED WITH COMPLIANCE APPROVAL ===');
-      const complianceId = this.getComplianceId(this.selectedApproval);
-      console.log('Compliance ID:', complianceId);
+      const approvalId = this.getApprovalId(this.selectedApproval);
+      console.log('Approval ID:', approvalId);
       
       // Use the same approach as ComplianceApprover - submit compliance review with approval
       const reviewData = {
@@ -689,7 +726,7 @@ export default {
       console.log('Review data for approval:', reviewData);
       
       // Submit compliance review using the compliance service
-      complianceService.submitComplianceReview(complianceId, reviewData)
+      this.complianceStore.submitComplianceReviewCompat(approvalId, reviewData)
         .then(response => {
           console.log('Compliance approved successfully:', response.data);
           
@@ -744,13 +781,14 @@ export default {
 
     // Helper method to submit compliance review
     submitComplianceReview(approved, remarks = '') {
-      if (!this.selectedApproval || !this.getComplianceId(this.selectedApproval)) {
+      if (!this.selectedApproval || !this.getApprovalId(this.selectedApproval)) {
         console.error('No compliance selected for review submission');
+        PopupService.warning('Approval context missing. Open this item from Compliance Approver list and try again.', 'Missing Approval');
         return;
       }
       
-      const complianceId = this.getComplianceId(this.selectedApproval);
-      console.log(`Submitting compliance review for compliance ${complianceId}`, {
+      const approvalId = this.getApprovalId(this.selectedApproval);
+      console.log(`Submitting compliance review for approval ${approvalId}`, {
         approved: approved,
         remarks: remarks
       });
@@ -796,7 +834,7 @@ export default {
       }
       
       // Submit compliance review using the compliance service
-      complianceService.submitComplianceReview(complianceId, reviewData)
+      this.complianceStore.submitComplianceReviewCompat(approvalId, reviewData)
         .then(response => {
           console.log('Compliance review submitted successfully:', response.data);
           
@@ -860,8 +898,9 @@ export default {
       console.log('Setting isSubmittingRejection to true');
       
       // For direct compliance rejection, use submitComplianceReview with rejection reason
-      if (!this.selectedApproval || !this.getComplianceId(this.selectedApproval)) {
+      if (!this.selectedApproval || !this.getApprovalId(this.selectedApproval)) {
         console.error('No compliance selected for rejection');
+        PopupService.warning('Approval context missing. Open this item from Compliance Approver list and try again.', 'Missing Approval');
         this.cancelRejection();
         return;
       }
@@ -897,24 +936,27 @@ export default {
     handleError(error, context) {
       console.error(`Error ${context}:`, error);
       let errorMessage = 'An unexpected error occurred';
-      
+
       if (error.response) {
-        // The server responded with a status code outside of 2xx range
-        if (error.response.data && error.response.data.error) {
-          errorMessage = error.response.data.error;
-        } else if (error.response.data && typeof error.response.data === 'string') {
-          errorMessage = error.response.data;
+        const data = error.response.data;
+        // Prefer specific backend messages and avoid rendering booleans like "true".
+        if (data && typeof data === 'object') {
+          errorMessage = data.error || data.detail || data.message || `Server error: ${error.response.status}`;
+        } else if (typeof data === 'string') {
+          errorMessage = data;
         } else {
           errorMessage = `Server error: ${error.response.status}`;
         }
       } else if (error.request) {
-        // The request was made but no response was received
         errorMessage = 'No response from server. Please check your connection.';
       } else {
-        // Something happened in setting up the request
         errorMessage = error.message || errorMessage;
       }
-      
+
+      if (error.response?.status === 409 && /no pending user submission/i.test(String(errorMessage))) {
+        errorMessage = 'This item is already processed or no longer pending review.';
+      }
+
       PopupService.error(`Error ${context}: ${errorMessage}`, 'Error');
       return errorMessage;
     }
@@ -1071,48 +1113,25 @@ export default {
     // Computed property to get the correct compliance status
     correctComplianceStatus() {
       if (!this.selectedApproval) return 'Unknown';
-      
-      console.log('=== COMPLIANCE STATUS DEBUG ===');
-      console.log('Selected approval:', this.selectedApproval);
-      console.log('ApprovedNot:', this.selectedApproval.ApprovedNot);
-      console.log('ExtractedData:', this.selectedApproval.ExtractedData);
-      console.log('compliance_approval:', this.selectedApproval.ExtractedData?.compliance_approval);
-      
-      // CRITICAL: Check for resubmitted items FIRST before checking ApprovedNot
-      // For resubmitted compliances, ApprovedNot might still be false from the previous rejection
-      // but inResubmission flag indicates it's now pending review again
-      const isResubmitted = this.selectedApproval.ExtractedData?.compliance_approval?.inResubmission === true;
-      console.log('isResubmitted (early check):', isResubmitted);
-      
+
+      const isResubmitted =
+        this.selectedApproval.ExtractedData?.compliance_approval?.inResubmission === true;
       if (isResubmitted) {
-        console.log('✅ RESUBMITTED: Overriding ApprovedNot status - returning Under Review');
         return 'Under Review';
       }
-      
-      // Check ApprovedNot only if NOT resubmitted
       if (this.selectedApproval.ApprovedNot === true) {
-        console.log('Status: Approved (from ApprovedNot)');
         return 'Approved';
       }
       if (this.selectedApproval.ApprovedNot === false) {
-        console.log('Status: Rejected (from ApprovedNot)');
         return 'Rejected';
       }
-      
-      // Additional check: if ApprovedNot is null (pending state) and we have rejection remarks,
-      // this could be a resubmitted item where the flag wasn't properly set
       if (this.selectedApproval.ApprovedNot === null) {
         const hasRejectionRemarks = this.selectedApproval.ExtractedData?.compliance_approval?.remarks;
         if (hasRejectionRemarks) {
-          console.log('✅ Found pending compliance with rejection remarks - likely resubmitted, returning Under Review status');
           return 'Under Review';
         }
       }
-      
-      // Fallback to ExtractedData.Status
-      const fallbackStatus = this.selectedApproval.ExtractedData?.Status || 'Under Review';
-      console.log('Using fallback status:', fallbackStatus);
-      return fallbackStatus;
+      return this.selectedApproval.ExtractedData?.Status || 'Under Review';
     },
 
     // Computed property to check if current user is the reviewer
@@ -1191,59 +1210,31 @@ export default {
       
       // Only allow review actions if the user is specifically assigned as the reviewer
       // AND is not the creator of the compliance
-      const canPerform = this.isCurrentUserReviewerComputed && !this.isCurrentUserCreatorComputed;
-      console.log('canPerformReviewActionsComputed:', {
-        isReviewer: this.isCurrentUserReviewerComputed,
-        isCreator: this.isCurrentUserCreatorComputed,
-        canPerform: canPerform,
-        approvalId: this.selectedApproval.ApprovalId,
-        ApprovedNot: this.selectedApproval.ApprovedNot,
-        isResubmitted: this.isResubmittedCompliance,
-        correctStatus: this.correctComplianceStatus
-      });
-      return canPerform;
+      return this.isCurrentUserReviewerComputed && !this.isCurrentUserCreatorComputed;
     },
 
     // Computed property to check if this is a resubmitted compliance
     isResubmittedCompliance() {
       if (!this.selectedApproval || !this.selectedApproval.ExtractedData) return false;
-      
-      const isResubmitted = this.selectedApproval.ExtractedData?.compliance_approval?.inResubmission === true;
-      
-      // CRITICAL: Check for resubmitted compliance by looking at the inResubmission flag
-      if (isResubmitted) {
-        console.log('✅ isResubmittedCompliance: Found inResubmission=true');
+
+      if (this.selectedApproval.ExtractedData?.compliance_approval?.inResubmission === true) {
         return true;
       }
-      
-      // Additional check: if ApprovedNot is null (pending) and we have rejection remarks,
-      // this is likely a resubmitted compliance
       if (this.selectedApproval.ApprovedNot === null) {
         const hasRejectionRemarks = this.selectedApproval.ExtractedData?.compliance_approval?.remarks;
         if (hasRejectionRemarks && hasRejectionRemarks.trim().length > 0) {
-          console.log('✅ isResubmittedCompliance: Found pending compliance with rejection remarks - likely resubmitted');
           return true;
         }
       }
-      
-      console.log('❌ isResubmittedCompliance: Not a resubmitted compliance');
       return false;
     },
 
     // Computed property to check if compliance has rejection remarks
     hasRejectionRemarks() {
       if (!this.selectedApproval || !this.selectedApproval.ExtractedData) return false;
-      
+
       const remarks = this.selectedApproval.ExtractedData?.compliance_approval?.remarks;
-      const hasRemarks = remarks && remarks.trim().length > 0;
-      
-      console.log('hasRejectionRemarks check:', {
-        remarks: remarks,
-        hasRemarks: hasRemarks,
-        approvalId: this.selectedApproval.ApprovalId
-      });
-      
-      return hasRemarks;
+      return !!(remarks && remarks.trim().length > 0);
     },
 
     // Computed property to check if review can be submitted

@@ -173,7 +173,7 @@
                     <div v-for="policy in popupData.policies" :key="policy.PolicyId" class="policy-item">
                       <div class="policy-info">
                         <h5 class="policy-name">{{ policy.PolicyName }}</h5>
-                        <p class="policy-description">{{ getPolicyDescription(policy.PolicyName) }}</p>
+                        <p class="policy-description">{{ getPolicyDescription(policy) }}</p>
                         <div class="policy-status-badge" :class="policy.Status ? policy.Status.toLowerCase().replace(' ', '-') : ''">
                           {{ policy.Status || 'N/A' }}
                         </div>
@@ -1262,6 +1262,7 @@ import { useRouter } from 'vue-router';
 import { useAppDataStore } from '@/stores/appData';
 import { useFrameworkStore } from '@/stores/framework';
 import { useHomepageStore } from '@/stores/homepage';
+import { useIncidentStore } from '@/stores/incident';
 import AOS from 'aos';
 import 'aos/dist/aos.css';
 import dashboardService from '@/services/dashboardService';
@@ -1394,7 +1395,9 @@ const handleResize = () => {
 
 // ── Stale-while-revalidate: pre-populate from cache so re-visits are instant ──
 // These are synchronous reads; no API calls happen here.
-const _initFrameworkId = frameworkStore.selectedFrameworkId || null;
+const _currentFrameworkUserId = frameworkStore.getCurrentUserContextId?.() ?? null;
+const _storeScopedToCurrentUser = frameworkStore.userContextId === _currentFrameworkUserId;
+const _initFrameworkId = _storeScopedToCurrentUser ? (frameworkStore.selectedFrameworkId || null) : null;
 const _initCacheKey = _initFrameworkId && _initFrameworkId !== 'all' ? String(_initFrameworkId) : 'all';
 const _initHomepageData = homepageStore.getHomepageData(_initCacheKey);
 const _initFrameworks = Array.isArray(frameworkStore.frameworks) && frameworkStore.frameworks.length > 0
@@ -2355,7 +2358,7 @@ const fetchPolicyMetrics = async () => {
           activePolicies: data.applied?.count || 0,
           approvalRate: Math.round((data.applied?.count || 0) / ((data.applied?.count || 0) + (data.in_progress?.count || 0) + (data.pending?.count || 0)) * 100) || 0,
           totalPolicies: (data.applied?.count || 0) + (data.in_progress?.count || 0) + (data.pending?.count || 0),
-          avgApprovalTime: 3.2
+          avgApprovalTime: 0
         };
         // Cache the result
         homepageDataService.setModuleMetrics('policyMetrics', policyMetrics.value);
@@ -2368,7 +2371,7 @@ const fetchPolicyMetrics = async () => {
           activePolicies: response.data.active_policies || 0,
           approvalRate: response.data.approval_rate || 0,
           totalPolicies: response.data.total_policies || 0,
-          avgApprovalTime: response.data.avg_approval_time || 3.2
+          avgApprovalTime: response.data.avg_approval_time ?? 0
         };
         // Cache the result
         homepageDataService.setModuleMetrics('policyMetrics', policyMetrics.value);
@@ -2378,12 +2381,12 @@ const fetchPolicyMetrics = async () => {
     console.error('Error fetching policy metrics:', error);
     // Only set default values if no data exists from unified endpoint
     if (!homepageData.value || !homepageData.value.moduleMetrics || !homepageData.value.moduleMetrics.policy) {
-    policyMetrics.value = {
-      activePolicies: 7,
-      approvalRate: 78,
-      totalPolicies: 7,
-      avgApprovalTime: 14
-    };
+      policyMetrics.value = {
+        activePolicies: 0,
+        approvalRate: 0,
+        totalPolicies: 0,
+        avgApprovalTime: 0
+      };
     }
   }
 };
@@ -2414,7 +2417,7 @@ const fetchComplianceMetrics = async () => {
         activeCompliances: summary.status_counts?.active_compliance || 0,
         approvalRate: summary.approval_rate || 0,
         totalFindings: summary.total_findings || 0,
-        underReview: summary.status_counts?.under_review || 1
+        underReview: summary.status_counts?.under_review ?? 0
       };
       // Cache the result
       homepageDataService.setModuleMetrics('complianceMetrics', complianceMetrics.value);
@@ -2423,12 +2426,12 @@ const fetchComplianceMetrics = async () => {
     console.error('Error fetching compliance metrics:', error);
     // Only set default values if no data exists from unified endpoint
     if (!homepageData.value || !homepageData.value.moduleMetrics || !homepageData.value.moduleMetrics.compliance) {
-    complianceMetrics.value = {
-      activeCompliances: 22,
-      approvalRate: 82,
-      totalFindings: 15,
-      underReview: 3
-    };
+      complianceMetrics.value = {
+        activeCompliances: 0,
+        approvalRate: 0,
+        totalFindings: 0,
+        underReview: 0
+      };
     }
   }
 };
@@ -2477,17 +2480,17 @@ const fetchRiskMetrics = async () => {
     console.error('Error fetching risk metrics:', error);
     // Only set default values if no data exists from unified endpoint
     if (!homepageData.value || !homepageData.value.moduleMetrics || !homepageData.value.moduleMetrics.risk) {
-    riskMetrics.value = {
-      totalRisks: 18,
-      acceptedRisks: 8,
-      mitigatedRisks: 6,
-        inProgressRisks: 4,
-        total: 18,
-        active: 18,
+      riskMetrics.value = {
+        totalRisks: 0,
+        acceptedRisks: 0,
+        mitigatedRisks: 0,
+        inProgressRisks: 0,
+        total: 0,
+        active: 0,
         inactive: 0,
-        accepted: 8,
-        mitigated: 6,
-        inProgress: 4
+        accepted: 0,
+        mitigated: 0,
+        inProgress: 0
       };
     }
   }
@@ -2520,11 +2523,11 @@ const fetchAuditorMetrics = async () => {
     if (response.data) {
       auditorMetrics.value = {
         completionRate: response.data.current_month_rate || 0,
-        totalAudits: response.data.total_current_month || 43,
+        totalAudits: response.data.total_current_month ?? 0,
         active: response.data.active || 0,
         inactive: response.data.inactive || 0,
-        openAudits: response.data.open_this_week || 4,
-        completedAudits: response.data.this_week_count || 25
+        openAudits: response.data.open_this_week ?? 0,
+        completedAudits: response.data.this_week_count ?? 0
       };
       // Cache the result
       homepageDataService.setModuleMetrics('auditorMetrics', auditorMetrics.value);
@@ -2533,30 +2536,28 @@ const fetchAuditorMetrics = async () => {
     console.error('Error fetching auditor metrics:', error);
     // Only set default values if no data exists from unified endpoint
     if (!homepageData.value || !homepageData.value.moduleMetrics || !homepageData.value.moduleMetrics.audit) {
-    auditorMetrics.value = {
-      completionRate: 78,
-      totalAudits: 15,
-        active: 15,
+      auditorMetrics.value = {
+        completionRate: 0,
+        totalAudits: 0,
+        active: 0,
         inactive: 0,
-      openAudits: 3,
-      completedAudits: 12
-    };
+        openAudits: 0,
+        completedAudits: 0
+      };
     }
   }
 };
 
-// Get policy description based on policy name
-const getPolicyDescription = (policyName) => {
-  const descriptions = {
-    'Capital Adequacy Policy': 'Establishes guidelines for maintaining sufficient capital levels to cover potential losses and meet Basel 3 regulatory requirements.',
-    'Liquidity Risk Management Policy': 'Ensures adequate liquidity to meet short and long-term obligations and withstand periods of financial stress as per Basel 3.',
-    'Leverage Ratio Policy': 'Maintains leverage ratio requirements to limit excessive leverage and ensure financial stability under Basel 3 framework.',
-    'Risk Disclosure & Transparency Policy': 'Ensures comprehensive risk disclosure and transparency in financial reporting and regulatory submissions.',
-    'Stress Testing & Risk Management Policy': 'Outlines procedures for testing financial resilience under various adverse economic scenarios and risk management.',
-    'Counterparty Credit Risk Policy': 'Establishes guidelines for assessing and mitigating risks associated with business counterparties and credit exposure.'
-  };
-  
-  return descriptions[policyName] || 'Policy description not available.';
+// Policy description from API only (no static name→text map)
+const getPolicyDescription = (policy) => {
+  if (!policy || typeof policy !== 'object') return '';
+  const desc =
+    policy.PolicyDescription ??
+    policy.policyDescription ??
+    policy.description ??
+    policy.PolicyDescriptionText;
+  if (desc != null && String(desc).trim()) return String(desc).trim();
+  return '';
 };
 
 
@@ -2566,7 +2567,8 @@ let isFetchingHomepageData = false;
 // ====================================================================
 // NEW: Fetch dynamic homepage data from unified endpoint
 // ====================================================================
-const fetchDynamicHomepageData = async () => {
+const fetchDynamicHomepageData = async (options = {}) => {
+  const { forceRefresh = false, bypassCache = false } = options;
   // Prevent concurrent calls
   if (isFetchingHomepageData) {
     console.log('⏸️ [HomeView] fetchDynamicHomepageData already in progress, skipping...');
@@ -2589,18 +2591,33 @@ const fetchDynamicHomepageData = async () => {
       !selectedFrameworkId.value || selectedFrameworkId.value === 'all';
     const cacheKey = isAllFrameworksView ? 'all' : String(selectedFrameworkId.value);
 
+    if (forceRefresh) {
+      try {
+        homepageStore.invalidate(cacheKey);
+        homepageDataService.clearHomepageDataCache(cacheKey);
+        console.log(`🧹 [HomeView] Force refresh enabled - cleared cache for key="${cacheKey}"`);
+      } catch (cacheError) {
+        console.warn('⚠️ [HomeView] Failed clearing cache during force refresh:', cacheError?.message || cacheError);
+      }
+    }
+
+    const useCache = !forceRefresh && !bypassCache;
+    if (bypassCache) {
+      console.log(`🔄 [HomeView] Bypassing cache for key="${cacheKey}" to refresh in background`);
+    }
+
     // ── Pinia cache check (fast path on re-visit) ────────────────────────
-    const piniaFresh = homepageStore.getFreshHomepageData(cacheKey);
-    const piniaAny = homepageStore.getHomepageData(cacheKey);
-    if (piniaFresh) {
+    const piniaFresh = useCache ? homepageStore.getFreshHomepageData(cacheKey) : null;
+    const piniaAny = useCache ? homepageStore.getHomepageData(cacheKey) : null;
+    if (useCache && piniaFresh) {
       console.log(`🏠 [Pinia] Serving homepage data from store cache (key="${cacheKey}", age=${homepageStore.cacheAgeSeconds(cacheKey)}s)`);
       response = piniaFresh;
       sourceTag = 'pinia-fresh';
-    } else if (piniaAny) {
+    } else if (useCache && piniaAny) {
       console.log(`🏠 [Pinia] Serving homepage data from store cache (key="${cacheKey}", stale-but-valid)`); 
       response = piniaAny;
       sourceTag = 'pinia-cache';
-    } else if (homepageDataService.hasHomepageDataCache(cacheKey)) {
+    } else if (useCache && homepageDataService.hasHomepageDataCache(cacheKey)) {
       console.log(`🏠 [HomeView] Using in-memory service cache for framework: ${cacheKey}`);
       response = homepageDataService.getHomepageData(cacheKey);
       sourceTag = 'service-cache';
@@ -3222,6 +3239,8 @@ const checkSelectedFramework = async () => {
   }
   selectedFrameworkRequestPromise = (async () => {
   try {
+    frameworkStore.ensureUserScopedState();
+
     // Prefer already-loaded global selection from Pinia to avoid a repeat API call
     if (frameworkStore.selectedFrameworkId !== undefined && frameworkStore.selectedFrameworkId !== null) {
       selectedFrameworkId.value = frameworkStore.selectedFrameworkId || 'all';
@@ -3230,13 +3249,18 @@ const checkSelectedFramework = async () => {
     }
 
     console.log('🔍 DEBUG: Checking currently selected framework...');
-    const response = await axios.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED);
+    await frameworkStore.loadFrameworkFromSession();
+    const response = {
+      data: {
+        success: true,
+        frameworkId: frameworkStore.selectedFrameworkId,
+      },
+    };
     console.log('📊 DEBUG: Selected framework response:', response.data);
     
-    if (response.data && response.data.success && response.data.frameworkId) {
+    if (response.data && response.data.frameworkId) {
       selectedFrameworkId.value = response.data.frameworkId;
       console.log('✅ DEBUG: Previously selected framework found:', response.data.frameworkId);
-      console.log('👤 DEBUG: Associated user ID:', response.data.userId);
     } else {
       console.log('ℹ️ DEBUG: No previously selected framework found - showing "All" as active');
       selectedFrameworkId.value = 'all';
@@ -3516,7 +3540,7 @@ watch(selectedFrameworkId, async (newFrameworkId, oldFrameworkId) => {
       console.log('🔄 ================================================');
       console.log('✅ Success:', success);
       
-      // If unified endpoint fails, run full fallback + synthesize homepageData
+      // If unified endpoint fails: restore Pinia (API-backed cache), fetch per-module metrics from APIs, optionally retry aggregate homepage — never fabricate homepageData.
       if (!success) {
         const watchKey = (!selectedFrameworkId.value || selectedFrameworkId.value === 'all')
           ? 'all'
@@ -3528,7 +3552,7 @@ watch(selectedFrameworkId, async (newFrameworkId, oldFrameworkId) => {
           console.log(`✅ [HomeView] Watch fallback skipped — restored from Pinia cache (${watchKey})`);
           return;
         }
-        console.log('⚠️ Unified endpoint failed - running full fallback endpoints');
+        console.log('⚠️ Unified endpoint failed - running per-module metric endpoints');
         await Promise.all([
           fetchPolicyMetrics(),
           fetchComplianceMetrics(),
@@ -3538,71 +3562,18 @@ watch(selectedFrameworkId, async (newFrameworkId, oldFrameworkId) => {
           // fetchPolicyData(),
         ]);
 
-        // Synthesize homepageData so hero + control-domain sections render
-        if (!homepageData.value) {
-          const isAll = isAllFrameworksSelected.value;
-          // For all-frameworks view, retry aggregate endpoint once before synthesis.
-          if (isAll) {
-            try {
-              const retryAll = await homepageDataService.getAllFrameworksData();
-              if (retryAll?.success) {
-                homepageData.value = retryAll;
-                homepageStore.setHomepageData('all', retryAll);
-                homeDataSource.value = 'unified-api-retry';
-                console.log('✅ [HomeView] Watch fallback recovered all-frameworks data from unified retry');
-              }
-            } catch (e) {
-              console.warn('⚠️ [HomeView] Watch fallback unified retry failed, using synthesized data');
+        if (!homepageData.value && isAllFrameworksSelected.value) {
+          try {
+            const retryAll = await homepageDataService.getAllFrameworksData();
+            if (retryAll?.success) {
+              homepageData.value = retryAll;
+              homepageStore.setHomepageData('all', retryAll);
+              homeDataSource.value = 'unified-api-retry';
+              console.log('✅ [HomeView] Watch fallback recovered all-frameworks data from unified retry');
             }
+          } catch (e) {
+            console.warn('⚠️ [HomeView] Watch fallback unified retry failed:', e?.message || e);
           }
-          if (homepageData.value) {
-            return;
-          }
-          const fallbackName = isAll ? 'All Frameworks' : (currentFrameworkContent.value?.frameworkName || 'Framework');
-          const totalCRaw = complianceMetrics.value.totalFindings || 0;
-          const activeC = complianceMetrics.value.activeCompliances || 0;
-          const totalC = Math.max(totalCRaw, activeC, 0);
-          const iPct = totalC > 0 ? Math.round((Math.min(activeC, totalC) / totalC) * 100) : 0;
-          const tRisks = riskMetrics.value.totalRisks || riskMetrics.value.total || 0;
-          const mRisks = riskMetrics.value.mitigatedRisks || riskMetrics.value.mitigated || 0;
-          const aPols = policyMetrics.value.activePolicies || 0;
-          const tPols = policyMetrics.value.totalPolicies || aPols;
-          homepageData.value = {
-            success: true,
-            _synthetic: true,
-            framework: { id: isAll ? null : selectedFrameworkId.value, name: fallbackName, description: '', category: isAll ? 'All' : fallbackName },
-            hero: {
-              stats: {
-                totalPoliciesAll: tPols, activePolicies: aPols,
-                totalCompliancesAll: totalC, activeCompliances: activeC, compliantCompliances: 0,
-                totalRisks: tRisks, mitigatedRisks: mRisks,
-                totalIncidents: incidentMetrics.value.totalIncidents || incidentMetrics.value.total || 0,
-                totalAudits: auditorMetrics.value.totalAudits || 0,
-              },
-              previewMetrics: {
-                implementationProgressPercent: iPct,
-                remainingControlsCount: Math.max(0, totalC - activeC),
-                remainingControlsPercent: totalC > 0 ? Math.round(((totalC - activeC) / totalC) * 100) : 0,
-                totalControlsCount: totalC,
-                implementedControlsCount: activeC,
-                riskCoveragePercent: totalC > 0 ? Math.min(100, Math.round((tRisks / totalC) * 100)) : 0,
-                totalActivePoliciesCount: aPols,
-                nextAudit: null, nextAuditTitle: null,
-                compliancePercentage: iPct,
-                remainingControls: Math.max(0, totalC - activeC),
-                policiesLabel: isAll ? 'Total Policies' : 'Security Policies',
-                policiesValue: tPols,
-              },
-            },
-            policies: policyData.value || { applied: {policies:[],count:0,percentage:0}, in_progress: {policies:[],count:0,percentage:0}, pending: {policies:[],count:0,percentage:0}, rejected: {policies:[],count:0,percentage:0} },
-            frameworks: [],
-            moduleMetrics: { policy: policyMetrics.value, compliance: complianceMetrics.value, risk: riskMetrics.value, incident: incidentMetrics.value, audit: auditorMetrics.value },
-          };
-          console.log('✅ [HomeView] Synthesized homepageData from watch fallback metrics');
-          homeDataSource.value = 'fallback-synth';
-          // Persist synthesized data to Pinia
-          const watchSynthKey = isAll ? 'all' : String(selectedFrameworkId.value ?? 'all');
-          homepageStore.setHomepageData(watchSynthKey, homepageData.value);
         }
       }
       
@@ -3631,11 +3602,12 @@ const selectAllFrameworks = async () => {
       homepageData.value = null;
       console.log('🧹 [HomeView] Cleared stale single-framework homepageData');
     }
-    // Always check Pinia cache for 'all' — if fresh, restore it immediately
+    // Always check Pinia cache for 'all' — restore immediately for fast UX.
     const piniaAllData = homepageStore.getFreshHomepageData('all');
     if (piniaAllData) {
       console.log(`🏠 [Pinia] Restoring All Frameworks data from store cache (age=${homepageStore.cacheAgeSeconds('all')}s)`);
       homepageData.value = piniaAllData;
+      homeDataSource.value = 'pinia-cache';
     }
 
     // Set "all" as selected framework in UI
@@ -3656,6 +3628,23 @@ const selectAllFrameworks = async () => {
     
     // Reset Pinia framework state (also clears backend session)
     await frameworkStore.resetFramework();
+
+    // Same behavior as single-framework view:
+    // 1) Fast render from Pinia cache (if present)
+    // 2) Background API refresh to update latest data.
+    if (piniaAllData) {
+      setTimeout(() => {
+        fetchDynamicHomepageData({ bypassCache: true }).catch((refreshError) => {
+          console.warn('⚠️ [HomeView] Background refresh for all frameworks failed:', refreshError?.message || refreshError);
+        });
+      }, 0);
+    } else {
+      // First-time all-frameworks selection with no cache available: fetch now.
+      const refreshed = await fetchDynamicHomepageData({ bypassCache: true });
+      if (!refreshed) {
+        console.warn('⚠️ [HomeView] Initial all-frameworks load did not complete successfully');
+      }
+    }
     
     console.log('✅ DEBUG: All frameworks set in Pinia and backend session cleared');
     console.log('⏳ Waiting for watch() to trigger data fetch...');
@@ -3721,7 +3710,7 @@ const fetchAllDashboardMetrics = async () => {
     if (piniaFallbackData?.success) {
       homepageData.value = piniaFallbackData;
       homeDataSource.value = 'pinia-cache';
-      console.log(`✅ [HomeView] Unified failed — using Pinia cache instead of fallback synthesis (${fallbackKey})`);
+      console.log(`✅ [HomeView] Unified failed — using Pinia cache (${fallbackKey})`);
       return;
     }
 
@@ -3747,116 +3736,19 @@ const fetchAllDashboardMetrics = async () => {
       console.log('✅ DEBUG: Public dashboard metrics fetched successfully (fallback mode)');
     }
 
-    // ====================================================================
-    // SYNTHESIZE homepageData from fallback metrics so hero card + control
-    // domains section can render even when the unified endpoint failed.
-    // ====================================================================
-    if (!homepageData.value) {
-      console.log('🔧 [HomeView] Synthesizing homepageData from fallback metrics...');
-      const isAll = isAllFrameworksSelected.value;
-      // For all-frameworks view, prefer one direct retry of unified aggregate endpoint
-      // before synthesizing from module fallbacks (which can be framework-scoped).
-      if (isAll) {
-        try {
-          const retryAll = await homepageDataService.getAllFrameworksData();
-          if (retryAll?.success) {
-            homepageData.value = retryAll;
-            homepageStore.setHomepageData('all', retryAll);
-            homeDataSource.value = 'unified-api-retry';
-            console.log('✅ [HomeView] Recovered all-frameworks data from unified retry');
-          }
-        } catch (e) {
-          console.warn('⚠️ [HomeView] Unified all-frameworks retry failed, using synthesized fallback');
+    // If unified failed: one aggregate API retry when "all frameworks" — no synthetic homepageData.
+    if (!homepageData.value && isAllFrameworksSelected.value) {
+      try {
+        const retryAll = await homepageDataService.getAllFrameworksData();
+        if (retryAll?.success) {
+          homepageData.value = retryAll;
+          homepageStore.setHomepageData('all', retryAll);
+          homeDataSource.value = 'unified-api-retry';
+          console.log('✅ [HomeView] Recovered all-frameworks data from unified retry');
         }
+      } catch (e) {
+        console.warn('⚠️ [HomeView] Unified all-frameworks retry failed:', e?.message || e);
       }
-      if (homepageData.value) {
-        return;
-      }
-      const fallbackName = isAll
-        ? 'All Frameworks'
-        : (currentFrameworkContent.value?.frameworkName || 'Framework');
-
-      const totalControlsRaw = complianceMetrics.value.totalFindings || 0;
-      const activeControls = complianceMetrics.value.activeCompliances || 0;
-      const totalControls = Math.max(totalControlsRaw, activeControls, 0);
-      const implPct = totalControls > 0
-        ? Math.round((Math.min(activeControls, totalControls) / totalControls) * 100)
-        : 0;
-      const totalRisks = riskMetrics.value.totalRisks || riskMetrics.value.total || 0;
-      const mitigated = riskMetrics.value.mitigatedRisks || riskMetrics.value.mitigated || 0;
-      const activePolicies = policyMetrics.value.activePolicies || 0;
-      const totalPolicies = policyMetrics.value.totalPolicies || activePolicies;
-
-      homepageData.value = {
-        success: true,
-        _synthetic: true,  // flag so caches know this is fallback-built
-        framework: {
-          id: isAll ? null : selectedFrameworkId.value,
-          name: fallbackName,
-          description: '',
-          category: isAll ? 'All' : fallbackName,
-        },
-        hero: {
-          stats: {
-            totalPoliciesAll: totalPolicies,
-            activePolicies,
-            inactivePolicies: Math.max(0, totalPolicies - activePolicies),
-            totalCompliances: activeControls,
-            totalCompliancesAll: totalControls,
-            activeCompliances: activeControls,
-            inactiveCompliances: Math.max(0, totalControls - activeControls),
-            compliantCompliances: 0,
-            totalRisks,
-            activeRisks: riskMetrics.value.active || totalRisks,
-            inactiveRisks: riskMetrics.value.inactive || 0,
-            mitigatedRisks: mitigated,
-            totalIncidents: incidentMetrics.value.totalIncidents || incidentMetrics.value.total || 0,
-            activeIncidents: incidentMetrics.value.active || 0,
-            resolvedIncidents: incidentMetrics.value.resolved || 0,
-            totalAudits: auditorMetrics.value.totalAudits || 0,
-            activeAudits: auditorMetrics.value.active || 0,
-            completedAudits: auditorMetrics.value.completedAudits || 0,
-          },
-          previewMetrics: {
-            implementationProgressPercent: implPct,
-            remainingControlsCount: Math.max(0, totalControls - activeControls),
-            remainingControlsPercent: totalControls > 0 ? Math.round(((totalControls - activeControls) / totalControls) * 100) : 0,
-            totalControlsCount: totalControls,
-            implementedControlsCount: activeControls,
-            auditVerifiedCompliancePercent: 0,
-            compliantControlsCount: 0,
-            riskCoveragePercent: totalControls > 0 ? Math.min(100, Math.round((totalRisks / totalControls) * 100)) : 0,
-            totalActivePoliciesCount: activePolicies,
-            approvedActivePoliciesCount: activePolicies,
-            nextAudit: null,
-            nextAuditTitle: null,
-            nextAuditStatus: null,
-            compliancePercentage: implPct,
-            remainingControls: Math.max(0, totalControls - activeControls),
-            policiesLabel: isAll ? 'Total Policies' : 'Security Policies',
-            policiesValue: totalPolicies,
-          },
-        },
-        policies: policyData.value || {
-          applied: { policies: [], count: 0, percentage: 0 },
-          in_progress: { policies: [], count: 0, percentage: 0 },
-          pending: { policies: [], count: 0, percentage: 0 },
-          rejected: { policies: [], count: 0, percentage: 0 },
-        },
-        frameworks: [],
-        moduleMetrics: {
-          policy: policyMetrics.value,
-          compliance: complianceMetrics.value,
-          risk: riskMetrics.value,
-          incident: incidentMetrics.value,
-          audit: auditorMetrics.value,
-        },
-      };
-      console.log('✅ [HomeView] Synthesized homepageData from fallback metrics');
-      homeDataSource.value = 'fallback-synth';
-      // Store synthetic data in Pinia so it's available on re-visit
-      const synthKey = (isAllFrameworksSelected.value) ? 'all' : String(selectedFrameworkId.value ?? 'all');
-      homepageStore.setHomepageData(synthKey, homepageData.value);
     }
   } catch (error) {
     console.error('❌ DEBUG: Error fetching dashboard metrics:', error);
@@ -3871,6 +3763,8 @@ const fetchAllDashboardMetrics = async () => {
  
 
 onMounted(async () => {
+  frameworkStore.ensureUserScopedState();
+
   handleResize();
   if (typeof window !== 'undefined') {
     window.addEventListener('resize', handleResize);
@@ -3940,6 +3834,11 @@ onMounted(async () => {
     risksData.value = appDataStore.risks.length ? appDataStore.risks : risksData.value;
     riskCount.value = risksData.value.length || 0;
     startHomeAutoRefresh();
+    // Light incident list prime (first page only, non-blocking): fills Pinia + session snapshot
+    // so Incidents opens from cache while the slow list request dedupes / completes in background.
+    const incidentStore = useIncidentStore();
+    void incidentStore.primeIncidentListFirstPage({ pageSize: 20, background: true }).catch(() => {});
+    void incidentStore.primeAuditFindingsDefault({ background: true }).catch(() => {});
   }
 
   // Ensure framework dropdown is populated immediately on home load.

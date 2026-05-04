@@ -1735,6 +1735,18 @@ def jwt_logout(request):
                 logger.debug(f"Refresh token blacklisting skipped/failed: {str(blacklist_error)}")
                 print(f"[DEBUG] Refresh token blacklisting skipped/failed: {str(blacklist_error)}")
 
+        # Clear framework context cache as well (not covered by session flush).
+        # Otherwise the next login can resurrect a previously selected framework.
+        if user_id:
+            try:
+                from grc.framework_context import clear_framework_context
+                clear_framework_context(str(user_id), request)
+                logger.info(f"✅ Cleared framework context cache for user {user_id} during JWT logout")
+                print(f"[DEBUG] ✅ Cleared framework context cache for user {user_id}")
+            except Exception as framework_clear_error:
+                logger.warning(f"⚠️ Failed to clear framework context on JWT logout: {str(framework_clear_error)}")
+                print(f"[DEBUG] ⚠️ Failed to clear framework context: {str(framework_clear_error)}")
+
         # Clear session data
         request.session.flush()
         

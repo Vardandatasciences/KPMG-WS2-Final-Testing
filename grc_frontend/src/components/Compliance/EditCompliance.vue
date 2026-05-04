@@ -55,8 +55,26 @@
       <div class="loading-text">Loading data...</div>
     </div> -->
 
+    <!-- Initial skeleton while compliance data loads -->
+    <div v-if="initialLoading" class="edit-skeleton">
+      <div class="skeleton-row">
+        <div class="skeleton-block skeleton-title"></div>
+        <div class="skeleton-block skeleton-title"></div>
+      </div>
+      <div class="skeleton-block skeleton-textarea"></div>
+      <div class="skeleton-row">
+        <div class="skeleton-block skeleton-title"></div>
+        <div class="skeleton-block skeleton-title"></div>
+      </div>
+      <div class="skeleton-row">
+        <div class="skeleton-block skeleton-title"></div>
+        <div class="skeleton-block skeleton-title"></div>
+      </div>
+      <div class="skeleton-block skeleton-actions"></div>
+    </div>
+
     <!-- Edit form -->
-    <div v-if="compliance" class="compliance-item-form">
+    <div v-else-if="compliance" class="compliance-item-form">
       <!-- Basic compliance information -->
       <div class="field-group">
         <div class="field-group-title">Basic Information</div>
@@ -1455,15 +1473,15 @@
       <button 
         class="btn btn-submit" 
         @click="validateAndSubmit"
-        :disabled="loading"
+        :disabled="isSaving || initialLoading"
       >
-        <span v-if="loading">Saving...</span>
+        <span v-if="isSaving">Saving...</span>
         <span v-else>Save as New Version</span>
       </button>
       <button 
         class="btn btn-cancel" 
         @click="cancelEdit"
-        :disabled="loading"
+        :disabled="isSaving || initialLoading"
       >
         Cancel
       </button>
@@ -1472,20 +1490,24 @@
 </template>
 
 <script>
-import { complianceService } from '@/services/api';
+import { useComplianceStore } from '@/stores/compliance';
 import { CompliancePopups } from './utils/popupUtils';
 import AccessUtils from '@/utils/accessUtils';
-import { API_ENDPOINTS } from '../../config/api.js';
-import apiService from '@/services/apiService.js';
 import { PopupService } from '@/modules/popus/popupService';
 
 export default {
   name: 'EditCompliance',
+  setup() {
+    const complianceStore = useComplianceStore()
+    return { complianceStore }
+  },
   data() {
     return {
       compliance: null,
       users: [],
       loading: false,
+      initialLoading: true,
+      isSaving: false,
       error: null,
       successMessage: null,
       impactError: false,
@@ -1656,9 +1678,10 @@ export default {
     }
     
     this.originalComplianceId = complianceId;
-    await this.loadUsers();
     await this.loadComplianceData(complianceId);
-    await this.loadCategoryOptions();
+    this.initialLoading = false;
+    void this.loadUsers();
+    void this.loadCategoryOptions();
     
     // Add click event listener to close dropdowns when clicking outside
     document.addEventListener('click', this.handleClickOutside);
@@ -1742,8 +1765,7 @@ export default {
     },
     async loadComplianceData(complianceId) {
       try {
-        this.loading = true;
-        const response = await complianceService.getComplianceById(complianceId);
+        const response = await this.complianceStore.getComplianceById(complianceId);
         if (response.data && response.data.success) {
           this.compliance = { ...response.data.data };
 
@@ -1852,8 +1874,6 @@ export default {
       } catch (error) {
         console.error('[loadComplianceData] Error:', error);
         this.error = 'Failed to load compliance data. Please try again.';
-      } finally {
-        this.loading = false;
       }
     },
     
@@ -1971,11 +1991,10 @@ export default {
     
     async loadUsers() {
       try {
-        this.loading = true;
         // Get current user ID to exclude from reviewer list
         const currentUserId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || ''
         // Fetch reviewers filtered by RBAC permissions (ApproveCompliance) for compliance module
-        const responseData = await apiService.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
+        const responseData = await this.complianceStore.fetchUsersForReviewerSelection({
           module: 'compliance',
           current_user_id: currentUserId
         });
@@ -1997,8 +2016,6 @@ export default {
         console.error('Failed to load users:', error);
         this.error = 'Failed to load approvers. Please try again.';
         this.users = [];
-      } finally {
-        this.loading = false;
       }
     },
     validateImpact(event) {
@@ -2409,7 +2426,7 @@ export default {
       }
 
       try {
-        this.loading = true;
+        this.isSaving = true;
         const versionType = this.compliance.versionType;
         if (!versionType || !['Major', 'Minor'].includes(versionType)) {
           this.validationErrors.versionType = ['Version Type is required'];
@@ -2504,7 +2521,7 @@ export default {
         delete editData.user_id;
         delete editData.reviewer_id;
         // Use the complianceService to save the edit
-        const response = await complianceService.updateCompliance(this.originalComplianceId, editData);
+        const response = await this.complianceStore.updateComplianceCompat(this.originalComplianceId, editData);
         if (response.data && response.data.success) {
           CompliancePopups.complianceUpdated({
             ComplianceId: response.data.compliance_id || this.originalComplianceId,
@@ -2521,7 +2538,7 @@ export default {
         console.error('Error updating compliance:', error);
         this.error = 'Failed to update compliance. Please try again.';
       } finally {
-        this.loading = false;
+        this.isSaving = false;
       }
     },
     goBack() {
@@ -2536,10 +2553,9 @@ export default {
     },
     async loadCategoryOptions() {
       try {
-        this.loading = true;
         
         // Load business units
-        const buResponse = await complianceService.getCategoryBusinessUnits('BusinessUnitsCovered');
+        const buResponse = await this.complianceStore.getCategoryBusinessUnits('BusinessUnitsCovered');
         console.log('BusinessUnitsCovered API response:', buResponse);
         console.log('BusinessUnitsCovered response data structure:', {
           success: buResponse.data.success,
@@ -2566,12 +2582,12 @@ export default {
           console.log('No BusinessUnitsCovered data found, attempting to initialize default categories...');
           try {
             // Try to initialize default categories
-            const initResponse = await complianceService.initializeDefaultCategories();
+            const initResponse = await this.complianceStore.initializeDefaultCategories();
             console.log('Initialize categories response:', initResponse);
             
             if (initResponse.data.success) {
               // Retry loading business units after initialization
-              const retryResponse = await complianceService.getCategoryBusinessUnits('BusinessUnitsCovered');
+              const retryResponse = await this.complianceStore.getCategoryBusinessUnits('BusinessUnitsCovered');
               console.log('Retry BusinessUnitsCovered API response:', retryResponse);
               if (retryResponse.data.success && retryResponse.data.data) {
                 this.categoryOptions.BusinessUnitsCovered = retryResponse.data.data;
@@ -2604,7 +2620,7 @@ export default {
         }
         
         // Load risk types
-        const rtResponse = await complianceService.getCategoryBusinessUnits('RiskType');
+        const rtResponse = await this.complianceStore.getCategoryBusinessUnits('RiskType');
         console.log('RiskType API response:', rtResponse);
         console.log('RiskType response data structure:', {
           success: rtResponse.data.success,
@@ -2631,12 +2647,12 @@ export default {
           console.log('No RiskType data found, attempting to initialize default categories...');
           try {
             // Try to initialize default categories
-            const initResponse = await complianceService.initializeDefaultCategories();
+            const initResponse = await this.complianceStore.initializeDefaultCategories();
             console.log('Initialize categories response:', initResponse);
             
             if (initResponse.data.success) {
               // Retry loading risk types after initialization
-              const retryResponse = await complianceService.getCategoryBusinessUnits('RiskType');
+              const retryResponse = await this.complianceStore.getCategoryBusinessUnits('RiskType');
               console.log('Retry RiskType API response:', retryResponse);
               if (retryResponse.data.success && retryResponse.data.data) {
                 this.categoryOptions.RiskType = retryResponse.data.data;
@@ -2669,7 +2685,7 @@ export default {
         }
         
         // Load risk categories
-        const rcResponse = await complianceService.getCategoryBusinessUnits('RiskCategory');
+        const rcResponse = await this.complianceStore.getCategoryBusinessUnits('RiskCategory');
         console.log('RiskCategory API response:', rcResponse);
         console.log('RiskCategory response data structure:', {
           success: rcResponse.data.success,
@@ -2696,12 +2712,12 @@ export default {
           console.log('No RiskCategory data found, attempting to initialize default categories...');
           try {
             // Try to initialize default categories
-            const initResponse = await complianceService.initializeDefaultCategories();
+            const initResponse = await this.complianceStore.initializeDefaultCategories();
             console.log('Initialize categories response:', initResponse);
             
             if (initResponse.data.success) {
               // Retry loading risk categories after initialization
-              const retryResponse = await complianceService.getCategoryBusinessUnits('RiskCategory');
+              const retryResponse = await this.complianceStore.getCategoryBusinessUnits('RiskCategory');
               console.log('Retry RiskCategory API response:', retryResponse);
               if (retryResponse.data.success && retryResponse.data.data) {
                 this.categoryOptions.RiskCategory = retryResponse.data.data;
@@ -2735,7 +2751,7 @@ export default {
         
         // Load risk business impacts
         console.log('Loading RiskBusinessImpact data...');
-        const rbiResponse = await complianceService.getCategoryBusinessUnits('RiskBusinessImpact');
+        const rbiResponse = await this.complianceStore.getCategoryBusinessUnits('RiskBusinessImpact');
         console.log('RiskBusinessImpact response:', rbiResponse);
         console.log('RiskBusinessImpact response data structure:', {
           success: rbiResponse.data.success,
@@ -2762,12 +2778,12 @@ export default {
           console.log('No RiskBusinessImpact data found, attempting to initialize default categories...');
           try {
             // Try to initialize default categories
-            const initResponse = await complianceService.initializeDefaultCategories();
+            const initResponse = await this.complianceStore.initializeDefaultCategories();
             console.log('Initialize categories response:', initResponse);
             
             if (initResponse.data.success) {
               // Retry loading risk business impacts after initialization
-              const retryResponse = await complianceService.getCategoryBusinessUnits('RiskBusinessImpact');
+              const retryResponse = await this.complianceStore.getCategoryBusinessUnits('RiskBusinessImpact');
               console.log('Retry RiskBusinessImpact API response:', retryResponse);
               if (retryResponse.data.success && retryResponse.data.data) {
                 this.categoryOptions.RiskBusinessImpact = retryResponse.data.data;
@@ -2811,7 +2827,7 @@ export default {
         console.error('Failed to load category options:', error);
         this.error = 'Failed to load dropdown options. Some features may be limited.';
       } finally {
-        this.loading = false;
+        // no-op: category options load is intentionally non-blocking for the main form
       }
     },
     
@@ -3138,7 +3154,7 @@ export default {
       if (!value || !value.trim()) return;
       
       try {
-        const response = await complianceService.addCategoryBusinessUnit({
+        const response = await this.complianceStore.addCategoryBusinessUnit({
           source: field,
           value: value.trim()
         });
@@ -3433,6 +3449,34 @@ export default {
 @import './CreateCompliance.css';
 @import '@/assets/css/form.css';
 @import '@/assets/css/dropdown.css';
+
+/* Initial page skeleton */
+.edit-skeleton {
+  margin-top: 12px;
+  padding: 20px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #fff;
+}
+.skeleton-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.skeleton-block {
+  border-radius: 8px;
+  background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 37%, #f3f4f6 63%);
+  background-size: 400% 100%;
+  animation: skeleton-shimmer 1.2s ease-in-out infinite;
+}
+.skeleton-title { height: 42px; }
+.skeleton-textarea { height: 110px; margin-bottom: 16px; }
+.skeleton-actions { height: 46px; width: 220px; margin-top: 8px; }
+@keyframes skeleton-shimmer {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
 
 /* Edit Compliance - Layout adjustments scoped to this page */
 .create-compliance-container .global-form-row {

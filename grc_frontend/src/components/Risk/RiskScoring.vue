@@ -8,7 +8,7 @@
       Risk Scoring
     </div>
     <p
-      v-if="dataSourceMessage"
+      v-if="dataSourceMessage && !showRiskScoringSkeleton"
       class="risk-scoring-data-source"
     >
       {{ dataSourceMessage }}
@@ -17,11 +17,11 @@
       <button
         type="button"
         class="btn btn-submit"
-        @click="fetchRiskInstances"
-        :disabled="loading"
+        @click="refreshScoringList"
+        :disabled="scoringRefreshBusy"
       >
         <i class="fas fa-sync-alt"></i>
-        {{ loading ? 'Refreshing...' : 'Refresh' }}
+        {{ scoringRefreshBusy ? 'Loading…' : 'Refresh' }}
       </button>
     </div>
     
@@ -38,11 +38,26 @@
       {{ error }}
     </div>
     
-    <div v-else-if="!loading && filteredRiskInstances.length === 0" class="risk-scoring-no-data">
+    <div
+      v-else-if="showRiskScoringSkeleton"
+      class="risk-scoring-skeleton grc-skeleton-table-wrap"
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+      aria-label="Loading risk scoring data"
+    >
+      <div
+        v-for="n in 10"
+        :key="'rssk-' + n"
+        class="grc-skeleton-row grc-skeleton-pulse"
+      />
+    </div>
+
+    <div v-else-if="filteredRiskInstances.length === 0" class="risk-scoring-no-data">
       <p>No risk instances found.</p>
     </div>
     
-    <div v-else-if="!loading">
+    <div v-else>
       <DynamicTable
         :title="''"
         :data="filteredRiskInstances"
@@ -148,14 +163,8 @@ import DynamicTable from '../DynamicTable.vue';
 import { PopupModal } from '@/modules/popup';
 import { API_ENDPOINTS } from '../../config/api.js';
 import apiService from '@/services/apiService.js';
-import riskDataService from '@/services/riskService';
-
-const axios = {
-  get: (url, config = {}) =>
-    apiService.get(url, config?.params || {}, config).then((data) => ({ data, status: 200 })),
-  post: (url, data = {}, config = {}) =>
-    apiService.post(url, data, config).then((res) => ({ data: res, status: 200 }))
-};
+import { mapState } from 'pinia';
+import { useRiskStore } from '@/stores/risk';
 
 export default {
   name: 'RiskScoring',
@@ -168,7 +177,6 @@ export default {
     return {
       riskInstances: [],
       filteredRiskInstances: [],
-      loading: true,
       error: null,
       dataSourceMessage: '',
       showActionButtons: reactive({}),
@@ -326,6 +334,23 @@ export default {
     }
   },
   computed: {
+    ...mapState(useRiskStore, {
+      storeScoringLoading: 'isLoadingScoring',
+    }),
+    showRiskScoringSkeleton() {
+      return (
+        this.storeScoringLoading &&
+        (!Array.isArray(this.filteredRiskInstances) ||
+          this.filteredRiskInstances.length === 0)
+      );
+    },
+    scoringRefreshBusy() {
+      return (
+        this.storeScoringLoading &&
+        (!Array.isArray(this.filteredRiskInstances) ||
+          this.filteredRiskInstances.length === 0)
+      );
+    },
     filteredColumnDefinitions() {
       if (!this.columnSearchQuery || this.columnSearchQuery.trim() === '') {
         return this.columnDefinitions;
@@ -359,6 +384,20 @@ export default {
       return this.columnDefinitions.filter(column =>
         this.visibleColumnKeys.includes(column.key)
       );
+    }
+  },
+  created() {
+    try {
+      const riskStore = useRiskStore();
+      riskStore.hydrateFromLegacyService();
+      if (riskStore.scoringInstances?.length) {
+        this.applyScoringInstanceRows(
+          JSON.parse(JSON.stringify(riskStore.scoringInstances)),
+          '(from cache)'
+        );
+      }
+    } catch {
+      /* non-fatal */
     }
   },
   mounted() {
@@ -504,83 +543,68 @@ export default {
         query: { action: 'view' }
       });
     },
-    fetchRiskInstances() {
-      this.loading = true;
-      this.dataSourceMessage = 'Loading risk instances...';
-      
-      const applyResponse = (data, source) => {
-        console.log('Risk instances data received:', data);
-        
-        // Process each risk instance to ensure required fields are initialized
-        this.riskInstances = data.map(risk => ({
-          ...risk,
-          RiskLikelihood: risk.RiskLikelihood || 1,
-          RiskImpact: risk.RiskImpact || 1,
-          RiskExposureRating: risk.RiskExposureRating || (risk.RiskLikelihood || 1) * (risk.RiskImpact || 1)
-        }));
-        
-        this.filteredRiskInstances = [...this.riskInstances]; // Initialize filtered risks
-        
-        // Log risk status and appetite for debugging
-        this.riskInstances.forEach(risk => {
-          console.log(`Risk #${risk.RiskInstanceId}: Status=${risk.RiskStatus}, Appetite=${risk.Appetite}, Likelihood=${risk.RiskLikelihood}, Impact=${risk.RiskImpact}, Exposure=${risk.RiskExposureRating}`);
-          
-          // Initialize showActionButtons for each risk instance
-          this.showActionButtons[risk.RiskInstanceId] = false;
+    refreshScoringList() {
+      this.fetchRiskInstances(true);
+    },
+    applyScoringInstanceRows(data, source) {
+      const list = Array.isArray(data) ? data : [];
+      console.log('Risk scoring rows applied:', list.length, source);
+      this.riskInstances = list.map((risk) => ({
+        ...risk,
+        RiskLikelihood: risk.RiskLikelihood || 1,
+        RiskImpact: risk.RiskImpact || 1,
+        RiskExposureRating:
+          risk.RiskExposureRating ||
+          (risk.RiskLikelihood || 1) * (risk.RiskImpact || 1),
+      }));
+      this.filteredRiskInstances = [...this.riskInstances];
+      this.riskInstances.forEach((risk) => {
+        this.showActionButtons[risk.RiskInstanceId] = false;
+      });
+      if (
+        this.riskInstances.length > 0 &&
+        !String(source || '').toLowerCase().includes('cache')
+      ) {
+        this.sendPushNotification({
+          title: 'Risk Instances Loaded Successfully',
+          message: `${this.riskInstances.length} risk instances have been loaded for scoring.`,
+          category: 'risk',
+          priority: 'medium',
         });
-        
-        // Send push notification for successful data load
-        if (this.riskInstances.length > 0) {
-          this.sendPushNotification({
-            title: 'Risk Instances Loaded Successfully',
-            message: `${this.riskInstances.length} risk instances have been loaded for scoring.`,
-            category: 'risk',
-            priority: 'medium'
-          });
+      }
+      this.dataSourceMessage = `Loaded ${this.riskInstances.length} risk instances ${source}`;
+    },
+    async fetchRiskInstances(forceRefresh = false) {
+      this.error = null;
+      const riskStore = useRiskStore();
+      const hadRows =
+        Array.isArray(this.filteredRiskInstances) &&
+        this.filteredRiskInstances.length > 0;
+      if (!hadRows && !forceRefresh) {
+        this.dataSourceMessage = '';
+      } else if (forceRefresh) {
+        this.dataSourceMessage = '';
+      }
+
+      try {
+        await riskStore.fetchScoringInstances({ force: forceRefresh });
+        const rows = JSON.parse(JSON.stringify(riskStore.scoringInstances || []));
+        const meta = forceRefresh ? 'directly from API' : 'via risk store';
+        this.applyScoringInstanceRows(rows, meta);
+        if (hadRows && !forceRefresh) {
+          this.dataSourceMessage = '';
         }
-        this.dataSourceMessage = `Loaded ${this.riskInstances.length} risk instances ${source}`;
-      };
-      
-      const fetchFromApi = () => axios.get(API_ENDPOINTS.RISK_SCORING_INSTANCES_WITH_NAMES)
-        .then(response => {
-          const apiData = Array.isArray(response.data) ? response.data : (response.data?.riskInstances || response.data || []);
-          applyResponse(apiData, 'directly from API');
-          riskDataService.setData('riskInstances', apiData);
+      } catch (error) {
+        console.error('Error fetching risk instances:', error);
+        this.error = `Failed to fetch risk instances: ${error.message}`;
+        this.dataSourceMessage = 'Failed to load risk instances';
+        this.sendPushNotification({
+          title: 'Risk Instances Load Failed',
+          message: `Failed to load risk instances: ${error.message}`,
+          category: 'risk',
+          priority: 'high',
         });
-      
-      Promise.resolve()
-        .then(() => {
-          if (riskDataService.hasRiskInstancesCache()) {
-            const cachedData = riskDataService.getData('riskInstances') || [];
-            if (cachedData.length > 0) {
-              applyResponse(JSON.parse(JSON.stringify(cachedData)), 'from cache (prefetched on Home page)');
-              this.loading = false;
-              return null;
-            }
-          }
-          return fetchFromApi();
-        })
-        .then(result => {
-          if (result === null || result === undefined) {
-            return;
-          }
-        })
-        .catch(error => {
-          console.error('Error fetching risk instances:', error);
-          this.error = `Failed to fetch risk instances: ${error.message}`;
-          this.dataSourceMessage = 'Failed to load risk instances';
-          
-          // Send push notification for error
-          this.sendPushNotification({
-            title: 'Risk Instances Load Failed',
-            message: `Failed to load risk instances: ${error.message}`,
-            category: 'risk',
-            priority: 'high'
-          });
-        })
-        .finally(() => {
-          this.loading = false;
-        });
+      }
     },
     handleResize() {
       // This method can be used to dynamically adjust the container based on sidebar state

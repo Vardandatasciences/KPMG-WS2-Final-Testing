@@ -4,7 +4,7 @@
 # Django imports
 from django.http import JsonResponse
 from django.utils import timezone
-from django.db.models import Avg, Count, Min, Max, F, ExpressionWrapper, DurationField, Value, Case, When
+from django.db.models import Avg, Count, Min, Max, F, ExpressionWrapper, DurationField, Value, Case, When, Subquery, OuterRef
 from django.db.models.functions import TruncMonth, Cast, Extract
 from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from django.utils.dateparse import parse_date
@@ -1718,23 +1718,27 @@ def first_response_time(request):
         start_date = now_date - timedelta(days=7)
     elif timeframe == '30days':
         start_date = now_date - timedelta(days=30)
+    elif timeframe == '90days':
+        start_date = now_date - timedelta(days=90)
     else:
         start_date = None  # no filtering
-    
+
     debug_print(f"[INFO] start_date calculated: {start_date}")
 
-    # Base queryset, filtered by tenant
-    queryset = RiskInstance.objects.select_related(None).filter(
+    # RiskInstance.IncidentId is an integer FK to Incident.IncidentId (not a Django FK field) — use Subquery for IdentifiedAt.
+    incident_identified_subq = Incident.objects.filter(
+        IncidentId=OuterRef('IncidentId'),
+        tenant_id=tenant_id,
+    ).values('IdentifiedAt')[:1]
+
+    queryset = RiskInstance.objects.filter(
         FirstResponseAt__isnull=False,
         IncidentId__isnull=False,
-        tenant_id=tenant_id
-    )
-    debug_print(f"[INFO] Initial queryset count: {queryset.count()}")
-
-    queryset = queryset.annotate(
-        incident_identified_at=F('IncidentId__IdentifiedAt')
+        tenant_id=tenant_id,
+    ).annotate(
+        incident_identified_at=Subquery(incident_identified_subq),
     ).filter(
-        incident_identified_at__isnull=False
+        incident_identified_at__isnull=False,
     )
     debug_print(f"[INFO] Queryset after annotating and filtering for non-null incident_identified_at: {queryset.count()}")
 

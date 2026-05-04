@@ -659,6 +659,7 @@
 import './baselkpi.css';
 import BaselGauge from './BaselGauge.vue';
 import { convertColorForColorblind as convertColorFromUtil } from '@/utils/colorblindness';
+import { useRiskStore } from '@/stores/risk';
 
 export default {
   name: 'BaselKPI',
@@ -986,6 +987,12 @@ export default {
     }
   },
   mounted() {
+    try {
+      const riskStore = useRiskStore();
+      void riskStore.prefetchRiskRegisterAndInstances({ force: false });
+    } catch {
+      /* non-fatal */
+    }
     this.initColorblindnessTracking();
   },
   beforeUnmount() {

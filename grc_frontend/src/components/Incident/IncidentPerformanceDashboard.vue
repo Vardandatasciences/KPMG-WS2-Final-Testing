@@ -254,8 +254,9 @@ import {
 import '@fortawesome/fontawesome-free/css/all.min.css'
 import { useDashboardsStore } from '@/stores/dashboards'
 import { useAppDataStore } from '@/stores/appData'
+import { useFrameworkStore } from '@/stores/framework'
+import { useIncidentStore } from '@/stores/incident'
 import apiService from '@/services/apiService.js'
-import { API_ENDPOINTS } from '@/config/api.js'
 import { PopupModal } from '@/modules/popup'
 import { AccessUtils } from '@/utils/accessUtils'
 import html2canvas from 'html2canvas'
@@ -287,7 +288,8 @@ export default {
   setup() {
     const dashboardsStore = useDashboardsStore()
     const appDataStore = useAppDataStore()
-    return { dashboardsStore, appDataStore }
+    const incidentStore = useIncidentStore()
+    return { dashboardsStore, appDataStore, incidentStore }
   },
   data() {
     return {
@@ -342,14 +344,25 @@ export default {
     }
   },
   computed: {
-    // Skeleton screen: show only on first load when no Pinia cache exists
+    performanceDashboardCacheKey() {
+      return this.incidentStore.buildPerformanceDashboardCacheKey({
+        framework: this.selectedFramework || '',
+        timeRange: this.selectedTimeRange || '',
+        category: this.selectedCategory || '',
+        priority: this.selectedPriority || '',
+      })
+    },
+    // Skeleton: hide when persisted dashboards cache OR in-session performance snapshot exists
     showSkeleton() {
+      if (this.incidentStore.getPerformanceSnapshot(this.performanceDashboardCacheKey)) {
+        return false
+      }
       return !this.incidentKpiLoaded && !this.dashboardsStore.hasData('incident')
     },
     frameworkOptions() {
       return [
         { value: '', label: 'All Frameworks' },
-        ...this.frameworks.map(fw => ({ value: fw.id, label: fw.name }))
+        ...this.frameworks.map(fw => ({ value: String(fw.id), label: fw.name }))
       ];
     },
     timeRangeOptions() {
@@ -434,6 +447,7 @@ export default {
     this.isComponentAlive = true
 
     this.initColorblindnessTracking()
+    window.addEventListener('framework-changed', this.handleGlobalFrameworkChanged)
 
     this._exportDropdownClickOutside = (e) => {
       if (this.$refs.exportSelectRef && !this.$refs.exportSelectRef.contains(e.target)) {
@@ -451,12 +465,11 @@ export default {
       this.incidentKpiLoaded = true
       const piniaFw = this.dashboardsStore.getFrameworks('incident')
       if (piniaFw?.length) this.frameworks = piniaFw.map(f => ({ ...f }))
+      await this.syncSelectedFrameworkWithGlobalStore()
       // Background: recent incidents, framework, full refresh if stale
       this.fetchRecentIncidents()
       this.fetchFrameworks()
-      if (!this.dashboardsStore.isFresh('incident')) {
-        this.fetchSelectedFramework().then(() => this.fetchDashboardData())
-      }
+      this.fetchSelectedFramework().then(() => this.fetchDashboardData({ silent: true }))
       return
     }
 
@@ -501,6 +514,7 @@ export default {
   },
   beforeUnmount() {
     this.isComponentAlive = false
+    window.removeEventListener('framework-changed', this.handleGlobalFrameworkChanged)
     document.removeEventListener('click', this._exportDropdownClickOutside)
     this.destroyAllCharts()
     // Clean up colorblindness observer
@@ -513,6 +527,25 @@ export default {
     next()
   },
   methods: {
+    async syncSelectedFrameworkWithGlobalStore() {
+      try {
+        const frameworkStore = useFrameworkStore()
+        await frameworkStore.loadFrameworkFromSession()
+        const globalFrameworkId = frameworkStore.selectedFrameworkId
+        this.selectedFramework = globalFrameworkId && globalFrameworkId !== 'all'
+          ? String(globalFrameworkId)
+          : ''
+      } catch (error) {
+        console.warn('[IncidentPerformanceDashboard] Unable to sync global framework:', error)
+      }
+    },
+    async handleGlobalFrameworkChanged() {
+      const previousFrameworkId = this.selectedFramework
+      await this.syncSelectedFrameworkWithGlobalStore()
+      if (String(previousFrameworkId || '') !== String(this.selectedFramework || '')) {
+        this.fetchDashboardData({ silent: true })
+      }
+    },
     hydrateIncidentKpisFromAppData() {
       if (!this.appDataStore.incidentsLoaded || !Array.isArray(this.appDataStore.incidents) || this.appDataStore.incidents.length === 0) return false
       const incidents = this.appDataStore.incidents
@@ -632,7 +665,7 @@ export default {
       try {
         this.loadingFrameworks = true
         console.log('🔍 Fetching frameworks...')
-        const cachedFrameworks = incidentDataService.getData('incidentFrameworks') || []
+        const cachedFrameworks = this.incidentStore.getDomainBulkData('incidentFrameworks') || []
         if (Array.isArray(cachedFrameworks) && cachedFrameworks.length > 0) {
           this.frameworks = cachedFrameworks.map(framework => ({
             id: framework.id || framework.FrameworkId,
@@ -674,14 +707,16 @@ export default {
         const activeFrameworks = frameworksData.filter(fw => {
           if (!fw) return false
           const status = fw.ActiveInactive || fw.status || fw.activeInactive || '';
+          // Keep frameworks when status is missing; only exclude known non-active values.
+          if (!status) return true;
           return status.toLowerCase() === 'active';
         });
         
         this.frameworks = activeFrameworks.map(framework => ({
-          id: framework.id || framework.FrameworkId,
+          id: String(framework.id || framework.FrameworkId),
           name: framework.name || framework.FrameworkName || 'Unknown Framework'
         }))
-        incidentDataService.setData('incidentFrameworks', this.frameworks)
+        this.incidentStore.setDomainBulkData('incidentFrameworks', this.frameworks)
         
         console.log('✅ Processed frameworks:', this.frameworks)
         
@@ -706,11 +741,17 @@ export default {
       this.selectedFrameworkRequestPromise = (async () => {
       try {
         console.log('🔍 Fetching selected framework from home page...')
-        const responseData = await apiService.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED)
+        await this.syncSelectedFrameworkWithGlobalStore()
+        const frameworkStore = useFrameworkStore()
+        const responseData = {
+          frameworkId: this.selectedFramework || frameworkStore.selectedFrameworkId,
+          frameworkName: frameworkStore.selectedFrameworkName,
+        }
         console.log('✅ Selected framework API response:', responseData)
         
         if (responseData && responseData.frameworkId) {
           this.selectedFramework = responseData.frameworkId
+          this.selectedFramework = String(this.selectedFramework)
           console.log('✅ Set selected framework ID:', this.selectedFramework)
           
           if (this.frameworks.length > 0) {
@@ -724,6 +765,7 @@ export default {
           const storedFrameworkId = getExplicitFrameworkId()
           if (storedFrameworkId) {
             this.selectedFramework = storedFrameworkId
+            this.selectedFramework = String(this.selectedFramework)
             console.log('✅ Using framework ID from localStorage:', this.selectedFramework)
             
             if (this.frameworks.length > 0) {
@@ -737,6 +779,7 @@ export default {
         const storedFrameworkId = getExplicitFrameworkId()
         if (storedFrameworkId) {
           this.selectedFramework = storedFrameworkId
+          this.selectedFramework = String(this.selectedFramework)
           console.log('✅ Using framework ID from localStorage as fallback:', this.selectedFramework)
           
           if (this.frameworks.length > 0) {
@@ -770,27 +813,22 @@ export default {
       try {
         console.log('🔍 [IncidentPerformanceDashboard] Checking for cached recent incidents...');
 
-        // Check if prefetch is in progress or cache is available
-        if (!window.incidentDataFetchPromise && !incidentDataService.hasValidIncidentsCache()) {
-          console.log('🚀 [IncidentPerformanceDashboard] Starting incident prefetch (user navigated directly)...');
-          window.incidentDataFetchPromise = incidentDataService.fetchAllIncidentData();
-        }
-
-        // Wait for prefetch if it's in progress
-        if (window.incidentDataFetchPromise) {
-          console.log('⏳ [IncidentPerformanceDashboard] Waiting for incident prefetch to complete...');
+        if (!this.incidentStore.hasDomainIncidentsPrefetchFresh()) {
+          console.log('🚀 [IncidentPerformanceDashboard] Starting domain prefetch...');
           try {
-            await window.incidentDataFetchPromise;
-            console.log('✅ [IncidentPerformanceDashboard] Incident prefetch completed');
+            await Promise.race([
+              this.incidentStore.ensureIncidentDomainPrefetch({ includeIncidents: false }),
+              new Promise((resolve) => setTimeout(resolve, 2000)),
+            ]);
           } catch (prefetchError) {
-            console.warn('⚠️ [IncidentPerformanceDashboard] Incident prefetch failed, will fetch directly from API', prefetchError);
+            console.warn('⚠️ [IncidentPerformanceDashboard] Domain prefetch failed', prefetchError);
           }
         }
 
         // Use cached incidents if available - get most recent from cache
-        if (incidentDataService.hasValidIncidentsCache()) {
+        if (this.incidentStore.hasDomainIncidentsPrefetchFresh()) {
           console.log('✅ [IncidentPerformanceDashboard] Using cached incidents for recent incidents');
-          const cachedIncidents = incidentDataService.getData('incidents') || [];
+          const cachedIncidents = this.incidentStore.getDomainBulkData('incidents') || [];
           
           // Sort by date (most recent first) and take first 3
           const recentIncidents = cachedIncidents
@@ -869,7 +907,24 @@ export default {
         this.recentIncidents = []
       }
     },
-         async fetchDashboardData() {
+    persistPerformanceDashboardPaint() {
+      try {
+        this.incidentStore.setPerformanceSnapshot(this.performanceDashboardCacheKey, {
+          dashboardData: { ...this.dashboardData },
+          chartData: {
+            status: this.chartData?.status,
+            origin: this.chartData?.origin,
+            category: this.chartData?.category,
+            priority: this.chartData?.priority,
+          },
+        })
+      } catch (e) {
+        console.warn('[IncidentPerformanceDashboard] snapshot persist skipped:', e)
+      }
+    },
+
+    async fetchDashboardData(opts = {}) {
+      const { silent = false } = opts || {}
       // Start timing
       const startTime = performance.now();
       
@@ -894,6 +949,29 @@ export default {
         
         // Complex filters that require API calls (time range requires server-side date filtering)
         const hasComplexFilters = hasTimeRangeFilter;
+
+        if (!silent) {
+          const snap = this.incidentStore.getPerformanceSnapshot(this.performanceDashboardCacheKey)
+          const c = snap?.chartData
+          if (
+            snap?.dashboardData &&
+            c &&
+            c.status != null &&
+            c.origin != null &&
+            c.category != null &&
+            c.priority != null
+          ) {
+            this.dashboardData = { ...snap.dashboardData }
+            this.chartData = { ...c }
+            this.incidentKpiLoaded = true
+            this.dataSourceBadge = 'Pinia (session paint)'
+            const timeTakenSnap = getTimeTaken()
+            this.dataSourceMessage = `✅ Restored dashboard from Pinia snapshot - ${timeTakenSnap}`
+            await this.$nextTick()
+            await this.safeUpdateAllCharts()
+            return
+          }
+        }
 
         // Instant path: if all dashboard + chart data is already cached, use it immediately
         // without waiting for any in-flight prefetch promise.
@@ -923,27 +1001,19 @@ export default {
             };
             await this.$nextTick();
             await this.safeUpdateAllCharts();
+            this.persistPerformanceDashboardPaint()
             return;
           }
         }
         
-        // Check if prefetch is in progress or cache is available
-        if (!window.incidentDataFetchPromise && !incidentDataService.hasValidIncidentsCache()) {
-          console.log('🚀 [IncidentPerformanceDashboard] Starting incident prefetch (user navigated directly)...');
-          window.incidentDataFetchPromise = incidentDataService.fetchAllIncidentData();
-        }
-
-        // Wait for prefetch if it's in progress (but don't block too long)
-        if (window.incidentDataFetchPromise) {
-          console.log('⏳ [IncidentPerformanceDashboard] Waiting for incident prefetch to complete...');
+        if (!this.incidentStore.hasDomainIncidentsPrefetchFresh()) {
           try {
             await Promise.race([
-              window.incidentDataFetchPromise,
-              new Promise(resolve => setTimeout(resolve, 2000)) // Max 2 seconds wait
+              this.incidentStore.ensureIncidentDomainPrefetch({ includeIncidents: false }),
+              new Promise((resolve) => setTimeout(resolve, 2000)),
             ]);
-            console.log('✅ [IncidentPerformanceDashboard] Incident prefetch completed or timeout');
           } catch (prefetchError) {
-            console.warn('⚠️ [IncidentPerformanceDashboard] Incident prefetch failed, will use cache or API', prefetchError);
+            console.warn('⚠️ [IncidentPerformanceDashboard] Domain prefetch failed', prefetchError);
           }
         }
 
@@ -1023,13 +1093,14 @@ export default {
             await this.safeUpdateAllCharts();
 
             console.log(`✅✅✅ [IncidentPerformanceDashboard] Dashboard loaded from cache - ${timeTaken}`);
+            this.persistPerformanceDashboardPaint()
             return;
           }
         }
         
         // PRIORITY 2: Check if we can compute dashboard data from cached incidents
         // We can use cache if: no complex filters (time range) AND we have cached incidents
-        if (!hasComplexFilters && incidentDataService.hasValidIncidentsCache()) {
+        if (!hasComplexFilters && this.incidentStore.hasDomainIncidentsPrefetchFresh()) {
           console.log('⚡ [IncidentPerformanceDashboard] Computing dashboard data from cached incidents - INSTANT!');
           
           // Prepare filters for client-side filtering
@@ -1092,6 +1163,7 @@ export default {
               priority: priorityData.labels.length
             }
           });
+          this.persistPerformanceDashboardPaint()
           return;
         }
         
@@ -1170,7 +1242,10 @@ export default {
             const timeTaken3 = getTimeTaken()
             console.log(`✅ [IncidentPerformanceDashboard] Charts loaded - ${timeTaken3}`)
             console.log('Updated chart data:', this.chartData)
-            this.$nextTick().then(() => this.safeUpdateAllCharts())
+            this.$nextTick().then(() => {
+              this.safeUpdateAllCharts()
+              this.persistPerformanceDashboardPaint()
+            })
           }).catch(e => console.warn('[IncidentDashboard] Background chart fetch failed:', e))
         } else {
           const errorMessage = dashboardResponse?.message || 'API request failed'
@@ -1228,7 +1303,7 @@ export default {
         
         // If no time range filter and we have cached incidents, compute from cache
         // (framework, category, priority filters are applied in computeChartDataFromCache)
-        if (!hasTimeRangeFilter && incidentDataService.hasValidIncidentsCache()) {
+        if (!hasTimeRangeFilter && this.incidentStore.hasDomainIncidentsPrefetchFresh()) {
           // Prepare filters for client-side filtering
           const filters = {};
           if (this.selectedFramework) {
@@ -1291,7 +1366,7 @@ export default {
       } catch (error) {
         console.error(`Error fetching ${yAxis} chart data:`, error)
         // Fallback to cache if API fails and we have cache
-        if (incidentDataService.hasValidIncidentsCache()) {
+        if (this.incidentStore.hasDomainIncidentsPrefetchFresh()) {
           console.log(`⚠️ [IncidentPerformanceDashboard] API failed for ${yAxis}, falling back to cache...`);
           const filters = {};
           if (this.selectedFramework) filters.frameworkId = this.selectedFramework;
@@ -1703,12 +1778,16 @@ export default {
       console.log('sessionStorage frameworkId:', sessionStorage.getItem('frameworkId'))
       
       // Test API call (same transport as rest of app: cookies + CSRF on mutating methods)
-      apiService.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED)
-        .then((data) => {
-          console.log('API Response:', data)
+      const frameworkStore = useFrameworkStore()
+      frameworkStore.loadFrameworkFromSession()
+        .then(() => {
+          console.log('Framework Store Response:', {
+            frameworkId: frameworkStore.selectedFrameworkId,
+            frameworkName: frameworkStore.selectedFrameworkName,
+          })
         })
-        .catch(error => {
-          console.error('API Error:', error)
+        .catch((error) => {
+          console.error('Framework Store Error:', error)
         })
       
       // Test setting a framework manually

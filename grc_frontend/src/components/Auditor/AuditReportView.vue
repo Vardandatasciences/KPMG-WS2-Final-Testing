@@ -129,9 +129,8 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import apiService from '@/services/apiService'
 import { ElMessage } from 'element-plus'
-import { API_ENDPOINTS } from '@/config/api.js'
+import { useAuditStore } from '@/stores/audit'
 
 const route = useRoute()
 const router = useRouter()
@@ -156,7 +155,7 @@ async function fetchReportData() {
     loading.value = true
     error.value = null
     
-          const data = await apiService.get(API_ENDPOINTS.AUDIT_REPORT(auditId.value))
+          const data = await useAuditStore().fetchAuditReportDocument(auditId.value, { force: false })
     
     if (data && data.success) {
       reportData.value = data.data
@@ -247,10 +246,7 @@ async function downloadReport() {
   try {
     downloading.value = true
     
-    const blobData = await apiService.get(API_ENDPOINTS.GENERATE_AUDIT_REPORT(auditId.value), {
-      responseType: 'blob',
-      timeout: 30000
-    })
+    const blobData = await useAuditStore().generateAuditReportDocxBlob(auditId.value)
 
     // Create blob and download
     const blob = new Blob([blobData], { 

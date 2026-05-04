@@ -14,6 +14,8 @@ import * as directives from 'vuetify/directives'
 import Popup from './modules/popup';
 import './styles/theme.css'
 import './assets/css/main.css'
+import './assets/css/grc-skeleton.css'
+import './assets/css/policy-module-skeleton.css'
 import './assets/css/dropdown.css'
 import './assets/css/darktheme.css'
 import './assets/css/Colourblindness.css'
@@ -55,6 +57,19 @@ const buildSharedGetCacheKey = (config) => {
   return `${url}::${params}`
 }
 
+const resolveAxiosAdapter = (adapterCandidate) => {
+  if (typeof adapterCandidate === 'function') return adapterCandidate
+  if (typeof axios.getAdapter === 'function') {
+    try {
+      return axios.getAdapter(adapterCandidate || axios.defaults.adapter)
+    } catch (error) {
+      console.warn('Unable to resolve axios adapter:', error?.message || error)
+      return null
+    }
+  }
+  return null
+}
+
 // CRITICAL: Enable credentials (cookies) for session management
 axios.defaults.withCredentials = true
 console.log('🍪 Axios configured to send cookies with requests (withCredentials: true)')
@@ -92,7 +107,11 @@ axios.interceptors.request.use(
         return config
       }
 
-      const defaultAdapter = config.adapter || axios.defaults.adapter
+      const defaultAdapter = resolveAxiosAdapter(config.adapter || axios.defaults.adapter)
+      if (!defaultAdapter) {
+        // Fallback: do not dedupe this request if adapter resolution failed.
+        return config
+      }
       const networkPromise = Promise.resolve().then(() => defaultAdapter(config))
       sharedGetCache.set(key, {
         timestamp: now,

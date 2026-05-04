@@ -1,6 +1,49 @@
 <template>
   <div class="domains-container">
-    <!-- Modern Header -->
+    <!-- Full-page skeleton: avoids header showing 0/0 then content flash -->
+    <div v-if="loading" class="domain-page-skeleton" aria-busy="true" aria-label="Loading domains">
+      <div class="domain-sk-header">
+        <div class="domain-sk-title-block">
+          <div class="domain-sk-icon"></div>
+          <div class="domain-sk-lines">
+            <div class="domain-sk-line domain-sk-line--lg"></div>
+            <div class="domain-sk-line domain-sk-line--sm"></div>
+          </div>
+        </div>
+        <div class="domain-sk-stats">
+          <div class="domain-sk-stat"></div>
+          <div class="domain-sk-stat"></div>
+        </div>
+      </div>
+      <div class="domain-sk-tabs">
+        <div v-for="n in 6" :key="'dom-tab-' + n" class="domain-sk-tab"></div>
+      </div>
+      <div class="domain-sk-panel">
+        <div class="domain-sk-panel-head">
+          <div class="domain-sk-line" style="width: 40%"></div>
+          <div class="domain-sk-badge"></div>
+        </div>
+        <div class="domain-sk-grid">
+          <div v-for="n in 8" :key="'dom-card-' + n" class="domain-sk-card"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modern Header + content (only after load) -->
+    <template v-else>
+    <!-- Error State -->
+    <div v-if="error" class="error-container">
+      <div class="error-message">
+        <i class="fas fa-exclamation-triangle"></i>
+        <h3>Unable to Load Domains</h3>
+        <p>{{ error }}</p>
+        <button @click="fetchDomains" class="retry-btn">
+          <i class="fas fa-redo"></i> Try Again
+        </button>
+      </div>
+    </div>
+
+    <template v-else>
     <div class="page-header">
       <div class="header-content">
         <div class="header-title">
@@ -24,26 +67,8 @@
       </div>
     </div>
 
-    <!-- Loading State -->
-    <div v-if="loading" class="loading-container">
-      <div class="spinner"></div>
-      <p>Loading domains and frameworks...</p>
-    </div>
-
-    <!-- Error State -->
-    <div v-else-if="error" class="error-container">
-      <div class="error-message">
-        <i class="fas fa-exclamation-triangle"></i>
-        <h3>Unable to Load Domains</h3>
-        <p>{{ error }}</p>
-        <button @click="fetchDomains" class="retry-btn">
-          <i class="fas fa-redo"></i> Try Again
-        </button>
-      </div>
-    </div>
-
     <!-- Tabs Navigation -->
-    <div v-else class="tabs-container">
+    <div class="tabs-container">
       <div class="tabs-navigation">
         <button
           v-for="domain in domains"
@@ -178,6 +203,7 @@
         </div>
       </div>
     </div>
+    </template>
 
     <!-- Toast Notification -->
     <transition name="toast">
@@ -186,6 +212,7 @@
         <span>{{ toast.message }}</span>
       </div>
     </transition>
+    </template>
   </div>
 </template>
 
@@ -592,6 +619,110 @@ export default {
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
+}
+
+@keyframes domainSkPulse {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+.domain-page-skeleton {
+  padding: 24px 32px 32px;
+  flex: 1;
+}
+.domain-sk-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 20px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid #e1e8ed;
+  margin-bottom: 20px;
+}
+.domain-sk-title-block {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.domain-sk-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: linear-gradient(90deg, #eef2f7 0%, #f8fafc 50%, #eef2f7 100%);
+  background-size: 200% 100%;
+  animation: domainSkPulse 1.35s ease infinite;
+}
+.domain-sk-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.domain-sk-line {
+  height: 14px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #eef2f7 0%, #f8fafc 50%, #eef2f7 100%);
+  background-size: 200% 100%;
+  animation: domainSkPulse 1.35s ease infinite;
+}
+.domain-sk-line--lg { width: 280px; height: 22px; }
+.domain-sk-line--sm { width: 420px; max-width: 100%; }
+.domain-sk-stats {
+  display: flex;
+  gap: 16px;
+}
+.domain-sk-stat {
+  width: 120px;
+  height: 72px;
+  border-radius: 12px;
+  background: linear-gradient(90deg, #eef2f7 0%, #f8fafc 50%, #eef2f7 100%);
+  background-size: 200% 100%;
+  animation: domainSkPulse 1.35s ease infinite;
+}
+.domain-sk-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.domain-sk-tab {
+  height: 40px;
+  width: 140px;
+  border-radius: 10px;
+  background: linear-gradient(90deg, #eef2f7 0%, #f8fafc 50%, #eef2f7 100%);
+  background-size: 200% 100%;
+  animation: domainSkPulse 1.35s ease infinite;
+}
+.domain-sk-panel {
+  border: 1px solid #e8ecf2;
+  border-radius: 12px;
+  padding: 20px;
+  background: #fafbfd;
+}
+.domain-sk-panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+.domain-sk-badge {
+  width: 100px;
+  height: 28px;
+  border-radius: 8px;
+  background: linear-gradient(90deg, #eef2f7 0%, #f8fafc 50%, #eef2f7 100%);
+  background-size: 200% 100%;
+  animation: domainSkPulse 1.35s ease infinite;
+}
+.domain-sk-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+}
+.domain-sk-card {
+  height: 110px;
+  border-radius: 12px;
+  background: linear-gradient(90deg, #f4f6fa 0%, #fafbfd 50%, #f4f6fa 100%);
+  background-size: 200% 100%;
+  animation: domainSkPulse 1.35s ease infinite;
 }
 
 /* Modern Header */

@@ -342,6 +342,7 @@ import { PopupModal } from '@/modules/popup';
 import { popupService } from '@/modules/popup';
 import { API_ENDPOINTS } from '@/config/api';
 import apiService from '@/services/apiService.js';
+import { useRiskStore } from '@/stores/risk';
 
 const axios = {
   get: (url, config = {}) =>
@@ -569,9 +570,10 @@ export default {
 
     const loadRisks = async () => {
       try {
-        const response = await axios.get(API_ENDPOINTS.RISKS_FOR_DROPDOWN);
-        allRisks.value = response.data?.risks || [];
-        
+        const riskStore = useRiskStore();
+        await riskStore.fetchRisks({ force: false });
+        allRisks.value = riskStore.risks || [];
+
         // If there's an ID in the route, select that risk
         if (route.params.id && route.params.id !== 'new') {
           selectedRiskId.value = route.params.id;

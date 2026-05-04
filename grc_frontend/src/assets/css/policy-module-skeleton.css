@@ -1,0 +1,65 @@
+/**
+ * Shared Policy module skeleton primitives (imported globally from main.js).
+ * Use BEM-style classes so pages stay consistent with Compliance-style pulse loaders.
+ */
+.policy-mod-sk {
+  padding: 8px 0 20px;
+}
+.policy-mod-sk__summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+.policy-mod-sk__card {
+  height: 82px;
+  border-radius: 12px;
+  background: linear-gradient(90deg, #eef2f7 0%, #f8fafc 50%, #eef2f7 100%);
+  background-size: 200% 100%;
+  animation: policyModSkPulse 1.35s ease infinite;
+}
+.policy-mod-sk__controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.policy-mod-sk__pill {
+  height: 38px;
+  width: min(100%, 200px);
+  border-radius: 10px;
+  background: linear-gradient(90deg, #eef2f7 0%, #f8fafc 50%, #eef2f7 100%);
+  background-size: 200% 100%;
+  animation: policyModSkPulse 1.35s ease infinite;
+}
+.policy-mod-sk__table {
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #e8ecf2;
+}
+.policy-mod-sk__row {
+  height: 46px;
+  border-bottom: 1px solid #eef2f7;
+  background: linear-gradient(90deg, #f4f6fa 0%, #fafbfd 50%, #f4f6fa 100%);
+  background-size: 200% 100%;
+  animation: policyModSkPulse 1.35s ease infinite;
+}
+.policy-mod-sk__row:last-child {
+  border-bottom: none;
+}
+.policy-mod-sk__hero {
+  height: 120px;
+  border-radius: 12px;
+  margin-bottom: 16px;
+  background: linear-gradient(90deg, #eef2f7 0%, #f8fafc 50%, #eef2f7 100%);
+  background-size: 200% 100%;
+  animation: policyModSkPulse 1.35s ease infinite;
+}
+@keyframes policyModSkPulse {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}

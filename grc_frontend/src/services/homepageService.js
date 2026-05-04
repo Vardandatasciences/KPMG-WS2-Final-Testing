@@ -8,6 +8,7 @@
  */
 import { axiosInstance } from '@/config/api.js';
 import { API_ENDPOINTS } from '../config/api.js';
+import { useFrameworkGlobalCacheStore } from '@/stores/frameworkGlobalCache';
 
 /** Bumped when homepage payload shape changes so stale in-memory entries are not reused. */
 const HOMEPAGE_DATA_CACHE_PREFIX = 'hp6';
@@ -107,6 +108,14 @@ class HomepageService {
         this.dataStore.approvedFrameworks = response.data;
       } else {
         this.dataStore.approvedFrameworks = [];
+      }
+
+      try {
+        const globalCache = useFrameworkGlobalCacheStore();
+        globalCache.hydrate();
+        globalCache.setFrameworks(this.dataStore.approvedFrameworks);
+      } catch (syncError) {
+        console.warn('[Homepage Service] Global framework cache sync skipped:', syncError?.message || syncError);
       }
 
       console.log(`[Homepage Service] Fetched ${this.dataStore.approvedFrameworks.length} approved frameworks`);

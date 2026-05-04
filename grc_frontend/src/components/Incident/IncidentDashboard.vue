@@ -19,10 +19,18 @@
       </div>
     </div>
     
-    <!-- Loading Indicator -->
-    <div v-if="loading" style="text-align: center; padding: 40px; font-size: 18px; color: #666;">
-      <i class="fas fa-spinner fa-spin" style="margin-right: 10px;"></i>
-      Loading incident metrics...
+    <div
+      v-if="showIncidentDashboardSkeleton"
+      class="grc-skeleton-dashboard incident-kpi-dashboard-skeleton"
+      aria-busy="true"
+      aria-label="Loading incident metrics"
+    >
+      <div class="grc-skeleton-kpi-row">
+        <div v-for="n in 4" :key="'ik-'+n" class="grc-skeleton-kpi-card grc-skeleton-pulse" />
+      </div>
+      <div class="grc-skeleton-charts">
+        <div v-for="n in 4" :key="'ic-'+n" class="grc-skeleton-chart grc-skeleton-pulse" />
+      </div>
     </div>
     <!-- First row - Detection and Response Times -->
     <div v-if="!loading" class="global-dashboard-charts-grid">
@@ -699,8 +707,10 @@ import '../Incident/IncidentDashboard.css';
 import '@/assets/css/dropdown.css';
 import { API_ENDPOINTS } from '../../config/api.js';
 import apiService from '@/services/apiService.js';
+import { mapStores } from 'pinia'
 import incidentService from '../../services/incidentService.js';
 import CustomDropdown from '@/components/CustomDropdown.vue';
+import { useIncidentStore, INCIDENT_MAIN_DASHBOARD_KPI_KEYS } from '@/stores/incident'
 
 export default {
   name: 'IncidentDashboard',
@@ -708,17 +718,12 @@ export default {
     CustomDropdown
   },
   data() {
-    // Stale-while-revalidate: skip loading spinner if all KPIs are already cached
-    const kpiKeys = [
-      'mttd', 'mttr', 'mttc', 'mttrv', 'firstResponseTime', 'incidentCount',
-      'reopenedIncidents', 'closureRate', 'falsePositiveRate', 'detectionAccuracy',
-      'slaCompliance', 'severity', 'rootCauses', 'incidentTypes', 'escalationRate',
-      'repeatRate', 'origins', 'cost', 'incidentCounts'
-    ];
-    const allKPIsCached = incidentService.hasValidKPICache() &&
-      kpiKeys.every(key => incidentService.getKPIData(key) !== null);
+    const incidentStore = useIncidentStore()
+    const anyKpiPrimed = INCIDENT_MAIN_DASHBOARD_KPI_KEYS.some(
+      (k) => incidentStore.peekKpiApiItem(k) != null
+    )
     return {
-      loading: !allKPIsCached, // skip loading spinner when fully cached
+      loading: !anyKpiPrimed && !incidentStore.hasFullMainDashboardKpiCache(),
       scanningRisks: false,
       dataSourceMessage: '', // Data source indicator
       timeRangeOptions: [
@@ -728,7 +733,7 @@ export default {
         { value: 'all', label: 'All Time' }
       ],
       selectedTimeRange: '30days', // Default time range for MTTR
-      selectedMTTDTimeRange: '30days', // Default time range for MTTD
+      selectedMTTDTimeRange: '90days', // Default time range for MTTD
       selectedMTTCTimeRange: '30days', // Default time range for MTTC
       selectedMTTRVTimeRange: '30days', // Default time range for MTTRv
       selectedIncidentCountTimeRange: '30days', // Default time range for Incident Count
@@ -883,16 +888,10 @@ export default {
   },
   computed: {
     totalIncidentCount() {
-      console.log('totalIncidentCount computed - kpiData.incidentOrigins:', this.kpiData.incidentOrigins); // Debug log
-      
       if (!this.kpiData || !this.kpiData.incidentOrigins || !Array.isArray(this.kpiData.incidentOrigins) || this.kpiData.incidentOrigins.length === 0) {
-        console.log('totalIncidentCount: No valid data, returning 0');
         return 0;
       }
-      
-      const total = this.kpiData.incidentOrigins.reduce((total, item) => total + (item.count || 0), 0);
-      console.log('totalIncidentCount: Calculated total:', total);
-      return total;
+      return this.kpiData.incidentOrigins.reduce((sum, item) => sum + (item.count || 0), 0);
     },
   
     opLossBars() {
@@ -916,7 +915,17 @@ export default {
         const y = height - pad - ((v - min) / range) * (height - 2 * pad);
         return `${i === 0 ? 'M' : 'L'}${x},${y}`;
       }).join(' ');
-    }
+    },
+
+    ...mapStores(useIncidentStore),
+
+    incidentKpiCachePrimed() {
+      return this.incidentStore.hasFullMainDashboardKpiCache()
+    },
+
+    showIncidentDashboardSkeleton() {
+      return this.loading && !this.incidentKpiCachePrimed;
+    },
   },
   methods: {
     async runRiskScan() {
@@ -962,132 +971,34 @@ export default {
       return '#ef4444';
     },
     async fetchKPIData() {
-      console.log("🔄 [IncidentDashboard] fetchKPIData called");
-      
       try {
-        console.log('🔍 [IncidentDashboard] Checking for cached incident data...');
-
-        // Three-tier fallback pattern: Check cache, wait for prefetch, fall back to API
-        // Check if prefetch is in progress or cache is available
-        if (!window.incidentDataFetchPromise && !incidentService.hasValidIncidentsCache()) {
-          console.log('🚀 [IncidentDashboard] Starting incident prefetch (user navigated directly)...');
-          window.incidentDataFetchPromise = incidentService.fetchAllIncidentData();
-        }
-
-        // Wait for prefetch if it's in progress (but don't block too long)
-        if (window.incidentDataFetchPromise) {
-          console.log('⏳ [IncidentDashboard] Waiting for incident prefetch to complete...');
+        if (!incidentService.hasValidIncidentsCache()) {
           try {
-            // Wait with a timeout to avoid blocking too long
-            await Promise.race([
-              window.incidentDataFetchPromise,
-              new Promise(resolve => setTimeout(resolve, 2000)) // Max 2 seconds wait
-            ]);
-            console.log('✅ [IncidentDashboard] Incident prefetch completed or timeout');
-          } catch (prefetchError) {
-            console.warn('⚠️ [IncidentDashboard] Incident prefetch failed, will fetch directly from API', prefetchError);
+            await this.incidentStore.ensureIncidentDomainPrefetch({ includeIncidents: false });
+          } catch (e) {
+            console.warn('[IncidentDashboard] Domain prefetch failed', e);
           }
         }
 
-        // Check if we have cached incident data
         const hasCachedIncidents = incidentService.hasValidIncidentsCache();
         const hasValidKPICache = incidentService.hasValidKPICache();
-        
-        console.log('📊 [IncidentDashboard] Cache status:', {
-          hasCachedIncidents: hasCachedIncidents,
-          hasValidKPICache: hasValidKPICache
-        });
-        
-        // Helper to fetch with cache check
-        const fetchWithCache = async (kpiKey, fetchFn) => {
-          // Check cache first
-          const cached = incidentService.getKPIData(kpiKey);
-          if (cached) {
-            console.log(`✅ [IncidentDashboard] Using cached ${kpiKey}`);
-            return cached;
-          }
-          
-          // Fetch from API
-          console.log(`🔍 [IncidentDashboard] Fetching ${kpiKey} from API...`);
-          const data = await fetchFn();
-          
-          // Cache the result
-          incidentService.setKPIData(kpiKey, data);
-          
-          return data;
-        };
-        
-        // STEP 1: Try to load ALL KPIs from cache first (instant load if all cached)
-        const kpiKeys = [
-          'mttd', 'mttr', 'mttc', 'mttrv', 'firstResponseTime', 'incidentCount',
-          'reopenedIncidents', 'closureRate', 'falsePositiveRate', 'detectionAccuracy',
-          'slaCompliance', 'severity', 'rootCauses', 'incidentTypes', 'escalationRate',
-          'repeatRate', 'origins', 'cost', 'incidentCounts'
-        ];
-        
-        const allCached = kpiKeys.every(key => incidentService.getKPIData(key) !== null);
-        
-        if (allCached && hasValidKPICache) {
-          console.log('⚡ [IncidentDashboard] ALL KPIs cached - INSTANT LOAD!');
-          // Load all from cache instantly
-          const [
-            mttdResponse,
-            mttrResponse,
-            mttcResponse,
-            mttrVResponse,
-            firstResponseResponse,
-            incidentCountResponse,
-            reopenedResponse,
-            closureRateResponse,
-            falsePositiveResponse,
-            detectionAccuracyResponse,
-            slaComplianceResponse,
-            severityResponse,
-            rootCausesResponse,
-            incidentTypesResponse,
-            escalationRateResponse,
-            repeatRateResponse,
-            originsResponse,
-            costResponse,
-            incidentCountsResponse
-          ] = kpiKeys.map(key => incidentService.getKPIData(key));
-          
-          // Update component data with all cached KPIs
-          this.updateKPIData({
-            mttd: mttdResponse,
-            mttr: mttrResponse,
-            mttc: mttcResponse,
-            mttrv: mttrVResponse,
-            firstResponseTime: firstResponseResponse,
-            incidentsDetected: incidentCountResponse,
-            reopenedIncidents: reopenedResponse,
-            closureRate: closureRateResponse,
-            falsePositiveRate: falsePositiveResponse,
-            detectionAccuracy: detectionAccuracyResponse,
-            slaComplianceRate: slaComplianceResponse,
-            incidentsBySeverity: severityResponse,
-            rootCauseCategories: rootCausesResponse,
-            incidentTypes: incidentTypesResponse,
-            escalationRate: escalationRateResponse,
-            repeatRate: repeatRateResponse,
-            incidentOrigins: originsResponse,
-            costData: costResponse
-          });
-          
-          this.incidentCounts = incidentCountsResponse;
+        const kpiKeys = [...INCIDENT_MAIN_DASHBOARD_KPI_KEYS];
+
+        const paintedPinia = this.applyPiniaKpiCacheToUi();
+        if (paintedPinia) {
           this.loading = false;
-          this.dataSourceMessage = '✅ All KPI data loaded from cache (prefetched on Home page)';
-          console.log('✅ [IncidentDashboard] All KPIs loaded from cache - INSTANT!');
+          this.dataSourceMessage = 'Showing KPIs from Pinia — loading any missing metrics in the background…';
+        }
+
+        const allFreshInPinia = kpiKeys.every((key) => incidentService.getKPIData(key) != null);
+        if (allFreshInPinia && hasValidKPICache) {
+          this.loading = false;
+          this.dataSourceMessage = '✅ All KPI metrics loaded from Pinia cache';
           return;
         }
-        
-        // STEP 2: Show basic data from cache INSTANTLY and set loading to false immediately
-        // This allows the UI to render while we fetch complex KPIs in the background
+
         if (hasCachedIncidents) {
-          console.log('⚡ [IncidentDashboard] Computing basic KPIs from cache - INSTANT!');
           const basicKPIs = incidentService.computeBasicKPIsFromCache();
-          
-          // Update basic KPIs immediately (instant load)
           if (basicKPIs.incidentsBySeverity) {
             this.kpiData.incidentsBySeverity = basicKPIs.incidentsBySeverity;
           }
@@ -1097,142 +1008,145 @@ export default {
           if (basicKPIs.incidentCounts) {
             this.incidentCounts = basicKPIs.incidentCounts;
           }
-          
-          // Update incident count KPI from cache
           if (basicKPIs.totalCount !== undefined) {
             this.kpiData.incidentsDetected = {
               value: basicKPIs.totalCount,
               change_percentage: 0,
-              chart_data: []
+              chart_data: [],
             };
           }
-          
-          console.log('✅ [IncidentDashboard] Basic KPIs loaded from cache instantly!', {
-            totalCount: basicKPIs.totalCount,
-            statusCounts: basicKPIs.statusCounts
-          });
-          this.dataSourceMessage = '⚡ Basic KPIs loaded from cache, fetching detailed metrics...';
+          if (!paintedPinia) {
+            this.dataSourceMessage = '⚡ Basic KPIs from cached incident list; loading detailed metrics…';
+          }
         }
-        
-        // Set loading to false IMMEDIATELY so UI renders (even if KPIs are still fetching)
-        // This way user sees the dashboard immediately with cached/basic data
+
         this.loading = false;
-        
-        // STEP 3: Fetch complex KPIs in background (check cache first, then API)
-        // These will update the UI as they arrive (progressive loading)
-        const fetchKPI = async (key) => {
-          const fetchMap = {
-            'mttd': () => this.fetchMTTD(),
-            'mttr': () => this.fetchMTTR(),
-            'mttc': () => this.fetchMTTC(),
-            'mttrv': () => this.fetchMTTRV(),
-            'firstResponseTime': () => this.fetchFirstResponseTime(),
-            'incidentCount': () => this.fetchIncidentCount(),
-            'reopenedIncidents': () => this.fetchReopenedIncidents(),
-            'closureRate': () => this.fetchClosureRate(),
-            'falsePositiveRate': () => this.fetchFalsePositiveRate(),
-            'detectionAccuracy': () => this.fetchDetectionAccuracy(),
-            'slaCompliance': () => this.fetchSLACompliance(),
-            'severity': () => this.fetchIncidentsBySeverity(),
-            'rootCauses': () => this.fetchRootCauses(),
-            'incidentTypes': () => this.fetchIncidentTypes(),
-            'escalationRate': () => this.fetchEscalationRate(),
-            'repeatRate': () => this.fetchRepeatRate(),
-            'origins': () => this.fetchIncidentOrigins(),
-            'cost': () => this.fetchIncidentCost(),
-            'incidentCounts': () => this.fetchIncidentCounts()
-          };
-          
-          return fetchMap[key] ? fetchWithCache(key, fetchMap[key]) : Promise.resolve(null);
-        };
-        
-        // Fetch all KPIs in parallel (cached ones return instantly, uncached ones fetch from API)
-        // Use Promise.allSettled to handle errors gracefully - don't block on failures
-        const kpiResults = await Promise.allSettled(
-          kpiKeys.map(key => fetchKPI(key))
-        );
-        
-        // Extract results (handle both fulfilled and rejected promises)
-        const [
-          mttdResult,
-          mttrResult,
-          mttcResult,
-          mttrVResult,
-          firstResponseResult,
-          incidentCountResult,
-          reopenedResult,
-          closureRateResult,
-          falsePositiveResult,
-          detectionAccuracyResult,
-          slaComplianceResult,
-          severityResult,
-          rootCausesResult,
-          incidentTypesResult,
-          escalationRateResult,
-          repeatRateResult,
-          originsResult,
-          costResult,
-          incidentCountsResult
-        ] = kpiResults.map(result => result.status === 'fulfilled' ? result.value : null);
-        
-        // Extract actual responses (handle null values)
-        const mttdResponse = mttdResult;
-        const mttrResponse = mttrResult;
-        const mttcResponse = mttcResult;
-        const mttrVResponse = mttrVResult;
-        const firstResponseResponse = firstResponseResult;
-        const incidentCountResponse = incidentCountResult;
-        const reopenedResponse = reopenedResult;
-        const closureRateResponse = closureRateResult;
-        const falsePositiveResponse = falsePositiveResult;
-        const detectionAccuracyResponse = detectionAccuracyResult;
-        const slaComplianceResponse = slaComplianceResult;
-        const severityResponse = severityResult;
-        const rootCausesResponse = rootCausesResult;
-        const incidentTypesResponse = incidentTypesResult;
-        const escalationRateResponse = escalationRateResult;
-        const repeatRateResponse = repeatRateResult;
-        const originsResponse = originsResult;
-        const costResponse = costResult;
-        const incidentCountsResponse = incidentCountsResult;
-        
-        // Update component data with all KPIs (preserve basic KPIs from cache if API didn't return or failed)
-        // Only update if we got a response - preserve cached values if API call failed
-        if (mttdResponse) this.updateKPIData({ mttd: mttdResponse });
-        if (mttrResponse) this.updateKPIData({ mttr: mttrResponse });
-        if (mttcResponse) this.updateKPIData({ mttc: mttcResponse });
-        if (mttrVResponse) this.updateKPIData({ mttrv: mttrVResponse });
-        if (firstResponseResponse) this.updateKPIData({ firstResponseTime: firstResponseResponse });
-        if (incidentCountResponse) this.updateKPIData({ incidentsDetected: incidentCountResponse });
-        if (reopenedResponse) this.updateKPIData({ reopenedIncidents: reopenedResponse });
-        if (closureRateResponse) this.updateKPIData({ closureRate: closureRateResponse });
-        if (falsePositiveResponse) this.updateKPIData({ falsePositiveRate: falsePositiveResponse });
-        if (detectionAccuracyResponse) this.updateKPIData({ detectionAccuracy: detectionAccuracyResponse });
-        if (slaComplianceResponse) this.updateKPIData({ slaComplianceRate: slaComplianceResponse });
-        if (severityResponse) this.updateKPIData({ incidentsBySeverity: severityResponse });
-        if (rootCausesResponse) this.updateKPIData({ rootCauseCategories: rootCausesResponse });
-        if (incidentTypesResponse) this.updateKPIData({ incidentTypes: incidentTypesResponse });
-        if (escalationRateResponse) this.updateKPIData({ escalationRate: escalationRateResponse });
-        if (repeatRateResponse) this.updateKPIData({ repeatRate: repeatRateResponse });
-        if (originsResponse) this.updateKPIData({ incidentOrigins: originsResponse });
-        if (costResponse) this.updateKPIData({ costData: costResponse });
-        if (incidentCountsResponse) this.incidentCounts = incidentCountsResponse;
-        
-        // Update data source message after all KPIs are fetched
-        const cachedCount = kpiResults.filter(r => r.status === 'fulfilled').length;
-        const totalCount = kpiKeys.length;
-        if (cachedCount === totalCount) {
-          this.dataSourceMessage = `✅ All ${totalCount} KPI metrics loaded (mix of cache and API)`;
-        } else {
-          this.dataSourceMessage = `📊 Loaded ${cachedCount}/${totalCount} KPI metrics from API (cache partial)`;
-        }
-        
-        console.log('✅ [IncidentDashboard] All KPIs loaded');
-        
+
+        const missingKeys = kpiKeys.filter((key) => incidentService.getKPIData(key) == null);
+        void this.backfillIncidentKpiKeys(missingKeys);
       } catch (error) {
         console.error('Error fetching KPI data:', error);
       } finally {
         this.loading = false;
+      }
+    },
+
+    applyPiniaKpiCacheToUi() {
+      const rows = {};
+      for (const key of INCIDENT_MAIN_DASHBOARD_KPI_KEYS) {
+        const raw = incidentService.getKPIData(key);
+        if (raw == null) continue;
+        if (key === 'incidentCounts') continue;
+        if (key === 'incidentCount') rows.incidentsDetected = raw;
+        else if (key === 'slaCompliance') rows.slaComplianceRate = raw;
+        else if (key === 'severity') rows.incidentsBySeverity = raw;
+        else if (key === 'rootCauses') rows.rootCauseCategories = raw;
+        else if (key === 'origins') rows.incidentOrigins = raw;
+        else if (key === 'cost') rows.costData = raw;
+        else rows[key] = raw;
+      }
+      const ic = incidentService.getKPIData('incidentCounts');
+      let any = false;
+      if (Object.keys(rows).length) {
+        this.updateKPIData(rows);
+        any = true;
+      }
+      if (ic != null) {
+        this.incidentCounts = ic;
+        any = true;
+      }
+      return any;
+    },
+
+    getDashboardKpiFetchMap() {
+      return {
+        mttd: () => this.fetchMTTD(),
+        mttr: () => this.fetchMTTR(),
+        mttc: () => this.fetchMTTC(),
+        mttrv: () => this.fetchMTTRV(),
+        firstResponseTime: () => this.fetchFirstResponseTime(),
+        incidentCount: () => this.fetchIncidentCount(),
+        reopenedIncidents: () => this.fetchReopenedIncidents(),
+        closureRate: () => this.fetchClosureRate(),
+        falsePositiveRate: () => this.fetchFalsePositiveRate(),
+        detectionAccuracy: () => this.fetchDetectionAccuracy(),
+        slaCompliance: () => this.fetchSLACompliance(),
+        severity: () => this.fetchIncidentsBySeverity(),
+        rootCauses: () => this.fetchRootCauses(),
+        incidentTypes: () => this.fetchIncidentTypes(),
+        escalationRate: () => this.fetchEscalationRate(),
+        repeatRate: () => this.fetchRepeatRate(),
+        origins: () => this.fetchIncidentOrigins(),
+        cost: () => this.fetchIncidentCost(),
+        incidentCounts: () => this.fetchIncidentCounts(),
+      };
+    },
+
+    mergeDashboardKpiApiResponse(key, payload) {
+      if (payload == null) return;
+      if (key === 'incidentCounts') {
+        this.incidentCounts = payload;
+        return;
+      }
+      const map = {
+        mttd: { mttd: payload },
+        mttr: { mttr: payload },
+        mttc: { mttc: payload },
+        mttrv: { mttrv: payload },
+        firstResponseTime: { firstResponseTime: payload },
+        incidentCount: { incidentsDetected: payload },
+        reopenedIncidents: { reopenedIncidents: payload },
+        closureRate: { closureRate: payload },
+        falsePositiveRate: { falsePositiveRate: payload },
+        detectionAccuracy: { detectionAccuracy: payload },
+        slaCompliance: { slaComplianceRate: payload },
+        severity: { incidentsBySeverity: payload },
+        rootCauses: { rootCauseCategories: payload },
+        incidentTypes: { incidentTypes: payload },
+        escalationRate: { escalationRate: payload },
+        repeatRate: { repeatRate: payload },
+        origins: { incidentOrigins: payload },
+        cost: { costData: payload },
+      };
+      const chunk = map[key];
+      if (chunk) this.updateKPIData(chunk);
+    },
+
+    backfillIncidentKpiKeys(keys) {
+      const unique = [...new Set(keys)].filter(Boolean);
+      if (!unique.length) {
+        this.dataSourceMessage = '✅ KPI metrics up to date';
+        return;
+      }
+      const fetchMap = this.getDashboardKpiFetchMap();
+      const keysToFetch = unique.filter((key) => typeof fetchMap[key] === 'function');
+      if (!keysToFetch.length) {
+        this.dataSourceMessage = '✅ KPI metrics up to date';
+        return;
+      }
+      let finished = 0;
+      let succeeded = 0;
+      const total = keysToFetch.length;
+      for (const key of keysToFetch) {
+        const fn = fetchMap[key];
+        void Promise.resolve()
+          .then(() => fn())
+          .then((data) => {
+            if (data == null) return;
+            incidentService.setKPIData(key, data);
+            this.mergeDashboardKpiApiResponse(key, data);
+            succeeded += 1;
+          })
+          .catch(() => {})
+          .finally(() => {
+            finished += 1;
+            if (finished >= total) {
+              this.dataSourceMessage =
+                succeeded > 0
+                  ? `✅ KPI metrics ready (${succeeded}/${total} refreshed from API; Pinia cache updated)`
+                  : '⚠️ Some KPI metrics could not be refreshed — showing cache or defaults';
+            }
+          });
       }
     },
     
@@ -1921,15 +1835,11 @@ export default {
     
     // Helper method to update KPI data
     updateKPIData(newData) {
-      console.log('Updating KPI data:', newData); // Debug log
       Object.keys(newData).forEach(key => {
         if (this.kpiData[key]) {
-          console.log(`Updating ${key}:`, newData[key]); // Debug log
-          
           // Handle arrays specially (like incidentOrigins, incidentTypes, etc.)
           if (Array.isArray(newData[key])) {
             this.kpiData[key] = newData[key];
-            console.log(`Updated ${key} as array:`, this.kpiData[key]);
           } else if (typeof newData[key] === 'object' && newData[key] !== null) {
             // Handle nested objects (like costData.by_severity)
             if (key === 'costData' && newData[key].by_severity && Array.isArray(newData[key].by_severity)) {
@@ -2467,8 +2377,6 @@ export default {
 
     async updateMTTRData() {
       try {
-        this.loading = true;
-        // Try to refresh from service first
         try {
           const refreshedData = await incidentService.refreshKPIData('mttr', this.selectedTimeRange);
           if (refreshedData) {
@@ -2481,20 +2389,15 @@ export default {
         } catch (serviceError) {
           console.warn('Service refresh failed, using direct API call:', serviceError);
         }
-        // Fallback to direct API call
         const mttrResponse = await this.fetchMTTR();
         this.kpiData.mttr = mttrResponse;
       } catch (error) {
         console.error('Error updating MTTR data:', error);
-      } finally {
-        this.loading = false;
       }
     },
 
     async updateMTTDData() {
       try {
-        this.loading = true;
-        // Try to refresh from service first
         try {
           const refreshedData = await incidentService.refreshKPIData('mttd', this.selectedMTTDTimeRange);
           if (refreshedData) {
@@ -2507,20 +2410,15 @@ export default {
         } catch (serviceError) {
           console.warn('Service refresh failed, using direct API call:', serviceError);
         }
-        // Fallback to direct API call
         const mttdResponse = await this.fetchMTTD();
         this.kpiData.mttd = mttdResponse;
       } catch (error) {
         console.error('Error updating MTTD data:', error);
-      } finally {
-        this.loading = false;
       }
     },
 
     async updateMTTCData() {
       try {
-        this.loading = true;
-        // Try to refresh from service first
         try {
           const refreshedData = await incidentService.refreshKPIData('mttc', this.selectedMTTCTimeRange);
           if (refreshedData) {
@@ -2533,25 +2431,19 @@ export default {
         } catch (serviceError) {
           console.warn('Service refresh failed, using direct API call:', serviceError);
         }
-        // Fallback to direct API call
         const mttcResponse = await this.fetchMTTC();
         this.kpiData.mttc = mttcResponse;
       } catch (error) {
         console.error('Error updating MTTC data:', error);
-      } finally {
-        this.loading = false;
       }
     },
 
     async updateMTTRVData() {
       try {
-        this.loading = true;
         const mttrvResponse = await this.fetchMTTRV();
         this.kpiData.mttrv = mttrvResponse;
       } catch (error) {
         console.error('Error updating MTTRv data:', error);
-      } finally {
-        this.loading = false;
       }
     },
 
@@ -3123,20 +3015,16 @@ export default {
   async mounted() {
     console.log('🚀 [IncidentDashboard] Component mounted');
     
-    // Wait for incident data fetch if still in progress
-    if (window.incidentDataFetchPromise) {
-      console.log('⏳ [IncidentDashboard] Waiting for incident data fetch...');
-      try {
-        await window.incidentDataFetchPromise;
-        console.log('✅ [IncidentDashboard] Incident data fetch completed');
-      } catch (error) {
-        console.warn('⚠️ [IncidentDashboard] Incident data fetch failed:', error);
-      }
+    try {
+      await this.incidentStore.ensureIncidentDomainPrefetch({ includeIncidents: false });
+    } catch (error) {
+      console.warn('⚠️ [IncidentDashboard] Domain prefetch failed:', error);
     }
-    
-    // Fetch KPI data (will check cache and wait for prefetch if needed)
-    await this.fetchKPIData();
-    console.log('✅ [IncidentDashboard] KPI data loaded');
+
+    // MTTD default is 90 days; Pinia KPI cache has no time-range metadata — evict so the first fetch matches the UI.
+    this.incidentStore.evictKpiApiItems(['mttd']);
+
+    void this.fetchKPIData();
   }
 }
 </script>

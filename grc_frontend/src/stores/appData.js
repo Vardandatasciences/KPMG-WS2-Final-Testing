@@ -1,11 +1,11 @@
 import { defineStore } from 'pinia';
 
-import riskDataService from '@/services/riskService';
-import complianceDataService from '@/services/complianceService';
 import auditorDataService from '@/services/auditorService';
+import { useAuditStore } from '@/stores/audit';
 import eventDataService from '@/services/eventService';
 import policyDataService from '@/services/policyService';
 import incidentDataService from '@/services/incidentService';
+import { useIncidentStore } from '@/stores/incident';
 import apiService from '@/services/apiService';
 import { API_ENDPOINTS } from '@/config/api.js';
 
@@ -61,9 +61,11 @@ export const useAppDataStore = defineStore('appData', {
       if (this.risksLoaded && !force) return;
       let success = false;
       try {
-        await riskDataService.fetchAllRiskData();
-        this.risks = riskDataService.getData('risks') || [];
-        this.riskInstances = riskDataService.getData('riskInstances') || [];
+        const { useRiskStore } = await import('@/stores/risk');
+        const riskStore = useRiskStore();
+        await riskStore.prefetchRiskRegisterAndInstances({ force });
+        this.risks = [...riskStore.risks];
+        this.riskInstances = [...riskStore.riskInstances];
         success = true;
       } catch (e) {
         console.error('[pinia:appData] fetchRisks failed:', e);
@@ -78,26 +80,20 @@ export const useAppDataStore = defineStore('appData', {
       if (this.compliancesLoaded && !force) return;
       let fullSuccess = false;
       try {
-        // Store complete compliance data + fast KPI summary in parallel.
-        const [fullDataResult, summaryResult] = await Promise.allSettled([
-          complianceDataService.fetchAllComplianceData(),
-          apiService.get(API_ENDPOINTS.COMPLIANCE_USER_DASHBOARD, {}, { background: true }),
-        ]);
+        // Delegate to complianceStore — single source of truth for compliance data.
+        const { useComplianceStore } = await import('@/stores/compliance');
+        const complianceStore = useComplianceStore();
+        await complianceStore.prefetchComplianceDomain({ force });
 
-        if (fullDataResult.status === 'fulfilled') {
-          this.complianceFrameworks = complianceDataService.getData('frameworks') || [];
-          this.compliances = complianceDataService.getData('compliances') || [];
-          fullSuccess = true;
-        } else {
-          console.error('[pinia:appData] fetchCompliances full dataset failed:', fullDataResult.reason);
-          this.complianceFrameworks = [];
-          this.compliances = [];
-        }
+        this.complianceFrameworks = complianceStore.frameworks;
+        this.compliances = complianceStore.compliances ?? [];
+        fullSuccess = true;
 
-        if (summaryResult.status === 'fulfilled') {
-          const result = summaryResult.value;
-          if (result?.success && result?.data?.summary) {
-            const s = result.data.summary;
+        // Also pull in the lightweight dashboard summary if not already populated.
+        if (!this.complianceSummary) {
+          await complianceStore.fetchComplianceDashboard();
+          if (complianceStore.dashboardSummary) {
+            const s = complianceStore.dashboardSummary;
             this.complianceSummary = {
               status_counts: s.status_counts || {},
               total_count: s.total_count || 0,
@@ -105,8 +101,6 @@ export const useAppDataStore = defineStore('appData', {
               approval_rate: s.approval_rate || 0,
             };
           }
-        } else {
-          console.warn('[pinia:appData] fetchCompliances summary failed:', summaryResult.reason);
         }
       } catch (e) {
         console.error('[pinia:appData] fetchCompliances failed:', e);
@@ -122,20 +116,23 @@ export const useAppDataStore = defineStore('appData', {
       if (this.auditsLoaded && !force) return;
       let fullSuccess = false;
       try {
-        // Store complete audit data + fast KPI summary in parallel.
-        const [fullDataResult, completionData, totalData, openData, completedData] = await Promise.all([
-          auditorDataService.fetchAllAuditorData({ scope: 'all' }),
+        const auditStore = useAuditStore();
+        // Auditor domain prefetch (Pinia-de-duplicated) + fast KPI summary in parallel.
+        const [, completionData, totalData, openData, completedData] = await Promise.all([
+          auditStore.prefetchAuditDomain({ scope: 'all', force }),
           apiService.get(API_ENDPOINTS.AUDIT_COMPLETION_RATE, {}, { background: true }).catch(() => null),
           apiService.get(API_ENDPOINTS.AUDIT_TOTAL_AUDITS, {}, { background: true }).catch(() => null),
           apiService.get(API_ENDPOINTS.AUDIT_OPEN_AUDITS, {}, { background: true }).catch(() => null),
           apiService.get(API_ENDPOINTS.AUDIT_COMPLETED_AUDITS, {}, { background: true }).catch(() => null),
         ]);
 
-        if (fullDataResult !== undefined) {
-          this.audits = auditorDataService.getData('audits') || [];
-          this.businessUnits = auditorDataService.getData('businessUnits') || [];
-          fullSuccess = true;
-        }
+        this.audits = auditStore.audits.length
+          ? auditStore.audits
+          : (auditorDataService.getData('audits') || []);
+        this.businessUnits = auditStore.businessUnits.length
+          ? auditStore.businessUnits
+          : (auditorDataService.getData('businessUnits') || []);
+        fullSuccess = true;
 
         this.auditSummary = {
           auditCompletionData: {
@@ -243,6 +240,11 @@ export const useAppDataStore = defineStore('appData', {
         // Include full incidents list when building global cache.
         await incidentDataService.fetchAllIncidentData({ includeIncidents: true });
         this.incidents = incidentDataService.getData('incidents') || [];
+        try {
+          useIncidentStore().hydrateListsFromIncidentService();
+        } catch (e) {
+          console.warn('[pinia:appData] incident store hydrate skipped:', e);
+        }
         success = true;
       } catch (e) {
         console.error('[pinia:appData] fetchIncidents failed:', e);

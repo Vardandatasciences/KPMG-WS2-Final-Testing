@@ -355,8 +355,8 @@
 </template>
 
 <script>
-import axios from 'axios'
 import { API_BASE_URL } from '../../config/api.js'
+import { useComplianceStore } from '@/stores/compliance'
 
 export default {
   name: 'CrossFrameworkMapping',
@@ -413,15 +413,19 @@ export default {
   methods: {
     async loadAvailableFrameworks() {
       try {
+        const complianceStore = useComplianceStore()
         console.log('='.repeat(80))
         console.log('🔄 Loading frameworks from API...')
         console.log('🌐 URL:', `${API_BASE_URL}/api/compliance/frameworks/`)
         console.log('='.repeat(80))
-        
-        // Increase timeout for large datasets
-        const response = await axios.get(`${API_BASE_URL}/api/compliance/frameworks/`, {
-          timeout: 60000 // 60 seconds instead of default 30
-        })
+        await complianceStore.fetchCrossFrameworkList({ force: true })
+        const response = {
+          data: {
+            success: true,
+            frameworks: complianceStore.crossFramework.frameworks || []
+          },
+          status: 200
+        }
         
         console.log('✅ API Response received!')
         console.log('✅ Response data:', response.data)
@@ -472,12 +476,18 @@ export default {
       if (!this.framework1Id) return
       
       try {
+        const complianceStore = useComplianceStore()
         this.framework1 = this.availableFrameworks.find(fw => fw.framework_id === this.framework1Id)
         
         console.log(`🔍 Loading compliances for framework ${this.framework1Id}`)
         
-        // Use the BRAND NEW dedicated endpoint for cross-framework mapping
-        const response = await axios.get(`${API_BASE_URL}/api/cross-framework-mapping/${this.framework1Id}/`)
+        await complianceStore.fetchCrossFrameworkMapping(this.framework1Id, { side: 1, force: true })
+        const response = {
+          data: {
+            success: true,
+            compliances: complianceStore.crossFramework.mapping1?.compliances || []
+          }
+        }
         if (response.data.success) {
           // Use the backend data directly - it already has the correct format
           this.framework1Compliances = response.data.compliances || []
@@ -494,12 +504,18 @@ export default {
       if (!this.framework2Id) return
       
       try {
+        const complianceStore = useComplianceStore()
         this.framework2 = this.availableFrameworks.find(fw => fw.framework_id === this.framework2Id)
         
         console.log(`🔍 Loading compliances for framework ${this.framework2Id}`)
         
-        // Use the BRAND NEW dedicated endpoint for cross-framework mapping
-        const response = await axios.get(`${API_BASE_URL}/api/cross-framework-mapping/${this.framework2Id}/`)
+        await complianceStore.fetchCrossFrameworkMapping(this.framework2Id, { side: 2, force: true })
+        const response = {
+          data: {
+            success: true,
+            compliances: complianceStore.crossFramework.mapping2?.compliances || []
+          }
+        }
         if (response.data.success) {
           // Use the backend data directly - it already has the correct format
           this.framework2Compliances = response.data.compliances || []
@@ -533,12 +549,13 @@ export default {
       this.processingSubMessage = 'Utilizing AI for semantic gap analysis'
 
       try {
+        const complianceStore = useComplianceStore()
         console.log(`🤖 Requesting Semantic Comparison Between Frameworks...`)
-        
-        const response = await axios.post(`${API_BASE_URL}/api/change-management/compare-versions/`, {
+        const responseData = await complianceStore.compareFrameworkVersions({
           framework1_id: this.framework1Id,
           framework2_id: this.framework2Id
         })
+        const response = { data: responseData }
 
         if (response.data.success && response.data.result) {
           const aiResult = response.data.result

@@ -340,23 +340,19 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import apiService from '@/services/apiService.js'
+import { storeToRefs } from 'pinia'
 import { PopupService } from '@/modules/popup'
 import DynamicTable from '../DynamicTable.vue'
 import AccessUtils from '@/utils/accessUtils'
-import { API_ENDPOINTS } from '../../config/api.js'
-import complianceDataService from '@/services/complianceService' // NEW: Use cached compliance data
+import { useComplianceStore } from '@/stores/compliance'
+import { useFrameworkStore } from '@/stores/framework'
 import { assertSafeDownloadUrl, openUrlInNewTabSafe } from '@/utils/safeExternalNavigation'
 
-const axios = {
-  get: async (url, config = {}) => ({ data: await apiService.get(url, config.params || {}, { ...config, params: undefined }) }),
-  post: async (url, data, config = {}) => ({ data: await apiService.post(url, data, config) }),
-  put: async (url, data, config = {}) => ({ data: await apiService.put(url, data, config) }),
-  patch: async (url, data, config = {}) => ({ data: await apiService.patch(url, data, config) }),
-  delete: async (url, config = {}) => ({ data: await apiService.delete(url, config) })
-}
+const complianceStore = useComplianceStore()
+const frameworkStore = useFrameworkStore()
+const { frameworks: storeFrameworks } = storeToRefs(complianceStore)
 
 // State
 const frameworks = ref([])
@@ -374,8 +370,8 @@ const versionModalTitle = ref('')
 // const expandedCompliance = ref(null)
 const router = useRouter()
 
-// Framework session state
-const sessionFrameworkId = ref(null)
+// Framework session state — now sourced from frameworkStore (read-only local alias)
+const sessionFrameworkId = computed(() => frameworkStore.selectedFrameworkId)
 
 // Export state
 const exportFormat = ref('')
@@ -450,13 +446,12 @@ const showFrameworks = computed(() => !selectedFramework.value)
 const showPolicies = computed(() => selectedFramework.value && !selectedPolicy.value)
 const showSubpolicies = computed(() => selectedPolicy.value && !selectedSubpolicy.value)
 
-// Filter frameworks based on session framework ID
+// Filter frameworks based on session framework ID (from frameworkStore)
 const filteredFrameworks = computed(() => {
-  if (sessionFrameworkId.value) {
-    // If there's a session framework ID, show only that framework
-    return frameworks.value.filter(fw => fw.id.toString() === sessionFrameworkId.value.toString())
+  const fwId = sessionFrameworkId.value
+  if (fwId && fwId !== 'all') {
+    return frameworks.value.filter(fw => fw.id.toString() === fwId.toString())
   }
-  // If no session framework ID, show all frameworks
   return frameworks.value
 })
 
@@ -474,41 +469,49 @@ const filteredCompliances = computed(() => {
   return selectedSubpolicy.value.compliances; // Return all compliances without filtering
 });
 
-// Check for selected framework from session and set it as default
-const checkSelectedFrameworkFromSession = async () => {
+const mapFrameworkRows = (raw = []) =>
+  (Array.isArray(raw) ? raw : []).map((fw) => ({
+    id: fw.FrameworkId ?? fw.id,
+    name: fw.FrameworkName ?? fw.name,
+    category: fw.FrameworkCategory ?? fw.category ?? 'General',
+    status: fw.Status ?? fw.status ?? fw.ActiveInactive ?? 'Active',
+    description: fw.Description ?? fw.description ?? fw.FrameworkDescription ?? '',
+    versions: fw.versions ?? [],
+  }))
+
+const hydrateFrameworksFromCache = () => {
+  if (Array.isArray(complianceStore.frameworks) && complianceStore.frameworks.length) {
+    frameworks.value = mapFrameworkRows(complianceStore.frameworks)
+    return true
+  }
   try {
-    console.log('🔍 DEBUG: Checking for selected framework from session in AllCompliance...')
-    const response = await axios.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED)
-    console.log('📊 DEBUG: Selected framework response:', response.data)
-    
-    if (response.data && response.data.success && response.data.frameworkId) {
-      const frameworkIdFromSession = response.data.frameworkId
-      console.log('✅ DEBUG: Found selected framework in session:', frameworkIdFromSession)
-      
-      // Store the session framework ID for filtering
-      sessionFrameworkId.value = frameworkIdFromSession
-      
-      // Check if this framework exists in our loaded frameworks
-      const frameworkExists = frameworks.value.find(f => f.id.toString() === frameworkIdFromSession.toString())
-      
-      if (frameworkExists) {
-        console.log('✅ DEBUG: Framework exists in loaded frameworks:', frameworkExists.name)
-        // Automatically select the framework from session
-        await selectFramework(frameworkExists)
-        console.log('✅ DEBUG: Auto-selected framework from session')
-      } else {
-        console.log('⚠️ DEBUG: Framework from session (ID:', frameworkIdFromSession, ') not found in loaded frameworks')
-        console.log('📋 DEBUG: Available frameworks:', frameworks.value.map(f => ({ id: f.id, name: f.name })))
-        // Clear the session framework ID since it doesn't exist
-        sessionFrameworkId.value = null
-      }
-    } else {
-      console.log('ℹ️ DEBUG: No framework found in session')
-      sessionFrameworkId.value = null
-    }
-  } catch (error) {
-    console.error('❌ DEBUG: Error checking selected framework from session:', error)
-    sessionFrameworkId.value = null
+    const raw = window?.sessionStorage?.getItem('pinia_compliance_frameworks_cache_v1')
+    if (!raw) return false
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed?.data) || !parsed.data.length) return false
+    frameworks.value = mapFrameworkRows(parsed.data)
+    return true
+  } catch {
+    return false
+  }
+}
+
+const syncFrameworkRowsFromStore = () => {
+  frameworks.value = mapFrameworkRows(complianceStore.frameworks)
+}
+
+// Apply the framework selection that is already in frameworkStore (no separate HTTP call needed).
+const applySessionFramework = async () => {
+  const fwId = frameworkStore.selectedFrameworkId
+  if (!fwId || fwId === 'all') {
+    selectedFramework.value = null
+    selectedPolicy.value = null
+    selectedSubpolicy.value = null
+    return
+  }
+  const frameworkExists = frameworks.value.find(f => f.id.toString() === fwId.toString())
+  if (frameworkExists) {
+    await selectFramework(frameworkExists)
   }
 }
 
@@ -524,8 +527,7 @@ const checkPendingExports = async () => {
     // If export is still processing and we have a task_id, check status
     if (exportState.status === 'processing' && exportState.taskId) {
       try {
-        const statusResponse = await axios.get(`/api/export-compliance-register/status/${exportState.taskId}/`);
-        const statusData = statusResponse.data;
+        const statusData = await complianceStore.fetchComplianceRegisterExportStatus(exportState.taskId);
         
         if (statusData.success) {
           if (statusData.status === 'completed' && statusData.file_url) {
@@ -582,92 +584,59 @@ const checkPendingExports = async () => {
 };
 
 onMounted(async () => {
-  // Check for pending exports first
-  await checkPendingExports();
-  
+  await checkPendingExports()
+
   try {
-    loading.value = true
-    console.log('🔍 [AllCompliance] Checking for cached framework data...')
-    
-    // ==========================================
-    // NEW: Ensure compliance prefetch is running
-    // ==========================================
-    if (!window.complianceDataFetchPromise && !complianceDataService.hasFrameworksCache()) {
-      console.log('🚀 [AllCompliance] Starting compliance prefetch (user navigated directly)...')
-      window.complianceDataFetchPromise = complianceDataService.fetchAllComplianceData()
+    // Paint instantly from Pinia/session cache if available.
+    const hasWarmFrameworks = hydrateFrameworksFromCache()
+    loading.value = !hasWarmFrameworks
+
+    // Ensure frameworkStore session is loaded (no-op if already done by HomeView/shell)
+    if (!frameworkStore.selectedFrameworkId) {
+      await frameworkStore.loadFrameworkFromSession()
     }
 
-    if (window.complianceDataFetchPromise) {
-      console.log('⏳ [AllCompliance] Waiting for compliance prefetch to complete...')
-      try {
-        await window.complianceDataFetchPromise
-        console.log('✅ [AllCompliance] Prefetch completed')
-      } catch (prefetchError) {
-        console.warn('⚠️ [AllCompliance] Prefetch failed, will fetch directly from API', prefetchError)
-      }
-    }
-    
-    // FIRST: Try to get data from cache
-    if (complianceDataService.hasFrameworksCache()) {
-      console.log('✅ [AllCompliance] Using cached framework data')
-      const cachedFrameworks = complianceDataService.getData('frameworks') || []
-      
-      frameworks.value = cachedFrameworks.map(framework => ({
-        id: framework.FrameworkId || framework.id,
-        name: framework.FrameworkName || framework.name,
-        category: framework.FrameworkCategory || framework.category || 'General',
-        status: framework.Status || framework.status || 'Active',
-        description: framework.Description || framework.description || '',
-        versions: framework.versions || []
-      }))
-      console.log(`[AllCompliance] Loaded ${frameworks.value.length} frameworks from cache (prefetched on Home page)`)
-      
-      // Check for selected framework from session after loading frameworks
-      await checkSelectedFrameworkFromSession()
+    // Background refresh for cache revalidation; don't block initial render.
+    const prefetchPromise = complianceStore.prefetchComplianceDomain().then(() => {
+      syncFrameworkRowsFromStore()
+    })
+
+    // Auto-select framework if one is persisted in frameworkStore session
+    await applySessionFramework()
+
+    if (hasWarmFrameworks) {
+      void prefetchPromise
     } else {
-      // FALLBACK: Fetch from API if cache is empty
-      console.log('⚠️ [AllCompliance] No cached data found, fetching from API...')
-      const response = await axios.get(API_ENDPOINTS.COMPLIANCE_ALL_POLICIES_FRAMEWORKS)
-      console.log('Frameworks response:', response.data)
-      
-      if (response.data && Array.isArray(response.data)) {
-        frameworks.value = response.data.map(framework => ({
-          id: framework.id,
-          name: framework.name,
-          category: framework.category || 'General',
-          status: framework.status || 'Active',
-          description: framework.description || '',
-          versions: framework.versions || []
-        }))
-        console.log(`[AllCompliance] Loaded ${frameworks.value.length} frameworks directly from API (cache unavailable)`)
-        
-        // Update cache so subsequent pages benefit
-        complianceDataService.setData('frameworks', response.data)
-        console.log('ℹ️ [AllCompliance] Cache updated after direct API fetch')
-        
-        // Check for selected framework from session after loading frameworks
-        await checkSelectedFrameworkFromSession()
-      } else {
-        console.error('Invalid frameworks response format:', response.data)
-        frameworks.value = []
-        error.value = 'Invalid response format from server'
-      }
+      await prefetchPromise
     }
   } catch (err) {
-    // Check if it's an access control error
-    if (err.response && [401, 403].includes(err.response.status)) {
-      AccessUtils.showViewAllComplianceDenied();
-      return;
+    if (err?.response && [401, 403].includes(err.response.status)) {
+      AccessUtils.showViewAllComplianceDenied()
+      return
     }
-    
     error.value = 'Failed to load frameworks'
-    console.error('Error fetching frameworks:', err.response?.data || err.message)
+    console.error('[AllCompliance] Error loading frameworks:', err?.response?.data ?? err.message)
     frameworks.value = []
     PopupService.error('Failed to load frameworks. Please refresh the page and try again.', 'Loading Error')
   } finally {
     loading.value = false
   }
+
+  // Re-sync frameworks whenever the store updates (background refresh)
+  watch(storeFrameworks, (raw) => {
+    if (!raw?.length) return
+    syncFrameworkRowsFromStore()
+  })
 })
+
+watch(
+  () => frameworkStore.selectedFrameworkId,
+  async (newFrameworkId, oldFrameworkId) => {
+    if (newFrameworkId === oldFrameworkId) return
+    if (!frameworks.value.length) return
+    await applySessionFramework()
+  }
+)
 
 // Methods
 // setViewMode method removed - only list view is available
@@ -678,62 +647,29 @@ async function selectFramework(fw) {
     selectedFramework.value = fw
     selectedPolicy.value = null
     selectedSubpolicy.value = null
-    
-    // Save the selected framework to session
-    await saveFrameworkToSession(fw.id)
-    
-    // Get active policies for the selected framework using the correct endpoint
-          const response = await axios.get(API_ENDPOINTS.COMPLIANCE_ALL_POLICIES_POLICIES, {
-      params: { 
-        framework_id: fw.id
-      }
-    })
-    
-    if (response.data && Array.isArray(response.data)) {
-      policies.value = response.data.map(policy => ({
-        ...policy,
-        versions: policy.versions || [] // Versions count should be included in the response
-      }))
-    } else {
-      policies.value = []
-    }
+
+    // Persist selection via frameworkStore (single source of truth — no direct FRAMEWORK_SET_SELECTED call)
+    await frameworkStore.setFramework({ id: fw.id, name: fw.name })
+
+    // Sync selection into complianceStore so hierarchy fetches use the right frameworkId
+    complianceStore.setSelectedFramework(fw.id)
+
+    // Fetch policies using store action (cache-first)
+    await complianceStore.fetchPoliciesByFramework(fw.id)
+    const storePolicies = complianceStore.policiesForFramework(fw.id)
+
+    policies.value = storePolicies.map(p => ({ ...p, versions: p.versions ?? [] }))
   } catch (err) {
-    // Check if it's an access control error
-    if (err.response && [401, 403].includes(err.response.status)) {
-      AccessUtils.showViewAllComplianceDenied();
-      return;
+    if (err?.response && [401, 403].includes(err.response.status)) {
+      AccessUtils.showViewAllComplianceDenied()
+      return
     }
-    
     error.value = 'Failed to load policies'
-    console.error('Error fetching policies:', err)
+    console.error('[AllCompliance] Error fetching policies:', err)
     policies.value = []
     PopupService.error('Failed to load policies. Please try selecting a different framework.', 'Loading Error')
   } finally {
     loading.value = false
-  }
-}
-
-// Save framework selection to session
-const saveFrameworkToSession = async (frameworkId) => {
-  try {
-    const userId = localStorage.getItem('user_id') || 'default_user'
-    console.log('🔍 DEBUG: Saving framework to session in AllCompliance:', frameworkId)
-    
-    const response = await axios.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, {
-      frameworkId: frameworkId,
-      userId: userId
-    })
-    
-    if (response.data && response.data.success) {
-      console.log('✅ DEBUG: Framework saved to session successfully in AllCompliance')
-      console.log('🔑 DEBUG: Session key:', response.data.sessionKey)
-      // Update the session framework ID
-      sessionFrameworkId.value = frameworkId
-    } else {
-      console.error('❌ DEBUG: Failed to save framework to session in AllCompliance')
-    }
-  } catch (error) {
-    console.error('❌ DEBUG: Error saving framework to session in AllCompliance:', error)
   }
 }
 
@@ -742,22 +678,16 @@ async function selectPolicy(policy) {
     loading.value = true
     selectedPolicy.value = policy
     selectedSubpolicy.value = null
-    
-    // Get subpolicies for the selected policy using the correct endpoint and param
-          const response = await axios.get(API_ENDPOINTS.COMPLIANCE_ALL_POLICIES_SUBPOLICIES, {
-      params: { 
-        policy_id: policy.id
-      }
-    })
-    
-    if (response.data && Array.isArray(response.data)) {
-      subpolicies.value = response.data
-    } else {
-      subpolicies.value = []
-    }
+    complianceStore.setSelectedPolicy(policy.id)
+
+    // Fetch subpolicies via store (cache-first)
+    await complianceStore.fetchSubpoliciesByPolicy(policy.id)
+    const storeSubs = complianceStore.subpoliciesForPolicy(policy.id)
+
+    subpolicies.value = storeSubs
   } catch (err) {
     error.value = 'Failed to load subpolicies'
-    console.error('Error fetching subpolicies:', err)
+    console.error('[AllCompliance] Error fetching subpolicies:', err)
     subpolicies.value = []
     PopupService.error('Failed to load subpolicies. Please try selecting a different policy.', 'Loading Error')
   } finally {
@@ -769,14 +699,18 @@ async function selectSubpolicy(subpolicy) {
   try {
     loading.value = true;
     selectedSubpolicy.value = subpolicy;
+    complianceStore.setSelectedSubpolicy(subpolicy.id);
     
-            const response = await axios.get(API_ENDPOINTS.COMPLIANCE_SUBPOLICY_COMPLIANCES(subpolicy.id));
-    console.log('Subpolicy compliances response:', response.data);
+    // Force-refresh compliances when entering controls to avoid stale cache
+    // right after approve/review transitions.
+    await complianceStore.fetchCompliancesBySubpolicy(subpolicy.id, { force: true });
+    const responseCompliances = complianceStore.compliancesBySubpolicyId[subpolicy.id] || [];
+    console.log('Subpolicy compliances response:', responseCompliances);
     
-    if (response.data && response.data.success) {
+    if (Array.isArray(responseCompliances)) {
       // Enhanced logging for debugging
-      if (response.data.compliances.length > 0) {
-        const firstCompliance = response.data.compliances[0];
+      if (responseCompliances.length > 0) {
+        const firstCompliance = responseCompliances[0];
         console.log('DETAILED COMPLIANCE OBJECT:', JSON.stringify(firstCompliance, null, 2));
         
         // Display all field names and values for better debugging
@@ -789,7 +723,7 @@ async function selectSubpolicy(subpolicy) {
       // Store the original compliance objects as they come from the API
       selectedSubpolicy.value = {
         ...subpolicy,
-        compliances: response.data.compliances.map(compliance => {
+        compliances: responseCompliances.map(compliance => {
           return {
             // IMPORTANT: Use the exact PascalCase field names from the API
             id: compliance.ComplianceId,
@@ -890,13 +824,15 @@ function goToStep(idx) {
     selectedFramework.value = null
     selectedPolicy.value = null
     selectedSubpolicy.value = null
-    // If there's a session framework ID, we should still filter to show only that framework
-    // but not auto-select it
+    complianceStore.resetSelection()
   } else if (idx === 1) {
     selectedPolicy.value = null
     selectedSubpolicy.value = null
+    complianceStore.setSelectedPolicy(null)
+    complianceStore.setSelectedSubpolicy(null)
   } else if (idx === 2) {
     selectedSubpolicy.value = null
+    complianceStore.setSelectedSubpolicy(null)
   }
 }
 
@@ -999,7 +935,7 @@ const exportCompliances = async () => {
     localStorage.setItem('compliance_export_state', JSON.stringify(exportState));
 
     // Single backend call: server fetches all relevant compliances and exports
-    const response = await axios.post(API_ENDPOINTS.EXPORT_COMPLIANCE_MANAGEMENT, {
+    const result = await complianceStore.exportComplianceManagement({
       export_format: exportFormat.value,
       user_id: userId,
       file_name: fileName,
@@ -1008,11 +944,9 @@ const exportCompliances = async () => {
       subpolicy_id: scope.subpolicy_id,
       scope
     });
-    
-    console.log('Export successful:', response.data);
-    console.log('Response structure:', Object.keys(response.data));
-    
-    const result = response.data;
+
+    console.log('Export successful:', result);
+    console.log('Response structure:', Object.keys(result));
     
     // Save task ID and record count if provided
     if (result.task_id) {
@@ -1027,9 +961,33 @@ const exportCompliances = async () => {
       console.log('File URL found:', result.file_url);
       console.log('File name:', result.file_name);
 
-      let safeFileUrl;
+      const rawFileUrl = String(result.file_url || '').trim();
+      const exportMethod = String(result?.metadata?.method || '').toLowerCase();
+      const isWindowsLocalPath = /^[a-zA-Z]:[\\/]/.test(rawFileUrl);
+      const isLikelyLocalFallback =
+        rawFileUrl.toLowerCase().startsWith('file://') ||
+        isWindowsLocalPath ||
+        exportMethod === 'local_fallback';
+
+      // Local fallback export already writes file to Downloads; browser cannot open local paths safely.
+      if (isLikelyLocalFallback) {
+        exportState.status = 'completed';
+        exportState.fileUrl = result.file_url;
+        exportState.fileName = result.file_name;
+        exportState.completedAt = new Date().toISOString();
+        localStorage.setItem('compliance_export_state', JSON.stringify(exportState));
+        PopupService.success('Export completed successfully. File is saved to your Downloads folder.');
+        localStorage.removeItem('compliance_export_state');
+        isExporting.value = false;
+        return;
+      }
+
+      const safeFileUrl = result.file_url;
       try {
-        safeFileUrl = assertSafeDownloadUrl(result.file_url);
+        const isSafe = assertSafeDownloadUrl(result.file_url);
+        if (!isSafe) {
+          throw new Error('Unsafe export URL');
+        }
       } catch (urlErr) {
         console.error('Unsafe export URL from server:', urlErr);
         exportState.status = 'failed';
@@ -1184,7 +1142,7 @@ function truncateDescription(desc) {
 // Add methods for actions
 function handleViewCompliance(row) {
   // Show control details modal
-  showControlDetailsModal(row);
+  void showControlDetailsModal(row);
 }
 
 function escapeHtml(value) {
@@ -1203,22 +1161,43 @@ function safeClassToken(value, fallback = 'default') {
   return token || fallback;
 }
 
-function showControlDetailsModal(compliance) {
-  const safeName = escapeHtml(compliance.name || 'Not specified');
-  const safeIdentifier = escapeHtml(compliance.identifier || 'Not specified');
-  const safeStatus = escapeHtml(compliance.status || 'Not specified');
-  const safeStatusClass = safeClassToken(compliance.status, 'default');
-  const safeCategory = escapeHtml(compliance.category || 'Not specified');
-  const safeCategoryClass = safeClassToken(compliance.category, 'default');
-  const safeDescription = escapeHtml(compliance.description || 'No description available');
-  const safeMandatoryOptional = escapeHtml(compliance.mandatoryOptional || 'Not specified');
-  const safeManualAutomatic = escapeHtml(compliance.manualAutomatic || 'Not specified');
-  const safeMaturityLevel = escapeHtml(compliance.maturityLevel || 'Not specified');
-  const safePossibleDamage = escapeHtml(compliance.PossibleDamage || 'Not specified');
-  const safeMitigation = escapeHtml(compliance.mitigation || 'Not specified');
-  const safeFramework = escapeHtml(selectedFramework.value?.name || 'Not specified');
-  const safePolicy = escapeHtml(selectedPolicy.value?.name || 'Not specified');
-  const safeSubPolicy = escapeHtml(selectedSubpolicy.value?.name || 'Not specified');
+async function showControlDetailsModal(compliance) {
+  let latest = { ...(compliance?.originalData || {}) };
+  try {
+    if (compliance?.id) {
+      // Force refresh so modal always shows latest values after approvals/resubmissions.
+      await complianceStore.fetchComplianceDetails(compliance.id, { force: true });
+      const cachedLatest = complianceStore.complianceDetailsById[compliance.id];
+      if (cachedLatest && typeof cachedLatest === 'object') {
+        latest = { ...latest, ...cachedLatest };
+      }
+    }
+  } catch (e) {
+    console.warn('[AllCompliance] Unable to fetch latest compliance details for modal:', e);
+  }
+
+  const mitigationValue = latest.mitigation ?? compliance.mitigation;
+  const safeMitigation = escapeHtml(
+    typeof mitigationValue === 'object'
+      ? JSON.stringify(mitigationValue)
+      : (mitigationValue || 'Not specified')
+  );
+  const safeName = escapeHtml(latest.ComplianceTitle || latest.ComplianceItemDescription || compliance.name || 'Not specified');
+  const safeIdentifier = escapeHtml(latest.Identifier || compliance.identifier || 'Not specified');
+  const statusValue = latest.Status || compliance.status || 'Not specified';
+  const safeStatus = escapeHtml(statusValue);
+  const safeStatusClass = safeClassToken(statusValue, 'default');
+  const categoryValue = latest.Criticality || compliance.category || 'Not specified';
+  const safeCategory = escapeHtml(categoryValue);
+  const safeCategoryClass = safeClassToken(categoryValue, 'default');
+  const safeDescription = escapeHtml(latest.ComplianceItemDescription || compliance.description || 'No description available');
+  const safeMandatoryOptional = escapeHtml(latest.MandatoryOptional || compliance.mandatoryOptional || 'Not specified');
+  const safeManualAutomatic = escapeHtml(latest.ManualAutomatic || compliance.manualAutomatic || 'Not specified');
+  const safeMaturityLevel = escapeHtml(latest.MaturityLevel || compliance.maturityLevel || 'Not specified');
+  const safePossibleDamage = escapeHtml(latest.PossibleDamage || compliance.PossibleDamage || 'Not specified');
+  const safeFramework = escapeHtml(latest.FrameworkName || selectedFramework.value?.name || 'Not specified');
+  const safePolicy = escapeHtml(latest.PolicyName || selectedPolicy.value?.name || 'Not specified');
+  const safeSubPolicy = escapeHtml(latest.SubPolicyName || selectedSubpolicy.value?.name || 'Not specified');
 
   const modalContent = `
     <div class="control-details-modal">
@@ -1272,7 +1251,7 @@ function showControlDetailsModal(compliance) {
           </div>
         </div>
 
-        ${compliance.isRisk ? `
+        ${(latest.IsRisk ?? compliance.isRisk) ? `
         <div class="detail-section risk-section">
           <h4>Risk Information</h4>
           <div class="detail-grid">

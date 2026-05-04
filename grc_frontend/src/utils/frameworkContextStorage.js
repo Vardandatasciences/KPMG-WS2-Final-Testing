@@ -54,8 +54,13 @@ export function setSessionFrameworkId(frameworkId) {
 }
 
 /**
- * Framework id for API payloads: session only, then configured default (no localStorage reads).
+ * Framework id for API payloads.
+ *
+ * IMPORTANT:
+ * Do not silently fall back to hardcoded/default framework ids here.
+ * That causes UI/API flicker where pages first load framework "1" (often NIST)
+ * and then jump to the actual selected framework once session state hydrates.
  */
 export function getFrameworkIdForClient() {
-  return getSessionFrameworkId() || getDefaultFrameworkId()
+  return getSessionFrameworkId() || getLegacyStoredFrameworkId() || null
 }

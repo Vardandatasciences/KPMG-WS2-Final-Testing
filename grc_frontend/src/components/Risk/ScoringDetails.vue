@@ -599,6 +599,7 @@ import '@/assets/css/main.css';
 import { PopupModal } from '@/modules/popup';
 import { API_ENDPOINTS } from '@/config/api';
 import apiService from '@/services/apiService.js';
+import { useRiskStore } from '@/stores/risk';
 
 const axios = {
   get: (url, config = {}) =>
@@ -950,28 +951,27 @@ export default {
           this.loading = false;
         });
     },
-    fetchMatchingRisks(complianceId) {
-      // Direct usage without validation
+    async fetchMatchingRisks(complianceId) {
       if (!complianceId) return;
-      
+
       this.loadingMatchingRisks = true;
-      
-      // Fetch risks from Risk Register with matching Compliance ID
-              axios.get(API_ENDPOINTS.RISKS_FOR_DROPDOWN)
-      .then(response => {
-        console.log('All risks data received:', response.data);
-        // Filter risks to only include those with matching Compliance ID
-        const risksData = response.data?.risks || [];
-        this.matchingRisks = risksData.filter(risk => 
-          risk.ComplianceId && risk.ComplianceId.toString() === complianceId.toString()
+
+      try {
+        const riskStore = useRiskStore();
+        await riskStore.fetchRisks({ force: false });
+        const risksData = riskStore.risks || [];
+        console.log('All risks data received (risk store):', risksData.length);
+        this.matchingRisks = risksData.filter(
+          (risk) =>
+            risk.ComplianceId &&
+            risk.ComplianceId.toString() === complianceId.toString()
         );
         console.log('Filtered matching risks:', this.matchingRisks);
-        this.loadingMatchingRisks = false;
-      })
-      .catch(error => {
+      } catch (error) {
         console.error('Error fetching matching risks:', error);
+      } finally {
         this.loadingMatchingRisks = false;
-      });
+      }
     },
     submitForm() {
       if (!this.validateForm()) {

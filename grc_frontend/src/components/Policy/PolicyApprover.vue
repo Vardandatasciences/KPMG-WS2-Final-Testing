@@ -61,6 +61,15 @@
         </div>
       </div>
 
+      <div v-if="isBootstrapping" class="policy-mod-sk policy-approver-boot" aria-busy="true">
+        <div class="policy-mod-sk__summary">
+          <div v-for="n in 3" :key="'pa-sk-c' + n" class="policy-mod-sk__card"></div>
+        </div>
+        <div class="policy-mod-sk__table">
+          <div v-for="n in 10" :key="'pa-sk-r' + n" class="policy-mod-sk__row"></div>
+        </div>
+      </div>
+      <template v-else>
       <!-- Summary Cards -->
       <div class="policy_summary_section">
         <div class="policy_summary_item">
@@ -199,6 +208,7 @@
           </div>
         </div>
       </div>
+      </template>
 
       <!-- Policy/Compliance Details Modal/Section -->
       <div v-if="showDetails && selectedApproval && !showRejectModal" class="policy-details-modal-overlay">
@@ -868,6 +878,8 @@ import PopupModal from '@/modules/popus/PopupModal.vue'
 import CollapsibleTable from '@/components/CollapsibleTable.vue'
 import policyDataService from '@/services/policyService'
 import ReviewHistoryModal from './ReviewHistoryModal.vue'
+import { useFrameworkStore } from '@/stores/framework'
+import { usePolicyStore } from '@/stores/policy'
 
 export default {
   name: 'PolicyApprover',
@@ -945,7 +957,8 @@ export default {
         approved: { currentPage: 1, pageSize: 6 },
         rejected: { currentPage: 1, pageSize: 6 }
       },
-      paginationUpdateTrigger: 0 // Reactive trigger for pagination updates
+      paginationUpdateTrigger: 0, // Reactive trigger for pagination updates
+      isBootstrapping: true,
     }
   },
   async mounted() {
@@ -956,16 +969,19 @@ export default {
       selectedUserId: this.selectedUserId,
       availableUsers: this.availableUsers
     });
-    
-    // Clear framework selection from session on mount to show all frameworks by default
-    // This ensures fresh login always shows all frameworks
-    await this.clearFrameworkSelection();
-    
-    // First fetch frameworks
-    await this.fetchFrameworks();
-    
-    // Then initialize user (which will load tasks without framework filter)
-    await this.initializeUser();
+    this.isBootstrapping = true
+    try {
+      // First fetch frameworks
+      await this.fetchFrameworks()
+
+      // Restore selected framework from centralized framework store/session sync.
+      await this.checkSelectedFrameworkFromSession()
+
+      // Then initialize user (loads tasks with current framework filter, if any).
+      await this.initializeUser()
+    } finally {
+      this.isBootstrapping = false
+    }
   },
   watch: {
     // Watch for changes in isReviewer and fetch appropriate data
@@ -1105,30 +1121,17 @@ export default {
     // Fetch all users for administrator dropdown
     async fetchUsers() {
       try {
-        console.log('Fetching users for dropdown from RBAC...');
-        const response = await apiService.get(API_ENDPOINTS.USERS_FOR_DROPDOWN);
-        console.log('Users API response:', response);
-        
-        if (Array.isArray(response)) {
-          this.availableUsers = response;
-        } else if (response && response.success && Array.isArray(response.data)) {
-          this.availableUsers = response.data;
-        } else {
-          this.availableUsers = response || [];
-        }
-        
-        console.log('Available users loaded:', this.availableUsers.length, 'users');
-        console.log('Users:', this.availableUsers);
-        
-        // If no users found, try fallback mechanism
+        console.log('Fetching users (Pinia cache first)...')
+        const policyStore = usePolicyStore()
+        const list = await policyStore.getUsersForDropdown({ force: false })
+        this.availableUsers = Array.isArray(list) ? list : []
+        console.log('Available users loaded:', this.availableUsers.length)
         if (this.availableUsers.length === 0) {
-          console.warn('No users found in RBAC table, trying fallback...');
-          await this.fetchUsersFallback();
+          await this.fetchUsersFallback()
         }
       } catch (error) {
-        console.error('Error fetching users:', error);
-        console.log('Trying fallback mechanism...');
-        await this.fetchUsersFallback();
+        console.error('Error fetching users:', error)
+        await this.fetchUsersFallback()
       }
     },
 
@@ -1224,49 +1227,40 @@ export default {
     // Framework-related methods
     async fetchFrameworks() {
       try {
-        console.log('🔍 DEBUG: Checking for cached frameworks in PolicyApprover...')
-
-        if (!window.policyDataFetchPromise && !policyDataService.hasFrameworksListCache()) {
-          console.log('🚀 DEBUG: Starting policy prefetch from PolicyApprover (user navigated directly)...')
+        console.log('🔍 PolicyApprover: frameworks — Pinia/cache first (no blocking prefetch)')
+        const policyStore = usePolicyStore()
+        if (!window.policyDataFetchPromise && !policyStore.hasFrameworksCache() && !policyDataService.hasFrameworksListCache()) {
           window.policyDataFetchPromise = policyDataService.fetchAllPolicyData()
         }
-
-        if (window.policyDataFetchPromise) {
-          console.log('⏳ DEBUG: Waiting for policy prefetch to complete in PolicyApprover...')
-          try {
-            await window.policyDataFetchPromise
-            console.log('✅ DEBUG: Policy prefetch completed for PolicyApprover')
-          } catch (prefetchError) {
-            console.warn('⚠️ DEBUG: Policy prefetch failed in PolicyApprover, will fetch directly', prefetchError)
-          }
+        let frameworksSource = []
+        let usedWarmCache = false
+        if (policyStore.hasFrameworksCache()) {
+          usedWarmCache = true
+          frameworksSource = policyStore.getFrameworksCached() || []
+        } else if (policyDataService.hasFrameworksListCache()) {
+          usedWarmCache = true
+          frameworksSource = policyDataService.getFrameworksList() || []
+        } else {
+          frameworksSource = await policyStore.getAllFrameworks({ force: false })
+          policyDataService.setFrameworksList(frameworksSource || [])
         }
-
-        if (policyDataService.hasFrameworksListCache()) {
-          console.log('✅ DEBUG: Using cached frameworks in PolicyApprover')
-          const cachedFrameworks = policyDataService.getFrameworksList() || []
-          this.frameworks = cachedFrameworks.map(fw => ({
-            id: fw.FrameworkId || fw.id,
-            name: fw.FrameworkName || fw.name
-          }))
-
-          // Framework selection is cleared on mount, so we don't restore it here
-          return
-        }
-
-        console.log('⚠️ DEBUG: No cached frameworks, fetching via API in PolicyApprover...')
-        const response = await apiService.get(API_ENDPOINTS.FRAMEWORKS)
-        this.frameworks = response.map(fw => ({
-          id: fw.FrameworkId,
-          name: fw.FrameworkName
+        this.frameworks = (frameworksSource || []).map((fw) => ({
+          id: fw.FrameworkId || fw.id,
+          name: fw.FrameworkName || fw.name
         }))
-
-        // Update cache for future loads
-        policyDataService.setFrameworksList(response)
-        
-        console.log('✅ DEBUG: Frameworks loaded:', this.frameworks)
-        // Framework selection is cleared on mount, so we don't restore it here
+        if (usedWarmCache) {
+          void policyStore.getAllFrameworks({ force: true }).then((fresh) => {
+            if (!Array.isArray(fresh) || !fresh.length) return
+            policyDataService.setFrameworksList(fresh)
+            this.frameworks = fresh.map((fw) => ({
+              id: fw.FrameworkId || fw.id,
+              name: fw.FrameworkName || fw.name
+            }))
+          }).catch(() => {})
+        }
+        console.log('✅ PolicyApprover frameworks:', this.frameworks.length)
       } catch (error) {
-        console.error('❌ DEBUG: Error fetching frameworks:', error)
+        console.error('❌ Error fetching frameworks:', error)
       }
     },
 
@@ -1278,9 +1272,7 @@ export default {
         this.selectedFrameworkId = ''
         this.sessionFrameworkId = null
         
-        await apiService.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, {
-          frameworkId: null
-        })
+        await useFrameworkStore().resetFramework()
         console.log('✅ DEBUG: Framework selection cleared from session successfully')
       } catch (error) {
         console.error('❌ DEBUG: Error clearing framework selection from session:', error)
@@ -1296,7 +1288,11 @@ export default {
     async checkSelectedFrameworkFromSession() {
       try {
         console.log('🔍 DEBUG: Checking for selected framework from session in PolicyApprover...')
-        const response = await apiService.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED)
+        await useFrameworkStore().loadFrameworkFromSession()
+        const response = {
+          success: true,
+          frameworkId: useFrameworkStore().selectedFrameworkId,
+        }
         console.log('📊 DEBUG: Selected framework response:', response)
         
         if (response && response.success) {
@@ -1341,24 +1337,18 @@ export default {
     // Handle framework selection change
     async onFrameworkChange() {
       if (this.selectedFrameworkId) {
-        // Save the selected framework to session
         try {
-          const userId = localStorage.getItem('user_id') || 'default_user'
-          console.log('🔍 DEBUG: Saving framework to session in PolicyApprover:', this.selectedFrameworkId)
-          
-          const response = await apiService.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, {
-            frameworkId: this.selectedFrameworkId,
-            userId: userId
+          console.log('🔍 DEBUG: Saving framework via frameworkStore in PolicyApprover:', this.selectedFrameworkId)
+          const selected = this.frameworks.find(
+            (f) => String(f.id) === String(this.selectedFrameworkId)
+          )
+          await useFrameworkStore().setFramework({
+            id: this.selectedFrameworkId,
+            name: selected?.name || 'Selected Framework',
           })
-          
-          if (response && response.success) {
-            console.log('✅ DEBUG: Framework saved to session successfully in PolicyApprover')
-            console.log('🔑 DEBUG: Session key:', response.sessionKey)
-          } else {
-            console.error('❌ DEBUG: Failed to save framework to session in PolicyApprover')
-          }
+          console.log('✅ DEBUG: Framework saved via frameworkStore in PolicyApprover')
         } catch (error) {
-          console.error('❌ DEBUG: Error saving framework to session in PolicyApprover:', error)
+          console.error('❌ DEBUG: Error saving framework via frameworkStore in PolicyApprover:', error)
         }
         
         // Refresh data with the selected framework
@@ -1385,9 +1375,7 @@ export default {
       
       // Clear from session storage as well
       try {
-        await apiService.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, {
-          frameworkId: null
-        })
+        await useFrameworkStore().resetFramework()
         console.log('✅ Cleared framework from session successfully')
       } catch (error) {
         console.error('❌ Error clearing framework from session:', error)
@@ -2180,7 +2168,7 @@ export default {
     // Fallback method for fetching rejected policies
     fetchRejectedPoliciesFallback() {
       console.log('Using fallback method to fetch rejected policies...');
-      apiService.get(API_ENDPOINTS.POLICIES)
+      usePolicyStore().getAllPolicies()
         .then(response => {
           console.log('All policies response:', response);
           
@@ -2228,7 +2216,7 @@ export default {
     // Add a method to fetch policies that have rejected subpolicies
     fetchPoliciesWithRejectedSubpolicies() {
       console.log('Fetching policies with rejected subpolicies...');
-      apiService.get(API_ENDPOINTS.POLICIES)
+      usePolicyStore().getAllPolicies()
         .then(response => {
           console.log('All policies response:', response);
           
@@ -3930,7 +3918,7 @@ export default {
     fetchRejectedSubpolicies() {
       console.log('Fetching rejected subpolicies...');
       // For now, we'll fetch all policies and filter for rejected subpolicies
-      apiService.get(API_ENDPOINTS.POLICIES)
+      usePolicyStore().getAllPolicies()
         .then(response => {
           console.log('Received policies for subpolicy check:', response.length);
           const allPolicies = response;
@@ -3990,71 +3978,36 @@ export default {
     getSubpolicyRemarks(sub) {
       return sub && sub.approval && sub.approval.remarks ? sub.approval.remarks : 'No reason provided';
     },
-    // Add a method to fetch policy categories
-    fetchPolicyCategories() {
-      apiService.get(API_ENDPOINTS.POLICY_CATEGORIES)
-        .then(response => {
-          // Handle both response formats: direct array or success wrapper
-          if (response.success && response.data) {
-            this.policyCategories = response.data;
-          } else if (Array.isArray(response)) {
-            this.policyCategories = response;
-          } else {
-            console.error('Unexpected response format:', response);
-          }
-        })
-        .catch(error => {
-          console.error('Error fetching policy categories:', error);
-        });
+    async fetchPolicyCategories() {
+      try {
+        const data = await usePolicyStore().getPolicyCategoriesList({ force: false })
+        this.policyCategories = Array.isArray(data) ? data : []
+      } catch (error) {
+        console.error('Error fetching policy categories:', error)
+      }
     },
-    fetchPolicyTypes() {
-      console.log('Fetching policy categories...');
-      apiService.get(API_ENDPOINTS.POLICY_CATEGORIES)
-        .then(response => {
-          console.log('Policy categories response:', response);
-          
-          // Handle both response formats: direct array or success wrapper
-          let categoriesData;
-          if (response.success && response.data) {
-            categoriesData = response.data;
-          } else if (Array.isArray(response)) {
-            categoriesData = response;
-          } else {
-            console.error('Unexpected response format:', response);
-            return;
+    async fetchPolicyTypes() {
+      console.log('Fetching policy categories (Pinia cache first)...')
+      try {
+        const categoriesData = await usePolicyStore().getPolicyCategoriesList({ force: false })
+        const rows = Array.isArray(categoriesData) ? categoriesData : []
+        this.policyCategories = rows
+        const typeMap = {}
+        rows.forEach((category) => {
+          if (!typeMap[category.PolicyType]) {
+            typeMap[category.PolicyType] = { categories: {} }
           }
-          
-          // Store the raw categories data
-          this.policyCategories = categoriesData;
-          
-          // Create a structured map for easier filtering
-          const typeMap = {};
-          
-          // Process the categories into a nested structure
-          categoriesData.forEach(category => {
-            if (!typeMap[category.PolicyType]) {
-              typeMap[category.PolicyType] = {
-                categories: {}
-              };
-            }
-            
-            if (!typeMap[category.PolicyType].categories[category.PolicyCategory]) {
-              typeMap[category.PolicyType].categories[category.PolicyCategory] = {
-                subCategories: []
-              };
-            }
-            
-            typeMap[category.PolicyType].categories[category.PolicyCategory].subCategories.push(
-              category.PolicySubCategory
-            );
-          });
-          
-          this.policyCategoriesMap = typeMap;
-          console.log('Processed policy categories map:', this.policyCategoriesMap);
+          if (!typeMap[category.PolicyType].categories[category.PolicyCategory]) {
+            typeMap[category.PolicyType].categories[category.PolicyCategory] = { subCategories: [] }
+          }
+          typeMap[category.PolicyType].categories[category.PolicyCategory].subCategories.push(
+            category.PolicySubCategory
+          )
         })
-        .catch(error => {
-          console.error('Error fetching policy categories:', error);
-        });
+        this.policyCategoriesMap = typeMap
+      } catch (error) {
+        console.error('Error fetching policy categories:', error)
+      }
     },
     // Helper method to initialize or update policy category fields
     initializePolicyCategoryFields(policy) {

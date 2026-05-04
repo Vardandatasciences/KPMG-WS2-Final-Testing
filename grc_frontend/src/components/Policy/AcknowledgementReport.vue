@@ -15,9 +15,13 @@
       </button>
     </div>
 
-    <div v-if="loading" class="loading-state">
-      <div class="spinner-large"></div>
-      <p>Loading report...</p>
+    <div v-if="loading" class="policy-mod-sk" aria-busy="true" aria-label="Loading report">
+      <div class="policy-mod-sk__summary">
+        <div v-for="n in 4" :key="'rpt-sk-' + n" class="policy-mod-sk__card"></div>
+      </div>
+      <div class="policy-mod-sk__table">
+        <div v-for="n in 8" :key="'rpt-r-' + n" class="policy-mod-sk__row" style="height: 56px"></div>
+      </div>
     </div>
 
     <div v-else-if="error" class="error-state">

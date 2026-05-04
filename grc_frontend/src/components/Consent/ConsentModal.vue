@@ -83,6 +83,7 @@ export default {
     const isProcessing = ref(false);
     const currentConfig = ref(null);
     const currentActionType = ref(null);
+    const currentConsentFrameworkId = ref(null);
     const resolveCallback = ref(null);
     const rejectCallback = ref(null);
 
@@ -97,10 +98,12 @@ export default {
         'By proceeding with this action, you acknowledge that you understand the implications and accept responsibility for the action being performed.';
     });
 
-    const show = (actionType, config) => {
+    /** @param {string|number|null} consentFrameworkId - form/flow framework when session has none */
+    const show = (actionType, config, consentFrameworkId = null) => {
       return new Promise((resolve, reject) => {
         currentActionType.value = actionType;
         currentConfig.value = config;
+        currentConsentFrameworkId.value = consentFrameworkId;
         hasAgreed.value = false;
         isVisible.value = true;
         resolveCallback.value = resolve;
@@ -114,14 +117,23 @@ export default {
       isProcessing.value = true;
 
       try {
-        const userId = localStorage.getItem('user_id');
+        const userId =
+          localStorage.getItem('user_id') ||
+          sessionStorage.getItem('user_id') ||
+          sessionStorage.getItem('userId');
         const configId = currentConfig.value.config_id;
-        
+        const fwForAccept =
+          currentConsentFrameworkId.value ??
+          currentConfig.value?.framework_id ??
+          currentConfig.value?.frameworkId;
+
         // Record consent acceptance
         const success = await recordConsentAcceptance(
           userId,
           configId,
-          currentActionType.value
+          currentActionType.value,
+          null,
+          fwForAccept
         );
 
         if (success) {
@@ -165,6 +177,7 @@ export default {
         hasAgreed.value = false;
         currentConfig.value = null;
         currentActionType.value = null;
+        currentConsentFrameworkId.value = null;
         resolveCallback.value = null;
         rejectCallback.value = null;
       }, 300); // Wait for transition to complete

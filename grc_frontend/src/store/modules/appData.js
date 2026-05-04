@@ -12,12 +12,12 @@
  *     actions.
  */
 
-import riskDataService       from '@/services/riskService';
 import complianceDataService from '@/services/complianceService';
 import auditorDataService    from '@/services/auditorService';
 import eventDataService      from '@/services/eventService';
 import policyDataService     from '@/services/policyService';
 import incidentDataService   from '@/services/incidentService';
+import { useIncidentStore } from '@/stores/incident';
 
 export default {
   namespaced: true,
@@ -124,13 +124,15 @@ export default {
   // ─────────────────────────────────────────────────────────────
   actions: {
     async fetchRisks({ commit, state }) {
-      // Skip if already loaded into Vuex (service cache is also populated)
+      // Skip if already loaded into Vuex (Pinia riskStore + riskDataService stay in sync)
       if (state.risksLoaded) return;
       try {
-        await riskDataService.fetchAllRiskData();
+        const { useRiskStore } = await import('@/stores/risk');
+        const riskStore = useRiskStore();
+        await riskStore.prefetchRiskRegisterAndInstances({ force: false });
         commit('SET_RISKS', {
-          risks:         riskDataService.getData('risks')         || [],
-          riskInstances: riskDataService.getData('riskInstances') || [],
+          risks: [...riskStore.risks],
+          riskInstances: [...riskStore.riskInstances],
         });
       } catch (e) {
         console.error('[appData] fetchRisks failed:', e);
@@ -202,6 +204,11 @@ export default {
         commit('SET_INCIDENTS', {
           incidents: incidentDataService.getData('incidents') || [],
         });
+        try {
+          useIncidentStore().hydrateListsFromIncidentService();
+        } catch (e) {
+          console.warn('[vuex:appData] incident Pinia hydrate skipped:', e);
+        }
       } catch (e) {
         console.error('[appData] fetchIncidents failed:', e);
         commit('SET_INCIDENTS', { incidents: [] });

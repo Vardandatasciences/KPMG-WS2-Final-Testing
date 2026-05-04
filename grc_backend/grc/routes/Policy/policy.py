@@ -3346,11 +3346,16 @@ def submit_subpolicy_review(request, pk):
                     PolicyId=policy.PolicyId
                 ).order_by('-ApprovalId').first()
                 
-                # Calculate next reviewer version
+                # Calculate next reviewer version (Version column only — avoid loading full rows)
                 r_versions = []
-                for pa in PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, PolicyId=policy.PolicyId):
-                    if pa.Version and pa.Version.startswith('r') and pa.Version[1:].isdigit():
-                        r_versions.append(int(pa.Version[1:]))
+                for v in PolicyApproval.objects.filter(
+                    PolicyId__tenant=tenant_id,
+                    PolicyId=policy.PolicyId,
+                ).exclude(Version__isnull=True).exclude(Version='').filter(
+                    Version__startswith='r'
+                ).values_list('Version', flat=True):
+                    if v and len(v) > 1 and v[1:].isdigit():
+                        r_versions.append(int(v[1:]))
                 
                 if r_versions:
                     new_version = f"r{max(r_versions) + 1}"
@@ -4177,42 +4182,10 @@ def submit_policy_approval_review(request, policy_id):
     tenant_id = get_tenant_id_from_request(request)
     """
     """
-    debug_print(f"DEBUG: ===== SUBMIT POLICY APPROVAL REVIEW CALLED =====")
-    debug_print(f"DEBUG: submit_policy_approval_review - Request path: {request.path}")
-    debug_print(f"DEBUG: submit_policy_approval_review - Request method: {request.method}")
-    debug_print(f"DEBUG: submit_policy_approval_review - Request headers: {dict(request.headers)}")
-    debug_print(f"DEBUG: submit_policy_approval_review - User object: {request.user}")
-    debug_print(f"DEBUG: submit_policy_approval_review - User type: {type(request.user)}")
-    debug_print(f"DEBUG: submit_policy_approval_review - User attributes: {dir(request.user) if hasattr(request.user, '__dict__') else 'No __dict__'}")
-    debug_print(f"DEBUG: submit_policy_approval_review - User is authenticated: {request.user.is_authenticated if hasattr(request.user, 'is_authenticated') else 'No is_authenticated attribute'}")
-    debug_print(f"DEBUG: submit_policy_approval_review - User is anonymous: {request.user.is_anonymous if hasattr(request.user, 'is_anonymous') else 'No is_anonymous attribute'}")
-    if hasattr(request.user, 'id'):
-        debug_print(f"DEBUG: submit_policy_approval_review - User ID: {request.user.id}")
-    if hasattr(request.user, 'UserId'):
-        debug_print(f"DEBUG: submit_policy_approval_review - User UserId: {request.user.UserId}")
-    if hasattr(request.user, 'username'):
-        debug_print(f"DEBUG: submit_policy_approval_review - User username: {request.user.username}")
-    if hasattr(request.user, 'UserName'):
-        debug_print(f"DEBUG: submit_policy_approval_review - User UserName: {request.user.UserName}")
-    if hasattr(request.user, 'Role'):
-        debug_print(f"DEBUG: submit_policy_approval_review - User Role: {request.user.Role}")
-    debug_print(f"DEBUG: submit_policy_approval_review - Request method: {request.method}")
-    debug_print(f"DEBUG: submit_policy_approval_review - Request path: {request.path}")
-    debug_print(f"DEBUG: submit_policy_approval_review - Request content type: {request.content_type}")
-    debug_print(f"DEBUG: submit_policy_approval_review - Request data: {request.data}")
-    debug_print(f"DEBUG: submit_policy_approval_review - Authentication header: {request.headers.get('Authorization', 'Not found')}")
-    debug_print(f"DEBUG: submit_policy_approval_review - Session data: {dict(request.session) if hasattr(request, 'session') else 'No session'}")
-    
-    # Check if user is authenticated and has admin role
-    if hasattr(request.user, 'Role'):
-        debug_print(f"DEBUG: submit_policy_approval_review - User Role: {request.user.Role}")
-        if request.user.Role == 'GRC Administrator':
-            debug_print(f"DEBUG: submit_policy_approval_review - User is GRC Administrator - allowing access")
-        else:
-            debug_print(f"DEBUG: submit_policy_approval_review - User Role: {request.user.Role} - checking permissions")
-    
-    debug_print(f"DEBUG: ===== END DEBUG INFO =====")
-    debug_print(f"DEBUG: ===== FUNCTION IS BEING CALLED - THIS SHOULD APPEAR IF THE FUNCTION IS REACHED =====")
+    debug_print(
+        f"DEBUG: submit_policy_approval_review policy_id={policy_id} "
+        f"path={request.path} user={getattr(request.user, 'UserId', getattr(request.user, 'id', None))}"
+    )
     
     # Check if user is authenticated and has proper permissions
     if hasattr(request.user, 'Role') and request.user.Role == 'GRC Administrator':
@@ -4309,16 +4282,20 @@ def submit_policy_approval_review(request, policy_id):
         # Set approved date to today
         approved_date = date.today()
         
-        # Determine next version
-        policy_approvals = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, 
-            PolicyId=policy
-        ).order_by('-Version')
-        
-        debug_print(f"DEBUG: Found {policy_approvals.count()} existing policy approvals for PolicyId {policy.PolicyId}")
-        
-        # Find latest reviewer version
-        r_versions = [pa.Version for pa in policy_approvals if pa.Version and pa.Version.startswith('r')]
-        debug_print(f"DEBUG: Existing reviewer versions: {r_versions}")
+        # Determine next version — only fetch Version strings (avoid loading every PolicyApproval row)
+        r_versions = list(
+            PolicyApproval.objects.filter(
+                PolicyId__tenant=tenant_id,
+                PolicyId=policy,
+            )
+            .exclude(Version__isnull=True)
+            .exclude(Version='')
+            .filter(Version__startswith='r')
+            .values_list('Version', flat=True)
+        )
+        debug_print(
+            f"DEBUG: Policy {policy.PolicyId} reviewer version candidates count={len(r_versions)}"
+        )
         
         new_version = 'r1'
         

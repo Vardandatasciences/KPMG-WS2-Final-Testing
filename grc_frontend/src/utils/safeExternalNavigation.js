@@ -1,6 +1,7 @@
 /**
  * Open-redirect and unsafe-navigation hardening for window.open / location.href.
  */
+import { API_BASE_URL } from '@/config/api'
 
 const GOOGLE_OAUTH_HOSTS = new Set([
   'accounts.google.com',
@@ -21,10 +22,27 @@ function parseTrustedDownloadHostsFromEnv() {
   }
 }
 
+function parseApiBaseHost() {
+  try {
+    if (!API_BASE_URL) return null
+    const normalized = String(API_BASE_URL).trim()
+    if (!normalized) return null
+    const url = new URL(normalized, typeof window !== 'undefined' ? window.location.origin : undefined)
+    return (url.hostname || '').toLowerCase() || null
+  } catch {
+    return null
+  }
+}
+
 function isTrustedDownloadHost(hostname) {
   const h = (hostname || '').toLowerCase()
   if (!h) return false
   if (h === 'localhost' || h === '127.0.0.1' || h === '[::1]') return true
+  const apiHost = parseApiBaseHost()
+  if (apiHost && (h === apiHost || h.endsWith('.' + apiHost))) return true
+  // Trusted infrastructure domains used by export/storage services.
+  if (h === 'utho.io' || h.endsWith('.utho.io')) return true
+  if (h === 'onutho.com' || h.endsWith('.onutho.com')) return true
   if (h.endsWith('.amazonaws.com') || h.endsWith('.amazonaws.com.cn')) return true
   if (h.endsWith('.cloudfront.net')) return true
   for (const entry of parseTrustedDownloadHostsFromEnv()) {

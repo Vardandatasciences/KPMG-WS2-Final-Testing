@@ -14,9 +14,10 @@
         </button> -->
       </div>
 
-    <div v-if="loading" class="loading-state">
-      <div class="spinner-large"></div>
-      <p>Loading pending acknowledgements...</p>
+    <div v-if="loading" class="policy-mod-sk" aria-busy="true" aria-label="Loading acknowledgements">
+      <div class="policy-mod-sk__table">
+        <div v-for="n in 8" :key="'pnd-sk-' + n" class="policy-mod-sk__row" style="height: 72px"></div>
+      </div>
     </div>
 
     <div v-else-if="pendingAcknowledgements.length === 0" class="empty-state">

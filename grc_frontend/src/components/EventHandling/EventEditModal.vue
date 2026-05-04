@@ -180,7 +180,7 @@
 </template>
 
 <script>
-import { ref, onMounted, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { eventService } from '../../services/api'
 import { MODULES } from '../../utils/constants'
 import PopupModal from '../../modules/popus/PopupModal.vue'
@@ -220,24 +220,31 @@ export default {
       frequency: ''
     })
 
-    // Initialize form data when event changes
-    watch(() => props.event, (newEvent) => {
-      if (newEvent) {
-        formData.value = {
-          title: newEvent.title || newEvent.EventTitle || '',
-          framework: newEvent.framework || newEvent.FrameworkName || '',
-          module: newEvent.module || newEvent.Module || '',
-          category: newEvent.category || newEvent.Category || '',
-          description: newEvent.description || newEvent.Description || '',
-          owner: newEvent.owner || newEvent.OwnerName || '', // Will be overridden by fetchCurrentUser
-          reviewer: newEvent.reviewer || newEvent.ReviewerName || '',
-          recurrence_type: newEvent.recurrence_type || newEvent.RecurrenceType || '',
-          frequency: newEvent.frequency || newEvent.Frequency || ''
-        }
-        // Fetch current user to set owner after form data is initialized
+    const syncFormFromEvent = (newEvent) => {
+      if (!newEvent) return
+      formData.value = {
+        title: newEvent.title || newEvent.EventTitle || '',
+        framework: newEvent.framework || newEvent.FrameworkName || '',
+        module: newEvent.module || newEvent.Module || '',
+        category: newEvent.category || newEvent.Category || '',
+        description: newEvent.description || newEvent.Description || '',
+        owner: newEvent.owner || newEvent.OwnerName || '',
+        reviewer: newEvent.reviewer || newEvent.ReviewerName || '',
+        recurrence_type: newEvent.recurrence_type || newEvent.RecurrenceType || '',
+        frequency: newEvent.frequency || newEvent.Frequency || ''
+      }
+    }
+
+    // Only sync when the edit modal is open — EventsList keeps this component mounted with :event="selectedEvent",
+    // so watching the event while closed would fire on every row/popup selection and duplicate current-user calls.
+    watch(
+      () => props.event,
+      (newEvent) => {
+        if (!newEvent || !props.isOpen) return
+        syncFormFromEvent(newEvent)
         fetchCurrentUser()
       }
-    }, { immediate: true })
+    )
 
     const fetchFrameworks = async () => {
       try {
@@ -336,25 +343,23 @@ export default {
       }
     }
 
-    onMounted(() => {
-      fetchFrameworks()
-      fetchUsers()
-      fetchCurrentUser()
-    })
-
-    // Also fetch data when modal opens
-    watch(() => props.isOpen, (isOpen) => {
-      if (isOpen) {
+    // Fetch only when the modal opens (component stays mounted closed on Events List — avoid duplicate list-page APIs).
+    watch(
+      () => props.isOpen,
+      (isOpen) => {
+        if (!isOpen) return
+        if (props.event) {
+          syncFormFromEvent(props.event)
+        }
         if (frameworks.value.length === 0) {
           fetchFrameworks()
         }
         if (users.value.length === 0) {
           fetchUsers()
         }
-        // Always fetch current user when modal opens to ensure owner is set
         fetchCurrentUser()
       }
-    })
+    )
 
     return {
       loading,

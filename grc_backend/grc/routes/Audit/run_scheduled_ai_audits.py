@@ -554,7 +554,7 @@ class Command(BaseCommand):
 
         count = schedules.count()
         if count == 0:
-            self.stdout.write("No scheduled AI audits due.")
+            logger.debug("No scheduled AI audits due.")
             return
 
         self.stdout.write(f"Running {count} scheduled AI audit(s)...")

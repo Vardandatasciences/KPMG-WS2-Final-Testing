@@ -659,9 +659,11 @@
         </div>
         
         <!-- Loading State -->
-        <div v-if="!checkedSectionsData" class="loading-container">
-          <i class="fas fa-spinner fa-spin"></i>
-          <p>Loading data...</p>
+        <div v-if="!checkedSectionsData" class="policy-mod-sk" aria-busy="true" aria-label="Loading extracted data">
+          <div class="policy-mod-sk__hero"></div>
+          <div class="policy-mod-sk__table">
+            <div v-for="n in 10" :key="'uf-sk-' + n" class="policy-mod-sk__row"></div>
+          </div>
         </div>
         
         <!-- Main Content - Vertical Layout -->

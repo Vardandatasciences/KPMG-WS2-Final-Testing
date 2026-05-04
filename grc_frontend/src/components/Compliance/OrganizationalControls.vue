@@ -642,8 +642,89 @@
 </template>
 
 <script>
-import { axiosInstance } from '@/config/api.js';
 import CustomDropdown from '@/components/CustomDropdown.vue';
+import { useFrameworkStore } from '@/stores/framework';
+import { useComplianceStore } from '@/stores/compliance';
+import { apiService } from '@/services/apiService';
+import { API_ENDPOINTS } from '@/config/api';
+
+const buildAxiosLikeResponse = (data) => ({ data, status: 200 })
+
+const axiosInstance = {
+  async get(url, config = {}) {
+    const complianceStore = useComplianceStore()
+    if (url === '/api/all-policies/frameworks/') {
+      // Fast path: use compact approved-active frameworks endpoint for dropdowns.
+      try {
+        const fastData = await apiService.get(
+          API_ENDPOINTS.FRAMEWORKS_APPROVED_ACTIVE,
+          {},
+          { skipCache: false, background: true }
+        )
+        const frameworks = (Array.isArray(fastData) ? fastData : fastData?.data ?? []).map((fw) => ({
+          FrameworkId: fw.FrameworkId ?? fw.id,
+          FrameworkName: fw.FrameworkName ?? fw.name,
+          ActiveInactive: fw.ActiveInactive ?? fw.status ?? 'Active',
+          ...fw,
+        }))
+        return buildAxiosLikeResponse({ success: true, frameworks })
+      } catch (_e) {
+        // Fallback to existing compliance frameworks source.
+        await complianceStore.fetchFrameworks()
+        const frameworks = (complianceStore.frameworks || []).map((fw) => ({
+          FrameworkId: fw.FrameworkId ?? fw.id,
+          FrameworkName: fw.FrameworkName ?? fw.name,
+          ActiveInactive: fw.ActiveInactive ?? fw.status ?? 'Active',
+          ...fw,
+        }))
+        const activeOnly = String(config?.params?.active_only ?? '').toLowerCase() === 'true'
+        const filtered = activeOnly
+          ? frameworks.filter((fw) => String(fw.ActiveInactive || '').toLowerCase() === 'active')
+          : frameworks
+        return buildAxiosLikeResponse({ success: true, frameworks: filtered })
+      }
+    }
+
+      const frameworkControlsMatch = url.match(/^\/api\/organizational-controls\/framework\/([^/]+)\/$/)
+    if (frameworkControlsMatch) {
+      const frameworkId = frameworkControlsMatch[1]
+      await complianceStore.fetchOrganizationalControls(frameworkId)
+      return buildAxiosLikeResponse({
+        success: true,
+        controls: complianceStore.organizationalControlsByFrameworkId[frameworkId] || [],
+      })
+    }
+
+    const frameworkStatsMatch = url.match(/^\/api\/organizational-controls\/statistics\/([^/]+)\/$/)
+    if (frameworkStatsMatch) {
+      const frameworkId = frameworkStatsMatch[1]
+      await complianceStore.fetchOrganizationalStats(frameworkId)
+      return buildAxiosLikeResponse({
+        success: true,
+        statistics: complianceStore.organizationalStatsByFrameworkId[frameworkId] || null,
+      })
+    }
+
+    throw new Error(`Unsupported GET route in organizational controls adapter: ${url}`)
+  },
+
+  async post(url, payload) {
+    const complianceStore = useComplianceStore()
+    if (url === '/api/organizational-controls/upload/') {
+      const data = await complianceStore.uploadOrganizationalControls(payload)
+      return buildAxiosLikeResponse(data)
+    }
+    if (url === '/api/organizational-controls/save/') {
+      const data = await complianceStore.saveOrganizationalControls(payload)
+      return buildAxiosLikeResponse(data)
+    }
+    if (url === '/api/organizational-controls/run-audit/') {
+      const data = await complianceStore.runOrganizationalAudit(payload)
+      return buildAxiosLikeResponse(data)
+    }
+    throw new Error(`Unsupported POST route in organizational controls adapter: ${url}`)
+  },
+}
 
 export default {
   name: 'OrganizationalControls',
@@ -652,6 +733,7 @@ export default {
     return {
       frameworks: [],
       selectedFrameworkId: null,
+      syncingFromGlobalFramework: false,
       frameworkControls: [],
       statistics: null,
       
@@ -783,26 +865,69 @@ export default {
       return filtered;
     }
   },
-  async mounted() {
-    await this.loadFrameworks();
+  mounted() {
+    // Render dropdown instantly from cached Pinia state, then refresh in background.
+    this.hydrateFrameworksFromStore();
+    void this.loadFrameworks();
+    void this.syncFrameworkFromGlobalStore();
+    window.addEventListener('framework-changed', this.syncFrameworkFromGlobalStore);
+  },
+  beforeUnmount() {
+    window.removeEventListener('framework-changed', this.syncFrameworkFromGlobalStore);
   },
   methods: {
+    hydrateFrameworksFromStore() {
+      const complianceStore = useComplianceStore();
+      const frameworks = Array.isArray(complianceStore.frameworks) ? complianceStore.frameworks : [];
+      if (!frameworks.length) return;
+      this.frameworks = frameworks
+        .filter((fw) => String(fw.ActiveInactive ?? fw.status ?? 'Active').toLowerCase() === 'active')
+        .map((fw) => ({
+          ...fw,
+          FrameworkId: fw.FrameworkId ?? fw.id,
+          FrameworkName: fw.FrameworkName ?? fw.name,
+          ActiveInactive: fw.ActiveInactive ?? fw.status ?? 'Active',
+        }));
+    },
+    async syncFrameworkFromGlobalStore() {
+      try {
+        const frameworkStore = useFrameworkStore();
+        await frameworkStore.loadFrameworkFromSession();
+        const globalId = frameworkStore.selectedFrameworkId;
+        if (!globalId || globalId === 'all') {
+          if (this.selectedFrameworkId !== null && this.selectedFrameworkId !== '') {
+            this.syncingFromGlobalFramework = true;
+            this.selectedFrameworkId = null;
+            await this.loadFrameworkControls();
+          }
+          return;
+        }
+
+        const exists = this.frameworks.some(
+          framework => String(framework.id ?? framework.FrameworkId) === String(globalId)
+        );
+        if (!exists || String(this.selectedFrameworkId ?? '') === String(globalId)) return;
+
+        this.syncingFromGlobalFramework = true;
+        this.selectedFrameworkId = globalId;
+        await this.loadFrameworkControls();
+      } catch (error) {
+        console.warn('[OrganizationalControls] Failed to sync framework from global store:', error);
+      }
+    },
     async loadFrameworks() {
       try {
-        const response = await axiosInstance.get('/api/all-policies/frameworks/', {
-          params: { active_only: 'true' }
-        });
-        console.log('Frameworks API response:', response.data);
-        
-        if (response.data.success && response.data.frameworks) {
-          this.frameworks = response.data.frameworks;
-        } else if (Array.isArray(response.data)) {
-          this.frameworks = response.data;
-        } else if (response.data && typeof response.data === 'object') {
-          this.frameworks = response.data.frameworks || Object.values(response.data);
-        }
-        
-        console.log('Loaded frameworks:', this.frameworks);
+        const complianceStore = useComplianceStore();
+        await complianceStore.fetchFrameworks();
+        const frameworks = Array.isArray(complianceStore.frameworks) ? complianceStore.frameworks : [];
+        this.frameworks = frameworks
+          .filter((fw) => String(fw.ActiveInactive ?? fw.status ?? 'Active').toLowerCase() === 'active')
+          .map((fw) => ({
+            ...fw,
+            FrameworkId: fw.FrameworkId ?? fw.id,
+            FrameworkName: fw.FrameworkName ?? fw.name,
+            ActiveInactive: fw.ActiveInactive ?? fw.status ?? 'Active',
+          }));
       } catch (error) {
         console.error('Error loading frameworks:', error);
         this.showToast('Error loading frameworks', 'error');
@@ -811,17 +936,35 @@ export default {
     
     getSelectedFrameworkName() {
       if (!this.selectedFrameworkId) return '';
-      const framework = this.frameworks.find(f => (f.id || f.FrameworkId) === this.selectedFrameworkId);
+      const framework = this.frameworks.find(
+        f => String(f.id ?? f.FrameworkId) === String(this.selectedFrameworkId)
+      );
       return framework?.name || framework?.FrameworkName || 'Framework';
     },
     
     async loadFrameworkControls() {
+      if (!this.syncingFromGlobalFramework && this.selectedFrameworkId) {
+        try {
+          const selectedFramework = this.frameworks.find(
+            framework => String(framework.id ?? framework.FrameworkId) === String(this.selectedFrameworkId)
+          );
+          const frameworkStore = useFrameworkStore();
+          await frameworkStore.setFramework({
+            id: this.selectedFrameworkId,
+            name: selectedFramework?.name || selectedFramework?.FrameworkName || 'Framework',
+          });
+        } catch (error) {
+          console.warn('[OrganizationalControls] Failed to sync selected framework to global store:', error);
+        }
+      }
+
       if (!this.selectedFrameworkId) {
         this.frameworkControls = [];
         this.statistics = null;
         this.selectedCompliance = null;
         this.selectedSubPolicy = null;
         this.selectedPolicy = null;
+        this.syncingFromGlobalFramework = false;
         return;
       }
       
@@ -862,6 +1005,7 @@ export default {
         this.showToast('Error loading framework controls', 'error');
       } finally {
         this.isLoading = false;
+        this.syncingFromGlobalFramework = false;
       }
     },
     
@@ -1236,7 +1380,9 @@ export default {
     },
     
     openFrameworkUpload() {
-      const selectedFramework = this.frameworks.find(f => (f.id || f.FrameworkId) === this.selectedFrameworkId);
+      const selectedFramework = this.frameworks.find(
+        f => String(f.id ?? f.FrameworkId) === String(this.selectedFrameworkId)
+      );
       this.uploadTarget = {
         type: 'framework',
         id: this.selectedFrameworkId,

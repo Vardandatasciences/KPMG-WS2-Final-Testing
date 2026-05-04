@@ -411,6 +411,9 @@ RBAC_DECORATOR_BYPASS = True  # Bypass RBAC decorators temporarily to fix 403 er
 # Set ENABLE_DEBUG_LOGGING=true to enable DEBUG/INFO logs, false to disable (clean terminal)
 # -----------------------------------------------------------------------------
 ENABLE_DEBUG_LOGGING = os.environ.get("ENABLE_DEBUG_LOGGING", "false").lower() == "true"
+# Optional extra gate for very noisy route-level trace output (debug_print).
+# Keep disabled by default to avoid repeated terminal spam.
+ENABLE_VERBOSE_ROUTE_DEBUG = os.environ.get("ENABLE_VERBOSE_ROUTE_DEBUG", "false").lower() == "true"
 
 # -----------------------------------------------------------------------------
 # Security audit log: append-only file with SHA-256 hash chain (tamper detection).
@@ -493,6 +496,29 @@ LOGGING = {
         'tprm_backend': {
             'handlers': ['console'],
             'level': _DEBUG_LOG_LEVEL,
+            'propagate': False,
+        },
+        # Suppress noisy third-party DB driver debug chatter even when app debug is enabled.
+        # This removes lines like "Building SSL context", "Switching to SSL",
+        # and "caching_sha2_password completed succesfully".
+        'mysql': {
+            'handlers': ['console'],
+            'level': 'ERROR',
+            'propagate': False,
+        },
+        'mysql.connector': {
+            'handlers': ['console'],
+            'level': 'ERROR',
+            'propagate': False,
+        },
+        'mysql.connector.network': {
+            'handlers': ['console'],
+            'level': 'ERROR',
+            'propagate': False,
+        },
+        'django.db.backends': {
+            'handlers': ['console'],
+            'level': 'ERROR',
             'propagate': False,
         },
     },

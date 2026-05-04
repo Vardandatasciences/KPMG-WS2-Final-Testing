@@ -168,8 +168,31 @@
       </div>
     </div>
 
-    <div v-else class="risk-view-no-data">
-      Loading risk details or no risk found...
+    <div
+      v-else-if="showRiskDetailSkeleton"
+      class="risk-view-details-card risk-view-detail-skeleton"
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+      aria-label="Loading risk details"
+    >
+      <div class="grc-skeleton-table-wrap">
+        <div
+          v-for="n in 8"
+          :key="'rsk-' + n"
+          class="grc-skeleton-row grc-skeleton-pulse"
+        />
+      </div>
+    </div>
+
+    <div v-else-if="showRiskDetailNotFound" class="risk-view-no-data risk-view-not-found">
+      <p class="risk-view-not-found-title">Risk not found</p>
+      <p class="risk-view-not-found-hint">
+        This risk may have been removed, or the link is invalid.
+      </p>
+      <button type="button" class="btn btn-edit-review" @click="goBack">
+        Back to Risk Register
+      </button>
     </div>
 
     <!-- Success/Error Messages -->
@@ -394,6 +417,8 @@ import './ViewRisk.css'
 import { PopupModal, PopupService } from '@/modules/popup'
 import { API_ENDPOINTS } from '../../config/api.js'
 import apiService from '@/services/apiService.js'
+import { mapState } from 'pinia'
+import { useRiskStore } from '@/stores/risk'
 
 const axios = {
   get: (url, config = {}) =>
@@ -439,6 +464,7 @@ export default {
         highRiskAreas: [],
         mitigationSteps: []
       },
+      detailFetchFinished: false,
       riskScoreOptions: [
         { value: 1, label: '1 - Very Low' },
         { value: 2, label: '2 - Low' },
@@ -454,33 +480,65 @@ export default {
     }
   },
   created() {
+    this.hydrateRiskFromStoreList()
     this.fetchRiskDetails()
   },
+  computed: {
+    ...mapState(useRiskStore, ['isLoadingRiskDetail']),
+    showRiskDetailSkeleton() {
+      return this.isLoadingRiskDetail && !this.risk
+    },
+    showRiskDetailNotFound() {
+      return !this.risk && !this.isLoadingRiskDetail && this.detailFetchFinished
+    },
+  },
   methods: {
-    fetchRiskDetails() {
+    hydrateRiskFromStoreList() {
+      const riskId = this.$route.params.id
+      if (!riskId) return
+      const riskStore = useRiskStore()
+      try {
+        riskStore.hydrateFromLegacyService()
+      } catch {
+        /* non-fatal */
+      }
+      const row = riskStore.riskById(riskId)
+      if (row && typeof row === 'object') {
+        const seeded = { ...row }
+        this.risk = seeded
+        this.originalRisk = { ...seeded }
+        this.editRisk = { ...seeded }
+      }
+    },
+    async fetchRiskDetails() {
       const riskId = this.$route.params.id
       if (!riskId) {
+        this.detailFetchFinished = true
         this.$router.push('/risk/riskregister-list')
         return
       }
-
-      axios.get(API_ENDPOINTS.RISK(riskId))
-        .then(response => {
-          this.risk = response.data
-          this.originalRisk = { ...response.data }
-          this.editRisk = { ...response.data }
-          // Send push notification when risk details are viewed
+      this.detailFetchFinished = false
+      const riskStore = useRiskStore()
+      try {
+        const detail = await riskStore.fetchRiskDetail(riskId, { force: false })
+        if (detail && typeof detail === 'object') {
+          this.risk = detail
+          this.originalRisk = { ...detail }
+          this.editRisk = { ...detail }
           this.sendPushNotification(this.risk)
-        })
-        .catch(error => {
-          console.error('Error fetching risk details:', error)
+        }
+      } catch (error) {
+        console.error('Error fetching risk details:', error)
+        if (!this.risk) {
           this.showError('Failed to load risk details')
-          // Send push notification for error case
           this.sendPushNotification({
             RiskTitle: 'Error Loading Risk',
-            message: `Failed to load risk details: ${error.message}`
+            message: `Failed to load risk details: ${error.message}`,
           })
-        })
+        }
+      } finally {
+        this.detailFetchFinished = true
+      }
     },
 
     toggleEditMode() {
@@ -510,7 +568,8 @@ export default {
         this.risk = response.data
         this.originalRisk = { ...response.data }
         this.isEditMode = false
-        
+        useRiskStore().patchRiskDetailCache(this.risk)
+
         this.showSuccess('Risk updated successfully!')
         
         // Send push notification for successful update

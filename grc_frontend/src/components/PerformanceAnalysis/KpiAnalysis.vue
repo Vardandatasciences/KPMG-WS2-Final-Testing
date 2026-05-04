@@ -917,7 +917,6 @@
 
 <script setup>
 import { ref, computed, onMounted, reactive, watch, onBeforeUnmount, nextTick } from 'vue';
-import { useStore } from 'vuex';
 import axios from 'axios';
 import { Chart, ArcElement, BarElement, CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend } from 'chart.js';
 import { Doughnut, Bar, Line as LineChart } from 'vue-chartjs';
@@ -927,13 +926,14 @@ import '@/assets/css/dropdown.css';
 import { API_ENDPOINTS } from '../../config/api.js';
 import CustomDropdown from '../CustomDropdown.vue';
 import { convertColorForColorblind as convertColorFromUtil } from '@/utils/colorblindness';
+import { useFrameworkStore } from '@/stores/framework';
 
 Chart.register(ArcElement, BarElement, CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend);
 
-// Framework selection from Vuex store
-const store = useStore();
-const globalFrameworkId = computed(() => store.state.framework.selectedFrameworkId);
-const globalFrameworkName = computed(() => store.state.framework.selectedFrameworkName);
+// Framework selection from Pinia store
+const frameworkStore = useFrameworkStore();
+const globalFrameworkId = computed(() => frameworkStore.selectedFrameworkId);
+const globalFrameworkName = computed(() => frameworkStore.selectedFrameworkName);
 
 // Colorblindness support
 const colorblindMode = ref(null);
@@ -1407,20 +1407,29 @@ const showFrameworksModal = ref(false);
 // Computed options for custom dropdowns (value/label format)
 const cycleFrameworksOptions = computed(() => [
   { value: '', label: 'All Frameworks' },
-  ...(cycleFrameworks.value || []).map((f) => ({ value: f.id, label: f.name }))
+  ...(cycleFrameworks.value || []).map((f) => ({ value: String(f.id), label: f.name }))
 ]);
 const readinessFrameworksOptions = computed(() => [
   { value: '', label: 'All Frameworks' },
-  ...(readinessFrameworks.value || []).map((f) => ({ value: f.framework_id, label: f.name }))
+  ...(readinessFrameworks.value || []).map((f) => ({ value: String(f.framework_id), label: f.name }))
 ]);
 const readinessPoliciesOptions = computed(() => [
   { value: '', label: 'All Policies' },
-  ...(readinessPolicies.value || []).map((p) => ({ value: p.policy_id, label: p.name }))
+  ...(readinessPolicies.value || []).map((p) => ({ value: String(p.policy_id), label: p.name }))
 ]);
 const evidenceAuditOptions = computed(() => [
   { value: '', label: 'All Audits' },
   ...(auditOptions.value || []).map((a) => ({ value: a.id, label: `Audit #${a.id} - ${a.name}` }))
 ]);
+
+const syncLocalFrameworkSelections = (frameworkId) => {
+  const normalized = frameworkId && frameworkId !== 'all' ? String(frameworkId) : '';
+  selectedCycleFrameworkId.value = normalized;
+  selectedFrameworkId.value = normalized;
+  if (normalized) {
+    selectedPolicyId.value = '';
+  }
+};
 
 // Computed properties
 const getCompletionColor = computed(() => {
@@ -1944,6 +1953,7 @@ const getCycleTimeColor = (range) => {
 // Watch for global framework changes and refetch data
 watch(globalFrameworkId, async (newFrameworkId, oldFrameworkId) => {
   if (newFrameworkId !== oldFrameworkId) {
+    syncLocalFrameworkSelections(newFrameworkId);
     console.log('🔄 [AuditKPI] Framework changed from homepage:', { 
       old: oldFrameworkId, 
       new: newFrameworkId,
@@ -1982,6 +1992,8 @@ const handleFrameworkChanged = (event) => {
 // Initialize data
 onMounted(async () => {
   try {
+    await frameworkStore.loadFrameworkFromSession();
+    syncLocalFrameworkSelections(globalFrameworkId.value);
     // Wait for next tick to ensure DOM is ready
     await nextTick();
     

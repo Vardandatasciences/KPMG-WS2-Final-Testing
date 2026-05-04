@@ -822,7 +822,7 @@ const routes = [
         meta: { requiresAuth: true }
       },
       {
-        path: 'details',
+        path: 'details/:eventId?',
         name: 'EventDetails',
         component: () => import('../components/EventHandling/EventDetails.vue'),
         meta: { requiresAuth: true }

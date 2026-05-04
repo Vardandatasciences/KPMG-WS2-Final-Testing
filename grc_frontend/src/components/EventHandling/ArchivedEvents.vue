@@ -4,6 +4,9 @@
     <div class="archived-events-header">
       <h1 class="archived-events-title">Archived Events</h1>
       <p class="archived-events-subtitle">Repository for archived events and queue items</p>
+      <p v-if="isRevalidatingArchived" class="archived-events-revalidating" aria-live="polite">
+        Updating…
+      </p>
     </div>
 
     <!-- Tabs Section -->
@@ -255,14 +258,15 @@
 </template>
 
 <script>
-import { ref, onMounted, onActivated } from 'vue'
+import { ref, computed, onMounted, onActivated } from 'vue'
+import { storeToRefs } from 'pinia'
 // import { useRouter } from 'vue-router' // Unused import
 import { eventService } from '../../services/api'
 import EventViewPopup from './EventViewPopup.vue'
 import { PopupService } from '../../modules/popus/popupService'
 import PopupModal from '../../modules/popus/PopupModal.vue'
 import apiService from '@/services/apiService.js'
-import eventDataService from '../../services/eventService' // NEW: Centralized event data service
+import { useEventsStore } from '@/stores/events'
 
 export default {
   name: 'ArchivedEvents',
@@ -271,11 +275,15 @@ export default {
     PopupModal
   },
   setup() {
+    const eventsStore = useEventsStore()
+    const { archivedEvents, archivedQueueItems, lastFetchedArchived } = storeToRefs(eventsStore)
     const activeTab = ref('events')
-    const loading = ref(false)
     const error = ref(null)
-    const archivedEvents = ref([])
-    const archivedQueueItems = ref([])
+    const isRevalidatingArchived = computed(
+      () =>
+        eventsStore.revalidatingArchived ||
+        (eventsStore.loading.archived && archivedEvents.value.length > 0)
+    )
     const processingItems = ref(new Set()) // Track items being processed
     const selectedFrameworkFromSession = ref(null)
     const selectedEvent = ref(null)
@@ -285,8 +293,8 @@ export default {
       activeTab.value = tab
       
       // Fetch data when switching to queue tab if not already loaded
-      if (tab === 'queue' && archivedQueueItems.value.length === 0) {
-        fetchArchivedQueueItems()
+      if (tab === 'queue' && !lastFetchedArchived.value) {
+        void fetchArchivedDomainSafe({ force: false })
       }
     }
 
@@ -344,9 +352,9 @@ export default {
           
           // Remove the item from the current list immediately
           if (type === 'event') {
-            archivedEvents.value = archivedEvents.value.filter(event => event.id !== id)
+            eventsStore.removeArchivedEventLocal(id)
           } else if (type === 'queue') {
-            archivedQueueItems.value = archivedQueueItems.value.filter(item => item.id !== id)
+            eventsStore.removeArchivedQueueItemLocal(id)
           }
           
           // Emit a custom event to notify other components that an event was unarchived
@@ -405,9 +413,9 @@ export default {
           
           // Remove the item from the current list immediately
           if (type === 'event') {
-            archivedEvents.value = archivedEvents.value.filter(event => event.id !== id)
+            eventsStore.removeArchivedEventLocal(id)
           } else if (type === 'queue') {
-            archivedQueueItems.value = archivedQueueItems.value.filter(item => item.id !== id)
+            eventsStore.removeArchivedQueueItemLocal(id)
           }
           
           // Show success popup
@@ -450,79 +458,42 @@ export default {
       }
     }
 
-    const fetchArchivedEvents = async () => {
+    const fetchArchivedDomainSafe = async ({ force = false } = {}) => {
       try {
-        loading.value = true
         error.value = null
-
-        // Always fetch fresh archived data to avoid stale cache after archive actions.
-        console.log('[ArchivedEvents] Fetching latest archived events from API...')
-        const response = await eventService.getArchivedEvents()
-        
-        if (response.data.success) {
-          archivedEvents.value = response.data.events || []
-          console.log('Archived events loaded:', archivedEvents.value.length)
-        } else {
-          PopupService.error(response.data.message || 'Failed to fetch archived events', 'Error')
-        }
+        console.log('[ArchivedEvents] Fetching archived domain via Pinia (stale-while-revalidate)...')
+        await eventsStore.fetchArchivedDomain({ force })
+        console.log('Archived events loaded:', archivedEvents.value.length)
       } catch (err) {
         console.error('Error fetching archived events:', err)
-        // Fallback to cache only when API call fails.
-        if (eventDataService.hasValidCache()) {
-          const cachedEvents = eventDataService.getData('events') || []
-          archivedEvents.value = cachedEvents.filter(event => event.status === 'Archived')
-          console.log('[ArchivedEvents] API failed, using cached archived events:', archivedEvents.value.length)
-        } else {
+        const cached = (eventsStore.events || []).filter((event) => event.status === 'Archived')
+        if (cached.length) {
+          eventsStore.$patch({ archivedEvents: cached })
+          console.log('[ArchivedEvents] API failed, using main-list archived slice:', cached.length)
+        } else if (!archivedEvents.value.length) {
           PopupService.error('Failed to fetch archived events. Please try again.', 'Error')
         }
-      } finally {
-        loading.value = false
-      }
-    }
-
-    const fetchArchivedQueueItems = async () => {
-      try {
-        loading.value = true
-        error.value = null
-        
-        const response = await eventService.getArchivedQueueItems()
-        
-        if (response.data.success) {
-          archivedQueueItems.value = response.data.queueItems || []
-          console.log('Archived queue items loaded:', archivedQueueItems.value.length)
-        } else {
-          PopupService.error(response.data.message || 'Failed to fetch archived queue items', 'Error')
-        }
-      } catch (err) {
-        console.error('Error fetching archived queue items:', err)
-        PopupService.error('Failed to fetch archived queue items. Please try again.', 'Error')
-      } finally {
-        loading.value = false
       }
     }
 
     onMounted(async () => {
-      // Check for framework selection from session
       await checkSelectedFrameworkFromSession()
-      
-      // Then fetch archived events and queue items
-      await fetchArchivedEvents()
-      await fetchArchivedQueueItems()
+      await fetchArchivedDomainSafe({ force: false })
     })
 
     onActivated(async () => {
-      // Re-fetch when the view becomes active again (for keep-alive/nested route scenarios).
-      await fetchArchivedEvents()
+      await fetchArchivedDomainSafe({ force: false })
     })
 
     return {
       activeTab,
       selectedEvent,
       showPopup,
-      loading,
       error,
       archivedEvents,
       archivedQueueItems,
+      lastFetchedArchived,
+      isRevalidatingArchived,
       processingItems,
       selectedFrameworkFromSession,
       setActiveTab,
@@ -531,8 +502,7 @@ export default {
       closePopup,
       handleUnarchive,
       handleDelete,
-      fetchArchivedEvents,
-      fetchArchivedQueueItems
+      fetchArchivedDomainSafe
     }
   }
 }
@@ -574,6 +544,13 @@ export default {
   font-size: 1rem;
   color: #6b7280;
   margin: 0;
+  font-weight: 500;
+}
+
+.archived-events-revalidating {
+  margin: 8px 0 0;
+  font-size: 0.875rem;
+  color: #6b7280;
   font-weight: 500;
 }
 

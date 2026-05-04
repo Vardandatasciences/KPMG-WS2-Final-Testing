@@ -332,6 +332,7 @@
 import apiService from '@/services/apiService';
 import { API_ENDPOINTS } from '@/config/api.js';
 import auditorDataService from '@/services/auditorService'; // NEW: Use cached auditor data
+import { useAuditStore } from '@/stores/audit';
 import { AccessUtils } from '@/utils/accessUtils';
 
 export default {
@@ -372,90 +373,63 @@ export default {
       this.fetchAuditData();
     },
     async fetchAuditData() {
-      console.log('🔍 [Audits] Checking for cached audits data...');
+      console.log('🔍 [Audits] Fetching audits (stale-while-revalidate)...');
       this.error = '';
 
-      // Fast path: if cache already has data, serve it immediately without showing loading state
       if (auditorDataService.hasAuditsCache()) {
-        console.log('✅ [Audits] Cache hit — serving instantly');
         const cachedAudits = auditorDataService.getData('audits') || [];
         if (Array.isArray(cachedAudits)) {
           this.auditData = cachedAudits;
-          this.filteredAuditData = cachedAudits;
-        }
-        this.loading = false;
-        return; // data is fresh enough, no need to re-fetch
-      }
-
-      // No cache — show loading spinner and fetch
-      this.loading = true;
-      
-      // Check if prefetch was never started (user came directly to this page)
-      if (!window.auditorDataFetchPromise) {
-        console.log('🚀 [Audits] Starting prefetch now (user came directly to this page)...');
-        window.auditorDataFetchPromise = auditorDataService.fetchAllAuditorData();
-      }
-      
-      // Wait for prefetch if it's running
-      if (window.auditorDataFetchPromise) {
-        console.log('⏳ [Audits] Waiting for prefetch to complete...');
-        try {
-          await window.auditorDataFetchPromise;
-          console.log('✅ [Audits] Prefetch completed');
-        } catch (error) {
-          console.warn('⚠️ [Audits] Prefetch failed, will fetch directly');
-        }
-      }
-      
-      // Try to get data from cache first
-      if (auditorDataService.hasAuditsCache()) {
-        console.log('✅ [Audits] Using cached audits data');
-        const cachedAudits = auditorDataService.getData('audits') || [];
-        console.log(`[Audits] Loaded ${cachedAudits.length} audits from cache (prefetched on Home page)`);
-        
-        if (Array.isArray(cachedAudits)) {
-          this.auditData = cachedAudits;
-          this.filteredAuditData = cachedAudits;
-        } else {
-          this.auditData = [];
-          this.filteredAuditData = [];
+          this.applyFilters();
         }
         this.loading = false;
       } else {
-        // Fallback: Fetch from API if cache is empty
-        console.log('⚠️ [Audits] No cached data found, fetching from API...');
-      apiService.get(API_ENDPOINTS.AUDIT_MY_AUDITS)
-        .then(data => {
-            console.log("Audit data received from API:", data);
-          const audits = Array.isArray(data)
-            ? data
-            : (Array.isArray(data?.audits) ? data.audits : []);
+        this.loading = true;
+      }
 
-          if (audits.length > 0) {
-            this.auditData = audits;
-            this.filteredAuditData = audits;
-            // Update cache
-            auditorDataService.setData('audits', audits);
-            console.log('ℹ️ [Audits] Cache updated after direct API fetch');
-          } else {
-            console.warn("Received non-array audit data:", data);
-            this.auditData = [];
-            this.filteredAuditData = [];
-          }
-          this.loading = false;
-        })
-        .catch(err => {
-          console.error("Error fetching audit data:", err);
-          // Handle access denied errors
-          if (AccessUtils.handleApiError(err, 'audit data access')) {
-            this.error = 'Access denied';
-          } else {
-            this.error = `Failed to load data: ${err.message || err}`;
-          }
-          this.auditData = [];
-          this.filteredAuditData = [];
-          this.loading = false;
-        });
+      const auditStore = useAuditStore();
+      try {
+        await auditStore.prefetchAuditDomain({ scope: 'my', force: true });
+        console.log('✅ [Audits] Prefetch completed');
+      } catch (error) {
+        console.warn('⚠️ [Audits] Prefetch failed:', error);
+      }
+
+      if (auditorDataService.hasAuditsCache()) {
+        const cachedAudits = auditorDataService.getData('audits') || [];
+        if (Array.isArray(cachedAudits)) {
+          this.auditData = cachedAudits;
+          this.applyFilters();
+        }
+        this.loading = false;
+        return;
+      }
+
+      console.log('⚠️ [Audits] No cached data after prefetch, fetching from API...');
+      try {
+        const data = await apiService.get(API_ENDPOINTS.AUDIT_MY_AUDITS);
+        console.log('Audit data received from API:', data);
+        const audits = Array.isArray(data)
+          ? data
+          : (Array.isArray(data?.audits) ? data.audits : []);
+
+        this.auditData = audits;
+        this.applyFilters();
+        if (audits.length > 0) {
+          auditorDataService.setData('audits', audits);
+          console.log('ℹ️ [Audits] Cache updated after direct API fetch');
+        }
+      } catch (err) {
+        console.error('Error fetching audit data:', err);
+        if (AccessUtils.handleApiError(err, 'audit data access')) {
+          this.error = 'Access denied';
+        } else {
+          this.error = `Failed to load data: ${err.message || err}`;
+        }
+        this.auditData = [];
+        this.filteredAuditData = [];
+      } finally {
+        this.loading = false;
       }
     },
     handleSearch() {

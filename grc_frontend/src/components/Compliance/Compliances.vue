@@ -36,6 +36,15 @@
         
         <!-- Export controls -->
         <div class="compliance-export-controls" v-if="!selectedSubpolicy">
+          <button
+            class="compliance-export-btn"
+            @click="refreshCurrentScope"
+            :disabled="isRefreshingData"
+            title="Force refresh from API"
+          >
+            <i :class="isRefreshingData ? 'fas fa-circle-notch fa-spin' : 'fas fa-rotate-right'"></i>
+            <span>{{ isRefreshingData ? 'Refreshing...' : 'Refresh' }}</span>
+          </button>
           <select v-model="exportFormat" class="compliance-export-format-select">
             <option value="xlsx">Excel (.xlsx)</option>
             <option value="csv">CSV (.csv)</option>
@@ -288,9 +297,10 @@
             </button>
           </div>
         </div>
-        <div v-if="loading" class="compliance-loading-spinner">
-          <i class="fas fa-circle-notch fa-spin"></i>
-          <span>Loading compliances...</span>
+        <div v-if="isSubpolicyInitialLoading" class="compliance-loading-skeleton">
+          <div class="skeleton-table">
+            <div class="skeleton-row" v-for="i in 8" :key="`controls-skeleton-row-${i}`"></div>
+          </div>
         </div>
         <div v-else-if="!hasCompliances" class="compliance-no-data">
           <i class="fas fa-inbox"></i>
@@ -426,27 +436,24 @@
 </template>
 
 <script>
-import { ref, computed, onMounted } from 'vue'
-import apiService from '@/services/apiService.js'
+import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
 import DynamicTable from '../DynamicTable.vue'
-import { API_ENDPOINTS } from '../../config/api.js'
-import complianceDataService from '@/services/complianceService' // NEW: Use cached compliance data
 import { openDownloadInNewTabWithAnchorFallback } from '@/utils/safeExternalNavigation'
+import { useComplianceStore } from '@/stores/compliance'
+import { useFrameworkStore } from '@/stores/framework'
+import { useAppDataStore } from '@/stores/appData'
 
-const axios = {
-  get: async (url, config = {}) => ({ data: await apiService.get(url, config.params || {}, { ...config, params: undefined }) }),
-  post: async (url, data, config = {}) => ({ data: await apiService.post(url, data, config) }),
-  put: async (url, data, config = {}) => ({ data: await apiService.put(url, data, config) }),
-  patch: async (url, data, config = {}) => ({ data: await apiService.patch(url, data, config) }),
-  delete: async (url, config = {}) => ({ data: await apiService.delete(url, config) })
-}
+const FRAMEWORKS_CACHE_KEY = 'pinia_compliance_frameworks_cache_v1'
 
 export default {
   name: 'ComplianceManagement',
   components: { DynamicTable },
   setup() {
+const complianceStore = useComplianceStore()
+const frameworkStore = useFrameworkStore()
+const appDataStore = useAppDataStore()
 // State
 const frameworks = ref([])
 const selectedFramework = ref(null)
@@ -462,6 +469,8 @@ const versionModalTitle = ref('')
 const selectedFormat = ref('xlsx')
 const exportFormat = ref('xlsx')
 const isExporting = ref(false)
+const isRefreshingData = ref(false)
+const isSubpolicyInitialLoading = ref(false)
 const exportError = ref(null)
 const complianceAudits = ref({})
 const viewMode = ref('card') // Default to card view to match other pages
@@ -521,91 +530,185 @@ const hasCompliances = computed(() => {
          selectedSubpolicy.value.compliances.length > 0;
 })
 
-// Lifecycle
-onMounted(async () => {
-  try {
-    loading.value = true
-    console.log('🔍 [Compliances] Checking for cached framework data...')
-    
-    // ==========================================
-    // NEW: Ensure prefetch is running if needed
-    // ==========================================
-    if (!window.complianceDataFetchPromise && !complianceDataService.hasFrameworksCache()) {
-      console.log('🚀 [Compliances] Starting compliance prefetch (user navigated directly)...')
-      window.complianceDataFetchPromise = complianceDataService.fetchAllComplianceData()
-    }
+/** Map API / store rows to local framework cards (shared shape for Controls list). */
+function mapRawToFrameworks(raw) {
+  if (!Array.isArray(raw) || !raw.length) return []
+  return raw.map((fw) => ({
+    id: fw.FrameworkId ?? fw.id,
+    name: fw.FrameworkName ?? fw.name,
+    category: fw.Category ?? fw.category ?? fw.FrameworkCategory ?? '',
+    status: fw.ActiveInactive ?? fw.status ?? '',
+    description: fw.FrameworkDescription ?? fw.description ?? '',
+    versions: fw.versions ?? [],
+  }))
+}
 
-    // Wait for any ongoing prefetch to finish
-    if (window.complianceDataFetchPromise) {
-      console.log('⏳ [Compliances] Waiting for compliance prefetch to complete...')
-      try {
-        await window.complianceDataFetchPromise
-        console.log('✅ [Compliances] Prefetch completed')
-      } catch (prefetchError) {
-        console.warn('⚠️ [Compliances] Prefetch failed, falling back to direct API fetch', prefetchError)
-      }
+function mapRawToPolicies(raw) {
+  if (!Array.isArray(raw) || !raw.length) return []
+  return raw.map((policy) => ({
+    ...policy,
+    id: policy.id ?? policy.PolicyId,
+    name: policy.name ?? policy.PolicyName,
+    category: policy.category ?? policy.Category ?? '',
+    status: policy.status ?? policy.ActiveInactive ?? '',
+    description: policy.description ?? policy.PolicyDescription ?? '',
+    versions: policy.versions || [],
+  }))
+}
+
+function mapRawToSubpolicies(raw) {
+  if (!Array.isArray(raw) || !raw.length) return []
+  return raw.map((subpolicy) => ({
+    ...subpolicy,
+    id: subpolicy.id ?? subpolicy.SubPolicyId,
+    name: subpolicy.name ?? subpolicy.SubPolicyName,
+    category: subpolicy.category ?? subpolicy.Category ?? '',
+    status: subpolicy.status ?? subpolicy.ActiveInactive ?? '',
+    description: subpolicy.description ?? subpolicy.SubPolicyDescription ?? '',
+  }))
+}
+
+function mapRawToCompliances(raw) {
+  if (!Array.isArray(raw) || !raw.length) return []
+  return raw.map((compliance) => ({
+    id: compliance.ComplianceId ?? compliance.id,
+    name: compliance.ComplianceItemDescription ?? compliance.name,
+    status: compliance.Status ?? compliance.status,
+    description: compliance.ComplianceItemDescription ?? compliance.description,
+    category: compliance.Criticality ?? compliance.category,
+    maturityLevel: compliance.MaturityLevel ?? compliance.maturityLevel,
+    mandatoryOptional: compliance.MandatoryOptional ?? compliance.mandatoryOptional,
+    manualAutomatic: compliance.ManualAutomatic ?? compliance.manualAutomatic,
+    createdBy: compliance.CreatedByName ?? compliance.createdBy,
+    createdDate: compliance.CreatedByDate ?? compliance.createdDate,
+    isRisk: compliance.IsRisk ?? compliance.isRisk,
+    activeInactive: compliance.ActiveInactive ?? compliance.activeInactive,
+    identifier: compliance.Identifier ?? compliance.identifier,
+    version: compliance.ComplianceVersion ?? compliance.version,
+  }))
+}
+
+function readPersistedFrameworksCache() {
+  try {
+    const raw = window?.sessionStorage?.getItem(FRAMEWORKS_CACHE_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed?.data) ? parsed.data : []
+  } catch {
+    return []
+  }
+}
+
+/** Restore session framework + load policies — runs after grid is visible so first paint stays fast. */
+async function restoreFrameworkSelection() {
+  try {
+    if (!frameworkStore.selectedFrameworkId) {
+      await frameworkStore.loadFrameworkFromSession().catch(() => {})
     }
-    
-    // FIRST: Try to get data from cache
-    if (complianceDataService.hasFrameworksCache()) {
-      console.log('✅ [Compliances] Using cached framework data')
-      const cachedFrameworks = complianceDataService.getData('frameworks') || []
-      
-      frameworks.value = cachedFrameworks.map(framework => ({
-        id: framework.FrameworkId || framework.id,
-        name: framework.FrameworkName || framework.name,
-        versions: framework.versions || []
-      }))
-      console.log(`[Compliances] Loaded ${frameworks.value.length} frameworks from cache (prefetched on Home page)`)
+    const savedFrameworkId = frameworkStore.selectedFrameworkId
+    if (savedFrameworkId && savedFrameworkId !== 'all') {
+      const matched = frameworks.value.find(
+        (fw) => String(fw.id) === String(savedFrameworkId)
+      )
+      if (matched) {
+        await selectFramework(matched, { silent: true })
+      }
     } else {
-      // FALLBACK: Fetch from API if cache is empty
-      console.log('⚠️ [Compliances] No cached data found, fetching from API...')
-      const response = await axios.get(API_ENDPOINTS.COMPLIANCE_ALL_POLICIES_FRAMEWORKS)
-      if (response.data && Array.isArray(response.data)) {
-        frameworks.value = response.data.map(framework => ({
-          ...framework,
-          versions: framework.versions || []
-        }))
-        console.log(`[Compliances] Loaded ${frameworks.value.length} frameworks directly from API (cache unavailable)`)
-        
-        // Update cache so subsequent pages benefit
-        complianceDataService.setData('frameworks', response.data)
-        console.log('ℹ️ [Compliances] Cache updated after direct API fetch')
-      } else {
+      selectedFramework.value = null
+      selectedPolicy.value = null
+      selectedSubpolicy.value = null
+    }
+  } catch (e) {
+    console.warn('[Compliances] restoreFrameworkSelection:', e)
+  }
+}
+
+// Lifecycle — instant paint from Pinia (then refresh if needed); session restore is non-blocking for the grid.
+onMounted(async () => {
+  error.value = null
+
+  // 1) Immediate hydrate: compliance store (already warm from other pages / prefetch)
+  let raw = complianceStore.frameworks
+  // 2) Fallback: appData background cache from fetchCompliances()
+  if (!raw?.length && appDataStore.complianceFrameworks?.length) {
+    raw = appDataStore.complianceFrameworks
+  }
+  // 3) Fallback: persisted session cache from compliance store (survives reload)
+  if (!raw?.length) {
+    raw = readPersistedFrameworksCache()
+  }
+
+  if (raw?.length) {
+    frameworks.value = mapRawToFrameworks(raw)
+    loading.value = false
+    // Data already available: keep UI instant and refresh in background.
+    void complianceStore.fetchFrameworks()
+      .then(() => {
+        frameworks.value = mapRawToFrameworks(complianceStore.frameworks)
+      })
+  } else {
+    loading.value = true
+    try {
+      await complianceStore.fetchFrameworks()
+      frameworks.value = mapRawToFrameworks(complianceStore.frameworks)
+    } catch (err) {
+      error.value = 'Failed to load frameworks'
+      console.error('Error fetching frameworks:', err)
+      if (!frameworks.value.length) {
         frameworks.value = []
       }
+    } finally {
+      loading.value = false
     }
-  } catch (err) {
-    error.value = 'Failed to load frameworks'
-    console.error('Error fetching frameworks:', err)
-    frameworks.value = []
-  } finally {
-    loading.value = false
   }
+
+  void restoreFrameworkSelection()
 })
 
+watch(
+  () => frameworkStore.selectedFrameworkId,
+  async (newFrameworkId, oldFrameworkId) => {
+    if (newFrameworkId === oldFrameworkId) return
+    if (!frameworks.value.length) return
+    await restoreFrameworkSelection()
+  }
+)
+
 // Methods
-async function selectFramework(fw) {
+async function selectFramework(fw, { silent = false } = {}) {
   try {
-    loading.value = true
     selectedFramework.value = fw
     selectedPolicy.value = null
     selectedSubpolicy.value = null
-    
-    // Get active policies for the selected framework using the correct endpoint
-          const response = await axios.get(API_ENDPOINTS.COMPLIANCE_ALL_POLICIES_POLICIES, {
-      params: { 
-        framework_id: fw.id
-      }
+
+    // Persist selected framework globally for other compliance pages.
+    await frameworkStore.setFramework({
+      id: fw?.id,
+      name: fw?.name || 'Selected Framework',
     })
     
-    if (response.data && Array.isArray(response.data)) {
-      policies.value = response.data.map(policy => ({
-        ...policy,
-        versions: policy.versions || [] // Versions count should be included in the response
-      }))
+    const frameworkId = fw?.id
+    const cachedPolicies = complianceStore.policiesByFrameworkId[frameworkId] || []
+    if (cachedPolicies.length) {
+      policies.value = mapRawToPolicies(cachedPolicies)
+      if (!silent) loading.value = false
+      // Data is available: keep UI instant and silently refresh in background.
+      void complianceStore.fetchPoliciesByFramework(frameworkId)
+        .then(() => {
+          policies.value = mapRawToPolicies(complianceStore.policiesByFrameworkId[frameworkId] || [])
+        })
+      return
+    }
+
+    if (silent) {
+      void complianceStore.fetchPoliciesByFramework(frameworkId)
+        .then(() => {
+          policies.value = mapRawToPolicies(complianceStore.policiesByFrameworkId[frameworkId] || [])
+        })
     } else {
-      policies.value = []
+      loading.value = true
+      await complianceStore.fetchPoliciesByFramework(frameworkId)
+      policies.value = mapRawToPolicies(complianceStore.policiesByFrameworkId[frameworkId] || [])
     }
   } catch (err) {
     error.value = 'Failed to load policies'
@@ -618,22 +721,25 @@ async function selectFramework(fw) {
 
 async function selectPolicy(policy) {
   try {
-    loading.value = true
     selectedPolicy.value = policy
     selectedSubpolicy.value = null
-    
-    // Get active subpolicies for the selected policy using the correct endpoint
-          const response = await axios.get(API_ENDPOINTS.COMPLIANCE_ALL_POLICIES_SUBPOLICIES, {
-      params: { 
-        policy_id: policy.id
-      }
-    })
-    
-    if (response.data && Array.isArray(response.data)) {
-      subpolicies.value = response.data
-    } else {
-      subpolicies.value = []
+
+    const policyId = policy?.id
+    const cachedSubpolicies = complianceStore.subpoliciesByPolicyId[policyId] || []
+    if (cachedSubpolicies.length) {
+      subpolicies.value = mapRawToSubpolicies(cachedSubpolicies)
+      loading.value = false
+      // Data is available: keep UI instant and silently refresh in background.
+      void complianceStore.fetchSubpoliciesByPolicy(policyId)
+        .then(() => {
+          subpolicies.value = mapRawToSubpolicies(complianceStore.subpoliciesByPolicyId[policyId] || [])
+        })
+      return
     }
+
+    loading.value = true
+    await complianceStore.fetchSubpoliciesByPolicy(policyId)
+    subpolicies.value = mapRawToSubpolicies(complianceStore.subpoliciesByPolicyId[policyId] || [])
   } catch (err) {
     error.value = 'Failed to load subpolicies'
     console.error('Error fetching subpolicies:', err)
@@ -645,70 +751,49 @@ async function selectPolicy(policy) {
 
 async function selectSubpolicy(subpolicy) {
   try {
-    loading.value = true;
+    isSubpolicyInitialLoading.value = true
     selectedSubpolicy.value = subpolicy;
-        complianceAudits.value = {}; // Reset audit data
-        
-        console.log(`Selecting subpolicy: ${subpolicy.id} - ${subpolicy.name}`);
-    
-            const response = await axios.get(API_ENDPOINTS.COMPLIANCE_SUBPOLICY_COMPLIANCES(subpolicy.id));
-    console.log('Subpolicy compliances response:', response.data);
-    
-    if (response.data && response.data.success) {
-          const compliances = response.data.compliances.map(compliance => ({
-          id: compliance.ComplianceId,
-          name: compliance.ComplianceItemDescription,
-          status: compliance.Status,
-          description: compliance.ComplianceItemDescription,
-          category: compliance.Criticality,
-          maturityLevel: compliance.MaturityLevel,
-          mandatoryOptional: compliance.MandatoryOptional,
-          manualAutomatic: compliance.ManualAutomatic,
-          createdBy: compliance.CreatedByName,
-          createdDate: compliance.CreatedByDate,
-          isRisk: compliance.IsRisk,
-          activeInactive: compliance.ActiveInactive,
-          identifier: compliance.Identifier,
-          version: compliance.ComplianceVersion
-          }));
-          
-          selectedSubpolicy.value = {
-            ...subpolicy,
-            compliances: compliances
-          };
-          
-          console.log(`Found ${compliances.length} compliances for subpolicy ${subpolicy.id}`);
-          
-          // Fetch audit info for each compliance
-          if (compliances.length > 0) {
-            for (const compliance of compliances) {
-              try {
-                await fetchAuditInfo(compliance.id);
-                // Add a small delay to prevent overwhelming the server
-                await new Promise(resolve => setTimeout(resolve, 100));
-              } catch (auditErr) {
-                console.error(`Error fetching audit info for compliance ${compliance.id}:`, auditErr);
-                // Continue with next compliance
-              }
-            }
-            console.log('All audit information fetched:', complianceAudits.value);
-          }
-    } else {
-          selectedSubpolicy.value = {
-            ...subpolicy,
-            compliances: []
-          };
-          console.log('No compliances found or API returned error');
+    complianceAudits.value = {}; // Reset audit data
+
+    const subpolicyId = subpolicy?.id
+    const cachedCompliances = complianceStore.compliancesBySubpolicyId[subpolicyId] || []
+    if (cachedCompliances.length) {
+      const instantCompliances = mapRawToCompliances(cachedCompliances)
+      selectedSubpolicy.value = {
+        ...subpolicy,
+        compliances: instantCompliances,
+      }
+      loading.value = false
+      // Data is available: keep UI instant and refresh in background.
+      void complianceStore.fetchCompliancesBySubpolicy(subpolicyId)
+        .then(() => {
+          const refreshed = mapRawToCompliances(complianceStore.compliancesBySubpolicyId[subpolicyId] || [])
+          selectedSubpolicy.value = { ...subpolicy, compliances: refreshed }
+        })
+      void Promise.allSettled(instantCompliances.map((c) => fetchAuditInfo(c.id)))
+      return
+    }
+
+    loading.value = true
+    await complianceStore.fetchCompliancesBySubpolicy(subpolicyId)
+    const compliances = mapRawToCompliances(complianceStore.compliancesBySubpolicyId[subpolicyId] || [])
+    selectedSubpolicy.value = {
+      ...subpolicy,
+      compliances,
+    }
+    if (compliances.length > 0) {
+      await Promise.allSettled(compliances.map((c) => fetchAuditInfo(c.id)))
     }
   } catch (err) {
     console.error('Error fetching subpolicy compliances:', err);
     error.value = 'Failed to load compliances';
-        selectedSubpolicy.value = {
-          ...subpolicy,
-          compliances: []
-        };
+    selectedSubpolicy.value = {
+      ...subpolicy,
+      compliances: []
+    };
   } finally {
     loading.value = false;
+    isSubpolicyInitialLoading.value = false
   }
 }
 
@@ -725,9 +810,15 @@ async function showVersions(type, item) {
         break
     }
     
-            const response = await axios.get(API_ENDPOINTS.COMPLIANCE_AUDIT_INFO(item.id))
-    if (response.data && Array.isArray(response.data)) {
-      versions.value = response.data.map(version => ({
+    await complianceStore.fetchAuditInfoForCompliance(item.id, { force: true })
+    const auditInfo = complianceStore.auditInfoByComplianceId[item.id]
+    const versionRows = Array.isArray(auditInfo)
+      ? auditInfo
+      : Array.isArray(auditInfo?.versions)
+        ? auditInfo.versions
+        : []
+    if (versionRows.length) {
+      versions.value = versionRows.map(version => ({
         id: version.ComplianceId,
         version: version.ComplianceVersion,
         name: version.ComplianceItemDescription,
@@ -767,6 +858,7 @@ function goToStep(idx) {
     selectedFramework.value = null
     selectedPolicy.value = null
     selectedSubpolicy.value = null
+    frameworkStore.resetFramework()
   } else if (idx === 1) {
     selectedPolicy.value = null
     selectedSubpolicy.value = null
@@ -905,7 +997,7 @@ async function handleExport(format) {
     console.log(`Attempting export for ${itemType} ${itemId} in ${format} format`);
     
     // Use the POST endpoint that returns S3 URL
-    const response = await axios.post(API_ENDPOINTS.COMPLIANCE_EXPORT, {
+    const result = await complianceStore.exportComplianceData({
       file_format: format,
       data: JSON.stringify(dataToExport),
       options: JSON.stringify({
@@ -919,13 +1011,13 @@ async function handleExport(format) {
       })
     });
 
-    console.log('Export successful:', response.data);
+    console.log('Export successful:', result);
     
     // Check if we have a file URL
-    if (response.data && response.data.file_url) {
+    if (result && result.file_url) {
       const ok = await openDownloadInNewTabWithAnchorFallback(
-        response.data.file_url,
-        response.data.file_name || `compliance_export.${format}`
+        result.file_url,
+        result.file_name || `compliance_export.${format}`
       )
       ElMessage({
         message: ok
@@ -963,6 +1055,40 @@ const setViewMode = (mode) => {
   viewMode.value = mode
 }
 
+async function refreshCurrentScope() {
+  try {
+    isRefreshingData.value = true
+    error.value = null
+
+    if (selectedSubpolicy.value?.id) {
+      await complianceStore.fetchCompliancesBySubpolicy(selectedSubpolicy.value.id, { force: true })
+      const refreshed = mapRawToCompliances(complianceStore.compliancesBySubpolicyId[selectedSubpolicy.value.id] || [])
+      selectedSubpolicy.value = { ...selectedSubpolicy.value, compliances: refreshed }
+      return
+    }
+
+    if (selectedPolicy.value?.id) {
+      await complianceStore.fetchSubpoliciesByPolicy(selectedPolicy.value.id, { force: true })
+      subpolicies.value = mapRawToSubpolicies(complianceStore.subpoliciesByPolicyId[selectedPolicy.value.id] || [])
+      return
+    }
+
+    if (selectedFramework.value?.id) {
+      await complianceStore.fetchPoliciesByFramework(selectedFramework.value.id, { force: true })
+      policies.value = mapRawToPolicies(complianceStore.policiesByFrameworkId[selectedFramework.value.id] || [])
+      return
+    }
+
+    await complianceStore.fetchFrameworks({ force: true })
+    frameworks.value = mapRawToFrameworks(complianceStore.frameworks)
+  } catch (e) {
+    console.error('Refresh failed:', e)
+    error.value = 'Refresh failed'
+  } finally {
+    isRefreshingData.value = false
+  }
+}
+
 const truncateDescription = (text, maxLength = 100) => {
   if (!text) return 'No description available'
   if (text.length <= maxLength) return text
@@ -996,20 +1122,21 @@ async function fetchAuditInfo(complianceId) {
       }
     };
     
-    const response = await axios.get(`/api/compliance/compliance/${complianceId}/audit-info/`);
-    console.log(`Audit info response for compliance ID ${complianceId}:`, response.data);
+    await complianceStore.fetchAuditInfoForCompliance(complianceId, { force: true })
+    const responseData = complianceStore.auditInfoByComplianceId[complianceId]
+    console.log(`Audit info response for compliance ID ${complianceId}:`, responseData);
     
-    if (response.data && response.data.success) {
+    if (responseData) {
       complianceAudits.value = {
         ...complianceAudits.value,
         [complianceId]: {
-          ...response.data.data,
+          ...(responseData?.data ?? responseData),
           isLoading: false
         }
       };
       console.log(`Updated audit data for compliance ID ${complianceId}:`, complianceAudits.value[complianceId]);
     } else {
-      throw new Error(response.data.message || 'Failed to fetch audit data');
+      throw new Error('Failed to fetch audit data');
     }
   } catch (err) {
     console.error(`Error fetching audit info for compliance ${complianceId}:`, err);
@@ -1083,6 +1210,8 @@ return {
   selectedFormat,
   exportFormat,
   isExporting,
+  isRefreshingData,
+  isSubpolicyInitialLoading,
   exportError,
   complianceAudits,
   viewMode,
@@ -1111,6 +1240,7 @@ return {
   handleAuditLinkClick,
   toggleViewMode,
   setViewMode,
+  refreshCurrentScope,
   truncateDescription,
   filteredCompliances,
   complianceTableColumns,
@@ -1549,6 +1679,36 @@ return {
 .compliance-loading-spinner i {
   font-size: 1.5rem;
   color: #4f8cff;
+}
+
+.compliance-loading-skeleton {
+  width: 100%;
+  margin: 16px 0;
+}
+
+.compliance-loading-skeleton .skeleton-table {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 14px;
+  background: #ffffff;
+}
+
+.compliance-loading-skeleton .skeleton-row {
+  height: 20px;
+  margin-bottom: 10px;
+  border-radius: 8px;
+  background: linear-gradient(90deg, #eef2f7 25%, #e5eaf2 37%, #eef2f7 63%);
+  background-size: 400% 100%;
+  animation: complianceSkeletonPulse 1.4s ease infinite;
+}
+
+.compliance-loading-skeleton .skeleton-row:last-child {
+  margin-bottom: 0;
+}
+
+@keyframes complianceSkeletonPulse {
+  0% { background-position: 100% 0; }
+  100% { background-position: 0 0; }
 }
 
 /* No Data State */

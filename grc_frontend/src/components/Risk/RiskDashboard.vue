@@ -501,6 +501,8 @@ import { useRouter } from 'vue-router'
 import { useStore } from 'vuex'
 import { useDashboardsStore } from '@/stores/dashboards'
 import { useAppDataStore } from '@/stores/appData'
+import { useRiskStore } from '@/stores/risk'
+import { useFrameworkStore } from '@/stores/framework'
 import { Chart, ArcElement, BarElement, CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend } from 'chart.js'
 import { Doughnut, Bar, Line as LineChart } from 'vue-chartjs'
 import '@fortawesome/fontawesome-free/css/all.min.css'
@@ -1183,7 +1185,14 @@ export default {
       selectedFrameworkSessionPromise = (async () => {
       try {
         console.log('🔍 DEBUG: Checking for selected framework from session in RiskDashboard...')
-        const response = await axios.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED)
+        const frameworkStore = useFrameworkStore()
+        await frameworkStore.loadFrameworkFromSession()
+        const response = {
+          data: {
+            success: true,
+            frameworkId: frameworkStore.selectedFrameworkId,
+          },
+        }
         console.log('📊 DEBUG: Selected framework response:', response.data)
 
         if (response.data && response.data.success) {
@@ -1342,6 +1351,11 @@ export default {
 
     // Fetch on mount and when filters change
     onMounted(async () => {
+      try {
+        void useRiskStore().prefetchRiskRegisterAndInstances({ force: false })
+      } catch {
+        /* non-fatal: dashboard charts still load */
+      }
       // Load framework from Vuex store
       const storeFrameworkId = store.state.framework.selectedFrameworkId
       if (storeFrameworkId && storeFrameworkId !== 'all') {

@@ -1,5 +1,6 @@
 import { API_BASE_URL, API_ENDPOINTS, createAxiosInstance } from '../config/api.js';
 import { clearLegacyClientJwtKeys } from '../utils/legacyAuthStorage.js';
+import { useFrameworkStore } from '@/stores/framework';
  
 // Use centralized axios instance configuration (includes withCredentials: true)
 const api = createAxiosInstance(API_BASE_URL);
@@ -360,7 +361,15 @@ export const incidentService = {
  
   // Framework endpoints for incident filtering
   getIncidentFrameworks: () => api.get('/api/compliance/frameworks/public/'),
-  getSelectedFramework: () => api.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED),
+  getSelectedFramework: async () => {
+    const frameworkStore = useFrameworkStore();
+    await frameworkStore.loadFrameworkFromSession();
+    return {
+      success: true,
+      frameworkId: frameworkStore.selectedFrameworkId,
+      frameworkName: frameworkStore.selectedFrameworkName,
+    };
+  },
 
   // Other incident-related endpoints
   getIncidentCountsByStatus: () => api.get('/api/incidents/counts-by-status/')

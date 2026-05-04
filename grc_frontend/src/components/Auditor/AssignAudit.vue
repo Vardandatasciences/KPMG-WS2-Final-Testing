@@ -2042,7 +2042,9 @@ import DateInput from '@/components/inputs/DateInput.vue';
 import { AccessUtils } from '@/utils/accessUtils';
 import { API_ENDPOINTS } from '@/config/api.js';
 import aiRecommendationService from '@/services/aiRecommendationService';
-import auditorDataService from '@/services/auditorService';
+import { useFrameworkStore } from '@/stores/framework';
+import { useAuditStore } from '@/stores/audit';
+import { normalizeApprovedActiveFrameworks } from '@/utils/frameworkApprovedActive';
 
 export default {
   name: 'AssignAudit',
@@ -2479,18 +2481,41 @@ export default {
     
     async fetchFrameworks() {
       try {
-        console.log('🔄 [AssignAudit] Fetching frameworks...');
-        const data = await apiService.get(API_ENDPOINTS.FRAMEWORKS);
-        this.frameworks = data;
-        console.log(`✅ [AssignAudit] Fetched ${this.frameworks.length} frameworks`);
-        
-        // Load selected framework context if it exists
+        const frameworkStore = useFrameworkStore();
+        frameworkStore.ensureUserScopedState();
+
+        // Use approved + active list (same as HomeView), not /api/frameworks/ (often user-attached only).
+        let list = [];
         try {
-          const sel = await apiService.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED);
-          if (sel && sel.FrameworkId && !this.auditData.framework) {
-            console.log('✅ [AssignAudit] Setting default framework from session context:', sel.FrameworkName);
-            this.auditData.framework = sel.FrameworkId;
-            this.onFrameworkChange(sel.FrameworkId);
+          const response = await apiService.get(API_ENDPOINTS.FRAMEWORKS_APPROVED_ACTIVE);
+          const raw =
+            response?.success && Array.isArray(response.data)
+              ? response.data
+              : Array.isArray(response)
+                ? response
+                : [];
+          list = normalizeApprovedActiveFrameworks(raw);
+        } catch (apiErr) {
+          console.warn('⚠️ [AssignAudit] approved-active failed; trying cached Pinia list', apiErr);
+          list = normalizeApprovedActiveFrameworks(frameworkStore.frameworks || []);
+        }
+
+        if (list.length > 0) {
+          this.frameworks = list;
+          frameworkStore.setFrameworks(list.map((fw) => ({ ...fw })));
+          console.log(`✅ [AssignAudit] ${list.length} approved/active frameworks (dropdown + Pinia sync)`);
+        } else {
+          console.warn('⚠️ [AssignAudit] No approved/active rows; falling back to /api/frameworks/');
+          const data = await apiService.get(API_ENDPOINTS.FRAMEWORKS);
+          this.frameworks = Array.isArray(data) ? data : [];
+        }
+
+        try {
+          await frameworkStore.loadFrameworkFromSession();
+          if (frameworkStore.selectedFrameworkId && !this.auditData.framework) {
+            console.log('✅ [AssignAudit] Setting default framework from session/store:', frameworkStore.selectedFrameworkName);
+            this.auditData.framework = frameworkStore.selectedFrameworkId;
+            this.onFrameworkChange(frameworkStore.selectedFrameworkId);
           }
         } catch (selErr) {
           console.log('ℹ️ [AssignAudit] No pre-selected framework session found');
@@ -2981,9 +3006,10 @@ export default {
       //   return;
       // }
       
+      let optimisticTempId = null;
       try {
         this.assigning = true;
-        
+
         // Get the first team member to use as template for common fields
         const templateMember = this.teamMembers[0];
         
@@ -3081,6 +3107,27 @@ export default {
         };
 
         console.log('🚀 Submitting audit with payload:', payload);
+        try {
+          const auditStore = useAuditStore();
+          optimisticTempId = auditStore.pushOptimisticAssignment({
+            title: payload.title,
+            framework: this.getFrameworkName(),
+            policy:
+              this.auditData.type === 'AI'
+                ? this.getPolicyName(this.auditData.policy)
+                : this.getPolicyName(templateMember.assignedPolicy),
+            subpolicy:
+              this.auditData.type === 'AI'
+                ? this.getSubPolicyName(this.auditData.subPolicy)
+                : this.getSubPolicyName(templateMember.assignedSubPolicy),
+            date: templateMember.dueDate || '—',
+            business_unit: (templateMember.businessUnits || []).join(', ') || '—',
+            auditType: templateMember.type || this.auditData.type || '—',
+          });
+        } catch (e) {
+          console.warn('⚠️ Optimistic audit row skipped:', e);
+        }
+
         const data = await apiService.post(API_ENDPOINTS.AUDIT_CREATE, payload);
         console.log('✅ Audit submission response:', data);
         
@@ -3099,32 +3146,32 @@ export default {
             priority: 'high',
             user_id: 'default_user'
           });
+
+          const navigateToAiUpload =
+            this.auditData.type === 'AI' || templateMember.type === 'AI';
+          const newAuditId = data.audit_ids && data.audit_ids[0];
+
+          const auditStore = useAuditStore();
+          try {
+            auditStore.invalidateAuditCache(['audits', 'lookups', 'reviews']);
+            void auditStore.prefetchAuditDomain({ scope: 'my', force: true }).catch(() => {});
+          } catch (e) {
+            console.warn('⚠️ Failed to sync audit caches after assign:', e);
+          }
+
           this.resetForm();
           
-          // Navigate based on audit type
-          console.log('🔄 Navigating after successful assignment in 2 seconds...');
+          // Navigate based on audit type (capture flags before resetForm clears auditData)
+          console.log('🔄 Navigating after successful assignment...');
           setTimeout(() => {
-            if (this.auditData.type === 'AI' || templateMember.type === 'AI') {
-              // For AI audits, go to document upload page
+            if (navigateToAiUpload && newAuditId) {
               console.log('🚀 Navigating to AI audit document upload');
-              // Clear cached audits so AI Audit Upload reloads fresh list including this new audit
-              try {
-                if (auditorDataService && typeof auditorDataService.clearCache === 'function') {
-                  auditorDataService.clearCache();
-                }
-              } catch (e) {
-                console.warn('⚠️ Failed to clear auditorDataService cache before AI audit navigation:', e);
-              }
-              if (typeof window !== 'undefined' && window.auditorDataFetchPromise) {
-                window.auditorDataFetchPromise = null;
-              }
-              this.$router.push(`/auditor/ai-audit/${data.audit_ids[0]}/upload`);
+              this.$router.push(`/auditor/ai-audit/${newAuditId}/upload`);
             } else {
-              // For regular audits, go to reviews page
               console.log('🚀 Navigating to /auditor/reviews');
               this.$router.push('/auditor/reviews');
             }
-          }, 2000);
+          }, 500);
         } else {
           throw new Error('No audits were created');
         }
@@ -3154,6 +3201,13 @@ export default {
         });
         console.error('Error in submitAudit:', error);
       } finally {
+        if (optimisticTempId) {
+          try {
+            useAuditStore().removeOptimisticAssignment(optimisticTempId);
+          } catch (e) {
+            /* noop */
+          }
+        }
         this.assigning = false;
       }
     },

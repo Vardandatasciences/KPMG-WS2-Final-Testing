@@ -215,12 +215,12 @@
       </div>
 
       <div class="modal-footer">
-        <button class="btn btn-cancel" @click="closeModal" :disabled="creating">
+        <button class="btn btn-cancel" @click="closeModal" :disabled="submitLocked">
           Cancel
         </button>
-        <button class="btn btn-submit" @click="createRequest" :disabled="creating">
-          <span v-if="creating" class="spinner"></span>
-          {{ creating ? 'Creating...' : 'Create Request' }}
+        <button class="btn btn-submit" @click="createRequest" :disabled="submitLocked">
+          <span v-if="submitLocked" class="spinner"></span>
+          {{ submitLocked ? 'Submitting...' : 'Create Request' }}
         </button>
       </div>
     </div>
@@ -245,7 +245,7 @@ export default {
       required: true
     }
   },
-  emits: ['close', 'created'],
+  emits: ['close', 'submit'],
   setup(props, { emit }) {
     const formData = ref({
       title: `Acknowledge ${props.policy.name || props.policy.PolicyName}`,
@@ -259,7 +259,7 @@ export default {
     })
 
     const errors = ref({})
-    const creating = ref(false)
+    const submitLocked = ref(false)
     const loadingUsers = ref(false)
     const users = ref([])
     const userSearch = ref('')
@@ -501,63 +501,56 @@ export default {
       return Object.keys(errors.value).length === 0
     }
 
-    const createRequest = async () => {
+    const createRequest = () => {
       if (!validate()) {
         return
       }
-
-      try {
-        creating.value = true
-
-        // Parse multiple emails from comma-separated string
-        let manualEmailValue = null
-        if (formData.value.manualEmail && formData.value.manualEmail.trim()) {
-          const emailList = formData.value.manualEmail
-            .split(',')
-            .map(email => email.trim())
-            .filter(email => email.length > 0)
-          
-          // Send as string for single email (backward compatibility) or array for multiple
-          if (emailList.length === 1) {
-            manualEmailValue = emailList[0]
-          } else if (emailList.length > 1) {
-            manualEmailValue = emailList
-          }
-        }
-
-        const requestData = {
-          policy_id: props.policy.id || props.policy.PolicyId,
-          policy_version: props.policy.CurrentVersion || '1.0',
-          title: formData.value.title,
-          description: formData.value.description,
-          due_date: formData.value.dueDate || null,
-          target_user_ids: formData.value.targetUserIds,
-          manual_email: manualEmailValue,
-          // Send notifications if enabled and we have user IDs (in-app notifications work for database users)
-          // Email notifications work for both users and manual emails
-          send_notifications: formData.value.sendNotifications && formData.value.targetUserIds.length > 0,
-          send_email: formData.value.sendEmail
-        }
-
-        const response = await apiService.post(API_ENDPOINTS.CREATE_ACKNOWLEDGEMENT_REQUEST, requestData)
-
-        // Don't show popup here - parent will handle it
-        console.log('Acknowledgement request created:', response)
-        
-        emit('created', {
-          ...response,
-          acknowledgement_request_id: response.acknowledgement_request_id
-        })
-        closeModal()
-      } catch (error) {
-        console.error('Error creating acknowledgement request:', error)
-        PopupService.error(
-          error.response?.data?.error || 'Failed to create acknowledgement request',
-          'Error'
-        )
-      } finally {
-        creating.value = false
+      if (submitLocked.value) {
+        return
       }
+
+      // Parse multiple emails from comma-separated string
+      let manualEmailValue = null
+      let manualEmailCount = 0
+      if (formData.value.manualEmail && formData.value.manualEmail.trim()) {
+        const emailList = formData.value.manualEmail
+          .split(',')
+          .map(email => email.trim())
+          .filter(email => email.length > 0)
+
+        manualEmailCount = emailList.length
+        if (emailList.length === 1) {
+          manualEmailValue = emailList[0]
+        } else if (emailList.length > 1) {
+          manualEmailValue = emailList
+        }
+      }
+
+      const requestData = {
+        policy_id: props.policy.id || props.policy.PolicyId,
+        policy_version: props.policy.CurrentVersion || '1.0',
+        title: formData.value.title,
+        description: formData.value.description,
+        due_date: formData.value.dueDate || null,
+        target_user_ids: formData.value.targetUserIds,
+        manual_email: manualEmailValue,
+        send_notifications: formData.value.sendNotifications && formData.value.targetUserIds.length > 0,
+        send_email: formData.value.sendEmail
+      }
+
+      const policy_name = props.policy.name || props.policy.PolicyName || 'policy'
+      const uidCount = formData.value.targetUserIds.length
+      let total_users = uidCount + manualEmailCount
+      if (total_users < 1) {
+        total_users = 1
+      }
+
+      submitLocked.value = true
+      PopupService.success(
+        'Acknowledgement request submitted. Recipients will be notified when processing finishes.',
+        'Success'
+      )
+      emit('submit', { requestData, policy_name, total_users })
     }
 
     const closeModal = () => {
@@ -567,6 +560,7 @@ export default {
     // Watch for modal visibility changes
     watch(() => props.isVisible, (newVal) => {
       if (newVal) {
+        submitLocked.value = false
         // Always fetch users when modal opens
         if (users.value.length === 0) {
           fetchUsers()
@@ -593,7 +587,7 @@ export default {
     return {
       formData,
       errors,
-      creating,
+      submitLocked,
       loadingUsers,
       users,
       userSearch,

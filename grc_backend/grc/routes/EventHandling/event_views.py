@@ -10,7 +10,9 @@ from django.views.decorators.http import require_http_methods
 from django.utils.decorators import method_decorator
 from django.db.models import Q
 from django.db import models
+from django.db import close_old_connections
 import logging
+import threading
 from django.utils import timezone
 from datetime import date, datetime as dt_datetime, timedelta
 import json
@@ -510,6 +512,23 @@ def _parse_non_negative_int(value, field_label, *, max_value=_MAX_SUBEVENT_TYPE_
     if v > max_value:
         raise ValueError(f'{field_label} is out of allowed range.')
     return v
+
+
+def _get_framework_for_tenant(fid, tenant_id):
+    """
+    Resolve Framework for event flows. Prefer strict tenant match; fall back to
+    legacy rows with TenantId NULL (common in DBs migrated before multi-tenancy).
+    """
+    if fid is None:
+        return None
+    try:
+        return Framework.objects.get(FrameworkId=fid, tenant_id=tenant_id)
+    except Framework.DoesNotExist:
+        pass
+    try:
+        return Framework.objects.get(FrameworkId=fid, tenant_id__isnull=True)
+    except Framework.DoesNotExist:
+        return None
 
 
 # Simple test endpoint
@@ -1325,11 +1344,11 @@ def create_event(request):
                     'success': False,
                     'message': str(ve)
                 }, status=400)
-            try:
-                framework_obj = Framework.objects.get(FrameworkId=fid, tenant_id=tenant_id)
+            framework_obj = _get_framework_for_tenant(fid, tenant_id)
+            if framework_obj:
                 debug_print(f"DEBUG: Found framework: {framework_obj.FrameworkName}")
-            except Framework.DoesNotExist:
-                debug_print(f"DEBUG: Framework with ID {fid} not found")
+            else:
+                debug_print(f"DEBUG: Framework with ID {fid} not found for tenant")
                 return Response({
                     'success': False,
                     'message': f'Framework with ID {fid} not found'
@@ -1722,10 +1741,10 @@ def create_event(request):
                                 'success': False,
                                 'message': str(ve)
                             }, status=400)
-                        try:
-                            additional_framework_obj = Framework.objects.get(FrameworkId=afid, tenant_id=tenant_id)
+                        additional_framework_obj = _get_framework_for_tenant(afid, tenant_id)
+                        if additional_framework_obj:
                             debug_print(f"DEBUG: Found additional framework: {additional_framework_obj.FrameworkName}")
-                        except Framework.DoesNotExist:
+                        else:
                             debug_print(f"DEBUG: Additional framework with ID {afid} not found")
                             return Response({
                                 'success': False,
@@ -4179,47 +4198,20 @@ def update_event(request, event_id):
         }, status=500)
 
 
-@api_view(['POST'])
-@permission_classes([EventArchivePermission])
-@authentication_classes([CsrfExemptSessionAuthentication])
-@csrf_exempt
-@require_tenant  # MULTI-TENANCY: Ensure tenant is present
-@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
-def archive_event(request, event_id):
-    """Archive an event - accepts either integer EventId or string EventId_Generated (e.g., EVT-2026-4226)"""
+def _run_event_archive_notifications_worker(tenant_id, event_pk, user_id_int, old_status):
+    """
+    Send archive notifications outside the request thread so POST /archive/ returns quickly.
+    Multi-channel / email work was routinely adding many seconds to the HTTP response.
+    """
+    close_old_connections()
     try:
-        # MULTI-TENANCY: Extract tenant_id from request
-        tenant_id = get_tenant_id_from_request(request)
-        
-        user_id_int = _parse_server_user_id_int(request)
-        if not user_id_int:
-            return Response({
-                'success': False,
-                'message': 'Authentication required'
-            }, status=401)
-        
         try:
-            event = _get_event_for_tenant(tenant_id, event_id, allow_generated_slug=True)
+            event = Event.objects.select_related('Owner', 'Reviewer', 'CreatedBy').get(
+                EventId=event_pk, tenant_id=tenant_id
+            )
         except Event.DoesNotExist:
-            return Response({
-                'success': False,
-                'message': 'Event not found'
-            }, status=404)
-        
-        deny = _guard_event_object_access(request, event)
-        if deny:
-            payload, code = deny
-            return Response(payload, status=code)
-        
-        debug_print(f"DEBUG: Event {event_id} - CreatedBy: {event.CreatedBy}, Reviewer: {event.Reviewer}, User: {user_id_int}")
-        
-        old_status = event.Status
-        # Archive the event
-        event.Status = 'Archived'
-        event.UpdatedAt = timezone.now()
-        event.save()
-        
-        # Notify stakeholders of status change (same anti-spam rules as approve/reject/update)
+            return
+
         try:
             from ...routes.Global.notification_service import NotificationService
             from ...routes.Global.notifications import (
@@ -4292,7 +4284,63 @@ def archive_event(request, event_id):
                     _log_exception(notify_error, context='archive_event.notify')
         except Exception as notify_ex:
             _log_exception(notify_ex, context='archive_event.notify_service')
+    finally:
+        close_old_connections()
+
+
+def _schedule_event_archive_notifications(tenant_id, event_pk, user_id_int, old_status):
+    t = threading.Thread(
+        target=_run_event_archive_notifications_worker,
+        args=(tenant_id, event_pk, user_id_int, old_status),
+        daemon=True,
+        name=f'event-archive-notify-{event_pk}',
+    )
+    t.start()
+
+
+@api_view(['POST'])
+@permission_classes([EventArchivePermission])
+@authentication_classes([CsrfExemptSessionAuthentication])
+@csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
+def archive_event(request, event_id):
+    """Archive an event - accepts either integer EventId or string EventId_Generated (e.g., EVT-2026-4226)"""
+    try:
+        # MULTI-TENANCY: Extract tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
         
+        user_id_int = _parse_server_user_id_int(request)
+        if not user_id_int:
+            return Response({
+                'success': False,
+                'message': 'Authentication required'
+            }, status=401)
+        
+        try:
+            event = _get_event_for_tenant(tenant_id, event_id, allow_generated_slug=True)
+        except Event.DoesNotExist:
+            return Response({
+                'success': False,
+                'message': 'Event not found'
+            }, status=404)
+        
+        deny = _guard_event_object_access(request, event)
+        if deny:
+            payload, code = deny
+            return Response(payload, status=code)
+        
+        debug_print(f"DEBUG: Event {event_id} - CreatedBy: {event.CreatedBy}, Reviewer: {event.Reviewer}, User: {user_id_int}")
+        
+        old_status = event.Status
+        # Archive the event
+        event.Status = 'Archived'
+        event.UpdatedAt = timezone.now()
+        event.save()
+
+        # Notifications (email / multi-channel) can take many seconds — do not block the HTTP response.
+        _schedule_event_archive_notifications(tenant_id, event.EventId, user_id_int, old_status)
+
         return Response({
             'success': True,
             'message': 'Event archived successfully',

@@ -260,29 +260,28 @@
       @cancel="handleModalCancel"
     />
 
-    <!-- Popup Modal -->
-    <PopupModal />
   </div>
 </template>
 
 <script>
-import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
+import { useEventsStore } from '@/stores/events'
 import { useEventPermissions } from '../../composables/useEventPermissions'
 import ApprovalModal from './ApprovalModal.vue'
-import { PopupService } from '../../modules/popus/popupService'
-import PopupModal from '../../modules/popus/PopupModal.vue'
+import { PopupService } from '../../modules/popup/popupService'
 import { eventService } from '../../services/api'
 import apiService from '@/services/apiService.js'
 
 export default {
   name: 'EventDetails',
   components: {
-    ApprovalModal,
-    PopupModal
+    ApprovalModal
   },
   setup() {
     const router = useRouter()
+    const route = useRoute()
+    const eventsStore = useEventsStore()
     
     // Event permissions
     const {
@@ -485,8 +484,7 @@ export default {
     }
 
     const handleEdit = () => {
-      // Store the event data in sessionStorage for the event creation page to use
-      sessionStorage.setItem('editEventData', JSON.stringify({
+      eventsStore.setCreationDraft('edit', {
         id: eventData.value.id,
         title: eventData.value.title,
         description: eventData.value.description,
@@ -501,15 +499,12 @@ export default {
         endDate: eventData.value.end_date,
         evidence: eventData.value.evidence || [],
         evidence_string: eventData.value.evidence_string || '',
-        isEdit: true
-      }))
-      
-      // Navigate to event creation page
+        isEdit: true,
+      })
       router.push('/event-handling/create')
     }
 
     const handleCreateEvent = () => {
-      // Store the queue event data in sessionStorage for the event creation page to use
       const createEventData = {
         source: eventData.value.source || 'RiskaVaire Module',
         rawData: eventData.value.rawData || eventData.value,
@@ -539,11 +534,10 @@ export default {
         }
       }
       
-      // Store in sessionStorage based on queue type
       if (eventData.value.queueType === 'integrations' || eventData.value.source === 'Jira') {
-        sessionStorage.setItem('integrationEventData', JSON.stringify(createEventData))
+        eventsStore.setCreationDraft('integration', createEventData)
       } else {
-        sessionStorage.setItem('riskavaireEventData', JSON.stringify(createEventData))
+        eventsStore.setCreationDraft('riskavaire', createEventData)
       }
       
       // Navigate to event creation page
@@ -566,48 +560,82 @@ export default {
     }
 
     const handleModalSubmit = async (comment) => {
+      const eventId = eventData.value?.id
+
+      if (!eventId) {
+        console.error('Missing event ID')
+        return
+      }
+
+      const data = {
+        comments: comment || ''
+      }
+
+      if (modalType.value === 'archive') {
+        const prevStatus = eventData.value.status
+        const rollback = eventsStore.removeEventFromListForRollback(eventId)
+        eventsStore.patchDetailRecord(eventId, { status: 'Archived' })
+        eventData.value = { ...eventData.value, status: 'Archived' }
+        showApprovalModal.value = false
+        showRejectModal.value = false
+        showArchiveModal.value = false
+
+        PopupService.success('Event archived successfully.', 'Success')
+        window.setTimeout(() => goBack(), 0)
+
+        window.setTimeout(() => {
+          void (async () => {
+            try {
+              const response = await eventService.archiveEvent(eventId, data)
+              if (!response?.data?.success) {
+                throw new Error(response?.data?.message || 'Archive failed')
+              }
+            } catch (error) {
+              console.error('Archive request failed:', error)
+              if (rollback) {
+                eventsStore.restoreEventInList(rollback)
+              }
+              eventsStore.patchDetailRecord(eventId, { status: prevStatus })
+              PopupService.error(
+                error?.response?.data?.message ||
+                  error?.message ||
+                  'Failed to archive event. The event was restored in the list.',
+                'Archive Error'
+              )
+            }
+          })()
+        }, 0)
+        return
+      }
+
       try {
-        const eventId = eventData.value?.id
-        
-        if (!eventId) {
-          console.error('Missing event ID')
-          return
-        }
-        
-        const data = {
-          comments: comment || ''
-        }
-        
         let response
         if (modalType.value === 'approve') {
           response = await eventService.approveEvent(eventId, data)
         } else if (modalType.value === 'reject') {
           response = await eventService.rejectEvent(eventId, data)
-        } else if (modalType.value === 'archive') {
-          response = await eventService.archiveEvent(eventId, data)
         } else {
-          // Handle other actions
           console.log(`${modalType.value} event:`, eventId, comment)
         }
-        
+
         if (response && response.data.success) {
-          // Update the event status locally
-          eventData.value.status = modalType.value === 'approve' ? 'Approved' : 
-                                 modalType.value === 'reject' ? 'Rejected' : 
-                                 modalType.value === 'archive' ? 'Archived' : 'Updated'
-          
-          PopupService.success(response.data.message || 'Action completed successfully!', 'Success')
-          
-          // If archiving, navigate back to events list after a short delay
-          if (modalType.value === 'archive') {
-            setTimeout(() => {
-              goBack()
-            }, 1500) // Wait 1.5 seconds to show the success message
+          const newStatus =
+            modalType.value === 'approve'
+              ? 'Approved'
+              : modalType.value === 'reject'
+                ? 'Rejected'
+                : 'Updated'
+          eventData.value.status = newStatus
+          if (eventId != null) {
+            eventsStore.patchEventInList(eventId, { status: newStatus })
+            eventsStore.patchDetailRecord(eventId, { status: newStatus })
           }
+
+          PopupService.success(response.data.message || 'Action completed successfully!', 'Success')
         } else if (response) {
           PopupService.error(response.data.message || 'Action failed', 'Error')
         }
-        
+
         showApprovalModal.value = false
         showRejectModal.value = false
         showArchiveModal.value = false
@@ -624,32 +652,63 @@ export default {
     }
 
     const loadEventData = async () => {
+      error.value = null
+
       try {
-        loading.value = true
-        error.value = null
-        
-        const storedData = sessionStorage.getItem('eventDetailsData')
-        if (storedData) {
-          eventData.value = JSON.parse(storedData)
-          console.log('Loaded event data:', eventData.value)
-          console.log('DEBUG: Metadata exists:', !!eventData.value.metadata)
-          console.log('DEBUG: Metadata content:', eventData.value.metadata)
-          console.log('DEBUG: Metadata keys:', eventData.value.metadata ? Object.keys(eventData.value.metadata) : 'No metadata')
-          
-          // Fetch evidence details from backend if event has an ID and it's not an integration event
-          if (eventData.value.id && !eventData.value.id.startsWith('integration_')) {
-            await loadEvidenceDetails(eventData.value.id)
+        const paramId = route.params.eventId
+        if (paramId) {
+          const cached = eventsStore.getEventDetailRecord(paramId)
+          if (cached && typeof cached === 'object' && (cached.id != null || cached.title)) {
+            eventData.value = { ...cached, isFromList: true }
+            loading.value = false
+          } else {
+            loading.value = true
+          }
+
+          try {
+            await eventsStore.fetchEventById(paramId, { force: false })
+            const rec = eventsStore.getEventDetailRecord(paramId)
+            if (rec) {
+              eventData.value = { ...rec, isFromList: true }
+            } else {
+              throw new Error('Event not found')
+            }
+          } catch (e) {
+            console.error('Failed to load event by id:', e)
+            if (!cached) {
+              error.value = e?.message || 'Failed to load event. Please try again.'
+              loading.value = false
+              return
+            }
+            console.warn('Keeping cached event row after refresh error', e)
+          }
+
+          loading.value = false
+
+          const evId = eventData.value.id
+          if (evId && !String(evId).startsWith('integration_')) {
+            void loadEvidenceDetails(evId)
           }
         } else {
-          console.error('No event data found in sessionStorage')
-          error.value = 'No event data found. Please try clicking on an event again.'
-          // Don't redirect immediately - show error message instead
+          loading.value = true
+          const payload = eventsStore.consumeActiveDetailsPayload()
+          if (payload) {
+            eventData.value = payload
+          } else {
+            error.value = 'No event data found. Please open an event from the list or queue again.'
+            loading.value = false
+            return
+          }
+
+          loading.value = false
+
+          if (eventData.value.id && !String(eventData.value.id).startsWith('integration_')) {
+            void loadEvidenceDetails(eventData.value.id)
+          }
         }
-      } catch (error) {
-        console.error('Error loading event data:', error)
+      } catch (err) {
+        console.error('Error loading event data:', err)
         error.value = 'Failed to load event data. Please try again.'
-        // Don't redirect immediately - show error message instead
-      } finally {
         loading.value = false
       }
     }
@@ -668,11 +727,15 @@ export default {
       }
     }
 
-    onMounted(async () => {
-      // Fetch user permissions first
-      await fetchEventPermissions()
-      // Load event data
-      await loadEventData()
+    watch(
+      () => route.params.eventId,
+      () => {
+        loadEventData()
+      }
+    )
+
+    onMounted(() => {
+      void Promise.all([fetchEventPermissions(), loadEventData()])
     })
 
     return {

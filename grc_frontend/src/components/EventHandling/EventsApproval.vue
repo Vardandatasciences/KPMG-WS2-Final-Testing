@@ -8,6 +8,7 @@
           <p class="events-approval-subtitle">Manage event approvals and review submissions</p>
         </div>
         <button
+          type="button"
           class="events-approval-refresh-btn"
           :disabled="loading"
           @click="refreshEvents"
@@ -53,8 +54,8 @@
       </div>
     </div>
 
-    <!-- Loading State -->
-    <div v-if="loading" class="events-approval-loading">
+    <!-- Loading State: only block UI on cold load (no cached rows yet) -->
+    <div v-if="showApprovalBlockingLoad" class="events-approval-loading">
       <div class="events-approval-loading-content">
         <div class="events-approval-loading-spinner"></div>
         <p class="events-approval-loading-text">Loading events...</p>
@@ -416,13 +417,14 @@
 </template>
 
 <script>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onActivated } from 'vue'
+import { storeToRefs } from 'pinia'
 import { eventService } from '../../services/api'
 import EventViewPopup from './EventViewPopup.vue'
 import { PopupService } from '../../modules/popus/popupService'
 import PopupModal from '../../modules/popus/PopupModal.vue'
 import apiService from '@/services/apiService.js'
-import eventDataService from '../../services/eventService' // NEW: Centralized event data service
+import { useEventsStore } from '@/stores/events'
 
 export default {
   name: 'EventsApproval',
@@ -435,9 +437,13 @@ export default {
     const searchQuery = ref('')
     const selectedEvent = ref(null)
     const approvalAction = ref('approve')
-    const events = ref([])
-    const loading = ref(false)
-    const error = ref(null)
+    const eventsStore = useEventsStore()
+    const { events } = storeToRefs(eventsStore)
+    const loading = computed(() => eventsStore.loading.list)
+    const error = computed(() => eventsStore.errors.list)
+    const showApprovalBlockingLoad = computed(
+      () => eventsStore.loading.list && (!events.value || events.value.length === 0)
+    )
     const selectedFrameworkFromSession = ref(null)
 
     // Server-resolved user id (session); do not trust localStorage for authorization UI.
@@ -587,8 +593,7 @@ export default {
           // Use popup module for success message
           PopupService.success(message, title)
           
-          // Refresh events list
-          await fetchEvents()
+          await fetchEvents(true)
         } else if (response) {
           // Show error message using popup module
           const errorMessage = response.data.message || 'Action failed'
@@ -645,88 +650,23 @@ export default {
 
     const fetchEvents = async (forceRefresh = false) => {
       try {
-        loading.value = true
-        error.value = null
-        if (forceRefresh) {
-          eventDataService.clearCache()
-        }
-        
-        console.log('[EventsApproval] Checking for cached event data...')
-        
-        // ==========================================
-        // NEW: Check if data is already cached from HomeView prefetch
-        // ==========================================
-        if (!forceRefresh && eventDataService.hasValidCache()) {
-          console.log('[EventsApproval] ✅ Using cached event data from HomeView prefetch')
-          events.value = eventDataService.getData('events') || []
-          console.log('Events loaded from cache:', events.value.length)
-          console.log('Current user ID:', currentUserId.value)
-          console.log('Sample events:', events.value.slice(0, 3))
-          
-          // Debug filtering
-          const uidCache = currentUserId.value
-          const eventsForReviewDebug = events.value.filter(event => 
-            uidCache != null && String(event.reviewer_id) === uidCache && (event.status === 'Pending Review' || event.status === 'Pending Approval')
-          )
-          console.log('Events for review (debug):', eventsForReviewDebug.length)
-          console.log('Events with reviewer_id matching current user:', events.value.filter(event => uidCache != null && String(event.reviewer_id) === uidCache))
-          console.log('Events with Pending Review status:', events.value.filter(event => event.status === 'Pending Review'))
-          console.log('Events with Pending Approval status:', events.value.filter(event => event.status === 'Pending Approval'))
-          loading.value = false
-          return
-        }
-        
-        // ==========================================
-        // Fallback: If cache is empty, wait for prefetch or fetch directly
-        // ==========================================
-        console.log('[EventsApproval] No cache found, checking for ongoing prefetch...')
-        
-        if (!forceRefresh && window.eventDataFetchPromise) {
-          console.log('[EventsApproval] ⏳ Waiting for ongoing prefetch to complete...')
-          await window.eventDataFetchPromise
-          events.value = eventDataService.getData('events') || []
-          console.log('Events loaded from prefetch:', events.value.length)
-          loading.value = false
-          return
-        }
-        
-        // Last resort: Fetch from API
-        console.log('[EventsApproval] 🔄 Fetching event data from API (cache miss)...')
-        const response = await eventService.getEventsList()
-        console.log('Events response:', response)
-        if (response.data.success) {
-          events.value = response.data.events
-          // Cache the fetched data for future use
-          eventDataService.setData('events', events.value)
-          console.log('Events loaded from API:', events.value.length)
-          console.log('Current user ID:', currentUserId.value)
-          console.log('Sample events:', events.value.slice(0, 3))
-          
-          // Debug filtering
-          const uidApi = currentUserId.value
-          const eventsForReviewDebug = events.value.filter(event => 
-            uidApi != null && String(event.reviewer_id) === uidApi && (event.status === 'Pending Review' || event.status === 'Pending Approval')
-          )
-          console.log('Events for review (debug):', eventsForReviewDebug.length)
-          console.log('Events with reviewer_id matching current user:', events.value.filter(event => uidApi != null && String(event.reviewer_id) === uidApi))
-          console.log('Events with Pending Review status:', events.value.filter(event => event.status === 'Pending Review'))
-          console.log('Events with Pending Approval status:', events.value.filter(event => event.status === 'Pending Approval'))
-        } else {
-          PopupService.error(response.data.message || 'Failed to fetch events', 'Error')
-          console.error('API returned error:', response.data.message)
-        }
+        console.log('[EventsApproval] Loading events via Pinia events store...')
+        await eventsStore.fetchEventsList({ force: !!forceRefresh })
+        console.log('Events loaded:', events.value.length)
       } catch (err) {
         console.error('Error fetching events:', err)
         console.error('Error details:', {
           message: err.message,
           response: err.response?.data,
           status: err.response?.status,
-          config: err.config
+          config: err.config,
         })
-        
-        // Provide more specific error messages using popup module
+
         if (err.code === 'ERR_NETWORK') {
-          PopupService.error('Cannot connect to server. Please make sure the backend server is running on port 8000.', 'Network Error')
+          PopupService.error(
+            'Cannot connect to server. Please make sure the backend server is running on port 8000.',
+            'Network Error'
+          )
         } else if (err.response?.status === 404) {
           PopupService.error('Events endpoint not found. Please check the API configuration.', 'API Error')
         } else if (err.response?.status === 500) {
@@ -734,8 +674,6 @@ export default {
         } else {
           PopupService.error(`Failed to fetch events: ${err.message}`, 'Error')
         }
-      } finally {
-        loading.value = false
       }
     }
 
@@ -757,11 +695,12 @@ export default {
 
     onMounted(async () => {
       await loadCurrentUserId()
-      // Check for framework selection from session
       await checkSelectedFrameworkFromSession()
-      
-      // Then fetch events
-      await fetchEvents()
+      await fetchEvents(false)
+    })
+
+    onActivated(async () => {
+      await fetchEvents(false)
     })
 
     return {
@@ -770,6 +709,7 @@ export default {
       approvalAction,
       events,
       loading,
+      showApprovalBlockingLoad,
       error,
       selectedFrameworkFromSession,
       searchQuery,

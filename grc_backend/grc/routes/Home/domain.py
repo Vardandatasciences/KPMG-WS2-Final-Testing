@@ -4,6 +4,11 @@ from django.views.decorators.http import require_http_methods
 from django.db import transaction
 from grc.models import Domain, Framework
 import json
+import logging
+import traceback
+
+
+logger = logging.getLogger(__name__)
 
 
 @csrf_exempt
@@ -14,13 +19,17 @@ def get_domains_with_frameworks(request):
     Also returns frameworks that are not linked to any domain.
     """
     try:
-        # Get all active domains
-        domains = Domain.objects.filter(IsActive='Y').order_by('domain_name')
+        # Get all active domains.
+        # Avoid DB-level ordering on encrypted/text fields to prevent backend-specific
+        # ordering failures; sort safely in Python.
+        domains = list(Domain.objects.filter(IsActive='Y'))
+        domains.sort(key=lambda d: (d.domain_name or '').lower())
         
         # Build domain data with frameworks
         domains_data = []
         for domain in domains:
-            frameworks = Framework.objects.filter(domain=domain).order_by('FrameworkName')
+            frameworks = list(Framework.objects.filter(domain=domain))
+            frameworks.sort(key=lambda fw: (fw.FrameworkName or '').lower())
             domains_data.append({
                 'domain_id': domain.domain_id,
                 'domain_name': domain.domain_name,
@@ -37,7 +46,8 @@ def get_domains_with_frameworks(request):
             })
         
         # Get frameworks not linked to any domain
-        unlinked_frameworks = Framework.objects.filter(domain__isnull=True).order_by('FrameworkName')
+        unlinked_frameworks = list(Framework.objects.filter(domain__isnull=True))
+        unlinked_frameworks.sort(key=lambda fw: (fw.FrameworkName or '').lower())
         unlinked_data = [
             {
                 'framework_id': fw.FrameworkId,
@@ -56,6 +66,8 @@ def get_domains_with_frameworks(request):
         })
     
     except Exception as e:
+        logger.error("Failed to fetch domains with frameworks: %s", e)
+        logger.error(traceback.format_exc())
         return JsonResponse({
             'status': 'error',
             'message': 'An internal server error occurred.'

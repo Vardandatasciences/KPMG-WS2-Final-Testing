@@ -75,7 +75,7 @@
           <CustomDropdown
             :options="frameworkOptions"
             v-model="selectedFramework"
-            @change="handleFrameworkChange"
+            @change="onFrameworkChange"
             placeholder="All Frameworks"
             :showClearButton="true"
             :showLabel="false"
@@ -129,7 +129,7 @@
 
     <div class="content-wrapper">
       <!-- KPI Summary (using global KPI card styles from main.css) -->
-      <div v-if="filteredCompliances.length > 0" class="kpi-grid">
+      <div v-if="!isInitialLoading && filteredCompliances.length > 0" class="kpi-grid">
         <!-- Total Compliances -->
         <div class="kpi-card">
           <div class="kpi-card-icon kpi-icon-total">
@@ -137,7 +137,14 @@
           </div>
           <div class="kpi-card-body">
             <p class="kpi-card-title">Total Compliances</p>
-            <p class="kpi-card-value">{{ filteredCompliances.length }}</p>
+            <p class="kpi-card-value">
+              {{
+                getStatusCount('Fully Compliant') +
+                getStatusCount('Partially Compliant') +
+                getStatusCount('Non Compliant') +
+                getStatusCount('Not Audited')
+              }}
+            </p>
             <p class="kpi-card-subtitle">Across current filters</p>
           </div>
         </div>
@@ -192,7 +199,16 @@
       </div>
       
       
-      <div v-if="!filteredCompliances.length" class="no-data">
+      <div v-if="isInitialLoading" class="compliance-loading-skeleton">
+        <div class="skeleton-kpi-grid">
+          <div class="skeleton-kpi-card" v-for="i in 5" :key="`kpi-${i}`"></div>
+        </div>
+        <div class="skeleton-table">
+          <div class="skeleton-row" v-for="i in 8" :key="`row-${i}`"></div>
+        </div>
+      </div>
+
+      <div v-else-if="!filteredCompliances.length" class="no-data">
         <i class="fas fa-inbox"></i>
         <p>No compliances found</p>
       </div>
@@ -296,20 +312,15 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import apiService from '@/services/apiService.js'
 import { ElMessage } from 'element-plus'
 import DynamicTable from '../DynamicTable.vue'
 import CustomDropdown from '../CustomDropdown.vue'
-import { API_ENDPOINTS } from '../../config/api.js'
 import { openDownloadInNewTabWithAnchorFallback } from '@/utils/safeExternalNavigation'
+import { useComplianceStore } from '@/stores/compliance'
+import { useFrameworkStore } from '@/stores/framework'
 
-const axios = {
-  get: async (url, config = {}) => ({ data: await apiService.get(url, config.params || {}, { ...config, params: undefined }) }),
-  post: async (url, data, config = {}) => ({ data: await apiService.post(url, data, config) }),
-  put: async (url, data, config = {}) => ({ data: await apiService.put(url, data, config) }),
-  patch: async (url, data, config = {}) => ({ data: await apiService.patch(url, data, config) }),
-  delete: async (url, config = {}) => ({ data: await apiService.delete(url, config) })
-}
+const complianceStore = useComplianceStore()
+const frameworkStore = useFrameworkStore()
 
 const router = useRouter()
 
@@ -327,6 +338,7 @@ const frameworks = ref([])
 const categories = ref([])
 const businessUnits = ref([])
 const error = ref(null)
+const isInitialLoading = ref(true)
 // Export controls (use global styles from main.css)
 const selectedFormat = ref('')
 const isExportDropdownOpen = ref(false)
@@ -345,6 +357,7 @@ const selectedBusinessUnit = ref('')
 
 // Framework session state
 const sessionFrameworkId = ref(null)
+const isInitializingFrameworkSelection = ref(true)
 
 // Column chooser state - default visible columns matching current display
 const showColumnEditor = ref(false)
@@ -659,42 +672,36 @@ const tableData = computed(() => {
   })
 })
 
-// Check for selected framework from session and set it as default
+// Apply framework session from frameworkStore (no direct FRAMEWORK_GET_SELECTED call)
 const checkSelectedFrameworkFromSession = async () => {
-  try {
-    console.log('🔍 DEBUG: Checking for selected framework from session in AuditManagementView...')
-    const response = await axios.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED)
-    console.log('📊 DEBUG: Selected framework response:', response.data)
-    
-    if (response.data && response.data.success && response.data.frameworkId) {
-      const frameworkIdFromSession = response.data.frameworkId
-      console.log('✅ DEBUG: Found selected framework in session:', frameworkIdFromSession)
-      
-      // Store the session framework ID for filtering
-      sessionFrameworkId.value = frameworkIdFromSession
-      
-      // Check if this framework exists in our loaded frameworks
-      const frameworkExists = frameworks.value.find(f => f.FrameworkId.toString() === frameworkIdFromSession.toString())
-      
-      if (frameworkExists) {
-        console.log('✅ DEBUG: Framework exists in loaded frameworks:', frameworkExists.FrameworkName)
-        // Automatically select the framework from session
-        selectedFramework.value = frameworkExists.FrameworkId.toString()
-        console.log('✅ DEBUG: Auto-selected framework from session:', selectedFramework.value)
-        console.log('✅ DEBUG: Framework name for filtering:', frameworkExists.FrameworkName)
-      } else {
-        console.log('⚠️ DEBUG: Framework from session (ID:', frameworkIdFromSession, ') not found in loaded frameworks')
-        console.log('📋 DEBUG: Available frameworks:', frameworks.value.map(f => ({ id: f.FrameworkId, name: f.FrameworkName })))
-        // Clear the session framework ID since it doesn't exist
-        sessionFrameworkId.value = null
-      }
+  if (!frameworkStore.selectedFrameworkId) {
+    await frameworkStore.loadFrameworkFromSession()
+  }
+  const frameworkIdFromSession = frameworkStore.selectedFrameworkId
+  if (frameworkIdFromSession && frameworkIdFromSession !== 'all') {
+    sessionFrameworkId.value = frameworkIdFromSession
+    const frameworkExists = frameworks.value.find(
+      f => f.FrameworkId?.toString() === frameworkIdFromSession.toString()
+    )
+    if (frameworkExists) {
+      selectedFramework.value = frameworkExists.FrameworkId.toString()
     } else {
-      console.log('ℹ️ DEBUG: No framework found in session')
-      sessionFrameworkId.value = null
+      // Keep selected framework even if it is missing from this page's framework list.
+      selectedFramework.value = frameworkIdFromSession.toString()
+      frameworks.value = [
+        ...frameworks.value,
+        {
+          FrameworkId: frameworkIdFromSession,
+          FrameworkName: frameworkStore.selectedFrameworkName || 'Selected Framework',
+          Category: '',
+          ActiveInactive: 'active',
+          FrameworkDescription: '',
+        },
+      ]
     }
-  } catch (error) {
-    console.error('❌ DEBUG: Error checking selected framework from session:', error)
+  } else {
     sessionFrameworkId.value = null
+    selectedFramework.value = ''
   }
 }
 
@@ -730,9 +737,19 @@ onMounted(async () => {
   // Check for selected framework from session after loading frameworks
   await checkSelectedFrameworkFromSession()
   
-  // Then fetch compliance data (categories and business units will be extracted from compliance data)
-  await fetchAllCompliances()
+  // Pinia-first render, then background revalidate for latest updates.
+  await fetchAllCompliances({ force: false, backgroundRevalidate: true })
+  // Enable cross-page sync writes only after initial restore is complete.
+  isInitializingFrameworkSelection.value = false
 })
+
+watch(
+  () => frameworkStore.selectedFrameworkId,
+  async (newFrameworkId, oldFrameworkId) => {
+    if (newFrameworkId === oldFrameworkId) return
+    await checkSelectedFrameworkFromSession()
+  }
+)
 
 // Cleanup click outside listener on unmount
 onUnmounted(() => {
@@ -742,18 +759,30 @@ onUnmounted(() => {
 // Methods
 async function fetchFrameworks() {
   try {
-    // Fetch ALL frameworks (not just compliance frameworks) to ensure session framework is included
-    const response = await axios.get(API_ENDPOINTS.FRAMEWORKS)
-    console.log('📋 DEBUG: Raw frameworks response:', response.data)
+    if (Array.isArray(complianceStore.frameworks) && complianceStore.frameworks.length > 0) {
+      frameworks.value = complianceStore.frameworks.map(framework => ({
+        FrameworkId: framework.FrameworkId ?? framework.id,
+        FrameworkName: framework.FrameworkName ?? framework.name,
+        Category: framework.Category ?? framework.category ?? '',
+        ActiveInactive: framework.ActiveInactive ?? framework.status ?? '',
+        FrameworkDescription: framework.FrameworkDescription ?? framework.description ?? ''
+      }))
+      void complianceStore.fetchFrameworks()
+      return
+    }
+
+    await complianceStore.fetchFrameworks()
+    const frameworkData = complianceStore.frameworks
+    console.log('📋 DEBUG: Raw frameworks response:', frameworkData)
     
-    if (response.data) {
+    if (frameworkData) {
       // Transform the data to match frontend expectations
-      frameworks.value = response.data.map(framework => ({
-        FrameworkId: framework.FrameworkId,
-        FrameworkName: framework.FrameworkName,
-        Category: framework.Category,
-        ActiveInactive: framework.ActiveInactive,
-        FrameworkDescription: framework.FrameworkDescription
+      frameworks.value = frameworkData.map(framework => ({
+        FrameworkId: framework.FrameworkId ?? framework.id,
+        FrameworkName: framework.FrameworkName ?? framework.name,
+        Category: framework.Category ?? framework.category,
+        ActiveInactive: framework.ActiveInactive ?? framework.status,
+        FrameworkDescription: framework.FrameworkDescription ?? framework.description
       }))
       console.log('📋 DEBUG: Transformed frameworks:', frameworks.value.length, 'frameworks')
       console.log('📋 DEBUG: Framework IDs:', frameworks.value.map(f => f.FrameworkId))
@@ -816,17 +845,38 @@ function extractBusinessUnitsFromCompliances() {
 }
 
 
-async function fetchAllCompliances() {
+async function fetchAllCompliances({ force = false, backgroundRevalidate = false } = {}) {
   try {
     error.value = null
-    
+
+    // Pinia-first hydration: render immediately from cached store data if available.
+    const hasCached = Array.isArray(complianceStore.auditManagementList) && complianceStore.auditManagementList.length > 0
+    if (!force && hasCached) {
+      compliances.value = complianceStore.auditManagementList
+      extractCategoriesFromCompliances()
+      extractBusinessUnitsFromCompliances()
+      isInitialLoading.value = false
+    }
+
+    const effectiveFrameworkId =
+      selectedFramework.value ||
+      frameworkStore.selectedFrameworkId ||
+      undefined
+
     console.log('🔍 DEBUG: Fetching all compliances...')
-    const response = await axios.get('/api/compliance/all-for-audit-management/public/')
-    console.log('🔍 DEBUG: API Response:', response.data)
+    // Use scoped endpoint (lighter than public endpoint) and pass framework when available.
+    await complianceStore.fetchAuditManagementList({
+      ...(effectiveFrameworkId && effectiveFrameworkId !== 'all'
+        ? { frameworkId: effectiveFrameworkId }
+        : {}),
+      force,
+    })
+    const responseData = { success: true, compliances: complianceStore.auditManagementList }
+    console.log('🔍 DEBUG: API Response:', responseData)
     
     // The backend returns the data in a specific format
-    if (response.data && response.data.success) {
-      compliances.value = response.data.compliances || []
+    if (responseData && responseData.success) {
+      compliances.value = responseData.compliances || []
       console.log('🔍 DEBUG: Loaded compliances count:', compliances.value.length)
       console.log('🔍 DEBUG: Sample compliance framework names:', compliances.value.slice(0, 5).map(c => c.FrameworkName))
       console.log('🔍 DEBUG: Unique framework names in data:', [...new Set(compliances.value.map(c => c.FrameworkName))])
@@ -847,10 +897,36 @@ async function fetchAllCompliances() {
     console.error('Error fetching compliances:', err)
     error.value = 'Failed to fetch compliances. Please try again.'
     compliances.value = []
+  } finally {
+    isInitialLoading.value = false
+  }
+
+  if (!force && backgroundRevalidate) {
+    // Revalidate in background to keep UI fresh without blocking initial paint.
+    void fetchAllCompliances({ force: true, backgroundRevalidate: false })
   }
 }
 
+function normalizeDropdownValue(input, fallback = '') {
+  if (input == null) return fallback
+  if (typeof input === 'string' || typeof input === 'number') return String(input)
+  if (typeof input === 'object') {
+    if (Object.prototype.hasOwnProperty.call(input, 'value')) return String(input.value ?? fallback)
+    if (input?.target && Object.prototype.hasOwnProperty.call(input.target, 'value')) {
+      return String(input.target.value ?? fallback)
+    }
+  }
+  return fallback
+}
+
+function onFrameworkChange(option) {
+  const normalized = normalizeDropdownValue(option, '')
+  selectedFramework.value = normalized
+  handleFrameworkChange()
+}
+
 function handleFrameworkChange() {
+  if (isInitializingFrameworkSelection.value) return
   // Save the selected framework to session
   // If empty string (All Frameworks), save null to session
   if (selectedFramework.value) {
@@ -862,25 +938,17 @@ function handleFrameworkChange() {
   // Filter will be applied automatically through computed property
 }
 
-// Save framework selection to session
+// Save framework selection via frameworkStore (no direct FRAMEWORK_SET_SELECTED call)
 const saveFrameworkToSession = async (frameworkId) => {
   try {
-    const userId = localStorage.getItem('user_id') || 'default_user'
-    console.log('🔍 DEBUG: Saving framework to session in AuditManagementView:', frameworkId)
-    
-    const response = await axios.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, {
-      frameworkId: frameworkId,
-      userId: userId
-    })
-    
-    if (response.data && response.data.success) {
-      console.log('✅ DEBUG: Framework saved to session successfully in AuditManagementView')
-      console.log('🔑 DEBUG: Session key:', response.data.sessionKey)
-      // Update the session framework ID
-      sessionFrameworkId.value = frameworkId
+    const fw = frameworks.value.find(f => f.FrameworkId?.toString() === String(frameworkId))
+    const name = fw?.FrameworkName ?? 'Selected Framework'
+    if (frameworkId) {
+      await frameworkStore.setFramework({ id: frameworkId, name })
     } else {
-      console.error('❌ DEBUG: Failed to save framework to session in AuditManagementView')
+      await frameworkStore.resetFramework()
     }
+    sessionFrameworkId.value = frameworkId
   } catch (error) {
     console.error('❌ DEBUG: Error saving framework to session in AuditManagementView:', error)
   }
@@ -916,9 +984,14 @@ function getStatusCount(status) {
     })
     
     // First check if there are audit findings
-    if (compliance.AuditFindings && compliance.AuditFindings.length > 0) {
+    if (Array.isArray(compliance.AuditFindings) && compliance.AuditFindings.length > 0) {
       compliance.AuditFindings.forEach(finding => {
-        const findingStatus = getStatusText(finding.CompletionStatus)
+        const findingStatus = getStatusText(
+          finding?.CompletionStatus ??
+          finding?.completion_status ??
+          finding?.Status ??
+          finding?.status
+        )
         console.log(`🔍 DEBUG: Finding status: ${findingStatus}, looking for: ${status}`)
         if (findingStatus === status) {
           count++
@@ -927,13 +1000,18 @@ function getStatusCount(status) {
       })
     } else {
       // If no audit findings, check the compliance status directly
-      const complianceStatus = getStatusText(compliance.Status)
+      const complianceStatus = getStatusText(
+        compliance?.CompletionStatus ??
+        compliance?.completion_status ??
+        compliance?.Status ??
+        compliance?.status
+      )
       console.log(`🔍 DEBUG: No audit findings, checking compliance status: ${complianceStatus}, looking for: ${status}`)
       
       if (complianceStatus === status) {
         count++
         console.log(`✅ DEBUG: Found match in compliance status! Count now: ${count}`)
-      } else if (status === 'Not Audited' && !compliance.AuditFindings) {
+      } else if (status === 'Not Audited' && (!compliance.AuditFindings || compliance.AuditFindings.length === 0)) {
         count++
         console.log(`✅ DEBUG: No audit findings, counting as Not Audited. Count now: ${count}`)
       }
@@ -988,9 +1066,12 @@ function getComplianceStatusClass(status) {
 
 function getStatusText(status) {
   if (!status) return 'Not Audited'
-  
+
+  const raw = String(status).trim()
+  const normalized = raw.toLowerCase()
+
   // Convert numeric status to text
-  switch (status.toString()) {
+  switch (raw) {
     case '0':
       return 'Not Audited'
     case '1':
@@ -1000,7 +1081,12 @@ function getStatusText(status) {
     case '3':
       return 'Non Compliant'
     default:
-      return status // Return as-is if it's already text
+      // Normalize text variants from different APIs/casing.
+      if (normalized.includes('not audited') || normalized.includes('not started')) return 'Not Audited'
+      if (normalized.includes('partially compliant') || normalized.includes('in progress')) return 'Partially Compliant'
+      if (normalized.includes('fully compliant') || normalized.includes('completed') || normalized === 'compliant') return 'Fully Compliant'
+      if (normalized.includes('non compliant') || normalized.includes('non-compliant')) return 'Non Compliant'
+      return raw
   }
 }
 
@@ -1108,8 +1194,7 @@ async function handleExport(format) {
       file_name: 'compliance_management_export'
     };
     
-    const response = await axios.post(API_ENDPOINTS.EXPORT_COMPLIANCE_MANAGEMENT, payload);
-    const result = response.data;
+    const result = await complianceStore.exportComplianceManagement(payload);
     
     if (result.success && result.file_url && result.file_name) {
       const ok = await openDownloadInNewTabWithAnchorFallback(result.file_url, result.file_name)
@@ -1495,6 +1580,50 @@ async function handleExport(format) {
 .audit-management-container .no-data i {
   font-size: 2rem;
   margin-bottom: 12px;
+}
+
+.audit-management-container .compliance-loading-skeleton {
+  width: 100%;
+}
+
+.audit-management-container .skeleton-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.audit-management-container .skeleton-kpi-card,
+.audit-management-container .skeleton-row {
+  background: linear-gradient(90deg, #eef2f7 25%, #e5eaf2 37%, #eef2f7 63%);
+  background-size: 400% 100%;
+  animation: complianceSkeletonPulse 1.4s ease infinite;
+  border-radius: 12px;
+}
+
+.audit-management-container .skeleton-kpi-card {
+  height: 96px;
+}
+
+.audit-management-container .skeleton-table {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 14px;
+  background: #ffffff;
+}
+
+.audit-management-container .skeleton-row {
+  height: 20px;
+  margin-bottom: 10px;
+}
+
+.audit-management-container .skeleton-row:last-child {
+  margin-bottom: 0;
+}
+
+@keyframes complianceSkeletonPulse {
+  0% { background-position: 100% 0; }
+  100% { background-position: 0 0; }
 }
 
 .audit-management-container .audit-id-link,

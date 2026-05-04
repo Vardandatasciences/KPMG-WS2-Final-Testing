@@ -8,6 +8,7 @@
  */
 
 import { axiosInstance, API_ENDPOINTS } from '@/config/api.js';
+import { summarizeExplorerFromFrameworkRows } from '@/composables/usePolicyExplorerPinia.js';
 
 class PolicyService {
   constructor() {
@@ -172,6 +173,33 @@ class PolicyService {
     this.dataStore.explorerFrameworks = frameworks;
     this.dataStore.explorerSummary = summary;
     this.dataStore.lastFetchTime = new Date();
+  }
+
+  /**
+   * Insert or replace one explorer row after create/version mutations (instant Framework Explorer paint).
+   */
+  mergeExplorerFrameworkRow(explorerRow) {
+    const id = explorerRow?.id ?? explorerRow?.FrameworkId;
+    if (id == null) return;
+    const prev = Array.isArray(this.dataStore.explorerFrameworks)
+      ? this.dataStore.explorerFrameworks
+      : [];
+    const filtered = prev.filter((f) => String(f.id ?? f.FrameworkId) !== String(id));
+    const row = { ...explorerRow, id: Number(id) || id };
+    const merged = [row, ...filtered];
+    this.dataStore.explorerFrameworks = merged;
+    this.dataStore.explorerSummary = summarizeExplorerFromFrameworkRows(merged);
+    this.dataStore.lastFetchTime = new Date();
+
+    const fl = Array.isArray(this.dataStore.frameworksList) ? this.dataStore.frameworksList : [];
+    const flFiltered = fl.filter((f) => String(f.FrameworkId ?? f.id) !== String(id));
+    flFiltered.push({
+      FrameworkId: id,
+      FrameworkName: row.name ?? row.FrameworkName ?? '',
+      Category: row.category ?? '',
+      Identifier: row.identifier ?? row.Identifier,
+    });
+    this.dataStore.frameworksList = flFiltered;
   }
 
   // ===== Cache Checks =====

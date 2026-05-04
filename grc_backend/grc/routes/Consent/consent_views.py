@@ -510,8 +510,11 @@ def check_consent_required(request):
         action_type = data.get('action_type')
         framework_id = data.get('framework_id')
         user_id = data.get('user_id')  # Optional - if provided, check if user has active consent
+
+        if framework_id in ('', 'null', 'undefined', None):
+            framework_id = None
         
-        if not action_type or not framework_id:
+        if not action_type or framework_id is None:
             return Response({
                 'status': 'error',
                 'message': 'action_type and framework_id are required'

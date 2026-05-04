@@ -1083,3 +1083,61 @@ div.framework-name:not(:empty) {
     font-size: 0.8rem;
   }
 }
+
+/* Data workflow loading skeleton */
+@keyframes dwSkPulse {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+.data-workflow-skeleton {
+  margin: 1.5rem 0 2rem;
+}
+.dw-sk-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.dw-sk-pill {
+  width: min(100%, 280px);
+  height: 40px;
+  border-radius: 10px;
+  background: linear-gradient(90deg, #eef2f7 0%, #f8fafc 50%, #eef2f7 100%);
+  background-size: 200% 100%;
+  animation: dwSkPulse 1.35s ease infinite;
+}
+.dw-sk-btn {
+  width: 120px;
+  height: 38px;
+  border-radius: 8px;
+  background: linear-gradient(90deg, #e2e8f0 0%, #f1f5f9 50%, #e2e8f0 100%);
+  background-size: 200% 100%;
+  animation: dwSkPulse 1.35s ease infinite;
+}
+.dw-sk-btn--muted {
+  width: 100px;
+  opacity: 0.9;
+}
+.dw-sk-tree-table {
+  border: 1px solid #e8ecf2;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fafbfd;
+}
+.dw-sk-row {
+  height: 48px;
+  border-bottom: 1px solid #eef2f7;
+  background: linear-gradient(90deg, #f4f6fa 0%, #fafbfd 50%, #f4f6fa 100%);
+  background-size: 200% 100%;
+  animation: dwSkPulse 1.35s ease infinite;
+}
+.dw-sk-row:last-child {
+  border-bottom: none;
+}
+.dw-sk-row--head {
+  height: 44px;
+  background: linear-gradient(90deg, #e8ecf2 0%, #f4f6fa 50%, #e8ecf2 100%);
+  background-size: 200% 100%;
+  animation: dwSkPulse 1.35s ease infinite;
+}

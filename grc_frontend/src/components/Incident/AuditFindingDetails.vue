@@ -13,15 +13,25 @@
       <h2 class="risk-view-title">Audit Finding Details</h2>
     </div>
 
-    <div v-if="loading" class="risk-view-no-data">
-      Loading audit finding details...
+    <div
+      v-if="showDetailSkeleton"
+      class="grc-skeleton-dashboard audit-finding-detail-skeleton"
+      aria-busy="true"
+      aria-label="Loading audit finding details"
+    >
+      <div class="grc-skeleton-kpi-row" style="max-width: 640px;">
+        <div v-for="n in 3" :key="'afd-'+n" class="grc-skeleton-kpi-card grc-skeleton-pulse" />
+      </div>
+      <div class="grc-skeleton-table-wrap" style="margin-top: 16px; max-width: 800px;">
+        <div v-for="n in 6" :key="'afd-r-'+n" class="grc-skeleton-row grc-skeleton-pulse" />
+      </div>
     </div>
 
     <div v-else-if="error" class="risk-view-no-data">
       {{ error }}
     </div>
 
-    <div class="risk-view-details-card" v-else-if="auditFinding">
+    <div class="risk-view-details-card" v-else-if="auditFinding && !showDetailSkeleton">
       <div class="risk-view-details-top">
         <div class="risk-view-id-section">
           <span class="risk-view-id-label">Audit Finding ID:</span>
@@ -117,8 +127,10 @@
 </template>
 
 <script>
-import apiService from '@/services/apiService.js';
-import { API_ENDPOINTS } from '../../config/api.js';
+import { mapStores } from 'pinia'
+import apiService from '@/services/apiService.js'
+import { API_ENDPOINTS } from '../../config/api.js'
+import { useIncidentStore } from '@/stores/incident'
 import '../Risk/ViewRisk.css';
 import { PopupService, PopupModal } from '@/modules/popup';
 
@@ -134,27 +146,44 @@ export default {
       error: null,
     }
   },
+  computed: {
+    ...mapStores(useIncidentStore),
+    showDetailSkeleton() {
+      return this.loading && !this.auditFinding
+    },
+  },
   async created() {
     await this.fetchAuditFindingDetails();
   },
   methods: {
     async fetchAuditFindingDetails() {
+      const incidentId = this.$route.params.id
+      this.error = null
+      this.incidentStore.hydrateAuditFindingsFromService()
+      const warm = this.incidentStore.findAuditFindingInCaches(incidentId)
+      if (warm) {
+        this.auditFinding = { ...warm }
+        this.loading = false
+        this.incidentStore
+          .fetchAuditFindingDetail(incidentId, { force: true, background: true })
+          .then(({ data }) => {
+            if (data) this.auditFinding = data
+          })
+          .catch(() => {})
+        return
+      }
       try {
-        this.loading = true;
-        this.error = null;
-        const incidentId = this.$route.params.id;
-        const body = await apiService.get(API_ENDPOINTS.AUDIT_FINDINGS_INCIDENT(incidentId));
-        
-        if (body.success) {
-          this.auditFinding = body.data;
-        } else {
-          throw new Error(body.message || 'Failed to fetch audit finding details');
-        }
+        this.loading = true
+        const { data } = await this.incidentStore.fetchAuditFindingDetail(incidentId, {
+          force: false,
+          background: false,
+        })
+        this.auditFinding = data
       } catch (error) {
-        console.error('Failed to fetch audit finding details:', error);
-        this.error = 'Failed to load audit finding details. Please try again.';
+        console.error('Failed to fetch audit finding details:', error)
+        this.error = 'Failed to load audit finding details. Please try again.'
       } finally {
-        this.loading = false;
+        this.loading = false
       }
     },
     getCriticalityClass(criticality) {

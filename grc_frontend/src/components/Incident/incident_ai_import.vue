@@ -638,6 +638,7 @@
 <script>
 import { axiosCompat as axios } from '@/services/apiServiceCompat.js';
 import { API_ENDPOINTS } from '@/config/api';
+import { useIncidentStore } from '@/stores/incident';
 
 export default {
   name: 'IncidentAIImport',
@@ -1133,6 +1134,7 @@ export default {
         );
 
         if (response.data.status === 'success') {
+          useIncidentStore().invalidateAllIncidentCaches();
           this.savedCount = response.data.saved?.length || this.extractedIncidents.length;
           this.currentStep = 'success';
           this.clearProcessingState();

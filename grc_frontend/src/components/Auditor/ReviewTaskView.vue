@@ -315,7 +315,7 @@
       <div class="audit_floating-save-container">
         <button @click="saveReview" class="btn btn-submit" :disabled="isSavingReview">
           <span class="audit_save-text">
-            {{ isSavingReview ? 'Saving Review...' : 'Save Review' }}
+            {{ saveReviewButtonLabel }}
           </span>
         </button>
       </div>
@@ -364,8 +364,8 @@
         </div>
         <div class="audit_modal-footer">
           <button @click="keepEditing" class="audit_btn-secondary">Keep Editing</button>
-          <button @click="confirmReject" class="audit_btn-danger">
-            Yes, Reject and Return
+          <button @click="confirmReject" class="audit_btn-danger" :disabled="isRejectingReview">
+            {{ isRejectingReview ? 'Processing...' : 'Yes, Reject and Return' }}
           </button>
         </div>
       </div>
@@ -388,8 +388,8 @@
         </div>
         <div class="audit_modal-footer">
           <button @click="keepEditing" class="audit_btn-secondary">Keep Editing</button>
-          <button @click="confirmAccept" class="btn btn-submit">
-            Yes, Complete Review
+          <button @click="confirmAccept" class="btn btn-submit" :disabled="isCompletingReview">
+            {{ isCompletingReview ? 'Completing...' : 'Yes, Complete Review' }}
           </button>
         </div>
       </div>
@@ -401,6 +401,7 @@
 import apiService from '@/services/apiService';
 import { AccessUtils } from '@/utils/accessUtils';
 import { API_ENDPOINTS } from '@/config/api.js';
+import { useAuditStore } from '@/stores/audit';
 
 export default {
   name: 'ReviewTaskView',
@@ -414,6 +415,9 @@ export default {
       currentVersion: null,
       lastSavedTime: null,
       isSavingReview: false,
+      optimisticReviewSaveApplied: false,
+      isCompletingReview: false,
+      isRejectingReview: false,
       selectedCompliance: null,
       hasUnsavedChanges: false,
       overallAuditComments: '',
@@ -423,6 +427,12 @@ export default {
       showAcceptModal: false,
       aiAuditReportUrl: ''
     }
+  },
+  computed: {
+    saveReviewButtonLabel() {
+      if (!this.isSavingReview) return 'Save Review';
+      return this.optimisticReviewSaveApplied ? 'Syncing...' : 'Saving Review...';
+    },
   },
   methods: {
     formatDateTime(dateTime) {
@@ -435,6 +445,22 @@ export default {
       if (version.startsWith('A')) return 'Auditor Version';
       if (version.startsWith('R')) return 'Reviewer Version';
       return 'Unknown Version';
+    },
+
+    predictNextReviewerVersion(v) {
+      if (v == null || v === '') return 'R1';
+      const m = /^R(\d+)$/i.exec(String(v).trim());
+      if (m) return `R${parseInt(m[1], 10) + 1}`;
+      return null;
+    },
+
+    /** Align with Django save_review_progress (expects Accept / Reject / In Review). */
+    normalizeReviewerApiStatus(status) {
+      const s = String(status || '').trim().toLowerCase();
+      if (s === 'reject') return 'Reject';
+      if (s === 'accept') return 'Accept';
+      if (s === 'in_review' || s === 'in review') return 'In Review';
+      return status || 'In Review';
     },
 
     async sendPushNotification(notificationData) {
@@ -476,7 +502,8 @@ export default {
           return;
         }
         console.log('Fetching details for audit:', auditId);
-        const data = await apiService.get(API_ENDPOINTS.AUDIT_TASK_DETAILS(auditId));
+        const auditStore = useAuditStore();
+        const data = await auditStore.fetchAuditTaskDetails(auditId, { force: false });
         this.auditDetails = data;
         
         // Initialize review fields if not present and normalize values
@@ -520,7 +547,7 @@ export default {
         if (this.auditDetails.audit_type === 'A') {
           this.aiAuditReportUrl = API_ENDPOINTS.AI_AUDIT_REPORT_DOWNLOAD(auditId);
           try {
-            const docsResponse = await apiService.get(API_ENDPOINTS.AI_AUDIT_DOCUMENTS(auditId));
+            const docsResponse = await useAuditStore().fetchAiAuditDocuments(auditId);
             console.log('[ReviewTaskView] AI audit documents response:', docsResponse);
             if (docsResponse && docsResponse.success && Array.isArray(docsResponse.documents)) {
               const aiDocs = docsResponse.documents.map(doc => {
@@ -610,8 +637,10 @@ export default {
     async saveReview() {
       if (this.isSavingReview) return;
 
+      let rollbackReview = null;
       try {
         this.isSavingReview = true;
+        this.optimisticReviewSaveApplied = false;
         const auditId = this.$route.params.auditId;
 
         // Check if all compliances have review status selected
@@ -637,10 +666,10 @@ export default {
         
         console.log('DEBUG: Unreviewed count:', unreviewed.length, 'out of', allCompliances.length);
         
-        // Prepare the review data
+        // Prepare the review data (backend expects Accept / Reject / In Review)
         const complianceReviews = allCompliances.map(comp => ({
           compliance_id: comp.id,
-          review_status: comp.review_status || 'in_review',
+          review_status: this.normalizeReviewerApiStatus(comp.review_status || 'in_review'),
           review_comments: comp.review_comments || ''
         }));
 
@@ -679,9 +708,21 @@ export default {
         }
 
         // Save the review version
-        const response = await apiService.post(API_ENDPOINTS.AUDIT_SAVE_REVIEW_PROGRESS(auditId), payload);
+        rollbackReview = {
+          lastSavedTime: this.lastSavedTime,
+          currentVersion: this.currentVersion,
+          hasUnsavedChanges: this.hasUnsavedChanges,
+        };
+        this.lastSavedTime = new Date().toISOString();
+        this.hasUnsavedChanges = false;
+        const predRev = this.predictNextReviewerVersion(this.currentVersion);
+        if (predRev) this.currentVersion = predRev;
+        this.optimisticReviewSaveApplied = true;
+        await this.$nextTick();
+
+        const response = await useAuditStore().saveReviewProgress(auditId, payload);
         if (response.message) {
-          this.currentVersion = response.review_version;
+          this.currentVersion = response.review_version || this.currentVersion;
           this.lastSavedTime = new Date().toISOString();
           this.hasUnsavedChanges = false;
           this.$toast?.success(`Review version ${this.currentVersion} saved successfully`);
@@ -697,6 +738,11 @@ export default {
         }
 
       } catch (error) {
+        if (rollbackReview) {
+          this.lastSavedTime = rollbackReview.lastSavedTime;
+          this.currentVersion = rollbackReview.currentVersion;
+          this.hasUnsavedChanges = rollbackReview.hasUnsavedChanges;
+        }
         console.error('Error in saveReview:', error);
         this.$toast?.error('Failed to save review: ' + (error.response?.data?.error || error.message));
         this.sendPushNotification({
@@ -707,11 +753,14 @@ export default {
           user_id: 'default_user'
         });
       } finally {
+        this.optimisticReviewSaveApplied = false;
         this.isSavingReview = false;
       }
     },
 
     async confirmReject() {
+      if (this.isRejectingReview) return;
+      let rollback = null;
       try {
         // Validate that all compliances have review status set before rejecting
         const allCompliances = this.auditDetails.compliances;
@@ -729,54 +778,71 @@ export default {
           return; // Stop here - don't proceed until all are reviewed
         }
         
-        if (this.savedVersionData) {
-          const auditId = this.$route.params.auditId;
-          
-          // First save the review version with rejection status
-          const saveResponse = await apiService.post(API_ENDPOINTS.AUDIT_SAVE_REVIEW_PROGRESS(auditId), {
-            compliance_reviews: this.savedVersionData.compliance_reviews,
+        if (!this.savedVersionData) return;
+
+        const auditId = this.$route.params.auditId;
+        rollback = {
+          showRejectModal: this.showRejectModal,
+          auditStatus: this.auditDetails?.status,
+        };
+        this.isRejectingReview = true;
+        this.showRejectModal = false;
+        if (this.auditDetails) {
+          this.auditDetails.status = 'Needs Revision';
+        }
+        await this.$nextTick();
+
+        const auditStore = useAuditStore();
+        const rejectReviews = (this.savedVersionData.compliance_reviews || []).map((r) => ({
+          ...r,
+          review_status: this.normalizeReviewerApiStatus(r.review_status),
+        }));
+        const saveResponse = await auditStore.saveReviewProgress(auditId, {
+          compliance_reviews: rejectReviews,
+          review_comments: this.overallReviewComments,
+          overall_audit_comments: this.overallAuditComments, // Preserve audit comments
+          save_only: false,
+          is_rejected: true
+        });
+
+        if (saveResponse.message) {
+          await auditStore.submitAuditReviewStatus(auditId, {
+            review_status: 'Reject',  // This maps to '3' in backend
+            status: 'Work In Progress',
             review_comments: this.overallReviewComments,
             overall_audit_comments: this.overallAuditComments, // Preserve audit comments
-            save_only: false,
-            is_rejected: true
+            compliance_reviews: rejectReviews
           });
 
-          if (saveResponse.message) {
-            // Then update the review status
-            await apiService.post(API_ENDPOINTS.UPDATE_AUDIT_REVIEW_STATUS(auditId), {
-              review_status: 'Reject',  // This maps to '3' in backend
-              status: 'Work In Progress',
-              review_comments: this.overallReviewComments,
-              overall_audit_comments: this.overallAuditComments, // Preserve audit comments
-              compliance_reviews: this.savedVersionData.compliance_reviews
-            });
-
-            this.$toast?.success('Audit has been rejected and returned for revision');
-            this.sendPushNotification({
-              title: 'Audit Rejected',
-              message: 'Audit has been rejected and returned for revision for audit "' + (this.auditDetails?.title || '') + '"',
-              category: 'review',
-              priority: 'warning',
-              user_id: 'default_user'
-            });
-            this.showRejectModal = false;
-            // Redirect to auditor reviews list after rejection
-            this.$router.push('/auditor/reviews');
-          } else {
-            throw new Error('Failed to save review version');
-          }
+          this.$toast?.success('Audit has been rejected and returned for revision');
+          this.sendPushNotification({
+            title: 'Audit Rejected',
+            message: 'Audit has been rejected and returned for revision for audit "' + (this.auditDetails?.title || '') + '"',
+            category: 'review',
+            priority: 'warning',
+            user_id: 'default_user'
+          });
+          auditStore.invalidateAuditDetail(auditId);
+          auditStore.invalidateAuditCache(['reviews', 'audits']);
+          void auditStore.prefetchAuditDomain({ scope: 'my', force: true }).catch(() => {});
+          this.$router.push('/auditor/reviews');
+        } else {
+          throw new Error('Failed to save review version');
         }
       } catch (error) {
+        if (rollback) {
+          this.showRejectModal = rollback.showRejectModal;
+          if (this.auditDetails && rollback.auditStatus !== undefined) {
+            this.auditDetails.status = rollback.auditStatus;
+          }
+        }
         console.error('Error confirming rejection:', error);
-        // Check if error is about missing review statuses
         if (error.response?.data?.message && error.response.data.message.includes('compliance items must have review status')) {
-          // Show warning modal instead of error toast
           this.showUnreviewedWarningModal = true;
           this.unreviewedComplianceCount = error.response.data.missing_count || 0;
-          this.showRejectModal = false; // Close reject modal
+          this.showRejectModal = false;
           return;
         }
-        // Handle access denied errors
         if (AccessUtils.handleApiError(error, 'audit review rejection')) {
           return;
         }
@@ -788,10 +854,14 @@ export default {
           priority: 'error',
           user_id: 'default_user'
         });
+      } finally {
+        this.isRejectingReview = false;
       }
     },
 
     async confirmAccept() {
+      if (this.isCompletingReview) return;
+      let rollback = null;
       try {
         // Validate that all compliances have review status set before accepting
         const allCompliances = this.auditDetails.compliances;
@@ -809,69 +879,85 @@ export default {
           return; // Stop here - don't proceed until all are reviewed
         }
         
-        if (this.savedVersionData) {
-          const auditId = this.$route.params.auditId;
-          
-          // Prepare detailed compliance data
-          const complianceData = this.auditDetails.compliances.map(comp => ({
-            compliance_id: comp.id,
-            review_status: comp.review_status || 'accept',
-            review_comments: comp.review_comments || '',
-            evidence: comp.evidence || '',
-            how_to_verify: comp.how_to_verify || '',
-            impact: comp.impact || '',
-            details_of_finding: comp.details_of_finding || '',
-            comments: comp.comments || '',
-            major_minor: comp.major_minor || '',
-            severity_rating: comp.severity_rating || 0,
-            predictive_risks: comp.selected_risks || [],
-            corrective_actions: comp.selected_mitigations || [],
-            underlying_cause: comp.underlying_cause || '',
-            why_to_verify: comp.why_to_verify || '',
-            what_to_verify: comp.what_to_verify || '',
-            suggested_action_plan: comp.suggested_action_plan || '',
-            mitigation_date: comp.mitigation_date || null,
-            responsible_for_plan: comp.responsible_for_plan || '',
-            re_audit: comp.re_audit ? 1 : 0,
-            re_audit_date: comp.re_audit_date || null,
-            compliance_status: comp.status
-          }));
+        if (!this.savedVersionData) return;
 
-          // First save the review data with complete compliance information
-          const saveResponse = await apiService.post(API_ENDPOINTS.AUDIT_SAVE_REVIEW_PROGRESS(auditId), {
-            ...this.savedVersionData,
-            compliance_data: complianceData,
+        const auditId = this.$route.params.auditId;
+
+        // Prepare detailed compliance data
+        const complianceData = this.auditDetails.compliances.map(comp => ({
+          compliance_id: comp.id,
+          review_status: this.normalizeReviewerApiStatus(comp.review_status || 'accept'),
+          review_comments: comp.review_comments || '',
+          evidence: comp.evidence || '',
+          how_to_verify: comp.how_to_verify || '',
+          impact: comp.impact || '',
+          details_of_finding: comp.details_of_finding || '',
+          comments: comp.comments || '',
+          major_minor: comp.major_minor || '',
+          severity_rating: comp.severity_rating || 0,
+          predictive_risks: comp.selected_risks || [],
+          corrective_actions: comp.selected_mitigations || [],
+          underlying_cause: comp.underlying_cause || '',
+          why_to_verify: comp.why_to_verify || '',
+          what_to_verify: comp.what_to_verify || '',
+          suggested_action_plan: comp.suggested_action_plan || '',
+          mitigation_date: comp.mitigation_date || null,
+          responsible_for_plan: comp.responsible_for_plan || '',
+          re_audit: comp.re_audit ? 1 : 0,
+          re_audit_date: comp.re_audit_date || null,
+          compliance_status: comp.status
+        }));
+
+        rollback = {
+          showAcceptModal: this.showAcceptModal,
+          auditStatus: this.auditDetails?.status,
+        };
+        this.isCompletingReview = true;
+        this.showAcceptModal = false;
+        if (this.auditDetails) {
+          this.auditDetails.status = 'Completed';
+        }
+        await this.$nextTick();
+
+        const auditStoreAccept = useAuditStore();
+        const saveResponse = await auditStoreAccept.saveReviewProgress(auditId, {
+          ...this.savedVersionData,
+          compliance_reviews: complianceData,
+          compliance_data: complianceData,
+          overall_audit_comments: this.overallAuditComments,
+          save_only: false,
+        });
+
+        if (saveResponse.message) {
+          await auditStoreAccept.submitAuditReviewStatus(auditId, {
+            status: 'accept',
+            review_comments: this.overallReviewComments,
             overall_audit_comments: this.overallAuditComments, // Preserve audit comments
-            save_only: false // Allow status update
+            compliance_reviews: complianceData
           });
 
-          if (saveResponse.message) {
-            // Then update the review status with complete compliance data
-            await apiService.post(API_ENDPOINTS.UPDATE_AUDIT_REVIEW_STATUS(auditId), {
-              status: 'accept',
-              review_comments: this.overallReviewComments,
-              overall_audit_comments: this.overallAuditComments, // Preserve audit comments
-              compliance_reviews: complianceData
-            });
-
-            this.showAcceptModal = false;
-            // Redirect to auditor reviews list after acceptance
-            this.$router.push('/auditor/reviews');
-          } else {
-            throw new Error('Failed to save review version');
-          }
+          this.$toast?.success('Audit review completed');
+          auditStoreAccept.invalidateAuditDetail(auditId);
+          auditStoreAccept.invalidateAuditCache(['reviews', 'audits']);
+          void auditStoreAccept.prefetchAuditDomain({ scope: 'my', force: true }).catch(() => {});
+          this.$router.push('/auditor/reviews');
+        } else {
+          throw new Error('Failed to save review version');
         }
       } catch (error) {
+        if (rollback) {
+          this.showAcceptModal = rollback.showAcceptModal;
+          if (this.auditDetails && rollback.auditStatus !== undefined) {
+            this.auditDetails.status = rollback.auditStatus;
+          }
+        }
         console.error('Error confirming acceptance:', error);
-        // Check if error is about missing review statuses
         if (error.response?.data?.message && error.response.data.message.includes('compliance items must have review status')) {
-          // Show warning modal instead of error toast
           this.showUnreviewedWarningModal = true;
           this.unreviewedComplianceCount = error.response.data.missing_count || 0;
-          this.showAcceptModal = false; // Close accept modal
+          this.showAcceptModal = false;
           return;
         }
-        // Handle access denied errors
         if (AccessUtils.handleApiError(error, 'audit review acceptance')) {
           return;
         }
@@ -883,6 +969,8 @@ export default {
           priority: 'error',
           user_id: 'default_user'
         });
+      } finally {
+        this.isCompletingReview = false;
       }
     },
 
@@ -894,7 +982,7 @@ export default {
       // Save the version without any status updates if there's pending data
       if (this.savedVersionData) {
         const auditId = this.$route.params.auditId;
-        apiService.post(API_ENDPOINTS.AUDIT_SAVE_REVIEW_PROGRESS(auditId), {
+        useAuditStore().saveReviewProgress(auditId, {
           ...this.savedVersionData,
           overall_audit_comments: this.overallAuditComments, // Preserve audit comments
           review_comments: this.overallReviewComments, // Use review comments

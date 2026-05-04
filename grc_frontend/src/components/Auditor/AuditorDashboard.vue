@@ -5,7 +5,20 @@
       Audit Dashboard
     </div>
     
-    <div v-if="loading" class="loading-indicator">Loading audits...</div>
+    <div
+      v-if="showAuditorSkeleton"
+      class="grc-skeleton-dashboard auditor-dashboard-skeleton"
+      aria-busy="true"
+      aria-label="Loading audits"
+    >
+      <div class="grc-skeleton-table-wrap">
+        <div
+          v-for="n in 10"
+          :key="'aud-sk-' + n"
+          class="grc-skeleton-row grc-skeleton-pulse"
+        ></div>
+      </div>
+    </div>
     <div v-if="error" class="error-message">
       {{ error }}
       <button @click="retryLoading" class="retry-btn">Retry</button>
@@ -213,6 +226,7 @@
 <script>
 import './AuditorDashboard.css';
 import auditorDataService from '@/services/auditorService';
+import { useAuditStore } from '@/stores/audit';
 import DynamicTable from '../DynamicTable.vue';
 import CustomButton from '../CustomButton.vue';
 import apiService from '@/services/apiService';
@@ -249,6 +263,9 @@ export default {
       showColumnEditor: false,
       columnSearchQuery: '',
       visibleColumnKeys: ['audit_id', 'framework', 'policy', 'subpolicy', 'date', 'business_unit', 'auditType', 'status'],
+      auditStoreUnsub: null,
+      visHandler: null,
+      pollTimer: null,
       columnDefinitions: [
         { key: 'audit_id', label: 'Audit ID', defaultVisible: true },
         { key: 'title', label: 'Title', defaultVisible: false },
@@ -277,6 +294,9 @@ export default {
     }
   },
   computed: {
+    showAuditorSkeleton() {
+      return this.loading && (!this.audits || this.audits.length === 0)
+    },
     tableColumns() {
       const allColumns = [
         { key: 'audit_id', label: 'Audit ID', sortable: true, width: '100px', resizable: true },
@@ -328,6 +348,27 @@ export default {
     this.fetchAudits()
     this.fetchBusinessUnits()
   },
+  mounted() {
+    this.auditStoreUnsub = useAuditStore().$subscribe(() => {
+      this.mergeOptimisticAssignmentsIntoAudits()
+    })
+    this.visHandler = () => {
+      if (!document.hidden) this.refreshAuditsQuiet()
+    }
+    document.addEventListener('visibilitychange', this.visHandler)
+    this.pollTimer = setInterval(() => this.refreshAuditsQuiet(), 45000)
+  },
+  beforeUnmount() {
+    if (typeof this.auditStoreUnsub === 'function') {
+      this.auditStoreUnsub()
+      this.auditStoreUnsub = null
+    }
+    document.removeEventListener('visibilitychange', this.visHandler)
+    if (this.pollTimer) {
+      clearInterval(this.pollTimer)
+      this.pollTimer = null
+    }
+  },
   methods: {
     retryLoading() {
       this.fetchAudits()
@@ -362,56 +403,104 @@ export default {
     async fetchAudits() {
       this.loading = true;
       this.error = '';
-      
-      console.log('🔍 [AuditorDashboard] Checking for cached audits data...');
-      
-      // Check if prefetch was never started (user came directly to this page)
-      if (!window.auditorDataFetchPromise && !auditorDataService.hasAuditsCache()) {
-        console.log('🚀 [AuditorDashboard] Starting prefetch now (user came directly to this page)...');
-        window.auditorDataFetchPromise = auditorDataService.fetchAllAuditorData();
+
+      console.log('🔍 [AuditorDashboard] Loading audits (network refresh)...');
+
+      const auditStore = useAuditStore();
+      try {
+        await auditStore.prefetchAuditDomain({ scope: 'my', force: true });
+        console.log('✅ [AuditorDashboard] Prefetch completed');
+      } catch (error) {
+        console.warn('⚠️ [AuditorDashboard] Prefetch failed, will fetch directly:', error);
       }
-      
-      // Wait for prefetch if it's running
-      if (window.auditorDataFetchPromise) {
-        console.log('⏳ [AuditorDashboard] Waiting for prefetch to complete...');
-        try {
-          await window.auditorDataFetchPromise;
-          console.log('✅ [AuditorDashboard] Prefetch completed');
-        } catch (error) {
-          console.warn('⚠️ [AuditorDashboard] Prefetch failed, will fetch directly');
-        }
-      }
-      
-      // Try to get data from cache first
+
       if (auditorDataService.hasAuditsCache()) {
-        console.log('✅ [AuditorDashboard] Using cached audits data');
         const cachedAudits = auditorDataService.getData('audits') || [];
-        console.log(`[AuditorDashboard] Loaded ${cachedAudits.length} audits from cache (prefetched on Home page)`);
-        
-        // Process cached data
-        const response = { data: { audits: cachedAudits } };
-        this.processAuditsData(response);
-      } else {
-        // Fallback: Fetch from API if cache is empty
-        console.log('⚠️ [AuditorDashboard] No cached data found, fetching from API...');
-        apiService.get(API_ENDPOINTS.AUDIT_MY_AUDITS)
-          .then(data => {
-            console.log('[AuditorDashboard] Audit data received from API:', data);
-            
-            // Update cache for subsequent loads
-            if (data && data.audits) {
-              auditorDataService.setData('audits', data.audits);
-              console.log('ℹ️ [AuditorDashboard] Cache updated after direct API fetch');
-            }
-            
-            this.processAuditsData({ data });
-          })
-          .catch(error => {
-            console.error('[AuditorDashboard] Error fetching audits:', error);
-            this.error = 'Failed to load audits';
-            this.loading = false;
-          });
+        console.log(`[AuditorDashboard] Loaded ${cachedAudits.length} audits from cache after prefetch`);
+        this.processAuditsData({ data: { audits: cachedAudits } });
+        return;
       }
+
+      console.log('⚠️ [AuditorDashboard] No cached data after prefetch, fetching from API...');
+      try {
+        const data = await apiService.get(API_ENDPOINTS.AUDIT_MY_AUDITS);
+        console.log('[AuditorDashboard] Audit data received from API:', data);
+        if (data && data.audits) {
+          auditorDataService.setData('audits', data.audits);
+          console.log('ℹ️ [AuditorDashboard] Cache updated after direct API fetch');
+        }
+        this.processAuditsData({ data });
+      } catch (error) {
+        console.error('[AuditorDashboard] Error fetching audits:', error);
+        this.error = 'Failed to load audits';
+        this.loading = false;
+      }
+    },
+
+    async refreshAuditsQuiet() {
+      if (document.hidden) return;
+      try {
+        const auditStore = useAuditStore();
+        await auditStore.prefetchAuditDomain({ scope: 'my', force: true });
+        if (auditorDataService.hasAuditsCache()) {
+          const cachedAudits = auditorDataService.getData('audits') || [];
+          this.processAuditsData({ data: { audits: cachedAudits } });
+        }
+      } catch (e) {
+        console.warn('[AuditorDashboard] refreshAuditsQuiet:', e);
+      }
+    },
+
+    mergeOptimisticAssignmentsIntoAudits() {
+      const store = useAuditStore();
+      const opt = store.optimisticAssignments || [];
+      const baseAudits = (this.audits || []).filter((a) => !a.__optimistic);
+      const optimisticRows = opt.map((o) => ({
+        audit_id: o.tempId,
+        title: o.title || '—',
+        framework: o.framework || '—',
+        policy: o.policy || '—',
+        subpolicy: o.subpolicy || '—',
+        date: o.date || '—',
+        business_unit: o.business_unit || '—',
+        auditType: o.auditType || '—',
+        status: 'Creating...',
+        scope: '',
+        objective: '',
+        role: '',
+        responsibility: '',
+        assignee: '—',
+        frequency: '',
+        completion_date: '',
+        review_status: '',
+        reviewer_comments: '',
+        evidence: '',
+        comments: '',
+        assigned_date: '',
+        review_start_date: '',
+        review_date: '',
+        user: '—',
+        reviewer: '—',
+        Reports: null,
+        report_available: false,
+        __optimistic: true,
+      }));
+      if (optimisticRows.length > 0) {
+        this.audits = [...optimisticRows, ...baseAudits];
+      } else {
+        this.audits = baseAudits;
+      }
+      this.auditStatuses = this.audits.map((a) => a.status);
+      this.frameworks = [...new Set(this.audits.map((a) => a.framework).filter(Boolean))];
+      this.policies = [...new Set(this.audits.map((a) => a.policy).filter(Boolean))];
+      this.businessUnits = [...new Set(this.audits.map((a) => a.business_unit).filter((bu) => bu && bu !== 'Not Specified'))];
+    },
+
+    isOptimisticAuditRow(audit) {
+      if (!audit) return false;
+      if (audit.__optimistic) return true;
+      const id = audit.audit_id;
+      return id != null && String(id).startsWith('pending-');
     },
     
     processAuditsData(response) {
@@ -485,7 +574,8 @@ export default {
             this.audits = [];
             this.auditStatuses = [];
           }
-          
+
+          this.mergeOptimisticAssignmentsIntoAudits();
           this.loading = false;
     },
     
@@ -501,7 +591,8 @@ export default {
     
     async openPopup(idx) {
       const audit = this.audits[idx];
-      
+      if (this.isOptimisticAuditRow(audit)) return;
+
       // Don't proceed if the audit is in "Under review" or "Completed" status
       if (audit.status === 'Under review' || audit.status === 'Completed') {
         return;
@@ -558,7 +649,8 @@ export default {
     
     startAudit(idx) {
       const audit = this.audits[idx];
-      
+      if (this.isOptimisticAuditRow(audit)) return;
+
       // Update status from "Yet to Start" to "Work In Progress"
       this.updateAuditStatus(idx, 'Work In Progress');
       
@@ -648,6 +740,10 @@ export default {
     
 
     async showReports(audit) {
+      if (this.isOptimisticAuditRow(audit)) {
+        this.$popup?.info('This audit is still being created. Refresh in a moment.');
+        return;
+      }
       // Prefer opening the latest available report version (S3 link)
       const auditId = audit.audit_id;
       console.log(`🔍 Attempting to show reports for audit ${auditId}`);
@@ -709,6 +805,7 @@ export default {
     
     // Method to view all versions of an audit
     viewAuditVersions(audit) {
+      if (this.isOptimisticAuditRow(audit)) return;
       // Store audit data in localStorage for the versions view to access
       localStorage.setItem(`audit_${audit.audit_id}_data`, JSON.stringify(audit));
       
@@ -831,6 +928,9 @@ export default {
     },
     
     getStatusDisplayText(row) {
+      if (row.status === 'Creating...') {
+        return 'Creating...';
+      }
       if (row.status === 'Yet to Start') {
         return 'Start';
       }
@@ -841,6 +941,7 @@ export default {
     },
     
     getStatusClass(status) {
+      if (status === 'Creating...') return 'status-pending';
       if (status === 'Yet to Start') return 'status-yet';
       if (status === 'Work In Progress') return 'status-progress';
       if (status === 'Under review') return 'status-review';
@@ -849,6 +950,7 @@ export default {
     },
     
     onStatusButtonClick(row) {
+      if (this.isOptimisticAuditRow(row)) return;
       // For AI audits, don't allow editing - they are done by AI
       const isAIAudit = (row.auditType || '').toString().toUpperCase() === 'A' || 
                         (row.auditType || '').toString().toUpperCase() === 'AI';

@@ -6,6 +6,9 @@
         <div class="events-calendar-title-section">
           <h1 class="events-calendar-title">Events Calendar</h1>
           <p class="events-calendar-subtitle">Dedicated view for recurring and future events</p>
+          <p v-if="isRevalidatingCalendar" class="events-calendar-revalidating" aria-live="polite">
+            Updating…
+          </p>
         </div>
         <div class="events-calendar-view-toggle">
           <div class="toggle-group">
@@ -34,7 +37,7 @@
 
     <div v-if="viewMode === 'table'">
       <!-- Loading State -->
-      <div v-if="loading" class="events-calendar-loading">
+      <div v-if="showCalendarBlockingLoad" class="events-calendar-loading">
         <div class="events-calendar-loading-content">
           <div class="events-calendar-loading-spinner"></div>
           <p class="events-calendar-loading-text">Loading calendar events...</p>
@@ -50,7 +53,7 @@
             </svg>
           </div>
           <p class="events-calendar-error-message">{{ error }}</p>
-          <button @click="fetchEvents" class="events-calendar-error-retry">
+          <button type="button" @click="fetchEvents({ force: true })" class="events-calendar-error-retry">
             Try Again
           </button>
         </div>
@@ -123,7 +126,7 @@
 
     <div v-else>
       <!-- Calendar View Loading -->
-      <div v-if="loading" class="events-calendar-loading">
+      <div v-if="showCalendarBlockingLoad" class="events-calendar-loading">
         <div class="events-calendar-loading-content">
           <div class="events-calendar-loading-spinner"></div>
           <p class="events-calendar-loading-text">Loading calendar events...</p>
@@ -139,7 +142,7 @@
             </svg>
           </div>
           <p class="events-calendar-error-message">{{ error }}</p>
-          <button @click="fetchEvents" class="events-calendar-error-retry">
+          <button type="button" @click="fetchEvents({ force: true })" class="events-calendar-error-retry">
             Try Again
           </button>
         </div>
@@ -233,14 +236,14 @@
 </template>
 
 <script>
-import { ref, computed, onMounted } from 'vue'
-import { eventService } from '../../services/api'
+import { ref, computed, onMounted, onActivated } from 'vue'
+import { storeToRefs } from 'pinia'
 import EventViewPopup from './EventViewPopup.vue'
 // import { useRouter } from 'vue-router' // Unused import
 import { PopupService } from '../../modules/popus/popupService'
 import PopupModal from '../../modules/popus/PopupModal.vue'
 import apiService from '@/services/apiService.js'
-import eventDataService from '../../services/eventService' // NEW: Centralized event data service
+import { useEventsStore } from '@/stores/events'
 
 export default {
   name: 'EventsCalendar',
@@ -249,13 +252,22 @@ export default {
     PopupModal
   },
   setup() {
+    const eventsStore = useEventsStore()
+    const { calendarEvents: calendarEventsFromStore, lastFetchedCalendar } = storeToRefs(eventsStore)
     const viewMode = ref('calendar')
     const selectedEvent = ref(null)
     const showPopup = ref(false)
     const currentDate = ref(new Date())
-    const events = ref([])
-    const loading = ref(false)
-    const error = ref(null)
+    const events = computed(() => calendarEventsFromStore.value || [])
+    const loading = computed(() => eventsStore.loading.calendar)
+    const error = computed(() => eventsStore.errors.calendar)
+    const showCalendarBlockingLoad = computed(
+      () =>
+        eventsStore.loading.calendar &&
+        !(calendarEventsFromStore.value || []).length &&
+        !lastFetchedCalendar.value
+    )
+    const isRevalidatingCalendar = computed(() => eventsStore.revalidatingCalendar)
     const selectedFrameworkFromSession = ref(null)
 
     const monthNames = [
@@ -491,55 +503,33 @@ export default {
       }
     }
 
-    const fetchEvents = async () => {
+    const fetchEvents = async ({ force = false } = {}) => {
       try {
-        loading.value = true
-        error.value = null
-        
-        console.log('[EventsCalendar] Fetching event data...')
-
-        // Show cached data immediately (if present) while we refresh from API.
-        const cachedEvents = eventDataService.getData('events') || []
-        if (cachedEvents.length > 0) {
-          events.value = cachedEvents
-          console.log(`[EventsCalendar] ⚡ Showing ${cachedEvents.length} cached events while refreshing...`)
-        }
-
-        // Always fetch from API for fresh calendar data.
-        const response = await eventService.getEventsForCalendar()
-        if (response.data && response.data.success) {
-          events.value = response.data.events || []
-          // Cache the fetched data for future use
-          eventDataService.setData('events', events.value)
-          console.log(`[EventsCalendar] ✅ Loaded ${events.value.length} events`)
-        } else {
-          if (cachedEvents.length === 0) {
-            error.value = response.data?.message || 'Failed to fetch calendar events'
-          }
-        }
+        console.log('[EventsCalendar] Fetching calendar events via Pinia (SWR)...')
+        await eventsStore.fetchCalendarEvents({ force })
       } catch (err) {
         console.error('Error fetching calendar events:', err)
-        if ((eventDataService.getData('events') || []).length === 0) {
-          error.value = 'Failed to fetch calendar events. Please try again.'
+        if (!(calendarEventsFromStore.value || []).length) {
           PopupService.error('Failed to fetch calendar events. Please try again.', 'Error')
         }
-      } finally {
-        loading.value = false
       }
     }
 
     onMounted(async () => {
-      // Check for framework selection from session
       await checkSelectedFrameworkFromSession()
-      
-      // Then fetch events
-      await fetchEvents()
+      await fetchEvents({ force: false })
+    })
+
+    onActivated(async () => {
+      await fetchEvents({ force: false })
     })
 
     return {
       viewMode,
       events,
       calendarEvents,
+      showCalendarBlockingLoad,
+      isRevalidatingCalendar,
       loading,
       error,
       selectedEvent,
@@ -603,6 +593,13 @@ export default {
   font-size: 1rem;
   color: #6b7280;
   margin: 0;
+  font-weight: 500;
+}
+
+.events-calendar-revalidating {
+  margin: 6px 0 0;
+  font-size: 0.875rem;
+  color: #6b7280;
   font-weight: 500;
 }
 

@@ -30,18 +30,26 @@
         </button>
       </div>
 
-      <!-- Loading and Error States -->
-      <div v-if="loading" class="loading-state">
-        <div class="spinner"></div>
-        <span>Loading data...</span>
+      <div
+        v-if="showTasksSkeleton"
+        class="grc-skeleton-dashboard incident-tasks-skeleton"
+        aria-busy="true"
+        aria-label="Loading tasks"
+      >
+        <div class="grc-skeleton-kpi-row">
+          <div v-for="n in 2" :key="'tsk-'+n" class="grc-skeleton-kpi-card grc-skeleton-pulse" />
+        </div>
+        <div class="grc-skeleton-table-wrap">
+          <div v-for="n in 8" :key="'tskr-'+n" class="grc-skeleton-row grc-skeleton-pulse" />
+        </div>
       </div>
       
-      <div v-else-if="error" class="error-state">
+      <div v-else-if="error && !showTasksSkeleton" class="error-state">
         {{ error }}
       </div>
 
       <!-- User Tasks View -->
-      <div v-else-if="activeTab === 'user' && !showMitigationWorkflow && !showReviewerWorkflow">
+      <div v-else-if="!showTasksSkeleton && activeTab === 'user' && !showMitigationWorkflow && !showReviewerWorkflow">
         <div v-if="!selectedUserId" class="no-data-state">
           <p>Please select a user to view their assigned tasks.</p>
         </div>
@@ -62,7 +70,7 @@
       </div>
 
       <!-- Reviewer Tasks View -->
-      <div v-else-if="activeTab === 'reviewer' && !showMitigationWorkflow && !showReviewerWorkflow">
+      <div v-else-if="!showTasksSkeleton && activeTab === 'reviewer' && !showMitigationWorkflow && !showReviewerWorkflow">
         <div v-if="!selectedUserId" class="no-data-state">
           <p>Please select a user to view their reviewer tasks.</p>
         </div>
@@ -106,10 +114,20 @@
           </div>
         </div>
 
-        <!-- Loading State -->
-        <div v-if="loadingMitigations" class="loading-state">
-          <div class="spinner"></div>
-          <span>Loading mitigation steps...</span>
+        <!-- Skeleton while waiting for API (no row-level Mitigation yet) -->
+        <div
+          v-if="loadingMitigations && !mitigationSteps.length"
+          class="mitigation-workflow-skeleton grc-skeleton-dashboard"
+          aria-busy="true"
+          aria-label="Loading mitigation workflow"
+        >
+          <div class="grc-skeleton-kpi-row">
+            <div class="grc-skeleton-kpi-card grc-skeleton-pulse mitigation-skeleton-header" />
+          </div>
+          <div class="grc-skeleton-table-wrap">
+            <div v-for="n in 6" :key="'mw-' + n" class="grc-skeleton-row grc-skeleton-pulse mitigation-skeleton-row" />
+          </div>
+          <p class="mitigation-skeleton-caption">Loading mitigation details…</p>
         </div>
 
         <!-- No Data State -->
@@ -587,9 +605,10 @@
                 <button 
                   @click="submitIncidentAssessment" 
                   class="submit-button"
-                  :disabled="!isQuestionnaireValid"
+                  :disabled="!isQuestionnaireValid || submittingAssessment"
                 >
-                  <i class="fas fa-check-circle"></i> Submit Assessment
+                  <i class="fas fa-check-circle"></i>
+                  {{ submittingAssessment ? 'Submitting…' : 'Submit Assessment' }}
                 </button>
               </div>
             </div>
@@ -610,10 +629,19 @@
           <h2>Review Incident Mitigations</h2>
         </div>
 
-        <!-- Loading State -->
-        <div v-if="loadingMitigations" class="loading-state">
-          <div class="spinner"></div>
-          <span>Loading mitigation data...</span>
+        <div
+          v-if="loadingMitigations"
+          class="mitigation-workflow-skeleton grc-skeleton-dashboard"
+          aria-busy="true"
+          aria-label="Loading reviewer workflow"
+        >
+          <div class="grc-skeleton-kpi-row">
+            <div class="grc-skeleton-kpi-card grc-skeleton-pulse mitigation-skeleton-header" />
+          </div>
+          <div class="grc-skeleton-table-wrap">
+            <div v-for="n in 5" :key="'rw-' + n" class="grc-skeleton-row grc-skeleton-pulse mitigation-skeleton-row" />
+          </div>
+          <p class="mitigation-skeleton-caption">Loading review data…</p>
         </div>
 
         <!-- Reviewer Content -->
@@ -929,9 +957,11 @@ import { PopupService, PopupModal } from '@/modules/popup';
 import CustomDropdown from '@/components/CustomDropdown.vue';
 import CollapsibleTable from '@/components/CollapsibleTable.vue';
 import EvidenceAttachment from '@/components/EventHandling/EvidenceAttachment.vue';
-import incidentService from '../../services/incidentService.js';
 import { safeEvidenceUrl } from '@/utils/trustedEvidenceUrl';
 import { getExplicitFrameworkId } from '@/utils/frameworkContextStorage.js';
+import { mapStores } from 'pinia'
+import { useFrameworkStore } from '@/stores/framework'
+import { useIncidentStore } from '@/stores/incident'
 import './IncidentUserTask.css'; // Import the CSS file
 
 export default {
@@ -944,8 +974,6 @@ export default {
   },
   data() {
     return {
-      // Add incidentService to data so it's available in methods
-      incidentService,
       userIncidents: [],
       reviewerTasks: [],
       users: [],
@@ -958,6 +986,7 @@ export default {
         values: []
       },
       loading: true,
+      submittingAssessment: false,
       error: null,
       showMitigationWorkflow: false,
       showReviewerWorkflow: false,
@@ -1004,6 +1033,14 @@ export default {
     }
   },
   computed: {
+    ...mapStores(useIncidentStore),
+    showTasksSkeleton() {
+      return (
+        this.loading &&
+        !this.showMitigationWorkflow &&
+        !this.showReviewerWorkflow
+      )
+    },
     allStepsCompleted() {
       // Only check rejected or unreviewed steps, ignore approved ones
       const stepsToCheck = this.mitigationSteps.filter(step => step.approved === false || step.approved === null);
@@ -1125,14 +1162,11 @@ export default {
     console.log('🚀 [IncidentUserTasks] Component mounted');
     
     // Wait for incident data fetch if still in progress
-    if (window.incidentDataFetchPromise) {
-      console.log('⏳ [IncidentUserTasks] Waiting for incident data fetch...');
-      try {
-        await window.incidentDataFetchPromise;
-        console.log('✅ [IncidentUserTasks] Incident data fetch completed');
-      } catch (error) {
-        console.warn('⚠️ [IncidentUserTasks] Incident data fetch failed:', error);
-      }
+    try {
+      await this.incidentStore.ensureIncidentDomainPrefetch({ includeIncidents: false })
+      console.log('✅ [IncidentUserTasks] Domain prefetch completed or skipped')
+    } catch (error) {
+      console.warn('⚠️ [IncidentUserTasks] Domain prefetch failed:', error)
     }
     
     // Fetch selected framework from home page first
@@ -1143,7 +1177,12 @@ export default {
     
     this.initializeFromQuery();
     this.setDefaultUser();
-    
+
+    await this.$nextTick();
+    if (!this.selectedUserId) {
+      this.loading = false;
+    }
+
     // Ensure evidence documents are fetched when component loads
     this.$nextTick(() => {
       if (this.selectedIncidentId) {
@@ -1169,6 +1208,15 @@ export default {
     },
     isAssignedBucketStatus(s) {
       return !this.isApprovedStatus(s) && !this.isRejectedStatus(s) && !this.isPendingReviewStatus(s);
+    },
+    recomputeUserTaskBuckets() {
+      if (!this.userIncidents || !Array.isArray(this.userIncidents)) return;
+      this.approvedIncidents = this.userIncidents.filter((incident) => this.isApprovedStatus(incident.Status));
+      this.rejectedIncidents = this.userIncidents.filter((incident) => this.isRejectedStatus(incident.Status));
+      this.pendingReviewIncidents = this.userIncidents.filter((incident) =>
+        this.isPendingReviewStatus(incident.Status)
+      );
+      this.assignedIncidents = this.userIncidents.filter((incident) => this.isAssignedBucketStatus(incident.Status));
     },
     /**
      * When a framework is selected, keep rows that match it OR have no framework field (lenient —
@@ -1210,8 +1258,8 @@ export default {
     deriveReviewerTasksFromBulkCache() {
       const uid = this.selectedUserId;
       if (uid == null || uid === '') return [];
-      const cachedIncidents = incidentService.getData('incidents') || [];
-      const cachedAuditFindings = incidentService.getData('auditFindings') || [];
+      const cachedIncidents = this.incidentStore.getDomainBulkData('incidents') || [];
+      const cachedAuditFindings = this.incidentStore.getDomainBulkData('auditFindings') || [];
       const rows = [];
       const seen = new Set();
       const pushRow = (task, itemType) => {
@@ -1251,28 +1299,11 @@ export default {
       return [...map.values()];
     },
     async loadReviewerTasksAsync(params) {
-      const parseList = (body) => (Array.isArray(body) ? body : (body?.data || []));
-      const toMarked = (items, itemType) =>
-        (items || []).map((item) => ({
-          ...item,
-          itemType,
-          id: item.id || item.IncidentId,
-          Title: item.Title || item.IncidentTitle,
-          Priority: item.Priority || item.RiskPriority
-        }));
-
       const fetchReviewerOnce = async (p) => {
-        const [incRes, audRes] = await Promise.all([
-          apiService.get(API_ENDPOINTS.INCIDENT_REVIEWER_TASKS(this.selectedUserId), p),
-          apiService.get(API_ENDPOINTS.AUDIT_FINDING_REVIEWER_TASKS(this.selectedUserId), p)
-        ]);
-        const combined = [
-          ...toMarked(parseList(incRes), 'incident'),
-          ...toMarked(parseList(audRes), 'audit_finding')
-        ];
-        return combined.filter(
-          (task, index, arr) => index === arr.findIndex((t) => t.id === task.id)
-        );
+        const { tasks } = await this.incidentStore.fetchReviewerTasksRaw(this.selectedUserId, p || {}, {
+          force: !!(p && p.framework_id),
+        });
+        return tasks;
       };
 
       let apiTasks = await fetchReviewerOnce(params || {});
@@ -1300,7 +1331,11 @@ export default {
     async fetchSelectedFramework() {
       try {
         console.log('🔍 Fetching selected framework for incident user tasks...');
-        const frameworkBody = await apiService.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED);
+        const frameworkStore = useFrameworkStore();
+        await frameworkStore.loadFrameworkFromSession();
+        const frameworkBody = {
+          frameworkId: frameworkStore.selectedFrameworkId,
+        };
         console.log('Framework response:', frameworkBody);
         
         if (frameworkBody && frameworkBody.frameworkId) {
@@ -1339,27 +1374,20 @@ export default {
       try {
         console.log('🔍 [IncidentUserTasks] Checking for cached users...');
 
-        // Check if prefetch is in progress or cache is available
-        if (!window.incidentDataFetchPromise && !incidentService.hasValidUsersCache()) {
-          console.log('🚀 [IncidentUserTasks] Starting incident prefetch for users (user navigated directly)...');
-          window.incidentDataFetchPromise = incidentService.fetchAllIncidentData();
-        }
-
-        // Wait for prefetch if it's in progress
-        if (window.incidentDataFetchPromise) {
-          console.log('⏳ [IncidentUserTasks] Waiting for incident prefetch to complete...');
+        if (!this.incidentStore.hasDomainIncidentUsersBulk()) {
+          console.log('🚀 [IncidentUserTasks] Starting domain prefetch for users (user navigated directly)...');
           try {
-            await window.incidentDataFetchPromise;
-            console.log('✅ [IncidentUserTasks] Incident prefetch completed');
+            await this.incidentStore.ensureIncidentDomainPrefetch({ includeIncidents: false });
+            console.log('✅ [IncidentUserTasks] Domain prefetch completed');
           } catch (prefetchError) {
-            console.warn('⚠️ [IncidentUserTasks] Incident prefetch failed, will fetch users directly', prefetchError);
+            console.warn('⚠️ [IncidentUserTasks] Domain prefetch failed, will fetch users directly', prefetchError);
           }
         }
 
         // Use cached data if available
-        if (incidentService.hasValidUsersCache()) {
+        if (this.incidentStore.hasDomainIncidentUsersBulk()) {
           console.log('✅ [IncidentUserTasks] Using cached users');
-          const cachedUsers = incidentService.getData('incidentUsers') || [];
+          const cachedUsers = this.incidentStore.getDomainBulkData('incidentUsers') || [];
           this.users = cachedUsers.map(user => ({ ...user }));
           this.userFilterConfig.values = [
             { value: '', label: 'All Users' },
@@ -1368,8 +1396,10 @@ export default {
               label: `${user.UserName} (${user.role || user.Role || 'User'})`
             }))
           ];
-          this.loading = false;
           this.setDefaultUser();
+          if (!this.selectedUserId) {
+            this.loading = false;
+          }
           return;
         }
 
@@ -1394,7 +1424,7 @@ export default {
           }))
           .filter(user => user.UserId);
         this.users = normalized;
-        incidentService.setData('incidentUsers', normalized);
+        this.incidentStore.setDomainBulkData('incidentUsers', normalized);
         this.userFilterConfig.values = [
           { value: '', label: 'All Users' },
           ...normalized.map(user => ({
@@ -1405,8 +1435,10 @@ export default {
         if (normalized.length === 0) {
           console.warn('⚠️ [IncidentUserTasks] No users found. This might indicate an API issue or empty database.');
         }
-        this.loading = false;
         this.setDefaultUser();
+        if (!this.selectedUserId) {
+          this.loading = false;
+        }
       };
 
       const parseUsersPayload = (payload) => {
@@ -1461,9 +1493,7 @@ export default {
         const byId = this.users.find(u => String(u.UserId) === sid);
         if (byId) {
           this.selectedUserId = byId.UserId;
-          this.$nextTick(() => {
-            this.fetchData();
-          });
+          void this.fetchData();
           return;
         }
       }
@@ -1485,9 +1515,7 @@ export default {
         );
         if (foundUser) {
           this.selectedUserId = foundUser.UserId;
-          this.$nextTick(() => {
-            this.fetchData();
-          });
+          void this.fetchData();
           return;
         }
       }
@@ -1495,9 +1523,7 @@ export default {
       // 3) Single user in list — select them (common in small deployments)
       if (this.users.length === 1) {
         this.selectedUserId = this.users[0].UserId;
-        this.$nextTick(() => {
-          this.fetchData();
-        });
+        void this.fetchData();
       }
     },
     switchToReviewerTab() {
@@ -1513,7 +1539,9 @@ export default {
         });
       }
     },
-    async fetchData() {
+    async fetchData(options = {}) {
+      const silent = !!options.silent;
+      const forceUserTasksFromApi = !!options.forceUserTasksFromApi;
       console.log('🔄 [IncidentUserTasks] fetchData called');
       console.log('🔍 [IncidentUserTasks] selectedUserId:', this.selectedUserId);
       console.log('🔍 [IncidentUserTasks] activeTab:', this.activeTab);
@@ -1522,37 +1550,46 @@ export default {
         console.error('❌ [IncidentUserTasks] No user selected, skipping data fetch');
         this.userIncidents = [];
         this.reviewerTasks = [];
+        this.approvedIncidents = [];
+        this.rejectedIncidents = [];
+        this.pendingReviewIncidents = [];
+        this.assignedIncidents = [];
+        this.pendingReviewerTasks = [];
+        this.approvedReviewerTasks = [];
+        this.loading = false;
         return;
       }
       
       console.log('✅ [IncidentUserTasks] User selected, fetching data for userId:', this.selectedUserId);
       
-      this.loading = true;
+      if (!silent) {
+        this.loading = true;
+      }
       
       const hasFrameworkFilter = !!this.selectedFramework;
 
-      // Warm cache / wait for prefetch (needed even when a framework is selected — API user_* + framework_id often returns [])
-      if (!window.incidentDataFetchPromise && !incidentService.hasValidIncidentsCache() && !incidentService.hasValidAuditFindingsCache()) {
-        console.log('🚀 [IncidentUserTasks] Starting incident prefetch (user navigated directly)...');
-        window.incidentDataFetchPromise = incidentService.fetchAllIncidentData();
-      }
-      if (window.incidentDataFetchPromise) {
-        console.log('⏳ [IncidentUserTasks] Waiting for incident prefetch to complete...');
+      if (!this.incidentStore.hasDomainIncidentsPrefetchFresh() && !this.incidentStore.hasDomainAuditFindingsPrefetchFresh()) {
+        console.log('🚀 [IncidentUserTasks] Starting domain prefetch (user navigated directly)...');
         try {
-          await window.incidentDataFetchPromise;
-          console.log('✅ [IncidentUserTasks] Incident prefetch completed');
+          await this.incidentStore.ensureIncidentDomainPrefetch({ includeIncidents: false });
+          console.log('✅ [IncidentUserTasks] Domain prefetch completed');
         } catch (prefetchError) {
-          console.warn('⚠️ [IncidentUserTasks] Incident prefetch failed, will fetch directly from API', prefetchError);
+          console.warn('⚠️ [IncidentUserTasks] Domain prefetch failed, will fetch directly from API', prefetchError);
         }
       }
 
+      const preferDomainCacheForUserTasks =
+        !forceUserTasksFromApi &&
+        (this.incidentStore.hasDomainIncidentsPrefetchFresh() ||
+          this.incidentStore.hasDomainAuditFindingsPrefetchFresh());
+
       // Prefer cache + client-side user/framework filters whenever bulk lists exist
-      if (incidentService.hasValidIncidentsCache() || incidentService.hasValidAuditFindingsCache()) {
+      if (preferDomainCacheForUserTasks) {
         console.log('✅ [IncidentUserTasks] Using cached incident data - filtering by user (and framework when set) client-side');
           
           // Get general incidents and audit findings from cache
-          const cachedIncidents = incidentService.getData('incidents') || [];
-          const cachedAuditFindings = incidentService.getData('auditFindings') || [];
+          const cachedIncidents = this.incidentStore.getDomainBulkData('incidents') || [];
+          const cachedAuditFindings = this.incidentStore.getDomainBulkData('auditFindings') || [];
           
           // Mark each item with its type
           const markedIncidents = Array.isArray(cachedIncidents) 
@@ -1647,16 +1684,8 @@ export default {
           if (this.userIncidents.length === 0) {
             console.warn('⚠️ [IncidentUserTasks] No tasks after cache + user + framework filter; will try API');
           } else {
-            // Filter incidents by status (case-insensitive; cache may differ from API casing)
-            this.approvedIncidents = this.userIncidents.filter(incident => this.isApprovedStatus(incident.Status));
-            this.rejectedIncidents = this.userIncidents.filter(incident => this.isRejectedStatus(incident.Status));
-            this.pendingReviewIncidents = this.userIncidents.filter(incident =>
-              this.isPendingReviewStatus(incident.Status)
-            );
-            this.assignedIncidents = this.userIncidents.filter(incident =>
-              this.isAssignedBucketStatus(incident.Status)
-            );
-            
+            this.recomputeUserTaskBuckets();
+
             this.expandedSections = {
               approved: true,
               rejected: true,
@@ -1695,27 +1724,9 @@ export default {
         console.log('🔍 Adding framework filter to user tasks:', this.selectedFramework);
       }
       
-      // Fetch user-assigned tasks first; reviewer endpoints are optional and may 401 without failing the page
-      Promise.all([
-        apiService.get(API_ENDPOINTS.USER_INCIDENTS(this.selectedUserId), params),
-        apiService.get(API_ENDPOINTS.USER_AUDIT_FINDINGS(this.selectedUserId), params)
-      ])
-      .then(async ([incidentsResponse, auditFindingsResponse]) => {
-        const parseList = (body) =>
-          (Array.isArray(body) ? body : (body?.data || []));
-
-        let incidents = parseList(incidentsResponse);
-        let auditFindings = parseList(auditFindingsResponse);
-
-        if (incidents.length === 0 && auditFindings.length === 0 && params.framework_id) {
-          console.warn('⚠️ [IncidentUserTasks] user_* endpoints returned empty with framework_id; retrying without framework (client filter)');
-          const [ir, ar] = await Promise.all([
-            apiService.get(API_ENDPOINTS.USER_INCIDENTS(this.selectedUserId), {}),
-            apiService.get(API_ENDPOINTS.USER_AUDIT_FINDINGS(this.selectedUserId), {})
-          ]);
-          incidents = parseList(ir);
-          auditFindings = parseList(ar);
-        }
+      this.incidentStore
+        .fetchUserTasksRaw(this.selectedUserId, params, { force: hasFrameworkFilter })
+        .then(async ({ incidents, auditFindings }) => {
         
         console.log('🔍 [IncidentUserTasks] API Response - Incidents:', incidents.length);
         console.log('🔍 [IncidentUserTasks] API Response - Audit Findings:', auditFindings.length);
@@ -1771,38 +1782,8 @@ export default {
           this.userIncidents.map(inc => ({ id: inc.id, Status: inc.Status, Title: inc.Title }))
         );
         
-        this.approvedIncidents = this.userIncidents.filter(incident => {
-          const matches = this.isApprovedStatus(incident.Status);
-          if (matches) console.log('✅ Approved:', incident.id, incident.Title);
-          return matches;
-        });
-        
-        this.rejectedIncidents = this.userIncidents.filter(incident => {
-          const matches = this.isRejectedStatus(incident.Status);
-          if (matches) console.log('✅ Rejected:', incident.id, incident.Title);
-          return matches;
-        });
-        
-        this.pendingReviewIncidents = this.userIncidents.filter(incident => {
-          const matches = this.isPendingReviewStatus(incident.Status);
-          if (matches) console.log('✅ Pending Review:', incident.id, incident.Title, 'Status:', incident.Status);
-          return matches;
-        });
-        
-        this.assignedIncidents = this.userIncidents.filter(incident => {
-          const isAssigned = this.isAssignedBucketStatus(incident.Status);
-          if (isAssigned) {
-            console.log('✅ [IncidentUserTasks] Assigned incident found:', {
-              id: incident.id,
-              Title: incident.Title,
-              Status: incident.Status,
-              ReviewerId: incident.ReviewerId,
-              AssignerId: incident.AssignerId
-            });
-          }
-          return isAssigned;
-        });
-        
+        this.recomputeUserTaskBuckets();
+
         console.log('✅ [IncidentUserTasks] Filtered counts:', {
           approved: this.approvedIncidents.length,
           rejected: this.rejectedIncidents.length,
@@ -1829,7 +1810,7 @@ export default {
           this.pendingReviewerTasks = this.reviewerTasks.filter((task) => !this.isApprovedStatus(task.Status));
         });
       })
-      .catch(error => {
+      .catch((error) => {
         this.error = `Failed to fetch data: ${error.message}`;
         this.loading = false;
       });
@@ -1857,57 +1838,91 @@ export default {
       }
       const isAuditFinding = task && task.itemType === 'audit_finding';
       
-      // Set these first to ensure UI updates
+      this.currentStep = 0;
       this.selectedIncidentId = id;
       this.showMitigationWorkflow = true;
-      this.loadingMitigations = true;
       this.assessmentFeedbackForUser = null;
-      
-      // Force a UI update
-      this.$nextTick(() => {
-        // Use appropriate endpoints based on task type
-        const mitigationsEndpoint = isAuditFinding
-          ? API_ENDPOINTS.AUDIT_FINDING_MITIGATIONS(id)
-          : API_ENDPOINTS.INCIDENT_MITIGATIONS(id);
-        
-        const reviewEndpoint = isAuditFinding
-          ? API_ENDPOINTS.AUDIT_FINDING_REVIEW_DATA(id)
-          : API_ENDPOINTS.INCIDENT_REVIEW_DATA(id);
-        
-        // Get the mitigation steps and assessment feedback
-        Promise.all([
-          apiService.get(mitigationsEndpoint),
-          apiService.get(reviewEndpoint)
-        ])
+
+      const warmSteps = this.parseMitigationsFromTask(task);
+      if (warmSteps.length > 0) {
+        this.mitigationSteps = warmSteps;
+        this.loadingMitigations = false;
+      } else {
+        this.mitigationSteps = [];
+        this.loadingMitigations = true;
+      }
+
+      const mitigationsEndpoint = isAuditFinding
+        ? API_ENDPOINTS.AUDIT_FINDING_MITIGATIONS(id)
+        : API_ENDPOINTS.INCIDENT_MITIGATIONS(id);
+
+      const reviewEndpoint = isAuditFinding
+        ? API_ENDPOINTS.AUDIT_FINDING_REVIEW_DATA(id)
+        : API_ENDPOINTS.INCIDENT_REVIEW_DATA(id);
+
+      Promise.all([
+        apiService.get(mitigationsEndpoint),
+        apiService.get(reviewEndpoint),
+      ])
         .then(([mitigationsBody, reviewBody]) => {
-          this.mitigationSteps = this.parseMitigations(mitigationsBody);
-          
-          // Fetch enhanced linked evidence data with documents
+          const serverSteps = this.parseMitigations(mitigationsBody);
+          if (serverSteps.length > 0) {
+            this.mitigationSteps = serverSteps;
+          }
+
           this.fetchLinkedEvidenceDocuments();
-          
-          // Check for assessment feedback from reviewer
+
           if (reviewBody && reviewBody.assessment_feedback) {
             this.assessmentFeedbackForUser = reviewBody.assessment_feedback;
           }
-          
-          // Pre-fill questionnaire data if previous data exists
-          if (mitigationsBody && mitigationsBody.previous_assessment_data &&
-              Object.keys(mitigationsBody.previous_assessment_data).length > 0) {
+
+          if (
+            mitigationsBody &&
+            mitigationsBody.previous_assessment_data &&
+            Object.keys(mitigationsBody.previous_assessment_data).length > 0
+          ) {
             this.questionnaireData = {
               ...this.questionnaireData,
-              ...mitigationsBody.previous_assessment_data
+              ...mitigationsBody.previous_assessment_data,
             };
           }
-          
+
           this.loadingMitigations = false;
         })
-        .catch(error => {
-          PopupService.error(`Error loading data: ${error.message}`);
-          this.mitigationSteps = [];
-          this.assessmentFeedbackForUser = null;
+        .catch((error) => {
+          if (!this.mitigationSteps.length) {
+            PopupService.error(`Error loading data: ${error.message}`);
+            this.mitigationSteps = [];
+            this.assessmentFeedbackForUser = null;
+          } else {
+            PopupService.warning(
+              'Could not refresh mitigation details from the server. Showing steps from your task list — try again if something looks out of date.'
+            );
+          }
           this.loadingMitigations = false;
         });
-      });
+    },
+    /** Fast first paint when list/cache already includes Mitigation JSON on the task row */
+    parseMitigationsFromTask(task) {
+      if (!task) return [];
+      let raw = task.Mitigation;
+      if (raw == null || raw === '') return [];
+      try {
+        if (typeof raw === 'string') {
+          const t = raw.trim();
+          if (t.startsWith('{') || t.startsWith('[')) {
+            raw = JSON.parse(t);
+          } else {
+            return this.parseMitigations({ mitigations: { 1: t } });
+          }
+        }
+        if (typeof raw === 'object') {
+          return this.parseMitigations({ mitigations: raw });
+        }
+      } catch (e) {
+        console.warn('[IncidentUserTasks] parseMitigationsFromTask failed:', e?.message || e);
+      }
+      return [];
     },
     parseMitigations(response) {
       // Handle the new enhanced response format
@@ -2039,28 +2054,40 @@ export default {
       }
     },
     submitIncidentAssessment() {
-      // Safety check for userIncidents array
+      if (this.submittingAssessment) return;
+
       if (!this.userIncidents || !Array.isArray(this.userIncidents)) {
         PopupService.error('Task data not loaded. Please refresh the page and try again.');
         return;
       }
 
-      // Find the task to determine if it's an audit finding or incident
-      const task = this.userIncidents.find(t => t.id === this.selectedIncidentId);
+      const incidentId = this.selectedIncidentId;
+      const taskIdx = this.userIncidents.findIndex(
+        (t) => t.id === incidentId || Number(t.id) === Number(incidentId)
+      );
+      const task = taskIdx >= 0 ? this.userIncidents[taskIdx] : null;
       const isAuditFinding = task && task.itemType === 'audit_finding';
-      
-      this.loading = true;
-      
-      // Prepare the mitigation data
+
+      if (taskIdx < 0 || !task) {
+        PopupService.error('Task data not found. Please refresh the page and try again.');
+        return;
+      }
+
+      let prevTaskSnapshot = null;
+      try {
+        prevTaskSnapshot = JSON.parse(JSON.stringify(this.userIncidents[taskIdx]));
+      } catch {
+        prevTaskSnapshot = { ...this.userIncidents[taskIdx] };
+      }
+
       const mitigationData = {};
       this.mitigationSteps.forEach((step, index) => {
         const stepNumber = (index + 1).toString();
-        
-        // Combine previous comments with new comments
+
         let combinedComments = '';
         const hasPreviousComments = step.previousComments && step.previousComments.trim();
         const hasNewComments = step.comments && step.comments.trim();
-        
+
         if (hasPreviousComments && hasNewComments) {
           combinedComments = `Previous: ${step.previousComments.trim()}\n\nNew: ${step.comments.trim()}`;
         } else if (hasPreviousComments) {
@@ -2068,21 +2095,19 @@ export default {
         } else if (hasNewComments) {
           combinedComments = step.comments.trim();
         }
-        
+
         mitigationData[stepNumber] = {
           description: step.description,
           status: step.status || 'Completed',
           comments: combinedComments,
-          "aws-file_link": step['aws-file_link'],
+          'aws-file_link': step['aws-file_link'],
           fileName: step.fileName,
-          files: step.files || [], // Include multiple files
-          approved: step.approved, // Include approval status
-          remarks: step.remarks    // Include reviewer remarks
+          files: step.files || [],
+          approved: step.approved,
+          remarks: step.remarks,
         };
-        
       });
-      
-      // Prepare questionnaire data for assessment
+
       const extractedInfo = {
         cost: this.questionnaireData.cost || '',
         impact: this.questionnaireData.impact || '',
@@ -2095,31 +2120,52 @@ export default {
         riskRecurrence: this.questionnaireData.riskRecurrence || '',
         improvementInitiative: this.questionnaireData.improvementInitiative || '',
         mitigations: mitigationData,
-        submittedAt: new Date().toISOString()
+        submittedAt: new Date().toISOString(),
       };
-      
-      // Use appropriate endpoint based on task type
+
       const submitEndpoint = isAuditFinding
         ? API_ENDPOINTS.SUBMIT_AUDIT_FINDING_ASSESSMENT
         : API_ENDPOINTS.SUBMIT_INCIDENT_ASSESSMENT;
-      
-      apiService.post(submitEndpoint, {
-        incident_id: this.selectedIncidentId,
+
+      const payload = {
+        incident_id: incidentId,
         user_id: this.selectedUserId,
-        extracted_info: extractedInfo
-      })
-      .then(() => {
-        this.loading = false;
-        this.closeMitigationModal();
-        PopupService.success(`${isAuditFinding ? 'Audit finding' : 'Incident'} assessment submitted for review successfully!`);
-        
-        // Refresh the tasks list
-        this.fetchData();
-      })
-      .catch(() => {
-        this.loading = false;
-        PopupService.error('Failed to submit assessment. Please try again.');
-      });
+        extracted_info: extractedInfo,
+      };
+
+      this.submittingAssessment = true;
+      this.incidentStore.invalidateUserAndReviewerTaskCaches();
+
+      const patchedTask = { ...this.userIncidents[taskIdx], Status: 'Pending Review' };
+      this.userIncidents.splice(taskIdx, 1, patchedTask);
+      this.recomputeUserTaskBuckets();
+      this.closeMitigationModal();
+      PopupService.success(
+        `${isAuditFinding ? 'Audit finding' : 'Incident'} assessment submitted for review successfully!`
+      );
+
+      apiService
+        .post(submitEndpoint, payload)
+        .then(async () => {
+          this.submittingAssessment = false;
+          try {
+            await this.fetchData({ silent: true, forceUserTasksFromApi: true });
+          } catch (refreshErr) {
+            console.warn('[IncidentUserTasks] Post-submit task refresh failed:', refreshErr?.message || refreshErr);
+          }
+        })
+        .catch((err) => {
+          this.submittingAssessment = false;
+          const rollbackIdx = this.userIncidents.findIndex(
+            (t) => t.id === incidentId || Number(t.id) === Number(incidentId)
+          );
+          if (rollbackIdx >= 0 && prevTaskSnapshot) {
+            this.userIncidents.splice(rollbackIdx, 1, prevTaskSnapshot);
+            this.recomputeUserTaskBuckets();
+          }
+          const msg = err?.message || err?.response?.data?.error || 'Please try again.';
+          PopupService.error(`Submission failed — your list was restored. ${msg}`);
+        });
     },
     closeReviewerModal() {
       this.showReviewerWorkflow = false;
@@ -2192,6 +2238,7 @@ export default {
       apiService.post(reviewEndpoint, reviewData)
         .then(() => {
           this.loading = false;
+          this.incidentStore.invalidateUserAndReviewerTaskCaches();
           
           // Remove this task from the list
           const index = this.reviewerTasks.findIndex(t => t.id === this.currentReviewTask.id);
@@ -2840,4 +2887,29 @@ export default {
 
 <style scoped>
 @import './IncidentUserTask.css';
-</style> 
+</style>
+<style>
+@import '@/assets/css/grc-skeleton.css';
+
+.mitigation-workflow-skeleton {
+  padding: 16px 8px 8px;
+  max-width: 920px;
+  margin: 0 auto;
+}
+
+.mitigation-skeleton-header {
+  min-height: 72px;
+  grid-column: 1 / -1;
+}
+
+.mitigation-skeleton-row {
+  height: 48px;
+}
+
+.mitigation-skeleton-caption {
+  margin-top: 14px;
+  text-align: center;
+  font-size: 13px;
+  color: #64748b;
+}
+</style>

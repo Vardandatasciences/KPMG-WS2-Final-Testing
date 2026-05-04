@@ -924,6 +924,127 @@ export const createAxiosInstance = (baseURL = API_BASE_URL) => {
     }
   );
 
+  // Short-TTL GET coalesce for hot paths (same pattern as main.js global axios; this instance powers api.js / eventService).
+  const GET_SHARED_TTL_MS = 4000;
+  const sharedGetCache = new Map();
+
+  const isSharedGetCandidate = (config) => {
+    const method = String(config?.method || 'get').toLowerCase();
+    if (method !== 'get') return false;
+    const url = `${config.baseURL || ''}${config.url || ''}`;
+    const hints = [
+      '/api/get-notifications/',
+      '/api/events/users-for-reviewer/',
+      '/api/events/current-user/',
+      '/api/events/modules/',
+      '/api/events/permissions/',
+      '/api/events/list/',
+      '/api/frameworks/get-selected/',
+      '/api/frameworks/approved-active/',
+    ];
+    return hints.some((h) => url.includes(h));
+  };
+
+  const buildSharedGetCacheKey = (config) => {
+    const url = `${config.baseURL || ''}${config.url || ''}`;
+    const params = config.params ? JSON.stringify(config.params) : '';
+    return `${url}::${params}`;
+  };
+
+  const resolveAxiosAdapterForInstance = (config) => {
+    const axiosLib = require('axios');
+    const cand = config.adapter || axiosLib.defaults.adapter;
+    if (typeof cand === 'function') return cand;
+    if (typeof axiosLib.getAdapter === 'function') {
+      try {
+        return axiosLib.getAdapter(cand || axiosLib.defaults.adapter);
+      } catch (e) {
+        console.warn('[axios instance] Unable to resolve adapter:', e?.message || e);
+        return null;
+      }
+    }
+    return null;
+  };
+
+  instance.interceptors.request.use(
+    (config) => {
+      if (!isSharedGetCandidate(config)) return config;
+      const key = buildSharedGetCacheKey(config);
+      const now = Date.now();
+      const existing = sharedGetCache.get(key);
+
+      if (existing?.response && now - existing.timestamp < GET_SHARED_TTL_MS) {
+        config.adapter = () =>
+          Promise.resolve({
+            data: existing.response.data,
+            status: existing.response.status,
+            statusText: existing.response.statusText,
+            headers: existing.response.headers,
+            config,
+            request: null,
+          });
+        return config;
+      }
+
+      if (existing?.promise) {
+        config.adapter = () =>
+          existing.promise.then((response) => ({
+            data: response.data,
+            status: response.status,
+            statusText: response.statusText,
+            headers: response.headers,
+            config,
+            request: null,
+          }));
+        return config;
+      }
+
+      const defaultAdapter = resolveAxiosAdapterForInstance(config);
+      if (!defaultAdapter) return config;
+
+      const cfgForNetwork = Object.assign({}, config);
+      delete cfgForNetwork.adapter;
+      const networkPromise = Promise.resolve().then(() => defaultAdapter(cfgForNetwork));
+      sharedGetCache.set(key, {
+        timestamp: now,
+        promise: networkPromise,
+        response: null,
+      });
+      config.__sharedGetCacheKey = key;
+      config.adapter = () => networkPromise;
+      return config;
+    },
+    (error) => Promise.reject(error)
+  );
+
+  instance.interceptors.response.use(
+    (response) => {
+      const cfg = response?.config || {};
+      if (isSharedGetCandidate(cfg)) {
+        const key = cfg.__sharedGetCacheKey || buildSharedGetCacheKey(cfg);
+        sharedGetCache.set(key, {
+          timestamp: Date.now(),
+          promise: null,
+          response: {
+            data: response.data,
+            status: response.status,
+            statusText: response.statusText,
+            headers: response.headers,
+          },
+        });
+      }
+      return response;
+    },
+    (error) => {
+      const cfg = error?.config || {};
+      if (isSharedGetCandidate(cfg)) {
+        const key = cfg.__sharedGetCacheKey || buildSharedGetCacheKey(cfg);
+        sharedGetCache.delete(key);
+      }
+      return Promise.reject(error);
+    }
+  );
+
   return instance;
 };
 

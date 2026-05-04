@@ -50,14 +50,35 @@
 
     <!-- Filters Section -->
     <div class="events-dashboard-filters">
-      <EventFilters @filter-change="handleFilterChange" :show-advanced="false" :show-export="false" />
+      <EventFilters
+        :selected-framework-from-session="selectedFrameworkFromSession"
+        :selected-framework-name-from-session="selectedFrameworkNameFromSession"
+        @filter-change="handleFilterChange"
+        :show-advanced="false"
+        :show-export="false"
+      />
     </div>
 
-    <!-- Loading State -->
-    <div v-if="loading" class="events-dashboard-loading">
-      <div class="events-dashboard-loading-content">
-        <div class="events-dashboard-loading-spinner"></div>
-        <p class="events-dashboard-loading-text">Loading dashboard data...</p>
+    <!-- Skeleton: cold load only (no Pinia dashboards slice yet) -->
+    <div
+      v-if="showEventSkeleton"
+      class="grc-skeleton-dashboard events-dashboard-skeleton"
+      aria-busy="true"
+      aria-label="Loading events dashboard"
+    >
+      <div class="grc-skeleton-kpi-row">
+        <div
+          v-for="n in 4"
+          :key="'ev-sk-kpi-' + n"
+          class="grc-skeleton-kpi-card grc-skeleton-pulse"
+        ></div>
+      </div>
+      <div class="grc-skeleton-charts">
+        <div
+          v-for="n in 4"
+          :key="'ev-sk-ch-' + n"
+          class="grc-skeleton-chart grc-skeleton-pulse"
+        ></div>
       </div>
     </div>
 
@@ -295,10 +316,11 @@ import EventFilters from './EventFilters.vue'
 import { Chart, registerables } from 'chart.js'
 import PopupModal from '../../modules/popus/PopupModal.vue'
 import AccessUtils from '../../utils/accessUtils'
-import apiService from '@/services/apiService.js'
-import eventDataService from '../../services/eventService' // NEW: Centralized event data service
+import { useEventsStore } from '@/stores/events'
 import { convertColorForColorblind, getColorblindMode } from '../../utils/colorblindness'
 import { useDashboardsStore } from '@/stores/dashboards'
+import { useFrameworkStore } from '@/stores/framework'
+import { useDashboardSkeleton } from '@/composables/useDashboardSkeleton'
 
 const sanitizeCSVCell = (value) => {
   const text = String(value ?? '')
@@ -318,8 +340,10 @@ export default {
   },
   setup() {
     const dashboardsStore = useDashboardsStore()
+    const eventsStore = useEventsStore()
     const dashboardData = ref(null)
     const loading = ref(false)
+    const { showSkeleton: showEventSkeleton } = useDashboardSkeleton('event', loading)
     const error = ref(null)
     
     // Filter state
@@ -332,6 +356,8 @@ export default {
     
     // Framework selection from session
     const selectedFrameworkFromSession = ref(null)
+    const selectedFrameworkNameFromSession = ref('')
+    const frameworkStore = useFrameworkStore()
     
     // Colorblindness mode tracking
     const colorblindMode = ref(null)
@@ -565,26 +591,32 @@ export default {
     // Check for selected framework from session (similar to other modules)
     const checkSelectedFrameworkFromSession = async () => {
       try {
-        console.log('🔍 DEBUG: Checking for selected framework from session in EventsDashboard...')
-        const response = await apiService.get('/api/frameworks/get-selected/')
-        
-        console.log('🔍 DEBUG: Framework response in EventsDashboard:', response)
-        
-        if (response && response.frameworkId) {
-          const frameworkIdFromSession = response.frameworkId.toString()
+        await frameworkStore.loadFrameworkFromSession()
+        if (frameworkStore.selectedFrameworkId && frameworkStore.selectedFrameworkId !== 'all') {
+          const frameworkIdFromSession = String(frameworkStore.selectedFrameworkId)
           console.log('✅ DEBUG: Found selected framework in session for EventsDashboard:', frameworkIdFromSession)
           
           // Set the selected framework from session
           selectedFrameworkFromSession.value = frameworkIdFromSession
+          selectedFrameworkNameFromSession.value = frameworkStore.selectedFrameworkName || ''
           console.log('📊 DEBUG: Events are now filtered by framework:', frameworkIdFromSession)
           console.log('📊 DEBUG: selectedFrameworkFromSession.value set to:', selectedFrameworkFromSession.value)
         } else {
           console.log('ℹ️ DEBUG: No framework filter active - showing all events')
           selectedFrameworkFromSession.value = null
+          selectedFrameworkNameFromSession.value = ''
         }
       } catch (error) {
         console.error('❌ DEBUG: Error checking selected framework in EventsDashboard:', error)
         selectedFrameworkFromSession.value = null
+        selectedFrameworkNameFromSession.value = ''
+      }
+    }
+
+    const handleFrameworkChanged = async () => {
+      await checkSelectedFrameworkFromSession()
+      if (!currentFilters.value.framework) {
+        await fetchDashboardData({ silent: true })
       }
     }
 
@@ -594,25 +626,14 @@ export default {
         if (!silent) loading.value = true
         error.value = null
         
-        console.log('[EventsDashboard] Checking for cached event data...')
-        
-        // ==========================================
-        // NEW: Check if data is already cached from HomeView prefetch
-        // ==========================================
-        // Note: Dashboard still needs to fetch dashboard-specific analytics from API
-        // But we can check if basic event data is available for initial state
-        if (eventDataService.hasValidCache()) {
-          console.log('[EventsDashboard] ✅ Event cache available from HomeView prefetch')
-          const cachedEvents = eventDataService.getData('events') || []
-          console.log('[EventsDashboard] Cached events count:', cachedEvents.length)
-        } else if (window.eventDataFetchPromise) {
-          console.log('[EventsDashboard] ⏳ Waiting for ongoing prefetch to complete...')
-          await window.eventDataFetchPromise
-          const cachedEvents = eventDataService.getData('events') || []
-          console.log('[EventsDashboard] Cached events count:', cachedEvents.length)
+        try {
+          await eventsStore.fetchEventsList({ force: false })
+          console.log('[EventsDashboard] Events list warm-cache count:', eventsStore.events.length)
+        } catch (e) {
+          console.warn('[EventsDashboard] Optional events list prefetch skipped:', e?.message || e)
         }
-        
-        // Dashboard needs specific analytics data, so we still fetch from dashboard API
+
+        // Dashboard still fetches dashboard-specific analytics from API
         // Build query parameters from current filters
         const params = new URLSearchParams()
         if (currentFilters.value.framework) {
@@ -1314,6 +1335,7 @@ export default {
       }
       
       document.addEventListener('click', exportDropdownClickOutside)
+      window.addEventListener('framework-changed', handleFrameworkChanged)
     })
 
     onActivated(async () => {
@@ -1332,6 +1354,7 @@ export default {
 
     onUnmounted(() => {
       document.removeEventListener('click', exportDropdownClickOutside)
+      window.removeEventListener('framework-changed', handleFrameworkChanged)
       // Clean up colorblindness observer
       if (colorblindObserver) {
         colorblindObserver.disconnect()
@@ -1361,8 +1384,10 @@ export default {
     return {
       dashboardData,
       loading,
+      showEventSkeleton,
       error,
       selectedFrameworkFromSession,
+      selectedFrameworkNameFromSession,
       handleExport,
       handleFilterChange,
       getStatusColorClass,

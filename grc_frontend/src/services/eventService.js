@@ -23,29 +23,20 @@ class EventService {
   }
 
   /**
-   * Fetch all event data and cache it
+   * Fetch all event data and cache it (delegates to Pinia useEventsStore; keeps this.dataStore in sync).
    */
   async fetchAllEventData() {
-    if (this.dataStore.isFetching) {
-      console.log('[Event Service] Already fetching, skipping duplicate request');
-      return this.dataStore;
-    }
-
     this.dataStore.isFetching = true;
-    console.log('[Event Service] 🚀 Starting event data prefetch...');
+    this.dataStore.fetchError = null;
+    console.log('[Event Service] 🚀 Starting event data prefetch (Pinia events store)...');
 
     try {
-      // Fetch all event-related datasets in parallel
-      await Promise.all([
-        this.fetchEvents(),
-        this.fetchIntegrationEvents() // NEW: Also fetch integration events
-      ]);
-
+      const { useEventsStore } = await import('@/stores/events');
+      await useEventsStore().prefetchAll({ force: true });
       this.dataStore.lastFetchTime = new Date();
-      this.dataStore.fetchError = null;
-      
-      console.log(`[Event Service] ✅ Prefetch complete - Total events: ${this.dataStore.events.length}, Integration events: ${this.dataStore.integrationEvents.length}`);
-      
+      console.log(
+        `[Event Service] ✅ Prefetch complete - Total events: ${this.dataStore.events.length}, Integration events: ${this.dataStore.integrationEvents.length}`
+      );
       return this.dataStore;
     } catch (error) {
       console.error('[Event Service] ❌ Prefetch failed:', error);

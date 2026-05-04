@@ -1080,6 +1080,7 @@ import { API_ENDPOINTS } from '../../config/api.js';
 import { convertColorForColorblind, getColorblindMode } from '@/utils/colorblindness';
 import CustomDropdown from '../CustomDropdown.vue';
 import apiService from '@/services/apiService.js';
+import { useRiskStore } from '@/stores/risk';
 
 export default {
   name: 'RiskKPI',
@@ -1460,6 +1461,11 @@ export default {
       console.warn('No authentication token found. KPI data may not load properly.');
     }
     
+    try {
+      void useRiskStore().prefetchRiskRegisterAndInstances({ force: false });
+    } catch {
+      /* non-fatal */
+    }
     // Fetch all required data when component mounts
     this.fetchKpiData();
     this.fetchActiveRisksTrend(); // This is already calling active-risks-kpi endpoint

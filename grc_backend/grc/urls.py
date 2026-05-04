@@ -2487,7 +2487,7 @@ risk_urlpatterns = [
 
     path('export-risk-register/', export_risk_register_v2, name='export-risk-register'),
 
-    path('export-compliance-register/', export_compliance_management, name='export-compliance-register'),
+    path('export-compliance-register/', compliance_views.export_compliance_management, name='export-compliance-register'),
     path('api/export-compliance-register/status/<int:export_id>/', get_compliance_export_status, name='export-compliance-status'),
 
     path('api/risk-register/export/', export_risk_register_v2, name='export-risk-register-v2'),

@@ -222,13 +222,14 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { complianceService } from '../../services/api';
+import { useComplianceStore } from '@/stores/compliance';
 // import Dynamicalsearch from '../Dynamicalsearch.vue'; // Unused import
 import CustomDropdown from '../CustomDropdown.vue';
 import DynamicTable from '../DynamicTable.vue';
 
 const route = useRoute();
 const router = useRouter();
+const complianceStore = useComplianceStore();
 const loading = ref(false);
 const error = ref(null);
 const compliances = ref([]);
@@ -420,7 +421,7 @@ const fetchCompliances = async () => {
   try {
     loading.value = true;
     error.value = null;
-    const response = await complianceService.getCompliancesByType(
+    const response = await complianceStore.getCompliancesByType(
       route.params.type,
       route.params.id
     );

@@ -97,6 +97,7 @@ import DynamicTable from '../DynamicTable.vue';
 import { AccessUtils } from '@/utils/accessUtils';
 import { API_ENDPOINTS } from '@/config/api.js';
 import PopupService from '../../modules/popus/popupService.js';
+import { useAuditStore } from '@/stores/audit';
 
 export default {
   name: 'AuditReport',
@@ -217,11 +218,12 @@ export default {
       error.value = null;
       
       try {
-        const params = {};
-        if (dateFrom.value) params.date_from = dateFrom.value;
-        if (dateTo.value) params.date_to = dateTo.value;
-        const data = await apiService.get(API_ENDPOINTS.AUDIT_REPORTS, { params });
-        audits.value = data.audits;
+        const auditStore = useAuditStore();
+        const data = await auditStore.fetchReportsTable({
+          dateFrom: dateFrom.value,
+          dateTo: dateTo.value,
+        });
+        audits.value = data?.audits ?? auditStore.reports.list ?? [];
       } catch (err) {
         console.error('Error fetching audit reports:', err);
         // Handle access denied errors
@@ -264,10 +266,7 @@ export default {
         console.log('Generating audit report...');
         
         // Call the generate audit report endpoint
-        const blobData = await apiService.get(`${API_ENDPOINTS.GENERATE_AUDIT_REPORT(auditId)}`, {
-          responseType: 'blob',
-          timeout: 30000 // 30 second timeout
-        });
+        const blobData = await useAuditStore().generateAuditReportDocxBlob(auditId);
         
         // Create blob from response
         const blob = new Blob([blobData], {

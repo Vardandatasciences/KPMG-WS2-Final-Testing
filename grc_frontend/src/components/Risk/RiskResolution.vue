@@ -203,7 +203,7 @@
               <button 
                 @click="assignRiskWithMitigations" 
                 class="btn btn-submit"
-                :disabled="loading || viewOnlyMitigationModal || mitigationSteps.length === 0 || !mitigationDueDate || !selectedUsers[selectedRisk.RiskInstanceId] || !selectedReviewers[selectedRisk.RiskInstanceId]"
+                :disabled="assignMitigationInFlight || viewOnlyMitigationModal || mitigationSteps.length === 0 || !mitigationDueDate || !selectedUsers[selectedRisk.RiskInstanceId] || !selectedReviewers[selectedRisk.RiskInstanceId]"
               >
                 <i class="fas fa-user-plus"></i> Assign with Mitigations
               </button>
@@ -221,7 +221,7 @@ import CollapsibleTable from '../CollapsibleTable.vue';
 import { PopupModal } from '@/modules/popup';
 import { API_ENDPOINTS } from '../../config/api.js';
 import apiService from '@/services/apiService.js';
-import riskDataService from '@/services/riskService';
+import { useRiskStore } from '@/stores/risk';
 
 const axios = {
   get: (url, config = {}) =>
@@ -282,7 +282,8 @@ export default {
         reviewer: '',
         assignTo: '',
         reviewerAssign: ''
-      }
+      },
+      assignMitigationInFlight: false,
     }
   },
   computed: {
@@ -467,79 +468,43 @@ export default {
         console.error('Error sending push notification:', error);
       }
     },
-    fetchRisks() {
+    async fetchRisks() {
       this.loading = true;
+      this.error = null;
       this.dataSourceMessage = 'Loading risks...';
-      
-      const useCachedRisks = async () => {
-        const cachedRisks = riskDataService.getData('riskInstances') || [];
-        const clonedRisks = JSON.parse(JSON.stringify(cachedRisks));
-        this.handleRiskResponse(clonedRisks);
-        this.dataSourceMessage = `Loaded ${clonedRisks.length} risks from cache (prefetched on Home page)`;
-      };
-      
-      const fetchFromApi = () => {
-        return axios.get(API_ENDPOINTS.RISK_INSTANCES)
-        .then(response => {
-          let apiRisks;
-            if (Array.isArray(response.data)) {
-              apiRisks = response.data;
-            } else if (response.data?.success && response.data?.risks) {
-              apiRisks = response.data.risks;
-            } else {
-              apiRisks = response.data || [];
-            }
-            
-            this.handleRiskResponse(apiRisks);
-            this.dataSourceMessage = `Loaded ${apiRisks.length} risks directly from API (cache unavailable)`;
-            riskDataService.setData('riskInstances', apiRisks);
-          });
-      };
-      (async () => {
-        try {
-          if (typeof window !== 'undefined' && window.riskDataFetchPromise) {
-            try {
-              await window.riskDataFetchPromise;
-            } catch (prefetchError) {
-              console.warn('RiskResolution: Prefetch promise rejected:', prefetchError);
-            }
-          }
-          
-          if (riskDataService.hasRiskInstancesCache()) {
-            await useCachedRisks();
-          } else {
-            await fetchFromApi();
-          }
-        } catch (error) {
-          console.error('Error fetching risks:', error);
-          this.error = `Failed to fetch risks: ${error.message}`;
-          this.dataSourceMessage = 'Failed to load risks';
-        } finally {
-          const needsApiFetch = !this.error && (!this.risks || this.risks.length === 0);
-          if (needsApiFetch) {
-            this.dataSourceMessage = riskDataService.hasRiskInstancesCache()
-              ? 'No risks found in cache; fetching from API...'
-              : 'Fetching risks from API...';
-            this.loading = true;
-            fetchFromApi()
-              .catch(apiError => {
-                console.error('Error fetching risks from API:', apiError);
-                this.error = `Failed to fetch risks: ${apiError.message}`;
-                this.dataSourceMessage = 'Failed to load risks';
-              })
-              .finally(() => {
-                this.loading = false;
-              });
-          } else {
-            this.loading = false;
-          }
+      const riskStore = useRiskStore();
+      try {
+        await riskStore.fetchRiskInstances({ force: false });
+        let rows = riskStore.riskInstances || [];
+        if (!rows.length) {
+          await riskStore.fetchRiskInstances({ force: true });
+          rows = riskStore.riskInstances || [];
         }
-      })();
+        const cloned = JSON.parse(JSON.stringify(rows));
+        this.handleRiskResponse(cloned);
+        this.dataSourceMessage =
+          rows.length > 0
+            ? `Loaded ${rows.length} risk instances (risk store)`
+            : 'No risk instances found';
+      } catch (error) {
+        console.error('Error fetching risks:', error);
+        this.error = `Failed to fetch risks: ${error.message}`;
+        this.dataSourceMessage = 'Failed to load risks';
+        this.risks = [];
+        this.filteredRisks = [];
+      } finally {
+        this.loading = false;
+      }
     },
     handleRiskResponse(responseData) {
       console.log('Risk data received:', responseData);
-      
-      if (responseData && responseData.length > 0) {
+      if (!Array.isArray(responseData)) {
+        this.risks = [];
+        this.filteredRisks = [];
+        return;
+      }
+
+      if (responseData.length > 0) {
         responseData.forEach(risk => {
           console.log(`Risk ID: ${risk.RiskInstanceId}, Reviewer: ${risk.Reviewer || risk.ReviewerName || 'None'}, ReviewerId: ${risk.ReviewerId || 'None'}`);
         });
@@ -818,48 +783,84 @@ export default {
     removeMitigationStep(index) {
       this.mitigationSteps.splice(index, 1);
     },
-    assignRiskWithMitigations() {
+    applyMitigationAssignmentToLocalRow(
+      rowIndex,
+      userIdRaw,
+      reviewerIdRaw,
+      userIdNum,
+      reviewerIdNum,
+      mitigationsJson,
+      dueDate
+    ) {
+      if (rowIndex < 0 || rowIndex >= this.risks.length) return false;
+      const assignedUser = this.users.find(
+        (u) => String(this.getUserId(u)) === String(userIdRaw)
+      );
+      const assignedReviewer = this.users.find(
+        (u) => String(this.getUserId(u)) === String(reviewerIdRaw)
+      );
+      if (!assignedUser || !assignedReviewer) {
+        console.error('Could not find assigned user or reviewer:', {
+          userIdRaw,
+          reviewerIdRaw,
+        });
+        return false;
+      }
+      const row = this.risks[rowIndex];
+      row.RiskOwner = this.getUserName(assignedUser);
+      row.UserId = userIdNum;
+      row.ReviewerId = Number(reviewerIdRaw);
+      row.ReviewerName = this.getUserName(assignedReviewer);
+      row.Reviewer = this.getUserName(assignedReviewer);
+      row.RiskStatus = 'Assigned';
+      row.RiskMitigation = mitigationsJson;
+      row.MitigationDueDate = dueDate;
+      row.MitigationStatus = 'Yet to Start';
+      row.RiskFormDetails = {};
+      return true;
+    },
+    async assignRiskWithMitigations() {
       const riskId = this.selectedRisk.RiskInstanceId;
       const userId = this.selectedUsers[riskId];
       const reviewerId = this.selectedReviewers[riskId];
-      const dueDateValidationError = this.validateMitigationDueDate(this.mitigationDueDate, this.selectedRisk?.CreatedAt);
+      const dueDateValidationError = this.validateMitigationDueDate(
+        this.mitigationDueDate,
+        this.selectedRisk?.CreatedAt
+      );
       if (dueDateValidationError) {
         this.$popup.warning(dueDateValidationError);
         return;
       }
-      
-      // Convert IDs to numbers to ensure proper format
-      // Handle null or undefined values
+
       if (!userId) {
         this.$popup.warning('No user selected. Please select a user to assign this risk to.');
         this.sendPushNotification({
           title: 'Risk Assignment Warning',
-          message: 'No user selected for risk assignment. Please select a user to assign this risk to.',
+          message:
+            'No user selected for risk assignment. Please select a user to assign this risk to.',
           category: 'risk',
-          priority: 'medium'
+          priority: 'medium',
         });
-        this.loading = false;
         return;
       }
-      
+
       const userIdNum = parseInt(userId, 10);
       const reviewerIdNum = parseInt(reviewerId, 10);
-      
-      console.log('Assigning risk with following IDs:', { 
-        riskId, 
-        userId: userIdNum, 
-        reviewerId: reviewerIdNum 
+
+      console.log('Assigning risk with following IDs:', {
+        riskId,
+        userId: userIdNum,
+        reviewerId: reviewerIdNum,
       });
-      
+
       if (!userIdNum || !reviewerIdNum || this.mitigationSteps.length === 0 || !this.mitigationDueDate) {
-        // Show validation error
         if (!userIdNum) {
           this.$popup.warning('Please select a valid user to assign this risk to.');
           this.sendPushNotification({
             title: 'Risk Assignment Validation Error',
             message: 'Please select a valid user to assign this risk to.',
             category: 'risk',
-            priority: 'medium'
+            priority: 'medium',
           });
           return;
         }
@@ -869,7 +870,7 @@ export default {
             title: 'Risk Assignment Validation Error',
             message: 'Please select a valid reviewer for this risk.',
             category: 'risk',
-            priority: 'medium'
+            priority: 'medium',
           });
           return;
         }
@@ -879,7 +880,7 @@ export default {
             title: 'Risk Assignment Validation Error',
             message: 'Please add at least one mitigation step for risk assignment.',
             category: 'risk',
-            priority: 'medium'
+            priority: 'medium',
           });
           return;
         }
@@ -889,133 +890,154 @@ export default {
             title: 'Risk Assignment Validation Error',
             message: 'Please select a due date for mitigation completion.',
             category: 'risk',
-            priority: 'medium'
+            priority: 'medium',
           });
           return;
         }
         return;
       }
-      
-      this.loading = true;
-      
-      // Convert mitigations to the expected JSON format
-      // Format: {"1": "Description 1", "2": "Description 2", ...}
+
+      if (this.assignMitigationInFlight) {
+        return;
+      }
+
+      const rowIndex = this.risks.findIndex(
+        (r) => String(r.RiskInstanceId) === String(riskId)
+      );
+      if (rowIndex === -1) {
+        this.$popup.error('Could not find this risk in the list. Please refresh and try again.');
+        return;
+      }
+
+      const previousRow = JSON.parse(JSON.stringify(this.risks[rowIndex]));
+      const riskTitleForMsg =
+        this.selectedRisk.RiskTitle ||
+        this.risks[rowIndex].RiskTitle ||
+        `Risk #${riskId}`;
+      const dueDateSnapshot = this.mitigationDueDate;
+
       const mitigationsJson = {};
-      this.mitigationSteps.forEach((step, index) => {
-        mitigationsJson[index + 1] = step.description;
+      this.mitigationSteps.forEach((step, idx) => {
+        mitigationsJson[idx + 1] = step.description;
       });
-      
-      console.log('Sending mitigation data:', mitigationsJson);
-      console.log('User ID type:', typeof userIdNum, 'value:', userIdNum);
-      console.log('Reviewer ID type:', typeof reviewerIdNum, 'value:', reviewerIdNum);
-      
-      // Log the exact payload we're sending to the API
+
       const assignPayload = {
         risk_id: parseInt(riskId, 10),
         UserId: userIdNum,
         mitigations: mitigationsJson,
-        due_date: this.mitigationDueDate,
-        risk_form_details: {} // Empty object instead of form details
+        due_date: dueDateSnapshot,
+        risk_form_details: {},
       };
-      console.log('Exact payload being sent to risk-assign API:', JSON.stringify(assignPayload));
-      
-      // First assign the risk to the user with mitigations
-      axios.post(API_ENDPOINTS.RISK_ASSIGN, assignPayload, {
-        // Add headers to ensure proper content type
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      })
-      .then(response => {
-        console.log('Assignment response:', response.data);
-        
-        // Now assign the reviewer - explicitly set create_approval_record to false
-        const reviewerPayload = {
-          risk_id: parseInt(riskId, 10),
-          ReviewerId: reviewerIdNum,
-          UserId: userIdNum,
-          mitigations: mitigationsJson,
-          risk_form_details: {}, // Empty object instead of form details
-          create_approval_record: false // Explicitly set to false to prevent creating version entry
-        };
-        console.log('Exact payload being sent to assign-reviewer API:', JSON.stringify(reviewerPayload));
-        
-        return axios.post(API_ENDPOINTS.ASSIGN_REVIEWER, reviewerPayload, {
-          // Add headers to ensure proper content type
-          headers: {
-            'Content-Type': 'application/json'
-          }
+
+      const reviewerPayload = {
+        risk_id: parseInt(riskId, 10),
+        ReviewerId: reviewerIdNum,
+        UserId: userIdNum,
+        mitigations: mitigationsJson,
+        risk_form_details: {},
+        create_approval_record: false,
+      };
+
+      this.assignMitigationInFlight = true;
+
+      const applied = this.applyMitigationAssignmentToLocalRow(
+        rowIndex,
+        userId,
+        reviewerId,
+        userIdNum,
+        reviewerIdNum,
+        mitigationsJson,
+        dueDateSnapshot
+      );
+      if (!applied) {
+        this.assignMitigationInFlight = false;
+        this.$popup.warning(
+          'Could not resolve selected user or reviewer. Please refresh the page and try again.'
+        );
+        return;
+      }
+      this.filterRisks();
+
+      try {
+        useRiskStore().patchRiskInstanceDetailCache({
+          ...this.risks[rowIndex],
+          RiskInstanceId: this.risks[rowIndex].RiskInstanceId,
         });
-      })
-      .then(response => {
-        console.log('Reviewer assignment response:', response.data);
-        
-        // Update the local risk data to show assignment
-        const index = this.risks.findIndex(r => r.RiskInstanceId === riskId);
-        if (index !== -1) {
-          const assignedUser = this.users.find(u => this.getUserId(u) == userId);
-          const assignedReviewer = this.users.find(u => this.getUserId(u) == reviewerId);
-          
-          // Make sure we have both user objects
-          if (assignedUser && assignedReviewer) {
-            this.risks[index].RiskOwner = this.getUserName(assignedUser);
-            this.risks[index].UserId = userId;
-            
-            // Update both Reviewer and ReviewerName fields to ensure compatibility
-            this.risks[index].ReviewerId = Number(reviewerId);
-            this.risks[index].ReviewerName = this.getUserName(assignedReviewer);
-            this.risks[index].Reviewer = this.getUserName(assignedReviewer);
-            
-            this.risks[index].RiskStatus = 'Assigned';
-            this.risks[index].RiskMitigation = mitigationsJson;
-            this.risks[index].MitigationDueDate = this.mitigationDueDate;
-            this.risks[index].MitigationStatus = 'Yet to Start';
-            this.risks[index].RiskFormDetails = {}; // Empty object instead of form details
-          } else {
-            console.error('Could not find assigned user or reviewer:', { userId, reviewerId });
-          }
-        }
-        
-        this.loading = false;
-        this.closeMitigationModal();
-        
-        // Show success message
-        this.$popup.success('Risk assigned successfully with mitigation steps and reviewer!');
-        this.sendPushNotification({
-          title: 'Risk Assignment Successful',
-          message: `Risk "${this.selectedRisk.RiskTitle || 'Risk #' + this.selectedRisk.RiskInstanceId}" has been successfully assigned with mitigation steps and reviewer.`,
-          category: 'risk',
-          priority: 'high'
+      } catch (e) {
+        console.warn('[RiskResolution] Pinia sync after optimistic assign:', e);
+      }
+
+      this.closeMitigationModal();
+      this.$popup.success(
+        'Risk assigned successfully with mitigation steps and reviewer!'
+      );
+      this.sendPushNotification({
+        title: 'Risk Assignment Successful',
+        message: `"${riskTitleForMsg}" has been assigned with mitigations and reviewer (syncing in background).`,
+        category: 'risk',
+        priority: 'high',
+      });
+
+      try {
+        console.log(
+          'Exact payload being sent to risk-assign API:',
+          JSON.stringify(assignPayload)
+        );
+        const assignRes = await axios.post(API_ENDPOINTS.RISK_ASSIGN, assignPayload, {
+          headers: { 'Content-Type': 'application/json' },
         });
-      })
-      .catch(error => {
+        console.log('Assignment response:', assignRes.data);
+
+        console.log(
+          'Exact payload being sent to assign-reviewer API:',
+          JSON.stringify(reviewerPayload)
+        );
+        const reviewerRes = await axios.post(
+          API_ENDPOINTS.ASSIGN_REVIEWER,
+          reviewerPayload,
+          {
+            headers: { 'Content-Type': 'application/json' },
+          }
+        );
+        console.log('Reviewer assignment response:', reviewerRes.data);
+      } catch (error) {
         console.error('Error assigning risk:', error);
-        this.loading = false;
-        
-        // Show more detailed error message
+        this.risks.splice(rowIndex, 1, previousRow);
+        this.filterRisks();
+        try {
+          useRiskStore().patchRiskInstanceDetailCache({
+            ...previousRow,
+            RiskInstanceId: previousRow.RiskInstanceId,
+          });
+        } catch (e) {
+          console.warn('[RiskResolution] Pinia rollback after assign failure:', e);
+        }
+
         let errorMessage = 'Failed to assign risk. ';
-        
         if (error.response) {
-          // The request was made and the server responded with a status code
-          // that falls out of the range of 2xx
-          errorMessage += `Server error: ${error.response.status} - ${error.response.data.message || error.response.data || 'Unknown error'}`;
+          errorMessage += `Server error: ${error.response.status} - ${
+            error.response.data?.message ||
+            error.response.data ||
+            'Unknown error'
+          }`;
           console.error('Error response data:', error.response.data);
         } else if (error.request) {
-          // The request was made but no response was received
-          errorMessage += 'No response received from server. Please check your network connection.';
+          errorMessage +=
+            'No response received from server. Please check your network connection.';
         } else {
-          // Something happened in setting up the request that triggered an Error
           errorMessage += error.message || 'Unknown error occurred';
         }
-        
+
         this.$popup.error(errorMessage);
         this.sendPushNotification({
           title: 'Risk Assignment Failed',
-          message: `Failed to assign risk "${this.selectedRisk.RiskTitle || 'Risk #' + this.selectedRisk.RiskInstanceId}": ${errorMessage}`,
+          message: `Failed to assign "${riskTitleForMsg}": ${errorMessage}`,
           category: 'risk',
-          priority: 'high'
+          priority: 'high',
         });
-      });
+      } finally {
+        this.assignMitigationInFlight = false;
+      }
     },
     getCriticalityClass(criticality) {
       if (!criticality) return '';

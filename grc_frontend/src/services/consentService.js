@@ -24,10 +24,13 @@ class ConsentService {
    * @param {Function} callback - The callback to execute after consent (optional)
    * @returns {Promise<boolean>} - Returns true if action can proceed, false if cancelled
    */
-  async checkAndRequestConsent(actionType, callback = null) {
+  /**
+   * @param {object|null} options - Optional `{ frameworkId }` for flows where session has no framework (e.g. event create).
+   */
+  async checkAndRequestConsent(actionType, callback = null, options = null) {
     try {
-      // Check if consent is required
-      const { required, config } = await checkConsentRequired(actionType);
+      const frameworkId = options?.frameworkId ?? options?.framework_id
+      const { required, config } = await checkConsentRequired(actionType, frameworkId)
 
       // If consent not required, execute immediately
       if (!required || !config) {
@@ -66,7 +69,7 @@ class ConsentService {
           return true;
         }
         
-        const accepted = await this.modalComponent.show(actionType, config);
+        const accepted = await this.modalComponent.show(actionType, config, frameworkId)
         console.log('[Consent] Modal returned:', accepted);
         
         if (accepted && callback) {

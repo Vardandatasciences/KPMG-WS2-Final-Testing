@@ -70,6 +70,27 @@
       </span>
     </div>
         
+    <!-- Initial load: avoid empty KPI cards (0/0/0) while role + tasks initialize -->
+    <div
+      v-if="!userInitialized"
+      class="policy-mod-sk framework-approver-page-skeleton"
+      aria-busy="true"
+      aria-label="Loading framework approval"
+      style="margin-top: 12px"
+    >
+      <div class="policy-mod-sk__summary">
+        <div v-for="n in 3" :key="'fa-kpi-' + n" class="policy-mod-sk__card"></div>
+      </div>
+      <div class="policy-mod-sk__controls">
+        <div class="policy-mod-sk__pill" style="max-width: 320px"></div>
+        <div class="policy-mod-sk__pill" style="max-width: 200px"></div>
+      </div>
+      <div class="policy-mod-sk__table">
+        <div v-for="n in 8" :key="'fa-row-' + n" class="policy-mod-sk__row"></div>
+      </div>
+    </div>
+
+    <template v-else>
     <!-- Summary KPI Cards (using global KPI styles from main.css) -->
     <div class="kpi-grid">
       <!-- Pending Frameworks -->
@@ -176,6 +197,7 @@
           @task-click="openApprovalDetails"
         />
       </div>
+    </template>
     </template>
 
     <!-- Rejection Modal -->
@@ -409,11 +431,15 @@
 <script>
 import '../../assets/css/main.css'
 import axios from 'axios'
+import apiService from '@/services/apiService'
 import { PopupService } from '@/modules/popus/popupService'
 import PopupModal from '@/modules/popus/PopupModal.vue'
 import CollapsibleTable from '@/components/CollapsibleTable.vue'
 import CustomDropdown from '@/components/CustomDropdown.vue'
 import { API_ENDPOINTS } from '../../config/api.js'
+import { useFrameworkStore } from '@/stores/framework'
+import { usePolicyStore } from '@/stores/policy'
+import policyDataService from '@/services/policyService'
 
 export default {
   name: 'FrameworkApprover',
@@ -467,6 +493,7 @@ export default {
         direction: 'desc'
       },
       activeTab: 'myTasks',
+      isInitializingFrameworkSelection: true,
       
       // Task arrays (following Policy Approval pattern)
       myTasks: [], // Frameworks created by the user
@@ -482,19 +509,19 @@ export default {
       availableUsers: this.availableUsers
     });
     
-    // First fetch frameworks and check for selected framework from session
+    this.isInitializingFrameworkSelection = true
+
+    void usePolicyStore()
+      .getPolicyCategoriesList({ force: false })
+      .catch(() => {})
+
     await this.fetchFrameworks();
-    
-    // Then initialize user (which will load frameworks with proper framework filter)
     await this.initializeUser();
-    
-    // After user is initialized, if framework was loaded from session, reload tasks
-    // This ensures data is loaded with the correct framework filter
-    if (this.userInitialized && this.selectedFrameworkId) {
-      console.log('🔄 Reloading tasks with framework filter from session after initialization:', this.selectedFrameworkId);
-      await this.loadUserTasks();
-      await this.fetchRejectedFrameworks();
-    }
+
+    // Guard against dropdown mount events clearing the shared selection.
+    setTimeout(() => {
+      this.isInitializingFrameworkSelection = false
+    }, 700)
   },
   methods: {
     // Initialize user and check role
@@ -526,29 +553,23 @@ export default {
           
           if (this.isGRCAdministrator) {
             console.log('User is GRC Administrator, fetching all users for dropdown...');
-            // Fetch all users for dropdown
-            await this.fetchUsers();
-            
-            // Set default user to current logged-in administrator
             this.selectedUserId = this.currentUserId;
             console.log('Setting default user for administrator to current user:', this.currentUserName);
-            // Load frameworks for the current administrator
             console.log('🔄 DEBUG: Loading frameworks for administrator with framework filter:', this.selectedFrameworkId)
-            await this.loadUserTasks();
-            await this.fetchRejectedFrameworks();
+            await Promise.all([
+              this.fetchUsers(),
+              this.loadUserTasks(),
+              this.fetchRejectedFrameworks(),
+            ])
           } else {
             console.log('User is not GRC Administrator, setting selected user to current user');
-            // Set selected user to current user for non-administrators
             this.selectedUserId = this.currentUserId;
-            
-            // Load frameworks for the current user
             console.log('🔄 DEBUG: Loading frameworks for user with framework filter:', this.selectedFrameworkId)
-            await this.loadUserTasks();
-            await this.fetchRejectedFrameworks();
+            await Promise.all([this.loadUserTasks(), this.fetchRejectedFrameworks()])
           }
           
           this.userInitialized = true;
-          this.fetchPolicyTypes();
+          void this.fetchPolicyTypes()
         } else {
           console.error('User role API did not return success:', response.data);
           // Fallback for development/testing
@@ -558,11 +579,9 @@ export default {
           this.selectedUserId = this.currentUserId;
           this.userInitialized = true;
           
-          // Load frameworks for the current user
           console.log('🔄 DEBUG: Loading frameworks for fallback user with framework filter:', this.selectedFrameworkId)
-          await this.loadUserTasks();
-          await this.fetchRejectedFrameworks();
-          this.fetchPolicyTypes();
+          await Promise.all([this.loadUserTasks(), this.fetchRejectedFrameworks()])
+          void this.fetchPolicyTypes()
         }
       } catch (error) {
         console.error('Error initializing user:', error);
@@ -573,64 +592,64 @@ export default {
         this.selectedUserId = this.currentUserId;
         this.userInitialized = true;
         
-        // Load frameworks for the current user
         console.log('🔄 DEBUG: Loading frameworks for error fallback user with framework filter:', this.selectedFrameworkId)
-        await this.loadUserTasks();
-        await this.fetchRejectedFrameworks();
-        this.fetchPolicyTypes();
+        await Promise.all([this.loadUserTasks(), this.fetchRejectedFrameworks()])
+        void this.fetchPolicyTypes()
       }
     },
 
-    // Fetch all users for administrator dropdown
+    // Fetch all users for administrator dropdown (Pinia cache-first)
     async fetchUsers() {
       try {
-        console.log('Fetching users for dropdown...');
-        const response = await axios.get(API_ENDPOINTS.USERS_FOR_DROPDOWN);
-        console.log('Users API response:', response.data);
-        
-        if (Array.isArray(response.data)) {
-          this.availableUsers = response.data;
-        } else if (response.data && response.data.success && Array.isArray(response.data.data)) {
-          this.availableUsers = response.data.data;
-        } else {
-          this.availableUsers = response.data || [];
-        }
-        
-        console.log('Available users loaded:', this.availableUsers.length, 'users');
-        
-        // If no users found, show error
+        console.log('Fetching users for dropdown (Pinia cache first)...')
+        const policyStore = usePolicyStore()
+        const list = await policyStore.getUsersForDropdown({ force: false })
+        this.availableUsers = Array.isArray(list) ? list : []
+        console.log('Available users loaded:', this.availableUsers.length)
         if (this.availableUsers.length === 0) {
-          console.error('No users found in database');
-          alert('Error: No users found. Please contact administrator.');
+          console.error('No users found in database')
+          alert('Error: No users found. Please contact administrator.')
         }
       } catch (error) {
-        console.error('Error fetching users:', error);
-        this.availableUsers = [];
-        alert('Error: Could not load users list. Please contact administrator.');
+        console.error('Error fetching users:', error)
+        this.availableUsers = []
+        alert('Error: Could not load users list. Please contact administrator.')
       }
+    },
+
+    // Coerce API user id: never pass DOM Event / option objects into axios URLs ([object Event] 404s).
+    normalizeFrameworkUserId(raw) {
+      if (raw === undefined || raw === null || raw === '') return null;
+      if (typeof raw === 'number') {
+        return Number.isFinite(raw) ? raw : null;
+      }
+      if (typeof raw === 'string') {
+        const t = raw.trim();
+        if (!t) return null;
+        if (t.startsWith('[object ')) return null;
+        const n = Number(t);
+        if (String(n) === t && Number.isFinite(n)) return n;
+        return t;
+      }
+      if (typeof raw === 'object') {
+        if (typeof Event !== 'undefined' && raw instanceof Event) return null;
+        if ('value' in raw) return this.normalizeFrameworkUserId(raw.value);
+        if ('UserId' in raw) return this.normalizeFrameworkUserId(raw.UserId);
+      }
+      return null;
     },
 
     // Handle user selection change
     async onUserSelectionChange(value) {
-      // CustomDropdown emits the value directly when using :options prop
-      // v-model should already update selectedUserId, but handle the event value too
-      if (value !== undefined && value !== null && value !== '') {
-        // Ensure selectedUserId is set (in case v-model didn't update yet)
-        if (this.selectedUserId !== value) {
-          this.selectedUserId = value;
-        }
-      } else {
-        // Clear selection
-        this.selectedUserId = null;
-      }
-      
+      const hasExplicit =
+        value !== undefined && value !== null && value !== '';
+      const source = hasExplicit ? value : this.selectedUserId;
+      this.selectedUserId = this.normalizeFrameworkUserId(source);
+
       console.log('User selection changed to:', this.selectedUserId);
-      if (this.selectedUserId) {
-        // Fetch frameworks for the selected user
-        await this.loadUserTasks();
-        await this.fetchRejectedFrameworks();
+      if (this.selectedUserId != null) {
+        await Promise.all([this.loadUserTasks(), this.fetchRejectedFrameworks()])
       } else {
-        // Clear frameworks if no user selected
         this.myTasks = [];
         this.reviewerTasks = [];
         this.rejectedFrameworks = [];
@@ -639,18 +658,16 @@ export default {
 
     // Get selected user name for display
     getSelectedUserName() {
-      if (!this.selectedUserId) return '';
-      
-      // If the selected user is the current administrator, return their name
-      // Use == for loose comparison to handle string/number mismatch
-      if (String(this.selectedUserId) === String(this.currentUserId)) {
+      const sid = this.normalizeFrameworkUserId(this.selectedUserId);
+      if (sid == null) return '';
+
+      const cid = this.normalizeFrameworkUserId(this.currentUserId);
+      if (String(sid) === String(cid)) {
         return this.currentUserName;
       }
-      
-      // Otherwise, find the user in the available users list
-      // Use loose comparison to handle type mismatch
-      const selectedUser = this.availableUsers.find(u => String(u.UserId) === String(this.selectedUserId));
-      return selectedUser ? selectedUser.UserName : `User ${this.selectedUserId}`;
+
+      const selectedUser = this.availableUsers.find(u => String(u.UserId) === String(sid));
+      return selectedUser ? selectedUser.UserName : `User ${sid}`;
     },
     
     // Navigate to All Policies page
@@ -661,18 +678,41 @@ export default {
     // Framework-related methods
     async fetchFrameworks() {
       try {
-        console.log('🔍 DEBUG: Fetching frameworks in FrameworkApprover...')
-        const response = await axios.get(API_ENDPOINTS.FRAMEWORKS)
-        this.frameworks = response.data.map(fw => ({
-          id: fw.FrameworkId,
-          name: fw.FrameworkName
+        console.log('🔍 FrameworkApprover: frameworks — Pinia/cache first (no blocking prefetch)')
+        const policyStore = usePolicyStore()
+        if (!window.policyDataFetchPromise && !policyStore.hasFrameworksCache() && !policyDataService.hasFrameworksListCache()) {
+          window.policyDataFetchPromise = policyDataService.fetchAllPolicyData()
+        }
+        let source = []
+        let usedWarmCache = false
+        if (policyStore.hasFrameworksCache()) {
+          usedWarmCache = true
+          source = policyStore.getFrameworksCached() || []
+        } else if (policyDataService.hasFrameworksListCache()) {
+          usedWarmCache = true
+          source = policyDataService.getFrameworksList() || []
+        } else {
+          source = await policyStore.getAllFrameworks({ force: false })
+          policyDataService.setFrameworksList(source || [])
+        }
+        this.frameworks = (source || []).map((fw) => ({
+          id: fw.FrameworkId || fw.id,
+          name: fw.FrameworkName || fw.name
         }))
-        console.log('✅ DEBUG: Frameworks loaded:', this.frameworks)
-        
-        // Check for selected framework from session after loading frameworks
+        console.log('✅ FrameworkApprover frameworks:', this.frameworks.length)
         await this.checkSelectedFrameworkFromSession()
+        if (usedWarmCache) {
+          void policyStore.getAllFrameworks({ force: true }).then((fresh) => {
+            if (!Array.isArray(fresh) || !fresh.length) return
+            policyDataService.setFrameworksList(fresh)
+            this.frameworks = fresh.map((fw) => ({
+              id: fw.FrameworkId || fw.id,
+              name: fw.FrameworkName || fw.name
+            }))
+          }).catch(() => {})
+        }
       } catch (error) {
-        console.error('❌ DEBUG: Error fetching frameworks:', error)
+        console.error('❌ Error fetching frameworks:', error)
       }
     },
 
@@ -680,7 +720,14 @@ export default {
     async checkSelectedFrameworkFromSession() {
       try {
         console.log('🔍 DEBUG: Checking for selected framework from session in FrameworkApprover...')
-        const response = await axios.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED)
+        const frameworkStore = useFrameworkStore()
+        await frameworkStore.loadFrameworkFromSession()
+        const response = {
+          data: {
+            success: true,
+            frameworkId: frameworkStore.selectedFrameworkId,
+          },
+        }
         console.log('📊 DEBUG: Selected framework response:', response.data)
         
         if (response.data && response.data.success && response.data.frameworkId) {
@@ -694,24 +741,10 @@ export default {
             this.selectedFrameworkId = sessionFrameworkId.toString()
             console.log('✅ DEBUG: Set selectedFrameworkId from session:', this.selectedFrameworkId)
             console.log('✅ DEBUG: Framework exists in loaded frameworks:', frameworkExists.name)
-            
-            // Save to session to ensure it's properly set (in case it wasn't saved before)
-            try {
-              const userId = localStorage.getItem('user_id') || 'default_user'
-              await axios.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, {
-                frameworkId: this.selectedFrameworkId,
-                userId: userId
-              })
-            } catch (error) {
-              console.error('❌ Error saving framework to session:', error)
-            }
-            
-            // Reload tasks after framework is set from session
-            // This ensures data is loaded with the correct framework filter
+            // Pinia already hydrated from loadFrameworkFromSession(); avoid redundant POST set-selected.
             if (this.userInitialized) {
               console.log('🔄 Reloading tasks with framework filter from session:', this.selectedFrameworkId)
-              await this.loadUserTasks()
-              await this.fetchRejectedFrameworks()
+              await Promise.all([this.loadUserTasks(), this.fetchRejectedFrameworks()])
             }
           } else {
             console.log('⚠️ DEBUG: Framework from session not found in loaded frameworks')
@@ -730,6 +763,14 @@ export default {
 
     // Handle framework selection change
     async onFrameworkSelectionChange(value) {
+      if (
+        this.isInitializingFrameworkSelection &&
+        (value === undefined || value === null || value === '')
+      ) {
+        console.log('⏭️ Ignoring empty framework change during initialization')
+        return
+      }
+
       // CustomDropdown emits the value directly when using :options prop
       // v-model should already update selectedFrameworkId, but handle the event value too
       if (value !== undefined && value !== null && value !== '') {
@@ -747,32 +788,23 @@ export default {
       // Save the selected framework to session or clear it
       if (this.selectedFrameworkId && this.selectedFrameworkId !== '') {
         try {
-          const userId = localStorage.getItem('user_id') || 'default_user'
-          console.log('🔍 DEBUG: Saving framework to session in FrameworkApprover:', this.selectedFrameworkId)
-          
-          const response = await axios.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, {
-            frameworkId: this.selectedFrameworkId,
-            userId: userId
+          console.log('🔍 DEBUG: Saving framework via frameworkStore in FrameworkApprover:', this.selectedFrameworkId)
+          const selected = this.frameworks.find(
+            (f) => String(f.id) === String(this.selectedFrameworkId)
+          )
+          await useFrameworkStore().setFramework({
+            id: this.selectedFrameworkId,
+            name: selected?.name || 'Selected Framework',
           })
-          
-          if (response.data && response.data.success) {
-            console.log('✅ DEBUG: Framework saved to session successfully in FrameworkApprover')
-            console.log('🔑 DEBUG: Session key:', response.data.sessionKey)
-          } else {
-            console.error('❌ DEBUG: Failed to save framework to session in FrameworkApprover')
-          }
+          console.log('✅ DEBUG: Framework saved via frameworkStore in FrameworkApprover')
         } catch (error) {
-          console.error('❌ DEBUG: Error saving framework to session in FrameworkApprover:', error)
+          console.error('❌ DEBUG: Error saving framework via frameworkStore in FrameworkApprover:', error)
         }
       } else {
         // Clear session if no framework selected (All Frameworks)
         console.log('🧹 Clearing framework from session (All Frameworks selected)')
         try {
-          const userId = localStorage.getItem('user_id') || 'default_user'
-          await axios.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, {
-            frameworkId: null,
-            userId: userId
-          })
+          await useFrameworkStore().resetFramework()
           console.log('✅ Framework cleared from session successfully')
         } catch (error) {
           console.error('❌ Error clearing framework from session:', error)
@@ -817,12 +849,14 @@ export default {
 
     // Load user tasks (following Policy Approval pattern)
     async loadUserTasks() {
-      const targetUserId = this.selectedUserId || this.currentUserId;
+      const selected = this.normalizeFrameworkUserId(this.selectedUserId);
+      const current = this.normalizeFrameworkUserId(this.currentUserId);
+      const targetUserId = selected ?? current;
       console.log('Loading user tasks for user:', targetUserId);
       console.log('Is GRC Administrator:', this.isGRCAdministrator);
       
       // If administrator and no user selected, don't load any tasks
-      if (this.isGRCAdministrator && !this.selectedUserId) {
+      if (this.isGRCAdministrator && selected == null) {
         console.log('Administrator with no user selected - clearing tasks');
         this.myTasks = [];
         this.reviewerTasks = [];
@@ -830,11 +864,10 @@ export default {
       }
       
       try {
-        // Fetch My Tasks (where user is the creator/owner)
-        await this.fetchMyTasks(targetUserId);
-        
-        // Fetch Reviewer Tasks (where user is the reviewer)
-        await this.fetchReviewerTasks(targetUserId);
+        await Promise.all([
+          this.fetchMyTasks(targetUserId),
+          this.fetchReviewerTasks(targetUserId),
+        ])
       } catch (error) {
         console.error('Error loading user tasks:', error);
         this.myTasks = [];
@@ -845,7 +878,12 @@ export default {
     // Fetch My Tasks (created by user)
     async fetchMyTasks(userId) {
       try {
-        console.log('🔍 DEBUG: fetchMyTasks called with userId:', userId);
+        const uid = this.normalizeFrameworkUserId(userId);
+        if (uid == null) {
+          this.myTasks = [];
+          return;
+        }
+        console.log('🔍 DEBUG: fetchMyTasks called with userId:', uid);
         
         // Prepare params with framework filter if selected
         const params = {};
@@ -857,7 +895,7 @@ export default {
         }
         
         // Fetch framework approvals where user is the creator
-        const response = await axios.get(API_ENDPOINTS.FRAMEWORK_APPROVALS_USER(userId), { params });
+        const response = await axios.get(API_ENDPOINTS.FRAMEWORK_APPROVALS_USER(uid), { params });
         
         let approvalsData;
         if (response.data.success && response.data.data) {
@@ -869,11 +907,11 @@ export default {
         }
         
         console.log('🔍 DEBUG: My Tasks API Response:', {
-          userId,
+          userId: uid,
           responseData: response.data,
           approvalsDataLength: approvalsData.length,
           firstFewApprovals: approvalsData.slice(0, 3),
-          url: API_ENDPOINTS.FRAMEWORK_APPROVALS_USER(userId)
+          url: API_ENDPOINTS.FRAMEWORK_APPROVALS_USER(uid)
         });
 
         this.myTasks = approvalsData.map(approval => {
@@ -910,7 +948,12 @@ export default {
     // Fetch Reviewer Tasks (where user is reviewer)
     async fetchReviewerTasks(userId) {
       try {
-        console.log('🔍 DEBUG: fetchReviewerTasks called with userId:', userId);
+        const uid = this.normalizeFrameworkUserId(userId);
+        if (uid == null) {
+          this.reviewerTasks = [];
+          return;
+        }
+        console.log('🔍 DEBUG: fetchReviewerTasks called with userId:', uid);
         
         // Prepare params with framework filter if selected
         const params = {};
@@ -922,7 +965,7 @@ export default {
         }
         
         // Fetch framework approvals where user is the reviewer
-        const response = await axios.get(API_ENDPOINTS.FRAMEWORK_APPROVALS_REVIEWER(userId), { params });
+        const response = await axios.get(API_ENDPOINTS.FRAMEWORK_APPROVALS_REVIEWER(uid), { params });
         
         let approvalsData;
         if (response.data.success && response.data.data) {
@@ -934,11 +977,11 @@ export default {
         }
         
         console.log('🔍 DEBUG: Reviewer Tasks API Response:', {
-          userId,
+          userId: uid,
           responseData: response.data,
           approvalsDataLength: approvalsData.length,
           firstFewApprovals: approvalsData.slice(0, 3),
-          url: API_ENDPOINTS.FRAMEWORK_APPROVALS_REVIEWER(userId)
+          url: API_ENDPOINTS.FRAMEWORK_APPROVALS_REVIEWER(uid)
         });
 
         this.reviewerTasks = approvalsData.map(approval => {
@@ -1148,8 +1191,7 @@ export default {
     },
     
     async refreshData() {
-      await this.loadUserTasks();
-      await this.fetchRejectedFrameworks();
+      await Promise.all([this.loadUserTasks(), this.fetchRejectedFrameworks()])
     },
     
     formatDate(dateString) {
@@ -1267,43 +1309,42 @@ export default {
         const url = API_ENDPOINTS.FRAMEWORK_POLICY_SUBPOLICY_APPROVE_REJECT(frameworkId, policy.PolicyId, subpolicy.SubPolicyId);
         console.log('DEBUG: Calling URL:', url);
         
-        // Call backend endpoint for subpolicy rejection
-        axios.put(url, {
-            approved: false,
+        const payload = {
+          approved: false,
           rejection_reason: this.rejectionComment,
-          submit_review: true // Add flag to submit review automatically
-        })
-          .then(response => {
-            console.log('Subpolicy rejected successfully:', response.data);
+          submit_review: true
+        };
 
-          // Update local state
-            subpolicy.Status = 'Rejected';
-            policy.Status = 'Rejected';
-            if (policy.subpolicies) {
-              policy.subpolicies.forEach(sp => {
-                sp.Status = 'Rejected';
-              });
+        subpolicy.Status = 'Rejected';
+        policy.Status = 'Rejected';
+        if (policy.subpolicies) {
+          policy.subpolicies.forEach(sp => {
+            sp.Status = 'Rejected';
+          });
+        }
+        this.selectedApproval.ExtractedData.Status = 'Rejected';
+        this.selectedApproval.ApprovedNot = false;
+
+        PopupService.success('Subpolicy rejected. Framework has been rejected and sent back for revision.', 'Subpolicy Rejected');
+        this.cancelRejection();
+
+        apiService
+          .put(url, payload, { background: true })
+          .then((data) => {
+            if (data?.ApprovalId) {
+              this.selectedApproval.ApprovalId = data.ApprovalId;
             }
-            this.selectedApproval.ExtractedData.Status = 'Rejected';
-            this.selectedApproval.ApprovedNot = false;
-            
-            // Update the approval record with the response data if available
-            if (response.data.ApprovalId) {
-              this.selectedApproval.ApprovalId = response.data.ApprovalId;
+            if (data?.Version) {
+              this.selectedApproval.Version = data.Version;
             }
-            if (response.data.Version) {
-              this.selectedApproval.Version = response.data.Version;
-            }
-            
-            PopupService.success('Subpolicy rejected. Framework has been rejected and sent back for revision.', 'Subpolicy Rejected');
-            this.cancelRejection();
             this.fetchFrameworks();
             this.fetchRejectedFrameworks();
           })
-          .catch(error => {
+          .catch((error) => {
             console.log('DEBUG: Error rejecting subpolicy:', error);
-            console.log('DEBUG: Error response:', error.response);
             this.handleError(error, 'rejecting subpolicy');
+            this.fetchFrameworks();
+            this.fetchRejectedFrameworks();
           })
           .finally(() => {
             this.isSubmittingRejection = false;
@@ -1317,71 +1358,56 @@ export default {
         const url = API_ENDPOINTS.FRAMEWORK_POLICY_APPROVE_REJECT(frameworkId, policy.PolicyId);
         console.log('DEBUG: Calling URL:', url);
         
-        // Call backend endpoint for policy rejection
-        axios.put(url, {
+        const policyRejectPayload = {
           approved: false,
           rejection_reason: this.rejectionComment,
-          submit_review: true // Add flag to submit review automatically
-        })
-          .then(response => {
-            console.log('Policy rejected successfully:', response.data);
+          submit_review: true
+        };
 
-          // Update local state
-            policy.Status = 'Rejected';
-            if (policy.subpolicies) {
-              policy.subpolicies.forEach(subpolicy => {
-                subpolicy.Status = 'Rejected';
-              });
+        policy.Status = 'Rejected';
+        if (policy.subpolicies) {
+          policy.subpolicies.forEach(sp => {
+            sp.Status = 'Rejected';
+          });
+        }
+        this.selectedApproval.ExtractedData.Status = 'Rejected';
+        this.selectedApproval.ApprovedNot = false;
+
+        PopupService.success('Policy rejected. Framework has been rejected and sent back for revision.', 'Policy Rejected');
+        this.cancelRejection();
+
+        apiService
+          .put(url, policyRejectPayload, { background: true })
+          .then((data) => {
+            console.log('Policy rejected successfully:', data);
+            if (data?.ApprovalId) {
+              this.selectedApproval.ApprovalId = data.ApprovalId;
             }
-            this.selectedApproval.ExtractedData.Status = 'Rejected';
-            this.selectedApproval.ApprovedNot = false;
-            
-            // Update the approval record with the response data if available
-            if (response.data.ApprovalId) {
-              this.selectedApproval.ApprovalId = response.data.ApprovalId;
+            if (data?.Version) {
+              this.selectedApproval.Version = data.Version;
             }
-            if (response.data.Version) {
-              this.selectedApproval.Version = response.data.Version;
-            }
-            
-            PopupService.success('Policy rejected. Framework has been rejected and sent back for revision.', 'Policy Rejected');
-            this.cancelRejection();
             this.fetchFrameworks();
             this.fetchRejectedFrameworks();
           })
-          .catch(error => {
+          .catch((error) => {
             console.log('DEBUG: Error rejecting policy:', error);
-            console.log('DEBUG: Error response:', error.response);
             this.handleError(error, 'rejecting policy');
+            this.fetchFrameworks();
+            this.fetchRejectedFrameworks();
           })
           .finally(() => {
             this.isSubmittingRejection = false;
           });
           
       } else if (this.currentRejectionType === 'framework') {
-        // For direct framework rejection, use submitFrameworkReview with rejection reason
         if (!this.selectedApproval || !this.selectedApproval.FrameworkId) {
           console.error('No framework selected for rejection');
           this.cancelRejection();
-            return;
-          }
-        
-        // Initialize framework approval if doesn't exist
-        if (!this.selectedApproval.ExtractedData.framework_approval) {
-          this.selectedApproval.ExtractedData.framework_approval = {};
+          return;
         }
-        
-        // Update the framework status and approval state in the UI
-        this.selectedApproval.ExtractedData.framework_approval.approved = false;
-        this.selectedApproval.ExtractedData.framework_approval.remarks = this.rejectionComment;
-        this.selectedApproval.ExtractedData.Status = 'Rejected';
-        this.selectedApproval.ApprovedNot = false;
-        
-        // Submit the review with rejection data
-        this.submitFrameworkReview(false, this.rejectionComment);
-        
+        const remarks = this.rejectionComment;
         this.cancelRejection();
-        this.isSubmittingRejection = false;
+        this.submitFrameworkReview(false, remarks);
       }
     },
     
@@ -1485,61 +1511,71 @@ export default {
         reviewData.ExtractedData.framework_approval.remarks = remarks;
       }
       
-      // Submit framework review
-      axios.post(API_ENDPOINTS.FRAMEWORK_SUBMIT_REVIEW(frameworkId), reviewData)
-        .then(response => {
-          console.log('Framework review submitted successfully:', response.data);
-          console.log('Response data details:', {
-            ApprovalId: response.data.ApprovalId,
-            Version: response.data.Version,
-            ApprovedNot: response.data.ApprovedNot,
-            ApprovedDate: response.data.ApprovedDate
-          });
-          
-          // Reset loading state
-          this.isSubmittingRejection = false;
-          
-          // Update the approval data with the response
-          this.selectedApproval.ApprovedNot = approved;
-          this.selectedApproval.Version = response.data.Version;
-          
-          if (approved) {
-            this.selectedApproval.ExtractedData.Status = 'Approved';
-            
-            // Store the approval date from the response
-            if (response.data.ApprovedDate) {
-              this.selectedApproval.ApprovedDate = response.data.ApprovedDate;
-            }
-            
-            // Update all policies and subpolicies to Approved status in the UI
-            if (this.selectedApproval.ExtractedData.policies) {
-              this.selectedApproval.ExtractedData.policies.forEach(policy => {
-                policy.Status = 'Approved';
-                
-                if (policy.subpolicies) {
-                  policy.subpolicies.forEach(subpolicy => {
-                    subpolicy.Status = 'Approved';
-                  });
-                }
+      const uiSnapshot = {
+        extractedData: JSON.parse(JSON.stringify(this.selectedApproval.ExtractedData)),
+        approvedNot: this.selectedApproval.ApprovedNot,
+        version: this.selectedApproval.Version,
+        approvalId: this.selectedApproval.ApprovalId,
+        approvedDate: this.selectedApproval.ApprovedDate
+      };
+
+      this.selectedApproval.ApprovedNot = approved;
+      if (approved) {
+        this.selectedApproval.ExtractedData.Status = 'Approved';
+        if (this.selectedApproval.ExtractedData.policies) {
+          this.selectedApproval.ExtractedData.policies.forEach(policy => {
+            policy.Status = 'Approved';
+            policy.ActiveInactive = 'Active';
+            if (policy.subpolicies) {
+              policy.subpolicies.forEach(subpolicy => {
+                subpolicy.Status = 'Approved';
               });
             }
-            
-            PopupService.success('Framework approved successfully!', 'Framework Approved');
-          } else {
-            this.selectedApproval.ExtractedData.Status = 'Rejected';
-            console.log('Framework rejected - updating UI state');
-            PopupService.success('Framework rejected successfully!', 'Framework Rejected');
+          });
+        }
+        this.selectedApproval.ExtractedData.ActiveInactive = 'Active';
+        PopupService.success('Framework approved successfully!', 'Framework Approved');
+      } else {
+        this.selectedApproval.ExtractedData.Status = 'Rejected';
+        if (remarks) {
+          if (!this.selectedApproval.ExtractedData.framework_approval) {
+            this.selectedApproval.ExtractedData.framework_approval = {};
           }
-          
-          // Refresh the frameworks list
-          console.log('Refreshing frameworks list after review submission');
+          this.selectedApproval.ExtractedData.framework_approval.approved = false;
+          this.selectedApproval.ExtractedData.framework_approval.remarks = remarks;
+        }
+        PopupService.success('Framework rejected successfully!', 'Framework Rejected');
+      }
+
+      this.isSubmittingRejection = false;
+
+      const restoreFrameworkReviewUi = () => {
+        this.selectedApproval.ExtractedData = uiSnapshot.extractedData;
+        this.selectedApproval.ApprovedNot = uiSnapshot.approvedNot;
+        this.selectedApproval.Version = uiSnapshot.version;
+        this.selectedApproval.ApprovalId = uiSnapshot.approvalId;
+        this.selectedApproval.ApprovedDate = uiSnapshot.approvedDate;
+      };
+
+      apiService
+        .post(API_ENDPOINTS.FRAMEWORK_SUBMIT_REVIEW(frameworkId), reviewData, { background: true })
+        .then((data) => {
+          console.log('Framework review submitted successfully:', data);
+          if (data?.Version != null) {
+            this.selectedApproval.Version = data.Version;
+          }
+          if (data?.ApprovalId != null) {
+            this.selectedApproval.ApprovalId = data.ApprovalId;
+          }
+          if (approved && data?.ApprovedDate) {
+            this.selectedApproval.ApprovedDate = data.ApprovedDate;
+          }
           this.fetchFrameworks();
           this.fetchRejectedFrameworks();
         })
-        .catch(error => {
+        .catch((error) => {
+          restoreFrameworkReviewUi();
           this.handleError(error, 'submitting framework review');
-          // Reset loading state on error
-          this.isSubmittingRejection = false;
         });
     },
     
@@ -1547,7 +1583,9 @@ export default {
       console.log('Fetching rejected frameworks...');
       
       // Determine which user ID to use for API calls
-      const userIdForAPI = this.selectedUserId || this.currentUserId;
+      const userIdForAPI =
+        this.normalizeFrameworkUserId(this.selectedUserId) ??
+        this.normalizeFrameworkUserId(this.currentUserId);
       console.log('Using user ID for rejected frameworks:', userIdForAPI);
       
       if (!userIdForAPI) {
@@ -1917,30 +1955,30 @@ export default {
       }
 
       const frameworkId = this.getFrameworkId(this.selectedApproval);
+      const previousPolicyStatus = policy.Status;
+      const previousFrameworkStatus = this.selectedApproval.ExtractedData.Status;
 
-      // Call backend endpoint
-      axios.put(API_ENDPOINTS.FRAMEWORK_POLICY_APPROVE_REJECT(frameworkId, policy.PolicyId), {
-        approved: true,
-        submit_review: false // Don't submit review automatically
-      })
-        .then(response => {
-          console.log('Policy approved successfully:', response.data);
+      policy.Status = 'Approved';
 
-          // Update policy status
-          policy.Status = 'Approved';
+      const allPoliciesApproved = this.selectedApproval.ExtractedData.policies.every(p =>
+        p.Status === 'Approved' || (p.subpolicies && p.subpolicies.every(sub => sub.Status === 'Approved'))
+      );
 
-          // Check if all policies are approved to update framework status
-          const allPoliciesApproved = this.selectedApproval.ExtractedData.policies.every(p => 
-            p.Status === 'Approved' || (p.subpolicies && p.subpolicies.every(sub => sub.Status === 'Approved'))
-          );
+      if (allPoliciesApproved) {
+        this.selectedApproval.ExtractedData.Status = 'Ready for Final Approval';
+      }
 
-          if (allPoliciesApproved) {
-            this.selectedApproval.ExtractedData.Status = 'Ready for Final Approval';
-          }
+      PopupService.success('Policy approved successfully!', 'Policy Approved');
 
-          PopupService.success('Policy approved successfully!', 'Policy Approved');
-        })
-        .catch(error => {
+      apiService
+        .put(
+          API_ENDPOINTS.FRAMEWORK_POLICY_APPROVE_REJECT(frameworkId, policy.PolicyId),
+          { approved: true, submit_review: false },
+          { background: true }
+        )
+        .catch((error) => {
+          policy.Status = previousPolicyStatus;
+          this.selectedApproval.ExtractedData.Status = previousFrameworkStatus;
           this.handleError(error, 'approving policy');
         });
     },
@@ -1989,31 +2027,34 @@ export default {
       }
       
       const frameworkId = this.getFrameworkId(this.selectedApproval);
-      
-      // Call backend endpoint
-      axios.put(API_ENDPOINTS.FRAMEWORK_POLICY_SUBPOLICY_APPROVE_REJECT(frameworkId, policy.PolicyId, subpolicy.SubPolicyId), {
-          approved: true,
-        submit_review: false // Don't submit review automatically
-      })
-        .then(response => {
-          console.log('Subpolicy approved successfully:', response.data);
-          
-          // Update subpolicy status
-          subpolicy.Status = 'Approved';
-          
-          // Check if all subpolicies in this policy are approved
-          const allSubpoliciesApproved = policy.subpolicies && 
-            policy.subpolicies.every(sp => sp.Status === 'Approved');
-          
-          if (allSubpoliciesApproved) {
-            // Update policy status to indicate it's ready for approval
-            policy.Status = 'Ready for Approval';
-            PopupService.success('All subpolicies approved. Policy is now ready for approval.', 'Subpolicies Approved');
-          } else {
-            PopupService.success('Subpolicy approved successfully!', 'Subpolicy Approved');
-          }
-        })
-        .catch(error => {
+      const previousSubStatus = subpolicy.Status;
+      const previousPolicyStatus = policy.Status;
+
+      subpolicy.Status = 'Approved';
+
+      const allSubpoliciesApproved = policy.subpolicies &&
+        policy.subpolicies.every(sp => sp.Status === 'Approved');
+
+      let subpolicySuccessTitle = 'Subpolicy Approved';
+      let subpolicySuccessMessage = 'Subpolicy approved successfully!';
+
+      if (allSubpoliciesApproved) {
+        policy.Status = 'Ready for Approval';
+        subpolicySuccessTitle = 'Subpolicies Approved';
+        subpolicySuccessMessage = 'All subpolicies approved. Policy is now ready for approval.';
+      }
+
+      PopupService.success(subpolicySuccessMessage, subpolicySuccessTitle);
+
+      apiService
+        .put(
+          API_ENDPOINTS.FRAMEWORK_POLICY_SUBPOLICY_APPROVE_REJECT(frameworkId, policy.PolicyId, subpolicy.SubPolicyId),
+          { approved: true, submit_review: false },
+          { background: true }
+        )
+        .catch((error) => {
+          subpolicy.Status = previousSubStatus;
+          policy.Status = previousPolicyStatus;
           this.handleError(error, 'approving subpolicy');
         });
     },
@@ -2084,42 +2125,65 @@ export default {
     },
     
     proceedWithFrameworkApproval() {
-      
       const frameworkId = this.getFrameworkId(this.selectedApproval);
-      
-      // Call backend endpoint for final framework approval
-      axios.put(API_ENDPOINTS.FRAMEWORK_APPROVE_FINAL(frameworkId))
-        .then(response => {
-          console.log('Framework approved successfully:', response.data);
-          
-          // Update framework status and store approval date
-          this.selectedApproval.ExtractedData.Status = 'Approved';
-          this.selectedApproval.ApprovedNot = true;
-          
-          // Store the approval date from the response
-          if (response.data.ApprovedDate) {
-            this.selectedApproval.ApprovedDate = response.data.ApprovedDate;
-          }
-          
-          // Update all policies and subpolicies to Approved status
-          if (this.selectedApproval.ExtractedData.policies) {
-            this.selectedApproval.ExtractedData.policies.forEach(policy => {
-              policy.Status = 'Approved';
-              
-              if (policy.subpolicies) {
-                policy.subpolicies.forEach(subpolicy => {
-                  subpolicy.Status = 'Approved';
-                });
-              }
+
+      const snap = {
+        extractedStatus: this.selectedApproval.ExtractedData.Status,
+        approvedNot: this.selectedApproval.ApprovedNot,
+        approvedDate: this.selectedApproval.ApprovedDate,
+        policies: this.selectedApproval.ExtractedData.policies
+          ? this.selectedApproval.ExtractedData.policies.map(p => ({
+              status: p.Status,
+              subStatuses: p.subpolicies ? p.subpolicies.map(s => s.Status) : []
+            }))
+          : []
+      };
+
+      this.selectedApproval.ExtractedData.Status = 'Approved';
+      this.selectedApproval.ApprovedNot = true;
+
+      if (this.selectedApproval.ExtractedData.policies) {
+        this.selectedApproval.ExtractedData.policies.forEach(p => {
+          p.Status = 'Approved';
+          if (p.subpolicies) {
+            p.subpolicies.forEach(sp => {
+              sp.Status = 'Approved';
             });
           }
-          
-          PopupService.success('Framework approved successfully!', 'Framework Approved');
-          
-          // Refresh the frameworks list
+        });
+      }
+
+      PopupService.success('Framework approved successfully!', 'Framework Approved');
+
+      const restoreFinalApproval = () => {
+        this.selectedApproval.ExtractedData.Status = snap.extractedStatus;
+        this.selectedApproval.ApprovedNot = snap.approvedNot;
+        this.selectedApproval.ApprovedDate = snap.approvedDate;
+        if (this.selectedApproval.ExtractedData.policies && snap.policies.length) {
+          this.selectedApproval.ExtractedData.policies.forEach((p, i) => {
+            const ps = snap.policies[i];
+            if (!ps) return;
+            p.Status = ps.status;
+            if (p.subpolicies && ps.subStatuses) {
+              p.subpolicies.forEach((sp, j) => {
+                if (ps.subStatuses[j] !== undefined) sp.Status = ps.subStatuses[j];
+              });
+            }
+          });
+        }
+      };
+
+      apiService
+        .put(API_ENDPOINTS.FRAMEWORK_APPROVE_FINAL(frameworkId), {}, { background: true })
+        .then((data) => {
+          console.log('Framework approved successfully:', data);
+          if (data?.ApprovedDate) {
+            this.selectedApproval.ApprovedDate = data.ApprovedDate;
+          }
           this.fetchFrameworks();
         })
-        .catch(error => {
+        .catch((error) => {
+          restoreFinalApproval();
           this.handleError(error, 'approving entire framework');
         });
     },
@@ -2190,42 +2254,28 @@ export default {
       return validationErrors;
     },
     
-    fetchPolicyTypes() {
-      console.log('Fetching policy categories...');
-      axios.get(API_ENDPOINTS.POLICY_CATEGORIES)
-        .then(response => {
-          console.log('Policy categories response:', response.data);
-          // Store the raw categories data
-          this.policyCategories = response.data;
-          
-          // Create a structured map for easier filtering
-          const typeMap = {};
-          
-          // Process the categories into a nested structure
-          response.data.forEach(category => {
-            if (!typeMap[category.PolicyType]) {
-              typeMap[category.PolicyType] = {
-                categories: {}
-              };
-            }
-            
-            if (!typeMap[category.PolicyType].categories[category.PolicyCategory]) {
-              typeMap[category.PolicyType].categories[category.PolicyCategory] = {
-                subCategories: []
-              };
-            }
-            
-            typeMap[category.PolicyType].categories[category.PolicyCategory].subCategories.push(
-              category.PolicySubCategory
-            );
-          });
-          
-          this.policyCategoriesMap = typeMap;
-          console.log('Processed policy categories map:', this.policyCategoriesMap);
+    async fetchPolicyTypes() {
+      console.log('Fetching policy categories (Pinia cache first)...')
+      try {
+        const data = await usePolicyStore().getPolicyCategoriesList({ force: false })
+        const rows = Array.isArray(data) ? data : []
+        this.policyCategories = rows
+        const typeMap = {}
+        rows.forEach((category) => {
+          if (!typeMap[category.PolicyType]) {
+            typeMap[category.PolicyType] = { categories: {} }
+          }
+          if (!typeMap[category.PolicyType].categories[category.PolicyCategory]) {
+            typeMap[category.PolicyType].categories[category.PolicyCategory] = { subCategories: [] }
+          }
+          typeMap[category.PolicyType].categories[category.PolicyCategory].subCategories.push(
+            category.PolicySubCategory
+          )
         })
-        .catch(error => {
-          console.error('Error fetching policy categories:', error);
-        });
+        this.policyCategoriesMap = typeMap
+      } catch (error) {
+        console.error('Error fetching policy categories:', error)
+      }
     },
     
     // Helper method to initialize or update policy category fields
@@ -2348,8 +2398,10 @@ export default {
 
     // Helper method to check if framework belongs to current user's tasks
     isMyFramework(framework) {
-      const currentUserId = this.selectedUserId || this.currentUserId;
-      if (!currentUserId) return false;
+      const currentUserId =
+        this.normalizeFrameworkUserId(this.selectedUserId) ??
+        this.normalizeFrameworkUserId(this.currentUserId);
+      if (currentUserId == null) return false;
       
       // Check if framework was created by the current user
       // Compare by user ID (most reliable) or by user name as fallback
@@ -2371,17 +2423,20 @@ export default {
 
     // Helper method to check if framework is assigned for review
     isReviewerFramework(framework) {
-      const currentUserId = this.selectedUserId || this.currentUserId;
-      if (!currentUserId) {
+      const currentUserId =
+        this.normalizeFrameworkUserId(this.selectedUserId) ??
+        this.normalizeFrameworkUserId(this.currentUserId);
+      if (currentUserId == null) {
         console.log(`⚠️ No currentUserId in isReviewerFramework for framework ${framework.FrameworkId}`);
         return false;
       }
       
       // For GRC Administrators viewing a specific user, check if that user is the reviewer
-      if (this.isGRCAdministrator && this.selectedUserId) {
-        const isReviewer = framework.ReviewerId === this.selectedUserId ||
-                          framework.ExtractedData?.Reviewer === this.selectedUserId;
-        console.log(`🔍 GRC Admin checking framework ${framework.FrameworkId} for user ${this.selectedUserId}:`, {
+      const adminSelectedId = this.normalizeFrameworkUserId(this.selectedUserId);
+      if (this.isGRCAdministrator && adminSelectedId != null) {
+        const isReviewer = String(framework.ReviewerId) === String(adminSelectedId) ||
+                          String(framework.ExtractedData?.Reviewer) === String(adminSelectedId);
+        console.log(`🔍 GRC Admin checking framework ${framework.FrameworkId} for user ${adminSelectedId}:`, {
           reviewerId: framework.ReviewerId,
           extractedReviewer: framework.ExtractedData?.Reviewer,
           isReviewer: isReviewer
@@ -2407,8 +2462,9 @@ export default {
 
     // Helper method to get current user name
     getCurrentUserName() {
-      if (this.selectedUserId && this.availableUsers.length > 0) {
-        const selectedUser = this.availableUsers.find(u => u.UserId === this.selectedUserId);
+      const sid = this.normalizeFrameworkUserId(this.selectedUserId);
+      if (sid != null && this.availableUsers.length > 0) {
+        const selectedUser = this.availableUsers.find(u => String(u.UserId) === String(sid));
         return selectedUser ? selectedUser.UserName : '';
       }
       // For current user, use stored username or fallback to localStorage
@@ -2434,17 +2490,19 @@ export default {
     },
     // Watch for selectedUserId changes to reload tasks
     selectedUserId(newVal, oldVal) {
-      if (this.userInitialized && newVal !== oldVal) {
-        console.log('🔄 selectedUserId changed from', oldVal, 'to', newVal);
-        // Only reload if user is actually selected (not clearing)
-        if (newVal) {
-          this.loadUserTasks();
-          this.fetchRejectedFrameworks();
-        } else {
-          this.myTasks = [];
-          this.reviewerTasks = [];
-          this.rejectedFrameworks = [];
-        }
+      if (!this.userInitialized || newVal === oldVal) return;
+      const normalized = this.normalizeFrameworkUserId(newVal);
+      if (normalized !== newVal) {
+        this.selectedUserId = normalized;
+        return;
+      }
+      console.log('🔄 selectedUserId changed from', oldVal, 'to', newVal);
+      if (normalized != null) {
+        void Promise.all([this.loadUserTasks(), this.fetchRejectedFrameworks()]);
+      } else {
+        this.myTasks = [];
+        this.reviewerTasks = [];
+        this.rejectedFrameworks = [];
       }
     },
     // Watch for selectedFrameworkId changes to reload tasks

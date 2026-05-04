@@ -14,9 +14,11 @@
     </div>
 
     <!-- Loading State -->
-    <div v-if="loading" class="policy_loading_container">
-      <div class="policy_loading_spinner"></div>
-      <p>Loading policy details...</p>
+    <div v-if="loading" class="policy-mod-sk" aria-busy="true" aria-label="Loading policy details">
+      <div class="policy-mod-sk__hero"></div>
+      <div class="policy-mod-sk__table">
+        <div v-for="n in 8" :key="'pd-sk-' + n" class="policy-mod-sk__row"></div>
+      </div>
     </div>
 
     <!-- Error State -->
@@ -59,13 +61,19 @@
           <button 
             class="btn-approve" 
             @click="approveEntirePolicy()" 
+            :disabled="isSubmittingRejection"
             v-if="canPerformReviewActions(selectedApproval) && canApprovePolicy() && selectedApproval.ApprovedNot === null && selectedApproval.ExtractedData?.Status !== 'Rejected'"
           >
             Final Approval
           </button>
           
           <!-- Reject Button - Show when policy is under review -->
-          <button class="btn-reject" @click="rejectPolicy()" v-if="canPerformReviewActions(selectedApproval) && selectedApproval.ApprovedNot === null && selectedApproval.ExtractedData?.Status !== 'Rejected'">
+          <button
+            class="btn-reject"
+            :disabled="isSubmittingRejection"
+            @click="rejectPolicy()"
+            v-if="canPerformReviewActions(selectedApproval) && selectedApproval.ApprovedNot === null && selectedApproval.ExtractedData?.Status !== 'Rejected'"
+          >
             reject
           </button>
           
@@ -131,13 +139,14 @@
                 <button 
                   class="approve-subpolicy-btn" 
                   @click="approveSubpolicy(subpolicy)"
-                  :disabled="subpolicy.Status === 'Approved'"
+                  :disabled="isSubmittingRejection || subpolicy.Status === 'Approved'"
                 >
                   <i class="fas fa-check"></i>
                 </button>
                 <button 
                   class="reject-subpolicy-btn" 
                   @click="rejectSubpolicy(subpolicy)"
+                  :disabled="isSubmittingRejection || subpolicy.Status === 'Rejected'"
                 >
                   <i class="fas fa-times"></i>
                 </button>
@@ -210,6 +219,7 @@ import apiService from '@/services/apiService.js'
 import { PopupService } from '@/modules/popus/popupService'
 import PopupModal from '@/modules/popus/PopupModal.vue'
 import { API_ENDPOINTS } from '../../config/api.js'
+import { usePolicyStore } from '@/stores/policy'
 
 export default {
   name: 'PolicyDetails',
@@ -409,7 +419,47 @@ export default {
               }
             } catch (policyError) {
               console.error('Error fetching regular policy details:', policyError);
-              // Only throw if the fallback also fails
+              // Cache-first fallback: resolve from policy store list if API path fails.
+              try {
+                const policyStore = usePolicyStore()
+                const cachedPolicies = await policyStore.getAllPolicies()
+                const cachedPolicy = (cachedPolicies || []).find(
+                  (item) => Number(item?.PolicyId || item?.id) === Number(this.policyId)
+                )
+
+                if (cachedPolicy) {
+                  this.selectedApproval = {
+                    PolicyId: cachedPolicy.PolicyId || cachedPolicy.id,
+                    Version: cachedPolicy.CurrentVersion || 'u1',
+                    ApprovedNot: null,
+                    ExtractedData: {
+                      PolicyName: cachedPolicy.PolicyName || cachedPolicy.name,
+                      PolicyDescription: cachedPolicy.PolicyDescription,
+                      Status: cachedPolicy.Status || 'Active',
+                      ActiveInactive: cachedPolicy.ActiveInactive || 'Active',
+                      Department: cachedPolicy.Department,
+                      CreatedByName: cachedPolicy.CreatedByName,
+                      CreatedByDate: cachedPolicy.CreatedByDate,
+                      Applicability: cachedPolicy.Applicability,
+                      DocURL: cachedPolicy.DocURL,
+                      Scope: cachedPolicy.Scope,
+                      Objective: cachedPolicy.Objective,
+                      Identifier: cachedPolicy.Identifier,
+                      PermanentTemporary: cachedPolicy.PermanentTemporary,
+                      StartDate: cachedPolicy.StartDate,
+                      EndDate: cachedPolicy.EndDate,
+                      CurrentVersion: cachedPolicy.CurrentVersion,
+                      subpolicies: cachedPolicy.subpolicies || []
+                    }
+                  }
+                  this.loading = false
+                  return
+                }
+              } catch (cacheError) {
+                console.warn('Policy store fallback failed:', cacheError)
+              }
+
+              // Only throw if API and cache fallback both fail
               throw policyError;
             }
           } else {
@@ -705,43 +755,87 @@ export default {
       return this.areAllSubpoliciesApproved();
     },
 
+    closeRejectModalOnly() {
+      this.showRejectModal = false;
+      this.rejectionComment = '';
+      this.currentRejectionType = 'policy';
+      this.currentRejectionItem = null;
+    },
+
+    snapshotApprovalUi() {
+      if (!this.selectedApproval) return null;
+      return {
+        approvedNot: this.selectedApproval.ApprovedNot,
+        approvedDate: this.selectedApproval.ApprovedDate,
+        version: this.selectedApproval.Version,
+        approvalId: this.selectedApproval.ApprovalId,
+        extractedDataJson: JSON.stringify(this.selectedApproval.ExtractedData),
+      };
+    },
+
+    restoreApprovalUi(snap) {
+      if (!snap || !this.selectedApproval) return;
+      this.selectedApproval.ApprovedNot = snap.approvedNot;
+      this.selectedApproval.ApprovedDate = snap.approvedDate;
+      this.selectedApproval.Version = snap.version;
+      this.selectedApproval.ApprovalId = snap.approvalId;
+      this.selectedApproval.ExtractedData = JSON.parse(snap.extractedDataJson);
+    },
+
     // Policy Actions
     approveSubpolicy(subpolicy) {
       if (!this.selectedApproval || !this.selectedApproval.PolicyId) {
         console.error('No policy selected for subpolicy approval');
         return;
       }
+      if (this.isSubmittingRejection) {
+        return;
+      }
 
-      // Set subpolicy approval status in UI
+      const prevStatus = subpolicy.Status;
+      const prevPolicyStatus = this.selectedApproval.ExtractedData.Status;
+      const hadApproval = subpolicy.approval ? { ...subpolicy.approval } : null;
+
       if (!subpolicy.approval) {
         subpolicy.approval = {};
       }
       subpolicy.approval.approved = true;
       subpolicy.approval.remarks = '';
+      subpolicy.Status = 'Approved';
 
-      // Call backend endpoint for subpolicy review
-      apiService.put(API_ENDPOINTS.SUBPOLICY_REVIEW(subpolicy.SubPolicyId), {
-        Status: 'Approved'
-      })
-        .then(response => {
+      const allSubpoliciesApproved = this.selectedApproval.ExtractedData.subpolicies.every(
+        (sp) => sp.Status === 'Approved'
+      );
+      if (allSubpoliciesApproved) {
+        this.selectedApproval.ExtractedData.Status = 'Ready for Final Approval';
+      }
+
+      PopupService.success('Subpolicy approved successfully!', 'Subpolicy Approved');
+
+      this.isSubmittingRejection = true;
+      apiService
+        .put(
+          API_ENDPOINTS.SUBPOLICY_REVIEW(subpolicy.SubPolicyId),
+          {
+            Status: 'Approved',
+          },
+          { background: true }
+        )
+        .then((response) => {
           console.log('Subpolicy approval submitted successfully:', response);
-          
-          // Update the subpolicy status in the UI
-          subpolicy.Status = 'Approved';
-
-          // Check if all subpolicies are approved to update policy status
-          const allSubpoliciesApproved = this.selectedApproval.ExtractedData.subpolicies.every(sp => 
-            sp.Status === 'Approved'
-          );
-
-          if (allSubpoliciesApproved) {
-            this.selectedApproval.ExtractedData.Status = 'Ready for Final Approval';
-          }
-
-          PopupService.success('Subpolicy approved successfully!', 'Subpolicy Approved');
         })
-        .catch(error => {
+        .catch((error) => {
+          subpolicy.Status = prevStatus;
+          this.selectedApproval.ExtractedData.Status = prevPolicyStatus;
+          if (hadApproval) {
+            subpolicy.approval = { ...hadApproval };
+          } else {
+            delete subpolicy.approval;
+          }
           this.handleError(error, 'approving subpolicy');
+        })
+        .finally(() => {
+          this.isSubmittingRejection = false;
         });
     },
 
@@ -783,59 +877,68 @@ export default {
     },
 
     proceedWithPolicyApproval() {
+      if (this.isSubmittingRejection) {
+        return;
+      }
       const policyId = this.getPolicyId(this.selectedApproval);
-      
-      // Use the same approach as PolicyApprover - submit policy review with approval
       const reviewData = {
         ExtractedData: JSON.parse(JSON.stringify(this.selectedApproval.ExtractedData)),
         approved: true,
         remarks: '',
         UserId: this.selectedApproval.UserId || this.selectedApproval.UserID || this.selectedApproval.ExtractedData?.CreatedBy,
         ReviewerId: this.currentUserId,
-        currentVersion: this.selectedApproval.version || this.selectedApproval.Version || 'u1'
+        currentVersion: this.selectedApproval.version || this.selectedApproval.Version || 'u1',
       };
-      
-      // Set all subpolicies to Approved status
+
       if (reviewData.ExtractedData.subpolicies) {
-        reviewData.ExtractedData.subpolicies.forEach(subpolicy => {
+        reviewData.ExtractedData.subpolicies.forEach((subpolicy) => {
           subpolicy.Status = 'Approved';
         });
       }
-      
-      // Set policy ActiveInactive to Active when approved
       reviewData.ExtractedData.ActiveInactive = 'Active';
-      
-      // Submit policy review
-      apiService.post(API_ENDPOINTS.POLICY_SUBMIT_REVIEW(policyId), reviewData)
-        .then(response => {
+
+      const snap = this.snapshotApprovalUi();
+
+      this.selectedApproval.ExtractedData.Status = 'Approved';
+      this.selectedApproval.ApprovedNot = true;
+      this.selectedApproval.ExtractedData.ActiveInactive = 'Active';
+      if (this.selectedApproval.ExtractedData.subpolicies) {
+        this.selectedApproval.ExtractedData.subpolicies.forEach((subpolicy) => {
+          subpolicy.Status = 'Approved';
+        });
+      }
+
+      PopupService.success('Policy approved successfully!', 'Policy Approved');
+
+      this.isSubmittingRejection = true;
+      apiService
+        .post(API_ENDPOINTS.POLICY_SUBMIT_REVIEW(policyId), reviewData, { background: true })
+        .then((response) => {
           console.log('Policy approved successfully:', response);
-          
-          // Update policy status and store approval date
-          this.selectedApproval.ExtractedData.Status = 'Approved';
-          this.selectedApproval.ApprovedNot = true;
-          
-          // Store the approval date from the response
           if (response.ApprovedDate) {
             this.selectedApproval.ApprovedDate = response.ApprovedDate;
           }
-          
-          // Update all subpolicies to Approved status
-          if (this.selectedApproval.ExtractedData.subpolicies) {
-            this.selectedApproval.ExtractedData.subpolicies.forEach(subpolicy => {
-              subpolicy.Status = 'Approved';
-            });
+          if (response.Version != null) {
+            this.selectedApproval.Version = response.Version;
           }
-          
-          PopupService.success('Policy approved successfully!', 'Policy Approved');
+          if (response.ApprovalId != null) {
+            this.selectedApproval.ApprovalId = response.ApprovalId;
+          }
         })
-        .catch(error => {
+        .catch((error) => {
+          this.restoreApprovalUi(snap);
           this.handleError(error, 'approving entire policy');
+        })
+        .finally(() => {
+          this.isSubmittingRejection = false;
         });
     },
 
     submitReview() {
-      console.log('submitReview called with approval:', this.selectedApproval);
-      
+      if (this.isSubmittingRejection) {
+        return;
+      }
+
       // Prevent submission if policy is already processed (approved or rejected)
       if (this.selectedApproval && this.selectedApproval.ExtractedData?.Status === 'Rejected') {
         console.log('Policy is already rejected, preventing duplicate submission');
@@ -858,124 +961,106 @@ export default {
     },
 
     // Helper method to submit policy review
-    submitPolicyReview(approved, remarks = '') {
-      // Prevent duplicate submission
+    submitPolicyReview(approved, remarks = '', options = {}) {
       if (this.isSubmittingRejection) {
-        console.log('Review submission already in progress, preventing duplicate call');
+        PopupService.warning('Another review action is still in progress. Please wait.', 'Please wait');
         return;
       }
-      
+
       if (!this.selectedApproval || !this.selectedApproval.PolicyId) {
         console.error('No policy selected for review submission');
         return;
       }
-      
-      // Prevent duplicate submission if policy is already processed
+
       if (this.selectedApproval.ExtractedData?.Status === 'Rejected') {
-        console.log('Policy is already rejected, preventing duplicate submission');
         PopupService.warning('Policy has already been rejected and cannot be submitted again.', 'Already Rejected');
         return;
       }
-      
+
       if (this.selectedApproval.ExtractedData?.Status === 'Approved') {
-        console.log('Policy is already approved, preventing duplicate submission');
         PopupService.warning('Policy has already been approved and cannot be submitted again.', 'Already Approved');
         return;
       }
-      
-      // Set loading state to prevent duplicate submissions
-      this.isSubmittingRejection = true;
-      
+
       const policyId = this.getPolicyId(this.selectedApproval);
-      console.log(`Submitting policy review for policy ${policyId}`, {
-        approved: approved,
-        remarks: remarks
-      });
-      
-      // Preserve the original UserId (policy creator) and set ReviewerId to current user
-      const originalUserId = this.selectedApproval.UserId || this.selectedApproval.UserID || this.selectedApproval.ExtractedData?.CreatedBy;
-      
-      console.log('User ID preservation:', {
-        originalUserId: originalUserId,
-        currentUserId: this.currentUserId,
-        selectedApprovalUserId: this.selectedApproval.UserId,
-        selectedApprovalUserID: this.selectedApproval.UserID,
-        extractedDataCreatedBy: this.selectedApproval.ExtractedData?.CreatedBy
-      });
-      
-      // Create the policy review data
+      const originalUserId =
+        this.selectedApproval.UserId ||
+        this.selectedApproval.UserID ||
+        this.selectedApproval.ExtractedData?.CreatedBy;
+
       const reviewData = {
         ExtractedData: JSON.parse(JSON.stringify(this.selectedApproval.ExtractedData)),
         ApprovedNot: approved,
         remarks: remarks,
-        UserId: originalUserId, // Preserve original policy creator's ID
-        ReviewerId: this.currentUserId, // Set reviewer ID to current user
-        currentVersion: this.selectedApproval.version || this.selectedApproval.Version || 'u1'
+        UserId: originalUserId,
+        ReviewerId: this.currentUserId,
+        currentVersion: this.selectedApproval.version || this.selectedApproval.Version || 'u1',
       };
-      
-      // If approving, set all subpolicies to Approved status
+
       if (approved === true && reviewData.ExtractedData.subpolicies) {
-        reviewData.ExtractedData.subpolicies.forEach(subpolicy => {
+        reviewData.ExtractedData.subpolicies.forEach((subpolicy) => {
           subpolicy.Status = 'Approved';
         });
       }
 
-      // Set policy ActiveInactive to Active when approved
       if (approved === true) {
         reviewData.ExtractedData.ActiveInactive = 'Active';
       }
-      
-      // If rejecting, ensure policy_approval contains rejection remarks
+
       if (approved === false && remarks) {
         if (!reviewData.ExtractedData.policy_approval) {
           reviewData.ExtractedData.policy_approval = {};
         }
         reviewData.ExtractedData.policy_approval.remarks = remarks;
       }
-      
-      // Submit policy review
-      apiService.post(API_ENDPOINTS.POLICY_SUBMIT_REVIEW(policyId), reviewData)
-        .then(response => {
-          console.log('Policy review submitted successfully:', response);
-          console.log('Response data details:', {
-            ApprovalId: response.ApprovalId,
-            Version: response.Version,
-            ApprovedNot: response.ApprovedNot,
-            ApprovedDate: response.ApprovedDate
+
+      const snap = this.snapshotApprovalUi();
+
+      this.selectedApproval.ApprovedNot = approved;
+      if (approved) {
+        this.selectedApproval.ExtractedData.Status = 'Approved';
+        this.selectedApproval.ExtractedData.ActiveInactive = 'Active';
+        if (this.selectedApproval.ExtractedData.subpolicies) {
+          this.selectedApproval.ExtractedData.subpolicies.forEach((subpolicy) => {
+            subpolicy.Status = 'Approved';
           });
-          
-          // Reset loading state
-          this.isSubmittingRejection = false;
-          
-          // Update the approval data with the response
-          this.selectedApproval.ApprovedNot = approved;
-          this.selectedApproval.Version = response.Version;
-          
-          if (approved) {
-            this.selectedApproval.ExtractedData.Status = 'Approved';
-            
-            // Store the approval date from the response
-            if (response.ApprovedDate) {
-              this.selectedApproval.ApprovedDate = response.ApprovedDate;
-            }
-            
-            // Update all subpolicies to Approved status in the UI
-            if (this.selectedApproval.ExtractedData.subpolicies) {
-              this.selectedApproval.ExtractedData.subpolicies.forEach(subpolicy => {
-                subpolicy.Status = 'Approved';
-              });
-            }
-            
-            PopupService.success('Policy approved successfully!', 'Policy Approved');
-          } else {
-            this.selectedApproval.ExtractedData.Status = 'Rejected';
-            console.log('Policy rejected - updating UI state');
-            PopupService.success('Policy rejected successfully!', 'Policy Rejected');
+        }
+        PopupService.success('Policy approved successfully!', 'Policy Approved');
+      } else {
+        this.selectedApproval.ExtractedData.Status = 'Rejected';
+        if (remarks) {
+          if (!this.selectedApproval.ExtractedData.policy_approval) {
+            this.selectedApproval.ExtractedData.policy_approval = {};
+          }
+          this.selectedApproval.ExtractedData.policy_approval.remarks = remarks;
+        }
+        PopupService.success('Policy rejected successfully!', 'Policy Rejected');
+      }
+
+      if (options.closeRejectModal) {
+        this.closeRejectModalOnly();
+      }
+
+      this.isSubmittingRejection = true;
+      apiService
+        .post(API_ENDPOINTS.POLICY_SUBMIT_REVIEW(policyId), reviewData, { background: true })
+        .then((response) => {
+          console.log('Policy review submitted successfully:', response);
+          if (response.Version != null) {
+            this.selectedApproval.Version = response.Version;
+          }
+          if (response.ApprovalId != null) {
+            this.selectedApproval.ApprovalId = response.ApprovalId;
+          }
+          if (response.ApprovedDate) {
+            this.selectedApproval.ApprovedDate = response.ApprovedDate;
           }
         })
-        .catch(error => {
+        .catch((error) => {
+          this.restoreApprovalUi(snap);
           this.handleError(error, 'submitting policy review');
-          // Reset loading state on error
+        })
+        .finally(() => {
           this.isSubmittingRejection = false;
         });
     },
@@ -1001,86 +1086,59 @@ export default {
         return;
       }
 
-      // Prevent double submission
       if (this.isSubmittingRejection) {
-        console.log('Rejection already in progress, preventing duplicate submission');
         return;
       }
 
-      console.log('DEBUG: confirmRejection called');
-      console.log('DEBUG: currentRejectionType:', this.currentRejectionType);
-      console.log('DEBUG: currentRejectionItem:', this.currentRejectionItem);
-      console.log('DEBUG: selectedApproval:', this.selectedApproval);
-
-      this.isSubmittingRejection = true;
-      const policyId = this.getPolicyId(this.selectedApproval);
-      console.log('DEBUG: policyId:', policyId);
-      
       if (this.currentRejectionType === 'subpolicy' && this.currentRejectionItem) {
         const subpolicy = this.currentRejectionItem;
-        console.log('DEBUG: Rejecting subpolicy - subpolicy:', subpolicy);
-        console.log('DEBUG: rejection_reason:', this.rejectionComment);
-        
+        const rejectionReason = this.rejectionComment.trim();
         const url = API_ENDPOINTS.SUBPOLICY_REVIEW(subpolicy.SubPolicyId);
-        console.log('DEBUG: Calling URL:', url);
-        
-        // Call backend endpoint for subpolicy rejection
-        apiService.put(url, {
-          Status: 'Rejected',
-          remarks: this.rejectionComment
-        })
-          .then(response => {
-            console.log('Subpolicy rejected successfully:', response);
+        const snap = this.snapshotApprovalUi();
 
-          // Update local state
-            subpolicy.Status = 'Rejected';
-            this.selectedApproval.ExtractedData.Status = 'Rejected';
-            this.selectedApproval.ApprovedNot = false;
-            
-            // Update the approval record with the response data if available
+        subpolicy.Status = 'Rejected';
+        this.selectedApproval.ExtractedData.Status = 'Rejected';
+        this.selectedApproval.ApprovedNot = false;
+
+        PopupService.success(
+          'Subpolicy rejected. Policy has been rejected and sent back for revision.',
+          'Subpolicy Rejected'
+        );
+        this.closeRejectModalOnly();
+
+        this.isSubmittingRejection = true;
+        apiService
+          .put(
+            url,
+            {
+              Status: 'Rejected',
+              remarks: rejectionReason,
+            },
+            { background: true }
+          )
+          .then((response) => {
+            console.log('Subpolicy rejected successfully:', response);
             if (response.ApprovalId) {
               this.selectedApproval.ApprovalId = response.ApprovalId;
             }
             if (response.Version) {
               this.selectedApproval.Version = response.Version;
             }
-            
-            PopupService.success('Subpolicy rejected. Policy has been rejected and sent back for revision.', 'Subpolicy Rejected');
-            this.cancelRejection();
           })
-          .catch(error => {
-            console.log('DEBUG: Error rejecting subpolicy:', error);
-            console.log('DEBUG: Error response:', error.response);
+          .catch((error) => {
+            this.restoreApprovalUi(snap);
             this.handleError(error, 'rejecting subpolicy');
           })
           .finally(() => {
             this.isSubmittingRejection = false;
           });
-          
       } else if (this.currentRejectionType === 'policy') {
-        // For direct policy rejection, use submitPolicyReview with rejection reason
         if (!this.selectedApproval || !this.selectedApproval.PolicyId) {
           console.error('No policy selected for rejection');
           this.cancelRejection();
-            return;
-          }
-        
-        // Initialize policy approval if doesn't exist
-        if (!this.selectedApproval.ExtractedData.policy_approval) {
-          this.selectedApproval.ExtractedData.policy_approval = {};
+          return;
         }
-        
-        // Update the policy status and approval state in the UI
-        this.selectedApproval.ExtractedData.policy_approval.approved = false;
-        this.selectedApproval.ExtractedData.policy_approval.remarks = this.rejectionComment;
-        this.selectedApproval.ExtractedData.Status = 'Rejected';
-        this.selectedApproval.ApprovedNot = false;
-        
-        // Submit the review with rejection data
-        this.submitPolicyReview(false, this.rejectionComment);
-        
-        this.cancelRejection();
-        this.isSubmittingRejection = false;
+        this.submitPolicyReview(false, this.rejectionComment.trim(), { closeRejectModal: true });
       }
     },
 

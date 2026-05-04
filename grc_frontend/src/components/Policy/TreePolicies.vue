@@ -1,5 +1,17 @@
 <template>
   <div class="tree-container">
+      <div
+        v-if="isLoadingTree && frameworks.length === 0"
+        class="policy-page-skeleton tree-policies-skeleton"
+        aria-busy="true"
+        aria-label="Loading tree"
+      >
+        <div class="policy-skeleton-pill" style="max-width: 320px; height: 44px; margin: 0 auto 20px"></div>
+        <div class="policy-skeleton-table" style="min-height: 400px; border-radius: 12px">
+          <div v-for="n in 10" :key="'tree-sk-' + n" class="policy-skeleton-row"></div>
+        </div>
+      </div>
+      <template v-else>
       <div class="tree-header" style="justify-content: center;">
         <div class="dropdown-container">
           <div class="dropdown-label-wrapper">
@@ -136,6 +148,7 @@
         </g>
       </template>
     </svg>
+      </template>
   </div>
 </template>
   
@@ -145,6 +158,12 @@ import apiService from '@/services/apiService'
 import CustomDropdown from '../CustomDropdown.vue'
 import { API_ENDPOINTS, API_BASE_URL } from '@/config/api.js'
 import policyDataService from '@/services/policyService'
+import { useFrameworkStore } from '@/stores/framework'
+import { usePolicyStore } from '@/stores/policy'
+const frameworkStore = useFrameworkStore()
+const policyStore = usePolicyStore()
+const isLoadingTree = ref(true)
+
 const fwY = computed(() => {
   // Vertically center the framework node regardless of policy count
   const height = Number(svgViewBox.value.split(' ')[3]);
@@ -171,7 +190,21 @@ const fwX = 60; // Framework node on the far left
 const fetchFrameworks = async () => {
   try {
     error.value = null
+    isLoadingTree.value = true
     console.log('🔍 [TreePolicies] Checking for cached frameworks...')
+
+    if (policyStore.hasFrameworksCache()) {
+      const raw = policyStore.getFrameworksCached()
+      const list = Array.isArray(raw) ? raw : []
+      frameworks.value = list.map((fw) => ({
+        id: fw.FrameworkId || fw.id,
+        title: fw.FrameworkName || fw.name,
+      }))
+      await checkSelectedFrameworkFromSession()
+      isLoadingTree.value = false
+      void policyStore.getAllFrameworks({ force: true }).catch(() => {})
+      return
+    }
 
     if (!window.policyDataFetchPromise && !policyDataService.hasFrameworksListCache()) {
       console.log('🚀 [TreePolicies] Starting policy prefetch (user navigated directly)...')
@@ -200,11 +233,11 @@ const fetchFrameworks = async () => {
       return
     }
 
-    console.log('⚠️ [TreePolicies] No cached data found, fetching frameworks from API...')
-    const response = await apiService.get(API_ENDPOINTS.FRAMEWORKS)
+    console.log('⚠️ [TreePolicies] No cached data found, fetching frameworks from policy store...')
+    const response = await policyStore.getAllFrameworks()
     frameworks.value = response.map(fw => ({
-      id: fw.FrameworkId,
-      title: fw.FrameworkName
+      id: fw.FrameworkId || fw.id,
+      title: fw.FrameworkName || fw.name
     }))
 
     policyDataService.setFrameworksList(response)
@@ -213,6 +246,8 @@ const fetchFrameworks = async () => {
   } catch (err) {
     console.error('Error fetching frameworks:', err)
     error.value = 'Failed to load frameworks. Please try again.'
+  } finally {
+    isLoadingTree.value = false
   }
 }
 
@@ -220,7 +255,11 @@ const fetchFrameworks = async () => {
       const checkSelectedFrameworkFromSession = async () => {
         try {
           console.log('🔍 DEBUG: Checking for selected framework from session in TreePolicies...')
-          const response = await apiService.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED)
+          await frameworkStore.loadFrameworkFromSession()
+          const response = {
+            success: true,
+            frameworkId: frameworkStore.selectedFrameworkId,
+          }
           console.log('📊 DEBUG: Selected framework response:', response)
           
           if (response && response.success) {
@@ -352,22 +391,14 @@ onMounted(async () => {
           if (framework) {
             // Save the selected framework to session
             try {
-              const userId = localStorage.getItem('user_id') || 'default_user'
-              console.log('🔍 DEBUG: Saving framework to session in TreePolicies:', framework.id)
-              
-              const response = await apiService.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, {
-                frameworkId: framework.id,
-                userId: userId
+              console.log('🔍 DEBUG: Saving framework via frameworkStore in TreePolicies:', framework.id)
+              await frameworkStore.setFramework({
+                id: framework.id,
+                name: framework.title || framework.name || 'Selected Framework',
               })
-              
-              if (response && response.success) {
-                console.log('✅ DEBUG: Framework saved to session successfully in TreePolicies')
-                console.log('🔑 DEBUG: Session key:', response.sessionKey)
-              } else {
-                console.error('❌ DEBUG: Failed to save framework to session in TreePolicies')
-              }
+              console.log('✅ DEBUG: Framework saved via frameworkStore in TreePolicies')
             } catch (error) {
-              console.error('❌ DEBUG: Error saving framework to session in TreePolicies:', error)
+              console.error('❌ DEBUG: Error saving framework via frameworkStore in TreePolicies:', error)
             }
             
             await fetchFrameworkDetails(framework.id)
@@ -560,5 +591,27 @@ const junction = computed(() => {
   white-space: normal;
   padding: 10px 12px;
   line-height: 1.5;
+}
+
+.tree-policies-skeleton .policy-skeleton-row {
+  height: 40px;
+  border-bottom: 1px solid #eef2f7;
+  background: linear-gradient(90deg, #f4f6fa 0%, #fafbfd 50%, #f4f6fa 100%);
+  background-size: 200% 100%;
+  animation: treeSkPulse 1.35s ease infinite;
+}
+.tree-policies-skeleton .policy-skeleton-pill {
+  border-radius: 10px;
+  background: linear-gradient(90deg, #eef2f7 0%, #f8fafc 50%, #eef2f7 100%);
+  background-size: 200% 100%;
+  animation: treeSkPulse 1.35s ease infinite;
+}
+@keyframes treeSkPulse {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
 }
   </style> 

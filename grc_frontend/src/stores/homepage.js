@@ -67,6 +67,10 @@ export const useHomepageStore = defineStore('homepage', {
      * data: the full homepageData object returned by the API / synthesized
      */
     setHomepageData(key, data) {
+      if (data && data._synthetic) {
+        console.warn(`[HomepageStore] Skipped cache for key="${key}" — synthetic payload not stored`);
+        return;
+      }
       const k = String(key ?? 'all');
       this.cache[k] = {
         data,
@@ -88,7 +92,9 @@ export const useHomepageStore = defineStore('homepage', {
      */
     getFreshHomepageData(key) {
       const entry = this.getFresh(String(key ?? 'all'));
-      return entry?.data ?? null;
+      const data = entry?.data ?? null;
+      if (data && data._synthetic) return null;
+      return data;
     },
 
     /**

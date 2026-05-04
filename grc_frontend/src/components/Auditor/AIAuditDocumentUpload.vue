@@ -1667,6 +1667,7 @@
 import apiService from '@/services/apiService';
 import { API_ENDPOINTS } from '@/config/api.js';
 import auditorDataService from '@/services/auditorService' // NEW: Use cached auditor data
+import { useAuditStore } from '@/stores/audit'
 import { compressFile, shouldCompressFile } from '@/utils/fileCompression.js'
 
 function formatRecommendation(val) {
@@ -3289,21 +3290,17 @@ export default {
         
         console.log('🔍 [AIAuditUpload] Checking for cached audits data...')
         
-        // Check if prefetch was never started (user came directly to this page)
-        if (!window.auditorDataFetchPromise && !auditorDataService.hasAuditsCache()) {
-          console.log('🚀 [AIAuditUpload] Starting prefetch now (user came directly to this page)...')
-          window.auditorDataFetchPromise = auditorDataService.fetchAllAuditorData()
-        }
-        
-        // Wait for prefetch if it's running
-        if (window.auditorDataFetchPromise) {
-          console.log('⏳ [AIAuditUpload] Waiting for prefetch to complete...')
+        const auditStore = useAuditStore()
+        if (!auditorDataService.hasAuditsCache()) {
+          console.log('🚀 [AIAuditUpload] Starting prefetch (Pinia auditStore)...')
           try {
-            await window.auditorDataFetchPromise
+            await auditStore.prefetchAuditDomain({ scope: 'my', force: false })
             console.log('✅ [AIAuditUpload] Prefetch completed')
           } catch (error) {
             console.warn('⚠️ [AIAuditUpload] Prefetch failed, will fetch directly')
           }
+        } else {
+          auditStore.hydrateFromAuditorServiceOnly('assignedToMe')
         }
         
         let merged = []
@@ -3397,14 +3394,11 @@ export default {
         console.log('🔄 [AIAuditUpload] Manual refresh of assigned AI audits requested');
         this.isLoadingAudits = true
         this.auditLoadError = ''
-        // Clear cached audits so we always fetch latest list
+        // Clear cached audits so we always fetch latest list (service + Pinia in-flight keys)
         try {
-          auditorDataService.clearCache()
+          useAuditStore().invalidateAuditCache(['audits', 'lookups'])
         } catch (e) {
-          console.warn('⚠️ [AIAuditUpload] Failed to clear auditorDataService cache before refresh:', e)
-        }
-        if (typeof window !== 'undefined' && window.auditorDataFetchPromise) {
-          window.auditorDataFetchPromise = null
+          console.warn('⚠️ [AIAuditUpload] Failed to invalidate audit cache before refresh:', e)
         }
         await this.loadAvailableAudits()
       } finally {

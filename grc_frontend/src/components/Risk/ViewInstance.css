@@ -438,6 +438,28 @@
   font-style: italic;
 }
 
+.instance-view-detail-skeleton {
+  min-height: 280px;
+}
+
+.instance-view-not-found {
+  font-style: normal;
+}
+
+.instance-view-not-found-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--risk-gray-800);
+  margin: 0 0 8px;
+}
+
+.instance-view-not-found-hint {
+  font-size: 0.95rem;
+  color: var(--risk-gray-600);
+  margin: 0 0 20px;
+  line-height: 1.5;
+}
+
 /* All priority and status badge styles are defined by the unified rule above */
 
 /* Responsive adjustments */

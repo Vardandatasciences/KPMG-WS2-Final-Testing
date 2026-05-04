@@ -1567,6 +1567,7 @@
           <button
             type="submit"
             class="incident-submit-btn"
+            :disabled="!isReadyToSubmit || isIncidentSubmitting"
             :title="isReadyToSubmit ? `Create ${incidentType}` : 'Please fill in all required fields'"
           >
             <i class="fas fa-save"></i> Create {{ incidentType }}
@@ -1584,7 +1585,7 @@
 </template>
 
 <script>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import apiService from '@/services/apiService.js'
 import { API_ENDPOINTS } from '../../config/api.js'
@@ -1592,13 +1593,12 @@ import './CreateIncident.css'
 import { PopupService, PopupModal } from '@/modules/popup'
 import { AccessUtils } from '@/utils/accessUtils'
 import ConsentModal from '@/components/Consent/ConsentModal.vue'
-import { checkConsentRequired, CONSENT_ACTIONS } from '@/utils/consentManager.js'
+import * as consentApi from '@/utils/consentManager.js'
 import {
   getFrameworkIdForClient,
   getSessionFrameworkId,
-  setSessionFrameworkId,
-  getDefaultFrameworkId,
 } from '@/utils/frameworkContextStorage.js'
+import { useIncidentStore } from '@/stores/incident'
 
 export default {
   name: 'CreateIncident',
@@ -1608,15 +1608,13 @@ export default {
   },
   setup() {
     const router = useRouter()
+    const incidentStore = useIncidentStore()
 
     const getIncidentFrameworkId = () => getFrameworkIdForClient()
 
     onMounted(() => {
       if (!getSessionFrameworkId()) {
-        setSessionFrameworkId(getDefaultFrameworkId())
-        console.log(
-          '💡 [Consent] Seeded session framework_id from default (set session when user selects a framework; VITE_DEFAULT_FRAMEWORK_ID overrides)'
-        )
+        console.log('ℹ️ [Consent] No session framework selected yet; incident flow will use current user selection when available.')
       }
     })
     
@@ -1656,6 +1654,7 @@ export default {
     // Validation errors
     const validationErrors = ref({})
     const isGeneratingAnalysis = ref(false)
+    const isIncidentSubmitting = ref(false)
 
     // AI Justifications for tooltips (similar to CreateRisk.vue)
     const aiJustifications = ref({
@@ -2216,23 +2215,18 @@ export default {
 
       loadingCompliances.value = true
       try {
-        const response = await apiService.get(API_ENDPOINTS.INCIDENT_COMPLIANCES)
-        if (response.success) {
-          compliances.value = response.data
-          console.log('Loaded compliances:', compliances.value.length)
+        const list = await incidentStore.getIncidentCompliancesList({ force: false })
+        compliances.value = Array.isArray(list) ? list : []
+        console.log('Loaded compliances:', compliances.value.length)
           
-          // Debug: Check for any compliance items with invalid data types
-          const invalidCompliances = compliances.value.filter(compliance => {
-            return (compliance.Mitigation && typeof compliance.Mitigation !== 'string') ||
-                   (compliance.PossibleDamage && typeof compliance.PossibleDamage !== 'string') ||
-                   (compliance.ComplianceItemDescription && typeof compliance.ComplianceItemDescription !== 'string')
-          })
+        const invalidCompliances = compliances.value.filter(compliance => {
+          return (compliance.Mitigation && typeof compliance.Mitigation !== 'string') ||
+                 (compliance.PossibleDamage && typeof compliance.PossibleDamage !== 'string') ||
+                 (compliance.ComplianceItemDescription && typeof compliance.ComplianceItemDescription !== 'string')
+        })
           
-          if (invalidCompliances.length > 0) {
-            console.warn('Found compliances with invalid data types:', invalidCompliances)
-          }
-        } else {
-          console.error('Failed to fetch compliances:', response.message)
+        if (invalidCompliances.length > 0) {
+          console.warn('Found compliances with invalid data types:', invalidCompliances)
         }
       } catch (error) {
         console.error('Error fetching compliances:', error)
@@ -2323,6 +2317,8 @@ export default {
     const consentConfig = ref(null)
 
     const submitForm = async () => {
+      if (isIncidentSubmitting.value) return
+
       let consentRequired = false
       let consentConfigData = null
       
@@ -2332,7 +2328,9 @@ export default {
         console.log('🔍 [Consent] Framework ID (session-scoped resolver):', getIncidentFrameworkId())
         console.log('🔍 [Consent] User ID in localStorage:', localStorage.getItem('user_id'))
         
-        const consentCheck = await checkConsentRequired(CONSENT_ACTIONS.CREATE_INCIDENT)
+        const consentCheck = await consentApi.checkConsentRequired(
+          consentApi.CONSENT_ACTIONS.CREATE_INCIDENT
+        )
         console.log('🔍 [Consent] Consent check result:', consentCheck)
         
         consentRequired = consentCheck.required
@@ -2354,19 +2352,22 @@ export default {
           consentConfig.value = consentConfigData
           showConsentModal.value = true
           
-          // Wait a bit for the modal to render
-          await new Promise(resolve => setTimeout(resolve, 100))
-          
+          await nextTick()
+          await nextTick()
+
           if (!consentModalRef.value) {
             console.error('❌ [Consent] ConsentModal ref is null! Modal may not be rendered.')
             PopupService.error('Error: Consent modal could not be displayed. Please refresh the page.')
             showConsentModal.value = false
-          return
+            return
           }
           
           try {
             console.log('✅ [Consent] Calling consentModalRef.value.show()')
-            const accepted = await consentModalRef.value.show(CONSENT_ACTIONS.CREATE_INCIDENT, consentConfigData)
+            const accepted = await consentModalRef.value.show(
+              consentApi.CONSENT_ACTIONS.CREATE_INCIDENT,
+              consentConfigData
+            )
             console.log('✅ [Consent] Modal show() returned:', accepted)
             
             if (!accepted) {
@@ -2455,27 +2456,54 @@ export default {
         
         console.log('Submitting incident with data:', submissionData)
         console.log('Data inventory:', dataInventory)
-        
-        await apiService.post(API_ENDPOINTS.INCIDENT_CREATE, submissionData)
-        // Show success message and redirect
-        PopupService.success('Incident created successfully! It has been saved to the incidents table and will be escalated to risk management when needed.')
-        
-        // Navigate to incidents list after a short delay to allow user to see success message
+
+        isIncidentSubmitting.value = true
+
+        PopupService.success(
+          'Incident created successfully! It has been saved to the incidents table and will be escalated to risk management when needed.'
+        )
         setTimeout(() => {
           router.push('/incident/incident')
-        }, 2000) // 2 second delay to show the success message
+        }, 320)
+
+        apiService
+          .post(API_ENDPOINTS.INCIDENT_CREATE, submissionData)
+          .then(() => {
+            incidentStore.invalidateIncidentListsAfterCreate()
+            consentApi.invalidateConsentCheckCache(consentApi.CONSENT_ACTIONS.CREATE_INCIDENT)
+          })
+          .catch((error) => {
+            console.error('Error creating incident (background):', error)
+            if (!AccessUtils.handleApiError(error, 'create incidents')) {
+              if (error.response && error.response.data) {
+                const serverErrors = error.response.data
+                Object.keys(serverErrors).forEach((field) => {
+                  validationErrors.value[field] = Array.isArray(serverErrors[field])
+                    ? serverErrors[field][0]
+                    : serverErrors[field]
+                })
+                PopupService.error(
+                  'The incident could not be saved. Open Create Incident again, fix the highlighted issues, and retry.'
+                )
+              } else {
+                PopupService.error(
+                  'The incident could not be saved on the server. Please try creating it again from the form.'
+                )
+              }
+            }
+          })
+          .finally(() => {
+            isIncidentSubmitting.value = false
+          })
       } catch (error) {
         console.error('Error creating incident:', error)
-        
-        // Check if this is an access denied error first
+
         if (!AccessUtils.handleApiError(error, 'create incidents')) {
-          // Only show generic error if it's not an access denied error
           if (error.response && error.response.data) {
-            // Handle validation errors from server
             const serverErrors = error.response.data
-            Object.keys(serverErrors).forEach(field => {
-              validationErrors.value[field] = Array.isArray(serverErrors[field]) 
-                ? serverErrors[field][0] 
+            Object.keys(serverErrors).forEach((field) => {
+              validationErrors.value[field] = Array.isArray(serverErrors[field])
+                ? serverErrors[field][0]
                 : serverErrors[field]
             })
             PopupService.error('Please correct the validation errors and try again.')
@@ -2927,7 +2955,7 @@ export default {
     // Business Unit dropdown methods
     const fetchBusinessUnits = async () => {
       try {
-        const response = await apiService.get(API_ENDPOINTS.BUSINESS_UNITS)
+        const response = await incidentStore.getBusinessUnitsList({ force: false })
         availableBusinessUnits.value = response
         filteredBusinessUnits.value = response
       } catch (error) {
@@ -3041,8 +3069,7 @@ export default {
     // Incident Category dropdown methods
     const fetchIncidentCategories = async () => {
       try {
-        // Use the dedicated incident categories endpoint
-        const response = await apiService.get(API_ENDPOINTS.INCIDENT_CATEGORIES)
+        const response = await incidentStore.getIncidentCategoriesList({ force: false })
         
         // Default incident categories if none exist
         const defaultIncidentCategories = [
@@ -3063,7 +3090,6 @@ export default {
           'Configuration Error'
         ]
         
-        // The response should be an array of categories
         const existingCategories = Array.isArray(response) ? response : []
         const combinedCategories = [...new Set([...existingCategories, ...defaultIncidentCategories])]
         
@@ -3340,6 +3366,7 @@ export default {
       validateControlFailures,
       validateAndSubmit,
       submitForm,
+      isIncidentSubmitting,
       cancel,
       generateAnalysis,
       incidentType,

@@ -533,6 +533,51 @@ class IncidentSerializer(AutoDecryptingModelSerializer):
             raise
 
 
+class IncidentListSerializer(AutoDecryptingModelSerializer):
+    """
+    List-view subset aligned with incident_views.list_incidents queryset `.only(...)`.
+    Avoids `fields = '__all__'` so we do not touch/decrypt every encrypted column per row.
+    """
+
+    has_risk_instance = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Incident
+        fields = [
+            'IncidentId',
+            'IncidentTitle',
+            'Date',
+            'Origin',
+            'RiskPriority',
+            'RiskCategory',
+            'Status',
+            'CreatedAt',
+            'AssignerId',
+            'ReviewerId',
+            'RejectionSource',
+            'ComplianceId',
+            'FrameworkId',
+            'AffectedBusinessUnit',
+            'IncidentCategory',
+            'Time',
+            'Criticality',
+            'IncidentClassification',
+            'CostOfIncident',
+            'RepeatedNot',
+            'ReopenedNot',
+            'IdentifiedAt',
+            'AssignedDate',
+            'MitigationDueDate',
+            'MitigationCompletedDate',
+            'GeographicLocation',
+            'has_risk_instance',
+        ]
+
+    def get_has_risk_instance(self, obj):
+        risk_instance_incident_ids = self.context.get('risk_instance_incident_ids', set())
+        return obj.IncidentId in risk_instance_incident_ids
+
+
 # =============================================================================
 # RISK MODULE SERIALIZERS
 # =============================================================================

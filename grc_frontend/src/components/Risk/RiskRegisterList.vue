@@ -52,10 +52,10 @@
           class="export-btn"
           type="button"
           @click="refreshRisks"
-          :disabled="loading"
+          :disabled="riskRegisterHeaderBusy"
         >
           <i class="fas fa-sync-alt"></i>
-          {{ loading ? 'Refreshing...' : 'Refresh' }}
+          {{ riskRegisterHeaderBusy ? 'Loading…' : 'Refresh' }}
         </button>
       </div>
     </div>
@@ -65,7 +65,7 @@
     <div class="risk-register-header-row">
       <h2 class="risk-register-title"> Risk Register List</h2>
       <p
-        v-if="dataSourceMessage"
+        v-if="dataSourceMessage && !showRiskRegisterSkeleton"
         class="risk-register-data-source"
       >
         {{ dataSourceMessage }}
@@ -133,9 +133,25 @@
       </transition>
     </div>
 
+    <!-- Cold load: show skeleton instead of empty "0 of 0" table; warm cache paints from Pinia in created(). -->
+    <div
+      v-if="showRiskRegisterSkeleton"
+      class="risk-register-skeleton grc-skeleton-table-wrap"
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+      aria-label="Loading risk register"
+    >
+      <div
+        v-for="n in 10"
+        :key="'sk-' + n"
+        class="grc-skeleton-row grc-skeleton-pulse"
+      />
+    </div>
 
     <!-- Dynamic Table -->
     <DynamicTable
+      v-show="!showRiskRegisterSkeleton"
       :title="''"
       :data="tableData"
       :columns="tableColumns"
@@ -173,9 +189,10 @@ import './RiskRegisterList.css'
 import DynamicTable from '../DynamicTable.vue'
 // import Dynamicalsearch from '../Dynamicalsearch.vue'
 import { PopupModal } from '@/modules/popup'
+import { mapActions, mapState } from 'pinia'
 import { API_ENDPOINTS } from '../../config/api.js'
 import apiService from '@/services/apiService.js'
-import riskDataService from '@/services/riskService' // NEW: Use cached risk data
+import { useRiskStore } from '@/stores/risk'
 import { getFrameworkIdForClient } from '@/utils/frameworkContextStorage.js'
 
 const axiosInstance = {
@@ -285,9 +302,7 @@ export default {
       .map(column => column.key);
 
     return {
-      risks: [],
       searchQuery: '',
-      loading: false,
       selectedExportFormat: '',
       riskRetentionEnabled: true,
       riskRetentionWarningShown: false,
@@ -308,6 +323,24 @@ export default {
     }
   },
   computed: {
+    ...mapState(useRiskStore, [
+      'risks',
+      'isLoadingRisks',
+      'errorRisks'
+    ]),
+    riskRegisterHeaderBusy() {
+      return (
+        this.isLoadingRisks &&
+        (!Array.isArray(this.risks) || this.risks.length === 0)
+      )
+    },
+    /** True only on first load with no rows yet — keeps stale rows visible during background refresh. */
+    showRiskRegisterSkeleton() {
+      return (
+        this.isLoadingRisks &&
+        (!Array.isArray(this.risks) || this.risks.length === 0)
+      )
+    },
     exportFormatLabel() {
       const match = this.exportFormatOptions.find(
         opt => opt.value === this.selectedExportFormat
@@ -390,6 +423,14 @@ export default {
       }))
     }
   },
+  created() {
+    // Sync from riskDataService into Pinia before first paint when Home prefetch populated the singleton.
+    try {
+      useRiskStore().hydrateFromLegacyService()
+    } catch {
+      /* non-fatal */
+    }
+  },
   watch: {
     searchQuery() {
       // Reset to first page when search changes
@@ -415,6 +456,7 @@ export default {
     document.removeEventListener('keydown', this.handleColumnEditorEscape);
   },
   methods: {
+    ...mapActions(useRiskStore, { fetchRisksFromStore: 'fetchRisks' }),
     selectExportFormatOption(opt) {
       this.selectedExportFormat = opt.value
       this.isExportDropdownOpen = false
@@ -451,35 +493,31 @@ export default {
       }
     },
 
-    async fetchRisks() {
-      this.loading = true
+    async fetchRisks(forceRefresh = false) {
+      const hadRows = Array.isArray(this.risks) && this.risks.length > 0
+      if (!hadRows && !forceRefresh) {
+        this.dataSourceMessage = ''
+      } else if (forceRefresh) {
+        this.dataSourceMessage = ''
+      }
       try {
-        console.log('🔍 [RiskRegisterList] Checking for cached risk data...');
-        
-        // FIRST: Try to get data from cache
-        if (riskDataService.hasValidCache()) {
-          console.log('✅ [RiskRegisterList] Using cached risk data');
-          this.risks = riskDataService.getData('risks') || [];
-          console.log(`[RiskRegisterList] Loaded ${this.risks.length} risks from cache`);
-          this.dataSourceMessage = `Loaded ${this.risks.length} risks from cache (prefetched on Home page)`;
+        console.log('🔍 [RiskRegisterList] Loading risks via riskStore...')
+        const meta = await this.fetchRisksFromStore({ force: forceRefresh })
+        const src = meta?.source || 'network'
+        if (src === 'network') {
+          this.dataSourceMessage = ''
+          console.log(
+            'Fetched risks from API:',
+            this.risks.map((r) => ({ id: r.RiskId, createdAt: r.CreatedAt }))
+          )
         } else {
-          // FALLBACK: If no cached data, fetch from API
-          console.log('⚠️ [RiskRegisterList] No cached data found, fetching from API...');
-          const response = await axiosInstance.get(API_ENDPOINTS.RISKS_FOR_DROPDOWN)
-          
-          // Handle both old and new response formats
-          if (response.data.success && response.data.risks) {
-            this.risks = response.data.risks
-          } else {
-            this.risks = response.data
-          }
-          console.log('Fetched risks from API:', this.risks.map(r => ({ id: r.RiskId, createdAt: r.CreatedAt })))
-          this.dataSourceMessage = '';
+          console.log(`[RiskRegisterList] Loaded ${this.risks.length} risks (source: ${src})`)
+          this.dataSourceMessage =
+            hadRows && !forceRefresh
+              ? ''
+              : `Loaded ${this.risks.length} risks from cache (prefetched on Home page)`
         }
-        
-        this.loading = false
-        
-        // Send push notification for successful risk data fetch
+
         this.sendPushNotification({
           title: 'Risk Register Updated',
           message: `Successfully loaded ${this.risks.length} risks from the Risk Register.`,
@@ -488,10 +526,8 @@ export default {
         })
       } catch (error) {
         console.error('Error fetching risks:', error)
-        this.loading = false
-        this.dataSourceMessage = 'Failed to load risks';
-        
-        // Send push notification for error
+        this.dataSourceMessage = 'Failed to load risks'
+
         this.sendPushNotification({
           title: 'Risk Register Load Failed',
           message: `Failed to load risks from the Risk Register: ${error.response?.data?.error || error.message}`,
@@ -761,7 +797,7 @@ export default {
     },
 
     refreshRisks() {
-      this.fetchRisks();
+      this.fetchRisks(true);
       this.sendPushNotification({
         title: 'Risk Register Refreshed',
         message: 'Risk Register data has been refreshed.',
@@ -803,6 +839,11 @@ export default {
   font-size: 0.85rem;
   color: #2563eb;
 }
+
+.risk-register-skeleton {
+  margin-top: 12px;
+}
+
 .risk-register-column-controls {
   display: flex;
   justify-content: flex-start;

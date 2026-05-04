@@ -410,7 +410,16 @@ export default {
     type: Boolean,
     default: false
   },
-  
+  /** When server-side pagination, parent owns page/size — keep UI in sync (avoids resetting to page 1 on every data refresh). */
+  syncCurrentPage: {
+    type: Number,
+    default: null,
+  },
+  syncPageSize: {
+    type: Number,
+    default: null,
+  },
+
   // Row styling
   getRowClass: {
     type: Function,
@@ -651,11 +660,26 @@ export default {
     }
   },
   watch: {
+    syncCurrentPage: {
+      handler(v) {
+        if (!this.serverSidePagination || v == null || v < 1) return
+        if (this.currentPage !== v) this.currentPage = v
+      },
+      immediate: true,
+    },
+    syncPageSize: {
+      handler(v) {
+        if (!this.serverSidePagination || v == null || v === '') return
+        if (this.itemsPerPage !== v) this.itemsPerPage = v
+      },
+      immediate: true,
+    },
     data: {
       handler() {
-        this.currentPage = 1;
+        if (this.serverSidePagination) return
+        this.currentPage = 1
       },
-      deep: true
+      deep: true,
     },
     columns: {
       handler() {

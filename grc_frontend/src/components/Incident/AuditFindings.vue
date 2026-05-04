@@ -69,13 +69,21 @@
       <button @click="fetchData">Retry</button>
     </div>
 
-    <!-- Quick loading indicator -->
-    <div class="quick-loading" v-if="isQuickLoading">
-      <div class="loading-spinner"></div>
-      <span>Loading...</span>
+    <div
+      v-if="showFindingsSkeleton"
+      class="grc-skeleton-dashboard audit-findings-skeleton"
+      aria-busy="true"
+      aria-label="Loading audit findings"
+    >
+      <div class="grc-skeleton-kpi-row">
+        <div v-for="n in 4" :key="'af-sk-'+n" class="grc-skeleton-kpi-card grc-skeleton-pulse" />
+      </div>
+      <div class="grc-skeleton-table-wrap">
+        <div v-for="n in 10" :key="'af-t-'+n" class="grc-skeleton-row grc-skeleton-pulse" />
+      </div>
     </div>
 
-    <div class="incident-findings-content" v-if="!error && !isQuickLoading && !showAssignmentWorkflow">
+    <div class="incident-findings-content" v-if="!error && !showFindingsSkeleton && !showAssignmentWorkflow">
       <div class="incident-summary-cards">
         <div class="incident-summary-card open-card" :class="{ active: filterStatus === 'open' }" @click="filterByStatus('open')">
           <div class="card-content">
@@ -469,7 +477,7 @@
               <button 
               @click="confirmAssignmentWorkflow" 
               class="btn btn-submit"
-              :disabled="!selectedReviewer || mitigationSteps.length === 0 || !mitigationDueDate"
+              :disabled="!selectedReviewer || mitigationSteps.length === 0 || !mitigationDueDate || isAssigningIncident"
               >
               <i class="fas fa-user-plus"></i> Assign Incident with Mitigations
               </button>
@@ -492,11 +500,12 @@ import apiService from '@/services/apiService.js';
 import { API_ENDPOINTS } from '../../config/api.js';
 import '@fortawesome/fontawesome-free/css/all.min.css';
 import { PopupModal, PopupService } from '@/modules/popup';
-import { SessionUtils } from '@/utils/accessUtils';
-import incidentService from '../../services/incidentService.js';
+import { SessionUtils, AccessUtils } from '@/utils/accessUtils';
 import DynamicTable from '@/components/DynamicTable.vue';
 import { openDownloadInNewTabWithAnchorFallback } from '@/utils/safeExternalNavigation';
 import { getExplicitFrameworkId } from '@/utils/frameworkContextStorage.js';
+import { useFrameworkStore } from '@/stores/framework';
+import { useIncidentStore } from '@/stores/incident';
 
 export default {
   name: 'AuditFindings',
@@ -507,11 +516,63 @@ export default {
   setup() {
     const router = useRouter();
     const store = useStore();
+    const incidentStore = useIncidentStore();
     const findings = ref([]);
     const loading = ref(false);
     const isQuickLoading = ref(false);
     const error = ref(null);
     const summary = ref({});
+
+    const showFindingsSkeleton = computed(
+      () => isQuickLoading.value && (!findings.value || findings.value.length === 0)
+    );
+
+    const summarizeFindings = (rows) => {
+      const cachedFindings = rows || [];
+      return {
+        open: cachedFindings.filter(f => f.Status?.toLowerCase() === 'open').length,
+        assigned: cachedFindings.filter(f => f.Status?.toLowerCase() === 'assigned').length,
+        closed: cachedFindings.filter(f => f.Status?.toLowerCase() === 'closed').length,
+        rejected: cachedFindings.filter(f => f.Status?.toLowerCase() === 'rejected').length,
+        mitigated: cachedFindings.filter(f =>
+          (f.Status || '').toLowerCase() === 'scheduled' ||
+          (f.Status || '').toLowerCase() === 'mitigated to risk'
+        ).length,
+        total: cachedFindings.length
+      };
+    };
+
+    /** Client-side sort + page slice so prefetched bulk can paint before the slow network response. */
+    const clientSortAndLimitAuditFindings = (rows, { sort, order, limit }) => {
+      if (!Array.isArray(rows) || rows.length === 0) return [];
+      const lim = Math.max(1, Math.min(Number(limit) || 100, rows.length));
+      const arr = [...rows];
+      const ord = order === 'desc' ? -1 : 1;
+      const s = sort || 'Date';
+      const cmp = (a, b) => {
+        if (s === 'IncidentTitle') {
+          return ord * String(a.IncidentTitle || '').localeCompare(String(b.IncidentTitle || ''));
+        }
+        if (s === 'RiskPriority') {
+          const rank = (p) => {
+            const x = String(p || '').toLowerCase();
+            if (x.includes('high')) return 3;
+            if (x.includes('medium')) return 2;
+            if (x.includes('low')) return 1;
+            return 0;
+          };
+          return ord * (rank(a.RiskPriority) - rank(b.RiskPriority));
+        }
+        if (s === 'Status') {
+          return ord * String(a.Status || '').localeCompare(String(b.Status || ''));
+        }
+        const da = new Date(a.Date || a.CreatedAt || 0).getTime();
+        const db = new Date(b.Date || b.CreatedAt || 0).getTime();
+        return ord * (da - db);
+      };
+      arr.sort(cmp);
+      return arr.slice(0, lim);
+    };
     
     // Modal and workflow state
     const showModal = ref(false);
@@ -524,6 +585,7 @@ export default {
     const assignmentNotes = ref('');
     const availableUsers = ref([]);
     const loadingUsers = ref(false);
+    const isAssigningIncident = ref(false);
     // Custom reviewer dropdown (dropdown.css)
     const reviewerDropdownOpen = ref(false);
     const reviewerSearchQuery = ref('');
@@ -898,105 +960,154 @@ export default {
     };
     
     // Fetch data from the API with performance optimizations
+    const applyStoreFindingsResult = (storeRes) => {
+      findings.value = storeRes.findings || [];
+      if (storeRes.summary && Object.keys(storeRes.summary).length > 0) {
+        summary.value = storeRes.summary;
+      } else {
+        summary.value = summarizeFindings(findings.value);
+      }
+    };
+
     const fetchData = async () => {
       console.log('🔄 [AuditFindings] fetchData called');
       error.value = null;
-      isQuickLoading.value = true;
-      
-      try {
-        // Check if we have any filters active
-        const hasFilters = filterStatus.value !== 'all' || 
-                          filterBusinessUnit.value !== 'all' || 
-                          filterCategory.value !== 'all' || 
-                          searchQuery.value || 
-                          selectedFramework.value;
-        
-        // Try to load from cache FIRST if no filters and cache has data
-        // Do NOT use empty cache - otherwise we never refetch and page stays empty
-        if (!hasFilters) {
-          const cachedFindings = incidentService.getData('auditFindings');
-          if (cachedFindings && Array.isArray(cachedFindings) && cachedFindings.length > 0) {
-            console.log(`✅ [AuditFindings] Loading ${cachedFindings.length} audit findings from cache - FAST!`);
-            findings.value = cachedFindings;
-            // Calculate summary from cached data
-            summary.value = {
-              open: cachedFindings.filter(f => f.Status?.toLowerCase() === 'open').length,
-              assigned: cachedFindings.filter(f => f.Status?.toLowerCase() === 'assigned').length,
-              closed: cachedFindings.filter(f => f.Status?.toLowerCase() === 'closed').length,
-              rejected: cachedFindings.filter(f => f.Status?.toLowerCase() === 'rejected').length,
-              mitigated: cachedFindings.filter(f => (f.Status || '').toLowerCase() === 'scheduled' || (f.Status || '').toLowerCase() === 'mitigated to risk').length,
-              total: cachedFindings.length
-            };
-            isQuickLoading.value = false;
-            return;
-          }
-        }
-        
-        // If filters or no cached data, fetch from API
-        console.log(hasFilters ? '🔍 [AuditFindings] Filters active, fetching from API' : '⚠️ [AuditFindings] No cached data, fetching from API');
-        
-        const params = {
-          // Set default limit to improve performance
-          limit: 100
-        };
-        
-        // Apply framework filter if selected
-        if (selectedFramework.value) {
-          params.framework_id = selectedFramework.value;
-          console.log('🔍 Applying framework filter to audit findings:', selectedFramework.value);
+
+      const summarySnapshot =
+        incidentStore.auditFindingsSummary &&
+        typeof incidentStore.auditFindingsSummary === 'object' &&
+        Object.keys(incidentStore.auditFindingsSummary).length > 0
+          ? { ...incidentStore.auditFindingsSummary }
+          : null;
+
+      incidentStore.hydrateAuditFindingsFromService();
+
+      const hasFilters = filterStatus.value !== 'all' ||
+        filterBusinessUnit.value !== 'all' ||
+        filterCategory.value !== 'all' ||
+        searchQuery.value ||
+        selectedFramework.value;
+
+      const params = {
+        limit: 100
+      };
+
+      if (selectedFramework.value) {
+        params.framework_id = selectedFramework.value;
+      }
+
+      if (filterStatus.value !== 'all') {
+        params.status = filterStatus.value;
+      }
+
+      if (filterBusinessUnit.value !== 'all') {
+        params.business_unit = filterBusinessUnit.value;
+      }
+
+      if (filterCategory.value !== 'all') {
+        params.category = filterCategory.value;
+      }
+
+      params.sort = sortBy.value;
+      params.order = sortBy.value === 'Date' ? 'desc' : 'asc';
+
+      if (searchQuery.value) {
+        params.search = searchQuery.value;
+      }
+
+      const bulkPrefetch = incidentStore.getDomainBulkData('auditFindings');
+      const canWarmPaint =
+        !hasFilters &&
+        Array.isArray(bulkPrefetch) &&
+        bulkPrefetch.length > 0;
+
+      if (canWarmPaint) {
+        if (summarySnapshot) {
+          summary.value = summarySnapshot;
         } else {
-          console.log('ℹ️ Loading audit findings for all frameworks');
+          summary.value = summarizeFindings(bulkPrefetch);
         }
-        
-        // Apply status filter if not 'all'
-        if (filterStatus.value !== 'all') {
-          params.status = filterStatus.value;
-        }
-
-        // Apply business unit filter if not 'all'
-        if (filterBusinessUnit.value !== 'all') {
-          params.business_unit = filterBusinessUnit.value;
-        }
-
-        // Apply category filter if not 'all'
-        if (filterCategory.value !== 'all') {
-          params.category = filterCategory.value;
-        }
-        
-        // Apply sorting
-        params.sort = sortBy.value;
-        params.order = sortBy.value === 'Date' ? 'desc' : 'asc';
-        
-        // Apply search query
-        if (searchQuery.value) {
-          params.search = searchQuery.value;
-        }
-        
-        console.log('📤 Fetching audit findings with params:', params);
-        
-        // Use Promise.race to implement timeout (params + timeout per apiService.get signature)
-        const fetchPromise = apiService.get(API_ENDPOINTS.AUDIT_FINDINGS, params, {
-          timeout: 10000
+        findings.value = clientSortAndLimitAuditFindings(bulkPrefetch, {
+          sort: params.sort,
+          order: params.order,
+          limit: params.limit
         });
-        
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Request timeout')), 10000)
-        );
-        
-        const payload = await Promise.race([fetchPromise, timeoutPromise]);
-        
-        if (payload && payload.success) {
-          findings.value = payload.data || [];
-          summary.value = payload.summary || {};
-          console.log('✅ Loaded', findings.value.length, 'audit findings from API');
-          
-          // Cache the results if no filters
-          if (!hasFilters && findings.value.length > 0) {
-            incidentService.setData('auditFindings', findings.value);
-            console.log('💾 Cached audit findings for future use');
-          }
-        } else {
-          throw new Error(payload?.message || 'Failed to load audit finding incidents');
+        isQuickLoading.value = false;
+
+        incidentStore.fetchAuditFindings({ params, force: false, background: true }).then((storeRes) => {
+          if (!storeRes.backgroundError) applyStoreFindingsResult(storeRes);
+        }).catch((err) => {
+          console.warn('[AuditFindings] Background revalidate failed (keeping warm data):', err?.message || err);
+        });
+        return;
+      }
+
+      const peeked = incidentStore.peekAuditFindings(params);
+      if (peeked) {
+        applyStoreFindingsResult({
+          findings: peeked.findings,
+          summary: peeked.summary,
+        });
+        isQuickLoading.value = false;
+        if (peeked.stale || hasFilters) {
+          incidentStore.fetchAuditFindings({ params, force: hasFilters, background: true }).then((storeRes) => {
+            if (!storeRes.backgroundError) applyStoreFindingsResult(storeRes);
+            const rows = storeRes.findings || [];
+            const noServerFilters =
+              !params.framework_id &&
+              !params.status &&
+              !params.business_unit &&
+              !params.category &&
+              !params.search;
+            if (rows.length > 0 && noServerFilters) {
+              incidentStore.setDomainBulkData('auditFindings', rows);
+            }
+          }).catch((err) => {
+            console.warn('[AuditFindings] Background revalidate (peek) failed:', err?.message || err);
+          });
+        }
+        return;
+      }
+
+      isQuickLoading.value = true;
+
+      try {
+        const storeRes = await incidentStore.fetchAuditFindings({
+          params,
+          force: hasFilters,
+          background: false,
+        });
+
+        applyStoreFindingsResult(storeRes);
+
+        const noServerFilters =
+          !params.framework_id &&
+          !params.status &&
+          !params.business_unit &&
+          !params.category &&
+          !params.search;
+        if (noServerFilters && findings.value.length > 0) {
+          incidentStore.setDomainBulkData('auditFindings', storeRes.findings || findings.value);
+        }
+
+        if (storeRes.fromCache && (storeRes.stale || hasFilters)) {
+          incidentStore.fetchAuditFindings({ params, force: hasFilters, background: true }).then((r) => {
+            if (r.backgroundError) return;
+            applyStoreFindingsResult(r);
+            const rows = r.findings || [];
+            if (
+              rows.length > 0 &&
+              !params.framework_id &&
+              !params.status &&
+              !params.business_unit &&
+              !params.category &&
+              !params.search
+            ) {
+              incidentStore.setDomainBulkData('auditFindings', rows);
+            }
+          }).catch((e) => {
+            console.warn('[AuditFindings] Background refresh (cache hit) failed:', e?.message || e);
+          });
         }
       } catch (err) {
         console.error('Error fetching audit finding incidents:', err);
@@ -1260,48 +1371,83 @@ export default {
         return;
       }
 
-      console.log('Assigning incident:', selectedIncident.value.IncidentId);
+      if (!selectedIncident.value?.IncidentId) {
+        PopupService.error('No incident selected for assignment. Please try again.');
+        return;
+      }
 
-      // Find reviewer details - assigner is automatically the current user (id may be number or string)
-      const reviewer = availableUsers.value.find(user => String(user.id) === String(selectedReviewer.value));
+      if (isAssigningIncident.value) {
+        return;
+      }
 
-      // Convert mitigations to the expected JSON format
+      const assignIncidentId = selectedIncident.value.IncidentId;
+      const reviewer = availableUsers.value.find(
+        (user) => String(user.id) === String(selectedReviewer.value)
+      );
+      if (!reviewer) {
+        PopupService.error('Selected reviewer not found. Please try again.');
+        return;
+      }
+
+      const reviewerIdNum = Number(selectedReviewer.value);
+      const reviewerId =
+        Number.isFinite(reviewerIdNum) && reviewerIdNum > 0 ? reviewerIdNum : selectedReviewer.value;
+
       const mitigationsJson = {};
       mitigationSteps.value.forEach((step, index) => {
         mitigationsJson[index + 1] = step.description;
       });
 
-      // Update incident with assignment details and mitigations
-      apiService.put(API_ENDPOINTS.INCIDENT_ASSIGN(selectedIncident.value.IncidentId), {
+      const payload = {
         status: 'In Progress',
         assigner_id: currentUserId,
         assigner_name: currentUserName.value,
-        reviewer_id: selectedReviewer.value,
+        reviewer_id: reviewerId,
         reviewer_name: reviewer.name,
         assignment_notes: assignmentNotes.value,
         assigned_date: new Date().toISOString(),
         mitigations: mitigationsJson,
-        due_date: mitigationDueDate.value
-      })
-      .then((body) => {
-        console.log('Incident assigned successfully - API response:', body);
-        
-        // Show success popup
-        PopupService.success(`Incident ${selectedIncident.value.IncidentId} assigned successfully with mitigation steps!`);
-        
-        // Refresh the audit findings data
-        fetchData();
-        
-        // Close workflow and redirect
-        closeAssignmentWorkflow();
-        setTimeout(() => {
-          router.push('/incident/incident');
-        }, 2000);
-      })
-      .catch(err => {
-        console.error('Error assigning incident:', err);
-        PopupService.error('Failed to assign incident. Please try again.');
-      });
+        due_date: mitigationDueDate.value,
+      };
+
+      isAssigningIncident.value = true;
+
+      PopupService.success(
+        `Incident ${assignIncidentId} assigned successfully with mitigation steps!`
+      );
+      closeAssignmentWorkflow();
+      setTimeout(() => {
+        router.push('/incident/incident');
+      }, 320);
+
+      apiService
+        .put(API_ENDPOINTS.INCIDENT_ASSIGN(assignIncidentId), payload)
+        .then((body) => {
+          console.log('Incident assigned — API confirmed (background):', body);
+          const ok = body == null || body.success !== false;
+          if (!ok) {
+            PopupService.error(
+              body?.message ||
+                'Assignment may not have been saved. Check the incident or Audit Findings and retry if needed.'
+            );
+            return;
+          }
+          incidentStore.invalidateAuditFindingsList();
+          fetchData().catch((e) => {
+            console.warn('[AuditFindings] Background list refresh after assign failed:', e?.message || e);
+          });
+        })
+        .catch((err) => {
+          console.error('Error assigning incident (background):', err);
+          if (!AccessUtils.handleApiError(err, 'assign incidents')) {
+            PopupService.error(
+              'The assignment may not have been saved on the server. Open Audit Findings, find the incident, and assign again if needed.'
+            );
+          }
+        })
+        .finally(() => {
+          isAssigningIncident.value = false;
+        });
     };
     
     const confirmSolve = (incident) => {
@@ -1319,7 +1465,7 @@ export default {
           // Show success popup
           PopupService.success(`Incident #${incident.IncidentId} escalated to Risk successfully!`);
           
-          // Refresh the audit findings data
+          incidentStore.invalidateAuditFindingsList();
           fetchData();
           
           // Close modal and redirect after 2 seconds
@@ -1357,7 +1503,7 @@ export default {
           // Show success popup
           PopupService.success(`Incident ${selectedIncident.value.IncidentId} rejected successfully!`);
           
-          // Refresh the audit findings data
+          incidentStore.invalidateAuditFindingsList();
           fetchData();
           
           // Close modal and redirect after 2 seconds
@@ -1558,9 +1704,13 @@ export default {
           }
         }
         
-        // Then check API
-        const payload = await apiService.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED);
-        console.log('✅ Selected framework API response:', payload);
+        // Then check centralized framework store/session sync
+        const frameworkStore = useFrameworkStore();
+        await frameworkStore.loadFrameworkFromSession();
+        const payload = {
+          frameworkId: frameworkStore.selectedFrameworkId,
+        };
+        console.log('✅ Selected framework store response:', payload);
         
         if (payload && payload.frameworkId) {
           const frameworkId = parseInt(payload.frameworkId);
@@ -1854,10 +2004,7 @@ export default {
       // First paint: fetch findings immediately (cache/API) without waiting for other prefetch jobs.
       fetchData();
 
-      // Do not block page on cross-module prefetch completion.
-      if (window.incidentDataFetchPromise) {
-        console.log('⏳ [AuditFindings] Incident prefetch still running in background');
-      }
+      void incidentStore.ensureIncidentDomainPrefetch({ includeIncidents: false }).catch(() => {});
 
       // Fetch frameworks and selected framework in background.
       await fetchFrameworks();
@@ -1906,13 +2053,13 @@ export default {
       window.addEventListener('storage', handleStorageChange);
       
       // Load supporting data from cache or API
-      const cachedUsers = incidentService.getData('incidentUsers');
+      const cachedUsers = incidentStore.getDomainBulkData('incidentUsers');
       if (cachedUsers && Array.isArray(cachedUsers) && cachedUsers.length > 0) {
         console.log(`✅ [AuditFindings] Loaded ${cachedUsers.length} users from cache`);
         availableUsers.value = cachedUsers;
       }
       
-      const cachedBusinessUnits = incidentService.getData('incidentBusinessUnits');
+      const cachedBusinessUnits = incidentStore.getDomainBulkData('incidentBusinessUnits');
       if (cachedBusinessUnits && Array.isArray(cachedBusinessUnits)) {
         console.log(`✅ [AuditFindings] Loaded ${cachedBusinessUnits.length} business units from cache`);
         businessUnitFilterConfig.value.values = [
@@ -1923,7 +2070,7 @@ export default {
         fetchBusinessUnits().catch(() => {});
       }
       
-      const cachedCategories = incidentService.getData('incidentCategories');
+      const cachedCategories = incidentStore.getDomainBulkData('incidentCategories');
       if (cachedCategories && Array.isArray(cachedCategories)) {
         console.log(`✅ [AuditFindings] Loaded ${cachedCategories.length} categories from cache`);
         categoryFilterConfig.value.values = [
@@ -1993,6 +2140,7 @@ export default {
       assignmentNotes,
       availableUsers,
       loadingUsers,
+      isAssigningIncident,
       reviewerDropdownOpen,
       reviewerSearchQuery,
       reviewerDropdownRef,
@@ -2020,6 +2168,7 @@ export default {
       isExportDropdownOpen,
       isExporting,
       isQuickLoading,
+      showFindingsSkeleton,
       
       // Framework filter
       selectedFramework,

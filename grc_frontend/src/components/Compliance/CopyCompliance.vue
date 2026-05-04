@@ -1334,7 +1334,7 @@
         @click="validateAndSubmit"
         :disabled="loading || !canSaveCopy"
       >
-        <span v-if="loading">Saving...</span>
+        <span v-if="isSaving">Saving...</span>
         <span v-else>Save Copy</span>
       </button>
           <button 
@@ -1351,14 +1351,17 @@
 </template>
 
 <script>
-import { complianceService } from '@/services/api';
-import complianceDataService from '@/services/complianceService'; // NEW: Use cached compliance data
 import { CompliancePopups } from './utils/popupUtils';
-import { API_ENDPOINTS } from '../../config/api.js';
-import apiService from '@/services/apiService.js';
+import { useComplianceStore } from '@/stores/compliance';
+import { useFrameworkStore } from '@/stores/framework';
 
 export default {
   name: 'CopyCompliance',
+  setup() {
+    const complianceStore = useComplianceStore()
+    const frameworkStore = useFrameworkStore()
+    return { complianceStore, frameworkStore }
+  },
   data() {
     return {
       compliance: null,
@@ -1370,6 +1373,7 @@ export default {
       targetPolicyId: '',
       targetSubPolicyId: '',
       loading: false,
+      isSaving: false,
       error: null,
       successMessage: null,
       impactError: false,
@@ -1599,7 +1603,7 @@ export default {
     async loadComplianceData(complianceId) {
       try {
         this.loading = true;
-        const response = await complianceService.getComplianceById(complianceId);
+        const response = await this.complianceStore.getComplianceById(complianceId);
         
         if (response.data && response.data.success) {
           this.compliance = response.data.data;
@@ -1956,7 +1960,7 @@ export default {
         // Get current user ID to exclude from reviewer list
         const currentUserId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || ''
         // Fetch reviewers filtered by RBAC permissions (ApproveCompliance) for compliance module
-        const responseData = await apiService.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
+        const responseData = await this.complianceStore.fetchUsersForReviewerSelection({
           module: 'compliance',
           current_user_id: currentUserId
         });
@@ -1980,63 +1984,28 @@ export default {
     async loadFrameworks() {
       try {
         this.loading = true;
-        this.error = null; // Clear any previous errors
-        console.log('🔍 [CopyCompliance] Checking for cached framework data...');
-        
-        // FIRST: Try to get data from cache
-        if (complianceDataService.hasFrameworksCache()) {
-          console.log('✅ [CopyCompliance] Using cached framework data');
-          const cachedFrameworks = complianceDataService.getData('frameworks') || [];
-          
-          this.frameworks = cachedFrameworks.map(fw => ({
-            id: fw.FrameworkId || fw.id,
-            name: fw.FrameworkName || fw.name
-          }));
-          
-          console.log(`[CopyCompliance] Loaded ${this.frameworks.length} frameworks from cache (prefetched on Home page)`);
-          
+        this.error = null;
+        const mapRows = (rows) => (rows || []).map(fw => ({
+          id: fw.FrameworkId ?? fw.id,
+          name: fw.FrameworkName ?? fw.name,
+        }));
+
+        if (Array.isArray(this.complianceStore.frameworks) && this.complianceStore.frameworks.length > 0) {
+          this.frameworks = mapRows(this.complianceStore.frameworks);
           if (this.frameworks.length === 0) {
-            console.warn('No frameworks found in cache');
             this.error = 'No frameworks available';
           }
-        } else {
-          // FALLBACK: Fetch from API if cache is empty
-          console.log('⚠️ [CopyCompliance] No cached data found, fetching from API...');
-          const response = await complianceService.getComplianceFrameworks();
-          
-          console.log('Frameworks API URL: /api/compliance/frameworks/'); // Debug log
-          console.log('Frameworks response:', response.data); // Debug log
-          
-          // Handle both response formats: direct array or success wrapper
-          let frameworksData;
-          if (response.data.success && response.data.frameworks) {
-            frameworksData = response.data.frameworks;
-          } else if (Array.isArray(response.data)) {
-            frameworksData = response.data;
-          } else {
-            console.error('Unexpected response format:', response.data);
-            this.error = 'Failed to load frameworks - invalid response format';
-            this.frameworks = [];
-            return;
-          }
-          
-          this.frameworks = frameworksData.map(fw => ({
-            id: fw.id || fw.FrameworkId,
-            name: fw.name || fw.FrameworkName
-          }));
-          
-          console.log(`[CopyCompliance] Loaded ${this.frameworks.length} frameworks directly from API (cache unavailable)`);
-          
-          // Update cache so subsequent pages benefit
-          if (frameworksData.length > 0) {
-            complianceDataService.setData('frameworks', frameworksData);
-            console.log('ℹ️ [CopyCompliance] Cache updated after direct API fetch');
-          }
-          
-          if (this.frameworks.length === 0) {
-            console.warn('No frameworks found');
-            this.error = 'No frameworks available';
-          }
+          this.loading = false;
+          void this.complianceStore.fetchFrameworks().then(() => {
+            this.frameworks = mapRows(this.complianceStore.frameworks);
+          });
+          return;
+        }
+        // Use complianceStore — replaces complianceDataService cache pattern
+        await this.complianceStore.fetchFrameworks();
+        this.frameworks = mapRows(this.complianceStore.frameworks);
+        if (this.frameworks.length === 0) {
+          this.error = 'No frameworks available';
         }
       } catch (error) {
         this.error = `Failed to load frameworks: ${error.response?.data?.message || error.message || 'Unknown error'}`;
@@ -2052,7 +2021,7 @@ export default {
         this.loading = true;
         this.error = null; // Clear any previous errors
         
-        const response = await complianceService.getCompliancePolicies(frameworkId);
+        const response = await this.complianceStore.getCompliancePolicies(frameworkId);
         
         console.log(`Policies API URL: /api/compliance/frameworks/${frameworkId}/policies/list/`); // Debug log
         console.log('Policies response for framework', frameworkId, ':', response.data); // Debug log
@@ -2094,7 +2063,7 @@ export default {
         this.loading = true;
         this.error = null; // Clear any previous errors
         
-        const response = await complianceService.getComplianceSubPolicies(policyId);
+        const response = await this.complianceStore.getComplianceSubPolicies(policyId);
         
         console.log(`Sub-policies API URL: /api/compliance/policies/${policyId}/subpolicies/`); // Debug log
         console.log('Sub-policies response for policy', policyId, ':', response.data); // Debug log
@@ -2145,13 +2114,14 @@ export default {
       return date.toISOString().split('T')[0]; // Format as YYYY-MM-DD
     },
     async submitCopy() {
-      if (this.loading) return; // Prevent double submission
+      if (this.loading || this.isSaving) return; // Prevent double submission
       if (!this.canSaveCopy) {
         this.error = 'Please fill all required fields and select a destination.';
         return;
       }
       try {
         this.loading = true;
+        this.isSaving = true;
         this.error = null;
         this.successMessage = null;
         
@@ -2263,7 +2233,7 @@ export default {
         console.log('- ApprovalDueDate:', cloneData.ApprovalDueDate);
         console.log('Final mitigation format being sent:', JSON.stringify(cloneData.mitigation));
 
-        const response = await complianceService.cloneCompliance(
+        const response = await this.complianceStore.cloneComplianceCompat(
           this.originalComplianceId,
           cloneData
         );
@@ -2290,6 +2260,7 @@ export default {
         this.error = 'Failed to copy compliance: ' + (error.response?.data?.message || error.message);
       } finally {
         this.loading = false;
+        this.isSaving = false;
       }
     },
     cancelCopy() {
@@ -2317,7 +2288,7 @@ export default {
         this.loading = true;
         
         // Load business units
-        const buResponse = await complianceService.getCategoryBusinessUnits('BusinessUnitsCovered');
+        const buResponse = await this.complianceStore.getCategoryBusinessUnits('BusinessUnitsCovered');
         console.log('BusinessUnitsCovered API response:', buResponse);
         if (buResponse.data.success && buResponse.data.data && Array.isArray(buResponse.data.data) && buResponse.data.data.length > 0) {
           // Validate that each item has the expected structure
@@ -2337,7 +2308,7 @@ export default {
         }
         
         // Load risk categories
-        const rcResponse = await complianceService.getCategoryBusinessUnits('RiskCategory');
+        const rcResponse = await this.complianceStore.getCategoryBusinessUnits('RiskCategory');
         console.log('RiskCategory API response:', rcResponse);
         if (rcResponse.data.success && rcResponse.data.data && Array.isArray(rcResponse.data.data) && rcResponse.data.data.length > 0) {
           // Validate that each item has the expected structure
@@ -2357,7 +2328,7 @@ export default {
         }
         
         // Load risk business impacts
-        const rbiResponse = await complianceService.getCategoryBusinessUnits('RiskBusinessImpact');
+        const rbiResponse = await this.complianceStore.getCategoryBusinessUnits('RiskBusinessImpact');
         console.log('RiskBusinessImpact API response:', rbiResponse);
         if (rbiResponse.data.success && rbiResponse.data.data && Array.isArray(rbiResponse.data.data) && rbiResponse.data.data.length > 0) {
           // Validate that each item has the expected structure
@@ -2587,7 +2558,7 @@ export default {
     // Add a new option to the category options
     async addNewOption(field, value) {
       try {
-        const response = await complianceService.addCategoryBusinessUnit({
+        const response = await this.complianceStore.addCategoryBusinessUnit({
           source: field,
           value: value
         });

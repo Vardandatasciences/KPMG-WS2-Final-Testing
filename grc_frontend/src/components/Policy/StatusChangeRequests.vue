@@ -1,5 +1,27 @@
 <template>
   <div class="statuschange-container">
+    <!-- Initial bootstrap: frameworks + user context + first task load -->
+    <div
+      v-if="pageBootstrapLoading"
+      class="policy-mod-sk status-change-page-skeleton"
+      aria-busy="true"
+      aria-label="Loading status change requests"
+    >
+      <div class="policy-mod-sk__hero"></div>
+      <div class="policy-mod-sk__controls">
+        <div class="policy-mod-sk__pill" style="max-width: 260px"></div>
+        <div class="policy-mod-sk__pill" style="max-width: 220px"></div>
+      </div>
+      <div class="policy-mod-sk__controls">
+        <div class="policy-mod-sk__pill" style="max-width: 140px"></div>
+        <div class="policy-mod-sk__pill" style="max-width: 160px"></div>
+      </div>
+      <div class="policy-mod-sk__table">
+        <div v-for="n in 8" :key="'scr-boot-' + n" class="policy-mod-sk__row"></div>
+      </div>
+    </div>
+
+    <template v-else>
     <!-- Breadcrumb Section for Selected Filters - Positioned at top -->
     <div v-if="(selectedFrameworkId && selectedFrameworkId !== '' && getSelectedFrameworkName !== '') || (selectedUserId && selectedUserId !== '' && getSelectedUserName !== '')" class="filter-breadcrumbs">
       <div v-if="selectedFrameworkId && selectedFrameworkId !== '' && getSelectedFrameworkName !== ''" class="filter-breadcrumbs__item">
@@ -88,8 +110,8 @@
            My Status Change Tasks
          </h3>
         
-        <div v-if="isLoadingMyTasks" class="loading-indicator">
-          <i class="fas fa-spinner fa-spin"></i> Loading my tasks...
+        <div v-if="isLoadingMyTasks" class="policy-tasks-skeleton" aria-busy="true">
+          <div v-for="n in 6" :key="'my-sk-' + n" class="policy-tasks-skeleton__row"></div>
         </div>
         
         <div v-else-if="myTasks.length === 0" class="no-tasks-message">
@@ -161,8 +183,8 @@
            Reviewer Status Change Tasks
          </h3>
         
-        <div v-if="isLoadingReviewerTasks" class="loading-indicator">
-          <i class="fas fa-spinner fa-spin"></i> Loading reviewer tasks...
+        <div v-if="isLoadingReviewerTasks" class="policy-tasks-skeleton" aria-busy="true">
+          <div v-for="n in 6" :key="'rev-sk-' + n" class="policy-tasks-skeleton__row"></div>
         </div>
         
         <div v-else-if="reviewerTasks.length === 0" class="no-tasks-message">
@@ -228,9 +250,10 @@
         </div>
       </div>
     </div>
+    </template>
 
     <!-- Legacy content for backwards compatibility -->
-    <div v-if="!activeTab" class="legacy-content">
+    <div v-if="!pageBootstrapLoading && !activeTab" class="legacy-content">
       <div v-if="isLoading" class="loading-indicator">
         <i class="fas fa-spinner fa-spin"></i> Loading status change requests...
       </div>
@@ -336,10 +359,20 @@
               <span>This {{ selectedRequest.ItemType }} is currently under review by the assigned reviewer. Only the assigned reviewer can approve or reject this status change request.</span>
             </div>
             <div v-else class="approval-buttons">
-              <button class="approve-btn" @click="approveRequest(selectedRequest)">
+              <button
+                class="approve-btn"
+                type="button"
+                :disabled="statusChangeActionInFlight"
+                @click="approveRequest(selectedRequest)"
+              >
                 Approve
               </button>
-              <button class="reject-btn btn-reject" @click="rejectRequest(selectedRequest)">
+              <button
+                class="reject-btn btn-reject"
+                type="button"
+                :disabled="statusChangeActionInFlight"
+                @click="rejectRequest(selectedRequest)"
+              >
                 Reject
               </button>
             </div>
@@ -513,10 +546,12 @@
 
 <script setup>
 import '../../assets/css/main.css'
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { API_ENDPOINTS } from '../../config/api.js'
 import apiService from '@/services/apiService'
+import { useFrameworkStore } from '@/stores/framework'
+import { usePolicyStore } from '@/stores/policy'
 import { PopupService } from '@/modules/popus/popupService'
 import PopupModal from '@/modules/popus/PopupModal.vue'
 import policyDataService from '@/services/policyService'
@@ -525,10 +560,13 @@ import CustomDropdown from '@/components/CustomDropdown.vue'
 import '@/assets/css/dropdown.css'
 
 const router = useRouter()
+const frameworkStore = useFrameworkStore()
+const policyStore = usePolicyStore()
 const requests = ref([])
 const isLoading = ref(false)
 const isLoadingMyTasks = ref(false)
 const isLoadingReviewerTasks = ref(false)
+const pageBootstrapLoading = ref(true)
 const showDetails = ref(false)
 const selectedRequest = ref(null)
 const reviewers = ref([])
@@ -542,6 +580,7 @@ const selectedUserId = ref(null) // Currently selected user (for administrators)
 const selectedUserInfo = ref(null) // Information about selected user
 const myTasks = ref([]) // Tasks assigned to user
 const reviewerTasks = ref([]) // Tasks where user is reviewer
+const statusChangeActionInFlight = ref(false)
 
 // Framework functionality
 const frameworks = ref([]) // List of frameworks
@@ -586,49 +625,39 @@ const switchTab = (tab) => {
 // Framework-related methods
 const fetchFrameworks = async () => {
   try {
-    console.log('🔍 DEBUG: Checking for cached frameworks in StatusChangeRequests...')
-
-    if (!window.policyDataFetchPromise && !policyDataService.hasFrameworksListCache()) {
-      console.log('🚀 DEBUG: Starting policy prefetch from StatusChangeRequests (user navigated directly)...')
+    console.log('🔍 StatusChangeRequests: frameworks — Pinia/cache first (no blocking prefetch)')
+    if (!window.policyDataFetchPromise && !policyStore.hasFrameworksCache() && !policyDataService.hasFrameworksListCache()) {
       window.policyDataFetchPromise = policyDataService.fetchAllPolicyData()
     }
-
-    if (window.policyDataFetchPromise) {
-      console.log('⏳ DEBUG: Waiting for policy prefetch to complete in StatusChangeRequests...')
-      try {
-        await window.policyDataFetchPromise
-        console.log('✅ DEBUG: Policy prefetch completed for StatusChangeRequests')
-      } catch (prefetchError) {
-        console.warn('⚠️ DEBUG: Policy prefetch failed in StatusChangeRequests, will fetch directly', prefetchError)
-      }
+    let source = []
+    let usedWarmCache = false
+    if (policyStore.hasFrameworksCache()) {
+      usedWarmCache = true
+      source = policyStore.getFrameworksCached() || []
+    } else if (policyDataService.hasFrameworksListCache()) {
+      usedWarmCache = true
+      source = policyDataService.getFrameworksList() || []
+    } else {
+      source = await policyStore.getAllFrameworks({ force: false })
+      policyDataService.setFrameworksList(source || [])
     }
-
-    if (policyDataService.hasFrameworksListCache()) {
-      console.log('✅ DEBUG: Using cached frameworks in StatusChangeRequests')
-      const cachedFrameworks = policyDataService.getFrameworksList() || []
-      frameworks.value = cachedFrameworks.map(fw => ({
-        id: fw.FrameworkId || fw.id,
-        name: fw.FrameworkName || fw.name
-      }))
-      console.log('✅ DEBUG: Frameworks loaded from cache:', frameworks.value)
-
-      await checkSelectedFrameworkFromSession()
-      return
-    }
-
-    console.log('⚠️ DEBUG: No cached frameworks, fetching via API in StatusChangeRequests...')
-    const response = await apiService.get(API_ENDPOINTS.FRAMEWORKS)
-    frameworks.value = response.map(fw => ({
-      id: fw.FrameworkId,
-      name: fw.FrameworkName
+    frameworks.value = (source || []).map((fw) => ({
+      id: fw.FrameworkId || fw.id,
+      name: fw.FrameworkName || fw.name
     }))
-    console.log('✅ DEBUG: Frameworks loaded:', frameworks.value)
-
-    policyDataService.setFrameworksList(response)
-    
     await checkSelectedFrameworkFromSession()
+    if (usedWarmCache) {
+      void policyStore.getAllFrameworks({ force: true }).then((fresh) => {
+        if (!Array.isArray(fresh) || !fresh.length) return
+        policyDataService.setFrameworksList(fresh)
+        frameworks.value = fresh.map((fw) => ({
+          id: fw.FrameworkId || fw.id,
+          name: fw.FrameworkName || fw.name
+        }))
+      }).catch(() => {})
+    }
   } catch (error) {
-    console.error('❌ DEBUG: Error fetching frameworks:', error)
+    console.error('❌ Error fetching frameworks:', error)
   }
 }
 
@@ -636,7 +665,11 @@ const fetchFrameworks = async () => {
 const checkSelectedFrameworkFromSession = async () => {
   try {
     console.log('🔍 DEBUG: Checking for selected framework from session in StatusChangeRequests...')
-    const response = await apiService.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED)
+    await frameworkStore.loadFrameworkFromSession()
+    const response = {
+      success: true,
+      frameworkId: frameworkStore.selectedFrameworkId,
+    }
     console.log('📊 DEBUG: Selected framework response:', response)
     
     if (response && response.success) {
@@ -675,24 +708,17 @@ const checkSelectedFrameworkFromSession = async () => {
 // Handle framework selection change
 const onFrameworkChange = async () => {
   if (selectedFrameworkId.value) {
-    // Save the selected framework to session
     try {
-      const userId = localStorage.getItem('user_id') || 'default_user'
-      console.log('🔍 DEBUG: Saving framework to session in StatusChangeRequests:', selectedFrameworkId.value)
-      
-      const response = await apiService.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, {
-        frameworkId: selectedFrameworkId.value,
-        userId: userId
+      const selected = frameworks.value.find(
+        (f) => String(f.id) === String(selectedFrameworkId.value)
+      )
+      await frameworkStore.setFramework({
+        id: selectedFrameworkId.value,
+        name: selected?.name || 'Selected Framework',
       })
-      
-      if (response && response.success) {
-        console.log('✅ DEBUG: Framework saved to session successfully in StatusChangeRequests')
-        console.log('🔑 DEBUG: Session key:', response.sessionKey)
-      } else {
-        console.error('❌ DEBUG: Failed to save framework to session in StatusChangeRequests')
-      }
+      console.log('✅ DEBUG: Framework saved via frameworkStore in StatusChangeRequests')
     } catch (error) {
-      console.error('❌ DEBUG: Error saving framework to session in StatusChangeRequests:', error)
+      console.error('❌ DEBUG: Error saving framework via frameworkStore in StatusChangeRequests:', error)
     }
     
     // Note: Removed loadUserTasks() call to keep content consistent
@@ -780,16 +806,16 @@ const onUserChange = () => {
     
     selectedUserInfo.value = selectedUser
     console.log('Selected user info:', selectedUser)
-    // Force reload with new user
-    loadUserTasks()
+    // Force reload with new user (avoid showing another user's cached slice)
+    loadUserTasks({ force: true })
   } else {
     selectedUserInfo.value = null
     console.log('Cleared tasks - no user selected')
   }
 }
 
-// Load tasks for the selected user
-const loadUserTasks = async () => {
+// Load tasks for the selected user (`force` bypasses Pinia TTL after mutations or user switch)
+const loadUserTasks = async ({ force = false } = {}) => {
   const targetUserId = selectedUserId.value || currentUserId.value
   
   console.log('Loading user tasks for user ID:', targetUserId)
@@ -806,165 +832,58 @@ const loadUserTasks = async () => {
   }
   
   try {
-    // Set loading states
     isLoadingMyTasks.value = true
     isLoadingReviewerTasks.value = true
     
-    // Fetch My Tasks (where user is the creator/owner)
-    await fetchMyTasks(targetUserId)
+    await Promise.all([
+      fetchMyTasks(targetUserId, { force }),
+      fetchReviewerTasks(targetUserId, { force })
+    ])
     
-    // Fetch Reviewer Tasks (where user is the reviewer)
-    await fetchReviewerTasks(targetUserId)
-    
-    // Debug: Log the final counts
     console.log('=== FINAL COUNTS ===')
     console.log('My Tasks Count:', myTasks.value.length)
     console.log('Reviewer Tasks Count:', reviewerTasks.value.length)
-    console.log('My Tasks:', myTasks.value.map(t => ({ name: t.FrameworkName || t.PolicyName, userId: t.UserId, reviewerId: t.ReviewerId, approvalId: t.ApprovalId })))
-    console.log('Reviewer Tasks:', reviewerTasks.value.map(t => ({ name: t.FrameworkName || t.PolicyName, userId: t.UserId, reviewerId: t.ReviewerId, approvalId: t.ApprovalId })))
-    
-    // Check if data is the same
-    const myTaskIds = myTasks.value.map(t => t.ApprovalId).sort()
-    const reviewerTaskIds = reviewerTasks.value.map(t => t.ApprovalId).sort()
-    const sameData = JSON.stringify(myTaskIds) === JSON.stringify(reviewerTaskIds)
-    console.log('Same data for both tabs:', sameData)
-    console.log('==================')
   } catch (error) {
     console.error('Error loading user tasks:', error)
     myTasks.value = []
     reviewerTasks.value = []
   } finally {
-    // Clear loading states
     isLoadingMyTasks.value = false
     isLoadingReviewerTasks.value = false
   }
 }
 
-// Fetch My Tasks (created by user)
-const fetchMyTasks = async (userId) => {
+// Fetch My Tasks (created by user) — Pinia cache + SWR unless `force`
+const fetchMyTasks = async (userId, { force = false } = {}) => {
   try {
     console.log(`Fetching my tasks for user ID: ${userId}`)
-    
-    // Fetch framework status change requests where user is the creator
-    const frameworkResponse = await apiService.get(API_ENDPOINTS.FRAMEWORK_STATUS_CHANGE_REQUESTS_USER(userId))
-    console.log('Framework response:', frameworkResponse)
-    
-    // Fetch policy status change requests where user is the creator
-    const policyResponse = await apiService.get(API_ENDPOINTS.POLICY_STATUS_CHANGE_REQUESTS_USER(userId))
-    console.log('Policy response:', policyResponse)
-    
-    let frameworkRequests = []
-    let policyRequests = []
-    
-    // Process framework requests
-    if (frameworkResponse && Array.isArray(frameworkResponse)) {
-      frameworkRequests = processFrameworks(frameworkResponse)
-      console.log('Processed framework requests:', frameworkRequests.length)
-    }
-    
-    // Process policy requests
-    if (policyResponse && Array.isArray(policyResponse)) {
-      policyRequests = processPolicies(policyResponse.map(request => ({
-        ...request,
-        RequestType: 'Policy Status Change',
-        ItemType: 'policy'
-      })))
-      console.log('Processed policy requests:', policyRequests.length)
-    }
-    
-    // Combine and sort by request date (newest first)
-    let allRequests = [...frameworkRequests, ...policyRequests]
-    allRequests.forEach(request => {
-      if (!request.ItemType) {
-        request.ItemType = 'framework'
-      }
-    })
-
-    // Framework dropdown is visual-only here; do not filter loaded task data.
-    
-    myTasks.value = allRequests.sort((a, b) => {
-      const dateA = new Date(a.RequestDate || 0)
-      const dateB = new Date(b.RequestDate || 0)
-      return dateB - dateA
-    })
-    
+    const [frameworkResponse, policyResponse] = await Promise.all([
+      policyStore.getFrameworkStatusChangeRequestsUser(userId, { force }),
+      policyStore.getPolicyStatusChangeRequestsUser(userId, { force })
+    ])
+    myTasks.value = buildMergedUserTasks(frameworkResponse, policyResponse)
     console.log('Final my tasks count:', myTasks.value.length)
-    console.log('My tasks data:', myTasks.value.map(t => ({
-      name: t.FrameworkName || t.PolicyName,
-      userId: t.UserId,
-      reviewerId: t.ReviewerId,
-      approvalId: t.ApprovalId
-    })))
-    
   } catch (error) {
     console.error('Error fetching my tasks:', error)
     myTasks.value = []
   }
 }
 
-// Fetch Reviewer Tasks (where user is reviewer)
-const fetchReviewerTasks = async (userId) => {
+// Fetch Reviewer Tasks — Pinia cache + SWR unless `force`
+const fetchReviewerTasks = async (userId, { force = false } = {}) => {
   try {
     console.log(`Fetching reviewer tasks for user ID: ${userId}`)
-    
-    // Fetch framework status change requests where user is the reviewer
-    const frameworkResponse = await apiService.get(API_ENDPOINTS.FRAMEWORK_STATUS_CHANGE_REQUESTS_REVIEWER(userId))
-    console.log('Framework reviewer response:', frameworkResponse)
-    
-    // Fetch policy status change requests where user is the reviewer
-    const policyResponse = await apiService.get(API_ENDPOINTS.POLICY_STATUS_CHANGE_REQUESTS_REVIEWER(userId))
-    console.log('Policy reviewer response:', policyResponse)
-    
-    let frameworkRequests = []
-    let policyRequests = []
-    
-    // Process framework requests
-    if (frameworkResponse && Array.isArray(frameworkResponse)) {
-      frameworkRequests = processFrameworks(frameworkResponse)
-      console.log('Processed framework reviewer requests:', frameworkRequests.length)
-    }
-    
-    // Process policy requests
-    if (policyResponse && Array.isArray(policyResponse)) {
-      policyRequests = processPolicies(policyResponse.map(request => ({
-        ...request,
-        RequestType: 'Policy Status Change',
-        ItemType: 'policy'
-      })))
-      console.log('Processed policy reviewer requests:', policyRequests.length)
-    }
-    
-    // Combine and sort by request date (newest first)
-    let allRequests = [...frameworkRequests, ...policyRequests]
-    allRequests.forEach(request => {
-      if (!request.ItemType) {
-        request.ItemType = 'framework'
-      }
-    })
-
-    // Framework dropdown is visual-only here; do not filter loaded task data.
-    
-    reviewerTasks.value = allRequests.sort((a, b) => {
-      const dateA = new Date(a.RequestDate || 0)
-      const dateB = new Date(b.RequestDate || 0)
-      return dateB - dateA
-    })
-    
+    const [frameworkResponse, policyResponse] = await Promise.all([
+      policyStore.getFrameworkStatusChangeRequestsReviewer(userId, { force }),
+      policyStore.getPolicyStatusChangeRequestsReviewer(userId, { force })
+    ])
+    reviewerTasks.value = buildMergedUserTasks(frameworkResponse, policyResponse)
     console.log('Final reviewer tasks count:', reviewerTasks.value.length)
-    console.log('Reviewer tasks data:', reviewerTasks.value.map(t => ({
-      name: t.FrameworkName || t.PolicyName,
-      userId: t.UserId,
-      reviewerId: t.ReviewerId,
-      approvalId: t.ApprovalId
-    })))
-    
   } catch (error) {
     console.error('Error fetching reviewer tasks:', error)
     reviewerTasks.value = []
   }
 }
-
-
 
 // Computed property for pending requests
 const pendingRequests = computed(() => {
@@ -1129,6 +1048,62 @@ const processPolicies = (policies) => {
   return policies
 }
 
+const buildMergedUserTasks = (frameworkResponse, policyResponse) => {
+  // Deep-clone Pinia/API rows before process* mutates Status / ActiveInactive.
+  // Otherwise in-place mutation triggers the deep watch on statusChangeRequestsByKey → infinite loop.
+  const cloneRows = (rows) => {
+    if (!rows || !Array.isArray(rows)) return []
+    try {
+      return JSON.parse(JSON.stringify(rows))
+    } catch {
+      return rows.map((r) => ({ ...r }))
+    }
+  }
+
+  let frameworkRequests = []
+  let policyRequests = []
+  if (frameworkResponse && Array.isArray(frameworkResponse)) {
+    frameworkRequests = processFrameworks(cloneRows(frameworkResponse))
+  }
+  if (policyResponse && Array.isArray(policyResponse)) {
+    policyRequests = processPolicies(
+      cloneRows(policyResponse).map((request) => ({
+        ...request,
+        RequestType: 'Policy Status Change',
+        ItemType: 'policy',
+      }))
+    )
+  }
+  const allRequests = [...frameworkRequests, ...policyRequests]
+  allRequests.forEach((request) => {
+    if (!request.ItemType) {
+      request.ItemType = 'framework'
+    }
+  })
+  return allRequests.sort((a, b) => {
+    const dateA = new Date(a.RequestDate || 0)
+    const dateB = new Date(b.RequestDate || 0)
+    return dateB - dateA
+  })
+}
+
+// When Pinia SWR background refresh finishes, update tables without full page reload
+watch(
+  () => policyStore.statusChangeRequestsByKey,
+  () => {
+    const targetUserId = selectedUserId.value || currentUserId.value
+    if (!targetUserId || (isAdministrator.value && !selectedUserId.value)) return
+    const fwU = policyStore.statusChangeRequestsByKey[`fw_user_${targetUserId}`]
+    const polU = policyStore.statusChangeRequestsByKey[`policy_user_${targetUserId}`]
+    const fwR = policyStore.statusChangeRequestsByKey[`fw_reviewer_${targetUserId}`]
+    const polR = policyStore.statusChangeRequestsByKey[`policy_reviewer_${targetUserId}`]
+    if (![fwU, polU, fwR, polR].some((x) => Array.isArray(x))) return
+    myTasks.value = buildMergedUserTasks(fwU || [], polU || [])
+    reviewerTasks.value = buildMergedUserTasks(fwR || [], polR || [])
+  },
+  { deep: true }
+)
+
 // Fetch status change requests
 const fetchRequests = async () => {
   isLoading.value = true
@@ -1192,14 +1167,12 @@ const closeRequestDetails = () => {
 
 const sendPushNotification = async (notificationData) => {
   try {
-    const response = await apiService.post(API_ENDPOINTS.PUSH_NOTIFICATION, notificationData);
-    if (response) {
-      console.log('Push notification sent successfully');
-    } else {
-      console.error('Failed to send push notification');
-    }
+    await apiService.post(API_ENDPOINTS.PUSH_NOTIFICATION, notificationData, {
+      background: true,
+    })
+    console.log('Push notification sent successfully')
   } catch (error) {
-    console.error('Error sending push notification:', error);
+    console.error('Error sending push notification:', error)
   }
 }
 
@@ -1221,83 +1194,89 @@ const approveRequest = async (request) => {
         'Enter any remarks (optional):',
         'Approval Remarks',
         async (remarks) => {
-          try {
-            const endpoint = request.ItemType === 'policy' 
+          if (statusChangeActionInFlight.value) return
+          const prevMyTasks = JSON.parse(JSON.stringify(myTasks.value))
+          const prevReviewerTasks = JSON.parse(JSON.stringify(reviewerTasks.value))
+
+          statusChangeActionInFlight.value = true
+
+          const updateRequestInArray = (array) => {
+            const index = array.findIndex((r) => r.ApprovalId === request.ApprovalId)
+            if (index !== -1) {
+              array[index].Status = 'Approved'
+              array[index].ApprovedNot = true
+              array[index].Remarks = remarks || 'Status change approved'
+              array[index].ApprovedDate = new Date().toISOString()
+            }
+          }
+
+          if (selectedRequest.value && selectedRequest.value.ApprovalId === request.ApprovalId) {
+            selectedRequest.value.Status = 'Approved'
+            selectedRequest.value.ApprovedNot = true
+            selectedRequest.value.Remarks = remarks || 'Status change approved'
+            selectedRequest.value.ApprovedDate = new Date().toISOString()
+          }
+          updateRequestInArray(myTasks.value)
+          updateRequestInArray(reviewerTasks.value)
+
+          const endpoint =
+            request.ItemType === 'policy'
               ? `/api/policy-approvals/${request.ApprovalId}/approve-status-change/`
               : `/api/framework-approvals/${request.ApprovalId}/approve-status-change/`
-            
-            await apiService.post(endpoint, {
-              approved: true,
-              remarks: remarks || 'Status change approved'
-            })
-            
-            const affectedCount = request.ItemType === 'policy' ? request.SubpolicyCount : request.PolicyCount
-            const affectedType = request.ItemType === 'policy' ? 'subpolicies' : 'policies'
-            
-            // Send push notification for successful approval
-            await sendPushNotification({
-              title: 'Status Change Request Approved',
-              message: `${itemType.charAt(0).toUpperCase() + itemType.slice(1)} "${itemName}" has been set to Inactive.${affectedCount > 0 ? ` ${affectedCount} ${affectedType} were also made inactive.` : ''}`,
-              category: 'status_change',
-              priority: 'high',
-              user_id: 'default_user'
-            });
-            
-            // Update the selectedRequest status immediately
-            if (selectedRequest.value && selectedRequest.value.ApprovalId === request.ApprovalId) {
-              selectedRequest.value.Status = 'Approved'
-              selectedRequest.value.ApprovedNot = true
-              selectedRequest.value.Remarks = remarks || 'Status change approved'
-              selectedRequest.value.ApprovedDate = new Date().toISOString()
-            }
-            
-            // Update the request status in the tasks arrays
-            const updateRequestInArray = (array) => {
-              const index = array.findIndex(r => r.ApprovalId === request.ApprovalId)
-              if (index !== -1) {
-                array[index].Status = 'Approved'
-                array[index].ApprovedNot = true
-                array[index].Remarks = remarks || 'Status change approved'
-                array[index].ApprovedDate = new Date().toISOString()
-              }
-            }
-            
-            updateRequestInArray(myTasks.value)
-            updateRequestInArray(reviewerTasks.value)
-            
-            PopupService.success(
-              `${itemType.charAt(0).toUpperCase() + itemType.slice(1)} "${itemName}" has been set to Inactive.${affectedCount > 0 ? ` ${affectedCount} ${affectedType} were also made inactive.` : ''}`,
-              'Status Changed'
-            )
-            
-            // Close modal and refresh the list
-            closeRequestDetails()
-            await loadUserTasks()
-          } catch (error) {
-            console.error('Error approving request:', error)
-            
-            // Handle specific error for reviewer restriction
-            if (error.response?.status === 403) {
-              PopupService.error(
-                'You are not the assigned reviewer for this request. Only the assigned reviewer can approve or reject status change requests.',
-                'Access Denied'
-              )
-            } else {
-              PopupService.error(
-                error.response?.data?.error || 'Failed to approve request. Please try again.',
-                'Approval Failed'
-              )
-            }
-            
-            // Send push notification for failed approval
-            await sendPushNotification({
-              title: 'Status Change Approval Failed',
-              message: `Failed to approve status change request for "${itemName}". Please try again.`,
-              category: 'status_change',
-              priority: 'high',
-              user_id: 'default_user'
-            });
+
+          const payload = {
+            approved: true,
+            remarks: remarks || 'Status change approved',
           }
+
+          const affectedCount =
+            request.ItemType === 'policy' ? request.SubpolicyCount : request.PolicyCount
+          const affectedType =
+            request.ItemType === 'policy' ? 'subpolicies' : 'policies'
+          const successMsg = `${itemType.charAt(0).toUpperCase() + itemType.slice(1)} "${itemName}" has been set to Inactive.${affectedCount > 0 ? ` ${affectedCount} ${affectedType} were also made inactive.` : ''}`
+
+          PopupService.success(successMsg, 'Status Changed')
+          closeRequestDetails()
+
+          void apiService
+            .post(endpoint, payload, { background: true })
+            .then(() => {
+              void sendPushNotification({
+                title: 'Status Change Request Approved',
+                message: successMsg,
+                category: 'status_change',
+                priority: 'high',
+                user_id: 'default_user',
+              })
+              void loadUserTasks({ force: true })
+            })
+            .catch(async (error) => {
+              console.error('Error approving request:', error)
+              myTasks.value = prevMyTasks
+              reviewerTasks.value = prevReviewerTasks
+              if (error.response?.status === 403) {
+                PopupService.error(
+                  'You are not the assigned reviewer for this request. Only the assigned reviewer can approve or reject status change requests.',
+                  'Access Denied'
+                )
+              } else {
+                PopupService.error(
+                  error.response?.data?.error ||
+                    'Failed to approve request. Please try again.',
+                  'Approval Failed'
+                )
+              }
+              await sendPushNotification({
+                title: 'Status Change Approval Failed',
+                message: `Failed to approve status change request for "${itemName}". Please try again.`,
+                category: 'status_change',
+                priority: 'high',
+                user_id: 'default_user',
+              })
+            })
+            .finally(() => {
+              statusChangeActionInFlight.value = false
+            })
         }
       )
     }
@@ -1318,80 +1297,85 @@ const rejectRequest = async (request) => {
         'Enter rejection reason (optional):',
         'Rejection Reason',
         async (remarks) => {
-          try {
-            const endpoint = request.ItemType === 'policy' 
+          if (statusChangeActionInFlight.value) return
+          const prevMyTasks = JSON.parse(JSON.stringify(myTasks.value))
+          const prevReviewerTasks = JSON.parse(JSON.stringify(reviewerTasks.value))
+
+          statusChangeActionInFlight.value = true
+
+          const updateRequestInArray = (array) => {
+            const index = array.findIndex((r) => r.ApprovalId === request.ApprovalId)
+            if (index !== -1) {
+              array[index].Status = 'Rejected'
+              array[index].ApprovedNot = false
+              array[index].Remarks = remarks || 'Status change rejected'
+              array[index].ApprovedDate = new Date().toISOString()
+            }
+          }
+
+          if (selectedRequest.value && selectedRequest.value.ApprovalId === request.ApprovalId) {
+            selectedRequest.value.Status = 'Rejected'
+            selectedRequest.value.ApprovedNot = false
+            selectedRequest.value.Remarks = remarks || 'Status change rejected'
+            selectedRequest.value.ApprovedDate = new Date().toISOString()
+          }
+          updateRequestInArray(myTasks.value)
+          updateRequestInArray(reviewerTasks.value)
+
+          const endpoint =
+            request.ItemType === 'policy'
               ? `/api/policy-approvals/${request.ApprovalId}/approve-status-change/`
               : `/api/framework-approvals/${request.ApprovalId}/approve-status-change/`
-            
-            await apiService.post(endpoint, {
-              approved: false,
-              remarks: remarks || 'Status change rejected'
-            })
-            
-            // Send push notification for successful rejection
-            await sendPushNotification({
-              title: 'Status Change Request Rejected',
-              message: `Status change request for "${itemName}" has been rejected. The ${itemType} remains Active.`,
-              category: 'status_change',
-              priority: 'medium',
-              user_id: 'default_user'
-            });
-            
-            // Update the selectedRequest status immediately
-            if (selectedRequest.value && selectedRequest.value.ApprovalId === request.ApprovalId) {
-              selectedRequest.value.Status = 'Rejected'
-              selectedRequest.value.ApprovedNot = false
-              selectedRequest.value.Remarks = remarks || 'Status change rejected'
-              selectedRequest.value.ApprovedDate = new Date().toISOString()
-            }
-            
-            // Update the request status in the tasks arrays
-            const updateRequestInArray = (array) => {
-              const index = array.findIndex(r => r.ApprovalId === request.ApprovalId)
-              if (index !== -1) {
-                array[index].Status = 'Rejected'
-                array[index].ApprovedNot = false
-                array[index].Remarks = remarks || 'Status change rejected'
-                array[index].ApprovedDate = new Date().toISOString()
-              }
-            }
-            
-            updateRequestInArray(myTasks.value)
-            updateRequestInArray(reviewerTasks.value)
-            
-            PopupService.success(
-              `Status change request for "${itemName}" has been rejected. The ${itemType} remains Active.`,
-              'Request Rejected'
-            )
-            
-            // Close modal and refresh the list
-            closeRequestDetails()
-            await loadUserTasks()
-          } catch (error) {
-            console.error('Error rejecting status change request:', error)
-            
-            // Handle specific error for reviewer restriction
-            if (error.response?.status === 403) {
-              PopupService.error(
-                'You are not the assigned reviewer for this request. Only the assigned reviewer can approve or reject status change requests.',
-                'Access Denied'
-              )
-            } else {
-              PopupService.error(
-                error.response?.data?.error || 'Failed to reject request. Please try again.',
-                'Rejection Failed'
-              )
-            }
-            
-            // Send push notification for failed rejection
-            await sendPushNotification({
-              title: 'Status Change Rejection Failed',
-              message: `Failed to reject status change request for "${itemName}". Please try again.`,
-              category: 'status_change',
-              priority: 'high',
-              user_id: 'default_user'
-            });
+
+          const payload = {
+            approved: false,
+            remarks: remarks || 'Status change rejected',
           }
+
+          const successMsg = `Status change request for "${itemName}" has been rejected. The ${itemType} remains Active.`
+
+          PopupService.success(successMsg, 'Request Rejected')
+          closeRequestDetails()
+
+          void apiService
+            .post(endpoint, payload, { background: true })
+            .then(() => {
+              void sendPushNotification({
+                title: 'Status Change Request Rejected',
+                message: successMsg,
+                category: 'status_change',
+                priority: 'medium',
+                user_id: 'default_user',
+              })
+              void loadUserTasks({ force: true })
+            })
+            .catch(async (error) => {
+              console.error('Error rejecting status change request:', error)
+              myTasks.value = prevMyTasks
+              reviewerTasks.value = prevReviewerTasks
+              if (error.response?.status === 403) {
+                PopupService.error(
+                  'You are not the assigned reviewer for this request. Only the assigned reviewer can approve or reject status change requests.',
+                  'Access Denied'
+                )
+              } else {
+                PopupService.error(
+                  error.response?.data?.error ||
+                    'Failed to reject request. Please try again.',
+                  'Rejection Failed'
+                )
+              }
+              await sendPushNotification({
+                title: 'Status Change Rejection Failed',
+                message: `Failed to reject status change request for "${itemName}". Please try again.`,
+                category: 'status_change',
+                priority: 'high',
+                user_id: 'default_user',
+              })
+            })
+            .finally(() => {
+              statusChangeActionInFlight.value = false
+            })
         }
       )
     }
@@ -1400,30 +1384,35 @@ const rejectRequest = async (request) => {
 
 // Fetch requests on component mount
 onMounted(async () => {
-  // Initialize current user ID
-  currentUserId.value = getCurrentUserId()
-  console.log('Current user ID:', currentUserId.value)
-  
-  // Initialize administrator status and available users
-  await initializeUserData()
-  
-  // Fetch frameworks and check session
-  await fetchFrameworks()
-  
-  // Load user tasks for the current tab
-  await loadUserTasks()
-  
-  // Fetch all requests for legacy compatibility
-  fetchRequests()
-  fetchReviewers()
-  
-  console.log('Component mounted - initial state:')
-  console.log('Active tab:', activeTab.value)
-  console.log('Is administrator:', isAdministrator.value)
-  console.log('Selected user ID:', selectedUserId.value)
-  console.log('Selected framework ID:', selectedFrameworkId.value)
-  console.log('My tasks count:', myTasks.value.length)
-  console.log('Reviewer tasks count:', reviewerTasks.value.length)
+  pageBootstrapLoading.value = true
+  try {
+    // Initialize current user ID
+    currentUserId.value = getCurrentUserId()
+    console.log('Current user ID:', currentUserId.value)
+    
+    // Initialize administrator status and available users
+    await initializeUserData()
+    
+    // Fetch frameworks and check session
+    await fetchFrameworks()
+    
+    // Load user tasks for the current tab
+    await loadUserTasks()
+    
+    // Fetch all requests for legacy compatibility
+    fetchRequests()
+    fetchReviewers()
+    
+    console.log('Component mounted - initial state:')
+    console.log('Active tab:', activeTab.value)
+    console.log('Is administrator:', isAdministrator.value)
+    console.log('Selected user ID:', selectedUserId.value)
+    console.log('Selected framework ID:', selectedFrameworkId.value)
+    console.log('My tasks count:', myTasks.value.length)
+    console.log('Reviewer tasks count:', reviewerTasks.value.length)
+  } finally {
+    pageBootstrapLoading.value = false
+  }
 })
 
 // Initialize user data and administrator status
@@ -2532,6 +2521,31 @@ const fetchReviewers = async () => {
   
   .status-change-requests-task_navigation .toggle-button {
     justify-content: center;
+  }
+}
+
+.policy-tasks-skeleton {
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #e8ecf2;
+  margin-top: 12px;
+}
+.policy-tasks-skeleton__row {
+  height: 52px;
+  border-bottom: 1px solid #eef2f7;
+  background: linear-gradient(90deg, #f4f6fa 0%, #fafbfd 50%, #f4f6fa 100%);
+  background-size: 200% 100%;
+  animation: policyTasksSkPulse 1.35s ease infinite;
+}
+.policy-tasks-skeleton__row:last-child {
+  border-bottom: none;
+}
+@keyframes policyTasksSkPulse {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
   }
 }
 </style> 

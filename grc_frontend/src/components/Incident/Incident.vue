@@ -72,9 +72,20 @@
     </div>
     
     <div class="incident-list-wrapper">
-      <!-- Loading State -->
-      <div v-if="isLoadingIncidents" class="incident-loading-container">
-       
+      <!-- Skeleton: first paint with no cached rows (cache-first / Pinia list store) -->
+      <div
+        v-if="showIncidentListSkeleton"
+        class="grc-skeleton-dashboard incident-list-skeleton"
+        aria-busy="true"
+        aria-label="Loading incidents"
+      >
+        <div class="grc-skeleton-table-wrap">
+          <div
+            v-for="n in 10"
+            :key="'sk-row-' + n"
+            class="grc-skeleton-row grc-skeleton-pulse"
+          />
+        </div>
       </div>
 
       <!-- Search Section (no filter-controls container) -->
@@ -146,7 +157,7 @@
 
       <!-- Dynamic Table (keep mounted; hide visually while loading to preserve pagination state) -->
       <DynamicTable
-        v-show="!isLoadingIncidents"
+        v-show="!showIncidentListSkeleton"
         :data="filteredIncidents"
         :columns="visibleTableColumns"
         :unique-key="'IncidentId'"
@@ -154,6 +165,8 @@
         :default-page-size="pageSize"
         :page-size-options="[10, 20, 50, 100]"
         :server-side-pagination="true"
+        :sync-current-page="currentPage"
+        :sync-page-size="pageSize"
         :total-count="totalIncidentsCount"
         @row-click="handleRowClick"
         @open-column-chooser="toggleColumnEditor"
@@ -450,13 +463,17 @@
 
 <script>
 import { axiosCompat as axiosInstance } from '@/services/apiServiceCompat.js';
+import apiService from '@/services/apiService.js';
 import { API_ENDPOINTS } from '../../config/api.js';
-import incidentService from '../../services/incidentService.js';
 import './Incident.css';
 import { PopupService } from '@/modules/popup';
 import { AccessUtils, SessionUtils } from '@/utils/accessUtils';
 import { openDownloadInNewTabWithAnchorFallback } from '@/utils/safeExternalNavigation';
 import { getExplicitFrameworkId } from '@/utils/frameworkContextStorage.js';
+import { mapStores } from 'pinia'
+import { useFrameworkStore } from '@/stores/framework'
+import { useFrameworkGlobalCacheStore } from '@/stores/frameworkGlobalCache'
+import { useIncidentStore } from '@/stores/incident'
 // import DynamicSearchBar from '@/components/Dynamicalsearch.vue';
 import DynamicTable from '@/components/DynamicTable.vue';
 import CustomDropdown from '@/components/CustomDropdown.vue';
@@ -534,6 +551,8 @@ export default {
       dataSourceMessage: '',
       // Measured duration of last incident list API fetch
       lastIncidentFetchMs: null,
+      /** True while first-page list is loading in background (non-blocking bootstrap). */
+      incidentsListFetchPending: false,
       // Keep Incident List independent from global framework auto-sync.
       // Users can still filter using this page's framework dropdown.
       syncFrameworkFromGlobal: false,
@@ -601,6 +620,17 @@ export default {
     }
   },
   computed: {
+    ...mapStores(useIncidentStore),
+    /** Table-shaped skeleton only when loading and no rows yet (prefetched full list counts as data). */
+    showIncidentListSkeleton() {
+      const hasRows =
+        (Array.isArray(this.filteredIncidents) && this.filteredIncidents.length > 0) ||
+        (Array.isArray(this.allIncidents) && this.allIncidents.length > 0)
+      const listLoading =
+        this.isLoadingIncidents ||
+        (this.incidentsListFetchPending === true && !hasRows)
+      return listLoading && !hasRows
+    },
     frameworkOptions() {
       return [
         { value: '', label: 'All Frameworks' },
@@ -746,6 +776,8 @@ export default {
     // Fetch metadata in background so incident list isn't blocked.
     // Do NOT auto-apply global selected framework here; default to all incidents.
     this.fetchFrameworks().catch(() => {});
+    // Start first-page list fetch early (dedupes with loadFromStoredData / peek + session restore).
+    void this.incidentStore.primeIncidentListFirstPage({ pageSize: 20, background: true }).catch(() => {});
     
     // Prefer cached incidents from IncidentService (loaded on login/home)
     // This mirrors the risk pages behavior: use cache first, then fallback.
@@ -756,7 +788,7 @@ export default {
         : ((Number(this.lastIncidentFetchMs) || 0) / 1000).toFixed(1);
       const count = this.totalIncidentsCount || (Array.isArray(this.incidents) ? this.incidents.length : 0);
       if (usedCache) {
-        this.dataSourceMessage = `Loaded ${count} incidents from cache (prefetched on Home page) in ${elapsed}s`;
+        this.dataSourceMessage = `Loaded ${count} incidents from cache (Pinia) in ${elapsed}s`;
       } else if (count > 0) {
         this.dataSourceMessage = `Loaded ${count} incidents directly from API in ${elapsed}s`;
       } else {
@@ -1450,8 +1482,21 @@ export default {
         mitigationsJson[index + 1] = step.description;
       });
 
-      // Update incident with assignment details and mitigations
-      axiosInstance.put(API_ENDPOINTS.INCIDENT_ASSIGN(this.selectedIncident.IncidentId), {
+      const assignIncidentId = this.selectedIncident.IncidentId
+      const optimisticPatch = {
+        Status: 'Assigned',
+        AssignerId: currentUserId,
+        ReviewerId: this.selectedReviewer,
+        assigner_name: this.currentUserName,
+        reviewer_name: reviewer.name,
+      }
+      const snapshot = this.applyOptimisticIncidentPatch(this.selectedIncident, optimisticPatch)
+
+      // Optimistic UX: success + close workflow immediately; persist assignment in the background.
+      PopupService.success('Incident assigned successfully with mitigation steps!');
+      this.closeAssignmentWorkflow();
+
+      const payload = {
         status: 'Assigned',
         assigner_id: currentUserId,
         assigner_name: this.currentUserName,
@@ -1460,100 +1505,63 @@ export default {
         assignment_notes: this.assignmentNotes,
         assigned_date: new Date().toISOString(),
         mitigations: mitigationsJson,
-        due_date: this.mitigationDueDate
-      })
-      .then(response => {
-        console.log('Incident assigned successfully - API response:', response.data);
-        
-        // Immediately update the local incident object for instant UI feedback
-        if (this.incidents && Array.isArray(this.incidents)) {
-          const incident = this.incidents.find(inc => inc.IncidentId === this.selectedIncident.IncidentId);
-          if (incident) {
-            incident.Status = 'Assigned';
-            incident.AssignerId = currentUserId;
-            incident.ReviewerId = this.selectedReviewer;
-            console.log('Updated local incident status to Assigned');
+        due_date: this.mitigationDueDate,
+      }
+
+      axiosInstance
+        .put(API_ENDPOINTS.INCIDENT_ASSIGN(assignIncidentId), payload)
+        .then((response) => {
+          console.log('Incident assigned — API confirmed:', response.data);
+          const ok = response.data == null || response.data.success !== false;
+          if (!ok) {
+            this.rollbackOptimisticIncident(assignIncidentId, snapshot);
+            PopupService.error(
+              response.data?.message || 'Assignment could not be saved. The list was reverted.'
+            );
+            return;
           }
-        }
-        
-        // Update filtered incidents as well
-        if (this.filteredIncidents && Array.isArray(this.filteredIncidents)) {
-          const filteredIncident = this.filteredIncidents.find(inc => inc.IncidentId === this.selectedIncident.IncidentId);
-          if (filteredIncident) {
-            filteredIncident.Status = 'Assigned';
-            filteredIncident.AssignerId = currentUserId;
-            filteredIncident.ReviewerId = this.selectedReviewer;
-          }
-        }
-        
-        // Refresh incidents list after assignment for data consistency
-        this.fetchIncidents();
-        
-        // Show success message and close workflow
-        PopupService.success('Incident assigned successfully with mitigation steps!');
-        this.closeAssignmentWorkflow();
-      })
-      .catch(error => {
-        console.error('Error assigning incident:', error);
-        
-        // Check if this is an access denied error first
+          this.afterIncidentListMutationSoftRevalidate();
+        })
+        .catch((error) => {
+          console.error('Error assigning incident (background):', error);
+          this.rollbackOptimisticIncident(assignIncidentId, snapshot);
         if (!AccessUtils.handleApiError(error, 'assign incidents')) {
-          // Only show generic error if it's not an access denied error
-          PopupService.error('Failed to assign incident. Please try again.');
+            PopupService.error(
+              'Assignment could not be saved on the server. The incident row was reverted — please try again.'
+            );
         }
       });
     },
-    confirmSolve(incident) {
+    confirmSolve(incidentOrEvent) {
+      const incident =
+        incidentOrEvent && incidentOrEvent.IncidentId != null ? incidentOrEvent : this.selectedIncident
+      if (!incident || incident.IncidentId == null) {
+        console.warn('confirmSolve: missing incident')
+        return
+      }
       console.log('Escalating incident to risk:', incident.IncidentId);
+      const snapshot = this.applyOptimisticIncidentPatch(incident, { Status: 'Scheduled' })
       
-      // Update incident status to "Scheduled"
       axiosInstance.put(API_ENDPOINTS.INCIDENT_STATUS(incident.IncidentId), {
         status: 'Scheduled'
       })
       .then(response => {
         console.log('Incident escalated to risk - API response:', response.data);
         
-        // Check if the response indicates success
         if (response.data.success) {
-          // Show success popup
           PopupService.success(`Incident #${incident.IncidentId} has been successfully escalated to Risk Management for further evaluation and mitigation.`, 'Escalated to Risk');
-          
-          // Immediately update the local incident object for instant UI feedback
-          if (this.incidents && Array.isArray(this.incidents)) {
-            const localIncident = this.incidents.find(inc => inc.IncidentId === incident.IncidentId);
-            if (localIncident) {
-              localIncident.Status = 'Scheduled';
-              console.log('Updated local incident status to Scheduled');
-            }
-          }
-          
-          // Update filtered incidents as well
-          if (this.filteredIncidents && Array.isArray(this.filteredIncidents)) {
-            const filteredIncident = this.filteredIncidents.find(inc => inc.IncidentId === incident.IncidentId);
-            if (filteredIncident) {
-              filteredIncident.Status = 'Scheduled';
-            }
-          }
-          
-          // Close the modal immediately
           this.closeModal();
-          
-          // Refresh incidents list after status update for data consistency
-          this.fetchIncidents();
+          this.afterIncidentListMutationSoftRevalidate();
         } else {
-          // Handle unsuccessful response
+          this.rollbackOptimisticIncident(incident.IncidentId, snapshot);
           console.error('API returned unsuccessful response:', response.data);
           PopupService.error(response.data.message || 'Failed to escalate incident. Please try again.');
         }
       })
       .catch(error => {
+        this.rollbackOptimisticIncident(incident.IncidentId, snapshot);
         console.error('Error updating incident status:', error);
-        console.error('Error details:', error.response);
-        console.error('Error message:', error.message);
-        
-        // Check if this is an access denied error first
         if (!AccessUtils.handleApiError(error, 'escalate incidents')) {
-          // Only show generic error if it's not an access denied error
           PopupService.error('Failed to escalate incident. Please try again.');
         }
       });
@@ -1596,8 +1604,7 @@ export default {
           // Close the modal immediately
           this.closeModal();
           
-          // Refresh incidents list after status update for data consistency
-          this.fetchIncidents();
+          this.afterIncidentListMutationSoftRevalidate();
         } else {
           // Handle unsuccessful response
           console.error('API returned unsuccessful response:', response.data);
@@ -1616,53 +1623,35 @@ export default {
         }
       });
     },
-    confirmClose(incident) {
+    confirmClose(incidentOrEvent) {
+      const incident =
+        incidentOrEvent && incidentOrEvent.IncidentId != null ? incidentOrEvent : this.selectedIncident
+      if (!incident || incident.IncidentId == null) {
+        console.warn('confirmClose: missing incident')
+        return
+      }
       console.log('Closing incident:', incident.IncidentId);
-      // Update incident status to "Closed"
+      const snapshot = this.applyOptimisticIncidentPatch(incident, { Status: 'Closed' })
+      this.closeModal();
+
       axiosInstance.put(API_ENDPOINTS.INCIDENT_STATUS(incident.IncidentId), {
         status: 'Closed'
       })
       .then(response => {
         console.log('Incident closed - API response:', response.data);
         
-        // Check if the response indicates success
         if (response.data.success) {
-          // Show success message
           PopupService.success(`Incident #${incident.IncidentId} closed successfully!`, 'Incident Closed');
-          
-          // Immediately update the local incident object for instant UI feedback
-          if (this.incidents && Array.isArray(this.incidents)) {
-            const localIncident = this.incidents.find(inc => inc.IncidentId === incident.IncidentId);
-            if (localIncident) {
-              localIncident.Status = 'Closed';
-              console.log('Updated local incident status to Closed');
-            }
-          }
-          
-          // Update filtered incidents as well
-          if (this.filteredIncidents && Array.isArray(this.filteredIncidents)) {
-            const filteredIncident = this.filteredIncidents.find(inc => inc.IncidentId === incident.IncidentId);
-            if (filteredIncident) {
-              filteredIncident.Status = 'Closed';
-            }
-          }
-          
-          // Close the modal immediately
-          this.closeModal();
-          
-          // Refresh incidents list after status update for data consistency
-          this.fetchIncidents();
+          this.afterIncidentListMutationSoftRevalidate();
         } else {
-          // Handle unsuccessful response
+          this.rollbackOptimisticIncident(incident.IncidentId, snapshot);
           console.error('API returned unsuccessful response:', response.data);
           PopupService.error(response.data.message || 'Failed to close incident. Please try again.');
         }
       })
       .catch(error => {
+        this.rollbackOptimisticIncident(incident.IncidentId, snapshot);
         console.error('Error updating incident status:', error);
-        console.error('Error details:', error.response);
-        console.error('Error message:', error.message);
-        
         if (!AccessUtils.handleApiError(error, 'close incidents')) {
           PopupService.error('Failed to close incident. Please try again.');
         }
@@ -1690,34 +1679,58 @@ export default {
 
       // Find reviewer details - assigner is automatically the current user
       const reviewer = this.availableUsers.find(user => user.id === this.selectedReviewer);
+      if (!reviewer) {
+        PopupService.error('Selected reviewer not found. Please try again.');
+        return;
+      }
 
-      // Update incident with assignment details
-      axiosInstance.put(API_ENDPOINTS.INCIDENT_ASSIGN(this.selectedIncident.IncidentId), {
+      if (!this.selectedIncident || !this.selectedIncident.IncidentId) {
+        PopupService.error('No incident selected for assignment. Please try again.');
+        return;
+      }
+
+      const assignId = this.selectedIncident.IncidentId
+      const snapshot = this.applyOptimisticIncidentPatch(this.selectedIncident, {
+        Status: 'Assigned',
+        AssignerId: currentUserId,
+        ReviewerId: this.selectedReviewer,
+        assigner_name: this.currentUserName,
+        reviewer_name: reviewer.name,
+      })
+
+      PopupService.success('Incident assigned successfully.');
+      this.closeModal();
+
+      const payload = {
         status: 'Assigned',
         assigner_id: currentUserId,
         assigner_name: this.currentUserName,
         reviewer_id: this.selectedReviewer,
         reviewer_name: reviewer.name,
         assignment_notes: this.assignmentNotes,
-        assigned_date: new Date().toISOString()
-      })
-      .then(response => {
-        console.log('Incident assigned successfully:', response.data);
-        // Refresh incidents list after assignment
-        this.fetchIncidents();
-        
-        // Show success message and close modal
-        setTimeout(() => {
-          this.closeModal();
-        }, 1500);
-      })
-      .catch(error => {
-        console.error('Error assigning incident:', error);
-        
-        // Check if this is an access denied error first
+        assigned_date: new Date().toISOString(),
+      }
+
+      axiosInstance
+        .put(API_ENDPOINTS.INCIDENT_ASSIGN(assignId), payload)
+        .then((response) => {
+          const ok = response.data == null || response.data.success !== false;
+          if (!ok) {
+            this.rollbackOptimisticIncident(assignId, snapshot);
+            PopupService.error(
+              response.data?.message || 'Assignment could not be saved. The list was reverted.'
+            );
+            return;
+          }
+          this.afterIncidentListMutationSoftRevalidate();
+        })
+        .catch((error) => {
+          this.rollbackOptimisticIncident(assignId, snapshot);
+          console.error('Error assigning incident (background):', error);
         if (!AccessUtils.handleApiError(error, 'assign incidents')) {
-          // Only show generic error if it's not an access denied error
-          PopupService.error('Failed to assign incident. Please try again.');
+            PopupService.error(
+              'Assignment could not be saved on the server. The incident row was reverted — please try again.'
+            );
         }
       });
     },
@@ -1785,13 +1798,12 @@ export default {
     // Load data from stored service (from login)
     // Returns true if cache was used, false if we had to call the API
     async loadFromStoredData() {
-      console.log('📦 Loading all data from incidentService...');
-      this.isLoadingIncidents = true;
+      console.log('📦 Loading all data from Pinia incident store + API...');
       let usedCache = false;
       
       try {
-        // Load incidents FIRST (most important)
-        const storedIncidents = incidentService.getData('incidents');
+        this.incidentStore.hydrateFullIncidentsFromService();
+        const storedIncidents = this.incidentStore.prefetchedFullIncidents;
         console.log('🔍 [loadFromStoredData] Checking stored incidents cache:', {
           exists: !!storedIncidents,
           isArray: Array.isArray(storedIncidents),
@@ -1830,8 +1842,9 @@ export default {
           if (!this.pageSize || this.pageSize <= 0) {
             this.pageSize = 20;
           }
-          await this.fetchIncidents(1, this.pageSize);
-          usedCache = false; // we used API, not cache
+          // Pinia/session first: peek is sync; slow API runs in background so shell is not blocked ~30s.
+          const listFromPinia = await this.fetchIncidents(1, this.pageSize, { deferNetwork: true });
+          usedCache = listFromPinia === true;
         }
         
         // Keep startup minimal: load only incident list at first paint.
@@ -1941,160 +1954,335 @@ export default {
       this.incidents = data.slice(start, end);
     },
     
-    async fetchIncidents(page = null, pageSize = null, options = {}) {
-      const startedAt = performance.now();
-      const minimalParamsOnly = options?.minimalParamsOnly === true;
-      try {
-        this.isLoadingIncidents = true;
-        
-        // Use provided page/pageSize or current state
-        const currentPage = page !== null ? page : this.currentPage;
-        const currentPageSize = pageSize !== null ? pageSize : this.pageSize;
-        
-        // Calculate offset for API
-        const offset = (currentPage - 1) * currentPageSize;
-        const limit = currentPageSize;
-        
-        console.log(`🔄 [fetchIncidents] Fetching page ${currentPage} with ${limit} items (offset: ${offset}) - CALLING API NOW!`);
-        
-        // Build query parameters for backend search, sort, and filters
-        const params = {
-          limit,
-          offset
-        };
-        
-        console.log('📤 [fetchIncidents] API call params:', params);
-        
-        if (!minimalParamsOnly) {
+    /**
+     * Build query params for /api/incident-incidents/ (shared by Pinia store cache key + request).
+     */
+    buildIncidentListRequestParams({ limit, offset, minimalParamsOnly }) {
+      const params = { limit, offset }
+      if (minimalParamsOnly) return params
           if (this.searchQuery && this.searchQuery.trim()) {
-            params.search = this.searchQuery.trim();
+        params.search = this.searchQuery.trim()
           }
-          
           if (this.sortField) {
-            params.sort_field = this.sortField;
-            params.sort_order = this.sortOrder;
-          }
-
-          // Add filter parameters
-          if (this.selectedFramework !== undefined && this.selectedFramework !== null && this.selectedFramework !== '') {
-            const frameworkId = Number.parseInt(String(this.selectedFramework), 10);
+        params.sort_field = this.sortField
+        params.sort_order = this.sortOrder
+      }
+      if (
+        this.selectedFramework !== undefined &&
+        this.selectedFramework !== null &&
+        this.selectedFramework !== ''
+      ) {
+        const frameworkId = Number.parseInt(String(this.selectedFramework), 10)
             if (Number.isInteger(frameworkId) && frameworkId > 0) {
-              params.framework_id = frameworkId;
-            }
-          }
-          if (this.selectedPolicy) {
-            params.policy_id = this.selectedPolicy;
-          }
-          if (this.selectedSubPolicy) {
-            params.subpolicy_id = this.selectedSubPolicy;
-          }
-          if (this.selectedPriority) {
-            params.priority = this.selectedPriority;
-          }
-          if (this.selectedBusinessUnit) {
-            params.business_unit = this.selectedBusinessUnit;
-          }
-          if (this.selectedBusinessCategory) {
-            params.business_category = this.selectedBusinessCategory;
-          }
-          if (this.selectedStatus) {
-            params.status = this.selectedStatus;
-          }
+          params.framework_id = frameworkId
         }
-        
-        // Fetch only the current page from API
-        const response = await axiosInstance.get(API_ENDPOINTS.INCIDENT_INCIDENTS, { 
-          // NOTE: Do not set a per-request timeout here so we inherit the
-          // global axiosInstance timeout (currently 5 minutes). This prevents
-          // premature frontend timeouts while the backend is still processing.
-          params
-        });
-        
-        // Handle response - extract incidents and total count
-        let incidentsData = [];
-        let totalCount = 0;
-        
-        if (response.data?.incidents && Array.isArray(response.data.incidents)) {
-          // Shape: { incidents: [...], total_count: N }
-          incidentsData = response.data.incidents;
-          totalCount = response.data.total_count || incidentsData.length;
-        } else if (
-          response.data?.data?.incidents &&
-          Array.isArray(response.data.data.incidents)
-        ) {
-          // Shape: { success: true, data: { incidents: [...], total_count: N } }
-          incidentsData = response.data.data.incidents;
-          totalCount = response.data.data.total_count || incidentsData.length;
-        } else if (response.data?.data && Array.isArray(response.data.data)) {
-          // Shape: { success: true, data: [...] }
-          incidentsData = response.data.data;
-          totalCount = response.data.total_count || incidentsData.length;
-        } else if (Array.isArray(response.data)) {
-          // Shape: [...]
-          incidentsData = response.data;
-          totalCount = incidentsData.length;
-        }
-        
-        // Update state
-        this.incidents = incidentsData;
-        this.totalIncidentsCount = totalCount;
-        this.currentPage = currentPage;
-        this.pageSize = currentPageSize;
-        
-        console.log(`✅ [fetchIncidents] Fetched page ${currentPage}: ${incidentsData.length} incidents (Total: ${totalCount})`);
-        
-        // Force re-render after data is loaded
-        this.$nextTick(() => {
-          this.handleResize();
-        });
-      } catch (error) {
-        console.error('Failed to fetch incidents:', error);
-        console.error('Error details:', error.response);
-        console.error('Error message:', error.message);
-        console.error('Error code:', error.code);
-        console.error('Error config:', error.config);
+      }
+      if (this.selectedPolicy) params.policy_id = this.selectedPolicy
+      if (this.selectedSubPolicy) params.subpolicy_id = this.selectedSubPolicy
+      if (this.selectedPriority) params.priority = this.selectedPriority
+      if (this.selectedBusinessUnit) params.business_unit = this.selectedBusinessUnit
+      if (this.selectedBusinessCategory) {
+        params.business_category = this.selectedBusinessCategory
+      }
+      if (this.selectedStatus) params.status = this.selectedStatus
+      return params
+    },
 
-        // Resiliency: backend validates query params strictly and can return 400
-        // for stale/invalid optional filters. Retry once with pagination-only params.
-        if (
-          error?.response?.status === 400 &&
-          !minimalParamsOnly
-        ) {
-          console.warn('⚠️ [fetchIncidents] 400 from list API, retrying with minimal pagination params only');
-          return await this.fetchIncidents(page, pageSize, { minimalParamsOnly: true });
+    _snapshotIncidentRow(incident) {
+      if (!incident) return null
+      try {
+        if (typeof structuredClone === 'function') return structuredClone(incident)
+      } catch {
+        /* ignore */
+      }
+      try {
+        return JSON.parse(JSON.stringify(incident))
+      } catch {
+        return { ...incident }
+      }
+    },
+
+    /**
+     * Update visible rows + Pinia list caches immediately; return snapshot for rollback.
+     */
+    applyOptimisticIncidentPatch(incident, partial) {
+      if (!incident || incident.IncidentId == null || !partial) return null
+      const snapshot = this._snapshotIncidentRow(incident)
+      const id = incident.IncidentId
+      const idStr = String(id)
+      const list = this.incidents
+      if (Array.isArray(list)) {
+        const idx = list.findIndex((r) => String(r.IncidentId) === idStr)
+        if (idx >= 0) Object.assign(list[idx], partial)
+      }
+      if (Array.isArray(this.allIncidents) && this.allIncidents.length) {
+        const j = this.allIncidents.findIndex((r) => String(r.IncidentId) === idStr)
+        if (j >= 0) Object.assign(this.allIncidents[j], partial)
+      }
+      this.incidentStore.patchIncidentInListCaches(id, partial)
+      return snapshot
+    },
+
+    rollbackOptimisticIncident(incidentId, snapshot) {
+      if (!snapshot) return
+      this.incidentStore.restoreIncidentRowInListCaches(incidentId, snapshot)
+      const idStr = String(incidentId)
+      const restored = this._snapshotIncidentRow(snapshot)
+      if (!restored) return
+      const restoredCopy = this._snapshotIncidentRow(snapshot)
+      if (Array.isArray(this.incidents)) {
+        const idx = this.incidents.findIndex((r) => String(r.IncidentId) === idStr)
+        if (idx >= 0) this.incidents.splice(idx, 1, restored)
+      }
+      if (Array.isArray(this.allIncidents) && this.allIncidents.length) {
+        const j = this.allIncidents.findIndex((r) => String(r.IncidentId) === idStr)
+        if (j >= 0) this.allIncidents.splice(j, 1, restoredCopy || restored)
+      }
+    },
+
+    /** Reconcile with server without blocking UI (no invalidate / forced refetch). */
+    afterIncidentListMutationSoftRevalidate() {
+      const limit = this.pageSize
+      const offset = (this.currentPage - 1) * limit
+      this.scheduleIncidentsListBackgroundRevalidate({
+        page: this.currentPage,
+        pageSize: this.pageSize,
+        requestParams: this.buildIncidentListRequestParams({
+          limit,
+          offset,
+          minimalParamsOnly: false,
+        }),
+        minimalParamsOnly: false,
+      })
+    },
+
+    refetchIncidentsListForced() {
+      this.incidentStore.invalidateServerIncidentList();
+      return this.fetchIncidents(null, null, { force: true });
+    },
+
+    applyIncidentsListResult(result) {
+      if (!result || result.backgroundError) return
+      this.incidents = result.items || []
+      this.totalIncidentsCount = result.total ?? 0
+      if (result.page != null) this.currentPage = result.page
+      if (result.pageSize != null) this.pageSize = result.pageSize
+      this.allIncidents = []
+    },
+
+    /**
+     * After painting from Pinia (peek), refresh the same list query in the background and merge when still relevant.
+     */
+    scheduleIncidentsListBackgroundRevalidate({ page, pageSize, requestParams, minimalParamsOnly }) {
+      const identityKey = this.incidentStore.getIncidentsListQueryKey(page, pageSize, requestParams)
+      this.incidentStore
+        .fetchIncidentsPage({
+          page,
+          pageSize,
+          requestParams,
+          force: true,
+          background: true,
+        })
+        .then((r) => {
+          if (!r || r.backgroundError) return
+          const limit = this.pageSize
+          const offset = (this.currentPage - 1) * this.pageSize
+          const nowParams = this.buildIncidentListRequestParams({
+            limit,
+            offset,
+            minimalParamsOnly: minimalParamsOnly === true,
+          })
+          const nowKey = this.incidentStore.getIncidentsListQueryKey(this.currentPage, this.pageSize, nowParams)
+          if (nowKey !== identityKey) return
+          this.applyIncidentsListResult(r)
+          this.$nextTick(() => {
+            this.handleResize()
+          })
+        })
+        .catch(() => {})
+    },
+
+    /**
+     * @param {Object} [options]
+     * @param {boolean} [options.deferNetwork] When true with default page-1 + no filters: paint from Pinia/session if
+     *   available, then run the slow list GET in the background so `await fetchIncidents` returns immediately.
+     * @returns {Promise<boolean|void>} true when the list was painted immediately from Pinia (peek); false when a network path was started or completed.
+     */
+    async fetchIncidents(page = null, pageSize = null, options = {}) {
+      const startedAt = performance.now()
+      const minimalParamsOnly = options?.minimalParamsOnly === true
+      const force = options?.force === true
+      const skipBackgroundRevalidate = options?.skipBackgroundRevalidate === true
+      const deferNetwork = options.deferNetwork === true
+
+      const currentPage = page !== null ? page : this.currentPage
+      const currentPageSize = pageSize !== null ? pageSize : this.pageSize
+      const offset = (currentPage - 1) * currentPageSize
+      const limit = currentPageSize
+
+      this.incidentStore.restoreIncidentListPageFromSession()
+
+      console.log(
+        `🔄 [fetchIncidents] page ${currentPage} size ${limit} offset ${offset} (Pinia cache-first)`
+      )
+
+      const requestParams = this.buildIncidentListRequestParams({
+        limit,
+        offset,
+        minimalParamsOnly,
+      })
+      console.log('📤 [fetchIncidents] API call params:', requestParams)
+
+      if (!force) {
+        const quick = this.incidentStore.peekIncidentsListCache(currentPage, currentPageSize, requestParams)
+        if (quick) {
+          this.applyIncidentsListResult(quick)
+          this.isLoadingIncidents = false
+          // Only hit the network when this slice is stale — always scheduling SWR stacked many
+          // concurrent ~30s background GETs (one per cache hit / page) and looked like Pinia was ignored.
+          if (!skipBackgroundRevalidate && quick.stale === true) {
+            this.scheduleIncidentsListBackgroundRevalidate({
+              page: currentPage,
+              pageSize: currentPageSize,
+              requestParams,
+              minimalParamsOnly,
+            })
+          }
+          this.lastIncidentFetchMs = performance.now() - startedAt
+          this.$nextTick(() => {
+            this.handleResize()
+          })
+          console.log(
+            `✅ [fetchIncidents] page ${currentPage}: ${quick.items.length} incidents from Pinia (stale=${!!quick.stale}), background revalidate scheduled`
+          )
+          return true
         }
-        
-        // Check if this is an access denied error first
+      }
+
+      const isDefaultFirstPage =
+        currentPage === 1 &&
+        !minimalParamsOnly &&
+        !this.hasActiveFilters
+
+      if (deferNetwork && !force && isDefaultFirstPage) {
+        const expectKey = this.incidentStore.getIncidentsListQueryKey(1, currentPageSize, requestParams)
+        this.isLoadingIncidents = false
+        this.incidentsListFetchPending = true
+        this.incidentStore
+          .fetchIncidentsPage({
+            page: currentPage,
+            pageSize: currentPageSize,
+            requestParams,
+            force: false,
+            background: true,
+          })
+          .then((r) => {
+            if (!r || r.backgroundError) return
+            const nowParams = this.buildIncidentListRequestParams({
+              limit: this.pageSize,
+              offset: 0,
+              minimalParamsOnly: false,
+            })
+            const nowKey = this.incidentStore.getIncidentsListQueryKey(1, this.pageSize, nowParams)
+            if (nowKey !== expectKey) return
+            this.applyIncidentsListResult(r)
+            this.$nextTick(() => {
+              this.handleResize()
+            })
+          })
+          .catch((err) => {
+            console.error('Deferred incident list fetch failed:', err)
+            PopupService.error('Failed to load incidents. Please try again.')
+          })
+          .finally(() => {
+            this.incidentsListFetchPending = false
+            this.lastIncidentFetchMs = performance.now() - startedAt
+          })
+        console.log('✅ [fetchIncidents] Background list fetch started (shell not blocked on slow API)')
+        return false
+      }
+
+      this.isLoadingIncidents = true
+      try {
+        const result = await this.incidentStore.fetchIncidentsPage({
+          page: currentPage,
+          pageSize: currentPageSize,
+          requestParams,
+          force,
+          background: false,
+        })
+
+        this.applyIncidentsListResult(result)
+
+        console.log(
+          `✅ [fetchIncidents] page ${currentPage}: ${(result.items || []).length} incidents (total ${result.total}, fromCache=${result.fromCache})`
+        )
+
+        if (result.fromCache && !force && !skipBackgroundRevalidate && result.stale === true) {
+          this.scheduleIncidentsListBackgroundRevalidate({
+            page: currentPage,
+            pageSize: currentPageSize,
+            requestParams,
+            minimalParamsOnly,
+          })
+        }
+
+        this.$nextTick(() => {
+          this.handleResize()
+        })
+        return false
+      } catch (error) {
+        console.error('Failed to fetch incidents:', error)
+        console.error('Error details:', error.response)
+        console.error('Error message:', error.message)
+        console.error('Error code:', error.code)
+        console.error('Error config:', error.config)
+
+        if (error?.response?.status === 400 && !minimalParamsOnly) {
+          console.warn(
+            '⚠️ [fetchIncidents] 400 from list API, retrying with minimal pagination params only'
+          )
+          return await this.fetchIncidents(page, pageSize, {
+            minimalParamsOnly: true,
+            force: options.force,
+            skipBackgroundRevalidate: options.skipBackgroundRevalidate,
+          })
+        }
+
         if (!AccessUtils.handleApiError(error, 'view incidents')) {
-          // Only show generic error if it's not an access denied error
-          let errorMessage = 'Failed to load incidents. ';
+          let errorMessage = 'Failed to load incidents. '
           
           if (error.code === 'ECONNABORTED') {
-            errorMessage += 'Request timed out. The database may be slow or contain many records. Please try applying filters to narrow down the results, or contact your administrator if the issue persists.';
+            errorMessage +=
+              'Request timed out. The database may be slow or contain many records. Please try applying filters to narrow down the results, or contact your administrator if the issue persists.'
           } else if (error.code === 'ERR_NETWORK') {
-            errorMessage += 'Network error. Please check your connection.';
+            errorMessage += 'Network error. Please check your connection.'
           } else if (error.response && error.response.status === 500) {
-            errorMessage += 'Server error. The backend may be experiencing issues. Please try again later or contact your administrator.';
+            errorMessage +=
+              'Server error. The backend may be experiencing issues. Please try again later or contact your administrator.'
           } else if (error.response && error.response.status) {
-            errorMessage += `Server error (${error.response.status}). Please try again.`;
+            errorMessage += `Server error (${error.response.status}). Please try again.`
           } else {
-            errorMessage += 'Please try again.';
+            errorMessage += 'Please try again.'
           }
           
-          PopupService.error(errorMessage);
+          PopupService.error(errorMessage)
         }
+        return false
       } finally {
-        this.lastIncidentFetchMs = performance.now() - startedAt;
-        this.isLoadingIncidents = false;
+        this.lastIncidentFetchMs = performance.now() - startedAt
+        this.isLoadingIncidents = false
       }
     },
     handlePageChange(page) {
       console.log(`📄 [Incident.vue] Page changed to: ${page}`);
-      this.currentPage = page;
       // If we have cached allIncidents, paginate on client; otherwise fall back to API
       if (Array.isArray(this.allIncidents) && this.allIncidents.length > 0) {
+        this.currentPage = page;
         this.applyClientSideFiltersAndPaging();
       } else {
+        // Server-side list: do not set currentPage until rows match (avoids "page 6" footer with page 1 rows
+        // while sync-current-page updates DynamicTable before fetch completes).
         this.fetchIncidents(page, this.pageSize);
       }
     },
@@ -2106,19 +2294,20 @@ export default {
       } else {
         this.pageSize = parseInt(newSize, 10);
       }
-      this.currentPage = 1; // Reset to first page
       if (Array.isArray(this.allIncidents) && this.allIncidents.length > 0) {
+        this.currentPage = 1; // Reset to first page when slicing client-side cache
         this.applyClientSideFiltersAndPaging();
       } else {
+        // Server-side: currentPage updates when applyIncidentsListResult runs (page 1).
         this.fetchIncidents(1, this.pageSize);
       }
     },
     async fetchUsers() {
       try {
         // Try to get from stored data first
-        const storedUsers = incidentService.getData('incidentUsers');
+        const storedUsers = this.incidentStore.getDomainBulkData('incidentUsers');
         if (storedUsers && Array.isArray(storedUsers) && storedUsers.length > 0) {
-          console.log('📦 Using stored users data from incidentService:', storedUsers.length, 'users');
+          console.log('📦 Using stored users data from Pinia:', storedUsers.length, 'users');
           this.availableUsers = storedUsers.map(user => ({
             id: user.UserId || user.id,
             name: user.UserName || user.name,
@@ -2168,7 +2357,7 @@ export default {
         
         // Update cache for future use
         if (this.availableUsers.length > 0) {
-          incidentService.setData('incidentUsers', users);
+          this.incidentStore.setDomainBulkData('incidentUsers', users);
         }
       } catch (error) {
         console.error('❌ Failed to fetch users:', error);
@@ -2199,7 +2388,7 @@ export default {
           
           // Update cache
           if (this.availableUsers.length > 0) {
-            incidentService.setData('incidentUsers', users);
+            this.incidentStore.setDomainBulkData('incidentUsers', users);
           }
         } catch (fallbackError) {
           console.error('❌ Fallback endpoint also failed:', fallbackError);
@@ -2215,45 +2404,124 @@ export default {
         }
       }
     },
+    /**
+     * Normalize framework rows for the incident filter dropdown (`id` / `name`).
+     */
+    mapRowsToIncidentFrameworkOptions(rows) {
+      const out = []
+      const seen = new Set()
+      for (const fw of rows || []) {
+        const rawId =
+          fw.id ?? fw.FrameworkId ?? fw.framework_id ?? fw.FrameworkID ?? fw.value
+        if (rawId == null || rawId === '') continue
+        const sid = String(rawId)
+        if (seen.has(sid)) continue
+        seen.add(sid)
+        const name =
+          fw.name ??
+          fw.FrameworkName ??
+          fw.framework_name ??
+          fw.FrameworkName_plain ??
+          `Framework ${sid}`
+        out.push({ ...fw, id: rawId, name })
+      }
+      return out
+    },
+
+    /** Drop known inactive rows; keep rows with no status (public / approved lists). */
+    filterNonInactiveFrameworkRows(rows) {
+      return (rows || []).filter((fw) => {
+        const activeStatus = fw.status || fw.Status || fw.ActiveInactive || fw.activeInactive || ''
+        if (!activeStatus) return true
+        const inactive =
+          activeStatus === 'Inactive' ||
+          activeStatus === 'inactive' ||
+          activeStatus === 'INACTIVE'
+        return !inactive
+      })
+    },
+
+    /**
+     * Framework dropdown: reuse session/global/Pinia lists first so we do not stack another
+     * slow `all-policies/frameworks` or `/api/frameworks/` call on top of Home / navbar loads.
+     */
     async fetchFrameworks() {
       try {
-        const response = await axiosInstance.get(API_ENDPOINTS.COMPLIANCE_ALL_POLICIES_FRAMEWORKS);
-        let allFrameworks = [];
-        
-        if (response.data && Array.isArray(response.data)) {
-          allFrameworks = response.data;
-        } else if (response.data && response.data.frameworks && Array.isArray(response.data.frameworks)) {
-          allFrameworks = response.data.frameworks;
-        } else if (response.data && response.data.data && Array.isArray(response.data.data)) {
-          allFrameworks = response.data.data;
-        } else {
-          allFrameworks = [];
+        const frameworkStore = useFrameworkStore()
+        frameworkStore.ensureUserScopedState()
+        const globalCache = useFrameworkGlobalCacheStore()
+        globalCache.hydrate(frameworkStore.getCurrentUserContextId())
+
+        const fromGlobal = this.mapRowsToIncidentFrameworkOptions(
+          this.filterNonInactiveFrameworkRows(globalCache.frameworks || [])
+        )
+        if (fromGlobal.length) {
+          this.frameworks = fromGlobal
+          this.incidentStore.setDomainBulkData('incidentFrameworks', fromGlobal)
+          return
         }
-        
-        // Filter to show only active frameworks (ActiveInactive === 'Active')
-        // The API returns frameworks with 'status' field containing ActiveInactive value
-        this.frameworks = allFrameworks.filter(fw => {
-          // Check various possible field names for active status
-          // API returns 'status' field with ActiveInactive value ('Active' or 'Inactive')
-          const activeStatus = fw.status || fw.Status || fw.ActiveInactive || fw.activeInactive || '';
-          const isActive = activeStatus === 'Active' || activeStatus === 'active' || activeStatus === 'ACTIVE';
-          
-          return isActive;
-        });
-        
-        console.log(`Fetched frameworks: ${allFrameworks.length} total, ${this.frameworks.length} active`);
-        console.log('Active frameworks:', this.frameworks);
+
+        const cachedPinia = this.incidentStore.getDomainBulkData('incidentFrameworks')
+        if (Array.isArray(cachedPinia) && cachedPinia.length) {
+          this.frameworks = this.mapRowsToIncidentFrameworkOptions(cachedPinia)
+          return
+        }
+
+        const storeFw = frameworkStore.frameworks || []
+        if (storeFw.length) {
+          const mapped = this.mapRowsToIncidentFrameworkOptions(
+            this.filterNonInactiveFrameworkRows(storeFw)
+          )
+          if (mapped.length) {
+            this.frameworks = mapped
+            this.incidentStore.setDomainBulkData('incidentFrameworks', mapped)
+            return
+          }
+        }
+
+        let responseData
+        try {
+          responseData = await apiService.get('/api/frameworks/approved-active/', {}, { timeout: 60000 })
+        } catch (primaryErr) {
+          console.warn('[Incident] approved-active frameworks failed, falling back:', primaryErr?.message || primaryErr)
+          const response = await axiosInstance.get(API_ENDPOINTS.COMPLIANCE_ALL_POLICIES_FRAMEWORKS, {
+            timeout: 120000,
+          })
+          responseData = response.data
+        }
+
+        let allFrameworks = []
+        if (Array.isArray(responseData)) {
+          allFrameworks = responseData
+        } else if (responseData?.frameworks && Array.isArray(responseData.frameworks)) {
+          allFrameworks = responseData.frameworks
+        } else if (Array.isArray(responseData?.data)) {
+          allFrameworks = responseData.data
+        }
+
+        this.frameworks = this.mapRowsToIncidentFrameworkOptions(
+          this.filterNonInactiveFrameworkRows(allFrameworks)
+        )
+        if (this.frameworks.length) {
+          this.incidentStore.setDomainBulkData('incidentFrameworks', this.frameworks)
+        }
       } catch (error) {
         if (!AccessUtils.handleApiError(error, 'view frameworks')) {
-          console.error('Error fetching frameworks:', error);
+          console.error('Error fetching frameworks:', error)
         }
-        this.frameworks = [];
+        this.frameworks = []
       }
     },
     async fetchSelectedFramework() {
       try {
         console.log('🔍 Fetching selected framework for incident list...');
-        const frameworkResponse = await axiosInstance.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED);
+        const frameworkStore = useFrameworkStore();
+        await frameworkStore.loadFrameworkFromSession();
+        const frameworkResponse = {
+          data: {
+            frameworkId: frameworkStore.selectedFrameworkId,
+          },
+        };
         console.log('Framework response:', frameworkResponse.data);
         
         if (frameworkResponse.data && frameworkResponse.data.frameworkId) {
@@ -2293,9 +2561,9 @@ export default {
     async fetchBusinessUnits() {
       try {
         // Try to get from stored data first
-        const storedBusinessUnits = incidentService.getData('incidentBusinessUnits');
+        const storedBusinessUnits = this.incidentStore.getDomainBulkData('incidentBusinessUnits');
         if (storedBusinessUnits && Array.isArray(storedBusinessUnits)) {
-          console.log('📦 Using stored business units data from incidentService');
+          console.log('📦 Using stored business units data from Pinia');
           this.businessUnits = storedBusinessUnits;
           return;
         }
@@ -2308,6 +2576,9 @@ export default {
         } else {
           this.businessUnits = [];
         }
+        if (this.businessUnits.length > 0) {
+          this.incidentStore.setDomainBulkData('incidentBusinessUnits', this.businessUnits);
+        }
         console.log('Fetched business units:', this.businessUnits);
       } catch (error) {
         console.error('Error fetching business units:', error);
@@ -2317,9 +2588,9 @@ export default {
     async fetchBusinessCategories() {
       try {
         // Try to get from stored data first
-        const storedCategories = incidentService.getData('incidentCategories');
+        const storedCategories = this.incidentStore.getDomainBulkData('incidentCategories');
         if (storedCategories && Array.isArray(storedCategories)) {
-          console.log('📦 Using stored categories data from incidentService');
+          console.log('📦 Using stored categories data from Pinia');
           this.businessCategories = storedCategories;
           return;
         }
@@ -2331,6 +2602,9 @@ export default {
           this.businessCategories = response.data;
         } else {
           this.businessCategories = [];
+        }
+        if (this.businessCategories.length > 0) {
+          this.incidentStore.setDomainBulkData('incidentCategories', this.businessCategories);
         }
         console.log('Fetched business categories:', this.businessCategories);
       } catch (error) {

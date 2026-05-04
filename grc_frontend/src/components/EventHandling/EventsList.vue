@@ -68,16 +68,36 @@
 
     <!-- Filters Section -->
     <div class="events-filters-section">
-      <EventFilters :selected-framework-from-session="selectedFrameworkFromSession" @filter-change="handleFilterChange" />
+      <EventFilters
+        :selected-framework-from-session="selectedFrameworkFromSession"
+        :selected-framework-name-from-session="selectedFrameworkNameFromSession"
+        @filter-change="handleFilterChange"
+      />
     </div>
 
     <!-- Events Table - Fill remaining screen space -->
     <div class="events-content-wrapper">
-      <!-- Loading State -->
-      <div v-if="loading" class="events-loading-spinner">
-        <div class="events-spinner-content">
-          <div class="events-spinner-circle"></div>
-          <p class="events-loading-text">Loading events...</p>
+      <!-- Initial / cold load: skeleton (store loading flips after permissions + sync paths; avoids empty "0" flash) -->
+      <div
+        v-if="showEventsListSkeleton"
+        class="grc-skeleton-dashboard events-list-skeleton"
+        aria-busy="true"
+        aria-label="Loading events list"
+      >
+        <div class="events-list-skeleton-toolbar grc-skeleton-pulse" />
+        <div
+          v-for="g in 3"
+          :key="'events-list-sk-g-' + g"
+          class="events-list-skeleton-group"
+        >
+          <div class="events-list-skeleton-header grc-skeleton-pulse" />
+          <div class="grc-skeleton-table-wrap">
+            <div
+              v-for="n in 5"
+              :key="'events-list-sk-g-' + g + '-r-' + n"
+              class="grc-skeleton-row grc-skeleton-pulse"
+            />
+          </div>
         </div>
       </div>
 
@@ -90,7 +110,7 @@
             </svg>
           </div>
           <p class="events-error-message">{{ error }}</p>
-          <button @click="fetchEvents" class="events-retry-btn">
+          <button type="button" @click="() => fetchEvents({ force: true })" class="events-retry-btn">
             Try Again
           </button>
         </div>
@@ -395,13 +415,20 @@
       @saved="handleEditSaved"
     />
 
-    <!-- Popup Modal -->
-    <PopupModal />
   </div>
 </template>
 
 <script>
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import {
+  ref,
+  computed,
+  onMounted,
+  onActivated,
+  onUnmounted,
+  watch,
+  nextTick
+} from 'vue'
+import { storeToRefs } from 'pinia'
 import { useRouter, useRoute } from 'vue-router'
 import { eventService } from '../../services/api'
 import { useEventPermissions } from '../../composables/useEventPermissions'
@@ -409,11 +436,10 @@ import EventFilters from './EventFilters.vue'
 import EventViewPopup from './EventViewPopup.vue'
 import ApprovalModal from './ApprovalModal.vue'
 import EventEditModal from './EventEditModal.vue'
-import { PopupService } from '../../modules/popus/popupService'
-import PopupModal from '../../modules/popus/PopupModal.vue'
+import { PopupService } from '../../modules/popup/popupService'
 import AccessUtils from '../../utils/accessUtils'
-import apiService from '@/services/apiService.js'
-import eventDataService from '../../services/eventService' // NEW: Centralized event data service
+import { useEventsStore } from '@/stores/events'
+import { useFrameworkStore } from '@/stores/framework'
 import { openDownloadInNewTabWithAnchorFallback } from '@/utils/safeExternalNavigation'
 import {
   sanitizeExportCellValue,
@@ -426,8 +452,7 @@ export default {
     EventFilters,
     EventViewPopup,
     ApprovalModal,
-    EventEditModal,
-    PopupModal
+    EventEditModal
   },
   setup() {
     const router = useRouter()
@@ -455,11 +480,23 @@ export default {
     const showRejectModal = ref(false)
     const showArchiveModal = ref(false)
     const modalType = ref('approve')
-    const events = ref([])
+    const eventsStore = useEventsStore()
+    const { events } = storeToRefs(eventsStore)
     const filteredEvents = ref([])
-    const loading = ref(false)
-    const error = ref(null)
+    const loading = computed(() => eventsStore.loading.list)
+    const error = computed(() => eventsStore.errors.list)
+    /** False only after the first onMounted fetch attempt finishes (permissions/session run first). */
+    const isInitialEventsLoad = ref(true)
+    /** keep-alive calls onActivated on first mount too — skip duplicate list fetch until a later activation. */
+    let eventsListActivateCount = 0
+    const showEventsListSkeleton = computed(
+      () =>
+        isInitialEventsLoad.value ||
+        (loading.value && (!events.value || events.value.length === 0))
+    )
     const selectedFrameworkFromSession = ref(null)
+    const selectedFrameworkNameFromSession = ref('')
+    const frameworkStore = useFrameworkStore()
     const showExportDropdown = ref(false)
     const selectedExportFormat = ref(null)
     const exportFormats = ['Select Format', 'Excel', 'CSV', 'PDF', 'JSON', 'XML']
@@ -592,22 +629,11 @@ export default {
 
     const handleEventClick = async (event) => {
       try {
-        // Fetch detailed event information including evidence
-        const response = await eventService.getEventDetails(event.id)
-        if (response.data.success) {
-          // Store the event data in sessionStorage for the event details page
-          const eventDetailsData = {
-            ...response.data.event,
-            isFromList: true
-          }
-          sessionStorage.setItem('eventDetailsData', JSON.stringify(eventDetailsData))
-          
-          // Navigate to event details page
-          router.push('/event-handling/details')
-        } else {
-          console.error('Failed to fetch event details:', response.data.message)
-          PopupService.error('Failed to fetch event details. Please try again.', 'Error')
-        }
+        await eventsStore.fetchEventById(event.id, { force: false })
+        router.push({
+          name: 'EventDetails',
+          params: { eventId: String(event.id) },
+        })
       } catch (err) {
         console.error('Error fetching event details:', err)
         PopupService.error('Failed to load event details. Please try again.', 'Error')
@@ -620,10 +646,8 @@ export default {
 
     const handleEdit = () => {
       showPopup.value = false
-      
-      // Store the event data in sessionStorage for the event creation page to use
       if (selectedEvent.value) {
-        sessionStorage.setItem('editEventData', JSON.stringify({
+        eventsStore.setCreationDraft('edit', {
           id: selectedEvent.value.id,
           title: selectedEvent.value.title,
           description: selectedEvent.value.description,
@@ -636,13 +660,11 @@ export default {
           frequency: selectedEvent.value.frequency,
           startDate: selectedEvent.value.start_date,
           endDate: selectedEvent.value.end_date,
-          evidence: selectedEvent.value.evidence || [], // Include existing evidence
-          evidence_string: selectedEvent.value.evidence_string || '', // Include evidence string
-          isEdit: true
-        }))
+          evidence: selectedEvent.value.evidence || [],
+          evidence_string: selectedEvent.value.evidence_string || '',
+          isEdit: true,
+        })
       }
-      
-      // Navigate to event creation page
       router.push('/event-handling/create')
     }
 
@@ -667,60 +689,93 @@ export default {
     }
 
     const handleModalSubmit = async (comment) => {
+      const eventId = selectedEvent.value?.id
+
+      if (!eventId) {
+        console.error('Missing event ID')
+        return
+      }
+
+      const data = {
+        comments: comment || ''
+      }
+
+      // Optimistic archive: update UI first, show global success (App PopupModal), then POST archive/ off the critical path.
+      if (modalType.value === 'archive') {
+        const rollback = eventsStore.removeEventFromListForRollback(eventId)
+        applyFilters()
+        eventsStore.pushStatusUpdate({ id: eventId, status: 'Archived' })
+        showApprovalModal.value = false
+        showRejectModal.value = false
+        showArchiveModal.value = false
+        showPopup.value = false
+        selectedEvent.value = null
+
+        await nextTick()
+        await nextTick()
+        PopupService.success('Event archived successfully.', 'Success')
+
+        window.setTimeout(() => {
+          void (async () => {
+            try {
+              const response = await eventService.archiveEvent(eventId, data)
+              if (!response?.data?.success) {
+                throw new Error(response?.data?.message || 'Archive failed')
+              }
+            } catch (error) {
+              console.error('Archive request failed:', error)
+              if (rollback) {
+                eventsStore.restoreEventInList(rollback)
+                applyFilters()
+              }
+              PopupService.error(
+                error?.response?.data?.message ||
+                  error?.message ||
+                  'Failed to archive event. Restored in the list.',
+                'Archive Error'
+              )
+            }
+          })()
+        }, 0)
+        return
+      }
+
       try {
-        const eventId = selectedEvent.value?.id
-        
-        if (!eventId) {
-          console.error('Missing event ID')
-          return
-        }
-        
-        const data = {
-          comments: comment || ''
-        }
-        
         let response
         if (modalType.value === 'approve') {
           response = await eventService.approveEvent(eventId, data)
         } else if (modalType.value === 'reject') {
           response = await eventService.rejectEvent(eventId, data)
         } else {
-          // Handle archive or other actions
           console.log(`${modalType.value} event:`, eventId, comment)
         }
-        
+
         if (response && response.data.success) {
-          // Store status update for Events Queue to pick up
           const statusUpdate = {
             id: eventId,
-            status: modalType.value === 'approve' ? 'Approved' : 
-                   modalType.value === 'reject' ? 'Rejected' : 
-                   modalType.value === 'archive' ? 'Archived' : 'Updated'
+            status:
+              modalType.value === 'approve'
+                ? 'Approved'
+                : modalType.value === 'reject'
+                  ? 'Rejected'
+                  : 'Updated',
           }
-          
-          // Get existing updates or create new array
-          const existingUpdates = sessionStorage.getItem('eventStatusUpdates')
-          const updates = existingUpdates ? JSON.parse(existingUpdates) : []
-          updates.push(statusUpdate)
-          sessionStorage.setItem('eventStatusUpdates', JSON.stringify(updates))
-          
-          console.log('Stored status update for Events Queue:', statusUpdate)
-          
-          // Update the cache with the new status
+          eventsStore.pushStatusUpdate(statusUpdate)
+          console.log('Stored status update for Events Queue (Pinia):', statusUpdate)
+
           if (eventId) {
-            eventDataService.updateEvent(eventId, { 
-              status: statusUpdate.status 
+            eventsStore.patchEventInList(eventId, {
+              status: statusUpdate.status,
             })
             console.log('[EventsList] ✅ Updated event status in cache:', eventId, statusUpdate.status)
           }
-          
-          // Refresh the events list
-          await fetchEvents()
-          alert(response.data.message)
+
+          await fetchEvents({ force: true })
+          PopupService.success(response.data.message || 'Action completed.', 'Success')
         } else if (response) {
-          alert(response.data.message || 'Action failed')
+          PopupService.warning(response.data.message || 'Action failed', 'Notice')
         }
-        
+
         showApprovalModal.value = false
         showRejectModal.value = false
         showArchiveModal.value = false
@@ -750,13 +805,13 @@ export default {
         
         // Update the cache with the updated event
         if (updatedEvent && updatedEvent.id) {
-          eventDataService.updateEvent(updatedEvent.id, updatedEvent)
+          eventsStore.patchEventInList(updatedEvent.id, updatedEvent)
           console.log('[EventsList] ✅ Updated event in cache:', updatedEvent.id)
         }
         
         // Refresh the entire events list to ensure we have the latest data
         console.log('Refreshing events list...')
-        await fetchEvents()
+        await fetchEvents({ force: true })
         console.log('Events list refreshed successfully')
         
         // Show success message
@@ -800,9 +855,9 @@ export default {
     const sessionUserId = ref(null)
     const loadSessionUserId = async () => {
       try {
-        const r = await eventService.getCurrentUser()
-        if (r.data?.success && r.data.user?.id != null) {
-          sessionUserId.value = String(r.data.user.id)
+        const user = await eventsStore.fetchEventSessionUser({ force: false })
+        if (user?.id != null) {
+          sessionUserId.value = String(user.id)
         }
       } catch (e) {
         console.warn('EventsList: could not load session user id', e)
@@ -815,84 +870,42 @@ export default {
       return String(selectedEvent.value.reviewer_id) === sessionUserId.value
     })
 
-    const fetchEvents = async () => {
+    const fetchEvents = async (options = {}) => {
+      const force = !!options.force
       try {
-        loading.value = true
-        error.value = null
-        
-        // ==========================================
-        // NEW: Check if data is already cached from HomeView prefetch
-        // ==========================================
-        console.log('[EventsList] Checking for cached event data...')
-        
-        if (eventDataService.hasValidCache()) {
-          // Use cached data from HomeView prefetch
-          console.log('[EventsList] ✅ Using cached event data from HomeView prefetch')
-          events.value = eventDataService.getData('events') || []
-          applyFilters() // Apply current filters to the cached data
-          loading.value = false
-          return
-        }
-        
-        // ==========================================
-        // Fallback: If cache is empty, wait for prefetch or fetch directly
-        // ==========================================
-        console.log('[EventsList] No cache found, checking for ongoing prefetch...')
-        
-        // Check if prefetch is in progress
-        if (window.eventDataFetchPromise) {
-          console.log('[EventsList] ⏳ Waiting for ongoing prefetch to complete...')
-          await window.eventDataFetchPromise
-          events.value = eventDataService.getData('events') || []
-          applyFilters()
-          loading.value = false
-          return
-        }
-        
-        // Last resort: Fetch directly from API
-        console.log('[EventsList] 🔄 Fetching event data from API (cache miss)...')
-        const response = await eventService.getEventsList()
-        if (response.data.success) {
-          events.value = response.data.events
-          // Cache the fetched data for future use
-          eventDataService.setData('events', events.value)
-          applyFilters() // Apply current filters to the new data
-        } else {
-          PopupService.error(response.data.message || 'Failed to fetch events', 'Error')
-        }
+        await eventsStore.fetchEventsList({ force })
+        applyFilters()
       } catch (err) {
         console.error('Error fetching events:', err)
-        
-        // Check if it's an access denied error (403)
+
         if (err.response && err.response.status === 403) {
-          AccessUtils.showAccessDenied('Event Management - Events List', 'You don\'t have permission to view events. Required permission: event.view_all_event or event.view_module_event')
+          AccessUtils.showAccessDenied(
+            'Event Management - Events List',
+            "You don't have permission to view events. Required permission: event.view_all_event or event.view_module_event"
+          )
         } else {
           PopupService.error('Failed to fetch events. Please try again.', 'Error')
         }
-      } finally {
-        loading.value = false
       }
     }
 
     // Check for selected framework from session (similar to other modules)
     const checkSelectedFrameworkFromSession = async () => {
       try {
-        console.log('🔍 DEBUG: Checking for selected framework from session in EventsList...')
-        const response = await apiService.get('/api/frameworks/get-selected/')
-        
-        console.log('🔍 DEBUG: Framework response in EventsList:', response)
-        
-        if (response && response.frameworkId) {
-          const frameworkIdFromSession = response.frameworkId.toString()
+        await frameworkStore.loadFrameworkFromSession()
+        if (frameworkStore.selectedFrameworkId && frameworkStore.selectedFrameworkId !== 'all') {
+          const frameworkIdFromSession = String(frameworkStore.selectedFrameworkId)
           console.log('✅ DEBUG: Found selected framework in session for EventsList:', frameworkIdFromSession)
           
           // Set the selected framework from session
           selectedFrameworkFromSession.value = frameworkIdFromSession
+          selectedFrameworkNameFromSession.value = frameworkStore.selectedFrameworkName || ''
           console.log('📊 DEBUG: Events are now filtered by framework:', frameworkIdFromSession)
           console.log('📊 DEBUG: selectedFrameworkFromSession.value set to:', selectedFrameworkFromSession.value)
         } else {
           console.log('ℹ️ DEBUG: No framework filter active - showing all events')
           selectedFrameworkFromSession.value = null
+          selectedFrameworkNameFromSession.value = ''
         }
       } catch (error) {
         console.log('⚠️ DEBUG: Could not check framework selection from session:', error)
@@ -900,35 +913,54 @@ export default {
       }
     }
 
+    const handleFrameworkChanged = async () => {
+      await checkSelectedFrameworkFromSession()
+      // EventFilters watcher will emit new filter and apply in list.
+    }
+
     const route = useRoute()
     
     onMounted(async () => {
-      // Fetch user permissions first
-      await fetchEventPermissions()
-      await loadSessionUserId()
-      
-      // Check for framework selection from session
-      await checkSelectedFrameworkFromSession()
-      
-      // Then fetch events
-      await fetchEvents()
-      
-      // Add focus event listener to refresh events when user returns to page
+      try {
+        if (events.value?.length > 0 || eventsStore.lastFetchedEvents > 0) {
+          applyFilters()
+          isInitialEventsLoad.value = false
+        }
+        await Promise.all([
+          fetchEventPermissions(),
+          loadSessionUserId(),
+          checkSelectedFrameworkFromSession(),
+        ])
+        await fetchEvents({ force: false })
+        applyFilters()
+      } finally {
+        isInitialEventsLoad.value = false
+      }
+
       window.addEventListener('focus', handleWindowFocus)
       
       // Listen for unarchive events to refresh the events list
       window.addEventListener('eventUnarchived', handleEventUnarchived)
+      window.addEventListener('framework-changed', handleFrameworkChanged)
       
       // Add click outside listener for export dropdown
       document.addEventListener('click', handleClickOutside)
     })
-    
+
+    onActivated(async () => {
+      eventsListActivateCount += 1
+      if (eventsListActivateCount <= 1) return
+      applyFilters()
+      await fetchEvents({ force: false })
+      applyFilters()
+    })
+
     // Watch for route changes to refresh events list
     watch(() => route.path, async (newPath, oldPath) => {
       // If navigating to events list from create page, refresh the list
       if (newPath === '/event-handling/list' && oldPath === '/event-handling/create') {
         console.log('Navigated to events list from create page, refreshing events...')
-        await fetchEvents()
+        await fetchEvents({ force: true })
       }
     })
     
@@ -941,13 +973,14 @@ export default {
     // Handle event unarchived to refresh events list
     const handleEventUnarchived = async (event) => {
       console.log('Event unarchived, refreshing events list...', event.detail)
-      await fetchEvents()
+      await fetchEvents({ force: true })
     }
     
     // Clean up event listeners when component unmounts
     const cleanup = () => {
       window.removeEventListener('focus', handleWindowFocus)
       window.removeEventListener('eventUnarchived', handleEventUnarchived)
+      window.removeEventListener('framework-changed', handleFrameworkChanged)
       document.removeEventListener('click', handleClickOutside)
     }
     
@@ -961,6 +994,7 @@ export default {
       filteredEvents,
       loading,
       error,
+      showEventsListSkeleton,
       selectedEvent,
       showPopup,
       showEditModal,
@@ -1004,7 +1038,9 @@ export default {
       getStatusColor,
       toggleStatusGroup,
       getEventsByStatus,
-      fetchEvents
+      fetchEvents,
+      selectedFrameworkFromSession,
+      selectedFrameworkNameFromSession
     }
   }
 }
@@ -1140,7 +1176,32 @@ export default {
   min-height: 400px;
 }
 
-/* Loading State */
+.events-list-skeleton {
+  padding: 8px 0 32px;
+}
+
+.events-list-skeleton-toolbar {
+  height: 42px;
+  border-radius: 10px;
+  margin-bottom: 18px;
+  max-width: 480px;
+}
+
+.events-list-skeleton-group {
+  margin-bottom: 22px;
+}
+
+.events-list-skeleton-header {
+  height: 46px;
+  border-radius: 10px 10px 0 0;
+  margin-bottom: 0;
+}
+
+.events-list-skeleton .grc-skeleton-table-wrap {
+  border-top: none;
+}
+
+/* Loading State (legacy spinner — list uses skeleton above) */
 .events-loading-spinner {
   display: flex;
   align-items: center;

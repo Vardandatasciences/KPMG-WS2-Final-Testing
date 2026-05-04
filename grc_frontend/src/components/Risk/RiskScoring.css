@@ -1811,3 +1811,8 @@
 :deep(.dynamic-table tbody tr:last-child td) {
   border-bottom: 1px solid #dee2e6 !important;
 }
+
+.risk-scoring-skeleton {
+  margin-top: 16px;
+  max-width: 100%;
+}

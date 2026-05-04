@@ -190,8 +190,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import apiService from '@/services/apiService'
-import { API_ENDPOINTS } from '@/config/api.js'
+import { useAuditStore } from '@/stores/audit'
 
 const route = useRoute()
 const router = useRouter()
@@ -215,7 +214,7 @@ async function fetchFindingData() {
     loading.value = true
     error.value = null
     
-    const data = await apiService.get(API_ENDPOINTS.AUDIT_FINDINGS_DETAILS(auditFindingId.value))
+    const data = await useAuditStore().fetchAuditFindingDetails(auditFindingId.value)
     
     if (data && data.success) {
       findingData.value = data.data

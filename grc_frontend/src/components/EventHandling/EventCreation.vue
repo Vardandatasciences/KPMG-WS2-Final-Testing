@@ -142,7 +142,7 @@
               </select>
               <div v-if="frameworksError" class="global-form-error-message">
                 {{ frameworksError }}
-                <button @click="fetchFrameworks" class="event-creation-form-retry">
+                <button type="button" @click="fetchFrameworks({ forceRefresh: true })" class="event-creation-form-retry">
                   Retry
                 </button>
               </div>
@@ -197,7 +197,7 @@
               </select>
               <div v-if="modulesError" class="global-form-error-message">
                 {{ modulesError }}
-                <button @click="fetchModules" class="event-creation-form-retry">
+                <button type="button" @click="fetchModules({ force: true })" class="event-creation-form-retry">
                   Retry
                 </button>
               </div>
@@ -1473,10 +1473,12 @@
           </button>
           <button
             v-if="currentStep === 4"
+            type="button"
+            :disabled="isSubmittingEvent"
             @click="handleSubmit"
             class="event-creation-nav-btn btn btn-submit"
           >
-            Submit Event
+            {{ isSubmittingEvent ? 'Submitting…' : 'Submit Event' }}
             <svg class="event-creation-nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
             </svg>
@@ -1742,7 +1744,7 @@
 </template>
 
 <script>
-import { ref, onMounted, watch, computed } from 'vue'
+import { ref, onMounted, watch, computed, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { RECURRENCE_FREQUENCIES } from '../../utils/constants'
 import { eventService, s3Service } from '../../services/api'
@@ -1752,6 +1754,11 @@ import PopupModal from '../../modules/popus/PopupModal.vue'
 import { checkConsentRequired, CONSENT_ACTIONS } from '@/utils/consentManager.js'
 import { getFrameworkIdForClient } from '@/utils/frameworkContextStorage.js'
 import apiService from '@/services/apiService.js'
+import { useEventsStore } from '@/stores/events'
+import { useFrameworkStore } from '@/stores/framework'
+import { useFrameworkGlobalCacheStore } from '@/stores/frameworkGlobalCache'
+import { API_ENDPOINTS } from '@/config/api.js'
+import { normalizeApprovedActiveFrameworks } from '@/utils/frameworkApprovedActive.js'
 
 export default {
   name: 'EventCreation',
@@ -1760,6 +1767,10 @@ export default {
   },
   setup() {
     const router = useRouter()
+    const eventsStore = useEventsStore()
+    const frameworkStore = useFrameworkStore()
+    const frameworkGlobalCache = useFrameworkGlobalCacheStore()
+    const isSubmittingEvent = ref(false)
     
     const currentStep = ref(1)
     const frameworks = ref([])
@@ -1847,6 +1858,8 @@ export default {
       sourceInformation: null,
       isEdit: false,
       editEventId: null,
+      integrationItemId: null,
+      riskavaireQueueItemId: null,
       // Dynamic fields will be added here based on framework/event type selection
       dynamicFields: {}
     })
@@ -1900,52 +1913,121 @@ export default {
       { number: 4, title: 'Submit', description: 'Review and submit' }
     ]
 
-    // Check for selected framework from session and pre-select it
-    const checkSelectedFrameworkFromSession = async () => {
-      try {
-        console.log('🔍 DEBUG: Checking for selected framework from session in EventCreation...')
-        const response = await apiService.get('/api/frameworks/get-selected/')
-        
-        console.log('🔍 DEBUG: Framework response in EventCreation:', response)
-        
-        if (response && response.frameworkId) {
-          const frameworkIdFromSession = response.frameworkId.toString()
-          console.log('✅ DEBUG: Found selected framework in session for EventCreation:', frameworkIdFromSession)
-          
-          // Pre-select the framework in the form
-          const selectedFramework = frameworks.value.find(fw => fw.FrameworkId == frameworkIdFromSession)
-          if (selectedFramework) {
-            formData.value.frameworkId = selectedFramework.FrameworkId
-            formData.value.framework = selectedFramework.FrameworkName
-            console.log('✅ DEBUG: Pre-selected framework in EventCreation form:', selectedFramework.FrameworkName)
-          }
-        } else {
-          console.log('ℹ️ DEBUG: No framework filter active - user can select any framework')
-        }
-      } catch (error) {
-        console.error('❌ DEBUG: Error checking selected framework in EventCreation:', error)
+    const extractApprovedActiveRows = (response) => {
+      if (!response) return []
+      if (Array.isArray(response)) return response
+      if (Array.isArray(response.data)) return response.data
+      if (response.success && Array.isArray(response.data)) return response.data
+      if (Array.isArray(response.frameworks)) return response.frameworks
+      return []
+    }
+
+    /** Pre-select framework from Pinia / session cache (no extra get-selected GET). */
+    const applySelectedFrameworkFromStore = () => {
+      if (formData.value.framework) return
+      const sid =
+        frameworkStore.selectedFrameworkId != null && frameworkStore.selectedFrameworkId !== 'all'
+          ? String(frameworkStore.selectedFrameworkId)
+          : frameworkGlobalCache.selectedFrameworkId != null &&
+              frameworkGlobalCache.selectedFrameworkId !== 'all'
+            ? String(frameworkGlobalCache.selectedFrameworkId)
+            : null
+      if (!sid || !frameworks.value.length) return
+      const selectedFramework = frameworks.value.find((fw) => String(fw.FrameworkId) === sid)
+      if (selectedFramework) {
+        formData.value.frameworkId = selectedFramework.FrameworkId
+        formData.value.framework = selectedFramework.FrameworkName
+        fetchEventTypes(formData.value.framework, formData.value.frameworkId)
       }
     }
 
-    // Fetch frameworks from API
-    const fetchFrameworks = async () => {
-      loadingFrameworks.value = true
-      frameworksError.value = null
-      
+    /** Reconcile with server in background after instant Pinia paint. */
+    const silentRefreshFrameworksFromApi = async () => {
       try {
-        const response = await eventService.getFrameworks()
-        if (response.data.success) {
-          frameworks.value = response.data.frameworks
-          
-          // After frameworks are loaded, check for selected framework from session
-          await checkSelectedFrameworkFromSession()
-        } else {
-          frameworksError.value = 'Failed to fetch frameworks'
+        const response = await apiService.get(API_ENDPOINTS.FRAMEWORKS_APPROVED_ACTIVE)
+        const raw = extractApprovedActiveRows(response)
+        let list = normalizeApprovedActiveFrameworks(raw)
+        if (!list.length) {
+          const r2 = await eventService.getFrameworks()
+          if (r2?.data?.success && Array.isArray(r2.data.frameworks)) {
+            list = normalizeApprovedActiveFrameworks(r2.data.frameworks)
+          }
+        }
+        if (list.length > 0) {
+          frameworks.value = list
+          frameworkStore.setFrameworks(list.map((fw) => ({ ...fw })))
+          applySelectedFrameworkFromStore()
+        }
+      } catch (e) {
+        console.warn('[EventCreation] silent framework refresh failed:', e?.message || e)
+      }
+    }
+
+    /**
+     * Approved/active frameworks: instant from Pinia + global cache (HomeView / navbar),
+     * then optional API refresh. Avoids slow duplicate /api/events/frameworks/ on every visit.
+     */
+    const fetchFrameworks = async ({ forceRefresh = false } = {}) => {
+      frameworksError.value = null
+      frameworkStore.ensureUserScopedState()
+      const userId = frameworkStore.getCurrentUserContextId()
+      frameworkGlobalCache.hydrate(userId)
+
+      if (!forceRefresh) {
+        const raw =
+          Array.isArray(frameworkStore.frameworks) && frameworkStore.frameworks.length
+            ? frameworkStore.frameworks
+            : frameworkGlobalCache.frameworks
+        const list = normalizeApprovedActiveFrameworks(raw || [])
+        if (list.length > 0) {
+          frameworks.value = list
+          applySelectedFrameworkFromStore()
+          void silentRefreshFrameworksFromApi()
+          return
+        }
+      }
+
+      loadingFrameworks.value = true
+      try {
+        const response = await apiService.get(API_ENDPOINTS.FRAMEWORKS_APPROVED_ACTIVE)
+        const raw = extractApprovedActiveRows(response)
+        let list = normalizeApprovedActiveFrameworks(raw)
+
+        if (!list.length) {
+          const r2 = await eventService.getFrameworks()
+          if (r2?.data?.success) {
+            list = normalizeApprovedActiveFrameworks(r2.data.frameworks || [])
+          } else {
+            frameworksError.value = 'Failed to fetch frameworks'
+          }
+        }
+
+        if (list.length > 0) {
+          frameworks.value = list
+          frameworkStore.setFrameworks(list.map((fw) => ({ ...fw })))
+        }
+
+        try {
+          await frameworkStore.loadFrameworkFromSession()
+        } catch (e) {
+          console.warn('[EventCreation] loadFrameworkFromSession:', e?.message || e)
+        }
+        applySelectedFrameworkFromStore()
+
+        if (!list.length) {
+          frameworks.value = [
+            { FrameworkId: 1, FrameworkName: 'NIST' },
+            { FrameworkId: 2, FrameworkName: 'ISO 27001' },
+            { FrameworkId: 3, FrameworkName: 'COBIT' },
+            { FrameworkId: 4, FrameworkName: 'PCI DSS' },
+            { FrameworkId: 5, FrameworkName: 'HIPAA' },
+            { FrameworkId: 6, FrameworkName: 'SOX' },
+            { FrameworkId: 7, FrameworkName: 'GDPR' },
+          ]
         }
       } catch (error) {
         console.error('Error fetching frameworks:', error)
         PopupService.error('Error loading frameworks. Please try again.', 'Error')
-        // Fallback to hardcoded frameworks if API fails
         frameworks.value = [
           { FrameworkId: 1, FrameworkName: 'NIST' },
           { FrameworkId: 2, FrameworkName: 'ISO 27001' },
@@ -1953,34 +2035,33 @@ export default {
           { FrameworkId: 4, FrameworkName: 'PCI DSS' },
           { FrameworkId: 5, FrameworkName: 'HIPAA' },
           { FrameworkId: 6, FrameworkName: 'SOX' },
-          { FrameworkId: 7, FrameworkName: 'GDPR' }
+          { FrameworkId: 7, FrameworkName: 'GDPR' },
         ]
       } finally {
         loadingFrameworks.value = false
       }
     }
 
-    const fetchModules = async () => {
-      loadingModules.value = true
+    const fetchModules = async ({ force = false } = {}) => {
       modulesError.value = null
-      
+      if (!force && eventsStore.isEventModulesFresh && eventsStore.eventModules?.length) {
+        modules.value = [...eventsStore.eventModules]
+        return
+      }
+
+      loadingModules.value = true
       try {
-        const response = await eventService.getModules()
-        if (response.data.success) {
-          modules.value = response.data.modules
-        } else {
-          modulesError.value = 'Failed to fetch modules'
-        }
+        const mods = await eventsStore.fetchEventModules({ force })
+        modules.value = Array.isArray(mods) ? mods : eventsStore.eventModules || []
       } catch (error) {
         console.error('Error fetching modules:', error)
         PopupService.error('Error loading modules. Please try again.', 'Error')
-        // Fallback to hardcoded modules if API fails
         modules.value = [
           { moduleid: 1, modulename: 'Policy Management' },
           { moduleid: 2, modulename: 'Compliance Management' },
           { moduleid: 3, modulename: 'Audit Management' },
           { moduleid: 4, modulename: 'Incident Management' },
-          { moduleid: 5, modulename: 'Risk Management' }
+          { moduleid: 5, modulename: 'Risk Management' },
         ]
       } finally {
         loadingModules.value = false
@@ -2248,6 +2329,7 @@ export default {
     }
 
     const handleSubmit = async () => {
+      if (isSubmittingEvent.value) return
       try {
         // Validate all required fields before submitting
         if (!formData.value.title) {
@@ -2359,7 +2441,9 @@ export default {
 
         console.log('DEBUG: Final eventData being sent:', eventData)
         console.log('DEBUG: Evidence in eventData:', eventData.evidence)
-        
+
+        isSubmittingEvent.value = true
+
         let response
         if (formData.value.isEdit && formData.value.editEventId) {
           // Update existing event (no consent required for updates)
@@ -2375,8 +2459,11 @@ export default {
           // Use the global consent service instead of local ref
           const consentService = (await import('@/services/consentService.js')).default;
           
+          const fwForConsent = formData.value.frameworkId
           const canProceed = await consentService.checkAndRequestConsent(
-            CONSENT_ACTIONS.CREATE_EVENT
+            CONSENT_ACTIONS.CREATE_EVENT,
+            null,
+            { frameworkId: fwForConsent }
           );
           
           // If user declined consent, stop here
@@ -2387,13 +2474,13 @@ export default {
           }
           
           // Get consent config to include in request
-          const consentCheck = await checkConsentRequired(CONSENT_ACTIONS.CREATE_EVENT)
+          const consentCheck = await checkConsentRequired(CONSENT_ACTIONS.CREATE_EVENT, fwForConsent)
           if (consentCheck.required && consentCheck.config) {
             console.log('✅ [Consent] User accepted consent, including consent data in request')
             // Add consent data to eventData
             eventData.consent_accepted = true
             eventData.consent_config_id = consentCheck.config.config_id
-            eventData.framework_id = eventData.framework_id || getFrameworkIdForClient()
+            eventData.framework_id = eventData.framework_id || fwForConsent || getFrameworkIdForClient()
           }
           
           // Create new event
@@ -2412,28 +2499,19 @@ export default {
         }
         
         if (response.data.success) {
-          // Navigate to events list page
-          router.push('/event-handling/list')
-          
-          // Check if this was created from integration data and update status
-          const integrationData = sessionStorage.getItem('integrationEventData')
-          if (integrationData) {
-            try {
-              const data = JSON.parse(integrationData)
-              if (data.integrationItemId) {
-                // Store success status for the queue to pick up
-                sessionStorage.setItem('eventCreationStatus', JSON.stringify({
-                  success: true,
-                  integrationItemId: data.integrationItemId,
-                  eventId: response.data.event?.id
-                }))
-              }
-            } catch (error) {
-              console.error('Error processing integration data:', error)
-            }
+          const completion = { success: true, eventId: response.data.event?.id }
+          if (formData.value.integrationItemId != null) {
+            completion.integrationItemId = formData.value.integrationItemId
           }
-          
-          // Reset form or redirect
+          if (formData.value.riskavaireQueueItemId != null) {
+            completion.riskavaireItemId = formData.value.riskavaireQueueItemId
+          }
+          if (completion.integrationItemId != null || completion.riskavaireItemId != null) {
+            eventsStore.setCompletionNotice(completion)
+          }
+          void eventsStore.fetchEventsList({ force: true }).catch(() => {})
+          await nextTick()
+          router.push('/event-handling/list')
           console.log('Event created:', response.data)
         } else {
           // Check if it's a database schema error
@@ -2453,27 +2531,19 @@ export default {
                     PopupService.success(`${totalEvents} events created successfully! (1 primary + ${totalEvents-1} additional records)`, 'Success')
                   }
                   
-                  // Navigate to events list page
-                  router.push('/event-handling/list')
-                  
-                  // Check if this was created from integration data and update status
-                  const integrationData = sessionStorage.getItem('integrationEventData')
-                  if (integrationData) {
-                    try {
-                      const data = JSON.parse(integrationData)
-                      if (data.integrationItemId) {
-                        // Store success status for the queue to pick up
-                        sessionStorage.setItem('eventCreationStatus', JSON.stringify({
-                          success: true,
-                          integrationItemId: data.integrationItemId,
-                          eventId: retryResponse.data.event?.id
-                        }))
-                      }
-                    } catch (error) {
-                      console.error('Error processing integration data:', error)
-                    }
+                  const completionRetry = { success: true, eventId: retryResponse.data.event?.id }
+                  if (formData.value.integrationItemId != null) {
+                    completionRetry.integrationItemId = formData.value.integrationItemId
                   }
-                  
+                  if (formData.value.riskavaireQueueItemId != null) {
+                    completionRetry.riskavaireItemId = formData.value.riskavaireQueueItemId
+                  }
+                  if (completionRetry.integrationItemId != null || completionRetry.riskavaireItemId != null) {
+                    eventsStore.setCompletionNotice(completionRetry)
+                  }
+                  void eventsStore.fetchEventsList({ force: true }).catch(() => {})
+                  await nextTick()
+                  router.push('/event-handling/list')
                   console.log('Event created after table creation:', retryResponse.data)
                 } else {
                   PopupService.error('Failed to create event after table creation: ' + retryResponse.data.message, 'Error')
@@ -2492,6 +2562,8 @@ export default {
       } catch (error) {
         console.error('Error creating event:', error)
         PopupService.error('Error creating event. Please try again.', 'Error')
+      } finally {
+        isSubmittingEvent.value = false
       }
     }
 
@@ -2935,7 +3007,9 @@ export default {
         const { CONSENT_ACTIONS } = await import('@/utils/consentManager.js');
         
         const canProceed = await consentService.checkAndRequestConsent(
-          CONSENT_ACTIONS.UPLOAD_EVENT
+          CONSENT_ACTIONS.UPLOAD_EVENT,
+          null,
+          { frameworkId: formData.value.frameworkId }
         );
         
         // If user declined consent, stop here
@@ -3158,7 +3232,9 @@ export default {
         const { CONSENT_ACTIONS } = await import('@/utils/consentManager.js');
         
         const canProceed = await consentService.checkAndRequestConsent(
-          CONSENT_ACTIONS.UPLOAD_EVENT
+          CONSENT_ACTIONS.UPLOAD_EVENT,
+          null,
+          { frameworkId: formData.value.frameworkId }
         );
         
         // If user declined consent, stop here
@@ -3440,11 +3516,10 @@ export default {
 
     // Function to process prefilled data after frameworks are loaded
     const processPrefilledData = () => {
-      // Check for integration event data
-      const integrationData = sessionStorage.getItem('integrationEventData')
-      if (integrationData) {
+      const integrationDraft = eventsStore.consumeCreationDraft('integration')
+      if (integrationDraft) {
         try {
-          const data = JSON.parse(integrationData)
+          const data = integrationDraft
           
           // Pre-fill form with integration data
           if (data.title) {
@@ -3506,21 +3581,20 @@ export default {
           // Set source and timestamp for display
           formData.value.source = data.source || 'Unknown'
           formData.value.sourceTimestamp = data.timestamp || new Date().toISOString()
-          
-          // Clear the session storage after using it
-          sessionStorage.removeItem('integrationEventData')
-          
+          if (data.integrationItemId != null) {
+            formData.value.integrationItemId = data.integrationItemId
+          }
+
           console.log('Pre-filled form with integration data:', data)
         } catch (error) {
           console.error('Error parsing integration data:', error)
         }
       }
       
-      // Check for RiskaVaire event data
-      const riskavaireData = sessionStorage.getItem('riskavaireEventData')
-      if (riskavaireData) {
+      const riskDraft = eventsStore.consumeCreationDraft('riskavaire')
+      if (riskDraft) {
         try {
-          const data = JSON.parse(riskavaireData)
+          const data = riskDraft
           
           // Pre-fill form with RiskaVaire data
           if (data.title) {
@@ -3582,10 +3656,10 @@ export default {
           // Set source and timestamp for display
           formData.value.source = data.source || 'RiskaVaire Module'
           formData.value.sourceTimestamp = data.timestamp || new Date().toISOString()
-          
-          // Clear the session storage after using it
-          sessionStorage.removeItem('riskavaireEventData')
-          
+          if (data.queueItemId != null) {
+            formData.value.riskavaireQueueItemId = data.queueItemId
+          }
+
           console.log('Pre-filled form with RiskaVaire data:', data)
         } catch (error) {
           console.error('Error parsing RiskaVaire data:', error)
@@ -3617,20 +3691,35 @@ export default {
         return
       }
       
-      await fetchFrameworks()
-      await fetchModules()
-      fetchTemplates()
-      fetchCurrentUser()
-      fetchReviewers()
+      await Promise.all([
+        fetchFrameworks(),
+        fetchModules(),
+        fetchTemplates(),
+        (async () => {
+          try {
+            await eventsStore.fetchEventSessionUser()
+            const u = eventsStore.eventSessionUser
+            if (u) {
+              currentUser.value = u
+              formData.value.owner = u.name
+              formData.value.ownerId = u.id
+            } else {
+              await fetchCurrentUser()
+            }
+          } catch {
+            await fetchCurrentUser()
+          }
+        })(),
+        fetchReviewers(),
+      ])
       
       // Process prefilled data after frameworks are loaded
       processPrefilledData()
       
-      // Check for edit event data
-      const editEventData = sessionStorage.getItem('editEventData')
-      if (editEventData) {
+      const editDraft = eventsStore.consumeCreationDraft('edit')
+      if (editDraft) {
         try {
-          const data = JSON.parse(editEventData)
+          const data = editDraft
           
           // Pre-fill form with edit data
           if (data.title) {
@@ -3726,9 +3815,6 @@ export default {
             console.log('Edit: Processed evidence from string:', formData.value.evidence)
           }
           
-          // Clear the session storage after using it
-          sessionStorage.removeItem('editEventData')
-          
           console.log('Pre-filled form with edit data:', data)
         } catch (error) {
           console.error('Error parsing edit data:', error)
@@ -3770,6 +3856,7 @@ export default {
       handleNext,
       handlePrevious,
       handleSubmit,
+      isSubmittingEvent,
       generateEventId,
       getEventTypeName,
       getSubEventTypeName,

@@ -331,7 +331,7 @@
         <div v-if="openMenus.riskInstances" class="submenu nested-submenu">
           <div class="menu-item" @click="navigate('/risk/riskinstances-list')" :class="{'active': isActive('/risk/riskinstances-list')}">
             <i class="fas fa-list icon"></i>
-            <span>Risk Incidents</span>
+            <span>Risk Instances</span>
           </div>
           <div class="menu-item" @click="navigate('/risk/create-instance')" :class="{'active': isActive('/risk/create-instance')}">
             <i class="fas fa-plus icon"></i>
@@ -1503,6 +1503,16 @@ export default {
       const handleClickOutside = (event) => {
         const sidebar = document.querySelector('.sidebar')
         const clickedElement = event.target
+        const clickedInsideDropdown =
+          clickedElement?.closest?.('.dropdown') ||
+          clickedElement?.closest?.('.dropdown__menu') ||
+          clickedElement?.closest?.('.custom-dropdown')
+        
+        // Ignore dropdown interactions so sidebar submenus don't collapse
+        // while users are selecting filter values on content pages.
+        if (clickedInsideDropdown) {
+          return
+        }
         
         // Check if click is outside the sidebar
         if (sidebar && !sidebar.contains(clickedElement)) {

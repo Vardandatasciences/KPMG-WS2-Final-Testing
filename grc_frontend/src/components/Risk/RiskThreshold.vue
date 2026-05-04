@@ -10,7 +10,7 @@
         <button
           type="button"
           class="btn btn-refresh"
-          @click="loadRisks"
+          @click="() => loadRisks(true)"
           :disabled="loading"
         >
           <i class="fas fa-sync-alt" :class="{ 'fa-spin': loading }"></i>
@@ -115,7 +115,7 @@
 </template>
 
 <script>
-import apiService from '@/services/apiService';
+import { useRiskStore } from '@/stores/risk';
 
 export default {
   name: 'RiskThreshold',
@@ -158,32 +158,14 @@ export default {
       const sidebar = document.querySelector('.sidebar');
       this.isSidebarCollapsed = !!sidebar && sidebar.classList.contains('collapsed');
     },
-    async loadRisks() {
+    async loadRisks(forceRefresh = false) {
       this.loading = true;
       try {
-        const response = await apiService.get('/api/system-risks/threshold-exceeded/');
-        if (response && response.data) {
-          this.risks = response.data.map(item => ({
-            id: item.id,
-            title: item.risk_title,
-            description: item.risk_description || item.risk_title,
-            category: item.category || 'Unknown',
-            type: item.risk_type || 'Current',
-            criticality: item.criticality || 'Medium',
-            confidence: item.confidence_score,
-            threshold: item.threshold_limit,
-            functionalArea: item.functional_area || 'General',
-            source: item.source_title || item.source_ref,
-            likelihood: item.likelihood || 5,
-            impact: item.impact || 5,
-            exposure: item.exposure_rating || 0,
-            aiReasoning: item.ai_reasoning || ''
-          }));
-          
-          // Expand the first department by default
-          if (this.groupedRisks.length > 0) {
-            this.expandedDepts = [this.groupedRisks[0].department];
-          }
+        const riskStore = useRiskStore();
+        await riskStore.fetchThresholdRisks({ force: !!forceRefresh });
+        this.risks = [...(riskStore.thresholdRisks || [])];
+        if (this.groupedRisks.length > 0) {
+          this.expandedDepts = [this.groupedRisks[0].department];
         }
       } catch (error) {
         console.error('Error loading threshold risks:', error);

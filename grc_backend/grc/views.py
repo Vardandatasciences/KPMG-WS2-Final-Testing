@@ -5803,6 +5803,18 @@ def logout_user(request):
             debug_print("✅ LOGOUT LOGGING COMPLETED SUCCESSFULLY")
             debug_print("=" * 80)
         
+        # Clear framework context cache as well (not covered by session flush).
+        # Otherwise the next login can resurrect a previously selected framework.
+        if user_id:
+            try:
+                from .framework_context import clear_framework_context
+                clear_framework_context(str(user_id), request)
+                logger.info(f"✅ Cleared framework context cache for user {user_id} during session logout")
+                debug_print(f"[DEBUG] ✅ Cleared framework context cache for user {user_id}")
+            except Exception as framework_clear_error:
+                logger.warning(f"⚠️ Failed to clear framework context on session logout: {str(framework_clear_error)}")
+                debug_print(f"[DEBUG] ⚠️ Failed to clear framework context: {str(framework_clear_error)}")
+
         # Clear all session data
         request.session.flush()
         

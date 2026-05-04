@@ -1145,7 +1145,7 @@ import { API_ENDPOINTS } from '../../config/api.js'
 import apiService from '@/services/apiService.js'
 import consentService from '@/services/consentService.js'
 import { CONSENT_ACTIONS } from '@/utils/consentManager.js'
-import riskDataService from '@/services/riskService'
+import { useRiskStore } from '@/stores/risk'
 import { getFrameworkIdForClient } from '@/utils/frameworkContextStorage.js'
 // import AccessUtils from '@/utils/accessUtils';
 
@@ -1278,7 +1278,9 @@ export default {
         { value: 'Residual', label: 'Residual' },
         { value: 'Inherent', label: 'Inherent' },
         { value: 'Accepted', label: 'Accepted' }
-      ]
+      ],
+      /** Prevents double-submit while optimistic POST completes. */
+      riskSubmitInFlight: false,
     }
   },
   setup() {
@@ -2362,72 +2364,75 @@ export default {
         });
       }
 
+      if (this.riskSubmitInFlight) {
+        return
+      }
+      this.riskSubmitInFlight = true
+
+      const riskStore = useRiskStore()
+      const tempRiskId = -Math.abs(Date.now() % 2147483640 || 1)
+      const optimisticRow = {
+        ...sanitizedRiskData,
+        RiskId: tempRiskId,
+        CreatedAt: new Date().toISOString(),
+      }
+      riskStore.mergeCreatedRisk(optimisticRow)
+
+      this.resetForm()
+      this.$popup.success('Risk created successfully!')
+
+      this.sendPushNotification({
+        title: 'New Risk Created Successfully',
+        message: `A new risk "${sanitizedRiskData.RiskTitle || 'Untitled Risk'}" has been created successfully.`,
+        category: 'risk',
+        priority: 'high',
+      })
+
       try {
-        console.log('Submitting risk data:', sanitizedRiskData);
-        
-        const response = await apiService.post(API_ENDPOINTS.RISKS, sanitizedRiskData);
+        console.log('Submitting risk data:', sanitizedRiskData)
+        const response = await apiService.post(API_ENDPOINTS.RISKS, sanitizedRiskData)
+        console.log('Risk created successfully:', response)
 
-        console.log('Risk created successfully:', response);
-
-        // Keep RiskRegisterList cache in sync so new risk appears without page reload.
         const createdRisk =
           response?.risk ||
           response?.data ||
-          (response?.RiskId ? response : null);
-        const cachedRisks = riskDataService.getData('risks');
-        if (createdRisk && Array.isArray(cachedRisks)) {
-          const exists = cachedRisks.some(r => r?.RiskId === createdRisk?.RiskId);
-          if (!exists) {
-            riskDataService.setData('risks', [createdRisk, ...cachedRisks]);
-          }
-        } else {
-          // Fallback: clear stale cache so list view fetches fresh data.
-          riskDataService.clearCache();
+          (response?.RiskId ? response : null)
+        riskStore.finalizeOptimisticRisk(tempRiskId, createdRisk)
+        if (!createdRisk?.RiskId || Number(createdRisk.RiskId) <= 0) {
+          this.$popup.error(
+            'Risk may have been created but the server response was incomplete. Please refresh the Risk Register.'
+          )
         }
-
-        this.resetForm();
-        this.$popup.success('Risk created successfully!');
-        
-        // Send push notification for successful risk creation
-        this.sendPushNotification({
-          title: 'New Risk Created Successfully',
-          message: `A new risk "${sanitizedRiskData.RiskTitle || 'Untitled Risk'}" has been created successfully.`,
-          category: 'risk',
-          priority: 'high'
-        });
       } catch (error) {
-        console.error('Error creating risk:', error);
-        console.error('Error response data:', error.response?.data);
-        console.error('Original risk data sent:', sanitizedRiskData);
-        
-        // Access denied errors are now handled globally by the HTTP interceptor
-        // Only handle validation and other non-access errors here
+        console.error('Error creating risk:', error)
+        console.error('Error response data:', error.response?.data)
+        console.error('Original risk data sent:', sanitizedRiskData)
+
+        riskStore.rollbackOptimisticRisk(tempRiskId)
+
         if (error.response && ![401, 403].includes(error.response.status)) {
-          if (error.response.data.errors) {
-            Object.entries(error.response.data.errors).forEach(([field, error]) => {
-              this.$popup.error(`${field}: ${error}`);
-              
-              // Send push notification for field-specific errors
+          if (error.response.data?.errors) {
+            Object.entries(error.response.data.errors).forEach(([field, err]) => {
+              this.$popup.error(`${field}: ${err}`)
               this.sendPushNotification({
                 title: 'Risk Creation Error',
-                message: `Error in ${field}: ${error}`,
+                message: `Error in ${field}: ${err}`,
                 category: 'risk',
-                priority: 'high'
-              });
-            });
+                priority: 'high',
+              })
+            })
           } else {
-            this.$popup.error('Failed to create risk. Please try again.');
-            
-            // Send push notification for general creation failure
+            this.$popup.error('Failed to create risk. Please try again.')
             this.sendPushNotification({
               title: 'Risk Creation Failed',
               message: 'Failed to create risk. Please try again.',
               category: 'risk',
-              priority: 'high'
-            });
+              priority: 'high',
+            })
           }
         }
-        // 401/403 errors are handled by the global interceptor
+      } finally {
+        this.riskSubmitInFlight = false
       }
     },
 

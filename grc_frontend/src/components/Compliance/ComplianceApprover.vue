@@ -58,7 +58,7 @@
           :config="{ label: 'Framework Filter' }"
           :options="frameworkOptions"
           v-model="selectedFramework" 
-          @change="handleFrameworkChange"
+          @change="onFrameworkChange"
           :showLabel="true"
           placeholder="All Frameworks"
         />
@@ -140,7 +140,7 @@
     <!-- Render My Tasks or Reviewer Tasks based on activeTab -->
     <div v-if="activeTab === 'myTasks'" class="compliance_tasks_container">
       <!-- <h2 class="compliance_tasks_title">My Compliance Approval Tasks (Latest Versions)</h2> -->
-      <div v-if="isTaskListLoading" class="loading-state task-loading-state">
+      <div v-if="isTaskListLoading || !hasLoadedTaskListOnce" class="loading-state task-loading-state">
         <i class="fas fa-spinner fa-spin"></i>
         <p>Loading your tasks...</p>
       </div>
@@ -195,7 +195,7 @@
           onPageChange: page => handleMyTasksPageChange('Rejected', page)
         }"
       />
-      <div v-if="!isTaskListLoading && !myTasksPending.length && !myTasksApproved.length && !myTasksRejected.length" class="no-tasks-message">
+      <div v-if="hasLoadedTaskListOnce && !isTaskListLoading && !myTasksPending.length && !myTasksApproved.length && !myTasksRejected.length" class="no-tasks-message">
         <div class="no-tasks-icon">
           <i class="fas fa-clipboard-check"></i>
         </div>
@@ -211,7 +211,7 @@
         @taskClick="handleApprovalAction"
         @editTask="handleEditTask"
       />
-      <div v-if="!isTaskListLoading && !rejectedCompliances.length" class="compliance_no_tasks">
+      <div v-if="hasLoadedTaskListOnce && !isTaskListLoading && !rejectedCompliances.length" class="compliance_no_tasks">
         <div class="compliance_no_tasks_icon">
           <i class="fas fa-clipboard-check"></i>
         </div>
@@ -221,7 +221,7 @@
     </div>
     <div v-if="activeTab === 'reviewerTasks'" class="compliance_tasks_container">
       <h2 class="compliance_tasks_title">Reviewer Tasks (Latest Versions)</h2>
-      <div v-if="isTaskListLoading" class="loading-state task-loading-state">
+      <div v-if="isTaskListLoading || !hasLoadedTaskListOnce" class="loading-state task-loading-state">
         <i class="fas fa-spinner fa-spin"></i>
         <p>Loading reviewer tasks...</p>
       </div>
@@ -276,7 +276,7 @@
           onPageChange: page => handleReviewerTasksPageChange('Rejected', page)
         }"
       />
-      <div v-if="!isTaskListLoading && !reviewerTasksPending.length && !reviewerTasksApproved.length && !reviewerTasksRejected.length" class="reviewer-empty-wrapper">
+      <div v-if="hasLoadedTaskListOnce && !isTaskListLoading && !reviewerTasksPending.length && !reviewerTasksApproved.length && !reviewerTasksRejected.length" class="reviewer-empty-wrapper">
         <div class="compliance_no_tasks">
           <div class="compliance_no_tasks_icon">
             <i class="fas fa-clipboard-check"></i>
@@ -666,24 +666,16 @@
 </template>
  
 <script>
-import { complianceService } from '@/services/api';
-import complianceDataService from '@/services/complianceService'; // NEW: Use cached compliance data
 import { PopupModal } from '../../modules/popup';
+import { useComplianceStore } from '@/stores/compliance';
+import { useFrameworkStore } from '@/stores/framework';
+import { usePermissionStore } from '@/stores/permission';
 import PopupMixin from './mixins/PopupMixin';
 import { CompliancePopups } from './utils/popupUtils';
 import CollapsibleTable from '../CollapsibleTable.vue';
 import CustomDropdown from '../CustomDropdown.vue';
 import AccessUtils from '@/utils/accessUtils';
-import apiService from '@/services/apiService.js';
 import { API_ENDPOINTS } from '../../config/api.js';
-
-const axios = {
-  get: async (url, config = {}) => ({ data: await apiService.get(url, config.params || {}, { ...config, params: undefined }) }),
-  post: async (url, data, config = {}) => ({ data: await apiService.post(url, data, config) }),
-  put: async (url, data, config = {}) => ({ data: await apiService.put(url, data, config) }),
-  patch: async (url, data, config = {}) => ({ data: await apiService.patch(url, data, config) }),
-  delete: async (url, config = {}) => ({ data: await apiService.delete(url, config) })
-};
  
 export default {
   name: 'ComplianceApprover',
@@ -693,6 +685,12 @@ export default {
     CustomDropdown
   },
   mixins: [PopupMixin],
+  setup() {
+    const complianceStore = useComplianceStore()
+    const frameworkStore = useFrameworkStore()
+    const permissionStore = usePermissionStore()
+    return { complianceStore, frameworkStore, permissionStore }
+  },
   data() {
     return {
       approvals: [],
@@ -759,12 +757,15 @@ export default {
         Rejected: { currentPage: 1, pageSize: 10 },
       },
       mitigationString: '',
-      isTaskListLoading: false,
+      isTaskListLoading: true,
+      hasLoadedTaskListOnce: false,
+      taskCacheByScope: {},
       
       // Framework filtering properties
       frameworks: [],
       selectedFramework: '',
       sessionFrameworkId: null,
+      isInitializingFrameworkSelection: true,
     }
   },
   async mounted() {
@@ -776,6 +777,12 @@ export default {
     // Check for selected framework from session after loading frameworks
     await this.checkSelectedFrameworkFromSession();
     
+    // Keep hydration guard briefly to absorb delayed mount-time empty change events.
+    this.isInitializingFrameworkSelection = true;
+    setTimeout(() => {
+      this.isInitializingFrameworkSelection = false;
+    }, 600);
+
     // Initialize user
     await this.initializeUser();
     
@@ -789,24 +796,33 @@ export default {
     // Debug user consistency after initialization
     this.debugUserConsistency();
     
-    // Set up auto-refresh every 30 seconds
-    this.refreshInterval = setInterval(() => {
-      this.refreshData();
-    }, 30000);
+    this.startAutoRefresh();
     
     // Add escape key handler for modal
     document.addEventListener('keydown', this.handleKeydown);
   },
+  // With <keep-alive>, navigating to Compliance Details deactivates this view but does not unmount it.
+  // Stop polling while the user is on another page so reviewer/user API calls do not compete with details.
+  activated() {
+    this.startAutoRefresh();
+  },
+  deactivated() {
+    this.stopAutoRefresh();
+  },
   beforeUnmount() {
-    // Clear the refresh interval when component is destroyed
-    if (this.refreshInterval) {
-      clearInterval(this.refreshInterval);
-    }
+    this.stopAutoRefresh();
     
     // Remove escape key handler
     document.removeEventListener('keydown', this.handleKeydown);
   },
   watch: {
+    'frameworkStore.selectedFrameworkId': {
+      async handler(newFrameworkId, oldFrameworkId) {
+        if (newFrameworkId === oldFrameworkId) return
+        await this.checkSelectedFrameworkFromSession()
+        await this.loadUserTasks()
+      },
+    },
     // Watch for changes in data and update pagination counts
     complianceApprovals: {
       handler() {
@@ -852,6 +868,25 @@ export default {
     },
   },
   methods: {
+    normalizeDropdownValue(input, fallback = '') {
+      if (input == null) return fallback;
+      if (typeof input === 'string' || typeof input === 'number') return String(input);
+      if (typeof input === 'object') {
+        if (Object.prototype.hasOwnProperty.call(input, 'value')) return String(input.value ?? fallback);
+        if (input?.target && Object.prototype.hasOwnProperty.call(input.target, 'value')) {
+          return String(input.target.value ?? fallback);
+        }
+      }
+      return fallback;
+    },
+
+    onFrameworkChange(option) {
+      const normalized = this.normalizeDropdownValue(option, '');
+      if (this.isInitializingFrameworkSelection && normalized === '') return;
+      this.selectedFramework = normalized;
+      this.handleFrameworkChange();
+    },
+
     getCriticalityClass(criticality) {
       if (!criticality) return '';
       const criticalityLower = criticality.toLowerCase();
@@ -882,6 +917,18 @@ export default {
         console.error('Error sending push notification:', error);
       }
     },
+    startAutoRefresh() {
+      this.stopAutoRefresh();
+      this.refreshInterval = setInterval(() => {
+        this.refreshData();
+      }, 30000);
+    },
+    stopAutoRefresh() {
+      if (this.refreshInterval) {
+        clearInterval(this.refreshInterval);
+        this.refreshInterval = null;
+      }
+    },
     async refreshData() {
       if (this.isLoading) return; // Prevent multiple simultaneous refreshes
       if (!this.currentUserId) {
@@ -894,7 +941,8 @@ export default {
       
       try {
         // Fetch approvals with reviewer_id - use currentUserId
-        const approvalsResponse = await complianceService.getCompliancePolicyApprovals({});
+        const approvalsData = await this.complianceStore.fetchPolicyApprovalsReviewer({ params: {}, force: true });
+        const approvalsResponse = { data: { success: true, data: approvalsData, counts: this.counts } };
         // console.log('📡 Approvals response:', approvalsResponse);
 
         if (approvalsResponse.data.success) {
@@ -1021,12 +1069,12 @@ export default {
           
           // Deactivation approval/rejection
           if (isApproved) {
-                    await complianceService.approveComplianceDeactivation(
+                    await this.complianceStore.approveComplianceDeactivationCompat(
           approvalId,
           { user_id: this.currentUserId }
         );
           } else {
-                      await complianceService.rejectComplianceDeactivation(
+                      await this.complianceStore.rejectComplianceDeactivationCompat(
             approvalId,
             { 
               user_id: this.currentUserId,
@@ -1048,7 +1096,7 @@ export default {
           extractedData.compliance_approval.approved = isApproved;
           extractedData.compliance_approval.remarks = remarks;
           
-          await complianceService.submitComplianceReview(
+          await this.complianceStore.submitComplianceReviewCompat(
             approvalId,
             {
               ExtractedData: extractedData,
@@ -1135,7 +1183,7 @@ export default {
         if (isDeactivationRequest) {
           // This is a deactivation request
           console.log("Processing deactivation approval...");
-          response = await complianceService.approveComplianceDeactivation(
+          response = await this.complianceStore.approveComplianceDeactivationCompat(
             this.selectedApproval.ApprovalId,
             { user_id: this.currentUserId }
           );
@@ -1185,7 +1233,7 @@ export default {
             // First try with the full data
             console.log('Submitting compliance review with payload:', reviewPayload);
             console.log('Approval ID being updated:', this.selectedApproval.ApprovalId);
-            response = await complianceService.submitComplianceReview(
+            response = await this.complianceStore.submitComplianceReviewCompat(
               this.selectedApproval.ApprovalId,
               reviewPayload
             );
@@ -1260,7 +1308,7 @@ export default {
                 user_id: this.currentUserId
               };
               
-              response = await complianceService.submitComplianceReview(
+              response = await this.complianceStore.submitComplianceReviewCompat(
                 this.selectedApproval.ApprovalId, 
                 minimalPayload
               );
@@ -1389,7 +1437,7 @@ export default {
         if (this.isDeactivationRequest) {
           // This is a deactivation request rejection
           console.log("Processing deactivation rejection...");
-          response = await complianceService.rejectComplianceDeactivation(
+          response = await this.complianceStore.rejectComplianceDeactivationCompat(
             this.selectedApproval.ApprovalId,
             { 
               user_id: this.currentUserId,
@@ -1446,7 +1494,7 @@ export default {
           console.log('Submitting compliance rejection with payload:', payload);
           console.log('Resubmission status before rejection:', this.selectedApproval.ExtractedData.compliance_approval.inResubmission);
           console.log('Approval ID being updated:', this.selectedApproval.ApprovalId);
-          response = await complianceService.submitComplianceReview(
+          response = await this.complianceStore.submitComplianceReviewCompat(
             this.selectedApproval.ApprovalId,
             payload
           );
@@ -1645,12 +1693,13 @@ export default {
         const resubmissionPayload = { 
           ExtractedData: compliance.ExtractedData,
           ApprovedNot: null, // Explicitly set to null to mark as pending
-          user_id: this.currentUserId
+          user_id: this.currentUserId,
+          reviewer_id: compliance.ReviewerId || compliance.ExtractedData?.ReviewerId || null
         };
         
         console.log("Resubmission payload:", resubmissionPayload);
         
-        const response = await complianceService.resubmitComplianceApproval(
+        const response = await this.complianceStore.resubmitComplianceApprovalCompat(
           compliance.ApprovalId,
           resubmissionPayload
         );
@@ -2136,6 +2185,10 @@ export default {
       
       // Get compliance information
       const complianceId = this.getComplianceId(approval);
+      if (!complianceId) {
+        this.showErrorPopup('Unable to open details: missing ComplianceId mapping for this row.', 'Navigation Error');
+        return;
+      }
       
       // Store the compliance data in sessionStorage for the ComplianceDetails page
       sessionStorage.setItem('complianceData', JSON.stringify(approval));
@@ -2297,12 +2350,13 @@ export default {
         console.log('Initializing user...');
         
         // Get current user role
-        const response = await axios.get(API_ENDPOINTS.USER_ROLE);
-        console.log('User role response:', response.data);
+        const responseData = await this.complianceStore.fetchUserRole();
+        console.log('User role response:', responseData);
         
-        if (response.data.success) {
-          this.currentUserId = response.data.user_id;
-          this.currentUserName = response.data.username || response.data.user_name || '';
+        if (responseData.success) {
+          this.permissionStore.setFromUserRoleResponse(responseData)
+          this.currentUserId = responseData.user_id;
+          this.currentUserName = responseData.username || responseData.user_name || '';
           
           console.log('User initialized:', {
             currentUserId: this.currentUserId,
@@ -2314,8 +2368,10 @@ export default {
             localStorage.setItem('user_name', this.currentUserName);
           }
           
-          const userRole = response.data.role;
-          this.isAdministrator = userRole === 'GRC Administrator';
+          const userRole = responseData.role;
+          this.isAdministrator =
+            this.permissionStore.can('compliance.approver.selectUser') ||
+            this.permissionStore.can('compliance.review.manageAll');
           
           console.log('User role:', userRole, 'isAdministrator:', this.isAdministrator);
           
@@ -2333,10 +2389,10 @@ export default {
             await this.loadUserTasks();
           }
           
-          // Refresh data after users are loaded to ensure proper mapping
-          await this.refreshData();
+          // Refresh approvals/counters in background; do not block first paint.
+          this.refreshData();
         } else {
-          throw new Error('Failed to get user role: ' + (response.data.message || 'Unknown error'));
+          throw new Error('Failed to get user role: ' + (responseData.message || 'Unknown error'));
         }
       } catch (error) {
         console.error('Error initializing user:', error);
@@ -2357,13 +2413,13 @@ export default {
     },
     async fetchUsers() {
       try {
-        const response = await axios.get(API_ENDPOINTS.USERS_FOR_DROPDOWN);
-        if (Array.isArray(response.data)) {
-          this.availableUsers = response.data;
-        } else if (response.data && response.data.success && Array.isArray(response.data.data)) {
-          this.availableUsers = response.data.data;
+        const responseData = await this.complianceStore.fetchUsersForDropdown();
+        if (Array.isArray(responseData)) {
+          this.availableUsers = responseData;
+        } else if (responseData && responseData.success && Array.isArray(responseData.data)) {
+          this.availableUsers = responseData.data;
         } else {
-          this.availableUsers = response.data || [];
+          this.availableUsers = responseData || [];
         }
         
         console.log('Fetched users for mapping:', this.availableUsers);
@@ -2488,84 +2544,82 @@ export default {
     switchTab(tab) {
       this.activeTab = tab;
     },
+    getTaskScopeKey(userId) {
+      const uid = userId || this.currentUserId || 'unknown';
+      const fw = this.selectedFramework || 'all';
+      return `${uid}::${fw}`;
+    },
+    hydrateTasksFromCache(scopeKey) {
+      const cached = this.taskCacheByScope[scopeKey];
+      if (cached && (Array.isArray(cached.myTasks) || Array.isArray(cached.reviewerTasks))) {
+        this.myTasks = Array.isArray(cached.myTasks) ? cached.myTasks : [];
+        this.reviewerTasks = Array.isArray(cached.reviewerTasks) ? cached.reviewerTasks : [];
+        this.hasLoadedTaskListOnce = true;
+        return true;
+      }
+
+      // Pinia-first fallback (latest loaded in store).
+      const piniaMy = Array.isArray(this.complianceStore.approvalsAsUser) ? this.complianceStore.approvalsAsUser : [];
+      const piniaReviewer = Array.isArray(this.complianceStore.approvalsAsReviewer) ? this.complianceStore.approvalsAsReviewer : [];
+      if (piniaMy.length || piniaReviewer.length) {
+        this.myTasks = piniaMy;
+        this.reviewerTasks = piniaReviewer;
+        this.hasLoadedTaskListOnce = true;
+        return true;
+      }
+      return false;
+    },
     async loadUserTasks() {
-      this.isTaskListLoading = true;
       const targetUserId = this.selectedUserId || this.currentUserId;
+      const scopeKey = this.getTaskScopeKey(targetUserId);
+      const hasWarmData = this.hydrateTasksFromCache(scopeKey);
+      this.isTaskListLoading = !hasWarmData;
       try {
         if (this.isAdministrator && !this.selectedUserId) {
           this.myTasks = [];
           this.reviewerTasks = [];
           return;
         }
-        await this.fetchMyTasks(targetUserId);
-        await this.fetchReviewerTasks(targetUserId);
+        await Promise.all([
+          this.fetchMyTasks(targetUserId, { force: true }),
+          this.fetchReviewerTasks(targetUserId, { force: true }),
+        ]);
+        this.taskCacheByScope = {
+          ...this.taskCacheByScope,
+          [scopeKey]: {
+            myTasks: Array.isArray(this.myTasks) ? [...this.myTasks] : [],
+            reviewerTasks: Array.isArray(this.reviewerTasks) ? [...this.reviewerTasks] : [],
+            fetchedAt: Date.now(),
+          },
+        };
       } finally {
+        this.hasLoadedTaskListOnce = true;
         this.isTaskListLoading = false;
       }
     },
-    async fetchMyTasks(userId) {
+    async fetchMyTasks(userId, { force = true } = {}) {
       try {
-        const params = {};
-        // Only pass framework_id if a specific framework is selected
-        // If "All Frameworks" is selected, don't pass it so backend uses session (which should be cleared)
-        if (this.selectedFramework && this.selectedFramework !== '') {
-          params.framework_id = this.selectedFramework;
-          console.log('🔍 Adding framework filter to compliance my tasks:', this.selectedFramework);
-        } else {
-          console.log('ℹ️ No framework filter - fetching all frameworks data');
-        }
-        
-        const response = await axios.get(API_ENDPOINTS.COMPLIANCE_APPROVALS_USER(userId), { params });
-        if (Array.isArray(response.data)) {
-          this.myTasks = response.data;
-        } else if (response.data && Array.isArray(response.data.data)) {
-          this.myTasks = response.data.data;
-        } else if (response.data && Array.isArray(response.data.results)) {
-          this.myTasks = response.data.results;
-        } else {
-          this.myTasks = [];
-        }
+        const frameworkId = this.selectedFramework || undefined;
+        await this.complianceStore.fetchApprovalsAsUser({
+          userId,
+          ...(frameworkId ? { framework_id: frameworkId } : {}),
+          force,
+        });
+        this.myTasks = this.complianceStore.approvalsAsUser;
       } catch (error) {
         this.myTasks = [];
       }
     },
-    async fetchReviewerTasks(userId) {
+    async fetchReviewerTasks(userId, { force = true } = {}) {
       try {
-        const params = {};
-        // Only pass framework_id if a specific framework is selected
-        // If "All Frameworks" is selected, don't pass it so backend uses session (which should be cleared)
-        if (this.selectedFramework && this.selectedFramework !== '') {
-          params.framework_id = this.selectedFramework;
-          console.log('🔍 Adding framework filter to compliance reviewer tasks:', this.selectedFramework);
-        } else {
-          console.log('ℹ️ No framework filter - fetching all frameworks data');
-        }
-        
-        console.log(`🔍 Fetching reviewer tasks for userId: ${userId}, framework filter: ${params.framework_id || 'none'}`);
-        const response = await axios.get(API_ENDPOINTS.COMPLIANCE_APPROVALS_REVIEWER(userId), { params });
-        
-        let tasks = [];
-        if (Array.isArray(response.data)) {
-          tasks = response.data;
-        } else if (response.data && Array.isArray(response.data.data)) {
-          tasks = response.data.data;
-        } else if (response.data && Array.isArray(response.data.results)) {
-          tasks = response.data.results;
-        }
-        
-        console.log(`✅ Received ${tasks.length} reviewer tasks for userId: ${userId}`);
-        if (tasks.length > 0) {
-          console.log(`📋 Sample reviewer task:`, {
-            ApprovalId: tasks[0].ApprovalId,
-            Identifier: tasks[0].Identifier,
-            ReviewerId: tasks[0].ReviewerId,
-            FrameworkId: tasks[0].FrameworkId || tasks[0].FrameworkId_id
-          });
-        }
-        
-        this.reviewerTasks = tasks;
+        const frameworkId = this.selectedFramework || undefined;
+        await this.complianceStore.fetchApprovalsAsReviewer({
+          userId,
+          ...(frameworkId ? { framework_id: frameworkId } : {}),
+          force,
+        });
+        this.reviewerTasks = this.complianceStore.approvalsAsReviewer;
       } catch (error) {
-        console.error(`❌ Error fetching reviewer tasks for userId ${userId}:`, error);
         this.reviewerTasks = [];
       }
     },
@@ -2829,10 +2883,17 @@ export default {
      // Helper method to get compliance ID
      getComplianceId(compliance) {
        if (!compliance) return null;
-       if (compliance.ComplianceId) {
-         return typeof compliance.ComplianceId === 'object' ? compliance.ComplianceId.ComplianceId : compliance.ComplianceId;
-       }
-       return compliance.ApprovalId || compliance.Identifier;
+      const extracted = compliance.ExtractedData || {};
+      const candidate =
+        extracted.compliance_id ??
+        extracted.ComplianceId ??
+        compliance.ComplianceId ??
+        null;
+      if (candidate == null || candidate === '') return null;
+      if (typeof candidate === 'object') {
+        return candidate.ComplianceId ?? candidate.compliance_id ?? null;
+      }
+      return candidate;
      },
     createComplianceContentKey(item) {
       const extractedData = item.ExtractedData || {};
@@ -2857,170 +2918,108 @@ export default {
       return `user_${userId}_date_${createdDate}`;
     },
     
-    // Framework filtering methods
+    // Framework filtering methods — delegated to frameworkStore (no direct FRAMEWORK_* API calls)
     async fetchFrameworks() {
       try {
-        console.log('🔍 [ComplianceApprover] Checking for cached framework data...')
-        
-        // ==========================================
-        // NEW: Ensure compliance prefetch is running
-        // ==========================================
-        if (!window.complianceDataFetchPromise && !complianceDataService.hasFrameworksCache()) {
-          console.log('🚀 [ComplianceApprover] Starting compliance prefetch (user navigated directly)...')
-          window.complianceDataFetchPromise = complianceDataService.fetchAllComplianceData()
+        // Instant hydrate from Pinia cache, refresh in background.
+        if (Array.isArray(this.complianceStore.frameworks) && this.complianceStore.frameworks.length > 0) {
+          const cached = this.complianceStore.frameworks
+            .filter(fw => {
+              const status = fw.ActiveInactive ?? fw.status ?? ''
+              return status.toLowerCase() === 'active'
+            })
+            .map(fw => ({
+              FrameworkId: fw.FrameworkId ?? fw.id,
+              FrameworkName: fw.FrameworkName ?? fw.name,
+              Category: fw.Category ?? fw.FrameworkCategory,
+              ActiveInactive: fw.ActiveInactive,
+              FrameworkDescription: fw.FrameworkDescription ?? fw.Description,
+              id: fw.FrameworkId ?? fw.id,
+              name: fw.FrameworkName ?? fw.name,
+            }))
+          if (cached.length > 0) {
+            this.frameworks = cached
+            void this.complianceStore.fetchFrameworks().then(() => {
+              this.frameworks = this.complianceStore.frameworks
+                .filter(fw => {
+                  const status = fw.ActiveInactive ?? fw.status ?? ''
+                  return status.toLowerCase() === 'active'
+                })
+                .map(fw => ({
+                  FrameworkId: fw.FrameworkId ?? fw.id,
+                  FrameworkName: fw.FrameworkName ?? fw.name,
+                  Category: fw.Category ?? fw.FrameworkCategory,
+                  ActiveInactive: fw.ActiveInactive,
+                  FrameworkDescription: fw.FrameworkDescription ?? fw.Description,
+                  id: fw.FrameworkId ?? fw.id,
+                  name: fw.FrameworkName ?? fw.name,
+                }))
+            })
+            return
+          }
         }
 
-        if (window.complianceDataFetchPromise) {
-          console.log('⏳ [ComplianceApprover] Waiting for compliance prefetch to complete...')
-          try {
-            await window.complianceDataFetchPromise
-            console.log('✅ [ComplianceApprover] Prefetch completed')
-          } catch (prefetchError) {
-            console.warn('⚠️ [ComplianceApprover] Prefetch failed, will fetch directly from API', prefetchError)
-          }
-        }
-        
-        // FIRST: Try to get data from cache
-        if (complianceDataService.hasFrameworksCache()) {
-          console.log('✅ [ComplianceApprover] Using cached framework data')
-          const cachedFrameworks = complianceDataService.getData('frameworks') || []
-          
-          // Filter to only show active frameworks
-          const activeFrameworks = cachedFrameworks.filter(fw => {
-            const status = fw.ActiveInactive || fw.status || '';
-            return status.toLowerCase() === 'active';
-          });
-          
-          // Transform the data to match frontend expectations (keep both formats for compatibility)
-          this.frameworks = activeFrameworks.map(framework => ({
-            FrameworkId: framework.FrameworkId || framework.id,
-            FrameworkName: framework.FrameworkName || framework.name,
-            Category: framework.Category || framework.FrameworkCategory,
-            ActiveInactive: framework.ActiveInactive,
-            FrameworkDescription: framework.FrameworkDescription || framework.Description,
-            // Also add id and name for consistency with Policy Approval
-            id: framework.FrameworkId || framework.id,
-            name: framework.FrameworkName || framework.name
-          }))
-          console.log(`[ComplianceApprover] Loaded ${this.frameworks.length} frameworks from cache (prefetched on Home page)`)
-          console.log('📋 DEBUG: Framework IDs:', this.frameworks.map(f => f.FrameworkId))
-        } else {
-          // FALLBACK: Fetch from API if cache is empty
-          console.log('⚠️ [ComplianceApprover] No cached data found, fetching from API...')
-          const response = await axios.get(API_ENDPOINTS.FRAMEWORKS)
-          console.log('📋 DEBUG: Raw frameworks response:', response.data)
-          
-          if (response.data) {
-            // Filter to only show active frameworks
-            const activeFrameworks = response.data.filter(fw => {
-              const status = fw.ActiveInactive || fw.status || '';
-              return status.toLowerCase() === 'active';
-            });
-            
-            // Transform the data to match frontend expectations (keep both formats for compatibility)
-            this.frameworks = activeFrameworks.map(framework => ({
-              FrameworkId: framework.FrameworkId || framework.id,
-              FrameworkName: framework.FrameworkName || framework.name,
-              Category: framework.Category,
-              ActiveInactive: framework.ActiveInactive,
-              FrameworkDescription: framework.FrameworkDescription,
-              // Also add id and name for consistency with Policy Approval
-              id: framework.FrameworkId || framework.id,
-              name: framework.FrameworkName || framework.name
-            }))
-            console.log(`[ComplianceApprover] Loaded ${this.frameworks.length} frameworks directly from API (cache unavailable)`)
-            console.log('📋 DEBUG: Framework IDs:', this.frameworks.map(f => f.FrameworkId))
-            
-            // Update cache so subsequent pages benefit
-            complianceDataService.setData('frameworks', response.data)
-            console.log('ℹ️ [ComplianceApprover] Cache updated after direct API fetch')
-          }
-        }
+        await this.complianceStore.fetchFrameworks()
+        const storeFrameworks = this.complianceStore.frameworks
+        const activeFrameworks = storeFrameworks.filter(fw => {
+          const status = fw.ActiveInactive ?? fw.status ?? ''
+          return status.toLowerCase() === 'active'
+        })
+        this.frameworks = activeFrameworks.map(fw => ({
+          FrameworkId: fw.FrameworkId ?? fw.id,
+          FrameworkName: fw.FrameworkName ?? fw.name,
+          Category: fw.Category ?? fw.FrameworkCategory,
+          ActiveInactive: fw.ActiveInactive,
+          FrameworkDescription: fw.FrameworkDescription ?? fw.Description,
+          id: fw.FrameworkId ?? fw.id,
+          name: fw.FrameworkName ?? fw.name,
+        }))
       } catch (err) {
-        console.error('Error fetching frameworks:', err)
+        console.error('[ComplianceApprover] Error fetching frameworks:', err)
       }
     },
-    
+
     async checkSelectedFrameworkFromSession() {
-      try {
-        console.log('🔍 DEBUG: Checking for selected framework from session in ComplianceApprover...')
-        const response = await axios.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED)
-        console.log('📊 DEBUG: Selected framework response:', response.data)
-        
-        if (response.data && response.data.success) {
-          // Check if a framework is selected (not null)
-          if (response.data.frameworkId) {
-            const frameworkIdFromSession = response.data.frameworkId
-            console.log('✅ DEBUG: Found selected framework in session:', frameworkIdFromSession)
-            
-            // Store the session framework ID for filtering
-            this.sessionFrameworkId = frameworkIdFromSession
-            
-            // Check if this framework exists in our loaded frameworks
-            // Try both FrameworkId and id properties for compatibility
-            const frameworkExists = this.frameworks.find(f => {
-              const fwId = f.FrameworkId || f.id
-              return fwId && fwId.toString() === frameworkIdFromSession.toString()
-            })
-            
-            if (frameworkExists) {
-              const frameworkId = frameworkExists.FrameworkId || frameworkExists.id
-              const frameworkName = frameworkExists.FrameworkName || frameworkExists.name
-              
-              console.log('✅ DEBUG: Framework exists in loaded frameworks:', frameworkName)
-              // Automatically select the framework from session
-              this.selectedFramework = frameworkId.toString()
-              console.log('✅ DEBUG: Auto-selected framework from session:', this.selectedFramework)
-              console.log('✅ DEBUG: Framework name for display:', frameworkName)
-              
-              // Save to session to ensure it's properly set (in case it wasn't saved before)
-              await this.saveFrameworkToSession(this.selectedFramework)
-            } else {
-              console.log('⚠️ DEBUG: Framework from session (ID:', frameworkIdFromSession, ') not found in loaded frameworks')
-              console.log('📋 DEBUG: Available frameworks:', this.frameworks.map(f => ({ 
-                FrameworkId: f.FrameworkId || f.id, 
-                FrameworkName: f.FrameworkName || f.name 
-              })))
-              // Clear the session framework ID since it doesn't exist
-              this.sessionFrameworkId = null
-              this.selectedFramework = ''
-            }
-          } else {
-            // "All Frameworks" is selected (frameworkId is null)
-            console.log('ℹ️ DEBUG: No framework selected in session (All Frameworks selected)')
-            console.log('🌐 DEBUG: Clearing framework selection to show all frameworks')
-            this.sessionFrameworkId = null
-            this.selectedFramework = ''
-          }
+      if (!this.frameworkStore.selectedFrameworkId) {
+        await this.frameworkStore.loadFrameworkFromSession()
+      }
+      const frameworkIdFromSession = this.frameworkStore.selectedFrameworkId
+      if (frameworkIdFromSession && frameworkIdFromSession !== 'all') {
+        this.sessionFrameworkId = frameworkIdFromSession
+        const frameworkExists = this.frameworks.find(f => {
+          const fwId = f.FrameworkId ?? f.id
+          return fwId && fwId.toString() === frameworkIdFromSession.toString()
+        })
+        if (frameworkExists) {
+          this.selectedFramework = (frameworkExists.FrameworkId ?? frameworkExists.id).toString()
         } else {
-          console.log('ℹ️ DEBUG: No framework found in session - showing All Frameworks')
-          this.sessionFrameworkId = null
-          this.selectedFramework = ''
+          // Keep selected framework across pages even if this page list doesn't contain it.
+          this.selectedFramework = frameworkIdFromSession.toString()
+          this.frameworks = [
+            ...this.frameworks,
+            {
+              FrameworkId: frameworkIdFromSession,
+              FrameworkName: this.frameworkStore.selectedFrameworkName || 'Selected Framework',
+              id: frameworkIdFromSession,
+              name: this.frameworkStore.selectedFrameworkName || 'Selected Framework',
+            },
+          ]
         }
-      } catch (error) {
-        console.error('❌ DEBUG: Error checking selected framework from session:', error)
+      } else {
         this.sessionFrameworkId = null
         this.selectedFramework = ''
       }
     },
-    
+
     async saveFrameworkToSession(frameworkId) {
-      try {
-        console.log('💾 DEBUG: Saving framework to session:', frameworkId)
-        const response = await axios.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, {
-          frameworkId: frameworkId
-        })
-        console.log('💾 DEBUG: Save framework response:', response.data)
-        
-        if (response.data && response.data.success) {
-          this.sessionFrameworkId = frameworkId
-          console.log('✅ DEBUG: Framework saved to session successfully')
-        } else {
-          console.error('❌ DEBUG: Failed to save framework to session:', response.data)
-        }
-      } catch (error) {
-        console.error('❌ DEBUG: Error saving framework to session:', error)
+      if (!frameworkId) {
+        await this.frameworkStore.resetFramework()
+        this.sessionFrameworkId = null
+        return
       }
+      const fw = this.frameworks.find(f => (f.FrameworkId ?? f.id)?.toString() === String(frameworkId))
+      await this.frameworkStore.setFramework({ id: frameworkId, name: fw?.FrameworkName ?? fw?.name ?? 'Selected Framework' })
+      this.sessionFrameworkId = frameworkId
     },
     
     // Clear framework selection
@@ -3037,56 +3036,21 @@ export default {
     },
     
     async handleFrameworkChange() {
-      console.log('🔄 Framework changed to:', this.selectedFramework)
-      
-      // Save the selected framework to session or clear it
+      if (this.isInitializingFrameworkSelection) return;
       if (this.selectedFramework) {
         await this.saveFrameworkToSession(this.selectedFramework)
       } else {
-        // Clear session if no framework selected (All Frameworks)
-        console.log('🧹 Clearing framework from session (All Frameworks selected)')
         this.sessionFrameworkId = null
-        try {
-          await axios.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, {
-            frameworkId: null,
-            userId: localStorage.getItem('user_id') || 'default_user'
-          })
-          console.log('✅ Framework cleared from session successfully')
-        } catch (error) {
-          console.error('❌ Error clearing framework from session:', error)
-        }
+        await this.frameworkStore.resetFramework()
       }
-      
-      // Reload tasks with the new framework filter
       await this.loadUserTasks()
     },
-    
+
     async clearFilters() {
-      console.log('🧹 Clearing all filters...')
-      console.log('  Before clear - selectedFramework:', this.selectedFramework)
-      console.log('  Before clear - sessionFrameworkId:', this.sessionFrameworkId)
-      
       this.selectedFramework = ''
       this.sessionFrameworkId = null
-      
-      // Clear from session storage as well
-      try {
-        await axios.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, {
-          frameworkId: null
-        })
-        console.log('✅ Cleared framework from session successfully')
-      } catch (error) {
-        console.error('❌ Error clearing framework from session:', error)
-      }
-      
-      console.log('  After clear - selectedFramework:', this.selectedFramework)
-      console.log('  After clear - sessionFrameworkId:', this.sessionFrameworkId)
-      console.log('✅ All filters cleared')
-      
-      // Reload tasks without framework filter
+      await this.frameworkStore.resetFramework()
       await this.loadUserTasks()
-      
-      // Force Vue to re-render
       this.$forceUpdate()
     },
     

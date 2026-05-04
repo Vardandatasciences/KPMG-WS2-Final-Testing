@@ -5,7 +5,7 @@
  * Prefer `apiService` in new code for clarity; use compat only to match legacy call shapes.
  */
 import apiService from '@/services/apiService.js';
-import { API_ENDPOINTS } from '@/config/api.js';
+import { useFrameworkStore } from '@/stores/framework';
 
 const buildConfig = (config = {}) => {
   const safeConfig = { ...config };
@@ -94,7 +94,13 @@ export const incidentServiceCompat = {
     return { data, status: 200 };
   },
   getSelectedFramework: async () => {
-    const data = await apiService.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED);
+    const frameworkStore = useFrameworkStore();
+    await frameworkStore.loadFrameworkFromSession();
+    const data = {
+      success: true,
+      frameworkId: frameworkStore.selectedFrameworkId,
+      frameworkName: frameworkStore.selectedFrameworkName,
+    };
     return { data, status: 200 };
   }
 };

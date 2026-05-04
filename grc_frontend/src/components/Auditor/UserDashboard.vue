@@ -299,6 +299,8 @@ import { useRouter } from 'vue-router'
 import { useStore } from 'vuex'
 import { useDashboardsStore } from '@/stores/dashboards'
 import { useAppDataStore } from '@/stores/appData'
+import { useAuditStore } from '@/stores/audit'
+import { useFrameworkStore } from '@/stores/framework'
 import { Chart, ArcElement, BarElement, CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend } from 'chart.js'
 import { Doughnut, Bar, Line } from 'vue-chartjs'
 import '@fortawesome/fontawesome-free/css/all.min.css'
@@ -572,111 +574,48 @@ export default {
       onPolicyChange('all');
     }
 
-    // Fetch Audit Completion Rate data
-    const fetchAuditCompletionRate = async () => {
+    /** Loads all four auditor KPI card endpoints via Pinia auditStore (single bundle + cache). */
+    const fetchAllAuditKpiCards = async (force = false) => {
       try {
-        const params = new URLSearchParams()
-        if (selectedFramework.value && selectedFramework.value !== 'all') {
-          params.append('framework_id', selectedFramework.value)
+        const auditStore = useAuditStore()
+        const bundle = await auditStore.fetchAuditKpiBundle({
+          frameworkId: selectedFramework.value,
+          policyId: selectedPolicy.value,
+          force,
+        })
+        const cr = bundle.auditCompletion
+        if (cr) {
+          auditCompletionData.current_month_rate = cr.current_month_rate
+          auditCompletionData.previous_month_rate = cr.previous_month_rate
+          auditCompletionData.change_in_rate = cr.change_in_rate
+          auditCompletionData.is_positive_change = cr.is_positive_change
         }
-        if (selectedPolicy.value && selectedPolicy.value !== 'all') {
-          params.append('policy_id', selectedPolicy.value)
+        const ta = bundle.totalAudits
+        if (ta) {
+          totalAuditsData.total_current_month = ta.total_current_month
+          totalAuditsData.total_previous_month = ta.total_previous_month
+          totalAuditsData.change_in_total = ta.change_in_total
+          totalAuditsData.is_positive_change = ta.is_positive_change
         }
-        
-        const url = params.toString() ? `${API_ENDPOINTS.AUDIT_COMPLETION_RATE}?${params}` : API_ENDPOINTS.AUDIT_COMPLETION_RATE
-        const data = await apiService.get(url)
-        if (data) {
-          auditCompletionData.current_month_rate = data.current_month_rate
-          auditCompletionData.previous_month_rate = data.previous_month_rate
-          auditCompletionData.change_in_rate = data.change_in_rate
-          auditCompletionData.is_positive_change = data.is_positive_change
+        const oa = bundle.openAudits
+        if (oa) {
+          openAuditsData.open_this_week = oa.open_this_week
+          openAuditsData.open_last_week = oa.open_last_week
+          openAuditsData.change_in_open = oa.change_in_open
+          openAuditsData.percent_change = oa.percent_change
+          openAuditsData.is_improvement = oa.is_improvement
+        }
+        const ca = bundle.completedAudits
+        if (ca) {
+          completedAuditsData.this_week_count = ca.this_week_count
+          completedAuditsData.last_week_count = ca.last_week_count
+          completedAuditsData.change_in_completed = ca.change_in_completed
+          completedAuditsData.percent_change = ca.percent_change
+          completedAuditsData.is_improvement = ca.is_improvement
         }
       } catch (error) {
-        console.error('Error fetching audit completion rate:', error)
-        if (AccessUtils.handleApiError(error, 'audit completion rate access')) {
-          return
-        }
-      }
-    }
-
-    // Fetch Total Audits data
-    const fetchTotalAudits = async () => {
-      try {
-        const params = new URLSearchParams()
-        if (selectedFramework.value && selectedFramework.value !== 'all') {
-          params.append('framework_id', selectedFramework.value)
-        }
-        if (selectedPolicy.value && selectedPolicy.value !== 'all') {
-          params.append('policy_id', selectedPolicy.value)
-        }
-        
-        const url = params.toString() ? `${API_ENDPOINTS.AUDIT_TOTAL_AUDITS}?${params}` : API_ENDPOINTS.AUDIT_TOTAL_AUDITS
-        const data = await apiService.get(url)
-        if (data) {
-          totalAuditsData.total_current_month = data.total_current_month
-          totalAuditsData.total_previous_month = data.total_previous_month
-          totalAuditsData.change_in_total = data.change_in_total
-          totalAuditsData.is_positive_change = data.is_positive_change
-        }
-      } catch (error) {
-        console.error('Error fetching total audits:', error)
-        if (AccessUtils.handleApiError(error, 'audit total audits access')) {
-          return
-        }
-      }
-    }
-
-    // Fetch Open Audits data
-    const fetchOpenAudits = async () => {
-      try {
-        const params = new URLSearchParams()
-        if (selectedFramework.value && selectedFramework.value !== 'all') {
-          params.append('framework_id', selectedFramework.value)
-        }
-        if (selectedPolicy.value && selectedPolicy.value !== 'all') {
-          params.append('policy_id', selectedPolicy.value)
-        }
-        
-        const url = params.toString() ? `${API_ENDPOINTS.AUDIT_OPEN_AUDITS}?${params}` : API_ENDPOINTS.AUDIT_OPEN_AUDITS
-        const data = await apiService.get(url)
-        if (data) {
-          openAuditsData.open_this_week = data.open_this_week
-          openAuditsData.open_last_week = data.open_last_week
-          openAuditsData.change_in_open = data.change_in_open
-          openAuditsData.percent_change = data.percent_change
-          openAuditsData.is_improvement = data.is_improvement
-        }
-      } catch (error) {
-        console.error('Error fetching open audits:', error)
-        if (AccessUtils.handleApiError(error, 'audit open audits access')) {
-          return
-        }
-      }
-    }
-
-    // Fetch Completed Audits data
-    const fetchCompletedAudits = async () => {
-      try {
-        const params = new URLSearchParams()
-        if (selectedFramework.value && selectedFramework.value !== 'all') {
-          params.append('framework_id', selectedFramework.value)
-        }
-        if (selectedPolicy.value && selectedPolicy.value !== 'all') {
-          params.append('policy_id', selectedPolicy.value)
-        }
-        
-        const url = params.toString() ? `${API_ENDPOINTS.AUDIT_COMPLETED_AUDITS}?${params}` : API_ENDPOINTS.AUDIT_COMPLETED_AUDITS
-        const data = await apiService.get(url)
-        if (data) {
-          completedAuditsData.this_week_count = data.this_week_count
-          completedAuditsData.last_week_count = data.last_week_count
-          completedAuditsData.change_in_completed = data.change_in_completed
-          completedAuditsData.percent_change = data.percent_change
-          completedAuditsData.is_improvement = data.is_improvement
-        }
-      } catch (error) {
-        console.error('Error fetching completed audits:', error)
-        if (AccessUtils.handleApiError(error, 'audit completed audits access')) {
+        console.error('Error fetching audit KPI bundle:', error)
+        if (AccessUtils.handleApiError(error, 'audit dashboard KPI access')) {
           return
         }
       }
@@ -726,7 +665,12 @@ export default {
       selectedFrameworkSessionPromise = (async () => {
       try {
         console.log('🔍 DEBUG: Checking for selected framework from session in Auditor Dashboard...')
-        const data = await apiService.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED)
+        const frameworkStore = useFrameworkStore()
+        await frameworkStore.loadFrameworkFromSession()
+        const data = {
+          success: true,
+          frameworkId: frameworkStore.selectedFrameworkId,
+        }
         console.log('📊 DEBUG: Selected framework response:', data)
         
         if (data && data.success) {
@@ -898,19 +842,11 @@ export default {
       try {
         console.log('🔍 DEBUG: Updating category chart with framework:', selectedFramework.value)
         
-        // Use actual API call with framework filter
-        const params = new URLSearchParams()
-        if (selectedFramework.value && selectedFramework.value !== 'all') {
-          params.append('framework_id', selectedFramework.value)
-        }
-        if (selectedPolicy.value && selectedPolicy.value !== 'all') {
-          params.append('policy_id', selectedPolicy.value)
-        }
-        
-        const url = params.toString() ? `${API_ENDPOINTS.AUDIT_CATEGORY_DISTRIBUTION}?${params}` : API_ENDPOINTS.AUDIT_CATEGORY_DISTRIBUTION
-        console.log('📡 DEBUG: Category chart API URL:', url)
-        
-        const data = await apiService.get(url)
+        const auditStore = useAuditStore()
+        const data = await auditStore.fetchAuditCategoryDistribution({
+          frameworkId: selectedFramework.value,
+          policyId: selectedPolicy.value,
+        })
         console.log('📊 DEBUG: Category chart response:', data)
         
         if (data && data.categories) {
@@ -949,19 +885,11 @@ export default {
       try {
         console.log('🔍 DEBUG: Updating status chart with framework:', selectedFramework.value)
         
-        // Use actual API call with framework filter
-        const params = new URLSearchParams()
-        if (selectedFramework.value && selectedFramework.value !== 'all') {
-          params.append('framework_id', selectedFramework.value)
-        }
-        if (selectedPolicy.value && selectedPolicy.value !== 'all') {
-          params.append('policy_id', selectedPolicy.value)
-        }
-        
-        const url = params.toString() ? `${API_ENDPOINTS.AUDIT_STATUS_DISTRIBUTION}?${params}` : API_ENDPOINTS.AUDIT_STATUS_DISTRIBUTION
-        console.log('📡 DEBUG: Status chart API URL:', url)
-        
-        const data = await apiService.get(url)
+        const auditStore = useAuditStore()
+        const data = await auditStore.fetchAuditStatusDistribution({
+          frameworkId: selectedFramework.value,
+          policyId: selectedPolicy.value,
+        })
         console.log('📊 DEBUG: Status chart response:', data)
         
         if (data && data.statuses) {
@@ -1082,16 +1010,10 @@ export default {
     const fetchRecentActivities = async () => {
       isLoadingActivities.value = true
       try {
-        const params = new URLSearchParams()
-        if (selectedFramework.value && selectedFramework.value !== 'all') {
-          params.append('framework_id', selectedFramework.value)
-        }
-        if (selectedPolicy.value && selectedPolicy.value !== 'all') {
-          params.append('policy_id', selectedPolicy.value)
-        }
-        
-        const url = params.toString() ? `${API_ENDPOINTS.AUDIT_RECENT_ACTIVITIES}?${params}` : API_ENDPOINTS.AUDIT_RECENT_ACTIVITIES
-        const data = await apiService.get(url)
+        const data = await useAuditStore().fetchAuditRecentActivities({
+          frameworkId: selectedFramework.value,
+          policyId: selectedPolicy.value,
+        })
         if (data) {
           // Process activities to ensure they have proper types and icons
           recentActivities.value = data.map(activity => {
@@ -1191,10 +1113,9 @@ export default {
           updateAllCharts(true)
           fetchRecentActivities()
           if (!dashboardsStore.isFresh('audit')) {
-            Promise.all([fetchAuditCompletionRate(), fetchTotalAudits(), fetchOpenAudits(), fetchCompletedAudits()])
-              .then(() => {
-                dashboardsStore.set('audit', _auditKpiSnapshot())
-              })
+            fetchAllAuditKpiCards(true).then(() => {
+              dashboardsStore.set('audit', _auditKpiSnapshot())
+            })
           }
           return
         }
@@ -1212,12 +1133,7 @@ export default {
       }
       try {
         // CRITICAL: fetch KPIs first → hide loading indicator
-        await Promise.all([
-          fetchAuditCompletionRate(),
-          fetchTotalAudits(),
-          fetchOpenAudits(),
-          fetchCompletedAudits()
-        ])
+        await fetchAllAuditKpiCards(false)
         if (!silent) {
           isLoading.value = false
         }

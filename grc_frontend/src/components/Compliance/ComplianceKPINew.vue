@@ -41,8 +41,17 @@
       </button>
     </div>
 
+    <!-- Dashboard skeleton until KPI charts are ready -->
+    <div v-if="showKpiSkeleton" class="kpi-sections-skeleton">
+      <div v-for="n in 8" :key="`kpi-skeleton-${n}`" class="kpi-skeleton-card">
+        <div class="kpi-skeleton-title"></div>
+        <div class="kpi-skeleton-chart"></div>
+        <div class="kpi-skeleton-stats"></div>
+      </div>
+    </div>
+
     <!-- Two Section Layout: Charts (Left) + Numbers (Right) -->
-    <div class="kpi-sections">
+    <div v-else class="kpi-sections">
       <!-- Left Section: Charts -->
       <div class="charts-section">
         <!-- Maturity Level Chart -->
@@ -510,11 +519,9 @@
 
 <script>
 import { Bar, Pie, Doughnut} from 'vue-chartjs'
-import { complianceService } from '@/services/api'
-import complianceDataService from '@/services/complianceService' // NEW: Use cached compliance data
 import AccessUtils from '@/utils/accessUtils'
-import apiService from '@/services/apiService.js'
-import { API_ENDPOINTS } from '@/config/api'
+import { useComplianceStore } from '@/stores/compliance'
+import { useFrameworkStore } from '@/stores/framework'
 import CustomDropdown from '@/components/CustomDropdown.vue'
 import { convertColorForColorblind as convertColorFromUtil } from '@/utils/colorblindness'
 import {
@@ -542,14 +549,6 @@ ChartJS.register(
   LineElement
 )
 
-const axios = {
-  get: async (url, config = {}) => ({ data: await apiService.get(url, config.params || {}, { ...config, params: undefined }) }),
-  post: async (url, data, config = {}) => ({ data: await apiService.post(url, data, config) }),
-  put: async (url, data, config = {}) => ({ data: await apiService.put(url, data, config) }),
-  patch: async (url, data, config = {}) => ({ data: await apiService.patch(url, data, config) }),
-  delete: async (url, config = {}) => ({ data: await apiService.delete(url, config) })
-}
-
 // Keep default animations to avoid rare runtime errors in some environments
 // Disable Chart.js animations globally to prevent race conditions with mount/unmount
 ChartJS.defaults.animation = false
@@ -564,11 +563,18 @@ export default {
     Pie,
     Doughnut
   },
+  setup() {
+    const complianceStore = useComplianceStore()
+    const frameworkStore = useFrameworkStore()
+    return { complianceStore, frameworkStore }
+  },
   data() {
     return {
       loading: false,
+      initialKpiLoading: true,
       error: null,
       frameworkChangeInProgress: false,
+      frameworkStoreUnwatch: null,
       maturityLevels: ['Initial', 'Developing', 'Defined', 'Managed', 'Optimizing'],
       colorblindMode: null,
       colorblindObserver: null,
@@ -1163,6 +1169,20 @@ export default {
       if (!this.selectedFrameworkId || this.selectedFrameworkId === '') return '';
       const framework = this.frameworks.find(fw => fw.id.toString() === this.selectedFrameworkId.toString());
       return framework ? framework.name : '';
+    },
+
+    hasPrimaryChartData() {
+      return !!(
+        this.chartData &&
+        Array.isArray(this.chartData.labels) &&
+        this.chartData.labels.length > 0 &&
+        Array.isArray(this.chartData.datasets) &&
+        this.chartData.datasets.length > 0
+      )
+    },
+
+    showKpiSkeleton() {
+      return this.initialKpiLoading && !this.hasPrimaryChartData
     }
   },
   methods: {
@@ -1213,200 +1233,54 @@ export default {
       if (this.nonCompliantIncidentsData) this.updateNonCompliantIncidentsChart();
     },
     
-    // Framework session management methods
+    // Framework session management — delegated to frameworkStore (no direct FRAMEWORK_* API calls)
     async fetchFrameworks() {
       try {
-        console.log('🔍 [ComplianceKPI] Checking for cached framework data...')
-        
-        // Check if prefetch was never started (user came directly to this page)
-        if (!window.complianceDataFetchPromise && !complianceDataService.hasFrameworksCache()) {
-          console.log('🚀 [ComplianceKPI] Starting prefetch now (user came directly to this page)...')
-          window.complianceDataFetchPromise = complianceDataService.fetchAllComplianceData()
+        const mapActive = (rows) => (rows || [])
+          .filter(f => {
+            if (!f || (!f.id && !f.FrameworkId)) return false
+            const status = f.ActiveInactive ?? f.status ?? ''
+            return status.toLowerCase() === 'active'
+          })
+          .map(f => ({
+            id: f.id ?? f.FrameworkId,
+            name: f.name ?? f.FrameworkName ?? `Framework ${f.id ?? f.FrameworkId}`,
+            ...f,
+          }))
+
+        if (Array.isArray(this.complianceStore.frameworks) && this.complianceStore.frameworks.length > 0) {
+          this.frameworks = mapActive(this.complianceStore.frameworks)
+          void this.complianceStore.fetchFrameworks().then(() => {
+            this.frameworks = mapActive(this.complianceStore.frameworks)
+          })
+          return
         }
-        
-        // Wait for prefetch if it's running
-        if (window.complianceDataFetchPromise) {
-          console.log('⏳ [ComplianceKPI] Waiting for prefetch to complete...')
-          try {
-            await window.complianceDataFetchPromise
-            console.log('✅ [ComplianceKPI] Prefetch completed')
-          } catch (error) {
-            console.warn('⚠️ [ComplianceKPI] Prefetch failed, will fetch directly')
-          }
-        }
-        
-        // FIRST: Try to get data from cache
-        if (complianceDataService.hasFrameworksCache()) {
-          console.log('✅ [ComplianceKPI] Using cached framework data')
-          const cachedFrameworks = complianceDataService.getData('frameworks') || []
-          
-          this.frameworks = cachedFrameworks
-            .filter(f => {
-              // Filter out invalid frameworks
-              if (!f || (!f.id && !f.FrameworkId)) return false;
-              // Filter to only show active frameworks
-              const status = f.ActiveInactive || f.status || '';
-              return status.toLowerCase() === 'active';
-            })
-            .map(f => ({
-              id: f.id || f.FrameworkId,
-              name: f.name || f.FrameworkName || `Framework ${f.id || f.FrameworkId}`,
-              ...f
-            }))
-          
-          console.log(`[ComplianceKPI] Loaded ${this.frameworks.length} frameworks from cache (prefetched on Home page)`)
-          console.log('📋 Available frameworks:', this.frameworks.map(f => ({ id: f.id || f.FrameworkId, name: f.name || f.FrameworkName })))
-        } else {
-          // FALLBACK: Fetch from API if cache is empty
-          console.log('⚠️ [ComplianceKPI] No cached data found, fetching from API...')
-          console.log('🔄 Fetching frameworks from:', API_ENDPOINTS.FRAMEWORKS)
-          const response = await axios.get(API_ENDPOINTS.FRAMEWORKS)
-          console.log('📋 Frameworks response:', response)
-          console.log('📋 Frameworks response data:', response.data)
-          
-          if (response.data) {
-            // Handle different response structures
-            if (response.data.success && response.data.data) {
-              // Standard structure: { success: true, data: [...] }
-              this.frameworks = (response.data.data || [])
-                .filter(f => {
-                  // Filter out invalid frameworks
-                  if (!f || (!f.id && !f.FrameworkId)) return false;
-                  // Filter to only show active frameworks
-                  const status = f.ActiveInactive || f.status || '';
-                  return status.toLowerCase() === 'active';
-                })
-                .map(f => ({
-                  id: f.id || f.FrameworkId,
-                  name: f.name || f.FrameworkName || `Framework ${f.id || f.FrameworkId}`,
-                  ...f
-                }))
-              console.log('✅ Frameworks loaded (success structure):', this.frameworks.length)
-              
-              // Update cache
-              if (response.data.data && response.data.data.length > 0) {
-                complianceDataService.setData('frameworks', response.data.data)
-                console.log('ℹ️ [ComplianceKPI] Cache updated after direct API fetch')
-              }
-            } else if (Array.isArray(response.data)) {
-              // Direct array structure: [...]
-              this.frameworks = (response.data || [])
-                .filter(f => {
-                  // Filter out invalid frameworks
-                  if (!f || (!f.id && !f.FrameworkId)) return false;
-                  // Filter to only show active frameworks
-                  const status = f.ActiveInactive || f.status || '';
-                  return status.toLowerCase() === 'active';
-                })
-                .map(f => ({
-                  id: f.id || f.FrameworkId,
-                  name: f.name || f.FrameworkName || `Framework ${f.id || f.FrameworkId}`,
-                  ...f
-                }))
-              console.log('✅ Frameworks loaded (array structure):', this.frameworks.length)
-              
-              // Update cache
-              if (response.data.length > 0) {
-                complianceDataService.setData('frameworks', response.data)
-                console.log('ℹ️ [ComplianceKPI] Cache updated after direct API fetch')
-              }
-            } else {
-              console.error('❌ Unexpected frameworks response structure:', response.data)
-              this.frameworks = []
-            }
-            
-            console.log('📋 Available frameworks:', this.frameworks.map(f => ({ id: f.id || f.FrameworkId, name: f.name || f.FrameworkName })))
-          } else {
-            console.error('❌ No data in frameworks response')
-            this.frameworks = []
-          }
-          
-          console.log(`[ComplianceKPI] Loaded ${this.frameworks.length} frameworks directly from API (cache unavailable)`)
-        }
+
+        await this.complianceStore.fetchFrameworks()
+        this.frameworks = mapActive(this.complianceStore.frameworks)
       } catch (error) {
-        console.error('❌ Error fetching frameworks:', error)
-        console.error('❌ Error details:', error.response?.data || error.message)
+        console.error('❌ [ComplianceKPI] Error fetching frameworks:', error)
         this.frameworks = []
       }
     },
 
     async checkSelectedFrameworkFromSession() {
-      try {
-        console.log('🔍 Checking selected framework from session...')
-        console.log('📋 Current frameworks loaded:', this.frameworks.length)
-        const response = await axios.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED)
-        console.log('📋 Session framework response:', response.data)
-        
-        if (response.data && response.data.success) {
-          // Handle different response structures
-          let sessionFramework = null
-          
-          if (response.data.data) {
-            // Standard structure: { success: true, data: { id, name, ... } }
-            sessionFramework = response.data.data
-          } else if (response.data.frameworkId) {
-            // Alternative structure: { success: true, frameworkId: '335', ... }
-            sessionFramework = { id: response.data.frameworkId }
-          }
-          
-          if (sessionFramework && sessionFramework.id) {
-            console.log('✅ Session framework found:', sessionFramework)
-            
-            // Ensure sessionFramework.id is valid before processing
-            const sessionFrameworkId = sessionFramework.id
-            if (!sessionFrameworkId) {
-              console.log('❌ Session framework ID is invalid:', sessionFrameworkId)
-              this.sessionFrameworkId = null
-              this.selectedFrameworkId = ''
-              return
-            }
-            
-            // Check if the session framework exists in our loaded frameworks
-            console.log('🔍 DEBUG: Searching for session framework:', sessionFrameworkId, 'in frameworks:', this.frameworks.map(f => ({ id: f.id, name: f.name })))
-            const frameworkExists = this.frameworks.find(f => {
-              if (!f || !f.id) {
-                console.log('⚠️ DEBUG: Skipping invalid framework:', f)
-                return false
-              }
-              const matches = f.id.toString() === sessionFrameworkId.toString()
-              console.log('🔍 DEBUG: Comparing framework ID:', f.id, 'with session ID:', sessionFrameworkId, 'matches:', matches)
-              return matches
-            })
-            
-            console.log('🔍 DEBUG: Framework search result:', frameworkExists)
-            
-            if (frameworkExists) {
-              console.log('✅ Session framework exists in available frameworks:', frameworkExists.name)
-              this.sessionFrameworkId = sessionFrameworkId
-              this.selectedFrameworkId = sessionFrameworkId.toString()
-              console.log('🎯 Set selectedFrameworkId to:', this.selectedFrameworkId)
-              console.log('🎯 Set sessionFrameworkId to:', this.sessionFrameworkId)
-            } else if (this.frameworks.length === 0) {
-              // If no frameworks loaded but we have a session framework, use it anyway
-              console.log('⚠️ No frameworks loaded, but using session framework anyway:', sessionFrameworkId)
-              this.sessionFrameworkId = sessionFrameworkId
-              this.selectedFrameworkId = sessionFrameworkId.toString()
-              console.log('🎯 Set selectedFrameworkId to:', this.selectedFrameworkId)
-              console.log('🎯 Set sessionFrameworkId to:', this.sessionFrameworkId)
-            } else {
-              console.log('❌ Session framework not found in available frameworks, clearing session')
-              console.log('🔍 Available framework IDs:', this.frameworks.map(f => f.id.toString()))
-              console.log('🔍 Session framework ID:', sessionFrameworkId.toString())
-              this.sessionFrameworkId = null
-              this.selectedFrameworkId = ''
-            }
-          } else {
-            console.log('📋 No valid session framework data found')
-            this.sessionFrameworkId = null
-            this.selectedFrameworkId = ''
-          }
+      if (!this.frameworkStore.selectedFrameworkId) {
+        await this.frameworkStore.loadFrameworkFromSession()
+      }
+      const sessionFrameworkId = this.frameworkStore.selectedFrameworkId
+      if (sessionFrameworkId && sessionFrameworkId !== 'all') {
+        const frameworkExists = this.frameworks.find(
+          f => f.id?.toString() === sessionFrameworkId.toString()
+        )
+        if (frameworkExists || this.frameworks.length === 0) {
+          this.sessionFrameworkId = sessionFrameworkId
+          this.selectedFrameworkId = sessionFrameworkId.toString()
         } else {
-          console.log('📋 No session framework found')
           this.sessionFrameworkId = null
           this.selectedFrameworkId = ''
         }
-      } catch (error) {
-        console.error('❌ Error checking session framework:', error)
+      } else {
         this.sessionFrameworkId = null
         this.selectedFrameworkId = ''
       }
@@ -1414,32 +1288,40 @@ export default {
 
     async saveFrameworkToSession(frameworkId) {
       if (!frameworkId) {
-        console.log('🧹 Clearing framework from session')
-        try {
-          // Use the correct parameter name that the backend expects
-          await axios.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, { frameworkId: null })
-          console.log('✅ Framework cleared from session')
-        } catch (error) {
-          console.error('❌ Error clearing framework from session:', error)
-          // If clearing fails, try to set it to empty string or skip the API call
-          console.log('⚠️ Skipping framework clearing due to API error')
-        }
+        await this.frameworkStore.resetFramework()
         return
       }
+      const fw = this.frameworks.find(f => f.id?.toString() === String(frameworkId))
+      await this.frameworkStore.setFramework({ id: frameworkId, name: fw?.name ?? 'Selected Framework' })
+    },
 
-      try {
-        console.log('💾 Saving framework to session:', frameworkId)
-        await axios.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, { frameworkId: frameworkId })
-        console.log('✅ Framework saved to session')
-      } catch (error) {
-        console.error('❌ Error saving framework to session:', error)
+    normalizeDropdownValue(input, fallback = '') {
+      if (input == null) return fallback
+      if (typeof input === 'string' || typeof input === 'number') return String(input)
+      if (typeof input === 'object') {
+        if (Object.prototype.hasOwnProperty.call(input, 'value')) return String(input.value ?? fallback)
+        if (input?.target && Object.prototype.hasOwnProperty.call(input.target, 'value')) {
+          return String(input.target.value ?? fallback)
+        }
       }
+      return fallback
+    },
+
+    sanitizeFrameworkId(value) {
+      const normalized = this.normalizeDropdownValue(value, '').trim()
+      if (!normalized || normalized === '[object Event]') return ''
+      return normalized
+    },
+
+    sanitizePeriod(value) {
+      const normalized = this.normalizeDropdownValue(value, 'month').trim().toLowerCase()
+      if (!normalized || normalized === '[object Event]') return 'month'
+      const allowed = ['week', 'month', 'quarter', 'year']
+      return allowed.includes(normalized) ? normalized : 'month'
     },
 
     onFrameworkChange(option) {
-      // CustomDropdown emits option object with value and label
-      const value = option && option.value !== undefined ? option.value : option
-      this.selectedFrameworkId = value || ''
+      this.selectedFrameworkId = this.sanitizeFrameworkId(option)
       this.handleFrameworkChange()
     },
     
@@ -1450,9 +1332,7 @@ export default {
     },
     
     onPeriodChange(option) {
-      // CustomDropdown emits option object with value and label
-      const value = option && option.value !== undefined ? option.value : option
-      this.selectedPeriod = value || 'month'
+      this.selectedPeriod = this.sanitizePeriod(option)
       this.fetchNonCompliantIncidents()
     },
     
@@ -1470,7 +1350,7 @@ export default {
       
       try {
         // Handle the case where selectedFrameworkId is undefined or empty
-        const frameworkId = this.selectedFrameworkId || ''
+        const frameworkId = this.sanitizeFrameworkId(this.selectedFrameworkId)
         
         // Save to session
         await this.saveFrameworkToSession(frameworkId)
@@ -1512,15 +1392,18 @@ export default {
       }
       this.error = null;
       try {
-        const params = this.selectedFrameworkId ? { framework_id: this.selectedFrameworkId } : {}
-        console.log('🔄 Fetching maturity data with params:', params)
-        const response = await complianceService.getMaturityLevelKPI(params);
-        console.log('Maturity Level Response:', response);
-        if (response.data && response.data.success) {
-          this.maturityData = response.data.data;
+        const frameworkId = this.sanitizeFrameworkId(this.selectedFrameworkId)
+        console.log('🔄 Fetching maturity data with framework:', frameworkId || 'all')
+        const payload = await this.complianceStore.fetchComplianceKpiMetric({
+          metric: 'maturity',
+          frameworkId: frameworkId || undefined,
+          force: true
+        })
+        if (payload) {
+          this.maturityData = payload;
           this.updateChartData();
         } else {
-          throw new Error(response.data?.message || 'Failed to fetch data');
+          throw new Error('Failed to fetch data');
         }
       } catch (error) {
         // Check if it's an access control error
@@ -1581,15 +1464,18 @@ export default {
       this.nonComplianceLoading = true;
       this.nonComplianceError = null;
       try {
-        const params = this.selectedFrameworkId ? { framework_id: this.selectedFrameworkId } : {}
-        console.log('🔄 Fetching non-compliance count with params:', params)
-        const response = await complianceService.getNonComplianceCount(params);
-        console.log('Non-Compliance Response:', response);
-        if (response.data && response.data.success) {
-          this.nonComplianceData = response.data.data;
+        const frameworkId = this.sanitizeFrameworkId(this.selectedFrameworkId)
+        console.log('🔄 Fetching non-compliance count with framework:', frameworkId || 'all')
+        const payload = await this.complianceStore.fetchComplianceKpiMetric({
+          metric: 'nonComplianceCount',
+          frameworkId: frameworkId || undefined,
+          force: true
+        })
+        if (payload) {
+          this.nonComplianceData = payload;
           this.updateNonComplianceChartData();
         } else {
-          throw new Error(response.data?.message || 'Failed to fetch non-compliance count');
+          throw new Error('Failed to fetch non-compliance count');
         }
       } catch (error) {
         // Check if it's an access control error
@@ -1648,15 +1534,18 @@ export default {
       this.automatedLoading = true;
       this.automatedError = null;
       try {
-        const params = this.selectedFrameworkId ? { framework_id: this.selectedFrameworkId } : {}
-        console.log('🔄 Fetching automated controls count with params:', params)
-        const response = await complianceService.getAutomatedControlsCount(params);
-        console.log('Automated Controls Response:', response);
-        if (response.data && response.data.success) {
-          this.automatedData = response.data.data;
+        const frameworkId = this.sanitizeFrameworkId(this.selectedFrameworkId)
+        console.log('🔄 Fetching automated controls count with framework:', frameworkId || 'all')
+        const payload = await this.complianceStore.fetchComplianceKpiMetric({
+          metric: 'automatedControls',
+          frameworkId: frameworkId || undefined,
+          force: true
+        })
+        if (payload) {
+          this.automatedData = payload;
           this.updateAutomatedChartData();
         } else {
-          throw new Error(response.data?.message || 'Failed to fetch automated controls data');
+          throw new Error('Failed to fetch automated controls data');
         }
       } catch (error) {
         // Check if it's an access control error
@@ -1704,15 +1593,18 @@ export default {
       this.repetitionsLoading = true;
       this.repetitionsError = null;
       try {
-        const params = this.selectedFrameworkId ? { framework_id: this.selectedFrameworkId } : {}
-        console.log('🔄 Fetching repetitions data with params:', params)
-        const response = await complianceService.getNonComplianceRepetitions(params);
-        console.log('Repetitions Response:', response);
-        if (response.data && response.data.success) {
-          this.repetitionsData = response.data.data;
+        const frameworkId = this.sanitizeFrameworkId(this.selectedFrameworkId)
+        console.log('🔄 Fetching repetitions data with framework:', frameworkId || 'all')
+        const payload = await this.complianceStore.fetchComplianceKpiMetric({
+          metric: 'nonComplianceRepetitions',
+          frameworkId: frameworkId || undefined,
+          force: true
+        })
+        if (payload) {
+          this.repetitionsData = payload;
           this.updateRepetitionsChartData();
         } else {
-          throw new Error(response.data?.message || 'Failed to fetch repetitions data');
+          throw new Error('Failed to fetch repetitions data');
         }
       } catch (error) {
         // Check if it's an access control error
@@ -1753,20 +1645,23 @@ export default {
       this.ontimeMitigationLoading = true;
       this.ontimeMitigationError = null;
       try {
-        const params = this.selectedFrameworkId ? { framework_id: this.selectedFrameworkId } : {}
-        console.log('🔄 Fetching on-time mitigation data with params:', params)
-        const response = await complianceService.getOntimeMitigationPercentage(params);
-        console.log('On-time Mitigation Response:', response);
-        if (response.data && response.data.success) {
+        const frameworkId = this.sanitizeFrameworkId(this.selectedFrameworkId)
+        console.log('🔄 Fetching on-time mitigation data with framework:', frameworkId || 'all')
+        const payload = await this.complianceStore.fetchComplianceKpiMetric({
+          metric: 'ontimeMitigation',
+          frameworkId: frameworkId || undefined,
+          force: true
+        })
+        if (payload) {
           // Ensure we have all required data with defaults
           this.ontimeMitigationData = {
-            on_time_percentage: response.data.data.on_time_percentage || 0,
-            total_completed: response.data.data.total_completed || 0,
-            completed_on_time: response.data.data.completed_on_time || 0,
-            completed_late: response.data.data.completed_late || 0
+            on_time_percentage: payload.on_time_percentage || 0,
+            total_completed: payload.total_completed || 0,
+            completed_on_time: payload.completed_on_time || 0,
+            completed_late: payload.completed_late || 0
           };
         } else {
-          throw new Error(response.data?.message || 'Failed to fetch on-time mitigation data');
+          throw new Error('Failed to fetch on-time mitigation data');
         }
       } catch (error) {
         // Check if it's an access control error
@@ -1786,14 +1681,18 @@ export default {
       this.statusOverviewLoading = true;
       this.statusOverviewError = null;
       try {
-        const params = this.selectedFrameworkId ? { framework_id: this.selectedFrameworkId } : {}
-        console.log('🔄 Fetching status overview with params:', params)
-        const response = await complianceService.getComplianceStatusOverview(params);
-        if (response.data && response.data.success) {
-          this.statusOverviewData = response.data.data;
+        const frameworkId = this.sanitizeFrameworkId(this.selectedFrameworkId)
+        console.log('🔄 Fetching status overview with framework:', frameworkId || 'all')
+        const payload = await this.complianceStore.fetchComplianceKpiMetric({
+          metric: 'statusOverview',
+          frameworkId: frameworkId || undefined,
+          force: true
+        })
+        if (payload) {
+          this.statusOverviewData = payload;
           this.updateStatusOverviewChart();
         } else {
-          throw new Error(response.data?.message || 'Failed to fetch status overview data');
+          throw new Error('Failed to fetch status overview data');
         }
       } catch (error) {
         // Check if it's an access control error
@@ -1853,15 +1752,18 @@ export default {
       this.reputationalLoading = true;
       this.reputationalError = null;
       try {
-        const params = this.selectedFrameworkId ? { framework_id: this.selectedFrameworkId } : {}
-        console.log('🔄 Fetching reputational data with params:', params)
-        const response = await complianceService.getReputationalImpact(params);
-        console.log('Reputational Impact Response:', response);
-        if (response.data && response.data.success) {
-          this.reputationalData = response.data.data;
+        const frameworkId = this.sanitizeFrameworkId(this.selectedFrameworkId)
+        console.log('🔄 Fetching reputational data with framework:', frameworkId || 'all')
+        const payload = await this.complianceStore.fetchComplianceKpiMetric({
+          metric: 'reputationalImpact',
+          frameworkId: frameworkId || undefined,
+          force: true
+        })
+        if (payload) {
+          this.reputationalData = payload;
           this.updateReputationalChart();
         } else {
-          throw new Error(response.data?.message || 'Failed to fetch reputational impact data');
+          throw new Error('Failed to fetch reputational impact data');
         }
       } catch (error) {
         console.error('Error fetching reputational impact:', error);
@@ -1936,15 +1838,18 @@ export default {
       this.remediationCostLoading = true;
       this.remediationCostError = null;
       try {
-        const params = this.selectedFrameworkId ? { framework_id: this.selectedFrameworkId } : {}
-        console.log('🔄 Fetching remediation cost with params:', params)
-        const response = await complianceService.getRemediationCost(params);
-        console.log('Remediation Cost Response:', response);
-        if (response.data && response.data.success) {
-          this.remediationCostData = response.data.data;
+        const frameworkId = this.sanitizeFrameworkId(this.selectedFrameworkId)
+        console.log('🔄 Fetching remediation cost with framework:', frameworkId || 'all')
+        const payload = await this.complianceStore.fetchComplianceKpiMetric({
+          metric: 'remediationCost',
+          frameworkId: frameworkId || undefined,
+          force: true
+        })
+        if (payload) {
+          this.remediationCostData = payload;
           this.updateRemediationCostChart();
         } else {
-          throw new Error(response.data?.message || 'Failed to fetch remediation cost data');
+          throw new Error('Failed to fetch remediation cost data');
         }
       } catch (error) {
         console.error('Error fetching remediation cost:', error);
@@ -1983,18 +1888,20 @@ export default {
       this.nonCompliantIncidentsLoading = true;
       this.nonCompliantIncidentsError = null;
       try {
-        const params = { period: this.selectedPeriod }
-        if (this.selectedFrameworkId) {
-          params.framework_id = this.selectedFrameworkId
-        }
-        console.log('🔄 Fetching non-compliant incidents with params:', params)
-        const response = await complianceService.getNonCompliantIncidents(this.selectedPeriod, params);
-        console.log('Non-Compliant Incidents Response:', response);
-        if (response.data && response.data.success) {
-          this.nonCompliantIncidentsData = response.data.data;
+        const period = this.sanitizePeriod(this.selectedPeriod)
+        const frameworkId = this.sanitizeFrameworkId(this.selectedFrameworkId)
+        console.log('🔄 Fetching non-compliant incidents with framework/period:', frameworkId || 'all', period)
+        const payload = await this.complianceStore.fetchComplianceKpiMetric({
+          metric: 'nonCompliantIncidents',
+          frameworkId: frameworkId || undefined,
+          period,
+          force: true
+        })
+        if (payload) {
+          this.nonCompliantIncidentsData = payload;
           this.updateNonCompliantIncidentsChart();
         } else {
-          throw new Error(response.data?.message || 'Failed to fetch non-compliant incidents data');
+          throw new Error('Failed to fetch non-compliant incidents data');
         }
       } catch (error) {
         console.error('Error fetching non-compliant incidents:', error);
@@ -2131,6 +2038,7 @@ export default {
     },
     // Initialize KPI loading in prioritized batches
     async initKpi() {
+      this.initialKpiLoading = true
       try {
         // Load the most visible/critical cards first in parallel
         const criticalPromises = [
@@ -2153,6 +2061,8 @@ export default {
       } catch (error) {
         console.error('❌ Error initializing KPI data:', error)
         // Don't throw - let individual fetch methods handle their own errors
+      } finally {
+        this.initialKpiLoading = false
       }
     },
     
@@ -2309,9 +2219,24 @@ export default {
     
     // Listen for sidebar state changes
     this.setupSidebarListener()
+
+    // Keep already-open KPI page in sync with global framework changes.
+    this.frameworkStoreUnwatch = this.$watch(
+      () => this.frameworkStore.selectedFrameworkId,
+      async (newFrameworkId, oldFrameworkId) => {
+        if (newFrameworkId === oldFrameworkId) return
+        await this.checkSelectedFrameworkFromSession()
+        await this.initKpi()
+      }
+    )
   },
   
   beforeUnmount() {
+    if (typeof this.frameworkStoreUnwatch === 'function') {
+      this.frameworkStoreUnwatch()
+      this.frameworkStoreUnwatch = null
+    }
+
     // Clean up colorblindness observer
     if (this.colorblindObserver) {
       this.colorblindObserver.disconnect();
@@ -3453,6 +3378,45 @@ export default {
   color: #3b82f6;
 }
 
+.kpi-sections-skeleton {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.kpi-skeleton-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.kpi-skeleton-title,
+.kpi-skeleton-chart,
+.kpi-skeleton-stats {
+  border-radius: 8px;
+  background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 37%, #f1f5f9 63%);
+  background-size: 400% 100%;
+  animation: kpiSkeletonShimmer 1.4s ease infinite;
+}
+
+.kpi-skeleton-title {
+  width: 48%;
+  height: 14px;
+  margin-bottom: 12px;
+}
+
+.kpi-skeleton-chart {
+  width: 100%;
+  height: 120px;
+  margin-bottom: 12px;
+}
+
+.kpi-skeleton-stats {
+  width: 80%;
+  height: 12px;
+}
+
 .no-chart-message {
   display: flex;
   align-items: center;
@@ -3468,6 +3432,9 @@ export default {
 @media (max-width: 1200px) {
   .charts-section {
     grid-template-columns: repeat(2, 1fr);
+  }
+  .kpi-sections-skeleton {
+    grid-template-columns: 1fr;
   }
   
 .maturity-card {
@@ -3536,6 +3503,11 @@ export default {
 @keyframes loading {
   0% { transform: translateX(-100%); }
   100% { transform: translateX(100%); }
+}
+
+@keyframes kpiSkeletonShimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: 0 0; }
 }
 
 /* Chart-specific adjustments */

@@ -294,15 +294,13 @@
 </template>
 
 <script>
-import dashboardService from '@/services/dashboardService';
-import { ref, reactive, watch, onMounted, onUnmounted, onActivated, computed } from 'vue'
+import { ref, reactive, watch, onMounted, onUnmounted, onActivated, onDeactivated, computed } from 'vue'
 import { useFrameworkStore } from '@/stores/framework'
 import { useDashboardsStore } from '@/stores/dashboards'
 import { useAppDataStore } from '@/stores/appData'
+import { usePolicyStore } from '@/stores/policy'
 import { Chart, ArcElement, BarElement, CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend } from 'chart.js'
 import DashboardChartCard from '@/assets/css/DashboardChartCard.vue'
-import apiService from '@/services/apiService'
-import { API_ENDPOINTS } from '../../config/api.js'
 import html2canvas from 'html2canvas'
 import jsPDF from 'jspdf'
 import CustomDropdown from '@/components/CustomDropdown.vue'
@@ -322,8 +320,10 @@ export default {
     const frameworkStore = useFrameworkStore()
     const dashboardsStore = useDashboardsStore()
     const appDataStore = useAppDataStore()
+    const policyStore = usePolicyStore()
     const showPolicyDetails = ref(true)
     const selectedFramework = ref('all')
+    const isInitializingFrameworkSelection = ref(true)
     const selectedPolicy = ref('all')
     const selectedTimeRange = ref('last_6_months')
     const selectedCategory = ref('all')
@@ -361,6 +361,7 @@ export default {
     const initialDataLoaded = ref(false)
     const chartDataCache = ref(new Map())
     const dataSourceBadge = ref('')
+    const isComponentActive = ref(false)
 
     // Export controls (shared button styles from main.css – same pattern as FrameworkExplorer)
     const selectedExportFormat = ref('')
@@ -651,10 +652,12 @@ export default {
           console.error('❌ DEBUG: No user ID found for checking framework')
           return
         }
-        
-        const response = await apiService.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED, {
-            userId: userId
-        })
+
+        await frameworkStore.loadFrameworkFromSession()
+        const response = {
+          success: true,
+          frameworkId: frameworkStore.selectedFrameworkId,
+        }
         console.log('📊 DEBUG: Selected framework response:', response)
         
         if (response && response.success) {
@@ -704,31 +707,32 @@ export default {
     
     const saveFrameworkToSession = async (frameworkId) => {
       try {
-        console.log('💾 DEBUG: Saving framework to session:', frameworkId)
-        
-        // Get user ID from localStorage or session
-        const userId = localStorage.getItem('user_id') || localStorage.getItem('grc_user_id') || localStorage.getItem('userId')
-        
-        if (!userId) {
-          console.error('❌ DEBUG: No user ID found for saving framework')
-          return
+        console.log('💾 DEBUG: Saving framework via frameworkStore:', frameworkId)
+        const selected = frameworks.value.find((f) => String(f.id) === String(frameworkId))
+        if (frameworkId && frameworkId !== 'all') {
+          await frameworkStore.setFramework({
+            id: frameworkId,
+            name: selected?.name || 'Selected Framework',
+          })
+        } else {
+          await frameworkStore.resetFramework()
         }
-        
-        // Send null to clear framework filter when "All Frameworks" is selected
-        const payload = { 
-          frameworkId: frameworkId === 'all' ? null : frameworkId,
-          userId: userId
-        }
-        
-        await apiService.post(API_ENDPOINTS.FRAMEWORK_SET_SELECTED, payload)
-        console.log('✅ DEBUG: Framework saved to session successfully')
+        console.log('✅ DEBUG: Framework saved via frameworkStore successfully')
       } catch (error) {
-        console.error('❌ DEBUG: Error saving framework to session:', error)
+        console.error('❌ DEBUG: Error saving framework via frameworkStore:', error)
       }
     }
     
     const handleFrameworkChange = async () => {
       console.log('🔍 DEBUG: handleFrameworkChange called with:', selectedFramework.value)
+
+      if (
+        isInitializingFrameworkSelection.value &&
+        (!selectedFramework.value || selectedFramework.value === 'all')
+      ) {
+        console.log('⏭️ Ignoring initial all-framework dropdown event during initialization')
+        return
+      }
       
       // Find the framework name from the frameworks list
       const frameworkName = frameworks.value.find(f => f.id === selectedFramework.value)?.name || 'All Frameworks'
@@ -757,10 +761,10 @@ export default {
         let response
         if (frameworkId && frameworkId !== 'all') {
           console.log('🔍 DEBUG: Fetching policies for specific framework:', frameworkId)
-          response = await dashboardService.getPoliciesByFramework(frameworkId)
+          response = await policyStore.getPoliciesByFramework(frameworkId, { force: true })
         } else {
           console.log('🔍 DEBUG: Fetching all policies (no framework filter)')
-          response = await dashboardService.getAllPolicies()
+          response = await policyStore.getAllPolicies({ force: true })
         }
         
         console.log('🔍 DEBUG: Raw policies response:', response)
@@ -937,7 +941,7 @@ export default {
           return
         }
         
-        const response = await dashboardService.getPolicyAnalytics(params)
+        const response = await policyStore.getPolicyAnalytics(params, { force: true })
         const data = response || []
         
         // Process active/inactive data
@@ -993,7 +997,7 @@ export default {
           return
         }
         
-        const response = await dashboardService.getPolicyAnalytics(params)
+        const response = await policyStore.getPolicyAnalytics(params, { force: true })
         const data = response || []
         
         const labels = Array.isArray(data) ? data.map(item => item.label || 'Unknown') : []
@@ -1049,7 +1053,7 @@ export default {
           return
         }
         
-        const response = await dashboardService.getPolicyAnalytics(params)
+        const response = await policyStore.getPolicyAnalytics(params, { force: true })
         const data = response || []
         
         const labels = Array.isArray(data) ? data.map(item => item.label || 'Unknown') : []
@@ -1105,7 +1109,7 @@ export default {
           return
         }
         
-        const response = await dashboardService.getPolicyAnalytics(params)
+        const response = await policyStore.getPolicyAnalytics(params, { force: true })
         const data = response || []
         
         const labels = Array.isArray(data) ? data.map(item => item.label || 'Unknown') : []
@@ -1134,13 +1138,13 @@ export default {
         if (selectedFramework.value && selectedFramework.value !== 'all') {
           summaryParams.framework_id = selectedFramework.value
         }
-        const hasSummaryCache = dashboardService.hasSummaryCache(summaryParams);
-        const hasFrameworksCache = dashboardService.hasFrameworksCache();
+        const hasSummaryCache = policyStore.hasSummaryCache(summaryParams);
+        const hasFrameworksCache = policyStore.hasFrameworksCache();
 
         if (hasSummaryCache && hasFrameworksCache) {
           // Restore from cache immediately — no loading spinner shown
-          const cachedSummary = dashboardService.getSummaryCached(summaryParams);
-          const cachedFrameworks = dashboardService.getFrameworksCached();
+          const cachedSummary = policyStore.getSummaryCached(summaryParams);
+          const cachedFrameworks = policyStore.getFrameworksCached();
           dashboardData.value = cachedSummary || {};
           let fwData = Array.isArray(cachedFrameworks) ? cachedFrameworks
             : (cachedFrameworks?.frameworks || cachedFrameworks?.data || []);
@@ -1155,8 +1159,8 @@ export default {
           loading.value = false;
           // Background refresh — updates cache silently without showing spinner
           Promise.all([
-            dashboardService.getDashboardSummary(summaryParams),
-            dashboardService.getAllFrameworks()
+            policyStore.getDashboardSummary(summaryParams, { force: true }),
+            policyStore.getAllFrameworks({ force: true })
           ]).then(([summaryRes, frameworksRes]) => {
             dashboardData.value = summaryRes || {};
             let fwD = Array.isArray(frameworksRes) ? frameworksRes
@@ -1177,8 +1181,8 @@ export default {
         loading.value = true
 
         const [summaryRes, frameworksRes] = await Promise.all([
-          dashboardService.getDashboardSummary(summaryParams),
-          dashboardService.getAllFrameworks()
+          policyStore.getDashboardSummary(summaryParams, { force: true }),
+          policyStore.getAllFrameworks({ force: true })
         ])
 
         dashboardData.value = summaryRes || {}
@@ -1257,10 +1261,10 @@ export default {
 
         // Load non-critical data AND charts in parallel for maximum speed
         const [statusRes, activityRes, approvalTimeRes, workloadRes] = await Promise.all([
-          dashboardService.getPolicyStatusDistribution(statusParams),
-          dashboardService.getRecentPolicyActivity(),
-          dashboardService.getAvgApprovalTime(approvalTimeParams),
-          dashboardService.getReviewerWorkload(workloadParams),
+          policyStore.getPolicyStatusDistribution(statusParams, { force: true }),
+          policyStore.getRecentPolicyActivity({}, { force: true }),
+          policyStore.getAvgApprovalTime(approvalTimeParams, { force: true }),
+          policyStore.getReviewerWorkload(workloadParams, { force: true }),
           // Load charts immediately in parallel
           loadCharts()
         ])
@@ -1367,10 +1371,10 @@ export default {
           approvalTimeRes,
           workloadRes
         ] = await Promise.all([
-          dashboardService.getDashboardSummary(summaryParams),
-          dashboardService.getPolicyStatusDistribution(statusParams),
-          dashboardService.getAvgApprovalTime(approvalTimeParams),
-          dashboardService.getReviewerWorkload(workloadParams)
+          policyStore.getDashboardSummary(summaryParams, { force: true }),
+          policyStore.getPolicyStatusDistribution(statusParams, { force: true }),
+          policyStore.getAvgApprovalTime(approvalTimeParams, { force: true }),
+          policyStore.getReviewerWorkload(workloadParams, { force: true })
         ])
 
         // Update dashboard data with new filtered data
@@ -1392,6 +1396,7 @@ export default {
 
     // Watch for filter changes
     watch([selectedFramework, selectedPolicy, selectedTimeRange, selectedCategory, selectedPriority], async () => {
+      if (!isComponentActive.value) return
       // Refresh dashboard summary with current filters
       const frameworkId = selectedFramework.value !== 'all' ? selectedFramework.value : null
       await refreshDashboardSummary(frameworkId)
@@ -1401,6 +1406,8 @@ export default {
 
     // Fetch data on component mount
     onMounted(async () => {
+      isComponentActive.value = true
+      isInitializingFrameworkSelection.value = true
       // Load framework from Pinia store
       const storeFrameworkId = frameworkStore.selectedFrameworkId
       if (storeFrameworkId && storeFrameworkId !== 'all') {
@@ -1418,6 +1425,11 @@ export default {
         if (piniaFw?.length) frameworks.value = piniaFw
         initialDataLoaded.value = true
         loading.value = false
+        // IMPORTANT: When restoring from cache, re-hydrate the currently selected framework
+        // so we don't keep showing KPI data from the previous framework.
+        await frameworkStore.loadFrameworkFromSession()
+        selectedFramework.value = frameworkStore.selectedFrameworkId || 'all'
+
         // Background: activities, charts, and silent revalidation
         fetchRecentActivities()
         loadBackgroundData()
@@ -1430,6 +1442,9 @@ export default {
           })
         }
         activityRefreshInterval.value = setInterval(() => fetchRecentActivities(), 300000)
+        setTimeout(() => {
+          isInitializingFrameworkSelection.value = false
+        }, 700)
         return
       }
 
@@ -1471,10 +1486,15 @@ export default {
       activityRefreshInterval.value = setInterval(() => {
         fetchRecentActivities()
       }, 300000) // 5 minutes
+
+      setTimeout(() => {
+        isInitializingFrameworkSelection.value = false
+      }, 700)
     })
 
     // Cleanup on unmount
     onUnmounted(() => {
+      isComponentActive.value = false
       if (activityRefreshInterval.value) {
         clearInterval(activityRefreshInterval.value)
       }
@@ -1484,6 +1504,10 @@ export default {
     })
 
     onActivated(() => {
+      isComponentActive.value = true
+      if (!activityRefreshInterval.value) {
+        activityRefreshInterval.value = setInterval(() => fetchRecentActivities(), 300000)
+      }
       // Keep previous data visible, only refresh in background.
       fetchCriticalData()
         .then(() => {
@@ -1493,22 +1517,44 @@ export default {
         })
         .catch(() => {})
     })
+
+    onDeactivated(() => {
+      isComponentActive.value = false
+      if (activityRefreshInterval.value) {
+        clearInterval(activityRefreshInterval.value)
+        activityRefreshInterval.value = null
+      }
+      if (updateTimeout.value) {
+        clearTimeout(updateTimeout.value)
+        updateTimeout.value = null
+      }
+    })
     
     // Watch for Pinia framework store changes
     watch(
       () => frameworkStore.selectedFrameworkId,
       async (newFrameworkId, oldFrameworkId) => {
+        if (!isComponentActive.value) return
         // Only update if value actually changed
         if (newFrameworkId === oldFrameworkId) return
         
         console.log('🔄 PolicyDashboard: Pinia framework changed to:', newFrameworkId)
-        // Update local filter to match store
+        // Keep session-level framework filter in sync so filteredFrameworks
+        // doesn't remain pinned to an old framework after Home selection changes.
         if (newFrameworkId === 'all' || !newFrameworkId) {
+          sessionFrameworkId.value = null
           selectedFramework.value = 'all'
-        } else {
-          selectedFramework.value = newFrameworkId
+          return
         }
-        
+
+        sessionFrameworkId.value = newFrameworkId
+        selectedFramework.value = newFrameworkId
+
+        // Ensure options list includes the currently selected framework.
+        if (!frameworks.value.find((f) => String(f.id) === String(newFrameworkId))) {
+          await fetchCriticalData()
+        }
+
         // selectedFramework watch already refreshes summary and charts.
       }
     )
@@ -1553,7 +1599,7 @@ export default {
         // Add timeout to prevent hanging
         try {
           const activityRes = await Promise.race([
-            dashboardService.getRecentPolicyActivity(),
+            policyStore.getRecentPolicyActivity({}, { force: true }),
             new Promise((_, reject) => setTimeout(() => reject(new Error('Activity API timeout')), 10000))
           ])
           console.log('Activity API response:', activityRes)
@@ -1601,7 +1647,7 @@ export default {
           try {
             console.log('No activities from API, trying fallback to recent policies...')
             const policiesRes = await Promise.race([
-              dashboardService.getRecentPolicies(),
+              policyStore.getRecentPolicies({ force: true }),
               new Promise((_, reject) => setTimeout(() => reject(new Error('Policies API timeout')), 10000))
             ])
             console.log('Recent policies response:', policiesRes)

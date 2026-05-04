@@ -62,8 +62,9 @@ def decrypt_value(value):
     try:
         decrypted = decrypt_data(value)
         if decrypted != value:  # Successfully decrypted
-            logger.debug(f"Middleware decrypted a value (length: {len(value)} -> {len(decrypted)})")
-        return decrypted
+            # logger.debug(f"Middleware decrypted a value (length: {len(value)} -> {len(decrypted)})")
+            return decrypted
+        return value
     except Exception as e:
         logger.debug(f"Middleware decryption failed (keeping original): {str(e)[:50]}")
         return value
@@ -124,7 +125,7 @@ class AutoDecryptMiddleware(MiddlewareMixin):
             if decrypted_data != data:
                 response.content = json.dumps(decrypted_data).encode('utf-8')
                 response['Content-Length'] = len(response.content)
-                logger.debug(f"Middleware decrypted response for {request.path}")
+                # logger.debug(f"Middleware decrypted response for {request.path}")
         
         except json.JSONDecodeError:
             # Not valid JSON, skip

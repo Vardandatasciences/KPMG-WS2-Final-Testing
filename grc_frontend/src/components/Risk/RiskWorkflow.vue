@@ -24,201 +24,233 @@
 
     <!-- Show tasks view when not viewing any workflows -->
     <div v-if="!showMitigationWorkflow && !showReviewerWorkflow">
-      <p
-        v-if="dataSourceMessage"
-        class="risk-workflow-data-source"
+      <div
+        v-if="showWorkflowBootSkeleton"
+        class="risk-workflow-boot-skeleton"
+        role="status"
+        aria-busy="true"
+        aria-label="Loading risk workflow"
       >
-        {{ dataSourceMessage }}
-      </p>
-      
+        <div class="risk-workflow-skeleton-search grc-skeleton-pulse" />
+        <div class="risk-workflow-skeleton-filters">
+          <div
+            v-for="n in 5"
+            :key="'boot-f-' + n"
+            class="grc-skeleton-row grc-skeleton-pulse risk-workflow-skeleton-pill"
+          />
+        </div>
+        <div class="risk-workflow-skeleton-task-toggle">
+          <div class="grc-skeleton-row grc-skeleton-pulse risk-workflow-skeleton-pill wide" />
+        </div>
+        <div class="grc-skeleton-table-wrap risk-workflow-skeleton-table risk-workflow-task-skeleton-panel">
+          <div
+            v-for="n in 12"
+            :key="'boot-t-' + n"
+            class="grc-skeleton-row grc-skeleton-pulse risk-workflow-task-skeleton-row"
+          />
+        </div>
+      </div>
+
+      <template v-else>
+        <p
+          v-if="dataSourceMessage"
+          class="risk-workflow-data-source"
+        >
+          {{ dataSourceMessage }}
+        </p>
+
         <!-- Search and Filter Bar (global search-bar styles from main.css) -->
         <div class="risk-workflow-filters-wrapper">
           <div class="search-bar">
             <i class="fas fa-search search-bar__icon"></i>
-            <input 
-              type="text" 
-              v-model="searchQuery" 
+            <input
+              type="text"
+              v-model="searchQuery"
               placeholder="Search risks..."
               @input="filterRisks"
               class="search-bar__input"
             />
           </div>
         </div>
-      
-      <p
-        v-if="dataSourceMessage"
-        class="risk-workflow-data-source"
-      >
-        {{ dataSourceMessage }}
-      </p>
-      
-      <!-- Search and Filter Bar (only new styled search bar in header is used) -->
-      
-      <!-- All five dropdowns in one row -->
-      <div class="risk-workflow-dropdowns-wrapper">
-        <CustomDropdown
-          :config="criticalityDropdownConfig"
-          v-model="criticalityFilter"
-          @change="filterRisks"
-        />
-        <CustomDropdown
-          :config="statusDropdownConfig"
-          v-model="statusFilter"
-          @change="filterRisks"
-        />
-        <CustomDropdown
-          :config="assignedToDropdownConfig"
-          v-model="assignedToFilter"
-          @change="filterRisks"
-        />
-        <CustomDropdown
-          :config="reviewerDropdownConfig"
-          v-model="reviewerFilter"
-          @change="filterRisks"
-        />
-        <!-- 5th: User dropdown (GRC Admin) or logged-in user info -->
-        <div class="risk-workflow-user-filter risk-workflow-dropdown-cell">
-          <div v-if="isLoadingUser" class="risk-workflow-loading-indicator">
-            Loading user information...
-          </div>
-          <div v-else-if="isGRCAdministrator">
-            <div v-if="loading && users.length === 0" class="risk-workflow-loading-indicator">
-              Loading users...
+
+        <!-- All five dropdowns in one row -->
+        <div class="risk-workflow-dropdowns-wrapper">
+          <CustomDropdown
+            :config="criticalityDropdownConfig"
+            v-model="criticalityFilter"
+            @change="filterRisks"
+          />
+          <CustomDropdown
+            :config="statusDropdownConfig"
+            v-model="statusFilter"
+            @change="filterRisks"
+          />
+          <CustomDropdown
+            :config="assignedToDropdownConfig"
+            v-model="assignedToFilter"
+            @change="filterRisks"
+          />
+          <CustomDropdown
+            :config="reviewerDropdownConfig"
+            v-model="reviewerFilter"
+            @change="filterRisks"
+          />
+          <!-- 5th: User dropdown (GRC Admin) or logged-in user info -->
+          <div class="risk-workflow-user-filter risk-workflow-dropdown-cell">
+            <div v-if="showUserFilterSkeleton" class="risk-workflow-user-skeleton">
+              <div class="grc-skeleton-row grc-skeleton-pulse risk-workflow-skeleton-pill wide" />
             </div>
-            <CustomDropdown
-              v-else
-              v-model="selectedUserId"
-              :config="userDropdownConfig"
-              @change="fetchData"
-            />
-          </div>
-          <div v-else class="risk-workflow-logged-user-info">
-            <div class="user-info-display">
-              <i class="fas fa-user"></i>
-              <span>{{ loggedInUser ? loggedInUser.UserName : 'Unknown User' }}</span>
-              <span v-if="loggedInUser && loggedInUser.department" class="user-department">
-                ({{ loggedInUser.department }})
-              </span>
+            <div v-else-if="isGRCAdministrator">
+              <CustomDropdown
+                v-model="selectedUserId"
+                :config="userDropdownConfig"
+                @change="fetchData"
+              />
+            </div>
+            <div v-else class="risk-workflow-logged-user-info">
+              <div class="user-info-display">
+                <i class="fas fa-user"></i>
+                <span>{{ loggedInUser ? loggedInUser.UserName : 'Unknown User' }}</span>
+                <span v-if="loggedInUser && loggedInUser.department" class="user-department">
+                  ({{ loggedInUser.department }})
+                </span>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-      
-      <!-- Tabs for User Tasks and Reviewer Tasks (use main.css toggle styles) -->
-      <div class="toggle-group risk-workflow-task-toggle">
-        <button
-          type="button"
-          class="toggle-button"
-          :class="{ active: activeTab === 'user' }"
-          @click="activeTab = 'user'"
-        >
-          My Tasks
-        </button>
-        <button
-          type="button"
-          class="toggle-button"
-          :class="{ active: activeTab === 'reviewer' }"
-          @click="activeTab = 'reviewer'"
-        >
-          Reviewer Tasks
-        </button>
-      </div>
-      
-      <div v-if="loading" class="risk-workflow-loading">
-        Loading data...
-      </div>
-      
-      <div v-else-if="error" class="risk-workflow-error-message">
-        {{ error }}
-      </div>
-      
-      <!-- User Tasks Section -->
-      <div v-if="activeTab === 'user'">
-        <!-- Debug Information (can be removed in production) -->
-        <div style="background: #f0f0f0; padding: 1rem; margin: 1rem; border-radius: 4px; font-size: 12px;" v-if="false">
-          <strong>Debug Info:</strong><br>
-          Selected User ID: {{ selectedUserId }}<br>
-          User Risks Length: {{ userRisks.length }}<br>
-          Loading: {{ loading }}<br>
-          Error: {{ error }}<br>
-          Approved Risks: {{ approvedRisks.length }}<br>
-          Rejected Risks: {{ rejectedRisks.length }}<br>
-          Pending Review Risks: {{ pendingReviewRisks.length }}<br>
-          Assigned Risks: {{ assignedRisks.length }}<br>
-          User Task Sections Length: {{ userTaskSections.length }}
+
+        <!-- Tabs for User Tasks and Reviewer Tasks (use main.css toggle styles) -->
+        <div class="toggle-group risk-workflow-task-toggle">
+          <button
+            type="button"
+            class="toggle-button"
+            :class="{ active: activeTab === 'user' }"
+            @click="activeTab = 'user'"
+          >
+            My Tasks
+          </button>
+          <button
+            type="button"
+            class="toggle-button"
+            :class="{ active: activeTab === 'reviewer' }"
+            @click="activeTab = 'reviewer'"
+          >
+            Reviewer Tasks
+          </button>
         </div>
-        
-        <div v-if="!selectedUserId" class="risk-workflow-no-data">
-          <p>Please select a user to view their assigned risks.</p>
-        </div>
-        <div v-else-if="loading" class="risk-workflow-loading">
-          <p>Loading user risks...</p>
-        </div>
-        <div v-else-if="error" class="risk-workflow-error-message">
+
+        <div v-if="error" class="risk-workflow-error-message">
           <p>{{ error }}</p>
         </div>
-        <div v-else-if="userRisks.length === 0" class="risk-workflow-no-data">
-          <p>No risks assigned to this user.</p>
-        </div>
-        <div v-else class="risk-workflow-collapsible-container">
-          <div v-if="userTaskSections && userTaskSections.length > 0">
-            <CollapsibleTable
-              v-for="section in userTaskSections"
-              :key="section.name"
-              :section-config="section"
-              :table-headers="userTaskTableHeaders"
-              :is-expanded="expandedSections[section.statusKey]"
-              @toggle="toggleSection(section.statusKey)"
-              @taskClick="handleUserTaskClick"
-            />
+
+        <!-- User Tasks Section -->
+        <div v-if="activeTab === 'user'">
+          <!-- Debug Information (can be removed in production) -->
+          <div style="background: #f0f0f0; padding: 1rem; margin: 1rem; border-radius: 4px; font-size: 12px;" v-if="false">
+            <strong>Debug Info:</strong><br>
+            Selected User ID: {{ selectedUserId }}<br>
+            User Risks Length: {{ userRisks.length }}<br>
+            tasksLoading: {{ tasksLoading }}<br>
+            Error: {{ error }}<br>
+            Approved Risks: {{ approvedRisks.length }}<br>
+            Rejected Risks: {{ rejectedRisks.length }}<br>
+            Pending Review Risks: {{ pendingReviewRisks.length }}<br>
+            Assigned Risks: {{ assignedRisks.length }}<br>
+            User Task Sections Length: {{ userTaskSections.length }}
           </div>
-          <div v-else class="risk-workflow-no-data">
-            <p>No task sections available.</p>
+
+          <div v-if="!selectedUserId" class="risk-workflow-no-data">
+            <p>Please select a user to view their assigned risks.</p>
           </div>
-        </div>
-      </div>
-      
-      <!-- Reviewer Tasks Section -->
-      <div v-if="activeTab === 'reviewer'">
-        <!-- Debug Information (can be removed in production) -->
-        <div style="background: #f0f0f0; padding: 1rem; margin: 1rem; border-radius: 4px; font-size: 12px;" v-if="false">
-          <strong>Reviewer Debug Info:</strong><br>
-          Selected User ID: {{ selectedUserId }}<br>
-          Reviewer Tasks Length: {{ reviewerTasks.length }}<br>
-          Approved Reviewer Tasks: {{ approvedReviewerTasks.length }}<br>
-          Pending Reviewer Tasks: {{ pendingReviewerTasks.length }}<br>
-          Reviewer Task Sections Length: {{ reviewerTaskSections.length }}
-        </div>
-        
-        <div v-if="!selectedUserId" class="risk-workflow-no-data">
-          <p>Please select a user to view their reviewer tasks.</p>
-        </div>
-        <div v-else-if="loading" class="risk-workflow-loading">
-          <p>Loading reviewer tasks...</p>
-        </div>
-        <div v-else-if="error" class="risk-workflow-error-message">
-          <p>{{ error }}</p>
-        </div>
-        <div v-else-if="reviewerTasks.length === 0" class="risk-workflow-no-data">
-          <p>No review tasks assigned to this user.</p>
-        </div>
-        <div v-else class="risk-workflow-collapsible-container">
-          <div v-if="reviewerTaskSections && reviewerTaskSections.length > 0">
-            <CollapsibleTable
-              v-for="section in reviewerTaskSections"
-              :key="section.name"
-              :section-config="section"
-              :table-headers="reviewerTaskTableHeaders"
-              :is-expanded="expandedSections[section.statusKey]"
-              @toggle="toggleSection(section.statusKey)"
-              @taskClick="handleReviewerTaskClick"
-            />
+          <div
+            v-else-if="showTasksAreaSkeleton"
+            class="risk-workflow-collapsible-container risk-workflow-task-skeleton-outer"
+            role="status"
+            aria-busy="true"
+            aria-label="Loading tasks"
+          >
+            <div class="risk-workflow-task-skeleton-section-bar grc-skeleton-pulse" />
+            <div class="grc-skeleton-table-wrap risk-workflow-task-area-skeleton risk-workflow-task-skeleton-panel">
+              <div
+                v-for="n in 12"
+                :key="'tsk-' + n"
+                class="grc-skeleton-row grc-skeleton-pulse risk-workflow-task-skeleton-row"
+              />
+            </div>
           </div>
-          <div v-else class="risk-workflow-no-data">
-            <p>No reviewer task sections available.</p>
+          <div v-else-if="userRisks.length === 0" class="risk-workflow-no-data">
+            <p>No risks assigned to this user.</p>
+          </div>
+          <div v-else class="risk-workflow-collapsible-container">
+            <div v-if="userTaskSections && userTaskSections.length > 0">
+              <CollapsibleTable
+                v-for="section in userTaskSections"
+                :key="section.name"
+                :section-config="section"
+                :table-headers="userTaskTableHeaders"
+                :is-expanded="expandedSections[section.statusKey]"
+                @toggle="toggleSection(section.statusKey)"
+                @taskClick="handleUserTaskClick"
+              />
+            </div>
+            <div v-else class="risk-workflow-no-data">
+              <p>No task sections available.</p>
+            </div>
           </div>
         </div>
-      </div>
+
+        <!-- Reviewer Tasks Section -->
+        <div v-if="activeTab === 'reviewer'">
+          <!-- Debug Information (can be removed in production) -->
+          <div style="background: #f0f0f0; padding: 1rem; margin: 1rem; border-radius: 4px; font-size: 12px;" v-if="false">
+            <strong>Reviewer Debug Info:</strong><br>
+            Selected User ID: {{ selectedUserId }}<br>
+            Reviewer Tasks Length: {{ reviewerTasks.length }}<br>
+            Approved Reviewer Tasks: {{ approvedReviewerTasks.length }}<br>
+            Pending Reviewer Tasks: {{ pendingReviewerTasks.length }}<br>
+            Reviewer Task Sections Length: {{ reviewerTaskSections.length }}
+          </div>
+
+          <div v-if="!selectedUserId" class="risk-workflow-no-data">
+            <p>Please select a user to view their reviewer tasks.</p>
+          </div>
+          <div
+            v-else-if="showTasksAreaSkeleton"
+            class="risk-workflow-collapsible-container risk-workflow-task-skeleton-outer"
+            role="status"
+            aria-busy="true"
+            aria-label="Loading reviewer tasks"
+          >
+            <div class="risk-workflow-task-skeleton-section-bar grc-skeleton-pulse" />
+            <div class="grc-skeleton-table-wrap risk-workflow-task-area-skeleton risk-workflow-task-skeleton-panel">
+              <div
+                v-for="n in 12"
+                :key="'rvw-' + n"
+                class="grc-skeleton-row grc-skeleton-pulse risk-workflow-task-skeleton-row"
+              />
+            </div>
+          </div>
+          <div v-else-if="reviewerTasks.length === 0" class="risk-workflow-no-data">
+            <p>No review tasks assigned to this user.</p>
+          </div>
+          <div v-else class="risk-workflow-collapsible-container">
+            <div v-if="reviewerTaskSections && reviewerTaskSections.length > 0">
+              <CollapsibleTable
+                v-for="section in reviewerTaskSections"
+                :key="section.name"
+                :section-config="section"
+                :table-headers="reviewerTaskTableHeaders"
+                :is-expanded="expandedSections[section.statusKey]"
+                @toggle="toggleSection(section.statusKey)"
+                @taskClick="handleReviewerTaskClick"
+              />
+            </div>
+            <div v-else class="risk-workflow-no-data">
+              <p>No reviewer task sections available.</p>
+            </div>
+          </div>
+        </div>
+      </template>
     </div>
     
     <!-- Risk Mitigation Workflow view (Full screen instead of modal) -->
@@ -234,9 +266,39 @@
         <h1>Mitigation Steps</h1>
       </div>
       
-      <div v-if="loadingMitigations" class="risk-workflow-loading">
-        <div class="risk-workflow-spinner"></div>
-        <span>Loading mitigation steps...</span>
+      <div
+        v-if="loadingMitigations"
+        class="risk-workflow-mitigation-skeleton"
+        role="status"
+        aria-busy="true"
+        aria-label="Loading mitigation steps"
+      >
+        <div class="risk-workflow-mitigation-skeleton-header mimic-steps-header">
+          <div class="risk-workflow-mitigation-skeleton-count-block">
+            <div class="risk-workflow-mitigation-skel-circle grc-skeleton-pulse" />
+            <div class="risk-workflow-mitigation-skel-label grc-skeleton-pulse" />
+          </div>
+          <div class="risk-workflow-mitigation-skeleton-chips">
+            <div
+              v-for="n in 6"
+              :key="'mchip-' + n"
+              class="risk-workflow-mitigation-skel-chip grc-skeleton-pulse"
+            />
+          </div>
+        </div>
+        <div class="risk-workflow-mitigation-skeleton-body">
+          <div class="risk-workflow-mitigation-skel-sidebar grc-skeleton-pulse" />
+          <div class="risk-workflow-mitigation-skel-main">
+            <div class="risk-workflow-mitigation-skel-line wide grc-skeleton-pulse" />
+            <div class="risk-workflow-mitigation-skel-line grc-skeleton-pulse" />
+            <div class="risk-workflow-mitigation-skel-line medium grc-skeleton-pulse" />
+            <div
+              v-for="n in 5"
+              :key="'mln-' + n"
+              class="risk-workflow-mitigation-skel-line grc-skeleton-pulse"
+            />
+          </div>
+        </div>
       </div>
       <div v-else-if="!mitigationSteps.length" class="risk-workflow-no-data">
         No mitigation steps found for this risk.
@@ -622,9 +684,37 @@
       
       <h1>Review Risk Mitigations</h1>
       
-      <div v-if="loadingMitigations" class="loading">
-        <div class="spinner"></div>
-        <span>Loading mitigation data...</span>
+      <div
+        v-if="loadingMitigations"
+        class="risk-workflow-mitigation-skeleton reviewer-mitigation-skeleton"
+        role="status"
+        aria-busy="true"
+        aria-label="Loading mitigation review"
+      >
+        <div class="risk-workflow-mitigation-skeleton-header mimic-steps-header">
+          <div class="risk-workflow-mitigation-skeleton-count-block">
+            <div class="risk-workflow-mitigation-skel-circle grc-skeleton-pulse" />
+            <div class="risk-workflow-mitigation-skel-label grc-skeleton-pulse" />
+          </div>
+          <div class="risk-workflow-mitigation-skeleton-chips">
+            <div
+              v-for="n in 5"
+              :key="'rchip-' + n"
+              class="risk-workflow-mitigation-skel-chip grc-skeleton-pulse"
+            />
+          </div>
+        </div>
+        <div class="risk-workflow-mitigation-skeleton-body reviewer-skel-body">
+          <div class="risk-workflow-mitigation-skel-review-top grc-skeleton-pulse" />
+          <div class="risk-workflow-mitigation-skel-main full">
+            <div class="risk-workflow-mitigation-skel-line wide grc-skeleton-pulse" />
+            <div
+              v-for="n in 8"
+              :key="'rln-' + n"
+              class="risk-workflow-mitigation-skel-line grc-skeleton-pulse"
+            />
+          </div>
+        </div>
       </div>
       <div v-else>
         <div class="risk-summary">
@@ -1247,7 +1337,6 @@ import { PopupService } from '../../modules/popus/popupService';
 import { API_ENDPOINTS } from '../../config/api.js';
 import apiService from '@/services/apiService.js';
 import EvidenceAttachment from '../EventHandling/EvidenceAttachment.vue';
-import riskDataService from '@/services/riskService';
 import { safeEvidenceUrl } from '@/utils/trustedEvidenceUrl';
 
 const axios = {
@@ -1274,7 +1363,9 @@ export default {
       reviewerTasks: [],
       users: [],
       selectedUserId: '',
-      loading: true,
+      loading: false,
+      usersListLoading: false,
+      tasksLoading: false,
       error: null,
       dataSourceMessage: '',
       // Search and filter properties
@@ -1392,6 +1483,17 @@ export default {
     isGRCAdministrator() {
     return this.loggedInUser && this.loggedInUser.role === 'GRC Administrator';
   },
+    showWorkflowBootSkeleton() {
+      if (this.isLoadingUser) return true;
+      if (this.isGRCAdministrator && this.usersListLoading) return true;
+      return false;
+    },
+    showUserFilterSkeleton() {
+      return this.isGRCAdministrator && this.usersListLoading && this.users.length === 0;
+    },
+    showTasksAreaSkeleton() {
+      return Boolean(this.selectedUserId) && this.tasksLoading && !this.showWorkflowBootSkeleton;
+    },
     userCount() {
       console.log('Current users in data:', this.users.length, this.users);
       return this.users.length;
@@ -1538,24 +1640,7 @@ export default {
   },
   mounted() {
     console.log('RiskWorkflow component mounted');
-    
-    // Fetch users immediately when component mounts
-    this.fetchUsers();
     this.fetchLoggedInUser();
-    
-    // Set a small delay to ensure the DOM is fully rendered
-    setTimeout(() => {
-      // Force a re-render of the dropdown
-      if (this.users.length === 0) {
-        this.fetchUsers();
-      }
-      
-      // If selectedUserId is already set, fetch data
-      if (this.selectedUserId) {
-        console.log('Selected user ID found, fetching data:', this.selectedUserId);
-        this.fetchData();
-      }
-    }, 500);
   },
   methods: {
     safeEvidenceUrl,
@@ -1857,7 +1942,6 @@ export default {
       } else {
         // For non-GRC administrators, create a single-user array
         this.users = [this.loggedInUser];
-        this.loading = false;
       }
       
       // Fetch data after user is loaded
@@ -1872,29 +1956,28 @@ export default {
   },
     fetchUsers() {
       console.log('Fetching users...');
-      this.loading = true;
-
-        // ADD THIS CHECK AT THE BEGINNING:
       if (!this.isGRCAdministrator) {
         console.log('Not GRC Administrator, skipping user list fetch');
-        this.loading = false;
-        return;
+        this.usersListLoading = false;
+        return Promise.resolve();
       }
-      
+
+      this.usersListLoading = true;
+
       // Try both endpoints to ensure we get users data
-              axios.get(API_ENDPOINTS.CUSTOM_USERS)
+      return axios.get(API_ENDPOINTS.CUSTOM_USERS)
         .then(response => {
           console.log('User data received:', response.data);
           if (Array.isArray(response.data) && response.data.length > 0) {
             this.users = response.data;
-            this.loading = false;
-            
+            this.usersListLoading = false;
+
             // Ensure the logged-in user is selected if not already set
             if (!this.selectedUserId && this.loggedInUser) {
               this.selectedUserId = this.loggedInUser.UserId;
               console.log('Setting default user after users loaded:', this.selectedUserId);
             }
-            
+
             // Update dropdown configuration
             this.updateUserDropdownConfig();
           } else {
@@ -1906,22 +1989,22 @@ export default {
           if (response && response.data) {
             console.log('User data from dropdown endpoint:', response.data);
             this.users = response.data;
-            
+
             // Ensure the logged-in user is selected if not already set
             if (!this.selectedUserId && this.loggedInUser) {
               this.selectedUserId = this.loggedInUser.UserId;
               console.log('Setting default user after fallback users loaded:', this.selectedUserId);
             }
-            
+
             // Update dropdown configuration
             this.updateUserDropdownConfig();
           }
-          this.loading = false;
+          this.usersListLoading = false;
         })
         .catch(error => {
           console.error('Error fetching users:', error);
           this.error = `Failed to fetch users: ${error.message}`;
-          this.loading = false;
+          this.usersListLoading = false;
         });
     },
     
@@ -1943,19 +2026,15 @@ export default {
       if (!this.selectedUserId) {
         this.userRisks = [];
         this.reviewerTasks = [];
-        this.dataSourceMessage = 'Select a user to load tasks';
+        this.tasksLoading = false;
+        this.dataSourceMessage = '';
         return;
       }
-      
-      this.loading = true;
-      this.dataSourceMessage = 'Loading tasks...';
-      
-      if (riskDataService.hasRiskInstancesCache()) {
-        this.dataSourceMessage = 'Loaded base risk data from cache; fetching user-specific tasks...';
-      } else {
-        this.dataSourceMessage = 'Fetching user-specific tasks from API...';
-      }
-      
+
+      this.tasksLoading = true;
+      this.dataSourceMessage = '';
+      this.error = null;
+
       // Only fetch user risks and reviewer tasks, not notifications
       Promise.all([
         axios.get(API_ENDPOINTS.USER_RISKS(this.selectedUserId)),
@@ -2021,11 +2100,9 @@ export default {
           this.userRisks = [];
         }
         
-        this.loading = false;
+        this.tasksLoading = false;
         this.error = null;
-        this.dataSourceMessage = riskDataService.hasRiskInstancesCache()
-          ? 'User-specific tasks refreshed from API (base data was prefetched)'
-          : 'User-specific tasks loaded directly from API';
+        this.dataSourceMessage = '';
         
         // Debug logging
         console.log('User risks fetched:', this.userRisks);
@@ -2045,8 +2122,8 @@ export default {
       .catch(error => {
         console.error('Error fetching data:', error);
         this.error = `Failed to fetch data: ${error.message}`;
-        this.loading = false;
-        this.dataSourceMessage = 'Failed to load tasks';
+        this.tasksLoading = false;
+        this.dataSourceMessage = '';
       });
     },
     getUserName(userId) {
@@ -2124,250 +2201,211 @@ export default {
         this.loading = false;
       });
     },
-    viewMitigations(riskId) {
+    async viewMitigations(riskId) {
       this.selectedRiskId = riskId;
       this.loadingMitigations = true;
-      this.showMitigationWorkflow = true; // Show workflow in full screen
-      // Initialize visibility states
+      this.showMitigationWorkflow = true;
       this.activeStepIndex = 0;
       this.showQuestionnaireSection = false;
-      
-      // First, get the basic mitigation steps
-              axios.get(API_ENDPOINTS.RISK_MITIGATIONS(riskId))
-        .then(response => {
-          console.log('Mitigations received:', response.data);
-          this.mitigationSteps = this.parseMitigations(response.data);
-          
-          // Get the risk form details
-          axios.get(API_ENDPOINTS.RISK_FORM_DETAILS(riskId))
-            .then(formResponse => {
-              console.log('Form details received:', formResponse.data);
-              // Ensure all form values are strings
-              this.formDetails = {
-                cost: String(formResponse.data.cost || ''),
-                costCurrency: formResponse.data.costCurrency || 'USD',
-                impact: String(formResponse.data.impact || ''),
-                financialImpact: String(formResponse.data.financialImpact || ''),
-                reputationalImpact: String(formResponse.data.reputationalImpact || ''),
-                operationalImpact: String(formResponse.data.operationalImpact || ''),
-                financialLoss: String(formResponse.data.financialLoss || ''),
-                financialLossCurrency: formResponse.data.financialLossCurrency || 'USD',
-                systemDowntime: String(formResponse.data.systemDowntime || ''),
-                recoveryTime: String(formResponse.data.recoveryTime || ''),
-                recurrencePossible: formResponse.data.recurrencePossible || '',
-                improvementInitiative: formResponse.data.improvementInitiative || '',
-                approved: formResponse.data.approved,
-                remarks: formResponse.data.remarks || '',
-                user_submitted_date: formResponse.data.user_submitted_date || formResponse.data.submission_date,
-                reviewer_submitted_date: formResponse.data.reviewer_submitted_date
-              };
-              
-              // Get the latest R version from risk_approval table to get approval status
-              axios.get(API_ENDPOINTS.LATEST_REVIEW(riskId))
-                .then(reviewResponse => {
-                  const reviewData = reviewResponse.data;
-                  console.log('Latest review data:', reviewData);
-                  
-                  // Store the latest review
-                  this.latestReview = reviewData;
-                  
-                  // Update form details with submission dates from the review data
-                  if (reviewData && reviewData.risk_form_details) {
-                    this.formDetails = {
-                      ...this.formDetails,
-                      approved: reviewData.risk_form_details.approved,
-                      remarks: reviewData.risk_form_details.remarks || '',
-                      user_submitted_date: reviewData.user_submitted_date || reviewData.submission_date,
-                      reviewer_submitted_date: reviewData.reviewer_submitted_date || reviewData.review_date
-                    };
-                  }
-                  
-                  if (reviewData && reviewData.mitigations) {
-                    // Create new steps array with proper boolean values for approved
-                    const updatedSteps = [];
-                    
-                    // Process each mitigation from the review data
-                    Object.keys(reviewData.mitigations).forEach(stepId => {
-                      const mitigation = reviewData.mitigations[stepId];
-                      
-                      // Ensure approved is a proper boolean value if it exists, otherwise leave it undefined
-                      let isApproved = undefined;
-                      if ('approved' in mitigation) {
-                        isApproved = mitigation.approved === true || mitigation.approved === "true";
-                      }
-                      
-                      updatedSteps.push({
-                        title: `Step ${stepId}`,
-                        description: mitigation.description,
-                        status: mitigation.status || 'Completed',
-                        approved: isApproved,  // This could be undefined, true, or false
-                        remarks: mitigation.remarks || '',
-                        comments: mitigation.comments || '',
-                        fileData: mitigation.fileData,
-                        fileName: mitigation.fileName,
-                        user_submitted_date: mitigation.user_submitted_date,  // Add user submission date
-                        reviewer_submitted_date: mitigation.reviewer_submitted_date  // Add reviewer submission date
-                      });
-                    });
-                    
-                    // Replace the mitigation steps with the properly formatted data
-                    this.mitigationSteps = updatedSteps;
-                  }
-                  
-                  // First, check if reviewer info is already available in the risk object from the table
-                  const riskFromTable = this.userRisks.find(r => r.RiskInstanceId === riskId);
-                  let reviewerFound = false;
-                  
-                  if (riskFromTable) {
-                    // Check for reviewer in different possible field names
-                    if (riskFromTable.ReviewerId) {
-                      this.selectedReviewer = riskFromTable.ReviewerId;
-                      console.log(`Using reviewer ID from risk object: ${this.selectedReviewer}`);
-                      reviewerFound = true;
-                    } else if (riskFromTable.Reviewer) {
-                      // If we have reviewer name, try to find the ID from users array
-                      const reviewerUser = this.users.find(u => u.UserName === riskFromTable.Reviewer);
-                      if (reviewerUser) {
-                        this.selectedReviewer = reviewerUser.UserId;
-                        console.log(`Using reviewer ID from reviewer name: ${this.selectedReviewer}`);
-                      } else {
-                        this.selectedReviewer = riskFromTable.Reviewer;
-                        console.log(`Using reviewer name from risk object: ${this.selectedReviewer}`);
-                      }
-                      reviewerFound = true;
-                    } else if (riskFromTable.ReviewerName) {
-                      // If we have ReviewerName, try to find the ID from users array
-                      const reviewerUser = this.users.find(u => u.UserName === riskFromTable.ReviewerName);
-                      if (reviewerUser) {
-                        this.selectedReviewer = reviewerUser.UserId;
-                        console.log(`Using reviewer ID from ReviewerName: ${this.selectedReviewer}`);
-                      } else {
-                        this.selectedReviewer = riskFromTable.ReviewerName;
-                        console.log(`Using ReviewerName from risk object: ${this.selectedReviewer}`);
-                      }
-                      reviewerFound = true;
-                    }
-                  }
-                  
-                  // Only make API call if reviewer not found in risk object
-                  if (!reviewerFound) {
-                    // Check if a reviewer is already assigned
-                    axios.get(API_ENDPOINTS.GET_ASSIGNED_REVIEWER(riskId))
-                    .then(reviewerResponse => {
-                      console.log('Reviewer response:', reviewerResponse.data);
-                      
-                      // Check if we have reviewer data
-                      if (reviewerResponse.data && (reviewerResponse.data.reviewer_name || reviewerResponse.data.reviewer_id)) {
-                        // Always use reviewer_id if available
-                        if (reviewerResponse.data.reviewer_id) {
-                          this.selectedReviewer = reviewerResponse.data.reviewer_id;
-                          console.log(`Using reviewer ID: ${this.selectedReviewer}`);
-                        } else {
-                          this.selectedReviewer = reviewerResponse.data.reviewer_name;
-                          console.log(`No reviewer ID available, using name: ${this.selectedReviewer}`);
-                        }
-                      } else if (reviewerResponse.data && reviewerResponse.data.error) {
-                        // Handle specific error cases
-                        console.log('Reviewer assignment error:', reviewerResponse.data.message);
-                        
-                        // Only show popup if it's a "no reviewer assigned" error, not a database error
-                        // But first check if reviewer exists in risk object
-                        const riskFromTable = this.userRisks.find(r => r.RiskInstanceId === riskId);
-                        const hasReviewerInTable = riskFromTable && (riskFromTable.ReviewerId || riskFromTable.Reviewer || riskFromTable.ReviewerName);
-                        
-                        if (reviewerResponse.data.error === 'No reviewer assigned' && !hasReviewerInTable) {
-                          this.sendPushNotification({
-                            title: 'No Reviewer Assigned',
-                            message: `No reviewer has been assigned to risk ${this.selectedRiskId}. Please contact your administrator.`,
-                            category: 'risk',
-                            priority: 'high'
-                          });
-                          PopupService.warning('No reviewer has been assigned to this risk yet. Please contact your administrator.', 'No Reviewer Assigned');
-                          this.selectedReviewer = '';
-                        } else if (reviewerResponse.data.error === 'No reviewer assigned' && hasReviewerInTable) {
-                          // Reviewer exists in table but API returned error - use table data
-                          if (riskFromTable.ReviewerId) {
-                            this.selectedReviewer = riskFromTable.ReviewerId;
-                          } else if (riskFromTable.Reviewer) {
-                            const reviewerUser = this.users.find(u => u.UserName === riskFromTable.Reviewer);
-                            this.selectedReviewer = reviewerUser ? reviewerUser.UserId : riskFromTable.Reviewer;
-                          } else if (riskFromTable.ReviewerName) {
-                            const reviewerUser = this.users.find(u => u.UserName === riskFromTable.ReviewerName);
-                            this.selectedReviewer = reviewerUser ? reviewerUser.UserId : riskFromTable.ReviewerName;
-                          }
-                        } else {
-                          // Database error - show error popup
-                          PopupService.error(`Database error: ${reviewerResponse.data.message}`, 'Error');
-                          this.selectedReviewer = '';
-                        }
-                      } else {
-                        // Empty response or unexpected format - don't show error popup, just log
-                        console.log('Empty or unexpected reviewer response from API');
-                        this.selectedReviewer = '';
-                      }
-                      this.loadingMitigations = false;
-                      
-                      // Show the questionnaire section by default
-                      this.showQuestionnaire = true;
-                    })
-                    .catch(error => {
-                      console.error('Error fetching assigned reviewer:', error);
-                      // Don't show error popup, just log the error
-                      this.selectedReviewer = '';
-                      this.loadingMitigations = false;
-                      
-                      // Show the questionnaire section by default even if reviewer fetch fails
-                      this.showQuestionnaire = true;
-                    });
-                  } else {
-                    // Reviewer found in risk object, skip API call
-                    this.loadingMitigations = false;
-                    
-                    // Show the questionnaire section by default
-                    this.showQuestionnaire = true;
-                  }
-                })
-                .catch(error => {
-                  console.error('Error fetching latest review:', error);
-                  this.loadingMitigations = false;
-                  
-                  // Show the questionnaire section by default
-                  this.showQuestionnaire = true;
-                });
-            })
-            .catch(error => {
-              console.error('Error fetching form details:', error);
-              // Continue with default empty form details
-              this.formDetails = {
-                cost: '',
-                costCurrency: 'USD',
-                impact: '',
-                financialImpact: '',
-                reputationalImpact: '',
-                operationalImpact: '',
-                financialLoss: '',
-                financialLossCurrency: 'USD',
-                systemDowntime: '',
-                recoveryTime: '',
-                recurrencePossible: '',
-                improvementInitiative: '',
-                approved: undefined,
-                remarks: ''
-              };
-              this.loadingMitigations = false;
-              
-              // Show the questionnaire section by default
-              this.showQuestionnaire = true;
-            });
-        })
-        .catch(error => {
-          console.error('Error fetching mitigations:', error);
+      this.latestReview = null;
+
+      const emptyFormDetails = () => ({
+        cost: '',
+        costCurrency: 'USD',
+        impact: '',
+        financialImpact: '',
+        reputationalImpact: '',
+        operationalImpact: '',
+        financialLoss: '',
+        financialLossCurrency: 'USD',
+        systemDowntime: '',
+        recoveryTime: '',
+        recurrencePossible: '',
+        improvementInitiative: '',
+        approved: undefined,
+        remarks: ''
+      });
+
+      try {
+        const [mitSettled, formSettled, reviewSettled] = await Promise.allSettled([
+          axios.get(API_ENDPOINTS.RISK_MITIGATIONS(riskId)),
+          axios.get(API_ENDPOINTS.RISK_FORM_DETAILS(riskId)),
+          axios.get(API_ENDPOINTS.LATEST_REVIEW(riskId))
+        ]);
+
+        if (mitSettled.status === 'rejected') {
+          console.error('Error fetching mitigations:', mitSettled.reason);
           this.mitigationSteps = [];
           this.loadingMitigations = false;
-          
-          // Show the questionnaire section by default
           this.showQuestionnaire = true;
-        });
+          return;
+        }
+
+        const mitResp = mitSettled.value;
+        console.log('Mitigations received:', mitResp.data);
+        this.mitigationSteps = this.parseMitigations(mitResp.data);
+
+        if (formSettled.status === 'fulfilled' && formSettled.value.data) {
+          const fd = formSettled.value.data;
+          console.log('Form details received:', fd);
+          this.formDetails = {
+            cost: String(fd.cost || ''),
+            costCurrency: fd.costCurrency || 'USD',
+            impact: String(fd.impact || ''),
+            financialImpact: String(fd.financialImpact || ''),
+            reputationalImpact: String(fd.reputationalImpact || ''),
+            operationalImpact: String(fd.operationalImpact || ''),
+            financialLoss: String(fd.financialLoss || ''),
+            financialLossCurrency: fd.financialLossCurrency || 'USD',
+            systemDowntime: String(fd.systemDowntime || ''),
+            recoveryTime: String(fd.recoveryTime || ''),
+            recurrencePossible: fd.recurrencePossible || '',
+            improvementInitiative: fd.improvementInitiative || '',
+            approved: fd.approved,
+            remarks: fd.remarks || '',
+            user_submitted_date: fd.user_submitted_date || fd.submission_date,
+            reviewer_submitted_date: fd.reviewer_submitted_date
+          };
+        } else {
+          if (formSettled.status === 'rejected') {
+            console.error('Error fetching form details:', formSettled.reason);
+          }
+          this.formDetails = emptyFormDetails();
+        }
+
+        if (reviewSettled.status === 'fulfilled' && reviewSettled.value.data) {
+          const reviewData = reviewSettled.value.data;
+          console.log('Latest review data:', reviewData);
+          this.latestReview = reviewData;
+
+          if (reviewData && reviewData.risk_form_details) {
+            this.formDetails = {
+              ...this.formDetails,
+              approved: reviewData.risk_form_details.approved,
+              remarks: reviewData.risk_form_details.remarks || '',
+              user_submitted_date: reviewData.user_submitted_date || reviewData.submission_date,
+              reviewer_submitted_date: reviewData.reviewer_submitted_date || reviewData.review_date
+            };
+          }
+
+          if (reviewData && reviewData.mitigations) {
+            const updatedSteps = [];
+            Object.keys(reviewData.mitigations).forEach(stepId => {
+              const mitigation = reviewData.mitigations[stepId];
+              let isApproved = undefined;
+              if ('approved' in mitigation) {
+                isApproved = mitigation.approved === true || mitigation.approved === 'true';
+              }
+              updatedSteps.push({
+                title: `Step ${stepId}`,
+                description: mitigation.description,
+                status: mitigation.status || 'Completed',
+                approved: isApproved,
+                remarks: mitigation.remarks || '',
+                comments: mitigation.comments || '',
+                fileData: mitigation.fileData,
+                fileName: mitigation.fileName,
+                user_submitted_date: mitigation.user_submitted_date,
+                reviewer_submitted_date: mitigation.reviewer_submitted_date
+              });
+            });
+            this.mitigationSteps = updatedSteps;
+          }
+        } else if (reviewSettled.status === 'rejected') {
+          console.error('Error fetching latest review:', reviewSettled.reason);
+        }
+
+        const riskFromTable = this.userRisks.find(r => r.RiskInstanceId === riskId);
+        let reviewerFound = false;
+
+        if (riskFromTable) {
+          if (riskFromTable.ReviewerId) {
+            this.selectedReviewer = riskFromTable.ReviewerId;
+            console.log(`Using reviewer ID from risk object: ${this.selectedReviewer}`);
+            reviewerFound = true;
+          } else if (riskFromTable.Reviewer) {
+            const reviewerUser = this.users.find(u => u.UserName === riskFromTable.Reviewer);
+            if (reviewerUser) {
+              this.selectedReviewer = reviewerUser.UserId;
+              console.log(`Using reviewer ID from reviewer name: ${this.selectedReviewer}`);
+            } else {
+              this.selectedReviewer = riskFromTable.Reviewer;
+              console.log(`Using reviewer name from risk object: ${this.selectedReviewer}`);
+            }
+            reviewerFound = true;
+          } else if (riskFromTable.ReviewerName) {
+            const reviewerUser = this.users.find(u => u.UserName === riskFromTable.ReviewerName);
+            if (reviewerUser) {
+              this.selectedReviewer = reviewerUser.UserId;
+              console.log(`Using reviewer ID from ReviewerName: ${this.selectedReviewer}`);
+            } else {
+              this.selectedReviewer = riskFromTable.ReviewerName;
+              console.log(`Using ReviewerName from risk object: ${this.selectedReviewer}`);
+            }
+            reviewerFound = true;
+          }
+        }
+
+        if (!reviewerFound) {
+          try {
+            const reviewerResponse = await axios.get(API_ENDPOINTS.GET_ASSIGNED_REVIEWER(riskId));
+            console.log('Reviewer response:', reviewerResponse.data);
+            const rr = reviewerResponse.data;
+
+            if (rr && (rr.reviewer_name || rr.reviewer_id)) {
+              if (rr.reviewer_id) {
+                this.selectedReviewer = rr.reviewer_id;
+                console.log(`Using reviewer ID: ${this.selectedReviewer}`);
+              } else {
+                this.selectedReviewer = rr.reviewer_name;
+                console.log(`No reviewer ID available, using name: ${this.selectedReviewer}`);
+              }
+            } else if (rr && rr.error) {
+              console.log('Reviewer assignment error:', rr.message);
+              const rft = this.userRisks.find(r => r.RiskInstanceId === riskId);
+              const hasReviewerInTable = rft && (rft.ReviewerId || rft.Reviewer || rft.ReviewerName);
+
+              if (rr.error === 'No reviewer assigned' && !hasReviewerInTable) {
+                this.sendPushNotification({
+                  title: 'No Reviewer Assigned',
+                  message: `No reviewer has been assigned to risk ${this.selectedRiskId}. Please contact your administrator.`,
+                  category: 'risk',
+                  priority: 'high'
+                });
+                PopupService.warning('No reviewer has been assigned to this risk yet. Please contact your administrator.', 'No Reviewer Assigned');
+                this.selectedReviewer = '';
+              } else if (rr.error === 'No reviewer assigned' && hasReviewerInTable) {
+                if (rft.ReviewerId) {
+                  this.selectedReviewer = rft.ReviewerId;
+                } else if (rft.Reviewer) {
+                  const ru = this.users.find(u => u.UserName === rft.Reviewer);
+                  this.selectedReviewer = ru ? ru.UserId : rft.Reviewer;
+                } else if (rft.ReviewerName) {
+                  const ru = this.users.find(u => u.UserName === rft.ReviewerName);
+                  this.selectedReviewer = ru ? ru.UserId : rft.ReviewerName;
+                }
+              } else {
+                PopupService.error(`Database error: ${rr.message}`, 'Error');
+                this.selectedReviewer = '';
+              }
+            } else {
+              console.log('Empty or unexpected reviewer response from API');
+              this.selectedReviewer = '';
+            }
+          } catch (error) {
+            console.error('Error fetching assigned reviewer:', error);
+            this.selectedReviewer = '';
+          }
+        }
+
+        this.loadingMitigations = false;
+        this.showQuestionnaire = true;
+      } catch (error) {
+        console.error('Error in viewMitigations:', error);
+        this.mitigationSteps = [];
+        this.loadingMitigations = false;
+        this.showQuestionnaire = true;
+      }
     },
     fetchLatestReviewerData(riskId) {
               axios.get(API_ENDPOINTS.LATEST_REVIEW(riskId))
@@ -3198,116 +3236,132 @@ export default {
         }
       }
       
-      // If mitigations are missing, fetch from risk instance
-      if (!hasMitigations) {
+      const applyMitigationApiToReviewData = (mitigationData) => {
+        if (!mitigationData) return false;
+        if (typeof mitigationData === 'object' && !Array.isArray(mitigationData)) {
+          const hasNumberedKeys = Object.keys(mitigationData).every(key => /^\d+$/.test(key));
+          if (hasNumberedKeys) {
+            this.mitigationReviewData = mitigationData;
+          } else {
+            this.mitigationReviewData = {};
+            Object.keys(mitigationData).forEach((key, index) => {
+              const stepNumber = (index + 1).toString();
+              if (typeof mitigationData[key] === 'string') {
+                this.mitigationReviewData[stepNumber] = {
+                  description: mitigationData[key],
+                  status: 'Completed'
+                };
+              } else {
+                this.mitigationReviewData[stepNumber] = mitigationData[key];
+              }
+            });
+          }
+        } else if (Array.isArray(mitigationData)) {
+          this.mitigationReviewData = {};
+          mitigationData.forEach((item, index) => {
+            const stepNumber = (index + 1).toString();
+            if (typeof item === 'string') {
+              this.mitigationReviewData[stepNumber] = {
+                description: item,
+                status: 'Completed'
+              };
+            } else {
+              this.mitigationReviewData[stepNumber] = item;
+            }
+          });
+        }
+        return Object.keys(this.mitigationReviewData).length > 0;
+      };
+
+      const applyFormApiToReviewDetails = (d) => {
+        if (!d) return false;
+        this.formDetails = {
+          cost: String(d.cost ?? ''),
+          costCurrency: d.costCurrency ?? 'USD',
+          impact: String(d.impact ?? ''),
+          financialImpact: String(d.financialImpact ?? d.financialimpact ?? ''),
+          reputationalImpact: String(d.reputationalImpact ?? d.reputationalimpact ?? ''),
+          operationalImpact: String(d.operationalImpact ?? d.operationalimpact ?? ''),
+          financialLoss: String(d.financialLoss ?? d.financialloss ?? ''),
+          financialLossCurrency: d.financialLossCurrency ?? 'USD',
+          systemDowntime: String(d.systemDowntime ?? d.expecteddowntime ?? ''),
+          recoveryTime: String(d.recoveryTime ?? d.recoverytime ?? ''),
+          recurrencePossible: d.recurrencePossible ?? d.riskrecurrence ?? '',
+          improvementInitiative: d.improvementInitiative ?? d.improvementinitiative ?? '',
+          approved: d.approved,
+          remarks: d.remarks || '',
+          user_submitted_date: d.user_submitted_date,
+          reviewer_submitted_date: d.reviewer_submitted_date
+        };
+        return true;
+      };
+
+      const emptyReviewerFormDetails = () => ({
+        cost: '',
+        costCurrency: 'USD',
+        impact: '',
+        financialImpact: '',
+        reputationalImpact: '',
+        operationalImpact: '',
+        financialLoss: '',
+        financialLossCurrency: 'USD',
+        systemDowntime: '',
+        recoveryTime: '',
+        recurrencePossible: '',
+        improvementInitiative: '',
+        approved: undefined,
+        remarks: ''
+      });
+
+      if (!hasMitigations && !hasFormDetails) {
+        try {
+          console.log('Fetching mitigations + form in parallel:', this.selectedRiskId);
+          const [mSettled, fSettled] = await Promise.allSettled([
+            axios.get(API_ENDPOINTS.RISK_MITIGATIONS(this.selectedRiskId)),
+            axios.get(API_ENDPOINTS.RISK_FORM_DETAILS(this.selectedRiskId))
+          ]);
+          if (mSettled.status === 'fulfilled') {
+            console.log('Mitigations from risk instance:', mSettled.value.data);
+            hasMitigations = applyMitigationApiToReviewData(mSettled.value.data);
+          } else {
+            console.error('Error fetching mitigations from risk instance:', mSettled.reason);
+            this.mitigationReviewData = {};
+          }
+          if (fSettled.status === 'fulfilled' && fSettled.value.data) {
+            console.log('Form details from risk instance:', fSettled.value.data);
+            hasFormDetails = applyFormApiToReviewDetails(fSettled.value.data);
+          } else {
+            if (fSettled.status === 'rejected') {
+              console.error('Error fetching form details from risk instance:', fSettled.reason);
+            }
+            this.formDetails = emptyReviewerFormDetails();
+          }
+        } catch (error) {
+          console.error('Error fetching reviewer risk data:', error);
+          this.mitigationReviewData = {};
+          this.formDetails = emptyReviewerFormDetails();
+        }
+      } else if (!hasMitigations) {
         try {
           console.log('Fetching mitigations from risk instance:', this.selectedRiskId);
           const mitigationResponse = await axios.get(API_ENDPOINTS.RISK_MITIGATIONS(this.selectedRiskId));
           console.log('Mitigations from risk instance:', mitigationResponse.data);
-          
-          if (mitigationResponse.data) {
-            // Parse mitigations from the response (similar to parseMitigations)
-            const mitigationData = mitigationResponse.data;
-            
-            // Convert to the format expected by mitigationReviewData
-            // The API might return a numbered object like {"1": {...}, "2": {...}}
-            // or an array format
-            if (typeof mitigationData === 'object' && !Array.isArray(mitigationData)) {
-              // Check if it's already in the correct format
-              const hasNumberedKeys = Object.keys(mitigationData).every(key => /^\d+$/.test(key));
-              
-              if (hasNumberedKeys) {
-                // Already in numbered format, use as is
-                this.mitigationReviewData = mitigationData;
-              } else {
-                // Convert to numbered format
-                this.mitigationReviewData = {};
-                Object.keys(mitigationData).forEach((key, index) => {
-                  const stepNumber = (index + 1).toString();
-                  if (typeof mitigationData[key] === 'string') {
-                    // Simple string format, convert to object
-                    this.mitigationReviewData[stepNumber] = {
-                      description: mitigationData[key],
-                      status: 'Completed'
-                    };
-                  } else {
-                    // Already an object
-                    this.mitigationReviewData[stepNumber] = mitigationData[key];
-                  }
-                });
-              }
-            } else if (Array.isArray(mitigationData)) {
-              // Array format, convert to numbered object
-              this.mitigationReviewData = {};
-              mitigationData.forEach((item, index) => {
-                const stepNumber = (index + 1).toString();
-                if (typeof item === 'string') {
-                  this.mitigationReviewData[stepNumber] = {
-                    description: item,
-                    status: 'Completed'
-                  };
-                } else {
-                  this.mitigationReviewData[stepNumber] = item;
-                }
-              });
-            }
-            
-            hasMitigations = Object.keys(this.mitigationReviewData).length > 0;
-          }
+          hasMitigations = applyMitigationApiToReviewData(mitigationResponse.data);
         } catch (error) {
           console.error('Error fetching mitigations from risk instance:', error);
           this.mitigationReviewData = {};
         }
-      }
-      
-      // If form details are missing, fetch from risk instance
-      if (!hasFormDetails) {
+      } else if (!hasFormDetails) {
         try {
           console.log('Fetching form details from risk instance:', this.selectedRiskId);
           const formResponse = await axios.get(API_ENDPOINTS.RISK_FORM_DETAILS(this.selectedRiskId));
           console.log('Form details from risk instance:', formResponse.data);
-          
           if (formResponse.data) {
-            const d = formResponse.data;
-            this.formDetails = {
-              cost: String(d.cost ?? ''),
-              costCurrency: d.costCurrency ?? 'USD',
-              impact: String(d.impact ?? ''),
-              financialImpact: String(d.financialImpact ?? d.financialimpact ?? ''),
-              reputationalImpact: String(d.reputationalImpact ?? d.reputationalimpact ?? ''),
-              operationalImpact: String(d.operationalImpact ?? d.operationalimpact ?? ''),
-              financialLoss: String(d.financialLoss ?? d.financialloss ?? ''),
-              financialLossCurrency: d.financialLossCurrency ?? 'USD',
-              systemDowntime: String(d.systemDowntime ?? d.expecteddowntime ?? ''),
-              recoveryTime: String(d.recoveryTime ?? d.recoverytime ?? ''),
-              recurrencePossible: d.recurrencePossible ?? d.riskrecurrence ?? '',
-              improvementInitiative: d.improvementInitiative ?? d.improvementinitiative ?? '',
-              approved: d.approved,
-              remarks: d.remarks || '',
-              user_submitted_date: d.user_submitted_date,
-              reviewer_submitted_date: d.reviewer_submitted_date
-            };
-            hasFormDetails = true;
+            hasFormDetails = applyFormApiToReviewDetails(formResponse.data);
           }
         } catch (error) {
           console.error('Error fetching form details from risk instance:', error);
-          // Reset form details to empty if fetch fails
-          this.formDetails = {
-            cost: '',
-            costCurrency: 'USD',
-            impact: '',
-            financialImpact: '',
-            reputationalImpact: '',
-            operationalImpact: '',
-            financialLoss: '',
-            financialLossCurrency: 'USD',
-            systemDowntime: '',
-            recoveryTime: '',
-            recurrencePossible: '',
-            improvementInitiative: '',
-            approved: undefined,
-            remarks: ''
-          };
+          this.formDetails = emptyReviewerFormDetails();
         }
       }
       
@@ -4302,6 +4356,205 @@ export default {
   font-size: 0.85rem;
   color: #2563eb;
   font-weight: 600;
+}
+
+.risk-workflow-boot-skeleton {
+  width: 100%;
+  max-width: 1100px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.risk-workflow-skeleton-search {
+  height: 44px;
+  border-radius: 10px;
+  margin-bottom: 16px;
+  border: 1px solid #e8ecf2;
+}
+
+.risk-workflow-skeleton-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.risk-workflow-skeleton-pill {
+  flex: 1 1 140px;
+  min-height: 42px;
+  height: auto;
+  border-radius: 8px;
+  border: 1px solid #e8ecf2;
+}
+
+.risk-workflow-skeleton-pill.wide {
+  flex: 1 1 220px;
+  max-width: 320px;
+}
+
+.risk-workflow-skeleton-task-toggle {
+  margin-bottom: 16px;
+}
+
+.risk-workflow-skeleton-table {
+  margin-top: 4px;
+}
+
+.risk-workflow-user-skeleton {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+}
+
+.risk-workflow-task-area-skeleton {
+  margin-top: 0;
+}
+
+.risk-workflow-task-skeleton-outer {
+  margin-top: 8px;
+}
+
+.risk-workflow-task-skeleton-section-bar {
+  height: 34px;
+  width: min(220px, 40%);
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.risk-workflow-task-skeleton-panel {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  background: linear-gradient(180deg, #f0f7ff 0%, #fafcfe 100%);
+  border: 1px solid #dbeafe;
+}
+
+.risk-workflow-task-skeleton-row {
+  width: 100%;
+  display: block;
+  box-sizing: border-box;
+}
+
+/* Mitigation full-screen: structured skeleton (no spinner) */
+.risk-workflow-mitigation-skeleton {
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0.5rem 0 1.5rem;
+  box-sizing: border-box;
+}
+
+.risk-workflow-mitigation-skeleton-header.mimic-steps-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem 1.5rem;
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.25rem;
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #e5e7eb;
+  background: #fafbfc;
+}
+
+.risk-workflow-mitigation-skeleton-count-block {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.risk-workflow-mitigation-skel-circle {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+}
+
+.risk-workflow-mitigation-skel-label {
+  width: 120px;
+  height: 14px;
+  border-radius: 6px;
+}
+
+.risk-workflow-mitigation-skeleton-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 1;
+  min-width: 200px;
+}
+
+.risk-workflow-mitigation-skel-chip {
+  width: 72px;
+  height: 36px;
+  border-radius: 8px;
+}
+
+.risk-workflow-mitigation-skeleton-body {
+  display: flex;
+  gap: 1rem;
+  width: 100%;
+  align-items: stretch;
+  box-sizing: border-box;
+}
+
+.risk-workflow-mitigation-skel-sidebar {
+  width: 200px;
+  min-height: 280px;
+  border-radius: 12px;
+  flex-shrink: 0;
+  display: none;
+}
+
+@media (min-width: 900px) {
+  .risk-workflow-mitigation-skel-sidebar {
+    display: block;
+  }
+}
+
+.risk-workflow-mitigation-skel-main {
+  flex: 1;
+  min-width: 0;
+  padding: 1rem 1.25rem;
+  border-radius: 12px;
+  border: 1px solid #e8ecf2;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.risk-workflow-mitigation-skel-main.full {
+  width: 100%;
+}
+
+.risk-workflow-mitigation-skel-line {
+  height: 14px;
+  border-radius: 6px;
+  width: 92%;
+}
+
+.risk-workflow-mitigation-skel-line.wide {
+  height: 22px;
+  width: 100%;
+}
+
+.risk-workflow-mitigation-skel-line.medium {
+  width: 65%;
+}
+
+.reviewer-mitigation-skeleton .risk-workflow-mitigation-skeleton-body.reviewer-skel-body {
+  flex-direction: column;
+}
+
+.risk-workflow-mitigation-skel-review-top {
+  height: 48px;
+  width: 100%;
+  border-radius: 10px;
+  margin-bottom: 0.75rem;
 }
 
 /* Add additional styles for the section title */

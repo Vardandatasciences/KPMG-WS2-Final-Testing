@@ -128,6 +128,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { MODULES, CATEGORIES } from '../../utils/constants'
 import { eventService } from '../../services/api'
+import { useEventsStore } from '@/stores/events'
 import CustomDropdown from '@/components/CustomDropdown.vue'
 import apiService from '@/services/apiService.js'
 import './EventFilters.css'
@@ -151,10 +152,16 @@ export default {
     selectedFrameworkFromSession: {
       type: String,
       default: null
+    },
+    selectedFrameworkNameFromSession: {
+      type: String,
+      default: ''
     }
   },
   emits: ['filter-change', 'export'],
   setup(props, { emit }) {
+    const eventsStore = useEventsStore()
+
     // Filter data
     const frameworks = ref([])
     const modules = ref([])
@@ -261,12 +268,8 @@ export default {
       modulesError.value = null
       
       try {
-        const response = await eventService.getModules()
-        if (response.data.success) {
-          modules.value = response.data.modules
-        } else {
-          modulesError.value = 'Failed to fetch modules'
-        }
+        const list = await eventsStore.fetchEventModules({ force: false })
+        modules.value = Array.isArray(list) ? list : []
       } catch (error) {
         console.error('Error fetching modules:', error)
         modulesError.value = 'Error loading modules'
@@ -394,12 +397,19 @@ export default {
           console.log('⚠️ DEBUG: Available framework names:', frameworks.value.map(fw => fw.FrameworkName))
           
           // If we can't find by ID, try to find by name (fallback)
-          const frameworkByName = frameworks.value.find(fw => fw.FrameworkName === 'aaaaaaaaaaawerfg')
+          const frameworkByName = frameworks.value.find(
+            fw => String(fw.FrameworkName || '').trim() === String(props.selectedFrameworkNameFromSession || '').trim()
+          )
           if (frameworkByName) {
             console.log('🔄 DEBUG: Using fallback - found framework by name:', frameworkByName)
             selectedFramework.value = frameworkByName.FrameworkName
           }
         }
+      } else if (props.selectedFrameworkNameFromSession) {
+        const frameworkByName = frameworks.value.find(
+          fw => String(fw.FrameworkName || '').trim() === String(props.selectedFrameworkNameFromSession || '').trim()
+        )
+        selectedFramework.value = frameworkByName ? frameworkByName.FrameworkName : ''
       } else {
         selectedFramework.value = ''
         console.log('ℹ️ DEBUG: Reset framework dropdown to "All Frameworks"')
@@ -440,7 +450,9 @@ export default {
           console.log('⚠️ DEBUG: Available framework names:', newFrameworks.map(fw => fw.FrameworkName))
           
           // If we can't find by ID, try to find by name (fallback)
-          const frameworkByName = newFrameworks.find(fw => fw.FrameworkName === 'aaaaaaaaaaawerfg')
+          const frameworkByName = newFrameworks.find(
+            fw => String(fw.FrameworkName || '').trim() === String(props.selectedFrameworkNameFromSession || '').trim()
+          )
           if (frameworkByName) {
             console.log('🔄 DEBUG: Using fallback - found framework by name:', frameworkByName)
             selectedFramework.value = frameworkByName.FrameworkName
@@ -449,12 +461,23 @@ export default {
       }
     }, { immediate: true })
 
+    watch(
+      () => props.showAdvanced,
+      (show) => {
+        if (show && owners.value.length === 0 && !loadingOwners.value) {
+          fetchOwners()
+        }
+      }
+    )
+
     // Fetch all filter data on component mount
     onMounted(async () => {
       await fetchFrameworks()
       fetchModules()
       fetchCategories()
-      fetchOwners()
+      if (props.showAdvanced) {
+        fetchOwners()
+      }
       
       // Force update the selected framework after frameworks are loaded
       if (props.selectedFrameworkFromSession) {
@@ -463,6 +486,14 @@ export default {
         if (framework) {
           selectedFramework.value = framework.FrameworkName
           console.log('✅ DEBUG: Force updated framework dropdown on mount:', framework.FrameworkName)
+        }
+      } else if (props.selectedFrameworkNameFromSession) {
+        const frameworkByName = frameworks.value.find(
+          fw => String(fw.FrameworkName || '').trim() === String(props.selectedFrameworkNameFromSession || '').trim()
+        )
+        if (frameworkByName) {
+          selectedFramework.value = frameworkByName.FrameworkName
+          console.log('✅ DEBUG: Force updated framework dropdown by name on mount:', frameworkByName.FrameworkName)
         }
       }
       document.addEventListener('click', exportDropdownClickOutside)

@@ -63,6 +63,7 @@
           <button 
             class="btn-approve" 
             @click="approveEntireFramework()" 
+            :disabled="isSubmittingRejection"
             v-if="canPerformReviewActions(selectedApproval) && canApproveFramework() && selectedApproval.ApprovedNot === null && selectedApproval.ExtractedData?.Status !== 'Rejected'"
           >
             Final Approval
@@ -72,13 +73,19 @@
           <button 
             class="btn-approve" 
             @click="approveFramework()" 
+            :disabled="isSubmittingRejection"
             v-if="canPerformReviewActions(selectedApproval) && !canApproveFramework() && selectedApproval.ApprovedNot === null && selectedApproval.ExtractedData?.Status !== 'Rejected'"
           >
             Approve Framework
           </button>
           
           <!-- Reject Button - Show when framework is under review -->
-          <button class="btn-reject" @click="rejectFramework()" v-if="canPerformReviewActions(selectedApproval) && selectedApproval.ApprovedNot === null && selectedApproval.ExtractedData?.Status !== 'Rejected'">
+          <button
+            class="btn-reject"
+            :disabled="isSubmittingRejection"
+            @click="rejectFramework()"
+            v-if="canPerformReviewActions(selectedApproval) && selectedApproval.ApprovedNot === null && selectedApproval.ExtractedData?.Status !== 'Rejected'"
+          >
             Reject
           </button>
           
@@ -132,7 +139,7 @@
                 <button 
                   class="btn-approve" 
                   @click="approvePolicy(policy)"
-                  :disabled="!canApprovePolicy(policy)"
+                  :disabled="isSubmittingRejection || !canApprovePolicy(policy)"
                   :title="!canApprovePolicy(policy) ? 'All subpolicies must be approved first' : 'Approve Policy'"
                 >
                   Approve
@@ -140,6 +147,7 @@
                 <button 
                   class="btn-reject" 
                   @click="rejectPolicy(policy)"
+                  :disabled="isSubmittingRejection"
                 >
                   Reject
                 </button>
@@ -194,7 +202,7 @@
                     <button 
                       class="btn-approve" 
                       @click="approveSubpolicy(policy, subpolicy)"
-                      :disabled="subpolicy.Status === 'Approved'"
+                      :disabled="isSubmittingRejection || subpolicy.Status === 'Approved'"
                       :class="{ 'approved': subpolicy.Status === 'Approved' }"
                     >
                       Approve
@@ -202,7 +210,7 @@
                     <button 
                       class="btn-reject" 
                       @click="rejectSubpolicy(policy, subpolicy)"
-                      :disabled="subpolicy.Status === 'Rejected'"
+                      :disabled="isSubmittingRejection || subpolicy.Status === 'Rejected'"
                       :class="{ 'rejected': subpolicy.Status === 'Rejected' }"
                     >
                       Reject
@@ -241,7 +249,7 @@
                     <button 
                       class="btn-approve" 
                       @click="approveSubpolicy(policy, subpolicy)"
-                      :disabled="subpolicy.Status === 'Approved'"
+                      :disabled="isSubmittingRejection || subpolicy.Status === 'Approved'"
                       :class="{ 'approved': subpolicy.Status === 'Approved' }"
                     >
                       Approve
@@ -249,7 +257,7 @@
                     <button 
                       class="btn-reject" 
                       @click="rejectSubpolicy(policy, subpolicy)"
-                      :disabled="subpolicy.Status === 'Rejected'"
+                      :disabled="isSubmittingRejection || subpolicy.Status === 'Rejected'"
                       :class="{ 'rejected': subpolicy.Status === 'Rejected' }"
                     >
                       Reject
@@ -594,27 +602,12 @@ export default {
     // Check if current user is the reviewer for this framework
     isCurrentUserReviewer(framework) {
       if (!framework) {
-        console.log('⚠️ FrameworkDetails: No framework provided to isCurrentUserReviewer');
         return false;
       }
       
       if (!this.currentUserId) {
-        console.log('⚠️ FrameworkDetails: No currentUserId set in isCurrentUserReviewer');
-        console.log('⚠️ FrameworkDetails: userInitialized:', this.userInitialized);
         return false;
       }
-      
-      console.log('✅ FrameworkDetails: Checking if current user is reviewer for framework:', {
-        frameworkId: framework.FrameworkId,
-        frameworkReviewerId: framework.ReviewerId,
-        extractedDataReviewer: framework.ExtractedData?.Reviewer,
-        currentUserId: this.currentUserId,
-        currentUserName: this.getCurrentUserName(),
-        isGRCAdmin: this.isGRCAdministrator,
-        userInitialized: this.userInitialized,
-        reviewerIdType: typeof framework.ReviewerId,
-        currentUserIdType: typeof this.currentUserId
-      });
       
       // For GRC Administrators, they can only review frameworks specifically assigned to them
       if (this.isGRCAdministrator) {
@@ -691,34 +684,21 @@ export default {
       const createdById = framework.ExtractedData?.CreatedBy || framework.CreatedBy;
       const userId = framework.ExtractedData?.UserID || framework.UserID;
       
-      console.log('Creator check details:', {
-        createdBy: createdBy,
-        createdById: createdById,
-        userId: userId,
-        currentUserId: this.currentUserId,
-        currentUserName: this.getCurrentUserName(),
-        frameworkData: framework.ExtractedData
-      });
-      
       // Check by ID first (most reliable)
       if (createdById && String(createdById) === String(this.currentUserId)) {
-        console.log('Current user is creator (by ID)');
         return true;
       }
       
       // Check by UserID (from approval record)
       if (userId && String(userId) === String(this.currentUserId)) {
-        console.log('Current user is creator (by UserID)');
         return true;
       }
       
       // Check by name (fallback)
       if (createdBy && String(createdBy) === String(this.getCurrentUserName())) {
-        console.log('Current user is creator (by name)');
         return true;
       }
       
-      console.log('Current user is not the creator');
       return false;
     },
 
@@ -796,10 +776,40 @@ export default {
       return this.areAllPoliciesApproved();
     },
 
+    closeRejectModalOnly() {
+      this.showRejectModal = false;
+      this.rejectionComment = '';
+      this.currentRejectionType = 'framework';
+      this.currentRejectionItem = null;
+    },
+
+    snapshotApprovalUi() {
+      if (!this.selectedApproval) return null;
+      return {
+        approvedNot: this.selectedApproval.ApprovedNot,
+        approvedDate: this.selectedApproval.ApprovedDate,
+        version: this.selectedApproval.Version,
+        approvalId: this.selectedApproval.ApprovalId,
+        extractedDataJson: JSON.stringify(this.selectedApproval.ExtractedData),
+      };
+    },
+
+    restoreApprovalUi(snap) {
+      if (!snap || !this.selectedApproval) return;
+      this.selectedApproval.ApprovedNot = snap.approvedNot;
+      this.selectedApproval.ApprovedDate = snap.approvedDate;
+      this.selectedApproval.Version = snap.version;
+      this.selectedApproval.ApprovalId = snap.approvalId;
+      this.selectedApproval.ExtractedData = JSON.parse(snap.extractedDataJson);
+    },
+
     // Framework Actions
     approvePolicy(policy) {
       if (!this.selectedApproval || !this.selectedApproval.FrameworkId) {
         console.error('No framework selected for policy approval');
+        return;
+      }
+      if (this.isSubmittingRejection) {
         return;
       }
 
@@ -814,30 +824,34 @@ export default {
 
       const frameworkId = this.getFrameworkId(this.selectedApproval);
 
-      // Call backend endpoint
+      const prevPolicyStatus = policy.Status;
+      const prevFrameworkStatus = this.selectedApproval.ExtractedData.Status;
+
+      policy.Status = 'Approved';
+      const allPoliciesApproved = this.selectedApproval.ExtractedData.policies.every(p =>
+        p.Status === 'Approved' || (p.subpolicies && p.subpolicies.every(sub => sub.Status === 'Approved'))
+      );
+      if (allPoliciesApproved) {
+        this.selectedApproval.ExtractedData.Status = 'Ready for Final Approval';
+      }
+
+      PopupService.success('Policy approved successfully!', 'Policy Approved');
+
+      this.isSubmittingRejection = true;
       axios.put(API_ENDPOINTS.FRAMEWORK_POLICY_APPROVE_REJECT(frameworkId, policy.PolicyId), {
         approved: true,
-        submit_review: false // Don't submit review automatically
+        submit_review: false
       })
-        .then(response => {
+        .then((response) => {
           console.log('Policy approved successfully:', response.data);
-
-          // Update policy status
-          policy.Status = 'Approved';
-
-          // Check if all policies are approved to update framework status
-          const allPoliciesApproved = this.selectedApproval.ExtractedData.policies.every(p => 
-            p.Status === 'Approved' || (p.subpolicies && p.subpolicies.every(sub => sub.Status === 'Approved'))
-          );
-
-          if (allPoliciesApproved) {
-            this.selectedApproval.ExtractedData.Status = 'Ready for Final Approval';
-          }
-
-          PopupService.success('Policy approved successfully!', 'Policy Approved');
         })
-        .catch(error => {
+        .catch((error) => {
+          policy.Status = prevPolicyStatus;
+          this.selectedApproval.ExtractedData.Status = prevFrameworkStatus;
           this.handleError(error, 'approving policy');
+        })
+        .finally(() => {
+          this.isSubmittingRejection = false;
         });
     },
 
@@ -857,34 +871,50 @@ export default {
         console.error('No framework selected for subpolicy approval');
         return;
       }
+      if (this.isSubmittingRejection) {
+        return;
+      }
       
       const frameworkId = this.getFrameworkId(this.selectedApproval);
-      
-      // Call backend endpoint
-      axios.put(API_ENDPOINTS.FRAMEWORK_POLICY_SUBPOLICY_APPROVE_REJECT(frameworkId, policy.PolicyId, subpolicy.SubPolicyId), {
+
+      const prevSubStatus = subpolicy.Status;
+      const prevPolicyStatus = policy.Status;
+
+      subpolicy.Status = 'Approved';
+      const allSubpoliciesApproved =
+        policy.subpolicies && policy.subpolicies.every((sp) => sp.Status === 'Approved');
+      if (allSubpoliciesApproved) {
+        policy.Status = 'Ready for Approval';
+        PopupService.success(
+          'All subpolicies approved. Policy is now ready for approval.',
+          'Subpolicies Approved'
+        );
+      } else {
+        PopupService.success('Subpolicy approved successfully!', 'Subpolicy Approved');
+      }
+
+      this.isSubmittingRejection = true;
+      axios.put(
+        API_ENDPOINTS.FRAMEWORK_POLICY_SUBPOLICY_APPROVE_REJECT(
+          frameworkId,
+          policy.PolicyId,
+          subpolicy.SubPolicyId
+        ),
+        {
           approved: true,
-        submit_review: false // Don't submit review automatically
-      })
-        .then(response => {
+          submit_review: false,
+        }
+      )
+        .then((response) => {
           console.log('Subpolicy approved successfully:', response.data);
-          
-          // Update subpolicy status
-          subpolicy.Status = 'Approved';
-          
-          // Check if all subpolicies in this policy are approved
-          const allSubpoliciesApproved = policy.subpolicies && 
-            policy.subpolicies.every(sp => sp.Status === 'Approved');
-          
-          if (allSubpoliciesApproved) {
-            // Update policy status to indicate it's ready for approval
-            policy.Status = 'Ready for Approval';
-            PopupService.success('All subpolicies approved. Policy is now ready for approval.', 'Subpolicies Approved');
-          } else {
-            PopupService.success('Subpolicy approved successfully!', 'Subpolicy Approved');
-          }
         })
-        .catch(error => {
+        .catch((error) => {
+          subpolicy.Status = prevSubStatus;
+          policy.Status = prevPolicyStatus;
           this.handleError(error, 'approving subpolicy');
+        })
+        .finally(() => {
+          this.isSubmittingRejection = false;
         });
     },
 
@@ -941,45 +971,49 @@ export default {
     },
 
     proceedWithFrameworkApproval() {
+      if (this.isSubmittingRejection) {
+        return;
+      }
       const frameworkId = this.getFrameworkId(this.selectedApproval);
-      
-      // Call backend endpoint for final framework approval
+      const snap = this.snapshotApprovalUi();
+
+      this.selectedApproval.ExtractedData.Status = 'Approved';
+      this.selectedApproval.ApprovedNot = true;
+      if (this.selectedApproval.ExtractedData.policies) {
+        this.selectedApproval.ExtractedData.policies.forEach((pol) => {
+          pol.Status = 'Approved';
+          if (pol.subpolicies) {
+            pol.subpolicies.forEach((sp) => {
+              sp.Status = 'Approved';
+            });
+          }
+        });
+      }
+
+      PopupService.success('Framework approved successfully!', 'Framework Approved');
+
+      this.isSubmittingRejection = true;
       axios.put(API_ENDPOINTS.FRAMEWORK_APPROVE_FINAL(frameworkId))
-        .then(response => {
+        .then((response) => {
           console.log('Framework approved successfully:', response.data);
-          
-          // Update framework status and store approval date
-          this.selectedApproval.ExtractedData.Status = 'Approved';
-          this.selectedApproval.ApprovedNot = true;
-          
-          // Store the approval date from the response
           if (response.data.ApprovedDate) {
             this.selectedApproval.ApprovedDate = response.data.ApprovedDate;
           }
-          
-          // Update all policies and subpolicies to Approved status
-          if (this.selectedApproval.ExtractedData.policies) {
-            this.selectedApproval.ExtractedData.policies.forEach(policy => {
-              policy.Status = 'Approved';
-              
-              if (policy.subpolicies) {
-                policy.subpolicies.forEach(subpolicy => {
-                  subpolicy.Status = 'Approved';
-                });
-              }
-            });
-          }
-          
-          PopupService.success('Framework approved successfully!', 'Framework Approved');
         })
-        .catch(error => {
+        .catch((error) => {
+          this.restoreApprovalUi(snap);
           this.handleError(error, 'approving entire framework');
+        })
+        .finally(() => {
+          this.isSubmittingRejection = false;
         });
     },
 
     submitReview() {
-      console.log('submitReview called with approval:', this.selectedApproval);
-      
+      if (this.isSubmittingRejection) {
+        return;
+      }
+
       // Prevent submission if framework is already processed (approved or rejected)
       if (this.selectedApproval && this.selectedApproval.ExtractedData?.Status === 'Rejected') {
         console.log('Framework is already rejected, preventing duplicate submission');
@@ -1002,24 +1036,29 @@ export default {
     },
 
     // Helper method to submit framework review
-    submitFrameworkReview(approved, remarks = '') {
+    submitFrameworkReview(approved, remarks = '', options = {}) {
       if (!this.selectedApproval || !this.selectedApproval.FrameworkId) {
         console.error('No framework selected for review submission');
+        return;
+      }
+
+      if (this.isSubmittingRejection) {
+        PopupService.warning('Another review action is still in progress. Please wait.', 'Please wait');
         return;
       }
       
       // Prevent duplicate submission if framework is already processed
       if (this.selectedApproval.ExtractedData?.Status === 'Rejected') {
-        console.log('Framework is already rejected, preventing duplicate submission');
         PopupService.warning('Framework has already been rejected and cannot be submitted again.', 'Already Rejected');
         return;
       }
       
       if (this.selectedApproval.ExtractedData?.Status === 'Approved') {
-        console.log('Framework is already approved, preventing duplicate submission');
         PopupService.warning('Framework has already been approved and cannot be submitted again.', 'Already Approved');
         return;
       }
+
+      this.isSubmittingRejection = true;
       
       const frameworkId = this.getFrameworkId(this.selectedApproval);
       console.log(`Submitting framework review for framework ${frameworkId}`, {
@@ -1075,55 +1114,57 @@ export default {
         reviewData.ExtractedData.framework_approval.remarks = remarks;
       }
       
-      // Submit framework review
-      axios.post(API_ENDPOINTS.FRAMEWORK_SUBMIT_REVIEW(frameworkId), reviewData)
-        .then(response => {
-          console.log('Framework review submitted successfully:', response.data);
-          console.log('Response data details:', {
-            ApprovalId: response.data.ApprovalId,
-            Version: response.data.Version,
-            ApprovedNot: response.data.ApprovedNot,
-            ApprovedDate: response.data.ApprovedDate
-          });
-          
-          // Reset loading state
-          this.isSubmittingRejection = false;
-          
-          // Update the approval data with the response
-          this.selectedApproval.ApprovedNot = approved;
-          this.selectedApproval.Version = response.data.Version;
-          
-          if (approved) {
-            this.selectedApproval.ExtractedData.Status = 'Approved';
-            
-            // Store the approval date from the response
-            if (response.data.ApprovedDate) {
-              this.selectedApproval.ApprovedDate = response.data.ApprovedDate;
-            }
-            
-            // Update all policies and subpolicies to Approved status in the UI
-            if (this.selectedApproval.ExtractedData.policies) {
-              this.selectedApproval.ExtractedData.policies.forEach(policy => {
-                policy.Status = 'Approved';
-                
-                if (policy.subpolicies) {
-                  policy.subpolicies.forEach(subpolicy => {
-                    subpolicy.Status = 'Approved';
-                  });
-                }
+      const snap = this.snapshotApprovalUi();
+
+      this.selectedApproval.ApprovedNot = approved;
+      if (approved) {
+        this.selectedApproval.ExtractedData.Status = 'Approved';
+        this.selectedApproval.ExtractedData.ActiveInactive = 'Active';
+        if (this.selectedApproval.ExtractedData.policies) {
+          this.selectedApproval.ExtractedData.policies.forEach((pol) => {
+            pol.Status = 'Approved';
+            pol.ActiveInactive = 'Active';
+            if (pol.subpolicies) {
+              pol.subpolicies.forEach((sp) => {
+                sp.Status = 'Approved';
               });
             }
-            
-            PopupService.success('Framework approved successfully!', 'Framework Approved');
-          } else {
-            this.selectedApproval.ExtractedData.Status = 'Rejected';
-            console.log('Framework rejected - updating UI state');
-            PopupService.success('Framework rejected successfully!', 'Framework Rejected');
+          });
+        }
+        PopupService.success('Framework approved successfully!', 'Framework Approved');
+      } else {
+        this.selectedApproval.ExtractedData.Status = 'Rejected';
+        if (remarks) {
+          if (!this.selectedApproval.ExtractedData.framework_approval) {
+            this.selectedApproval.ExtractedData.framework_approval = {};
+          }
+          this.selectedApproval.ExtractedData.framework_approval.remarks = remarks;
+        }
+        PopupService.success('Framework rejected successfully!', 'Framework Rejected');
+      }
+
+      if (options.closeRejectModal) {
+        this.closeRejectModalOnly();
+      }
+
+      axios.post(API_ENDPOINTS.FRAMEWORK_SUBMIT_REVIEW(frameworkId), reviewData)
+        .then((response) => {
+          console.log('Framework review submitted successfully:', response.data);
+          if (response.data.Version != null) {
+            this.selectedApproval.Version = response.data.Version;
+          }
+          if (response.data.ApprovalId != null) {
+            this.selectedApproval.ApprovalId = response.data.ApprovalId;
+          }
+          if (response.data.ApprovedDate) {
+            this.selectedApproval.ApprovedDate = response.data.ApprovedDate;
           }
         })
-        .catch(error => {
+        .catch((error) => {
+          this.restoreApprovalUi(snap);
           this.handleError(error, 'submitting framework review');
-          // Reset loading state on error
+        })
+        .finally(() => {
           this.isSubmittingRejection = false;
         });
     },
@@ -1162,141 +1203,111 @@ export default {
         return;
       }
 
-      // Prevent double submission
       if (this.isSubmittingRejection) {
-        console.log('Rejection already in progress, preventing duplicate submission');
         return;
       }
 
-      console.log('DEBUG: confirmRejection called');
-      console.log('DEBUG: currentRejectionType:', this.currentRejectionType);
-      console.log('DEBUG: currentRejectionItem:', this.currentRejectionItem);
-      console.log('DEBUG: selectedApproval:', this.selectedApproval);
-
-      this.isSubmittingRejection = true;
       const frameworkId = this.getFrameworkId(this.selectedApproval);
-      console.log('DEBUG: frameworkId:', frameworkId);
-      
+
       if (this.currentRejectionType === 'subpolicy' && this.currentRejectionItem) {
         const { policy, subpolicy } = this.currentRejectionItem;
-        console.log('DEBUG: Rejecting subpolicy - policy:', policy);
-        console.log('DEBUG: Rejecting subpolicy - subpolicy:', subpolicy);
-        console.log('DEBUG: rejection_reason:', this.rejectionComment);
-        
-        const url = API_ENDPOINTS.FRAMEWORK_POLICY_SUBPOLICY_APPROVE_REJECT(frameworkId, policy.PolicyId, subpolicy.SubPolicyId);
-        console.log('DEBUG: Calling URL:', url);
-        
-        // Call backend endpoint for subpolicy rejection
-        axios.put(url, {
-            approved: false,
-          rejection_reason: this.rejectionComment,
-          submit_review: true // Add flag to submit review automatically
-        })
-          .then(response => {
-            console.log('Subpolicy rejected successfully:', response.data);
+        const rejectionReason = this.rejectionComment.trim();
+        const url = API_ENDPOINTS.FRAMEWORK_POLICY_SUBPOLICY_APPROVE_REJECT(
+          frameworkId,
+          policy.PolicyId,
+          subpolicy.SubPolicyId
+        );
+        const snap = this.snapshotApprovalUi();
 
-          // Update local state
-            subpolicy.Status = 'Rejected';
-            policy.Status = 'Rejected';
-            if (policy.subpolicies) {
-              policy.subpolicies.forEach(sp => {
-                sp.Status = 'Rejected';
-              });
-            }
-            this.selectedApproval.ExtractedData.Status = 'Rejected';
-            this.selectedApproval.ApprovedNot = false;
-            
-            // Update the approval record with the response data if available
+        subpolicy.Status = 'Rejected';
+        policy.Status = 'Rejected';
+        if (policy.subpolicies) {
+          policy.subpolicies.forEach((sp) => {
+            sp.Status = 'Rejected';
+          });
+        }
+        this.selectedApproval.ExtractedData.Status = 'Rejected';
+        this.selectedApproval.ApprovedNot = false;
+
+        PopupService.success(
+          'Subpolicy rejected. Framework has been rejected and sent back for revision.',
+          'Subpolicy Rejected'
+        );
+        this.closeRejectModalOnly();
+
+        this.isSubmittingRejection = true;
+        axios
+          .put(url, {
+            approved: false,
+            rejection_reason: rejectionReason,
+            submit_review: true,
+          })
+          .then((response) => {
             if (response.data.ApprovalId) {
               this.selectedApproval.ApprovalId = response.data.ApprovalId;
             }
             if (response.data.Version) {
               this.selectedApproval.Version = response.data.Version;
             }
-            
-            PopupService.success('Subpolicy rejected. Framework has been rejected and sent back for revision.', 'Subpolicy Rejected');
-            this.cancelRejection();
           })
-          .catch(error => {
-            console.log('DEBUG: Error rejecting subpolicy:', error);
-            console.log('DEBUG: Error response:', error.response);
+          .catch((error) => {
+            this.restoreApprovalUi(snap);
             this.handleError(error, 'rejecting subpolicy');
           })
           .finally(() => {
             this.isSubmittingRejection = false;
           });
-          
       } else if (this.currentRejectionType === 'policy' && this.currentRejectionItem) {
         const policy = this.currentRejectionItem;
-        console.log('DEBUG: Rejecting policy - policy:', policy);
-        console.log('DEBUG: rejection_reason:', this.rejectionComment);
-        
+        const rejectionReason = this.rejectionComment.trim();
         const url = API_ENDPOINTS.FRAMEWORK_POLICY_APPROVE_REJECT(frameworkId, policy.PolicyId);
-        console.log('DEBUG: Calling URL:', url);
-        
-        // Call backend endpoint for policy rejection
-        axios.put(url, {
-          approved: false,
-          rejection_reason: this.rejectionComment,
-          submit_review: true // Add flag to submit review automatically
-        })
-          .then(response => {
-            console.log('Policy rejected successfully:', response.data);
+        const snap = this.snapshotApprovalUi();
 
-          // Update local state
-            policy.Status = 'Rejected';
-            if (policy.subpolicies) {
-              policy.subpolicies.forEach(subpolicy => {
-                subpolicy.Status = 'Rejected';
-              });
-            }
-            this.selectedApproval.ExtractedData.Status = 'Rejected';
-            this.selectedApproval.ApprovedNot = false;
-            
-            // Update the approval record with the response data if available
+        policy.Status = 'Rejected';
+        if (policy.subpolicies) {
+          policy.subpolicies.forEach((subpolicy) => {
+            subpolicy.Status = 'Rejected';
+          });
+        }
+        this.selectedApproval.ExtractedData.Status = 'Rejected';
+        this.selectedApproval.ApprovedNot = false;
+
+        PopupService.success(
+          'Policy rejected. Framework has been rejected and sent back for revision.',
+          'Policy Rejected'
+        );
+        this.closeRejectModalOnly();
+
+        this.isSubmittingRejection = true;
+        axios
+          .put(url, {
+            approved: false,
+            rejection_reason: rejectionReason,
+            submit_review: true,
+          })
+          .then((response) => {
             if (response.data.ApprovalId) {
               this.selectedApproval.ApprovalId = response.data.ApprovalId;
             }
             if (response.data.Version) {
               this.selectedApproval.Version = response.data.Version;
             }
-            
-            PopupService.success('Policy rejected. Framework has been rejected and sent back for revision.', 'Policy Rejected');
-            this.cancelRejection();
           })
-          .catch(error => {
-            console.log('DEBUG: Error rejecting policy:', error);
-            console.log('DEBUG: Error response:', error.response);
+          .catch((error) => {
+            this.restoreApprovalUi(snap);
             this.handleError(error, 'rejecting policy');
           })
           .finally(() => {
             this.isSubmittingRejection = false;
           });
-          
       } else if (this.currentRejectionType === 'framework') {
-        // For direct framework rejection, use submitFrameworkReview with rejection reason
         if (!this.selectedApproval || !this.selectedApproval.FrameworkId) {
           console.error('No framework selected for rejection');
           this.cancelRejection();
-            return;
-          }
-        
-        // Initialize framework approval if doesn't exist
-        if (!this.selectedApproval.ExtractedData.framework_approval) {
-          this.selectedApproval.ExtractedData.framework_approval = {};
+          return;
         }
-        
-        // Update the framework status and approval state in the UI
-        this.selectedApproval.ExtractedData.framework_approval.approved = false;
-        this.selectedApproval.ExtractedData.framework_approval.remarks = this.rejectionComment;
-        this.selectedApproval.ExtractedData.Status = 'Rejected';
-        this.selectedApproval.ApprovedNot = false;
-        
-        // Submit the review with rejection data
-        this.submitFrameworkReview(false, this.rejectionComment);
-        
-        this.cancelRejection();
-        this.isSubmittingRejection = false;
+        // Do not set Status to Rejected here — submitFrameworkReview treats that as "already processed" and skips the API.
+        this.submitFrameworkReview(false, this.rejectionComment, { closeRejectModal: true });
       }
     },
 
@@ -1370,22 +1381,11 @@ export default {
     
     // Computed property to check if we're ready to show reviewer actions
     isReadyToShowActions() {
-      const ready = this.userInitialized && 
-                    this.currentUserId && 
-                    this.selectedApproval &&
-                    !this.loading &&
-                    this.permissionsEvaluated;
-      
-      console.log('🎯 isReadyToShowActions:', {
-        ready,
-        userInitialized: this.userInitialized,
-        currentUserId: this.currentUserId,
-        hasSelectedApproval: !!this.selectedApproval,
-        loading: this.loading,
-        permissionsEvaluated: this.permissionsEvaluated
-      });
-      
-      return ready;
+      return this.userInitialized &&
+        this.currentUserId &&
+        this.selectedApproval &&
+        !this.loading &&
+        this.permissionsEvaluated;
     }
   }
 }

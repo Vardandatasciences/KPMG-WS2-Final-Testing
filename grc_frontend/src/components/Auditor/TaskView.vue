@@ -363,7 +363,7 @@
       <div v-if="!isViewOnly" class="audit_floating-save-container">
         <button @click="saveCompliance" class="btn btn-submit" :disabled="isSaving">
           <span class="audit_save-text">
-            {{ isSaving ? 'Saving Version...' : 'Save Changes' }}
+            {{ saveButtonLabel }}
           </span>
         </button>
       </div>
@@ -573,10 +573,10 @@
 </template>
 
 <script>
-import apiService from '@/services/apiService';
 import ValidationMixin from '@/mixins/ValidationMixin';
 import { AccessUtils } from '@/utils/accessUtils';
 import { API_ENDPOINTS } from '@/config/api.js';
+import { useAuditStore } from '@/stores/audit';
 
 export default {
   name: 'TaskView',
@@ -593,6 +593,7 @@ export default {
       currentVersion: null,
       lastSavedTime: null,
       isSaving: false,
+      optimisticSaveApplied: false,
 
       hasUnsavedChanges: false,
       overallAuditComments: '',
@@ -633,6 +634,10 @@ export default {
     },
     isViewOnly() {
       return this.isReadOnlyMode;
+    },
+    saveButtonLabel() {
+      if (!this.isSaving) return 'Save Changes';
+      return this.optimisticSaveApplied ? 'Syncing...' : 'Saving Version...';
     }
   },
   watch: {
@@ -665,6 +670,14 @@ export default {
       if (version.startsWith('A')) return 'Auditor Version';
       if (version.startsWith('R')) return 'Reviewer Version';
       return 'Unknown Version';
+    },
+
+    /** Next auditor version when backend uses A1, A2, ... (otherwise returns null). */
+    predictNextAuditorVersion(v) {
+      if (v == null || v === '') return 'A1';
+      const m = /^A(\d+)$/i.exec(String(v).trim());
+      if (m) return `A${parseInt(m[1], 10) + 1}`;
+      return null;
     },
 
     extractFilenameFromUrl(url) {
@@ -935,7 +948,7 @@ export default {
       this.onFieldChange();
     },
 
-    async fetchAuditDetails() {
+    async fetchAuditDetails(force = false) {
       this.loading = true;
       this.error = null;
       try {
@@ -946,7 +959,8 @@ export default {
           return;
         }
         console.log('Fetching details for audit:', auditId);
-        const data = await apiService.get(API_ENDPOINTS.AUDIT_TASK_DETAILS(auditId));
+        const auditStore = useAuditStore();
+        const data = await auditStore.fetchAuditTaskDetails(auditId, { force });
         this.auditDetails = data;
         
         // Initialize selected_risks and selected_mitigations for each compliance
@@ -1062,7 +1076,7 @@ export default {
     },
 
     retryFetch() {
-      this.fetchAuditDetails();
+      this.fetchAuditDetails(true);
     },
 
     getStatusClass(status) {
@@ -1148,9 +1162,11 @@ export default {
       
       console.log('Starting save operation...');
       
+      let rollbackSave = null;
       try {
         this.isSaving = true;
-        
+        this.optimisticSaveApplied = false;
+
         // Helper function to format dates consistently
         const formatDateForBackend = (dateValue) => {
           if (!dateValue) return '';
@@ -1261,10 +1277,24 @@ export default {
         console.log('Payload to be sent:', JSON.stringify(payload, null, 2));
         const auditId = this.$route.params.auditId;
         console.log('Calling saveVersion with auditId:', auditId);
-        const data = await apiService.post(API_ENDPOINTS.AUDIT_SAVE_VERSION(auditId), payload);
+
+        rollbackSave = {
+          lastSavedTime: this.lastSavedTime,
+          currentVersion: this.currentVersion,
+          hasUnsavedChanges: this.hasUnsavedChanges,
+        };
+        this.lastSavedTime = new Date().toISOString();
+        this.hasUnsavedChanges = false;
+        const predictedVer = this.predictNextAuditorVersion(this.currentVersion);
+        if (predictedVer) this.currentVersion = predictedVer;
+        this.optimisticSaveApplied = true;
+        await this.$nextTick();
+
+        const data = await useAuditStore().saveAuditVersion(auditId, payload);
         console.log('Save response received:', data);
         
         if (data.success) {
+          useAuditStore().invalidateAuditDetail(auditId);
           // Store the saved version data
           this.savedVersionData = {
             version: data.version,
@@ -1316,6 +1346,11 @@ export default {
           throw new Error('Failed to save audit version');
         }
       } catch (error) {
+        if (rollbackSave) {
+          this.lastSavedTime = rollbackSave.lastSavedTime;
+          this.currentVersion = rollbackSave.currentVersion;
+          this.hasUnsavedChanges = rollbackSave.hasUnsavedChanges;
+        }
         console.error('Error saving audit version:', error);
         
         // Handle validation errors from backend
@@ -1350,6 +1385,7 @@ export default {
         });
         }
       } finally {
+        this.optimisticSaveApplied = false;
         this.isSaving = false;
       }
     },
@@ -1373,21 +1409,46 @@ export default {
 
     async sendForReview() {
       if (this.isSendingForReview) return;
-      
+
+      const auditId = this.$route.params.auditId;
+      const rollback = {
+        showReviewModal: this.showReviewModal,
+        showSentForReviewSuccess: this.showSentForReviewSuccess,
+        isReadOnlyMode: this.isReadOnlyMode,
+        isAuditFrozen: this.isAuditFrozen,
+        auditStatus: this.auditDetails?.status,
+      };
+
+      const revertSendForReview = () => {
+        this.showReviewModal = rollback.showReviewModal;
+        this.showSentForReviewSuccess = rollback.showSentForReviewSuccess;
+        this.isReadOnlyMode = rollback.isReadOnlyMode;
+        this.isAuditFrozen = rollback.isAuditFrozen;
+        if (this.auditDetails && rollback.auditStatus !== undefined) {
+          this.auditDetails.status = rollback.auditStatus;
+        }
+      };
+
       try {
         this.isSendingForReview = true;
-        const auditId = this.$route.params.auditId;
-        
-        // Call backend to update audit status to "Under Review"
-        const data = await apiService.post(API_ENDPOINTS.AUDIT_SEND_FOR_REVIEW(auditId), {
+
+        this.showReviewModal = false;
+        this.showSentForReviewSuccess = true;
+        this.isReadOnlyMode = true;
+        this.isAuditFrozen = true;
+        if (this.auditDetails) {
+          this.auditDetails.status = 'Under review';
+        }
+        await this.$nextTick();
+
+        const data = await useAuditStore().sendAuditForReview(auditId, {
           version: this.currentVersion
         });
 
         if (data.success) {
-          this.showReviewModal = false;
-          this.showSentForReviewSuccess = true;
-          this.isReadOnlyMode = true;
-          this.isAuditFrozen = true;
+          useAuditStore().invalidateAuditDetail(auditId);
+          useAuditStore().invalidateAuditCache(['reviews', 'audits']);
+          void useAuditStore().prefetchAuditDomain({ scope: 'my', force: true }).catch(() => {});
           this.$toast?.success('Audit sent for review successfully');
           await this.sendPushNotification({
             title: 'Audit Sent for Review',
@@ -1396,26 +1457,21 @@ export default {
             priority: 'high',
             user_id: 'current-user'
           });
-          
-          // Optionally redirect to audits list or show different UI
-          // this.$router.push('/audits');
         } else {
           throw new Error('Failed to send audit for review');
         }
       } catch (error) {
         console.error('Error sending audit for review:', error);
-        // Handle access denied errors
+        revertSendForReview();
         if (AccessUtils.handleApiError(error, 'audit review submission')) {
           return;
         }
-        
-        // Check if error is about missing compliance statuses
+
         if (error.response?.data?.message && error.response.data.message.includes('compliance statuses must be set')) {
-          // Show warning modal instead of error toast
           this.showComplianceStatusWarning = true;
           this.missingComplianceCount = error.response.data.missing_count || 0;
           this.missingCompliances = error.response.data.missing_compliances || [];
-          this.closeReviewModal(); // Close the review modal first
+          this.showReviewModal = true;
         } else {
           this.$toast?.error('Failed to send audit for review: ' + (error.response?.data?.error || error.response?.data?.message || error.message));
           await this.sendPushNotification({
@@ -1492,7 +1548,7 @@ export default {
         console.log('Submitting compliance data:', complianceData);
         
         // Call backend API to add compliance
-        const data = await apiService.post(API_ENDPOINTS.AUDIT_ADD_COMPLIANCE(auditId), complianceData);
+        const data = await useAuditStore().addComplianceToAudit(auditId, complianceData);
         
         if (data.success) {
           this.$toast?.success('Compliance added successfully');
@@ -1501,7 +1557,7 @@ export default {
           // Instead of manually adding the compliance to the local list,
           // refresh the entire audit details to get the most up-to-date data
           console.log('Refreshing audit details with the latest data including the new compliance');
-          await this.fetchAuditDetails();
+          await this.fetchAuditDetails(true);
           
           // If we have compliances after refresh, select the newly added one (should be the last one)
           if (this.auditDetails && this.auditDetails.compliances && this.auditDetails.compliances.length > 0) {

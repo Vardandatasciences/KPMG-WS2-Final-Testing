@@ -14,9 +14,13 @@
     </div>
 
     <!-- Loading State -->
-    <div v-if="loading && !accessDenied" class="loading-message">
-      <i class="fas fa-spinner fa-spin"></i>
-      <span>Loading Performance Data...</span>
+    <div v-if="loading && !accessDenied" class="policy-mod-sk" aria-busy="true" aria-label="Loading performance data">
+      <div class="policy-mod-sk__summary">
+        <div v-for="n in 4" :key="'perf-kpi-' + n" class="policy-mod-sk__card"></div>
+      </div>
+      <div class="policy-mod-sk__table">
+        <div v-for="n in 6" :key="'perf-r-' + n" class="policy-mod-sk__row"></div>
+      </div>
     </div>
 
     <!-- Error Message -->

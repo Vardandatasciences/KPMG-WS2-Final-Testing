@@ -6,35 +6,55 @@ const eventPermissions = ref({})
 const accessibleModules = ref([])
 const isLoading = ref(false)
 const error = ref(null)
+/** True after a successful permissions response (survives dev Strict Mode remount; cleared in resetPermissions). */
+let permissionsHydratedOk = false
+let permissionsFetchPromise = null
 
 export function useEventPermissions() {
   // Fetch user event permissions from backend
-  const fetchEventPermissions = async () => {
-    try {
-      isLoading.value = true
-      error.value = null
-      
-      const response = await eventService.getUserEventPermissions()
-      
-      if (response.data.success) {
-        eventPermissions.value = response.data.permissions
-        accessibleModules.value = response.data.accessible_modules
-        console.log('Event permissions loaded:', eventPermissions.value)
-        console.log('Accessible modules:', accessibleModules.value)
-      } else {
-        error.value = response.data.message || 'Failed to fetch permissions'
-      }
-    } catch (err) {
-      console.error('Error fetching event permissions:', err)
-      console.error('Error details:', err.response?.data || err.message)
-      error.value = 'Failed to fetch permissions'
-      // Security: fail closed when permission lookup fails.
-      // UI should not auto-elevate to admin permissions.
-      eventPermissions.value = {}
-      accessibleModules.value = []
-    } finally {
-      isLoading.value = false
+  const fetchEventPermissions = async ({ force = false } = {}) => {
+    if (
+      !force &&
+      permissionsHydratedOk &&
+      Object.keys(eventPermissions.value).length > 0
+    ) {
+      return
     }
+    if (permissionsFetchPromise) {
+      return permissionsFetchPromise
+    }
+    permissionsFetchPromise = (async () => {
+      try {
+        isLoading.value = true
+        error.value = null
+
+        const response = await eventService.getUserEventPermissions()
+
+        if (response.data.success) {
+          eventPermissions.value = response.data.permissions
+          accessibleModules.value = response.data.accessible_modules
+          permissionsHydratedOk = true
+          console.log('Event permissions loaded:', eventPermissions.value)
+          console.log('Accessible modules:', accessibleModules.value)
+        } else {
+          permissionsHydratedOk = false
+          error.value = response.data.message || 'Failed to fetch permissions'
+        }
+      } catch (err) {
+        console.error('Error fetching event permissions:', err)
+        console.error('Error details:', err.response?.data || err.message)
+        error.value = 'Failed to fetch permissions'
+        permissionsHydratedOk = false
+        // Security: fail closed when permission lookup fails.
+        // UI should not auto-elevate to admin permissions.
+        eventPermissions.value = {}
+        accessibleModules.value = []
+      } finally {
+        isLoading.value = false
+        permissionsFetchPromise = null
+      }
+    })()
+    return permissionsFetchPromise
   }
 
   // Computed properties for permission checks
@@ -155,6 +175,8 @@ export function useEventPermissions() {
     eventPermissions.value = {}
     accessibleModules.value = []
     error.value = null
+    permissionsHydratedOk = false
+    permissionsFetchPromise = null
   }
 
   return {
