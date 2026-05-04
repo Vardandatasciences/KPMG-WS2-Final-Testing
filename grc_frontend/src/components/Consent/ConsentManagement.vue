@@ -5,11 +5,37 @@
       <p>View and manage your consent preferences. You can withdraw your consent at any time.</p>
     </div>
 
-    <!-- Loading State -->
-    <div v-if="loading" class="loading">
-      <div class="loading-content">
-        <div class="spinner-large"></div>
-        <p>Loading your consents...</p>
+    <!-- Loading: skeleton mirrors All Consents layout -->
+    <div
+      v-if="loading"
+      class="consent-skeleton"
+      aria-busy="true"
+      aria-live="polite"
+      aria-label="Loading consent preferences"
+    >
+      <div class="consent-skeleton-inner">
+        <div class="consent-skeleton-section-header">
+          <div class="sk-block sk-section-title" />
+          <div class="sk-block sk-section-btn" />
+        </div>
+        <div class="consent-skeleton-filters">
+          <div class="sk-block sk-pill" />
+          <div class="sk-block sk-pill" />
+          <div class="sk-block sk-pill sk-pill-wide" />
+        </div>
+        <div class="consent-skeleton-cards">
+          <div v-for="n in 4" :key="n" class="consent-skeleton-card">
+            <div class="consent-skeleton-card-row">
+              <div class="sk-block sk-icon" />
+              <div class="consent-skeleton-card-body">
+                <div class="sk-block sk-line sk-line-title" />
+                <div class="sk-block sk-line sk-line-meta" />
+                <div class="sk-block sk-line sk-line-meta sk-line-short" />
+              </div>
+              <div class="sk-block sk-withdraw" />
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -546,7 +572,7 @@ export default {
   margin: 0;
 }
 
-.loading, .error-message, .success-message {
+.error-message, .success-message {
   padding: 1.25rem 1.5rem;
   border-radius: 12px;
   margin-bottom: 2rem;
@@ -558,38 +584,174 @@ export default {
   border-left: 4px solid;
 }
 
-.loading {
-  background: transparent;
-  border: none;
-  padding: 3rem 0;
-  margin: 2rem 0;
+/* Skeleton (My Consents loading) */
+@keyframes consent-skeleton-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
-.loading-content {
+.consent-skeleton {
+  margin: 1.5rem 0 2rem;
+  padding: 0;
+}
+
+.consent-skeleton-inner {
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #fafbfc;
+  padding: 1.5rem 1.75rem 1.75rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.consent-skeleton .sk-block {
+  border-radius: 10px;
+  background: linear-gradient(
+    90deg,
+    #e8edf3 0%,
+    #f1f5f9 40%,
+    #e2e8f0 60%,
+    #f1f5f9 100%
+  );
+  background-size: 200% 100%;
+  animation: consent-skeleton-shimmer 1.35s ease-in-out infinite;
+}
+
+.consent-skeleton-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.25rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.consent-skeleton .sk-section-title {
+  height: 1.5rem;
+  width: 42%;
+  max-width: 220px;
+  border-radius: 8px;
+}
+
+.consent-skeleton .sk-section-btn {
+  height: 2.5rem;
+  width: 11rem;
+  border-radius: 10px;
+}
+
+.consent-skeleton-filters {
+  display: flex;
+  gap: 0.625rem;
+  margin-bottom: 1.25rem;
+}
+
+.consent-skeleton .sk-pill {
+  height: 2rem;
+  width: 3.5rem;
+  border-radius: 999px;
+}
+
+.consent-skeleton .sk-pill-wide {
+  width: 5.5rem;
+}
+
+.consent-skeleton-cards {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.consent-skeleton-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 1.5rem 1.75rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  position: relative;
+  overflow: hidden;
+}
+
+.consent-skeleton-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  background: #e2e8f0;
+  border-radius: 4px 0 0 4px;
+}
+
+.consent-skeleton-card-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.consent-skeleton-card-body {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 1.5rem;
-  color: #64748b;
+  gap: 0.65rem;
 }
 
-.loading-content p {
-  font-size: 1.0625rem;
-  font-weight: 500;
-  margin: 0;
-}
-
-.spinner-large {
-  width: 48px;
-  height: 48px;
-  border: 4px solid #e2e8f0;
-  border-top-color: #6366f1;
+.consent-skeleton .sk-icon {
+  width: 2.75rem;
+  height: 2.75rem;
   border-radius: 50%;
-  animation: spin 0.8s linear infinite;
+  flex-shrink: 0;
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
+.consent-skeleton .sk-line {
+  height: 0.9rem;
+  border-radius: 6px;
+}
+
+.consent-skeleton .sk-line-title {
+  width: 55%;
+  max-width: 280px;
+  height: 1.05rem;
+}
+
+.consent-skeleton .sk-line-meta {
+  width: 85%;
+}
+
+.consent-skeleton .sk-line-short {
+  width: 60%;
+}
+
+.consent-skeleton .sk-withdraw {
+  width: 5.5rem;
+  height: 2.25rem;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  .consent-skeleton-section-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+
+  .consent-skeleton .sk-section-title,
+  .consent-skeleton .sk-section-btn {
+    width: 100%;
+    max-width: none;
+  }
+
+  .consent-skeleton-card-row {
+    flex-wrap: wrap;
+  }
+
+  .consent-skeleton .sk-withdraw {
+    width: 100%;
+    margin-left: calc(2.75rem + 1rem);
+  }
 }
 
 .error-message {

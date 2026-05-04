@@ -1737,6 +1737,8 @@
 </template>
 
 <script>
+import { mapStores } from 'pinia';
+import { usePermissionStore } from '@/stores/permission.js';
 // import { API_ENDPOINTS } from '@/config/api.js'
 import { api } from '../../data/api';
 import ConsentManagement from '../Consent/ConsentManagement.vue';
@@ -2001,6 +2003,8 @@ export default {
     }
   },
   computed: {
+    ...mapStores(usePermissionStore),
+
     visibleTabs() {
       return this.tabs.filter(tab => {
         if (tab.adminOnly) {
@@ -2596,12 +2600,18 @@ export default {
     },
     
     // Handle login event
-    handleUserLogin(event) {
+    async handleUserLogin(event) {
       if (event.detail && event.detail.user) {
         const userId = event.detail.user.UserId;
         if (userId) {
           console.log('Storing user ID in session storage:', userId);
           sessionStorage.setItem('userId', userId);
+          sessionStorage.setItem('user_id', String(userId));
+          try {
+            await this.permissionStore.fetchAndSetUserRole({ force: true });
+          } catch (e) {
+            console.warn('[UserProfile] fetchAndSetUserRole after login failed:', e);
+          }
           this.loadUserData();
         }
       }
@@ -2610,14 +2620,20 @@ export default {
     // Resolve current user id from session/context only.
     getCurrentUserId() {
       console.log('=== DEBUGGING USER ID RETRIEVAL ===');
-      
-      // Try to get from URL params first
+
+      // Explicit URL wins (e.g. deep links / support flows)
       const urlParams = new URLSearchParams(window.location.search);
       let userId = urlParams.get('userId');
       
       if (userId) {
         console.log('Using userId from URL:', userId);
         return userId;
+      }
+
+      // Pinia permission store (fetchAndSetUserRole / profile sync / login)
+      const storeId = this.permissionStore?.userId;
+      if (storeId !== undefined && storeId !== null && String(storeId).trim() !== '') {
+        return String(storeId);
       }
       
       // Try session user_id
@@ -2703,6 +2719,11 @@ export default {
           const normalized = String(serverUserId);
           sessionStorage.setItem('user_id', normalized);
           sessionStorage.setItem('userId', normalized);
+          try {
+            this.permissionStore.setFromUserRoleResponse(payload);
+          } catch (e) {
+            console.warn('[UserProfile] permissionStore.setFromUserRoleResponse failed:', e);
+          }
           return normalized;
         }
       } catch (error) {
@@ -2712,11 +2733,64 @@ export default {
       return null;
     },
 
+    /**
+     * Flatten profile permissions API `modules` object into string keys for permission store.
+     */
+    flattenProfileModulesToPermissionKeys(modules) {
+      if (!modules || typeof modules !== 'object') return [];
+      const keys = [];
+      for (const [, perms] of Object.entries(modules)) {
+        if (perms && typeof perms === 'object' && !Array.isArray(perms)) {
+          for (const [k, v] of Object.entries(perms)) {
+            if (v) keys.push(k);
+          }
+        }
+      }
+      return [...new Set(keys)];
+    },
+
+    syncPermissionStoreFromProfile(userId) {
+      if (!this.userPermissions?.role) return;
+      const flat = this.flattenProfileModulesToPermissionKeys(this.userPermissions.modules);
+      const username =
+        this.maskedData?.username ||
+        [this.form.firstName, this.form.lastName].filter(Boolean).join(' ').trim() ||
+        this.permissionStore.userName;
+      const uidNum = Number.parseInt(String(userId), 10);
+      const normalizedUserId = Number.isFinite(uidNum) ? uidNum : userId;
+      try {
+        if (flat.length > 0) {
+          this.permissionStore.setFromUserRoleResponse({
+            user_id: userId,
+            UserId: userId,
+            username,
+            role: this.userPermissions.role,
+            permissions: flat,
+          });
+        } else {
+          // Avoid wiping permissions from fetchAndSetUserRole when profile modules are empty/missing
+          this.permissionStore.$patch({
+            userId: normalizedUserId,
+            userName: username,
+            role: this.userPermissions.role,
+          });
+        }
+      } catch (e) {
+        console.warn('[UserProfile] syncPermissionStoreFromProfile failed:', e);
+      }
+    },
+
     async loadUserData() {
       this.loading = true;
       this.error = null;
 
       try {
+        try {
+          await this.permissionStore.fetchAndSetUserRole({ force: false });
+        } catch (e) {
+          console.warn('[UserProfile] fetchAndSetUserRole failed (non-fatal):', e);
+        }
+
         const userId = await this.resolveCurrentUserId();
         
         if (userId) {
@@ -2807,6 +2881,8 @@ export default {
                                          userRole.includes('grc administrator');
                 console.log('Is GRC Administrator:', this.isGRCAdministrator);
                 console.log('Visible tabs:', this.visibleTabs);
+
+                this.syncPermissionStoreFromProfile(userId);
               }
             } catch (permissionsError) {
               console.error('Failed to fetch user permissions:', permissionsError);
@@ -3131,6 +3207,11 @@ export default {
 
      forceAdminMode() {
        this.isGRCAdministrator = true;
+       try {
+         this.permissionStore.$patch({ role: 'GRC Administrator' });
+       } catch (e) {
+         console.warn('[UserProfile] permissionStore patch failed:', e);
+       }
        console.log('Forced admin mode enabled');
        console.log('Visible tabs after force:', this.visibleTabs);
      },
@@ -3138,6 +3219,12 @@ export default {
      // Temporary method to manually set user ID for testing
      setVikramPatel() {
        sessionStorage.setItem('userId', '2');
+       sessionStorage.setItem('user_id', '2');
+       try {
+         this.permissionStore.$patch({ userId: 2 });
+       } catch (e) {
+         console.warn('[UserProfile] permissionStore patch failed:', e);
+       }
        console.log('Set user ID to 2 (vikram.patel)');
        this.loadUserData();
      },
