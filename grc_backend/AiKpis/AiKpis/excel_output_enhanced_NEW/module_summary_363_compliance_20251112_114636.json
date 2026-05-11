@@ -1,0 +1,444 @@
+{
+  "framework": {
+    "FrameworkId": 363,
+    "FrameworkName": "Anti-Money Laundering and Counter Financing of Terrorism (AML/CFT) Compliance Guidelines",
+    "FrameworkDescription": "This framework provides guidelines for reporting entities to understand their enhanced customer due diligence (CDD) obligations under the AML/CFT Act. It outlines the requirements for compliance with regulations related to customer verification and suspicious activity reporting.",
+    "Category": "Regulatory Compliance",
+    "InternalExternal": "External",
+    "Identifier": "FW-363",
+    "Status": "Approved",
+    "CurrentVersion": 1.0
+  },
+  "module": "compliance",
+  "tables": {
+    "compliance": [
+      {
+        "ComplianceId": 2801,
+        "SubPolicyId": 4043,
+        "ComplianceTitle": "Customer Identification Verification",
+        "ComplianceItemDescription": "Compliance officers and customer service representatives must implement procedures to collect and verify customer identification information using government-issued IDs and other reliable sources.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2802,
+        "SubPolicyId": 4044,
+        "ComplianceTitle": "Customer Risk Assessment Process",
+        "ComplianceItemDescription": "Conduct risk assessments based on customer profiles, transaction patterns, and geographic risk factors to categorize customers as high, medium, or low risk.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2803,
+        "SubPolicyId": 4044,
+        "ComplianceTitle": "Ongoing Transaction Monitoring",
+        "ComplianceItemDescription": "Utilize risk assessment frameworks and transaction monitoring systems to identify and flag high-risk customers for further investigation.",
+        "ComplianceType": "Internal",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2804,
+        "SubPolicyId": 4045,
+        "ComplianceTitle": "Reporting Suspicious Activities",
+        "ComplianceItemDescription": "Compliance officers must establish a process for documenting and reporting suspicious activities to the relevant authorities within 24 hours of identification using a standardized reporting template.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      }
+    ],
+    "complianceapproval": []
+  },
+  "schema": {
+    "compliance": {
+      "columns": [
+        "ComplianceId",
+        "SubPolicyId",
+        "PreviousComplianceVersionId",
+        "Identifier",
+        "ComplianceTitle",
+        "ComplianceItemDescription",
+        "ComplianceType",
+        "Scope",
+        "Objective",
+        "BusinessUnitsCovered",
+        "IsRisk",
+        "PossibleDamage",
+        "mitigation",
+        "Criticality",
+        "MandatoryOptional",
+        "ManualAutomatic",
+        "Impact",
+        "Probability",
+        "MaturityLevel",
+        "ActiveInactive",
+        "PermanentTemporary",
+        "CreatedByName",
+        "CreatedByDate",
+        "ComplianceVersion",
+        "Status",
+        "Applicability",
+        "PotentialRiskScenarios",
+        "RiskType",
+        "RiskCategory",
+        "RiskBusinessImpact",
+        "FrameworkId"
+      ],
+      "row_count": 4,
+      "column_details": [
+        {
+          "name": "ComplianceId",
+          "type": "int",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "SubPolicyId",
+          "type": "int",
+          "null": "NO",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PreviousComplianceVersionId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Identifier",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ComplianceTitle",
+          "type": "varchar(145)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ComplianceItemDescription",
+          "type": "longtext",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ComplianceType",
+          "type": "varchar(100)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Scope",
+          "type": "longtext",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Objective",
+          "type": "longtext",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "BusinessUnitsCovered",
+          "type": "varchar(225)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "IsRisk",
+          "type": "tinyint(1)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PossibleDamage",
+          "type": "longtext",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "mitigation",
+          "type": "longtext",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Criticality",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "MandatoryOptional",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ManualAutomatic",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Impact",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Probability",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "MaturityLevel",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ActiveInactive",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PermanentTemporary",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "CreatedByName",
+          "type": "varchar(250)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "CreatedByDate",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ComplianceVersion",
+          "type": "varchar(50)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Status",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Applicability",
+          "type": "varchar(450)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PotentialRiskScenarios",
+          "type": "longtext",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskType",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskCategory",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskBusinessImpact",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "FrameworkId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        }
+      ]
+    },
+    "complianceapproval": {
+      "columns": [
+        "ApprovalId",
+        "Identifier",
+        "ExtractedData",
+        "UserId",
+        "ReviewerId",
+        "Version",
+        "ApprovedNot",
+        "ApprovedDate",
+        "PolicyId",
+        "ApprovalDueDate",
+        "FrameworkId"
+      ],
+      "row_count": 0,
+      "column_details": [
+        {
+          "name": "ApprovalId",
+          "type": "int",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "Identifier",
+          "type": "varchar(45)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ExtractedData",
+          "type": "json",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "UserId",
+          "type": "int",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ReviewerId",
+          "type": "int",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Version",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ApprovedNot",
+          "type": "tinyint(1)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ApprovedDate",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PolicyId",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ApprovalDueDate",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "FrameworkId",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        }
+      ]
+    }
+  }
+}

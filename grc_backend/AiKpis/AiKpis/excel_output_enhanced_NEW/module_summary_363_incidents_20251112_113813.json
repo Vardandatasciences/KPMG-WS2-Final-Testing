@@ -1,0 +1,628 @@
+{
+  "framework": {
+    "FrameworkId": 363,
+    "FrameworkName": "Anti-Money Laundering and Counter Financing of Terrorism (AML/CFT) Compliance Guidelines",
+    "FrameworkDescription": "This framework provides guidelines for reporting entities to understand their enhanced customer due diligence (CDD) obligations under the AML/CFT Act. It outlines the requirements for compliance with regulations related to customer verification and suspicious activity reporting.",
+    "Category": "Regulatory Compliance",
+    "InternalExternal": "External",
+    "Identifier": "FW-363",
+    "Status": "Approved",
+    "CurrentVersion": 1.0
+  },
+  "module": "incidents",
+  "tables": {
+    "incidents": [
+      {
+        "IncidentId": 648,
+        "IncidentTitle": "Non-Compliance with Reporting Suspicious Activities",
+        "Description": "During a routine audit, it was discovered that the RiskManagement business unit failed to report suspicious activities in a timely manner as required by internal policies and regulatory guidelines. This non-compliance with reporting procedures raised significant concerns about the organization's ability to detect and prevent potential risks associated with technology-related threats.",
+        "RiskCategory": "Technology Risk",
+        "Criticality": "High",
+        "Status": "Scheduled",
+        "CostOfIncident": "5006"
+      },
+      {
+        "IncidentId": 649,
+        "IncidentTitle": "Failure to Report Suspicious Activities in RiskManagement Business Unit",
+        "Description": "During a routine audit check in the RiskManagement business unit, it was identified that there was a failure to report suspicious activities as required by regulations. This non-compliance poses a significant risk to the organization as it can lead to severe financial losses, regulatory penalties, reputational damage, operational disruptions, and legal consequences. The incident originated from an audit finding that brought to light the lack of reporting procedures within the RiskManagement team.",
+        "RiskCategory": "Physical Risk",
+        "Criticality": "High",
+        "Status": "Open",
+        "CostOfIncident": "6232"
+      },
+      {
+        "IncidentId": 650,
+        "IncidentTitle": "Non-Compliance with Reporting Suspicious Activities in IT Department",
+        "Description": "During a recent audit in the IT Department, it was identified that there was a lack of compliance with reporting suspicious activities related to potential fraudulent behavior. Employees were not following the proper procedures to report any suspicious activities, which could have serious consequences for the organization. This non-compliance poses a significant fraud risk to the company.",
+        "RiskCategory": "Fraud Risk",
+        "Criticality": "High",
+        "Status": "Scheduled",
+        "CostOfIncident": "6902"
+      },
+      {
+        "IncidentId": 651,
+        "IncidentTitle": "Non-compliance with Reporting Suspicious Activities in Credit Risk Management",
+        "Description": "During a routine audit check in the RiskManagement business unit, it was discovered that there was a significant lack of compliance with reporting suspicious activities related to credit risk. This non-compliance posed a serious threat to the organization's financial stability and reputation. The audit revealed multiple instances where suspicious activities were not reported as required by regulatory guidelines.",
+        "RiskCategory": "Credit Risk",
+        "Criticality": "High",
+        "Status": "Open",
+        "CostOfIncident": "7278"
+      },
+      {
+        "IncidentId": 652,
+        "IncidentTitle": "Failure to Report Suspicious Activities in Treasury Department",
+        "Description": "During a routine audit in the Treasury department, it was discovered that employees failed to report suspicious activities related to financial transactions. The employees neglected to follow the proper reporting procedures outlined in the company's policies and procedures. This non-compliance with reporting requirements posed a significant operational risk to the organization.",
+        "RiskCategory": "Operational Risk",
+        "Criticality": "High",
+        "Status": "Scheduled",
+        "CostOfIncident": "7237"
+      },
+      {
+        "IncidentId": 653,
+        "IncidentTitle": "Non-compliance with Reporting Suspicious Activities in RiskManagement Business Unit",
+        "Description": "During a routine audit check in the RiskManagement business unit, it was discovered that there was non-compliance with reporting suspicious activities related to market risk. This violation of reporting procedures could potentially expose the organization to severe financial losses, regulatory penalties, reputational damage, operational disruptions, and legal consequences.",
+        "RiskCategory": "Market Risk",
+        "Criticality": "High",
+        "Status": "Open",
+        "CostOfIncident": "7803"
+      },
+      {
+        "IncidentId": 654,
+        "IncidentTitle": "Non-Compliance with Reporting Suspicious Activities in IT Department",
+        "Description": "During a routine audit check in the IT Department, it was discovered that there was non-compliance with reporting suspicious activities related to liquidity risk. This lack of reporting poses a significant threat to the organization's financial stability and regulatory compliance.",
+        "RiskCategory": "Liquidity Risk",
+        "Criticality": "High",
+        "Status": "Open",
+        "CostOfIncident": "5845"
+      },
+      {
+        "IncidentId": 655,
+        "IncidentTitle": "Failure to Report Suspicious Activities Resulting in Liquidity Risk Exposure",
+        "Description": "During a routine audit check in the RiskManagement business unit, it was discovered that there was a failure to report suspicious activities that could potentially impact liquidity risk management. This non-compliance with reporting procedures has put the organization at risk of severe financial losses, regulatory penalties, reputational damage, operational disruptions, and legal consequences.",
+        "RiskCategory": "Liquidity Risk",
+        "Criticality": "High",
+        "Status": "Scheduled",
+        "CostOfIncident": "5594"
+      },
+      {
+        "IncidentId": 656,
+        "IncidentTitle": "Non-Compliance with Reporting Suspicious Activities",
+        "Description": "During a routine audit check in the RiskManagement business unit, it was discovered that there was a significant issue with non-compliance in reporting suspicious activities related to potential fraud risks. The audit finding revealed that there were instances where employees failed to report red flags and unusual transactions that could indicate fraudulent activities. This lack of reporting has put the organization at a heightened risk of financial losses, regulatory penalties, and reputational damage.",
+        "RiskCategory": "Fraud Risk",
+        "Criticality": "High",
+        "Status": "Open",
+        "CostOfIncident": "6018"
+      },
+      {
+        "IncidentId": 657,
+        "IncidentTitle": "Non-compliance with Reporting Suspicious Activities",
+        "Description": "During a routine audit check in the RiskManagement business unit, it was discovered that there was a significant lack of compliance with reporting suspicious activities within the organization. This non-compliance stemmed from inadequate training, unclear reporting procedures, and a lack of awareness among employees regarding the importance of reporting such activities.",
+        "RiskCategory": "Operational Risk",
+        "Criticality": "High",
+        "Status": "Scheduled",
+        "CostOfIncident": "6329"
+      },
+      {
+        "IncidentId": 658,
+        "IncidentTitle": "Non-compliance with Reporting Suspicious Activities in Treasury Department",
+        "Description": "During a recent audit finding, it was discovered that the Treasury department failed to report suspicious activities as required by compliance regulations. This lapse in reporting procedures posed a significant risk to the organization as it could lead to severe financial losses, regulatory penalties, reputational damage, operational disruptions, and legal consequences. The failure to comply with reporting protocols jeopardizes the integrity of the organization's financial transactions and exposes it to potential risks.",
+        "RiskCategory": "Compliance Risk",
+        "Criticality": "High",
+        "Status": "Scheduled",
+        "CostOfIncident": "7313"
+      },
+      {
+        "IncidentId": 659,
+        "IncidentTitle": "Failure to Report Suspicious Activities in Treasury Operations",
+        "Description": "During a routine audit check in the Treasury business unit, it was discovered that there was a failure to report suspicious activities related to liquidity risk management. This non-compliance with reporting requirements raised concerns about potential financial losses, regulatory penalties, and reputational damage for the organization. The lack of proper reporting also posed risks of operational disruptions and legal consequences.",
+        "RiskCategory": "Liquidity Risk",
+        "Criticality": "High",
+        "Status": "Open",
+        "CostOfIncident": "6728"
+      },
+      {
+        "IncidentId": 660,
+        "IncidentTitle": "Failure to Report Suspicious Activities Resulting in Non-Compliance",
+        "Description": "During a routine audit check in the RiskManagement business unit, it was discovered that there was a failure to report suspicious activities as required by regulatory standards. This non-compliance poses a significant risk to the organization as it can lead to severe financial losses, regulatory penalties, reputational damage, operational disruptions, and potential legal consequences.",
+        "RiskCategory": "Technology Risk",
+        "Criticality": "High",
+        "Status": "Open",
+        "CostOfIncident": "5947"
+      },
+      {
+        "IncidentId": 661,
+        "IncidentTitle": "Failure to Report Suspicious Activity",
+        "Description": "During a routine audit check within the RiskManagement business unit, it was discovered that there was a failure to report suspicious activities as required by the organization's policies and procedures. This non-compliance with reporting protocols poses a significant reputational risk to the organization.",
+        "RiskCategory": "Reputational Risk",
+        "Criticality": "High",
+        "Status": "Open",
+        "CostOfIncident": "7292"
+      }
+    ],
+    "incident_approval": []
+  },
+  "schema": {
+    "incidents": {
+      "columns": [
+        "IncidentId",
+        "IncidentTitle",
+        "Description",
+        "PossibleDamage",
+        "Mitigation",
+        "AuditId",
+        "ComplianceId",
+        "Date",
+        "Time",
+        "UserId",
+        "Origin",
+        "Comments",
+        "RiskCategory",
+        "RiskPriority",
+        "Attachments",
+        "CreatedAt",
+        "Status",
+        "IdentifiedAt",
+        "RepeatedNot",
+        "CostOfIncident",
+        "ReopenedNot",
+        "RejectionSource",
+        "AffectedBusinessUnit",
+        "SystemsAssetsInvolved",
+        "GeographicLocation",
+        "Criticality",
+        "InitialImpactAssessment",
+        "InternalContacts",
+        "ExternalPartiesInvolved",
+        "RegulatoryBodies",
+        "RelevantPoliciesProceduresViolated",
+        "ControlFailures",
+        "LessonsLearned",
+        "IncidentClassification",
+        "AssignerId",
+        "ReviewerId",
+        "MitigationDueDate",
+        "AssignedDate",
+        "AssignmentNotes",
+        "IncidentFormDetails",
+        "MitigationCompletedDate",
+        "IncidentCategory",
+        "FrameworkId"
+      ],
+      "row_count": 14,
+      "column_details": [
+        {
+          "name": "IncidentId",
+          "type": "int",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "IncidentTitle",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Description",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PossibleDamage",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Mitigation",
+          "type": "json",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "AuditId",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ComplianceId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Date",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Time",
+          "type": "time",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "UserId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Origin",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Comments",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskCategory",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskPriority",
+          "type": "varchar(20)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Attachments",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "CreatedAt",
+          "type": "timestamp",
+          "null": "YES",
+          "key": "",
+          "default": "CURRENT_TIMESTAMP",
+          "extra": "DEFAULT_GENERATED"
+        },
+        {
+          "name": "Status",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "IdentifiedAt",
+          "type": "datetime",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RepeatedNot",
+          "type": "tinyint",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "CostOfIncident",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ReopenedNot",
+          "type": "tinyint",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RejectionSource",
+          "type": "varchar(20)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "AffectedBusinessUnit",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "SystemsAssetsInvolved",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "GeographicLocation",
+          "type": "varchar(100)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Criticality",
+          "type": "varchar(20)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "InitialImpactAssessment",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "InternalContacts",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ExternalPartiesInvolved",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RegulatoryBodies",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RelevantPoliciesProceduresViolated",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ControlFailures",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "LessonsLearned",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "IncidentClassification",
+          "type": "varchar(100)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "AssignerId",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ReviewerId",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "MitigationDueDate",
+          "type": "datetime",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "AssignedDate",
+          "type": "datetime",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "AssignmentNotes",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "IncidentFormDetails",
+          "type": "json",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "MitigationCompletedDate",
+          "type": "datetime",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "IncidentCategory",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "FrameworkId",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        }
+      ]
+    },
+    "incident_approval": {
+      "columns": [
+        "id",
+        "IncidentId",
+        "version",
+        "ExtractedInfo",
+        "AssigneeId",
+        "ReviewerId",
+        "ApprovedRejected",
+        "Date",
+        "FrameworkId"
+      ],
+      "row_count": 0,
+      "column_details": [
+        {
+          "name": "id",
+          "type": "int",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "IncidentId",
+          "type": "int",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "version",
+          "type": "varchar(45)",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ExtractedInfo",
+          "type": "json",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "AssigneeId",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ReviewerId",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ApprovedRejected",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Date",
+          "type": "datetime",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "FrameworkId",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        }
+      ]
+    }
+  }
+}

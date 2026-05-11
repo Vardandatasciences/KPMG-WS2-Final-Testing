@@ -1,0 +1,1859 @@
+{
+  "framework": {
+    "FrameworkId": 364,
+    "FrameworkName": "Enhanced Due Diligence (EDD)",
+    "FrameworkDescription": "Enhanced Due Diligence (EDD) is a critical component in international banking and private banking, particularly in high-risk situations. It aims to mitigate risks associated with money laundering, terrorist financing, and other financial crimes by requiring financial institutions to conduct comprehensive risk assessments and implement robust anti-money laundering (AML) measures.",
+    "Category": "Financial Security and Compliance",
+    "InternalExternal": "External",
+    "Identifier": "FW-364",
+    "Status": "Approved",
+    "CurrentVersion": 1.0
+  },
+  "module": "risk",
+  "tables": {
+    "risk": [
+      {
+        "RiskId": 2143,
+        "ComplianceId": 2805,
+        "RiskTitle": "Money Laundering Risk",
+        "RiskDescription": "Failure to conduct comprehensive risk assessments may lead to unidentified money laundering risks and regulatory non-compliance.",
+        "Category": "Compliance",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 2144,
+        "ComplianceId": 2806,
+        "RiskTitle": "Failure to Collect and Verify Customer Information",
+        "RiskDescription": "Failure to collect and verify customer information for high-risk customers may result in increased exposure to money laundering, fraud, and regulatory fines.",
+        "Category": "Compliance",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 7
+      },
+      {
+        "RiskId": 2145,
+        "ComplianceId": 2807,
+        "RiskTitle": "Failure to Obtain Senior Management Approval",
+        "RiskDescription": "Failure to obtain senior management approval for high-risk customer relationships may result in non-compliance with regulatory requirements, leading to severe consequences for the institution.",
+        "Category": "Compliance",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 2146,
+        "ComplianceId": 2808,
+        "RiskTitle": "Money Laundering Risk",
+        "RiskDescription": "Failure to accurately document client wealth sources may lead to potential money laundering activities.",
+        "Category": "Compliance",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 2147,
+        "ComplianceId": 2809,
+        "RiskTitle": "Compliance Risk",
+        "RiskDescription": "Failure to update client wealth information regularly may result in compliance issues and financial penalties.",
+        "Category": "Compliance",
+        "Criticality": "Medium",
+        "RiskImpact": 7,
+        "RiskLikelihood": 6
+      },
+      {
+        "RiskId": 2148,
+        "ComplianceId": 2810,
+        "RiskTitle": "Failure to Detect Suspicious Transactions",
+        "RiskDescription": "The failure to detect suspicious transactions could result in the institution being used for illicit activities, leading to severe consequences.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 2149,
+        "ComplianceId": 2811,
+        "RiskTitle": "Outdated or Inaccurate Client Information",
+        "RiskDescription": "Outdated or inaccurate client information could result in the institution unknowingly facilitating illicit activities, leading to severe consequences.",
+        "Category": "Operational",
+        "Criticality": "Medium",
+        "RiskImpact": 7,
+        "RiskLikelihood": 6
+      },
+      {
+        "RiskId": 2150,
+        "ComplianceId": 2812,
+        "RiskTitle": "Client Identification Risk",
+        "RiskDescription": "Failure to identify clients accurately may lead to involvement in money laundering or terrorist financing activities.",
+        "Category": "Compliance",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 2151,
+        "ComplianceId": 2813,
+        "RiskTitle": "Annual Client Verification Risk",
+        "RiskDescription": "Outdated client information may expose the organization to financial crimes or regulatory non-compliance.",
+        "Category": "Compliance",
+        "Criticality": "Medium",
+        "RiskImpact": 7,
+        "RiskLikelihood": 6
+      },
+      {
+        "RiskId": 2152,
+        "ComplianceId": 2814,
+        "RiskTitle": "Undisclosed Illegal Financial Activities",
+        "RiskDescription": "Failure to identify undisclosed illegal financial activities of high-net-worth clients may lead to severe reputational and financial consequences for the bank.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 2153,
+        "ComplianceId": 2815,
+        "RiskTitle": "Undisclosed Changes in Financial Circumstances",
+        "RiskDescription": "Failure to review high-net-worth clients' source of wealth annually or during significant changes may lead to inaccurate risk assessment and potential financial losses for the bank.",
+        "Category": "Operational",
+        "Criticality": "Medium",
+        "RiskImpact": 7,
+        "RiskLikelihood": 6
+      },
+      {
+        "RiskId": 2154,
+        "ComplianceId": 2816,
+        "RiskTitle": "Failure to Monitor High-Value Transactions",
+        "RiskDescription": "Failure to monitor high-value transactions may result in undetected money laundering activities and financial crimes, leading to severe consequences for the organization.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 2155,
+        "ComplianceId": 2817,
+        "RiskTitle": "Delayed Detection of Suspicious Activities",
+        "RiskDescription": "Failure to conduct real-time monitoring and monthly reviews may lead to delayed detection of suspicious activities, exposing the organization to higher risks of money laundering and financial crimes.",
+        "Category": "Operational",
+        "Criticality": "Medium",
+        "RiskImpact": 7,
+        "RiskLikelihood": 6
+      },
+      {
+        "RiskId": 2156,
+        "ComplianceId": 2818,
+        "RiskTitle": "Inadequate EDD Training",
+        "RiskDescription": "Failure to provide adequate EDD training may result in staff not identifying risks effectively, leading to compliance breaches and financial crime.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 7
+      },
+      {
+        "RiskId": 2157,
+        "ComplianceId": 2819,
+        "RiskTitle": "Ineffective Training Delivery",
+        "RiskDescription": "Failure to deliver EDD training effectively may result in staff not fully understanding procedures, increasing the risk of compliance breaches and financial crime.",
+        "Category": "Operational",
+        "Criticality": "Medium",
+        "RiskImpact": 7,
+        "RiskLikelihood": 5
+      },
+      {
+        "RiskId": 2158,
+        "ComplianceId": 2820,
+        "RiskTitle": "Inadequate Risk Assessment Framework",
+        "RiskDescription": "Failure to implement a standardized risk assessment framework may result in incomplete risk assessments and undetected high-risk transactions.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 2159,
+        "ComplianceId": 2821,
+        "RiskTitle": "Outdated Risk Assessments",
+        "RiskDescription": "Failure to review risk assessments quarterly may result in outdated risk information and increased exposure to potential risks.",
+        "Category": "Operational",
+        "Criticality": "Medium",
+        "RiskImpact": 7,
+        "RiskLikelihood": 6
+      },
+      {
+        "RiskId": 2160,
+        "ComplianceId": 2822,
+        "RiskTitle": "Undetected Compliance Issues",
+        "RiskDescription": "Failure to conduct audits may result in undetected compliance issues, leading to regulatory fines, reputational damage, and increased financial crime incidents.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 7
+      },
+      {
+        "RiskId": 2161,
+        "ComplianceId": 2823,
+        "RiskTitle": "Inadequate Response to Emerging Risks",
+        "RiskDescription": "Failure to conduct triggered audits may result in inadequate response to emerging risks, leading to regulatory non-compliance and increased financial crime risks.",
+        "Category": "Operational",
+        "Criticality": "Medium",
+        "RiskImpact": 7,
+        "RiskLikelihood": 6
+      },
+      {
+        "RiskId": 2162,
+        "ComplianceId": 2824,
+        "RiskTitle": "Increased Exposure to Financial Crimes",
+        "RiskDescription": "Failure to conduct comprehensive risk assessments for high-risk customers may result in increased exposure to financial crimes such as money laundering and terrorist financing.",
+        "Category": "Compliance",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 2163,
+        "ComplianceId": 2825,
+        "RiskTitle": "Inadequate EDD Training",
+        "RiskDescription": "Failure to comply with EDD training requirements may result in staff being ill-equipped to identify and manage risks associated with high-risk customers, leading to potential regulatory fines or reputational damage.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 7
+      },
+      {
+        "RiskId": 2164,
+        "ComplianceId": 2826,
+        "RiskTitle": "Incomplete Online EDD Training",
+        "RiskDescription": "Failure to complete online training modules may result in staff having incomplete knowledge of EDD principles, leading to potential errors in risk assessment and potential regulatory scrutiny.",
+        "Category": "Operational",
+        "Criticality": "Medium",
+        "RiskImpact": 7,
+        "RiskLikelihood": 6
+      },
+      {
+        "RiskId": 2165,
+        "ComplianceId": 2827,
+        "RiskTitle": "Non-Compliance with EDD Audit Requirements",
+        "RiskDescription": "Failure to conduct audits may result in ineffective risk management and non-compliance with regulations.",
+        "Category": "Compliance",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 2166,
+        "ComplianceId": 2828,
+        "RiskTitle": "Delayed Response to Significant Findings",
+        "RiskDescription": "Delayed response to significant findings may lead to ineffective risk management and non-compliance with regulations.",
+        "Category": "Compliance",
+        "Criticality": "Medium",
+        "RiskImpact": 7,
+        "RiskLikelihood": 6
+      },
+      {
+        "RiskId": 2167,
+        "ComplianceId": 2829,
+        "RiskTitle": "Failure to Conduct Annual Risk Assessment",
+        "RiskDescription": "Not conducting annual risk assessments may lead to unidentified risks and non-compliance with regulatory requirements.",
+        "Category": "Compliance",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 2168,
+        "ComplianceId": 2830,
+        "RiskTitle": "Money Laundering Risk",
+        "RiskDescription": "Failure to conduct proper due diligence could result in the business unknowingly facilitating money laundering activities",
+        "Category": "Compliance",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 2169,
+        "ComplianceId": 2831,
+        "RiskTitle": "Transaction Monitoring Failure",
+        "RiskDescription": "Failure to detect suspicious transactions could result in the business unknowingly facilitating illegal activities",
+        "Category": "Compliance",
+        "Criticality": "Medium",
+        "RiskImpact": 8,
+        "RiskLikelihood": 6
+      },
+      {
+        "RiskId": 2170,
+        "ComplianceId": 2832,
+        "RiskTitle": "Inaccurate Client Net Worth Reporting",
+        "RiskDescription": "Failure to accurately document client net worth may result in incorrect financial advice, improper risk assessment, and potential legal implications.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 7
+      },
+      {
+        "RiskId": 2171,
+        "ComplianceId": 2833,
+        "RiskTitle": "Unverified Source of Wealth",
+        "RiskDescription": "Failure to verify clients' declared source of wealth may result in facilitating illegal activities, regulatory violations, and damage to the institution's reputation.",
+        "Category": "Legal",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 2172,
+        "ComplianceId": 2834,
+        "RiskTitle": "Failure to Verify Source of Wealth Documentation",
+        "RiskDescription": "Failure to verify the legitimacy of source of wealth documentation may result in the institution unknowingly facilitating money laundering activities.",
+        "Category": "Compliance",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 7
+      },
+      {
+        "RiskId": 2173,
+        "ComplianceId": 2835,
+        "RiskTitle": "Failure to Verify Source of Wealth for Significant Transactions",
+        "RiskDescription": "Failure to verify the legitimacy of source of wealth for significant transactions may result in the institution unknowingly facilitating money laundering activities.",
+        "Category": "Compliance",
+        "Criticality": "High",
+        "RiskImpact": 8,
+        "RiskLikelihood": 7
+      },
+      {
+        "RiskId": 2174,
+        "ComplianceId": 2836,
+        "RiskTitle": "Inaccurate Customer Risk Assessment",
+        "RiskDescription": "Failure to accurately assess customer risk levels may result in onboarding high-risk customers, leading to potential regulatory violations and reputational harm.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 2175,
+        "ComplianceId": 2837,
+        "RiskTitle": "Failure to Detect Suspicious Activities",
+        "RiskDescription": "Undetected suspicious activities can lead to severe financial and reputational consequences for the institution.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 2176,
+        "ComplianceId": 2838,
+        "RiskTitle": "Delayed Reporting of Suspicious Activities",
+        "RiskDescription": "Failure to escalate concerns related to suspicious activities in a timely manner can lead to regulatory violations and reputational harm.",
+        "Category": "Operational",
+        "Criticality": "Medium",
+        "RiskImpact": 7,
+        "RiskLikelihood": 6
+      },
+      {
+        "RiskId": 2177,
+        "ComplianceId": 2839,
+        "RiskTitle": "Inadequate EDD and AML Training",
+        "RiskDescription": "Lack of regular training may lead to staff incompetence in identifying suspicious activity, resulting in non-compliance with regulations and potential financial losses.",
+        "Category": "Compliance",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 2178,
+        "ComplianceId": 2840,
+        "RiskTitle": "Inadequate New Staff Onboarding Training",
+        "RiskDescription": "Insufficient training for new staff may lead to gaps in compliance knowledge, increasing the risk of early exposure to potential violations and regulatory fines.",
+        "Category": "Compliance",
+        "Criticality": "Medium",
+        "RiskImpact": 7,
+        "RiskLikelihood": 6
+      },
+      {
+        "RiskId": 2179,
+        "ComplianceId": 2841,
+        "RiskTitle": "Failure to Verify Customer Identity",
+        "RiskDescription": "Failure to verify customer identity may result in facilitating illegal activities through the financial institution.",
+        "Category": "Compliance",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 7
+      },
+      {
+        "RiskId": 2180,
+        "ComplianceId": 2842,
+        "RiskTitle": "Outdated Customer Profiles",
+        "RiskDescription": "Outdated customer profiles may result in the financial institution unknowingly facilitating money laundering activities.",
+        "Category": "Compliance",
+        "Criticality": "Medium",
+        "RiskImpact": 7,
+        "RiskLikelihood": 5
+      },
+      {
+        "RiskId": 2181,
+        "ComplianceId": 2843,
+        "RiskTitle": "Failure to Detect Money Laundering",
+        "RiskDescription": "Failure to detect money laundering activities can result in severe financial and reputational damage to the institution.",
+        "Category": "Compliance",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 2182,
+        "ComplianceId": 2844,
+        "RiskTitle": "Inaccurate Customer Risk Assessments",
+        "RiskDescription": "Inaccurate customer risk assessments can lead to regulatory non-compliance and increased exposure to financial crimes.",
+        "Category": "Compliance",
+        "Criticality": "Medium",
+        "RiskImpact": 8,
+        "RiskLikelihood": 6
+      },
+      {
+        "RiskId": 2183,
+        "ComplianceId": 2845,
+        "RiskTitle": "Failure to Identify Beneficial Owners",
+        "RiskDescription": "Failure to identify beneficial owners can lead to regulatory non-compliance and exposure to financial crimes.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 2184,
+        "ComplianceId": 2846,
+        "RiskTitle": "Insufficient Ownership Documentation",
+        "RiskDescription": "Lack of detailed ownership documentation can lead to misunderstandings and disputes over ownership rights.",
+        "Category": "Legal",
+        "Criticality": "Medium",
+        "RiskImpact": 7,
+        "RiskLikelihood": 6
+      },
+      {
+        "RiskId": 2185,
+        "ComplianceId": 2847,
+        "RiskTitle": "Outdated Risk Assessment",
+        "RiskDescription": "Failure to conduct the annual review of the risk assessment may result in an outdated assessment that does not accurately reflect the institution's exposure to various risks, leading to potential non-compliance with regulations and increased vulnerability to financial crimes.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 2186,
+        "ComplianceId": 2848,
+        "RiskTitle": "Inadequate Customer Due Diligence",
+        "RiskDescription": "Failure to adequately assess customer risk profiles and monitor transactions may lead to regulatory violations and financial losses.",
+        "Category": "Compliance",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 2187,
+        "ComplianceId": 2849,
+        "RiskTitle": "Ineffective Transaction Monitoring",
+        "RiskDescription": "Failure to effectively monitor transactions and detect suspicious activities may lead to regulatory violations and financial losses.",
+        "Category": "Compliance",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 2188,
+        "ComplianceId": 2850,
+        "RiskTitle": "Inadequate Training",
+        "RiskDescription": "Staff lacking necessary skills and knowledge may overlook red flags in customer profiles, leading to potential money laundering activities going undetected.",
+        "Category": "Compliance",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 2189,
+        "ComplianceId": 2851,
+        "RiskTitle": "Inaccurate Customer Profiles",
+        "RiskDescription": "Outdated or incomplete customer profiles may lead to inaccurate risk assessments, increasing the risk of financial crimes.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 7
+      },
+      {
+        "RiskId": 2190,
+        "ComplianceId": 2852,
+        "RiskTitle": "Missing Audit Findings",
+        "RiskDescription": "Lack of documented audit findings may result in recurring compliance issues, leading to potential regulatory fines and reputational damage.",
+        "Category": "Operational",
+        "Criticality": "Medium",
+        "RiskImpact": 6,
+        "RiskLikelihood": 5
+      },
+      {
+        "RiskId": 2191,
+        "ComplianceId": 2853,
+        "RiskTitle": "Failure to Detect Suspicious Activities",
+        "RiskDescription": "The risk of not detecting suspicious activities can lead to severe financial and reputational consequences for the institution.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 2192,
+        "ComplianceId": 2854,
+        "RiskTitle": "Delayed Investigation of Suspicious Transactions",
+        "RiskDescription": "Failure to promptly investigate flagged transactions can lead to financial losses and regulatory consequences.",
+        "Category": "Operational",
+        "Criticality": "Medium",
+        "RiskImpact": 8,
+        "RiskLikelihood": 6
+      },
+      {
+        "RiskId": 2193,
+        "ComplianceId": 2855,
+        "RiskTitle": "Unresolved Audit Findings",
+        "RiskDescription": "Failure to address audit findings in a timely manner may lead to regulatory non-compliance and financial penalties.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 7
+      },
+      {
+        "RiskId": 2194,
+        "ComplianceId": 2856,
+        "RiskTitle": "Incomplete Action Plan Implementation",
+        "RiskDescription": "Failure to implement the action plan within agreed timelines may lead to regulatory scrutiny, repeat audit findings, and reputational harm.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 7
+      },
+      {
+        "RiskId": 2195,
+        "ComplianceId": 2857,
+        "RiskTitle": "Financial Losses due to High-Risk Customer Transactions",
+        "RiskDescription": "High-risk customers engaging in illicit activities may lead to financial losses and regulatory penalties.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 9
+      },
+      {
+        "RiskId": 2196,
+        "ComplianceId": 2858,
+        "RiskTitle": "Undetected Suspicious Activities",
+        "RiskDescription": "Failure to monitor high-risk customers may result in undetected suspicious activities, leading to severe consequences.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 2197,
+        "ComplianceId": 2859,
+        "RiskTitle": "Delayed Reporting of Suspicious Activities",
+        "RiskDescription": "Delay in reporting suspicious activities may lead to severe consequences such as financial losses, regulatory penalties, and reputational harm.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 7
+      },
+      {
+        "RiskId": 2198,
+        "ComplianceId": 2860,
+        "RiskTitle": "Undetected ML/TF Risks",
+        "RiskDescription": "Failure to identify ML/TF risks may lead to non-compliance with regulations and severe financial consequences.",
+        "Category": "Compliance",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 2199,
+        "ComplianceId": 2861,
+        "RiskTitle": "Misalignment of Risk Appetite with Strategic Objectives",
+        "RiskDescription": "Failure to review and update the risk appetite statement could result in misalignment with strategic objectives, leading to increased risk exposure and potential failure to achieve organizational goals.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 7
+      },
+      {
+        "RiskId": 2200,
+        "ComplianceId": 2862,
+        "RiskTitle": "Lack of Stakeholder Engagement in Risk Appetite Statement Development",
+        "RiskDescription": "Failure to engage stakeholders in the development of the risk appetite statement may result in a document that does not accurately reflect the organization's risk tolerance, leading to potential misalignment with strategic objectives and increased risk exposure.",
+        "Category": "Operational",
+        "Criticality": "Medium",
+        "RiskImpact": 7,
+        "RiskLikelihood": 6
+      },
+      {
+        "RiskId": 2201,
+        "ComplianceId": 2863,
+        "RiskTitle": "Inaccurate Client Net Worth Assessment",
+        "RiskDescription": "Failure to accurately assess client net worth may result in incorrect risk exposure calculations and impact client financial stability.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 2202,
+        "ComplianceId": 2864,
+        "RiskTitle": "Unauthorized Access to Client Net Worth Data",
+        "RiskDescription": "Unauthorized access to client net worth data may result in financial fraud or identity theft, compromising client data privacy and financial security.",
+        "Category": "IT",
+        "Criticality": "Medium",
+        "RiskImpact": 7,
+        "RiskLikelihood": 6
+      },
+      {
+        "RiskId": 2203,
+        "ComplianceId": 2865,
+        "RiskTitle": "Inadequate Source of Wealth Documentation",
+        "RiskDescription": "Failure to accurately document clients' sources of wealth may lead to regulatory non-compliance and exposure to financial crimes.",
+        "Category": "Compliance",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 2204,
+        "ComplianceId": 2866,
+        "RiskTitle": "Failure to Verify Source of Wealth",
+        "RiskDescription": "Failure to accurately verify the source of wealth may result in the facilitation of money laundering activities through the financial institution.",
+        "Category": "Compliance",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 7
+      },
+      {
+        "RiskId": 2205,
+        "ComplianceId": 2867,
+        "RiskTitle": "Failure to Verify Source of Funds",
+        "RiskDescription": "Failure to verify the source of funds may expose the organization to financial and reputational risks.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 2206,
+        "ComplianceId": 2868,
+        "RiskTitle": "Failure to Verify Source of Wealth",
+        "RiskDescription": "Failure to verify the source of wealth information may expose the organization to financial crime risks and regulatory penalties.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 2207,
+        "ComplianceId": 2869,
+        "RiskTitle": "Failure to Detect Suspicious PEP Transactions",
+        "RiskDescription": "Failure to detect suspicious PEP transactions could result in severe financial and reputational consequences for the institution.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 2208,
+        "ComplianceId": 2870,
+        "RiskTitle": "Delayed Detection of Suspicious PEP Transactions",
+        "RiskDescription": "Delayed detection of suspicious PEP transactions could lead to financial losses and reputational damage for the institution.",
+        "Category": "Operational",
+        "Criticality": "Medium",
+        "RiskImpact": 7,
+        "RiskLikelihood": 6
+      },
+      {
+        "RiskId": 2209,
+        "ComplianceId": 2871,
+        "RiskTitle": "Failure to Collect and Verify Customer Information",
+        "RiskDescription": "Failure to collect and verify necessary customer information may lead to increased risk of money laundering, fraud, and regulatory non-compliance.",
+        "Category": "Compliance",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 7
+      },
+      {
+        "RiskId": 2210,
+        "ComplianceId": 2872,
+        "RiskTitle": "Undetected Suspicious Activities",
+        "RiskDescription": "Failure to detect suspicious activities through quarterly transaction reviews may result in financial crimes going undetected, leading to regulatory sanctions and reputational harm.",
+        "Category": "Compliance",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 2211,
+        "ComplianceId": 2873,
+        "RiskTitle": "Real-Time Monitoring Failure",
+        "RiskDescription": "Inadequate real-time monitoring of customer transactions may result in delayed detection of suspicious activities, increasing the risk of financial crimes and regulatory non-compliance.",
+        "Category": "Compliance",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 9
+      },
+      {
+        "RiskId": 2212,
+        "ComplianceId": 2874,
+        "RiskTitle": "Failure to Verify Customer Identification Information",
+        "RiskDescription": "Failure to verify customer identification information may lead to unauthorized account access, financial losses, and regulatory non-compliance.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 2213,
+        "ComplianceId": 2875,
+        "RiskTitle": "Lack of Documentation in Verification Process",
+        "RiskDescription": "Failure to document the customer verification process may lead to regulatory fines, legal disputes, and audit failures due to the inability to prove compliance with verification requirements.",
+        "Category": "Operational",
+        "Criticality": "Medium",
+        "RiskImpact": 7,
+        "RiskLikelihood": 6
+      },
+      {
+        "RiskId": 2214,
+        "ComplianceId": 2876,
+        "RiskTitle": "Undetected Suspicious Activities",
+        "RiskDescription": "Failure to detect suspicious activities in real-time may result in severe financial and reputational consequences for the institution.",
+        "Category": "Compliance",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 2215,
+        "ComplianceId": 2877,
+        "RiskTitle": "Delayed Review of Flagged Transactions",
+        "RiskDescription": "Failure to review flagged transactions promptly may lead to missed opportunities to identify suspicious activities and escalate them in a timely manner.",
+        "Category": "Compliance",
+        "Criticality": "Medium",
+        "RiskImpact": 8,
+        "RiskLikelihood": 6
+      },
+      {
+        "RiskId": 2216,
+        "ComplianceId": 2878,
+        "RiskTitle": "Outdated Customer Information",
+        "RiskDescription": "Failure to refresh customer information annually may result in outdated records, leading to incorrect decisions, financial losses, and regulatory fines.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 2217,
+        "ComplianceId": 2879,
+        "RiskTitle": "Delayed Information Refresh Completion",
+        "RiskDescription": "Delays in completing information refreshes may result in outdated records, leading to compliance issues and potential regulatory fines.",
+        "Category": "Operational",
+        "Criticality": "Medium",
+        "RiskImpact": 7,
+        "RiskLikelihood": 6
+      },
+      {
+        "RiskId": 2218,
+        "ComplianceId": 2880,
+        "RiskTitle": "Failure to Identify PEPs",
+        "RiskDescription": "Failure to identify PEPs can lead to unknowingly engaging in high-risk business relationships, resulting in severe consequences.",
+        "Category": "Compliance",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 2219,
+        "ComplianceId": 2881,
+        "RiskTitle": "Failure to Review PEP Status",
+        "RiskDescription": "Failure to review PEP status regularly can lead to missed changes in risk levels and increased exposure to financial crime, resulting in regulatory fines and reputational damage.",
+        "Category": "Compliance",
+        "Criticality": "Medium",
+        "RiskImpact": 7,
+        "RiskLikelihood": 6
+      },
+      {
+        "RiskId": 2220,
+        "ComplianceId": 2882,
+        "RiskTitle": "Undetected Suspicious Activities in PEP Transactions",
+        "RiskDescription": "Failure to detect suspicious activities in PEP transactions may result in regulatory violations, financial losses, and reputational damage.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 2221,
+        "ComplianceId": 2883,
+        "RiskTitle": "Delayed Detection of Suspicious Activities in PEP Transactions",
+        "RiskDescription": "Failure to timely review flagged PEP transactions may result in regulatory scrutiny and financial losses due to delayed detection of suspicious activities.",
+        "Category": "Operational",
+        "Criticality": "Medium",
+        "RiskImpact": 7,
+        "RiskLikelihood": 6
+      },
+      {
+        "RiskId": 2222,
+        "ComplianceId": 2884,
+        "RiskTitle": "Inadequate Client Suitability Assessment",
+        "RiskDescription": "Failure to conduct thorough client suitability assessments may result in providing unsuitable investment services to clients, leading to financial losses, regulatory penalties, and reputational damage.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 7
+      },
+      {
+        "RiskId": 2223,
+        "ComplianceId": 2885,
+        "RiskTitle": "Failure to Identify Financial Crime Risks",
+        "RiskDescription": "Staff may not be equipped to identify red flags and potential financial crime risks, leading to increased exposure to financial crime incidents and regulatory penalties.",
+        "Category": "Compliance",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 7
+      },
+      {
+        "RiskId": 2224,
+        "ComplianceId": 2886,
+        "RiskTitle": "Outdated Knowledge on Financial Crime Risks",
+        "RiskDescription": "Staff may fail to recognize new trends and risks in financial crime, leading to increased exposure to financial crime incidents and regulatory fines.",
+        "Category": "Compliance",
+        "Criticality": "Medium",
+        "RiskImpact": 7,
+        "RiskLikelihood": 5
+      },
+      {
+        "RiskId": 2225,
+        "ComplianceId": 2887,
+        "RiskTitle": "High-Value Transaction Risk",
+        "RiskDescription": "Risk of approving high-value transactions without proper assessment leading to financial and reputational damage",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 2226,
+        "ComplianceId": 2888,
+        "RiskTitle": "Cross-Border Transaction Risk",
+        "RiskDescription": "Risk of facilitating cross-border transactions without proper risk assessment leading to regulatory and financial consequences",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 8,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 2227,
+        "ComplianceId": 2889,
+        "RiskTitle": "Misvaluation of High-Value Assets",
+        "RiskDescription": "Incorrect valuation of high-value assets leading to financial losses and reputational damage.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 2228,
+        "ComplianceId": 2890,
+        "RiskTitle": "Misuse of High-Value Assets in Significant Transactions",
+        "RiskDescription": "Potential misuse of high-value assets in significant transactions leading to financial losses and reputational damage.",
+        "Category": "Operational",
+        "Criticality": "Medium",
+        "RiskImpact": 8,
+        "RiskLikelihood": 6
+      },
+      {
+        "RiskId": 2229,
+        "ComplianceId": 2891,
+        "RiskTitle": "Failure to Verify Customer Documentation",
+        "RiskDescription": "Failure to verify customer documentation may result in facilitating illegal activities, financial losses, and damage to the institution's reputation.",
+        "Category": "Compliance",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 2230,
+        "ComplianceId": 2892,
+        "RiskTitle": "Failure to Detect Suspicious Activities",
+        "RiskDescription": "Failure to detect suspicious activities can result in regulatory violations and damage to the institution's reputation.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 2231,
+        "ComplianceId": 2893,
+        "RiskTitle": "Delayed Detection of Suspicious Activities in High-Risk Accounts",
+        "RiskDescription": "Delayed detection of suspicious activities in high-risk accounts can lead to regulatory violations and increased risk of financial crimes.",
+        "Category": "Operational",
+        "Criticality": "Medium",
+        "RiskImpact": 8,
+        "RiskLikelihood": 6
+      },
+      {
+        "RiskId": 2232,
+        "ComplianceId": 2894,
+        "RiskTitle": "Misuse of Complex Legal Structures",
+        "RiskDescription": "Failure to properly identify and verify beneficial owners may lead to the misuse of complex legal structures for illicit activities.",
+        "Category": "Compliance",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 2233,
+        "ComplianceId": 2895,
+        "RiskTitle": "Non-Compliance with Legal Arrangements Assessment",
+        "RiskDescription": "Failure to assess legal arrangements could lead to non-compliance with regulations and potential legal issues.",
+        "Category": "Legal",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 2234,
+        "ComplianceId": 2896,
+        "RiskTitle": "Failure to Detect Unusual Activity in Transactions",
+        "RiskDescription": "The risk of not detecting unusual activity in transactions associated with complex legal structures, leading to potential financial crime and associated consequences.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 2235,
+        "ComplianceId": 2897,
+        "RiskTitle": "Missed Detection of Financial Crime in Manual Reviews",
+        "RiskDescription": "The risk of not conducting thorough manual reviews of flagged transactions, leading to potential missed detection of financial crime and associated consequences.",
+        "Category": "Operational",
+        "Criticality": "Medium",
+        "RiskImpact": 8,
+        "RiskLikelihood": 7
+      },
+      {
+        "RiskId": 2236,
+        "ComplianceId": 2898,
+        "RiskTitle": "Incomplete Risk Assessment Documentation",
+        "RiskDescription": "Failure to review the risk assessment documentation may result in missing critical risks and non-compliance with regulatory requirements.",
+        "Category": "Compliance",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 7
+      },
+      {
+        "RiskId": 2237,
+        "ComplianceId": 2899,
+        "RiskTitle": "Non-alignment of Policies with Risk Assessment",
+        "RiskDescription": "Failure to align policies with the risk assessment may result in ineffective risk mitigation strategies, potential regulatory violations, and reputational damage to the financial institution.",
+        "Category": "Compliance",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 7
+      },
+      {
+        "RiskId": 2238,
+        "ComplianceId": 2900,
+        "RiskTitle": "Inaccurate Customer-Specific Profiles",
+        "RiskDescription": "Inability to develop accurate customer-specific profiles based on EDD policies and procedures may lead to inadequate risk assessment, exposure to high-risk customers, and potential regulatory scrutiny.",
+        "Category": "Operational",
+        "Criticality": "Medium",
+        "RiskImpact": 7,
+        "RiskLikelihood": 6
+      },
+      {
+        "RiskId": 2239,
+        "ComplianceId": 2901,
+        "RiskTitle": "Inadequate Staff Training",
+        "RiskDescription": "Insufficient training may result in staff lacking the necessary knowledge and skills to effectively carry out EDD processes, increasing the risk of errors and non-compliance.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 7
+      },
+      {
+        "RiskId": 2240,
+        "ComplianceId": 2902,
+        "RiskTitle": "Inaccurate Evaluation of Knowledge Testing Results",
+        "RiskDescription": "Failure to accurately evaluate knowledge testing results may result in staff not possessing the required knowledge to effectively carry out EDD duties, increasing the risk of non-compliance.",
+        "Category": "Operational",
+        "Criticality": "Medium",
+        "RiskImpact": 7,
+        "RiskLikelihood": 6
+      },
+      {
+        "RiskId": 2241,
+        "ComplianceId": 2903,
+        "RiskTitle": "Inaccurate EDD Documentation",
+        "RiskDescription": "Failure to maintain accurate EDD documentation may result in incorrect risk assessments, regulatory violations, and reputational damage for the organization.",
+        "Category": "Compliance",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 2242,
+        "ComplianceId": 2904,
+        "RiskTitle": "Failure to Implement Audit Recommendations",
+        "RiskDescription": "Failure to track and implement audit recommendations may result in unresolved issues, financial losses, and damage to the organization's reputation.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 7
+      }
+    ],
+    "risk_instance": [
+      {
+        "RiskInstanceId": 392,
+        "IncidentId": 677,
+        "ComplianceId": 2854,
+        "RiskTitle": "Non-compliance with Daily Review of Flagged Transactions in RiskManagement Department",
+        "RiskDescription": "During a routine audit check in the RiskManagement department, it was discovered that there was non-compliance with the daily review of flagged transactions. This critical process is essential in identifying and investigating suspicious activities that could potentially harm the reputation of the organization.",
+        "PossibleDamage": "The possible damage from this non-compliance includes undetected suspicious activities that could lead to financial losses, regulatory penalties, and operational disruptions. Failure to review flagged transactions exposes the organization to reputational risk, as it may signal a lack of diligence in monitoring for fraudulent or illicit activities.",
+        "RiskPriority": "Medium",
+        "Criticality": "High",
+        "Category": "Reputational Risk",
+        "Origin": "Incident",
+        "ReportedBy": 1,
+        "RiskId": null,
+        "RiskLikelihood": null,
+        "RiskImpact": null,
+        "RiskExposureRating": null,
+        "Appetite": null,
+        "RiskResponseType": null,
+        "RiskResponseDescription": null,
+        "RiskMitigation": null,
+        "RiskType": null,
+        "RiskOwner": null,
+        "RiskStatus": null,
+        "BusinessImpact": null,
+        "UserId": null,
+        "MitigationDueDate": null,
+        "ModifiedMitigations": null,
+        "MitigationStatus": null,
+        "MitigationCompletedDate": null,
+        "ReviewerCount": null,
+        "RiskFormDetails": null,
+        "RecurrenceCount": null,
+        "CreatedAt": null,
+        "Reviewer": null,
+        "ReviewerId": null,
+        "FirstResponseAt": null,
+        "FrameworkId": 364,
+        "RiskMultiplierX": 0.1,
+        "RiskMultiplierY": 0.1
+      },
+      {
+        "RiskInstanceId": 393,
+        "IncidentId": 678,
+        "ComplianceId": 2829,
+        "RiskTitle": "Non-compliance with Annual Risk Assessment in Treasury Department",
+        "RiskDescription": "During a recent audit finding, it was discovered that the Treasury department failed to conduct the annual comprehensive risk assessment as required by the company's policies. This non-compliance poses a significant reputational risk to the organization due to increased exposure to money laundering and terrorist financing risks.",
+        "PossibleDamage": "The possible damage from this incident includes potential regulatory fines, reputational damage, and legal actions against the company. Failure to address this issue promptly could result in loss of customer trust, negative media coverage, and decreased investor confidence.",
+        "RiskPriority": "High",
+        "Criticality": "High",
+        "Category": "Reputational Risk",
+        "Origin": "Incident",
+        "ReportedBy": 1,
+        "RiskId": null,
+        "RiskLikelihood": null,
+        "RiskImpact": null,
+        "RiskExposureRating": null,
+        "Appetite": null,
+        "RiskResponseType": null,
+        "RiskResponseDescription": null,
+        "RiskMitigation": null,
+        "RiskType": null,
+        "RiskOwner": null,
+        "RiskStatus": null,
+        "BusinessImpact": null,
+        "UserId": null,
+        "MitigationDueDate": null,
+        "ModifiedMitigations": null,
+        "MitigationStatus": null,
+        "MitigationCompletedDate": null,
+        "ReviewerCount": null,
+        "RiskFormDetails": null,
+        "RecurrenceCount": null,
+        "CreatedAt": null,
+        "Reviewer": null,
+        "ReviewerId": null,
+        "FirstResponseAt": null,
+        "FrameworkId": 364,
+        "RiskMultiplierX": 0.1,
+        "RiskMultiplierY": 0.1
+      },
+      {
+        "RiskInstanceId": 394,
+        "IncidentId": 686,
+        "ComplianceId": 2825,
+        "RiskTitle": "Non-compliance with Annual EDD Training Requirement in IT Department",
+        "RiskDescription": "During a recent audit finding in the IT Department, it was discovered that a significant number of employees had not completed their annual Enhanced Due Diligence (EDD) training session as required by company policy. The EDD training is crucial for ensuring that employees are aware of the latest regulatory requirements and best practices in conducting due diligence processes.",
+        "PossibleDamage": "The non-compliance with the annual EDD training session requirement poses a serious risk to the organization. Without proper training, employees may not be equipped to identify and mitigate risks effectively, leading to increased risk exposure. This could result in potential regulatory fines for non-compliance, compromised due diligence processes, and ultimately impact the organization's reputation and financial stability.",
+        "RiskPriority": "Low",
+        "Criticality": "High",
+        "Category": "Physical Risk",
+        "Origin": "Incident",
+        "ReportedBy": 1,
+        "RiskId": null,
+        "RiskLikelihood": null,
+        "RiskImpact": null,
+        "RiskExposureRating": null,
+        "Appetite": null,
+        "RiskResponseType": null,
+        "RiskResponseDescription": null,
+        "RiskMitigation": null,
+        "RiskType": null,
+        "RiskOwner": null,
+        "RiskStatus": null,
+        "BusinessImpact": null,
+        "UserId": null,
+        "MitigationDueDate": null,
+        "ModifiedMitigations": null,
+        "MitigationStatus": null,
+        "MitigationCompletedDate": null,
+        "ReviewerCount": null,
+        "RiskFormDetails": null,
+        "RecurrenceCount": null,
+        "CreatedAt": null,
+        "Reviewer": null,
+        "ReviewerId": null,
+        "FirstResponseAt": null,
+        "FrameworkId": 364,
+        "RiskMultiplierX": 0.1,
+        "RiskMultiplierY": 0.1
+      },
+      {
+        "RiskInstanceId": 395,
+        "IncidentId": 687,
+        "ComplianceId": 2856,
+        "RiskTitle": "Non-compliance with Remediation Action Plans Leading to Potential Financial Losses",
+        "RiskDescription": "During a recent audit check in the RiskManagement business unit, it was identified that there was non-compliance with the implementation of remediation action plans aimed at addressing fraud risks. This non-compliance poses a significant threat to the organization's financial stability and reputation.",
+        "PossibleDamage": "The failure to effectively implement remediation action plans can result in repeated audit findings, potential financial losses due to regulatory penalties, and operational disruptions within the business lines. This can lead to a loss of trust from stakeholders, decreased market value, and potential legal consequences.",
+        "RiskPriority": "Low",
+        "Criticality": "High",
+        "Category": "Fraud Risk",
+        "Origin": "Incident",
+        "ReportedBy": 1,
+        "RiskId": null,
+        "RiskLikelihood": null,
+        "RiskImpact": null,
+        "RiskExposureRating": null,
+        "Appetite": null,
+        "RiskResponseType": null,
+        "RiskResponseDescription": null,
+        "RiskMitigation": null,
+        "RiskType": null,
+        "RiskOwner": null,
+        "RiskStatus": null,
+        "BusinessImpact": null,
+        "UserId": null,
+        "MitigationDueDate": null,
+        "ModifiedMitigations": null,
+        "MitigationStatus": null,
+        "MitigationCompletedDate": null,
+        "ReviewerCount": null,
+        "RiskFormDetails": null,
+        "RecurrenceCount": null,
+        "CreatedAt": null,
+        "Reviewer": null,
+        "ReviewerId": null,
+        "FirstResponseAt": null,
+        "FrameworkId": 364,
+        "RiskMultiplierX": 0.1,
+        "RiskMultiplierY": 0.1
+      },
+      {
+        "RiskInstanceId": 396,
+        "IncidentId": 688,
+        "ComplianceId": 2811,
+        "RiskTitle": "Non-compliance with Annual Client Information Review in Treasury Department",
+        "RiskDescription": "During a routine audit check in the Treasury department, it was identified that the annual client information review process was not being followed as per the established procedures. This non-compliance could potentially lead to inaccurate client data being used for financial transactions, increasing the risk of financial crimes and regulatory fines.",
+        "PossibleDamage": "The possible damage from this incident includes inaccurate financial reporting, potential exposure to money laundering activities, regulatory scrutiny from authorities such as the SEC, and reputational damage for the organization. Additionally, there could be financial losses due to incorrect client data impacting investment decisions.",
+        "RiskPriority": "Low",
+        "Criticality": "High",
+        "Category": "Credit Risk",
+        "Origin": "Incident",
+        "ReportedBy": 1,
+        "RiskId": null,
+        "RiskLikelihood": null,
+        "RiskImpact": null,
+        "RiskExposureRating": null,
+        "Appetite": null,
+        "RiskResponseType": null,
+        "RiskResponseDescription": null,
+        "RiskMitigation": null,
+        "RiskType": null,
+        "RiskOwner": null,
+        "RiskStatus": null,
+        "BusinessImpact": null,
+        "UserId": null,
+        "MitigationDueDate": null,
+        "ModifiedMitigations": null,
+        "MitigationStatus": null,
+        "MitigationCompletedDate": null,
+        "ReviewerCount": null,
+        "RiskFormDetails": null,
+        "RecurrenceCount": null,
+        "CreatedAt": null,
+        "Reviewer": null,
+        "ReviewerId": null,
+        "FirstResponseAt": null,
+        "FrameworkId": 364,
+        "RiskMultiplierX": 0.1,
+        "RiskMultiplierY": 0.1
+      },
+      {
+        "RiskInstanceId": 397,
+        "IncidentId": 689,
+        "ComplianceId": 2830,
+        "RiskTitle": "Non-compliance with Enhanced Due Diligence Policy in IT Department",
+        "RiskDescription": "During an audit check, it was identified that the IT Department within the organization was not fully compliant with the Enhanced Due Diligence Policy. This policy is crucial in mitigating risks related to money laundering and terrorist financing activities. The non-compliance could potentially expose the organization to severe consequences.",
+        "PossibleDamage": "The possible damage from this non-compliance includes increased exposure to money laundering and terrorist financing activities, which could lead to reputational damage, regulatory fines, and potential legal actions. This could tarnish the organization's reputation, result in financial penalties, and even legal liabilities.",
+        "RiskPriority": "Low",
+        "Criticality": "High",
+        "Category": "Compliance Risk",
+        "Origin": "Incident",
+        "ReportedBy": 1,
+        "RiskId": null,
+        "RiskLikelihood": null,
+        "RiskImpact": null,
+        "RiskExposureRating": null,
+        "Appetite": null,
+        "RiskResponseType": null,
+        "RiskResponseDescription": null,
+        "RiskMitigation": null,
+        "RiskType": null,
+        "RiskOwner": null,
+        "RiskStatus": null,
+        "BusinessImpact": null,
+        "UserId": null,
+        "MitigationDueDate": null,
+        "ModifiedMitigations": null,
+        "MitigationStatus": null,
+        "MitigationCompletedDate": null,
+        "ReviewerCount": null,
+        "RiskFormDetails": null,
+        "RecurrenceCount": null,
+        "CreatedAt": null,
+        "Reviewer": null,
+        "ReviewerId": null,
+        "FirstResponseAt": null,
+        "FrameworkId": 364,
+        "RiskMultiplierX": 0.1,
+        "RiskMultiplierY": 0.1
+      }
+    ],
+    "risk_approval": []
+  },
+  "schema": {
+    "risk": {
+      "columns": [
+        "RiskId",
+        "ComplianceId",
+        "RiskTitle",
+        "Criticality",
+        "PossibleDamage",
+        "Category",
+        "RiskType",
+        "BusinessImpact",
+        "RiskDescription",
+        "RiskLikelihood",
+        "RiskImpact",
+        "RiskExposureRating",
+        "RiskPriority",
+        "RiskMitigation",
+        "CreatedAt",
+        "FrameworkId",
+        "RiskMultiplierX",
+        "RiskMultiplierY"
+      ],
+      "row_count": 100,
+      "column_details": [
+        {
+          "name": "RiskId",
+          "type": "int",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "ComplianceId",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskTitle",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Criticality",
+          "type": "varchar(50)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PossibleDamage",
+          "type": "text",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Category",
+          "type": "varchar(100)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskType",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "BusinessImpact",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskDescription",
+          "type": "text",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskLikelihood",
+          "type": "int",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskImpact",
+          "type": "int",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskExposureRating",
+          "type": "float",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskPriority",
+          "type": "varchar(50)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskMitigation",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "CreatedAt",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "FrameworkId",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskMultiplierX",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": "0.1",
+          "extra": ""
+        },
+        {
+          "name": "RiskMultiplierY",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": "0.1",
+          "extra": ""
+        }
+      ]
+    },
+    "risk_instance": {
+      "columns": [
+        "RiskInstanceId",
+        "IncidentId",
+        "ComplianceId",
+        "RiskTitle",
+        "RiskDescription",
+        "PossibleDamage",
+        "RiskPriority",
+        "Criticality",
+        "Category",
+        "Origin",
+        "ReportedBy",
+        "RiskId",
+        "RiskLikelihood",
+        "RiskImpact",
+        "RiskExposureRating",
+        "Appetite",
+        "RiskResponseType",
+        "RiskResponseDescription",
+        "RiskMitigation",
+        "RiskType",
+        "RiskOwner",
+        "RiskStatus",
+        "BusinessImpact",
+        "UserId",
+        "MitigationDueDate",
+        "ModifiedMitigations",
+        "MitigationStatus",
+        "MitigationCompletedDate",
+        "ReviewerCount",
+        "RiskFormDetails",
+        "RecurrenceCount",
+        "CreatedAt",
+        "Reviewer",
+        "ReviewerId",
+        "FirstResponseAt",
+        "FrameworkId",
+        "RiskMultiplierX",
+        "RiskMultiplierY"
+      ],
+      "row_count": 6,
+      "column_details": [
+        {
+          "name": "RiskInstanceId",
+          "type": "int",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "IncidentId",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ComplianceId",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskTitle",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskDescription",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PossibleDamage",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskPriority",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Criticality",
+          "type": "varchar(100)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Category",
+          "type": "varchar(100)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Origin",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ReportedBy",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskId",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskLikelihood",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskImpact",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskExposureRating",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Appetite",
+          "type": "varchar(100)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskResponseType",
+          "type": "varchar(100)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskResponseDescription",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskMitigation",
+          "type": "json",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskType",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskOwner",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskStatus",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "BusinessImpact",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "UserId",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "MitigationDueDate",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ModifiedMitigations",
+          "type": "json",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "MitigationStatus",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "MitigationCompletedDate",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ReviewerCount",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskFormDetails",
+          "type": "json",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RecurrenceCount",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "CreatedAt",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Reviewer",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ReviewerId",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "FirstResponseAt",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "FrameworkId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskMultiplierX",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": "0.1",
+          "extra": ""
+        },
+        {
+          "name": "RiskMultiplierY",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": "0.1",
+          "extra": ""
+        }
+      ]
+    },
+    "risk_approval": {
+      "columns": [
+        "RiskinstanceId",
+        "version",
+        "ExtractedInfo",
+        "UserId",
+        "ApproverId",
+        "ApprovedRejected",
+        "Date",
+        "FrameworkId"
+      ],
+      "row_count": 0,
+      "column_details": [
+        {
+          "name": "RiskinstanceId",
+          "type": "int",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "version",
+          "type": "varchar(450)",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ExtractedInfo",
+          "type": "json",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "UserId",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ApproverId",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ApprovedRejected",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Date",
+          "type": "datetime",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "FrameworkId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        }
+      ]
+    }
+  }
+}

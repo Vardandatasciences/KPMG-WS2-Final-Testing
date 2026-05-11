@@ -987,8 +987,9 @@ def update_audit_review_status(request, audit_id):
         except Audit.DoesNotExist:
             return Response({'error': 'Audit not found'}, status=status.HTTP_404_NOT_FOUND)
         
-        # Check if audit is in the correct state for review
-        if audit.Status != 'Under review':
+        # Check if audit is in the correct state for review (case-insensitive)
+        normalized_audit_status = str(audit.Status or '').strip().lower()
+        if normalized_audit_status != 'under review':
             error_msg = f'Cannot update review status when audit is not under review. Current status: {audit.Status}'
             debug_print(f"DEBUG: State error - {error_msg}")
             return Response({'error': error_msg}, status=status.HTTP_400_BAD_REQUEST)

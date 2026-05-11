@@ -26,6 +26,7 @@ from django.core.files.storage import default_storage
 from django.conf import settings
 
 from django.db import connection, transaction
+from django.db.models import Q
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes, authentication_classes, parser_classes
 from rest_framework.permissions import IsAuthenticated
@@ -1656,34 +1657,19 @@ class AIAuditDocumentUploadView(APIView):
                                     try:
                                         logger.info(f"🚀 Starting automatic compliance checks for Document Handling batch upload")
                                         
-                                        # Call compliance check for the primary document (which will check all mappings for that file)
-                                        # The check_document_compliance function handles all mappings for a file group
+                                        # Use internal checker for background jobs to avoid auth/session issues.
+                                        # It checks all mappings for the same file group.
                                         try:
                                             logger.info(f"🔍 Auto-checking compliance for primary document_id={primary_document_id}")
-                                            
-                                            # Create a minimal request object for the compliance check
-                                            from django.test import RequestFactory
-                                            factory = RequestFactory()
-                                            check_request = factory.post(f'/api/ai-audit/{audit_id}/documents/{primary_document_id}/check/')
-                                            
-                                            # Copy authentication from original request
-                                            if 'HTTP_AUTHORIZATION' in request.META:
-                                                check_request.META['HTTP_AUTHORIZATION'] = request.META['HTTP_AUTHORIZATION']
-                                            
-                                            # Set request data (empty - will use all compliances from mappings)
-                                            check_request.data = {}
-                                            
-                                            # Call the compliance check function directly
-                                            from rest_framework.response import Response as DRFResponse
-                                            result = check_document_compliance(check_request, audit_id, primary_document_id)
-                                            
-                                            if isinstance(result, DRFResponse):
-                                                if result.status_code == 200:
-                                                    logger.info(f"✅ Automatic compliance check completed successfully for document_id={primary_document_id}")
-                                                else:
-                                                    logger.warning(f"⚠️ Automatic compliance check returned status {result.status_code}")
+                                            result = _check_document_compliance_internal(
+                                                audit_id=audit_id,
+                                                document_id=primary_document_id,
+                                                user_id=user_id
+                                            )
+                                            if isinstance(result, dict) and result.get('success'):
+                                                logger.info(f"✅ Automatic compliance check completed successfully for document_id={primary_document_id}")
                                             else:
-                                                logger.info(f"ℹ️ Compliance check triggered for document_id={primary_document_id}")
+                                                logger.warning(f"⚠️ Automatic compliance check failed for document_id={primary_document_id}: {result}")
                                                 
                                         except Exception as check_err:
                                             logger.warning(f"⚠️ Could not auto-check document_id={primary_document_id}: {check_err}")
@@ -2149,34 +2135,19 @@ class AIAuditDocumentUploadView(APIView):
                         try:
                             logger.info(f"🚀 Starting automatic compliance checks for Document Handling upload")
                             
-                            # Call compliance check for the primary document (which will check all mappings for that file)
-                            # The check_document_compliance function handles all mappings for a file group
+                            # Use internal checker for background jobs to avoid auth/session issues.
+                            # It checks all mappings for the same file group.
                             try:
                                 logger.info(f"🔍 Auto-checking compliance for primary document_id={primary_document_id}")
-                                
-                                # Create a minimal request object for the compliance check
-                                from django.test import RequestFactory
-                                factory = RequestFactory()
-                                check_request = factory.post(f'/api/ai-audit/{audit_id}/documents/{primary_document_id}/check/')
-                                
-                                # Copy authentication from original request
-                                if 'HTTP_AUTHORIZATION' in request.META:
-                                    check_request.META['HTTP_AUTHORIZATION'] = request.META['HTTP_AUTHORIZATION']
-                                
-                                # Set request data (empty - will use all compliances from mappings)
-                                check_request.data = {}
-                                
-                                # Call the compliance check function directly
-                                from rest_framework.response import Response as DRFResponse
-                                result = check_document_compliance(check_request, audit_id, primary_document_id)
-                                
-                                if isinstance(result, DRFResponse):
-                                    if result.status_code == 200:
-                                        logger.info(f"✅ Automatic compliance check completed successfully for document_id={primary_document_id}")
-                                    else:
-                                        logger.warning(f"⚠️ Automatic compliance check returned status {result.status_code}")
+                                result = _check_document_compliance_internal(
+                                    audit_id=audit_id,
+                                    document_id=primary_document_id,
+                                    user_id=user_id
+                                )
+                                if isinstance(result, dict) and result.get('success'):
+                                    logger.info(f"✅ Automatic compliance check completed successfully for document_id={primary_document_id}")
                                 else:
-                                    logger.info(f"ℹ️ Compliance check triggered for document_id={primary_document_id}")
+                                    logger.warning(f"⚠️ Automatic compliance check failed for document_id={primary_document_id}: {result}")
                                     
                             except Exception as check_err:
                                 logger.warning(f"⚠️ Could not auto-check document_id={primary_document_id}: {check_err}")
@@ -3086,12 +3057,23 @@ class AIAuditDocumentsView(View):
                     })
             
             logger.info(f"✅ Returning {len(documents)} documents for audit {audit_id}")
+
+            # Keep audit status in sync with document processing state.
+            # This avoids audits getting stuck in "Work In Progress" when all
+            # document rows are already completed/failed.
+            status_update = None
+            try:
+                status_update = check_and_update_ai_audit_status(converted_audit_id)
+                logger.info(f"🔁 Documents API status sync for audit {audit_id}: {status_update}")
+            except Exception as status_err:
+                logger.warning(f"⚠️ Documents API status sync failed for audit {audit_id}: {status_err}")
             
             return JsonResponse({
                 'success': True,
                 'audit_id': audit_id,
                 'documents': documents,
-                'total_documents': len(documents)
+                'total_documents': len(documents),
+                'status_sync': status_update
             })
             
         except Exception as e:
@@ -6416,6 +6398,7 @@ def check_document_compliance(request, audit_id, document_id):
                     logger.warning(f"⚠️ Could not fetch subpolicy name: {e}")
 
         # Handle file path - check if it's S3 or local
+        temp_file_created = False
         if external_source in ['s3', 'evidence_attachment'] and external_id:
             # Handle S3 file
             try:
@@ -6508,6 +6491,14 @@ def check_document_compliance(request, audit_id, document_id):
                         import traceback
                         traceback.print_exc()
                 
+                # If this is an evidence_attachment but we couldn't resolve anything from file_operations
+                # and the document_path clearly points to a local ai_audit_documents file, fall back to
+                # local/manual handling instead of hard-failing on missing S3 metadata.
+                if external_source == 'evidence_attachment' and not s3_key and doc_path:
+                    if doc_path.startswith('ai_audit_documents') or doc_path.startswith('/'):
+                        logger.info("ℹ️ No S3 metadata found for evidence_attachment; falling back to local file path.")
+                        external_source = 'manual'
+
                 # If we didn't find it in file_operations, try to extract from external_id
                 if not s3_key:
                     # external_id might be JSON, a raw S3 key, or a full S3 URL
@@ -8478,9 +8469,19 @@ def _get_audit_document_view_url(audit_id_int, doc_id_int, request):
     aad_id, external_source, external_id, document_name, document_path = row
     if external_source == 'evidence_attachment' and external_id:
         try:
-            file_op = FileOperations.objects.get(id=int(external_id), operation_type='upload')
+            if str(external_id).isdigit():
+                file_op = FileOperations.objects.get(id=int(external_id), operation_type='upload')
+            else:
+                file_op = FileOperations.objects.filter(
+                    operation_type='upload',
+                    status='completed'
+                ).filter(
+                    Q(s3_key=external_id) | Q(stored_name=external_id) | Q(file_name=external_id) | Q(original_name=external_id)
+                ).first()
+                if not file_op:
+                    return f'/api/ai-audit/{audit_id_int}/documents/{doc_id_int}/serve/', None
         except (FileOperations.DoesNotExist, ValueError):
-            return None, 'Document file not found'
+            return f'/api/ai-audit/{audit_id_int}/documents/{doc_id_int}/serve/', None
         bucket = (file_op.s3_bucket or '').strip()
         key = (file_op.s3_key or '').strip()
         file_name = file_op.original_name or file_op.file_name or document_name or 'document'
@@ -8574,7 +8575,17 @@ def serve_audit_document(request, audit_id, document_id):
                     local_path = full
         if not local_path and external_source == 'evidence_attachment' and external_id:
             try:
-                file_op = FileOperations.objects.get(id=int(external_id), operation_type='upload')
+                if str(external_id).isdigit():
+                    file_op = FileOperations.objects.get(id=int(external_id), operation_type='upload')
+                else:
+                    file_op = FileOperations.objects.filter(
+                        operation_type='upload',
+                        status='completed'
+                    ).filter(
+                        Q(s3_key=external_id) | Q(stored_name=external_id) | Q(file_name=external_id) | Q(original_name=external_id)
+                    ).first()
+                    if not file_op:
+                        raise FileOperations.DoesNotExist
                 file_name = file_op.original_name or file_op.file_name or file_name
                 stored = (file_op.s3_key or file_op.stored_name or '').strip()
                 if stored:

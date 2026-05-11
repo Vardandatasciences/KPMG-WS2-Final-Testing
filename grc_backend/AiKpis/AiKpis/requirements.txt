@@ -1,0 +1,29 @@
+# Core Dependencies (Required)
+mysql-connector-python
+pandas
+requests
+python-dotenv
+boto3
+numpy
+
+# OpenAI SDK (Required for KPI generation and embeddings)
+openai>=1.0.0
+
+# Optional Dependencies (Recommended for full functionality)
+# PDF Processing
+PyPDF2
+
+# Excel Processing
+openpyxl
+xlrd
+
+# Text Processing
+langchain
+langchain-text-splitters
+
+# PDF Generation
+fpdf
+
+# Additional utilities
+protobuf # Required for MySQL compatibility
+

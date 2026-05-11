@@ -1,0 +1,1330 @@
+{
+  "framework": {
+    "FrameworkId": 970,
+    "FrameworkName": "ISO 45001",
+    "FrameworkDescription": "ISO 45001 is an international standard for occupational health and safety management systems, providing a framework to improve employee safety, reduce workplace risks, and create better, safer working conditions.",
+    "Category": "Healthcare Privacy and Security",
+    "InternalExternal": "External",
+    "Identifier": "FW-970",
+    "Status": "Approved",
+    "CurrentVersion": 2018.0
+  },
+  "module": "compliance",
+  "tables": {
+    "compliance": [
+      {
+        "ComplianceId": 6911,
+        "SubPolicyId": 11386,
+        "ComplianceTitle": "Contractor Assessment and Selection Process",
+        "ComplianceItemDescription": "The organization must establish a comprehensive process for assessing and selecting contractors based on agreed specifications, terms, and conditions. This process should include conducting thorough assessments to ensure compliance with legal requirements and occupational health and safety standards. Documentation of assessments and selection criteria must be maintained for audit purposes. Assessments must be conducted prior to engaging contractors and periodically thereafter. Assessment records, compliance documentation, and performance evaluations must be stored securely for a minimum of [X] years.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6912,
+        "SubPolicyId": 11387,
+        "ComplianceTitle": "Top Management Leadership and Commitment Review",
+        "ComplianceItemDescription": "Top management must conduct an annual review of the OH&S management system to assess its effectiveness. The review should include evaluating the performance of the system, identifying opportunities for improvement, and ensuring compliance with ISO 45001 requirements. The review must be documented with detailed findings, actions taken, and responsible parties. Any identified issues or corrective actions must be addressed within specified timelines. Key stakeholders, including OH&S representatives and relevant management personnel, should actively participate in the review process.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6913,
+        "SubPolicyId": 11388,
+        "ComplianceTitle": "Establishment of Health and Safety Committees",
+        "ComplianceItemDescription": "All business units within the organization must establish Health and Safety Committees as per regulatory requirements. The committees should comprise representatives from various organizational levels and meet regularly to discuss occupational health and safety issues. Workers must be consulted and allowed to participate in the committee meetings. Incident reports, hazards, risks, and opportunities must be reported through the established mechanisms. Records of meetings, actions taken, and recommendations for improvement must be maintained.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6914,
+        "SubPolicyId": 11389,
+        "ComplianceTitle": "Establishment of Consultation and Participation Process",
+        "ComplianceItemDescription": "The organization must establish, implement, and maintain a formal process for consultation and participation of workers at all levels and functions in the OH&S management system. This process should include mechanisms for workers to provide input, dedicated time for consultation, relevant training on participation, and adequate resources to support worker involvement. Evidence of this compliance includes documented procedures outlining the consultation process, training records for workers, and resource allocation plans.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6915,
+        "SubPolicyId": 11390,
+        "ComplianceTitle": "Implementation of OH&S Risk Assessment Methodology",
+        "ComplianceItemDescription": "All business units within the organization must adhere to the defined OH&S risk assessment methodology for assessing hazards and opportunities. This includes conducting bi-annual risk assessments led by the OH&S team, with clear roles and responsibilities outlined. The assessment process should involve hazard identification, risk evaluation, and control effectiveness review using standardized tools and templates. Documentation of risk assessment methodologies and criteria must be stored securely for a minimum of 5 years. Any deviations from the assessment process require approval from the OH&S manager and must be documented for review.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6916,
+        "SubPolicyId": 11391,
+        "ComplianceTitle": "Control of Documented Information - Document Review and Approval",
+        "ComplianceItemDescription": "All documented information within the organization's OH&S management system must undergo an annual review and approval process. This process includes identifying, describing, formatting, and reviewing the documented information to ensure accuracy and relevance. The OH&S managers, document controllers, and relevant process owners are responsible for conducting the review and approval. Any changes to the documented information must be documented, approved by the OH&S manager, and implemented with proper version control. Evidence of the review and approval process must be maintained for audit purposes.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6917,
+        "SubPolicyId": 11391,
+        "ComplianceTitle": "Control of Documented Information - Document Storage and Retention",
+        "ComplianceItemDescription": "All documented information within the organization's OH&S management system must be stored electronically in a secure repository. The documented information must be retained for a minimum of 5 years to ensure traceability, accessibility, and compliance with regulatory requirements. The storage repository must have access controls in place to prevent unauthorized access or tampering. Regular backups of the documented information must be performed to mitigate the risk of data loss or corruption.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6918,
+        "SubPolicyId": 11392,
+        "ComplianceTitle": "Quarterly Monitoring and Measurement Control",
+        "ComplianceItemDescription": "The Health and Safety Manager is responsible for overseeing monitoring and measurement activities on a quarterly basis. This includes conducting regular inspections, audits, and data analysis to assess compliance levels with legal requirements and other obligations. The results of these activities must be documented in the Occupational Health and Safety Management System records. Any deviations from the set performance criteria shall trigger immediate corrective actions to address non-conformities. The monitoring and measurement process should be completed within 30 days of the end of each quarter to ensure timely identification of compliance issues.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6919,
+        "SubPolicyId": 11393,
+        "ComplianceTitle": "Quarterly OH&S Training Sessions",
+        "ComplianceItemDescription": "All employees must attend quarterly OH&S training sessions conducted by the OH&S manager with support from the HR department. Training sessions should cover topics related to OH&S requirements, emergency procedures, hazard identification, and reporting protocols. Attendance records must be maintained for each session, including employee names, dates of training, topics covered, and any feedback received. Non-compliance with training requirements should be documented and addressed through corrective actions.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6920,
+        "SubPolicyId": 11393,
+        "ComplianceTitle": "OH&S Responsibilities Designation",
+        "ComplianceItemDescription": "The organization must designate clear responsibilities for OH&S management system implementation. The OH&S manager should oversee the implementation process, while the HR department should provide support in training coordination and record-keeping. Responsibilities should be documented in an official OH&S management system manual, outlining roles, duties, and reporting structures. Regular reviews of responsibilities should be conducted to ensure alignment with organizational goals and OH&S requirements.",
+        "ComplianceType": "Internal",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 6921,
+        "SubPolicyId": 11394,
+        "ComplianceTitle": "Training on Interpretation and Application of Normative References",
+        "ComplianceItemDescription": "All employees responsible for OH&S management must undergo annual training on the interpretation and application of normative references as specified in ISO 45001. Training sessions should cover the correct verbal forms ('shall,' 'should,' 'may,' 'can') and guidance notes for clarity. Records of training attendance and comprehension assessments must be maintained in the OH&S management system for a minimum of 3 years. Non-compliance with training requirements will result in retraining and corrective actions.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6922,
+        "SubPolicyId": 11395,
+        "ComplianceTitle": "Bi-Annual Review of ISO 45001 Terms and Definitions",
+        "ComplianceItemDescription": "The Health and Safety Manager is required to conduct bi-annual reviews of all terms and definitions within the ISO 45001 standard. Reviews must be completed within 30 days of the scheduled date. Any updates or modifications to terms must be approved by the Quality Assurance team before implementation. The revised glossary shall be disseminated to all relevant stakeholders and integrated into the organization's training materials. Records of term reviews, modifications, and approvals must be maintained in a secure electronic repository for a minimum of 3 years.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6923,
+        "SubPolicyId": 11396,
+        "ComplianceTitle": "Context Analysis Implementation Process",
+        "ComplianceItemDescription": "The organization must establish a structured process for conducting context analysis as per the Context of the Organization Policy. This process includes identifying internal and external factors that can impact OH&S performance. The OH&S manager shall lead this analysis annually, documenting the findings in a structured report. The management team must review the identified factors and their implications on safety measures to determine necessary improvement actions. The context analysis report must be retained for a minimum of 3 years for audit purposes.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6924,
+        "SubPolicyId": 11397,
+        "ComplianceTitle": "Internal and External Context Analysis Review",
+        "ComplianceItemDescription": "The OH&S management team shall conduct an annual review of the internal and external context analysis to identify factors impacting OH&S performance. This review shall include assessing risks, opportunities, legal requirements, and stakeholder expectations. The results of the review, including any identified changes, shall be documented and presented to top management for approval. Records of the review, approved changes, and their impact on OH&S performance shall be retained for a minimum of 3 years for audit purposes.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6925,
+        "SubPolicyId": 11398,
+        "ComplianceTitle": "Annual Needs and Expectations Survey",
+        "ComplianceItemDescription": "All departments must conduct an annual survey to identify and document the needs and expectations of workers and other interested parties. The survey should include questions related to safety concerns, suggestions for improvement, and feedback on current practices. The Health and Safety Manager is responsible for coordinating and overseeing the survey process, ensuring that all relevant information is captured. The survey results must be compiled, analyzed, and integrated into the occupational health and safety management system.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6926,
+        "SubPolicyId": 11399,
+        "ComplianceTitle": "Determination of OH&S Management System Scope",
+        "ComplianceItemDescription": "The organization must conduct a thorough assessment of all activities, processes, and locations where workers are exposed to risks to define the scope of the OH&S management system. This assessment includes identifying potential hazards, evaluating their significance, and documenting the boundaries of the system. The responsible roles for scope determination, including [Roles], must follow a documented process that includes hazard identification, risk assessment, and stakeholder consultation. The scope statement must be reviewed annually by [Reviewing Role] to ensure relevance and effectiveness. Any changes to the scope require approval by [Approving Role] and communication to relevant stakeholders. Evidence of scope determination, hazard assessments, and stakeholder feedback must be retained for a minimum of [Retention Period].",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6927,
+        "SubPolicyId": 11400,
+        "ComplianceTitle": "Quarterly Hazard Identification and Risk Assessment Procedure",
+        "ComplianceItemDescription": "All identified hazards must be documented in the Hazard Register, including associated risks and proposed control measures, by the Health & Safety Manager at least quarterly. The Hazard Register shall be reviewed by the OH&S Committee monthly, and any overdue actions shall be escalated to Executive Management. Records of hazard identification, risk assessments, and control measures shall be maintained in a secure electronic database for a minimum of 5 years. The effectiveness of controls shall be monitored through leading and lagging indicators, with a target of reducing high-risk hazards by 20% annually.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6928,
+        "SubPolicyId": 11401,
+        "ComplianceTitle": "Quarterly OH&S Performance Review",
+        "ComplianceItemDescription": "Leadership shall conduct quarterly reviews of occupational health and safety (OH&S) performance to assess compliance with regulatory requirements and organizational objectives. These reviews must include a detailed analysis of incident reports, hazard identification outcomes, risk assessment findings, and progress towards achieving set objectives. The reviews shall be documented in a structured report format, highlighting key findings, areas for improvement, and action plans for addressing identified gaps. Evidence of these quarterly reviews, including meeting minutes, review reports, and action plans, must be maintained for a minimum of 3 years in a secure electronic format accessible to relevant stakeholders.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6929,
+        "SubPolicyId": 11401,
+        "ComplianceTitle": "Bi-annual Risk Assessment",
+        "ComplianceItemDescription": "Leadership shall conduct bi-annual risk assessments to identify, evaluate, and prioritize occupational health and safety (OH&S) risks within the organization. These assessments must involve a systematic review of workplace hazards, potential exposures, control measures effectiveness, and risk mitigation strategies. The risk assessment process should be documented in a standardized format, outlining identified risks, their severity, likelihood of occurrence, and proposed control measures. Records of bi-annual risk assessments, including assessment reports, risk registers, and action plans, must be retained for a minimum of 3 years in a secure electronic repository accessible to relevant stakeholders.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6930,
+        "SubPolicyId": 11402,
+        "ComplianceTitle": "Monthly Worker Consultations",
+        "ComplianceItemDescription": "The organization shall conduct monthly worker consultations as part of the Worker Participation Control subpolicy. These consultations must involve all workers and focus on discussing any OH&S concerns, hazards, or improvement suggestions. The consultations should be documented with meeting minutes, including identified issues, proposed solutions, and action items. Workers' participation in these consultations is mandatory, and their feedback must be taken into consideration for decision-making processes. Evidence of these consultations must be retained for a minimum of 5 years in a centralized database accessible to authorized personnel.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6931,
+        "SubPolicyId": 11402,
+        "ComplianceTitle": "Bi-annual OH&S Training Sessions",
+        "ComplianceItemDescription": "The organization shall provide bi-annual OH&S training sessions to all workers as part of the Worker Participation Control subpolicy. These training sessions must cover relevant OH&S topics, hazard identification, reporting procedures, emergency response protocols, and worker rights and responsibilities. Attendance and participation in these sessions are mandatory, and training outcomes should be documented, including assessment results and feedback. Training records must be retained for a minimum of 5 years in a centralized database accessible to authorized personnel.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6932,
+        "SubPolicyId": 11403,
+        "ComplianceTitle": "Leadership Engagement and Support - Resource Allocation",
+        "ComplianceItemDescription": "All levels of leadership, including top management, department heads, and supervisors, must allocate specific resources towards occupational health and safety initiatives. This includes budgetary allocations, personnel assignments, and time commitments to ensure the successful implementation of safety programs. Resource allocation plans must be documented and reviewed annually to ensure adequacy and effectiveness. Evidence of resource allocation, such as budget reports, staffing plans, and project timelines, must be maintained and made available for audit purposes.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6933,
+        "SubPolicyId": 11403,
+        "ComplianceTitle": "Leadership Engagement and Support - Incident Investigation",
+        "ComplianceItemDescription": "Leadership, including top management, department heads, and supervisors, must actively participate in incident investigations following safety incidents. This includes conducting root cause analyses, implementing corrective actions, and communicating findings to employees. Incident investigation reports must be documented, reviewed by leadership, and shared with relevant stakeholders within 72 hours of the incident occurrence. Evidence of leadership involvement in incident investigations and implementation of corrective actions must be maintained for a minimum of 3 years.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6934,
+        "SubPolicyId": 11404,
+        "ComplianceTitle": "Incident Reporting and Investigation Procedure",
+        "ComplianceItemDescription": "All workplace incidents, near-misses, and accidents must be reported to the designated Health and Safety Executive (HSE) personnel within 24 hours of occurrence. The HSE personnel are responsible for initiating investigations within 48 hours, collecting relevant evidence, conducting root cause analysis, and proposing corrective actions. Incident reports, witness statements, investigation findings, and corrective action plans must be stored securely in a centralized database for a minimum of 5 years. Any exceptions to the reporting or investigation process must be documented, approved by the HSE manager, and escalated if necessary for further review and resolution. Compliance with ISO 45001 requirements for incident management is mandatory.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6935,
+        "SubPolicyId": 11405,
+        "ComplianceTitle": "Documentation of Roles and Responsibilities",
+        "ComplianceItemDescription": "All personnel involved in the OH&S management system must have clearly defined roles, responsibilities, and authorities documented. This documentation should include specific tasks related to OH&S performance improvement, legal compliance, and achievement of OH&S objectives. The OH&S manager is responsible for defining and documenting these roles annually or whenever there are changes in personnel or OH&S requirements. The documentation should be stored in a centralized repository accessible to all relevant personnel. Regular audits should be conducted to verify compliance with assigned roles and responsibilities.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6936,
+        "SubPolicyId": 11406,
+        "ComplianceTitle": "Establishment of Worker Consultation and Participation Framework",
+        "ComplianceItemDescription": "The organization must establish a clear communication channel for workers to provide input on OH&S matters. This includes setting up feedback mechanisms and platforms for effective worker consultation. Roles and responsibilities for facilitating worker engagement should be clearly defined. Mechanisms for documenting consultation outcomes, decisions, and action plans must be in place. Regular training on consultation processes and OH&S requirements should be provided to ensure effective worker participation.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6937,
+        "SubPolicyId": 11407,
+        "ComplianceTitle": "Establishment of OH&S Policy Documentation",
+        "ComplianceItemDescription": "Top management must ensure the OH&S policy is documented in a clear and accessible manner. The documentation should include commitments to provide safe working conditions, fulfill legal requirements, eliminate hazards, ensure continual improvement, and promote worker consultation and participation. The documentation must be regularly reviewed and updated as needed to reflect the organization's current context and objectives. Evidence of compliance includes documented policy statements, records of policy reviews, and communication logs.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6938,
+        "SubPolicyId": 11408,
+        "ComplianceTitle": "Assignment of Responsibility for OH&S Conformance",
+        "ComplianceItemDescription": "Top management must assign responsibility for ensuring OH&S management system conformance and reporting on performance. This assignment should be clearly communicated and documented. The responsibility includes ensuring that the OH&S management system complies with the requirements of ISO 45001 and reporting on its performance to top management. The assignment should be made within 30 days of the establishment of the OH&S management system. Evidence of assignment and communication should be maintained in the form of documented roles and responsibilities.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6939,
+        "SubPolicyId": 11409,
+        "ComplianceTitle": "Establishment of Worker Consultation Process",
+        "ComplianceItemDescription": "The organization must establish a formal process for worker consultation and participation in all aspects of the OH&S management system. This process should include regular meetings, feedback mechanisms, and channels for workers to raise concerns or suggestions. The consultation process must be documented, communicated to all workers, and reviewed periodically to ensure effectiveness. Evidence of worker participation and feedback should be recorded and maintained.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6940,
+        "SubPolicyId": 11409,
+        "ComplianceTitle": "Training and Resources for Worker Participation",
+        "ComplianceItemDescription": "The organization must provide adequate training, resources, and time for workers to effectively participate in the consultation process. Training should cover the importance of worker participation, how to provide feedback, and the organization's OH&S management system. Resources such as meeting rooms, communication tools, and support staff should be made available to facilitate worker participation. Evidence of training sessions, resource allocation, and worker participation should be documented.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 6941,
+        "SubPolicyId": 11410,
+        "ComplianceTitle": "Quarterly Hazard Identification Process Review",
+        "ComplianceItemDescription": "The organization shall conduct a quarterly review of the Hazard Identification Process as per designated safety officers. This review shall include a comprehensive assessment of work organization, social factors, routine and non-routine activities, past incidents, emergency situations, and changes in the organization. The findings and identified hazards must be documented, stored electronically in a secure database, and retained for a minimum of 5 years. The review process must also evaluate the effectiveness of hazard mitigation measures implemented based on previous assessments.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6942,
+        "SubPolicyId": 11411,
+        "ComplianceTitle": "Establishment of OH&S Policy Documentation",
+        "ComplianceItemDescription": "Top management must ensure that the OH&S policy is documented in a clear and accessible manner. The documentation should include commitments to provide safe working conditions, fulfill legal requirements, eliminate hazards, reduce OH&S risks, and promote continual improvement. The policy document must be regularly reviewed and updated as necessary to reflect any changes in the organization's purpose, size, or context. Evidence of compliance includes documented policy reviews, updates, and communication to interested parties.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6943,
+        "SubPolicyId": 11411,
+        "ComplianceTitle": "Communication of OH&S Policy",
+        "ComplianceItemDescription": "Top management must ensure that the OH&S policy is effectively communicated within the organization. Communication methods should be tailored to reach all employees, contractors, and other relevant parties. The communication process should include training sessions, awareness campaigns, and regular updates to ensure understanding and compliance. Evidence of compliance includes documented communication plans, training records, and feedback mechanisms.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6944,
+        "SubPolicyId": 11412,
+        "ComplianceTitle": "Risk Assessment Frequency Compliance",
+        "ComplianceItemDescription": "All employees must ensure that regular risk assessments are conducted by the HSE manager at defined intervals or whenever significant changes occur. The risk assessments should follow a structured process outlined in the Risk Assessment and Control Subpolicy, including hazard identification, risk assessment, control prioritization, and effectiveness monitoring. The HSE manager is responsible for documenting all findings, control measures, and effectiveness evaluations in a centralized database accessible to relevant stakeholders. Compliance with this requirement is mandatory to ensure proactive risk management and maintain a safe work environment.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6945,
+        "SubPolicyId": 11412,
+        "ComplianceTitle": "Hazard Reporting and Control Implementation Compliance",
+        "ComplianceItemDescription": "All employees are required to promptly report any hazards they identify to their supervisors. Supervisors must then ensure that control measures are implemented within specified timelines to mitigate the identified risks. The Hazard Reporting and Control Implementation Compliance aims to establish a proactive hazard reporting culture and timely implementation of control measures to enhance occupational health and safety. Documentation of hazard reports, control measures, and their effectiveness evaluations is essential for compliance monitoring and continuous improvement.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 6946,
+        "SubPolicyId": 11413,
+        "ComplianceTitle": "Annual Hazard Identification and Risk Assessment Process",
+        "ComplianceItemDescription": "The organization must conduct an annual hazard identification and risk assessment process as per the subpolicy. This process involves a designated team from various organizational levels identifying hazards, evaluating risks using a risk matrix, prioritizing risks based on severity and likelihood, and developing risk mitigation strategies. The results of this process must be documented, communicated to relevant stakeholders, and reviewed periodically for effectiveness. Evidence of completion and documentation of the process must be maintained for audit purposes.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6947,
+        "SubPolicyId": 11414,
+        "ComplianceTitle": "Quarterly Review of Legal and Other Requirements",
+        "ComplianceItemDescription": "The organization must conduct a quarterly review of all legal requirements and other obligations related to occupational health and safety. This review should be overseen by the OH&S management team and Compliance Officer. The review process involves identifying any new legal requirements, assessing changes to existing obligations, and evaluating the organization's compliance status. Updates and changes must be documented in a centralized repository, including evidence of compliance with each requirement. Any instances of non-compliance must trigger immediate corrective actions to ensure alignment with legal and other obligations.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6948,
+        "SubPolicyId": 11415,
+        "ComplianceTitle": "Annual Risk Assessment and Control Measures Review",
+        "ComplianceItemDescription": "The organization must conduct an annual risk assessment to identify hazards, assess risks and opportunities. This process should involve the OH&S management team and consider contextual issues, interested parties, and the OH&S management system scope. Control measures must be determined to achieve intended outcomes, prevent undesired effects, and drive continual improvement. The risk assessment results and control measures must be documented, securely stored, and reviewed periodically to ensure effectiveness. Key performance indicators related to risk mitigation and opportunity realization should be monitored regularly to track progress and compliance with ISO 45001 standards.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6949,
+        "SubPolicyId": 11416,
+        "ComplianceTitle": "Establishment of Hazard Identification Process",
+        "ComplianceItemDescription": "The organization must establish a systematic process for identifying hazards in the workplace. This process should involve input from OH&S managers, supervisors, and designated safety personnel. Hazard identification should consider various factors such as work organization, social aspects, routine and non-routine activities, past incidents, emergency situations, and changes in operations. The process must be conducted at least annually and documented in a secure electronic database. Evidence of identified hazards, assessed risks, and planned actions must be retained for a minimum of [X] years.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6950,
+        "SubPolicyId": 11417,
+        "ComplianceTitle": "Regular Hazard Assessments",
+        "ComplianceItemDescription": "All relevant stakeholders must conduct regular hazard assessments to identify potential risks within the organization. These assessments should consider work organization, social factors, routine and non-routine activities, past incidents, emergency situations, and organizational changes. The assessments must be documented in detail, including the identified hazards and their potential impact. The hazard register should be updated promptly with the assessment findings, and any identified risks should be communicated to the appropriate personnel in a timely manner.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6951,
+        "SubPolicyId": 11417,
+        "ComplianceTitle": "Stakeholder Involvement in Hazard Identification",
+        "ComplianceItemDescription": "All relevant stakeholders must actively participate in the hazard identification process to ensure comprehensive coverage of potential risks. Stakeholders should provide insights based on their areas of expertise and experience to enhance the hazard identification process. Their involvement should be documented, and their contributions should be acknowledged in the hazard register. Regular communication and collaboration among stakeholders are essential to effectively identify and mitigate hazards.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 6952,
+        "SubPolicyId": 11418,
+        "ComplianceTitle": "Establishment of Hazard Identification Process",
+        "ComplianceItemDescription": "The organization must establish a formal hazard identification process that involves the responsible department conducting ongoing activities to identify hazards. This process should consider work organization, routine and non-routine activities, past incidents, emergency situations, changes in operations, and knowledge of hazards. The process must involve relevant stakeholders, document identified hazards, assess associated risks, and implement controls to mitigate risks. Records of hazard identification activities and risk assessments must be retained for a minimum of [X] years in a secure electronic repository accessible to authorized personnel.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6953,
+        "SubPolicyId": 11418,
+        "ComplianceTitle": "Implementation of Risk Assessment Controls",
+        "ComplianceItemDescription": "The responsible department must implement controls based on risk assessments to mitigate identified risks. Controls should be designed to reduce the likelihood and severity of potential hazards. The process must involve relevant stakeholders in the selection and implementation of controls. Regular monitoring through audits, inspections, and incident reviews is required to ensure the effectiveness of controls. Any deviations or non-conformities must be reported and escalated to the OH&S management team for corrective action.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6954,
+        "SubPolicyId": 11419,
+        "ComplianceTitle": "Regular OH&S Risk and Opportunity Assessments",
+        "ComplianceItemDescription": "The responsible personnel are required to conduct regular assessments of occupational health and safety (OH&S) risks, opportunities, legal requirements, and other related risks using defined methodologies and criteria. These assessments must be proactive, systematic, and documented in accordance with the OH&S management system. The assessments should integrate legal requirements and other applicable requirements into the OH&S management system processes. Actions to address identified risks, opportunities, and legal requirements must be planned, implemented, and evaluated for effectiveness. The hierarchy of controls and outputs from the OH&S management system shall be considered in the planning process.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6955,
+        "SubPolicyId": 11420,
+        "ComplianceTitle": "Annual OH&S Risk Assessment Conducted by EHS Manager",
+        "ComplianceItemDescription": "The EHS Manager is required to conduct an annual OH&S risk assessment following a systematic process. This process must include hazard identification, evaluation of existing controls, and proactive risk mitigation strategies. The assessment methodology and criteria must be clearly defined and documented. Records of assessments and criteria must be stored in a secure electronic repository for a minimum of 5 years. Evidence of completion of assessments and implementation of risk mitigation actions must be maintained.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6956,
+        "SubPolicyId": 11420,
+        "ComplianceTitle": "Documentation of OH&S Risk Assessment Methodologies and Criteria",
+        "ComplianceItemDescription": "Establish and maintain documented information on OH&S risk assessment methodologies and criteria. The documentation should clearly outline the systematic process for assessing risks, including hazard identification, control effectiveness evaluation, and proactive risk mitigation strategies. Criteria for risk assessments must be defined to ensure consistent and thorough identification of hazards. The documented information must be stored in a secure electronic repository for a minimum of 5 years.",
+        "ComplianceType": "Internal",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 6957,
+        "SubPolicyId": 11421,
+        "ComplianceTitle": "Legal Requirements Determination Process Establishment",
+        "ComplianceItemDescription": "The organization must establish a formal process to determine and access up-to-date legal requirements applicable to hazards, OH&S risks, and the management system. This process should include regular reviews of relevant legislation, regulations, and industry standards to ensure compliance. The Legal Compliance Officer is responsible for monitoring and updating legal requirements quarterly, documenting any changes or updates. Evidence of compliance with legal requirements must be maintained, including records of legal research, updates, and communication with stakeholders.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6958,
+        "SubPolicyId": 11422,
+        "ComplianceTitle": "Competence Assessment Control - Assessment Schedule Compliance",
+        "ComplianceItemDescription": "All OH&S competence assessments must be conducted by designated competent personnel at regular intervals as defined by the organization's assessment schedule. The schedule should specify the frequency and timing of assessments to ensure timely identification of risks, opportunities, legal requirements, and other related areas. The assessment schedule must be reviewed and updated periodically to align with changing organizational needs and regulatory requirements. Evidence of compliance includes documented assessment dates, responsible personnel, and assessment outcomes.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6959,
+        "SubPolicyId": 11422,
+        "ComplianceTitle": "Competence Assessment Control - Documentation and Review Compliance",
+        "ComplianceItemDescription": "The assessment methodologies and criteria used in OH&S competence assessments must be documented and reviewed periodically to ensure relevance and effectiveness. The documentation should include detailed descriptions of assessment methods, criteria for evaluation, and any updates or revisions made to the assessment process. Regular reviews should be conducted to verify the adequacy and accuracy of the documented methodologies and criteria. Evidence of compliance includes documented assessment methodologies, criteria, review dates, and any revisions made.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6960,
+        "SubPolicyId": 11423,
+        "ComplianceTitle": "Assessment Methodologies and Criteria Definition",
+        "ComplianceItemDescription": "The organization must define methodologies and criteria for proactive risk assessment of OH&S risks and other risks. This includes establishing clear guidelines on how risks will be identified, assessed, and managed. The methodologies and criteria should be documented and communicated to relevant stakeholders. Regular reviews and updates to these methodologies and criteria are required to ensure they remain effective. Evidence of compliance will include documented methodologies, criteria, and communication records.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6961,
+        "SubPolicyId": 11423,
+        "ComplianceTitle": "Regular Conduct of Risk Assessments",
+        "ComplianceItemDescription": "OH&S managers and risk assessment teams must conduct risk assessments regularly to identify OH&S risks and other risks in the workplace. The assessments should be proactive, systematic, and documented. A schedule for conducting assessments should be established, and results should be recorded and retained for a specified period. Evidence of compliance will include documented assessment schedules, results, and retention records.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6962,
+        "SubPolicyId": 11424,
+        "ComplianceTitle": "Assessment of OH&S Opportunities and Other Opportunities",
+        "ComplianceItemDescription": "All OH&S improvement teams and management representatives must systematically identify and assess OH&S opportunities and other opportunities to enhance performance and improve the OH&S management system. This assessment process should be proactive, considering planned changes and organizational activities. Opportunities to adapt work, eliminate hazards, and improve the management system must be documented and retained for future reference. The documentation should include specific details on the identified opportunities, evaluation criteria, assessment results, and proposed actions.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6963,
+        "SubPolicyId": 11425,
+        "ComplianceTitle": "Implementation of OH&S Risk Assessment Methodology",
+        "ComplianceItemDescription": "All OH&S managers and risk assessors must conduct regular OH&S risk assessments using standardized tools and templates at least annually. The assessment process should include hazard identification, risk evaluation, and control effectiveness assessment. Assessment results, including identified hazards, risk levels, and control effectiveness, must be documented and securely stored for a minimum of 5 years. Any exceptions or deviations from the assessment process must be approved by the OH&S manager and documented for review.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6964,
+        "SubPolicyId": 11427,
+        "ComplianceTitle": "Establishment of Internal Communication Process",
+        "ComplianceItemDescription": "The organization must establish a clear internal communication process to prepare for and respond to emergency situations. This process should include defining roles and responsibilities, identifying required resources, setting timelines for completion, evaluating results, and integrating actions into business processes. Communication channels, methods, and frequency should be determined to ensure effective dissemination of information. The internal communication process shall be the responsibility of the OH&S management team, with designated individuals responsible for specific communication tasks. Communication activities should be conducted in real-time during emergencies and documented for future evaluation. Communication effectiveness shall be measured through response times, clarity of information, and feedback mechanisms. Records of communication activities and outcomes shall be retained for a minimum period of [X] years in a secure and accessible format.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6965,
+        "SubPolicyId": 11428,
+        "ComplianceTitle": "Establishment of External Communication Process",
+        "ComplianceItemDescription": "The organization must establish a structured process for external communication related to OH&S. This includes preparing for and responding to emergency situations, integrating actions into the OH&S management system processes, evaluating effectiveness, and considering best practices, technological options, and financial requirements. Roles and responsibilities for external communication must be clearly defined, resources allocated, timelines set, and evaluation indicators established. The process should be documented and communicated to all relevant stakeholders.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6966,
+        "SubPolicyId": 11429,
+        "ComplianceTitle": "Documentation of OH&S Objectives Annual Review",
+        "ComplianceItemDescription": "Designated OH&S managers are required to annually review and document OH&S objectives in a clear and measurable manner. This review should ensure that the objectives are Specific, Measurable, Achievable, Relevant, and Time-bound (SMART). The review process must be completed by the end of the first quarter each year using standardized templates stored in the centralized OH&S management system. Evidence of the review and updated objectives must be retained for audit purposes.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6967,
+        "SubPolicyId": 11429,
+        "ComplianceTitle": "Communication of Documented OH&S Objectives",
+        "ComplianceItemDescription": "Designated OH&S managers are required to communicate the documented OH&S objectives to all relevant stakeholders for awareness and alignment. This communication should be done promptly after the annual review process, ensuring that stakeholders understand the objectives, their role in achieving them, and the expected outcomes. Evidence of communication must be retained for audit purposes.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 6968,
+        "SubPolicyId": 11430,
+        "ComplianceTitle": "Development of OH&S Plans - Detailed Action Steps",
+        "ComplianceItemDescription": "This compliance requires the OH&S planning team to develop detailed action steps in the OH&S plans to achieve the documented objectives. The action steps should be specific, measurable, achievable, relevant, and time-bound (SMART). Each action step must have assigned responsibilities, clear timelines for completion, and resource allocations. The OH&S director must ensure that the action steps are aligned with the overall OH&S objectives and contribute to continuous improvement.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6969,
+        "SubPolicyId": 11431,
+        "ComplianceTitle": "Competence Assessment and Training Program Compliance",
+        "ComplianceItemDescription": "All employees must undergo an annual competence assessment conducted by the HR department to identify training needs. Based on the assessment outcomes, appropriate training programs must be developed and completed within 6 months. Competence evaluation records must be documented and stored in the HR database for a minimum of 3 years. Evidence of completion and effectiveness of training programs must be maintained, including assessment results and training certificates.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6970,
+        "SubPolicyId": 11432,
+        "ComplianceTitle": "Establishment of Document Control Procedure",
+        "ComplianceItemDescription": "The organization must develop a documented procedure for controlling all forms of documented information within the OH&S management system. This procedure should define roles and responsibilities, specify document formats, establish review and approval processes, determine access controls, and set retention periods. The procedure must be established within 30 days of policy approval and reviewed annually.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6971,
+        "SubPolicyId": 11433,
+        "ComplianceTitle": "Competence Evaluation and Training Compliance",
+        "ComplianceItemDescription": "All workers' competence shall be evaluated annually by the HR department to ensure skills affecting OH&S performance are adequate. Training programs must be conducted bi-annually for all workers to enhance competence levels. Competence assessments and training records shall be stored electronically for a minimum of 5 years. Any exceptions to the training schedule must be approved by the HR manager to maintain compliance. Evidence of competence evaluations, training programs, and approvals must be documented and readily available for audit purposes.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6972,
+        "SubPolicyId": 11434,
+        "ComplianceTitle": "Establishment of Internal Communication Processes",
+        "ComplianceItemDescription": "The organization must establish internal communication processes relevant to the OH&S management system. This includes determining what information needs to be communicated, when it should be communicated, and how it should be communicated, taking into account diversity aspects. Internal communication processes should be documented and regularly audited to ensure effectiveness. Communication audits must be conducted quarterly to assess the efficiency of the internal communication processes. Feedback mechanisms such as suggestion boxes and surveys should be utilized to gather input from employees. All internal communication records must be securely stored for a minimum of 3 years.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6973,
+        "SubPolicyId": 11435,
+        "ComplianceTitle": "Competence Evaluation and Training Program",
+        "ComplianceItemDescription": "All workers must undergo an annual competence evaluation conducted by the HR department to assess their skills and knowledge. The evaluation should include identifying necessary competencies, providing relevant training, and documenting evidence of competence. Training effectiveness must be assessed through post-training evaluations, and any competency gaps addressed through additional training or re-assignment. HR training records must store documented evidence of competence evaluations and training.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6974,
+        "SubPolicyId": 11436,
+        "ComplianceTitle": "Establishment of Internal Communication Processes",
+        "ComplianceItemDescription": "All employees must receive regular updates on changes to the Occupational Health and Safety (OH&S) management system within 24 hours of implementation. The Communication Manager is responsible for disseminating this information through designated communication channels such as email, intranet, or team meetings. Employees are required to acknowledge receipt of these updates to ensure understanding and compliance. Evidence of communication must be documented and stored in a centralized repository accessible to relevant stakeholders.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6975,
+        "SubPolicyId": 11436,
+        "ComplianceTitle": "Alignment of External Communication with Legal Requirements",
+        "ComplianceItemDescription": "All external communication must align with relevant legal requirements and regulations specific to the industry. The Communication Manager is responsible for ensuring that all external communications, including press releases, public statements, and customer communications, comply with applicable laws and regulations. Any deviations from legal requirements must be approved by the Legal Department before dissemination. Evidence of legal compliance in external communications must be documented and stored in a centralized repository accessible to relevant stakeholders.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6976,
+        "SubPolicyId": 11437,
+        "ComplianceTitle": "Implementation of Internal Communication Process",
+        "ComplianceItemDescription": "The organization must establish and implement the internal communication process as per the subpolicy 'Internal Communication Process'. This includes ensuring that relevant OH&S information is effectively shared among different levels and functions within the organization. Workers should be encouraged and enabled to contribute to continual improvement through efficient communication channels. The process must be documented in detail, outlining the communication flow, responsible roles, and frequency of updates. Evidence of compliance will include documented communication records, meeting minutes, and feedback mechanisms.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6977,
+        "SubPolicyId": 11438,
+        "ComplianceTitle": "Quarterly External Communication Updates",
+        "ComplianceItemDescription": "External communication updates must be communicated quarterly to external stakeholders as per legal requirements. The OH&S communication team is responsible for managing this process. The updates should include accurate, reliable, and compliant OH&S information. Records of these communications must be maintained in both physical and electronic formats for a minimum of 5 years. Regular reviews should be conducted to ensure accuracy and compliance.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6978,
+        "SubPolicyId": 11439,
+        "ComplianceTitle": "Establishment of Internal Communication Processes",
+        "ComplianceItemDescription": "The responsible department must define and document internal communication processes that consider diversity aspects and legal requirements. This includes regular communication among different levels and functions within the organization to ensure effective dissemination of changes to the OH&S management system. The internal communication processes should be established within 30 days of any change to the management system, with clear procedures for information sharing and feedback mechanisms. Evidence of internal communication, such as meeting minutes or email communications, must be retained for a minimum of 2 years.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6979,
+        "SubPolicyId": 11439,
+        "ComplianceTitle": "Establishment of External Communication Processes",
+        "ComplianceItemDescription": "The responsible department must define and document external communication processes that adhere to established procedures and legal obligations related to the OH&S management system. External communication should be conducted in accordance with regulatory requirements and within specified timelines. All external communication must be documented and retained for a minimum of 3 years to provide evidence of compliance.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6980,
+        "SubPolicyId": 11440,
+        "ComplianceTitle": "Establishment of Communication Processes",
+        "ComplianceItemDescription": "The organization must establish communication processes that consider diversity aspects, legal requirements, and the reliability of OH&S information. Internal communication should enable continual improvement, while external communication must align with legal obligations. Documented information retention is mandatory to evidence communication activities. The responsible roles include OH&S managers, communication officers, and relevant department heads. Communication processes should be reviewed annually, with documented evidence stored in a secure digital repository for a minimum of 5 years.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6981,
+        "SubPolicyId": 11441,
+        "ComplianceTitle": "Regular Review and Update of Documented Information",
+        "ComplianceItemDescription": "The responsible personnel, such as the OH&S manager, must review and update all documented information related to emergency preparedness at least annually. This review should ensure that the information is current, accurate, and relevant to the organization's emergency response procedures. Updates must be documented with clear details on the changes made, reasons for the changes, and the date of the update. Evidence of the review and update process, including any approvals or sign-offs, must be maintained for audit purposes.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6982,
+        "SubPolicyId": 11441,
+        "ComplianceTitle": "Controlled Storage and Access of Documented Information",
+        "ComplianceItemDescription": "All documented information related to emergency preparedness must be stored electronically and in hard copy format. Access to this information should be restricted to authorized personnel only, with clear guidelines on who can access, modify, or distribute the information. Changes made to the documented information must be documented, version-controlled, and retained for a minimum of [X] years. Regular audits should be conducted to ensure compliance with access restrictions and version control procedures.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6983,
+        "SubPolicyId": 11442,
+        "ComplianceTitle": "Establishment of Performance Evaluation Criteria",
+        "ComplianceItemDescription": "The organization must establish clear criteria for performance evaluations of the occupational health and safety management system. These criteria should include measurable indicators for assessing the effectiveness of OH&S processes, controls, and actions as determined in Clause 6 of ISO 45001:2018. The OH&S manager is responsible for defining and updating the performance evaluation criteria annually. The criteria shall be reviewed by the OH&S committee for suitability and adequacy. Performance evaluations shall be conducted bi-annually, with documented evidence of the evaluation results, findings, and proposed actions. The results of the evaluations shall be communicated to relevant stakeholders, including management and workers. Documented information related to performance evaluations shall be retained for a minimum of 3 years in electronic format in a secure, accessible location.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6984,
+        "SubPolicyId": 11443,
+        "ComplianceTitle": "Control of Documented Information - Document Identification and Format",
+        "ComplianceItemDescription": "All documented information within the organization must be appropriately identified and formatted according to the established guidelines. This includes assigning unique identifiers, titles, and formats to ensure consistency and ease of retrieval. The Document Control Manager is responsible for overseeing this process and ensuring compliance with regulatory requirements. Any new documented information must undergo a review process to verify its accuracy and relevance before approval.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6985,
+        "SubPolicyId": 11443,
+        "ComplianceTitle": "Control of Documented Information - Document Access and Distribution",
+        "ComplianceItemDescription": "Access to documented information within the organization must be controlled and restricted based on the individual's role and responsibilities. The Document Control Manager is responsible for managing access permissions, ensuring that only authorized personnel can view, edit, or distribute sensitive information. Distribution of documented information must follow secure channels and protocols to prevent unauthorized access or leakage.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6986,
+        "SubPolicyId": 11444,
+        "ComplianceTitle": "Quarterly Compliance Evaluation Audit",
+        "ComplianceItemDescription": "The Compliance department is required to conduct quarterly compliance evaluations to assess adherence to OH&S controls. Audits must be conducted using standardized checklists and procedures approved by the OH&S management team. The compliance evaluation report must document all findings, including identified gaps and non-conformities, along with proposed corrective actions. This report must be retained for a minimum of 3 years to ensure traceability and accountability. The success of the compliance evaluation process will be measured by the percentage of identified non-conformities addressed within 30 days of the audit.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6987,
+        "SubPolicyId": 11445,
+        "ComplianceTitle": "Management of Change Process - Change Impact Assessment",
+        "ComplianceItemDescription": "All proposed changes that impact OH&S performance must undergo a Change Impact Assessment conducted by the Change Management department. This assessment evaluates potential risks and identifies necessary mitigation measures. The assessment process includes documenting the nature of the change, its potential impact on OH&S risks, proposed mitigation actions, and approval criteria. Evidence of the assessment, including risk evaluations and mitigation plans, must be maintained for a minimum of 5 years to ensure traceability and accountability.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6988,
+        "SubPolicyId": 11446,
+        "ComplianceTitle": "Supplier Assessment Compliance",
+        "ComplianceItemDescription": "The organization shall conduct annual assessments of suppliers based on OH&S criteria to ensure conformity to its management system. The Procurement department is responsible for evaluating supplier performance, including their OH&S practices, certifications, and compliance with relevant regulations. The assessment process shall include on-site audits, document reviews, and interviews with key supplier personnel. Evidence of supplier assessments, including audit reports, interview transcripts, and compliance certificates, must be retained for a minimum of 3 years to demonstrate adherence to procurement control requirements.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6989,
+        "SubPolicyId": 11447,
+        "ComplianceTitle": "Annual Internal Audit Process Compliance",
+        "ComplianceItemDescription": "The internal audit process must be conducted annually by trained auditors independent of the audited areas. The audit plan, findings, and corrective actions must be documented and retained for a minimum of 3 years. Auditors should follow a documented audit plan, conduct on-site inspections, interview personnel, and review relevant documentation. Audit reports should include identified hazards, assessed risks, control effectiveness, and recommendations for improvement. The OH&S manager is responsible for overseeing the process and ensuring timely corrective actions.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6990,
+        "SubPolicyId": 11448,
+        "ComplianceTitle": "Establishment of Internal Audit Program",
+        "ComplianceItemDescription": "The organization must establish a documented internal audit program specifying the frequency, scope, and methodologies for conducting internal audits. This program should be developed by the OH&S management representative and include details on the designated auditors, audit checklists, and reporting mechanisms. The internal audit program must be reviewed and updated annually to ensure its effectiveness. Evidence of compliance includes the documented internal audit program, audit schedules, and audit reports.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6991,
+        "SubPolicyId": 11448,
+        "ComplianceTitle": "Documentation and Storage of Audit Reports",
+        "ComplianceItemDescription": "Audit findings and corrective actions must be documented in the audit reports and stored in a secure electronic repository for a minimum of 5 years. The audit reports should include details on audit scope, findings, non-conformities, corrective actions taken, and verification of corrective actions. Access controls should be implemented to ensure the confidentiality and integrity of audit reports. Evidence of compliance includes stored audit reports, access logs, and audit report templates.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 6992,
+        "SubPolicyId": 11449,
+        "ComplianceTitle": "Internal Audit Programme Implementation - Audit Scheduling",
+        "ComplianceItemDescription": "The organization must establish an annual audit schedule for the Internal Audit Programme, outlining the frequency, duration, and scope of audits. The schedule must be approved by the OH&S Manager and communicated to all relevant stakeholders. Audits should be planned in advance to ensure adequate resources and time allocation. The schedule should include pre-audit meetings, on-site inspections, interviews, and post-audit reporting. Evidence of the approved audit schedule and adherence to it must be maintained.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6993,
+        "SubPolicyId": 11449,
+        "ComplianceTitle": "Internal Audit Programme Implementation - Audit Reporting",
+        "ComplianceItemDescription": "Following the completion of internal audits, auditors must document their findings in a structured report format, including observations, non-conformities, corrective actions, and recommendations. The audit report should be reviewed by the OH&S Manager for accuracy and completeness before being communicated to relevant stakeholders. Evidence of audit reports, review process, and communication must be retained for a minimum of 3 years.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6994,
+        "SubPolicyId": 11450,
+        "ComplianceTitle": "Contractor Selection Criteria Compliance",
+        "ComplianceItemDescription": "In accordance with the Contractor Management subpolicy, the organization must define and apply occupational health and safety criteria for contractor selection. This includes specifying the criteria in procurement processes and contractual documents. The criteria should cover aspects such as safety training, certification, insurance, and compliance with OH&S regulations. Evidence of compliance will include documented procurement processes, contractual agreements, and records of contractor evaluations.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6995,
+        "SubPolicyId": 11451,
+        "ComplianceTitle": "Outsourcing Control Alignment",
+        "ComplianceItemDescription": "All outsourced functions and processes must align with legal and system requirements as defined within the OH&S management system. This alignment includes ensuring that the type and degree of control are clearly specified and implemented. The organization must coordinate effectively with external providers to maintain this alignment. Documented information on outsourcing arrangements must be regularly updated and accessible to relevant stakeholders. Evidence of compliance will be required through audit trails and documentation reviews.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6996,
+        "SubPolicyId": 11452,
+        "ComplianceTitle": "Emergency Response Plan Development",
+        "ComplianceItemDescription": "The organization must develop a comprehensive emergency response plan that outlines procedures for responding to various emergency situations. The plan should include specific regulatory requirements such as providing first aid, training workers, testing response capabilities, and communicating with stakeholders. The plan must be developed within 90 days of the subpolicy implementation and should be reviewed and updated annually. Evidence of compliance includes documented emergency response procedures, training records, test results, and communication logs.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6997,
+        "SubPolicyId": 11452,
+        "ComplianceTitle": "Emergency Response Plan Testing and Evaluation",
+        "ComplianceItemDescription": "The organization must conduct regular testing and evaluation of the emergency response plan to ensure its effectiveness. Testing should include simulated emergency scenarios, drills, and tabletop exercises. Evaluation should assess the response capabilities, identify areas for improvement, and involve all stakeholders. Testing and evaluation must be conducted at least twice a year, with results documented and shared with relevant parties.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 6998,
+        "SubPolicyId": 11453,
+        "ComplianceTitle": "Internal Audit Program Establishment",
+        "ComplianceItemDescription": "The organization must establish an internal audit program to assess the conformity and effectiveness of the OH&S management system. This includes defining audit criteria, selecting auditors, reporting audit results, and taking corrective actions. The audit program must be documented and communicated to relevant stakeholders. Internal audits shall be conducted at planned intervals as per the defined audit criteria. The audit program must address the importance of processes, previous audit results, and involve relevant stakeholders. Documented information on audit implementation and results shall be retained for review.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 6999,
+        "SubPolicyId": 11454,
+        "ComplianceTitle": "Management Review Periodic Evaluation",
+        "ComplianceItemDescription": "Top management shall conduct periodic reviews of the OH&S management system to ensure its suitability, adequacy, and effectiveness. These reviews must be conducted at planned intervals, not exceeding six months, to evaluate the continuing suitability and effectiveness of the OH&S management system. The review process includes assessing actions from previous reviews, changes in internal and external issues, compliance with legal requirements, OH&S performance trends, resource adequacy, and opportunities for improvement. Evidence of these reviews must be documented, including meeting minutes, action plans, and identified improvement opportunities.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 7000,
+        "SubPolicyId": 11455,
+        "ComplianceTitle": "Internal Audit Control Frequency Compliance",
+        "ComplianceItemDescription": "All internal audits must be conducted at planned intervals as defined in the internal audit program. The frequency of internal audits should align with organizational requirements, OH&S policy, objectives, and the ISO 45001 standard. Internal auditors must adhere to the scheduled audit timelines and ensure timely completion of audit activities. Evidence of audit frequency compliance should be documented in the internal audit reports, including audit dates, scope, and findings. Non-compliance with audit frequency requirements may result in inadequate monitoring of OH&S performance and regulatory compliance.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 7001,
+        "SubPolicyId": 11456,
+        "ComplianceTitle": "Timely Incident Reporting",
+        "ComplianceItemDescription": "All incidents must be reported immediately by the involved personnel to the designated OH&S officer. This includes any accidents, near misses, or hazardous situations. The reporting should be done within 24 hours of the incident occurring. The personnel must provide detailed information about the incident, including date, time, location, individuals involved, and a brief description of what happened. Evidence such as photos, videos, or witness statements may be required to support the report.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 7002,
+        "SubPolicyId": 11456,
+        "ComplianceTitle": "Thorough Investigation and Root Cause Analysis",
+        "ComplianceItemDescription": "Investigations into reported incidents shall be initiated within 24 hours of the incident occurring. Relevant stakeholders, including supervisors, safety officers, and HR personnel, must be involved in the investigation process. A thorough root cause analysis must be conducted within 5 days of the incident, identifying the underlying factors that contributed to the incident. The analysis should consider human factors, equipment failures, environmental conditions, and organizational factors. The findings of the investigation must be documented in detail, including the identified root causes and contributing factors.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 7003,
+        "SubPolicyId": 11457,
+        "ComplianceTitle": "Establishment of Key Performance Indicators",
+        "ComplianceItemDescription": "The organization must define clear key performance indicators (KPIs) related to health and safety metrics. These KPIs should align with organizational goals and objectives, such as incident rates, near-miss reporting, safety training completion rates, and compliance with safety procedures. The Health and Safety Manager is responsible for identifying, documenting, and communicating these KPIs to relevant stakeholders. Regular reviews of KPI performance should be conducted to assess progress towards safety goals.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 7004,
+        "SubPolicyId": 11457,
+        "ComplianceTitle": "Monthly Monitoring Activities",
+        "ComplianceItemDescription": "The organization must conduct monthly monitoring activities to track health and safety performance indicators. The Safety Officer is responsible for collecting data related to incident reports, near-misses, safety audits, and compliance checks. Monitoring activities should be conducted according to a predefined schedule, documented in the OH&S management system, and reviewed by the Health and Safety Manager for accuracy and completeness. Any deviations from expected performance levels should trigger immediate corrective actions.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 7005,
+        "SubPolicyId": 11458,
+        "ComplianceTitle": "Incident Reporting and Investigation Procedure",
+        "ComplianceItemDescription": "All incidents and nonconformities within the OH&S management system must be reported immediately to the designated incident manager. The incident manager will initiate an investigation within 24 hours of the report. The investigation must include interviewing witnesses, collecting evidence, and determining root causes. A detailed report outlining the incident, findings, and recommended corrective actions must be completed within 5 business days. All documentation related to the incident and investigation must be retained for a minimum of 5 years.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 7006,
+        "SubPolicyId": 11459,
+        "ComplianceTitle": "Establishment of Incident Reporting Procedures",
+        "ComplianceItemDescription": "The organization must establish clear procedures for incident reporting, including timelines for reporting incidents, procedures for documenting incidents, and guidelines for investigating incidents. These procedures should outline the roles and responsibilities of OH&S personnel designated to receive incident reports, investigate them promptly, and take corrective actions. Evidence of compliance includes documented incident reporting procedures, training records for designated personnel, and incident investigation reports.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 7007,
+        "SubPolicyId": 11460,
+        "ComplianceTitle": "Worker Consultation and Participation Process Meetings",
+        "ComplianceItemDescription": "All workers must participate in quarterly meetings with management to discuss occupational health and safety issues. Workers are required to provide feedback on proposed changes and identify hazards. The responsible department must document all feedback received and actions taken in response. Meeting minutes and action plans must be retained for a minimum of two years for audit purposes. Ad-hoc meetings should be scheduled as needed.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 7008,
+        "SubPolicyId": 11461,
+        "ComplianceTitle": "Quarterly OH&S Opportunities Assessment",
+        "ComplianceItemDescription": "The organization must conduct a quarterly assessment of OH&S opportunities to identify potential improvements in OH&S performance. The assessment shall be led by the EHS Manager using surveys, interviews, and observations. Results and improvement recommendations must be documented in the OH&S opportunities register stored in the centralized EHS database. The assessment process should involve relevant stakeholders and aim to achieve a 10% improvement in OH&S performance within six months of implementing identified opportunities.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 7009,
+        "SubPolicyId": 11462,
+        "ComplianceTitle": "Hierarchy of Controls Implementation - Hazard Elimination",
+        "ComplianceItemDescription": "The organization must prioritize hazard elimination by removing hazards, substituting hazardous materials, and implementing engineering controls. This process should be continuous, with regular inspections and training sessions conducted by the Health and Safety Department. Records of hazard assessments, control measures, and training sessions must be maintained for a minimum of 3 years to ensure compliance with regulatory requirements.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 7010,
+        "SubPolicyId": 11462,
+        "ComplianceTitle": "Hierarchy of Controls Implementation - Engineering Controls",
+        "ComplianceItemDescription": "The organization must implement engineering controls to reduce or eliminate workplace hazards. This includes the design and installation of physical barriers, ventilation systems, and other engineering solutions to protect employees. The Health and Safety Department is responsible for overseeing the implementation of these controls and ensuring their effectiveness through regular monitoring and maintenance.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 7011,
+        "SubPolicyId": 11463,
+        "ComplianceTitle": "Management of Change Process Risk Assessment",
+        "ComplianceItemDescription": "All changes in technology, equipment, facilities, and work practices must undergo a comprehensive risk assessment conducted by the Health and Safety Department. The risk assessment should utilize design reviews and other appropriate methodologies to identify and evaluate occupational health and safety risks. The organization must ensure that the risk assessment is completed within 30 days of the proposed change and documented with clear findings, recommendations, and risk mitigation strategies. Evidence of the risk assessment, including records of identified hazards, risks, and control measures, must be retained for a minimum of 5 years for audit purposes.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 7012,
+        "SubPolicyId": 11464,
+        "ComplianceTitle": "Procurement Hazard Assessment",
+        "ComplianceItemDescription": "The Procurement Department must conduct thorough hazard assessments on all products, materials, equipment, and services before their introduction into the workplace. This assessment should identify and eliminate potential hazards that could impact the health and safety of employees. The hazard assessment process must be documented, including the identification of hazards, risk evaluation, control measures, and verification of effectiveness. Records of hazard assessments must be maintained for a minimum of 5 years to demonstrate compliance.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 7013,
+        "SubPolicyId": 11464,
+        "ComplianceTitle": "Contractor Health and Safety Compliance",
+        "ComplianceItemDescription": "The organization must verify the capabilities, performance records, and compliance with health and safety standards of all contractors before engaging their services. Contractors must meet specific health and safety performance criteria, provide documented safety training to their employees, and adhere to the organization's occupational health and safety standards. Records of contractor assessments, qualifications, safety performance, and training must be maintained for a minimum of 5 years to ensure ongoing compliance.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 7014,
+        "SubPolicyId": 11466,
+        "ComplianceTitle": "Establishment of Criteria for Comparison",
+        "ComplianceItemDescription": "In accordance with the Criteria Establishment and Indicator Usage subpolicy, the responsible OH&S manager must establish clear and specific criteria for comparison within the organization. These criteria should encompass incidents, legal requirements, and other relevant factors that are essential for measuring performance effectively. The establishment of criteria must be documented and maintained in a centralized database. The OH&S manager should ensure that the criteria are periodically reviewed for relevance and effectiveness, with records of these reviews also being stored for a minimum of 3 years. Compliance with this requirement is mandatory for all OH&S managers.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 7015,
+        "SubPolicyId": 11467,
+        "ComplianceTitle": "Internal Audit Objectivity Control - Auditor Independence",
+        "ComplianceItemDescription": "Internal auditors shall not audit their own work to maintain objectivity and impartiality. This requirement is in line with regulatory standards such as Sarbanes-Oxley Act Section 404. Auditors must be independent from the areas they are auditing and should not have any conflicts of interest. The organization must ensure that internal auditors do not participate in audits where they have a personal or financial interest. Evidence of compliance includes documented audit assignments and confirmation of auditor independence.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 7016,
+        "SubPolicyId": 11468,
+        "ComplianceTitle": "Incident Reporting and Investigation Process",
+        "ComplianceItemDescription": "All incidents, nonconformities, and corrective actions must be promptly reported to the designated authority within 24 hours of occurrence. A detailed incident report form must be completed, including information on the date, time, location, individuals involved, and a description of the incident. The investigation process must commence within 48 hours of the incident report submission, involving a designated investigation team to conduct a thorough analysis of contributing factors.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 7017,
+        "SubPolicyId": 11468,
+        "ComplianceTitle": "Root Cause Analysis and Corrective Action Implementation",
+        "ComplianceItemDescription": "All incidents and nonconformities must undergo a root cause analysis within 72 hours of occurrence to identify underlying factors contributing to the incident. Based on the analysis, corrective actions must be proposed and implemented using the hierarchy of controls, including hazard elimination, substitution, engineering controls, administrative controls, and personal protective equipment. The effectiveness of corrective actions must be monitored regularly to prevent reoccurrence.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 7018,
+        "SubPolicyId": 11469,
+        "ComplianceTitle": "Implementation of Continual Improvement Control",
+        "ComplianceItemDescription": "All employees, including top management, OH&S personnel, and general staff, must actively participate in the continual improvement process outlined in the subpolicy. This includes identifying improvement opportunities, assessing their impact on occupational health and safety, implementing necessary changes, and monitoring the effectiveness of improvement initiatives. The process must be documented and tracked in a centralized repository for a minimum of 5 years. Evidence of improvement actions, performance metrics, and stakeholder feedback must be regularly reviewed and updated.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      }
+    ],
+    "complianceapproval": []
+  },
+  "schema": {
+    "compliance": {
+      "columns": [
+        "ComplianceId",
+        "SubPolicyId",
+        "PreviousComplianceVersionId",
+        "Identifier",
+        "ComplianceTitle",
+        "ComplianceItemDescription",
+        "ComplianceType",
+        "Scope",
+        "Objective",
+        "BusinessUnitsCovered",
+        "IsRisk",
+        "PossibleDamage",
+        "mitigation",
+        "Criticality",
+        "MandatoryOptional",
+        "ManualAutomatic",
+        "Impact",
+        "Probability",
+        "MaturityLevel",
+        "ActiveInactive",
+        "PermanentTemporary",
+        "CreatedByName",
+        "CreatedByDate",
+        "ComplianceVersion",
+        "Status",
+        "Applicability",
+        "PotentialRiskScenarios",
+        "RiskType",
+        "RiskCategory",
+        "RiskBusinessImpact",
+        "FrameworkId",
+        "retentionExpiry",
+        "data_inventory",
+        "TenantId",
+        "ai_bse_enabled",
+        "AuditFrequency"
+      ],
+      "row_count": 108,
+      "column_details": [
+        {
+          "name": "ComplianceId",
+          "type": "int",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "SubPolicyId",
+          "type": "int",
+          "null": "NO",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PreviousComplianceVersionId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Identifier",
+          "type": "varchar(500)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ComplianceTitle",
+          "type": "varchar(1000)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ComplianceItemDescription",
+          "type": "longtext",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ComplianceType",
+          "type": "varchar(100)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Scope",
+          "type": "longtext",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Objective",
+          "type": "longtext",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "BusinessUnitsCovered",
+          "type": "varchar(1000)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "IsRisk",
+          "type": "tinyint(1)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PossibleDamage",
+          "type": "longtext",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "mitigation",
+          "type": "longtext",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Criticality",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "MandatoryOptional",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ManualAutomatic",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Impact",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Probability",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "MaturityLevel",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ActiveInactive",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PermanentTemporary",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "CreatedByName",
+          "type": "varchar(250)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "CreatedByDate",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ComplianceVersion",
+          "type": "varchar(50)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Status",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Applicability",
+          "type": "varchar(1000)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PotentialRiskScenarios",
+          "type": "longtext",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskType",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskCategory",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskBusinessImpact",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "FrameworkId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "retentionExpiry",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "data_inventory",
+          "type": "json",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "TenantId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ai_bse_enabled",
+          "type": "tinyint(1)",
+          "null": "YES",
+          "key": "",
+          "default": "0",
+          "extra": ""
+        },
+        {
+          "name": "AuditFrequency",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        }
+      ]
+    },
+    "complianceapproval": {
+      "columns": [
+        "ApprovalId",
+        "Identifier",
+        "ExtractedData",
+        "UserId",
+        "ReviewerId",
+        "Version",
+        "ApprovedNot",
+        "ApprovedDate",
+        "PolicyId",
+        "ApprovalDueDate",
+        "FrameworkId",
+        "retentionExpiry"
+      ],
+      "row_count": 0,
+      "column_details": [
+        {
+          "name": "ApprovalId",
+          "type": "int",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "Identifier",
+          "type": "varchar(45)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ExtractedData",
+          "type": "json",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "UserId",
+          "type": "int",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ReviewerId",
+          "type": "int",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Version",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ApprovedNot",
+          "type": "tinyint(1)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ApprovedDate",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PolicyId",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ApprovalDueDate",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "FrameworkId",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "retentionExpiry",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        }
+      ]
+    }
+  }
+}

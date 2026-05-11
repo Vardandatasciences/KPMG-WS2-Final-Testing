@@ -1,0 +1,657 @@
+{
+  "framework": {
+    "FrameworkId": 363,
+    "FrameworkName": "Anti-Money Laundering and Counter Financing of Terrorism (AML/CFT) Compliance Guidelines",
+    "FrameworkDescription": "This framework provides guidelines for reporting entities to understand their enhanced customer due diligence (CDD) obligations under the AML/CFT Act. It outlines the requirements for compliance with regulations related to customer verification and suspicious activity reporting.",
+    "Category": "Regulatory Compliance",
+    "InternalExternal": "External",
+    "Identifier": "FW-363",
+    "Status": "Approved",
+    "CurrentVersion": 1.0
+  },
+  "module": "policies",
+  "tables": {
+    "policies": [
+      {
+        "PolicyId": 3001,
+        "PolicyName": "Enhanced Customer Due Diligence (CDD) Policy",
+        "PolicyDescription": "This policy outlines the enhanced customer due diligence obligations for reporting entities under the AML/CFT Act. It emphasizes the importance of verifying customer identity and assessing risk factors associated with customers, particularly those deemed high risk. The policy aims to ensure compliance with updated regulations and to mitigate risks associated with money laundering and terrorist financing.",
+        "PolicyType": "Compliance",
+        "PolicyCategory": "Regulatory adherence",
+        "Scope": "This policy applies to all reporting entities under the AML/CFT Act, including financial institutions, real estate agents, and other designated businesses. It covers all personnel involved in customer onboarding and transaction monitoring, as well as systems used for customer verification and risk assessment. The policy is applicable across all geographic locations where the reporting entities operate, including third-party relationships and vendor interactions. It encompasses all types of customer data, including personal identification information and business documentation.",
+        "Objective": "The objective of this policy is to ensure that all reporting entities comply with enhanced CDD obligations to prevent money laundering and terrorist financing. Specific goals include achieving 100% compliance with regulatory requirements, reducing the risk of financial crime through thorough customer assessments, and ensuring timely reporting of suspicious activities. The policy aims to enhance operational effectiveness in customer verification processes and protect stakeholders from potential risks associated with non-compliance."
+      }
+    ],
+    "policyversions": [
+      {
+        "VersionId": 2001,
+        "PolicyId": 3001,
+        "Version": "1.0",
+        "PolicyName": "Enhanced Customer Due Diligence (CDD) Policy",
+        "CreatedBy": "radha.sharma",
+        "CreatedDate": "2025-11-11",
+        "PreviousVersionId": null,
+        "frameworkId": 363
+      }
+    ],
+    "policycategories": [
+      {
+        "Id": 972,
+        "PolicyType": "Compliance",
+        "PolicyCategory": "Regulatory adherence",
+        "PolicySubCategory": "Customer Due Diligence",
+        "FrameworkId": 363
+      }
+    ],
+    "subpolicies": [
+      {
+        "SubPolicyId": 4043,
+        "PolicyId": 3001,
+        "SubPolicyName": "Customer Identification and Verification Procedures",
+        "Description": "This subpolicy details the procedures for identifying and verifying customer identities as part of the enhanced CDD process. It includes guidelines on acceptable forms of identification, verification methods, and documentation requirements.",
+        "Control": "WHAT: Implement procedures to collect and verify customer identification information using government-issued IDs and other reliable sources. WHO: Compliance officers and customer service representatives are responsible for executing these procedures. WHEN: Customer identification must be completed prior to account opening or transaction initiation. HOW: Use a combination of physical document verification and electronic verification tools to confirm identity. WHERE: Applicable across all branches and online platforms of the reporting entity."
+      },
+      {
+        "SubPolicyId": 4044,
+        "PolicyId": 3001,
+        "SubPolicyName": "Risk Assessment and Monitoring",
+        "Description": "This subpolicy outlines the process for assessing customer risk levels and ongoing monitoring of customer transactions to detect suspicious activities. It includes criteria for categorizing customers as high, medium, or low risk.",
+        "Control": "WHAT: Conduct risk assessments based on customer profiles, transaction patterns, and geographic risk factors. WHO: Risk management team and compliance officers are responsible for conducting assessments and monitoring. WHEN: Risk assessments must be performed at the time of onboarding and reviewed annually or when significant changes occur. HOW: Utilize risk assessment frameworks and transaction monitoring systems to identify and flag high-risk customers. WHERE: Applicable to all customer accounts and transactions across all operational environments."
+      },
+      {
+        "SubPolicyId": 4045,
+        "PolicyId": 3001,
+        "SubPolicyName": "Suspicious Activity Reporting",
+        "Description": "This subpolicy provides guidelines for reporting suspicious activities identified during the CDD process or through ongoing monitoring. It outlines the procedures for documenting and escalating suspicious findings.",
+        "Control": "WHAT: Establish a process for documenting and reporting suspicious activities to the relevant authorities. WHO: Compliance officers are responsible for preparing and submitting reports. WHEN: Reports must be filed within 24 hours of identifying suspicious activity. HOW: Use a standardized reporting template and ensure all relevant details are included in the report. WHERE: Applicable to all reporting entities and must be conducted in accordance with local regulatory requirements."
+      }
+    ],
+    "policyapproval": []
+  },
+  "schema": {
+    "policies": {
+      "columns": [
+        "PolicyId",
+        "CurrentVersion",
+        "Status",
+        "PolicyDescription",
+        "PolicyName",
+        "StartDate",
+        "EndDate",
+        "Department",
+        "CreatedByName",
+        "CreatedByDate",
+        "Applicability",
+        "DocURL",
+        "Scope",
+        "Objective",
+        "Identifier",
+        "PermanentTemporary",
+        "ActiveInactive",
+        "FrameworkId",
+        "Reviewer",
+        "CoverageRate",
+        "AcknowledgedUserIds",
+        "AcknowledgementCount",
+        "PolicyType",
+        "PolicyCategory",
+        "PolicySubCategory",
+        "Entities"
+      ],
+      "row_count": 1,
+      "column_details": [
+        {
+          "name": "PolicyId",
+          "type": "int",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "CurrentVersion",
+          "type": "double",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Status",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PolicyDescription",
+          "type": "longtext",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PolicyName",
+          "type": "varchar(255)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "StartDate",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "EndDate",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Department",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "CreatedByName",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "CreatedByDate",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Applicability",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "DocURL",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Scope",
+          "type": "longtext",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Objective",
+          "type": "longtext",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Identifier",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PermanentTemporary",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ActiveInactive",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "FrameworkId",
+          "type": "int",
+          "null": "NO",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Reviewer",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "CoverageRate",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "AcknowledgedUserIds",
+          "type": "json",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "AcknowledgementCount",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PolicyType",
+          "type": "varchar(225)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PolicyCategory",
+          "type": "varchar(225)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PolicySubCategory",
+          "type": "varchar(225)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Entities",
+          "type": "json",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        }
+      ]
+    },
+    "policyversions": {
+      "columns": [
+        "VersionId",
+        "PolicyId",
+        "Version",
+        "PolicyName",
+        "CreatedBy",
+        "CreatedDate",
+        "PreviousVersionId",
+        "frameworkId"
+      ],
+      "row_count": 1,
+      "column_details": [
+        {
+          "name": "VersionId",
+          "type": "int",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "PolicyId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Version",
+          "type": "varchar(20)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PolicyName",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "CreatedBy",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "CreatedDate",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PreviousVersionId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "frameworkId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        }
+      ]
+    },
+    "policycategories": {
+      "columns": [
+        "Id",
+        "PolicyType",
+        "PolicyCategory",
+        "PolicySubCategory",
+        "FrameworkId"
+      ],
+      "row_count": 1,
+      "column_details": [
+        {
+          "name": "Id",
+          "type": "int",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "PolicyType",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PolicyCategory",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PolicySubCategory",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "FrameworkId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        }
+      ]
+    },
+    "subpolicies": {
+      "columns": [
+        "SubPolicyId",
+        "PolicyId",
+        "SubPolicyName",
+        "CreatedByName",
+        "CreatedByDate",
+        "Identifier",
+        "Description",
+        "Status",
+        "PermanentTemporary",
+        "Control",
+        "FrameworkId"
+      ],
+      "row_count": 3,
+      "column_details": [
+        {
+          "name": "SubPolicyId",
+          "type": "int",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "PolicyId",
+          "type": "int",
+          "null": "NO",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "SubPolicyName",
+          "type": "varchar(255)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "CreatedByName",
+          "type": "varchar(255)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "CreatedByDate",
+          "type": "date",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Identifier",
+          "type": "varchar(45)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Description",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Status",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PermanentTemporary",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Control",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "FrameworkId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        }
+      ]
+    },
+    "policyapproval": {
+      "columns": [
+        "ApprovalId",
+        "ExtractedData",
+        "UserId",
+        "ReviewerId",
+        "Version",
+        "ApprovedNot",
+        "ApprovedDate",
+        "PolicyId",
+        "Identifier",
+        "ApprovalDueDate",
+        "FrameworkId"
+      ],
+      "row_count": 0,
+      "column_details": [
+        {
+          "name": "ApprovalId",
+          "type": "int",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "ExtractedData",
+          "type": "json",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "UserId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ReviewerId",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Version",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ApprovedNot",
+          "type": "tinyint(1)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ApprovedDate",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PolicyId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Identifier",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ApprovalDueDate",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "FrameworkId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        }
+      ]
+    }
+  }
+}

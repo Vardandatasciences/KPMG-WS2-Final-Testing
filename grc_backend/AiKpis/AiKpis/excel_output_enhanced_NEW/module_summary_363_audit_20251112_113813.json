@@ -1,0 +1,1853 @@
+{
+  "framework": {
+    "FrameworkId": 363,
+    "FrameworkName": "Anti-Money Laundering and Counter Financing of Terrorism (AML/CFT) Compliance Guidelines",
+    "FrameworkDescription": "This framework provides guidelines for reporting entities to understand their enhanced customer due diligence (CDD) obligations under the AML/CFT Act. It outlines the requirements for compliance with regulations related to customer verification and suspicious activity reporting.",
+    "Category": "Regulatory Compliance",
+    "InternalExternal": "External",
+    "Identifier": "FW-363",
+    "Status": "Approved",
+    "CurrentVersion": 1.0
+  },
+  "module": "audit",
+  "tables": {
+    "audit": [
+      {
+        "AuditId": 685,
+        "Title": "Customer Identification Verification Procedures Audit",
+        "Status": "Under Review",
+        "CompletionDate": null,
+        "ReviewStatus": null
+      },
+      {
+        "AuditId": 686,
+        "Title": "Customer Risk Assessment Process Audit",
+        "Status": "Under Review",
+        "CompletionDate": null,
+        "ReviewStatus": null
+      },
+      {
+        "AuditId": 687,
+        "Title": "Enhanced Customer Due Diligence (CDD) Policy Compliance Audit",
+        "Status": "Completed",
+        "CompletionDate": "2025-11-10 04:39:15",
+        "ReviewStatus": 1
+      }
+    ],
+    "audit_version": [
+      {
+        "AuditId": 685,
+        "Version": "A1",
+        "ExtractedInfo": "{\"2801\": {\"impact\": \"Non-compliance with customer identification verification procedures can lead to increased risk of financial crimes such as money laundering, potential regulatory fines, reputational damage, and loss of customer trust.\", \"comments\": \"Focus on the thoroughness of customer identification documentation review and the accuracy of verification methods.\", \"evidence\": \"\", \"re_audit\": false, \"criticality\": \"Major\", \"description\": \"Compliance officers and customer service representatives must implement procedures to collect and verify customer identification information using government-issued IDs and other reliable sources.\", \"accept_reject\": \"1\", \"how_to_verify\": \"1. Review a sample of customer identification documents for completeness and accuracy. 2. Verify the authenticity of government-issued IDs through appropriate channels. 3. Cross-check customer information with external databases for validation. 4. Conduct periodic audits of compliance records for consistency.\", \"re_audit_date\": \"\", \"review_status\": \"accept\", \"why_to_verify\": \"Verification of customer identification is critical to mitigate the risk of financial crimes, ensure regulatory compliance, and maintain the integrity of the institution.\", \"recommendation\": [\"Provide regular training sessions for compliance officers and customer service representatives on proper identification verification procedures.\", \"Implement automated verification tools to enhance the accuracy and efficiency of the process.\", \"Conduct regular reviews of the Enhanced CDD Policy and Customer Identification and Verification Procedures to ensure alignment with regulatory requirements.\"], \"selected_risks\": [], \"what_to_verify\": \"1. Customer identification documentation collected. 2. Verification methods used for customer identification. 3. Compliance records related to customer identification verification.\", \"mitigation_date\": \"\", \"review_comments\": \"Reviewed\", \"severity_rating\": 10, \"underlying_cause\": \"Inadequate training, lack of oversight, or insufficient resources may contribute to lapses in customer identification verification procedures.\", \"compliance_status\": \"0\", \"details_of_finding\": \"Common findings may include incomplete or inconsistent customer identification documentation, lack of verification of government-issued IDs, and inadequate record-keeping of verification processes.\", \"responsible_for_plan\": \"Internal Audit\", \"selected_mitigations\": [], \"suggested_action_plan\": [\"Conduct a comprehensive review of current customer identification verification procedures within the institution within the next 30 days.\", \"Develop and implement a training program for compliance officers and customer service representatives on proper identification verification techniques within the next 60 days.\", \"Establish regular monitoring and reporting mechanisms to track the effectiveness of customer identification verification procedures on a monthly basis.\", \"Review and update the Enhanced CDD Policy and Customer Identification and Verification Procedures annually to ensure alignment with regulatory changes and best practices.\", \"Assign responsibility to a designated compliance officer to oversee the implementation and maintenance of customer identification verification procedures.\"]}}",
+        "UserId": 1,
+        "ApproverId": null,
+        "ApprovedRejected": null,
+        "Date": "2025-11-11 04:39:20",
+        "ActiveInactive": "A",
+        "FrameworkId": 363
+      },
+      {
+        "AuditId": 686,
+        "Version": "A1",
+        "ExtractedInfo": "{\"2802\": {\"impact\": \"Non-compliance with the Customer Risk Assessment Process could result in increased exposure to financial crimes, regulatory fines, reputational damage, and potential loss of customer trust.\", \"comments\": \"Focus on the accuracy and consistency of risk assessments conducted and the adequacy of controls in place to mitigate risks.\", \"evidence\": \"\", \"re_audit\": false, \"criticality\": \"Major\", \"description\": \"Conduct risk assessments based on customer profiles, transaction patterns, and geographic risk factors to categorize customers as high, medium, or low risk.\", \"accept_reject\": \"1\", \"how_to_verify\": \"1. Review a sample of risk assessment reports for accuracy and completeness. 2. Assess the alignment of risk assessments with customer profiles and transaction patterns. 3. Evaluate the effectiveness of controls in place to manage high-risk customers.\", \"re_audit_date\": \"\", \"review_status\": \"accept\", \"why_to_verify\": \"Verification is critical to ensure that the risk assessment process is robust and aligns with regulatory requirements to mitigate financial crime risks effectively.\", \"recommendation\": [\"Enhance training for staff involved in conducting risk assessments to improve accuracy and consistency.\", \"Implement regular reviews of risk assessment procedures to ensure they remain up-to-date and effective.\", \"Enhance monitoring mechanisms to promptly identify and address any discrepancies or anomalies in risk assessments.\"], \"selected_risks\": [], \"what_to_verify\": \"1. Risk assessment reports for accuracy and completeness. 2. Alignment of risk assessments with customer profiles and transaction patterns. 3. Effectiveness of controls for managing high-risk customers.\", \"mitigation_date\": \"\", \"review_comments\": \"Reviewed\", \"severity_rating\": 8, \"underlying_cause\": \"Inadequate training, outdated procedures, or ineffective monitoring mechanisms may lead to inaccurate risk assessments and inadequate risk mitigation.\", \"compliance_status\": \"1\", \"details_of_finding\": \"Common findings may include inconsistent risk categorization, lack of documentation supporting risk assessments, and inadequate controls for high-risk customers.\", \"responsible_for_plan\": \"Internal Audit\", \"selected_mitigations\": [], \"suggested_action_plan\": \"1. Conduct a comprehensive review of the risk assessment process within 30 days. 2. Provide refresher training to staff on risk assessment procedures within 60 days. 3. Implement enhanced monitoring mechanisms for risk assessments within 90 days.\"}, \"2803\": {\"impact\": \"Non-compliance with the Customer Risk Assessment Process can lead to increased exposure to financial crimes such as money laundering and terrorist financing, resulting in regulatory fines, reputational damage, and potential legal actions.\", \"comments\": \"Focus on the accuracy and consistency of risk assessments conducted for different customer segments.\", \"evidence\": \"\", \"re_audit\": false, \"criticality\": \"Minor\", \"description\": \"Utilize risk assessment frameworks and transaction monitoring systems to identify and flag high-risk customers for further investigation.\", \"accept_reject\": \"1\", \"how_to_verify\": \"1. Review a sample of risk assessment reports for high-risk customers. 2. Verify the categorization of customers based on risk factors. 3. Cross-check customer profiles with transaction records to ensure alignment. 4. Validate the documented procedures against actual practices.\", \"re_audit_date\": \"\", \"review_status\": \"accept\", \"why_to_verify\": \"Verification of the risk assessment process is crucial to identify potential gaps in compliance and prevent financial crime risks.\", \"recommendation\": [\"Implement regular training sessions for staff involved in risk assessment to enhance their understanding of risk factors.\", \"Conduct periodic reviews of the risk assessment framework to incorporate emerging risks and regulatory changes.\", \"Enhance the documentation of risk assessment procedures to ensure transparency and consistency.\"], \"selected_risks\": [], \"what_to_verify\": \"1. Risk assessment reports for high-risk customers. 2. Customer profiles categorization based on risk factors. 3. Transaction records alignment with risk assessments.\", \"mitigation_date\": \"\", \"review_comments\": \"Reviewed\", \"severity_rating\": 7, \"underlying_cause\": \"Inadequate training on risk assessment methodologies or lack of oversight in the risk categorization process may lead to inaccurate risk assessments.\", \"compliance_status\": \"2\", \"details_of_finding\": \"Typical findings may include inconsistencies in risk categorization, incomplete documentation of risk assessment factors, or lack of alignment between customer profiles and transaction patterns.\", \"responsible_for_plan\": \"Internal Audit\", \"selected_mitigations\": [], \"suggested_action_plan\": \"1. Conduct a comprehensive review of all risk assessment reports within the past year. 2. Provide refresher training on risk assessment procedures for staff members. 3. Update the risk assessment framework to include new risk factors. 4. Implement regular audits of risk assessment practices to ensure ongoing compliance.\"}}",
+        "UserId": 1,
+        "ApproverId": null,
+        "ApprovedRejected": null,
+        "Date": "2025-11-11 04:39:26",
+        "ActiveInactive": "A",
+        "FrameworkId": 363
+      },
+      {
+        "AuditId": 687,
+        "Version": "A1",
+        "ExtractedInfo": "{\"2804\": {\"impact\": \"Non-compliance with reporting suspicious activities can lead to severe financial losses, regulatory penalties, and reputational damage for the organization. It may also result in operational disruptions and legal consequences.\", \"comments\": \"Focus on the timely identification and reporting of suspicious activities as per the regulatory requirements.\", \"evidence\": \"\", \"re_audit\": false, \"criticality\": \"Major\", \"description\": \"Compliance officers must establish a process for documenting and reporting suspicious activities to the relevant authorities within 24 hours of identification using a standardized reporting template.\", \"accept_reject\": \"1\", \"how_to_verify\": \"1. Review the process established for documenting suspicious activities. 2. Verify the use of a standardized reporting template. 3. Check if reports are submitted to relevant authorities within 24 hours of identification. 4. Assess the completeness and accuracy of the reported information.\", \"re_audit_date\": \"\", \"review_status\": \"accept\", \"why_to_verify\": \"Verifying the reporting of suspicious activities is critical to prevent money laundering and terrorist financing risks, ensuring compliance with regulatory obligations, and safeguarding the organization's reputation.\", \"recommendation\": [\"Conduct regular training sessions for compliance officers on identifying and reporting suspicious activities.\", \"Implement automated monitoring systems to enhance the detection of suspicious transactions.\", \"Periodically review and update the suspicious activity reporting process to align with regulatory changes.\"], \"selected_risks\": [], \"what_to_verify\": \"1. Established process for documenting suspicious activities. 2. Usage of a standardized reporting template. 3. Timely submission of reports to relevant authorities.\", \"mitigation_date\": \"\", \"review_comments\": \"Reviewed\", \"severity_rating\": 8, \"underlying_cause\": \"Lack of awareness, inadequate training, or ineffective processes may contribute to the failure in reporting suspicious activities promptly.\", \"compliance_status\": \"0\", \"details_of_finding\": \"Common findings may include delays in reporting suspicious activities, incomplete documentation, or lack of adherence to the reporting timeline set by regulations.\", \"responsible_for_plan\": \"Internal Audit\", \"selected_mitigations\": [], \"suggested_action_plan\": [\"Conduct a gap analysis of the current suspicious activity reporting process.\", \"Enhance training programs for compliance officers on identifying and reporting suspicious activities.\", \"Implement regular reviews and audits of the reporting process to ensure timely and accurate reporting.\", \"Establish clear escalation procedures for handling high-risk suspicious activities.\", \"Engage with regulatory authorities to seek guidance on improving the reporting process.\"]}}",
+        "UserId": 1,
+        "ApproverId": null,
+        "ApprovedRejected": null,
+        "Date": "2025-11-10 04:39:15",
+        "ActiveInactive": "A",
+        "FrameworkId": 363
+      },
+      {
+        "AuditId": 687,
+        "Version": "R1",
+        "ExtractedInfo": "{\"2804\": {\"impact\": \"Non-compliance with reporting suspicious activities can lead to severe financial losses, regulatory penalties, and reputational damage for the organization. It may also result in operational disruptions and legal consequences.\", \"comments\": \"Focus on the timely identification and reporting of suspicious activities as per the regulatory requirements.\", \"evidence\": \"\", \"re_audit\": false, \"criticality\": \"Major\", \"description\": \"Compliance officers must establish a process for documenting and reporting suspicious activities to the relevant authorities within 24 hours of identification using a standardized reporting template.\", \"accept_reject\": \"1\", \"how_to_verify\": \"1. Review the process established for documenting suspicious activities. 2. Verify the use of a standardized reporting template. 3. Check if reports are submitted to relevant authorities within 24 hours of identification. 4. Assess the completeness and accuracy of the reported information.\", \"re_audit_date\": \"\", \"review_status\": \"accept\", \"why_to_verify\": \"Verifying the reporting of suspicious activities is critical to prevent money laundering and terrorist financing risks, ensuring compliance with regulatory obligations, and safeguarding the organization's reputation.\", \"recommendation\": [\"Conduct regular training sessions for compliance officers on identifying and reporting suspicious activities.\", \"Implement automated monitoring systems to enhance the detection of suspicious transactions.\", \"Periodically review and update the suspicious activity reporting process to align with regulatory changes.\"], \"selected_risks\": [], \"what_to_verify\": \"1. Established process for documenting suspicious activities. 2. Usage of a standardized reporting template. 3. Timely submission of reports to relevant authorities.\", \"mitigation_date\": \"\", \"review_comments\": \"Reviewed\", \"severity_rating\": 8, \"underlying_cause\": \"Lack of awareness, inadequate training, or ineffective processes may contribute to the failure in reporting suspicious activities promptly.\", \"compliance_status\": \"0\", \"details_of_finding\": \"Common findings may include delays in reporting suspicious activities, incomplete documentation, or lack of adherence to the reporting timeline set by regulations.\", \"responsible_for_plan\": \"Internal Audit\", \"selected_mitigations\": [], \"suggested_action_plan\": [\"Conduct a gap analysis of the current suspicious activity reporting process.\", \"Enhance training programs for compliance officers on identifying and reporting suspicious activities.\", \"Implement regular reviews and audits of the reporting process to ensure timely and accurate reporting.\", \"Establish clear escalation procedures for handling high-risk suspicious activities.\", \"Engage with regulatory authorities to seek guidance on improving the reporting process.\"]}}",
+        "UserId": 1,
+        "ApproverId": null,
+        "ApprovedRejected": "Approved",
+        "Date": "2025-11-10 04:39:15",
+        "ActiveInactive": "A",
+        "FrameworkId": 363
+      }
+    ],
+    "audit_findings": [
+      {
+        "AuditFindingsId": 935,
+        "AuditId": 687,
+        "ComplianceId": 2804,
+        "Evidence": null,
+        "UserId": 1,
+        "Check": "0",
+        "HowToVerify": "1. Review the process established for documenting suspicious activities. 2. Verify the use of a standardized reporting template. 3. Check if reports are submitted to relevant authorities within 24 hours of identification. 4. Assess the completeness and accuracy of the reported information.",
+        "Impact": "Non-compliance with reporting suspicious activities can lead to severe financial losses, regulatory penalties, and reputational damage for the organization. It may also result in operational disruptions and legal consequences.",
+        "Recommendation": "['Conduct regular training sessions for compliance officers on identifying and reporting suspicious activities.', 'Implement automated monitoring systems to enhance the detection of suspicious transactions.', 'Periodically review and update the suspicious activity reporting process to align with regulatory changes.']",
+        "DetailsOfFinding": "Common findings may include delays in reporting suspicious activities, incomplete documentation, or lack of adherence to the reporting timeline set by regulations.",
+        "Comments": "Focus on the timely identification and reporting of suspicious activities as per the regulatory requirements.",
+        "CheckedDate": "2025-10-19 04:39:15",
+        "AssignedDate": "2025-04-13 03:18:06",
+        "MajorMinor": "Major",
+        "ReviewRejected": 0,
+        "ReviewComments": "Reviewed",
+        "ReviewStatus": "Accept",
+        "ReviewDate": "2025-10-25 04:39:15",
+        "SeverityRating": 8,
+        "PredictiveRisks": null,
+        "CorrectiveActions": null,
+        "UnderlyingCause": "Lack of awareness, inadequate training, or ineffective processes may contribute to the failure in reporting suspicious activities promptly.",
+        "WhyToVerify": "Verifying the reporting of suspicious activities is critical to prevent money laundering and terrorist financing risks, ensuring compliance with regulatory obligations, and safeguarding the organization's reputation.",
+        "WhatToVerify": "1. Established process for documenting suspicious activities. 2. Usage of a standardized reporting template. 3. Timely submission of reports to relevant authorities.",
+        "SuggestedActionPlan": "['Conduct a gap analysis of the current suspicious activity reporting process.', 'Enhance training programs for compliance officers on identifying and reporting suspicious activities.', 'Implement regular reviews and audits of the reporting process to ensure timely and accurate reporting.', 'Establish clear escalation procedures for handling high-risk suspicious activities.', 'Engage with regulatory authorities to seek guidance on improving the reporting process.']",
+        "MitigationDate": "2026-02-09",
+        "ResponsibleForPlan": "Internal Audit",
+        "ReAudit": 0,
+        "ReAuditDate": null,
+        "Report": "Audit Finding for 0. Common findings may include delays in reporting suspicious activities, incomplete documentation, or lack of adherence to the reporting timeline set by regulations.",
+        "FrameworkId": 363
+      }
+    ],
+    "audit_report": [],
+    "audit_reports": [],
+    "audit_document": [],
+    "audit_documents": [],
+    "audit_document_mappings": [],
+    "audit_document_validation": [],
+    "audit_review": [],
+    "audit_review_comments": []
+  },
+  "schema": {
+    "audit": {
+      "columns": [
+        "AuditId",
+        "Assignee",
+        "Auditor",
+        "AssignedDate",
+        "DueDate",
+        "Frequency",
+        "Status",
+        "CompletionDate",
+        "Reviewer",
+        "FrameworkId",
+        "PolicyId",
+        "ReviewStatus",
+        "ReviewerComments",
+        "AuditType",
+        "Evidence",
+        "Comments",
+        "SubPolicyId",
+        "ReviewStartDate",
+        "ReviewComments",
+        "ReviewDate",
+        "Title",
+        "Scope",
+        "Reports",
+        "Objective",
+        "BusinessUnit",
+        "Role",
+        "Responsibility",
+        "Report"
+      ],
+      "row_count": 3,
+      "column_details": [
+        {
+          "name": "AuditId",
+          "type": "int",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "Assignee",
+          "type": "int",
+          "null": "NO",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Auditor",
+          "type": "int",
+          "null": "NO",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "AssignedDate",
+          "type": "timestamp",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "DueDate",
+          "type": "date",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Frequency",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Status",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "CompletionDate",
+          "type": "timestamp",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Reviewer",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "FrameworkId",
+          "type": "int",
+          "null": "NO",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PolicyId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ReviewStatus",
+          "type": "tinyint",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ReviewerComments",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "AuditType",
+          "type": "varchar(10)",
+          "null": "YES",
+          "key": "",
+          "default": "R",
+          "extra": ""
+        },
+        {
+          "name": "Evidence",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Comments",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "SubPolicyId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ReviewStartDate",
+          "type": "datetime",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ReviewComments",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ReviewDate",
+          "type": "datetime",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Title",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Scope",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Reports",
+          "type": "json",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Objective",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "BusinessUnit",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Role",
+          "type": "varchar(100)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Responsibility",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Report",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        }
+      ]
+    },
+    "audit_version": {
+      "columns": [
+        "AuditId",
+        "Version",
+        "ExtractedInfo",
+        "UserId",
+        "ApproverId",
+        "ApprovedRejected",
+        "Date",
+        "ActiveInactive",
+        "FrameworkId"
+      ],
+      "row_count": 4,
+      "column_details": [
+        {
+          "name": "AuditId",
+          "type": "int",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Version",
+          "type": "varchar(45)",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ExtractedInfo",
+          "type": "json",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "UserId",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ApproverId",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ApprovedRejected",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Date",
+          "type": "datetime",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ActiveInactive",
+          "type": "varchar(1)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "FrameworkId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        }
+      ]
+    },
+    "audit_findings": {
+      "columns": [
+        "AuditFindingsId",
+        "AuditId",
+        "ComplianceId",
+        "Evidence",
+        "UserId",
+        "Check",
+        "HowToVerify",
+        "Impact",
+        "Recommendation",
+        "DetailsOfFinding",
+        "Comments",
+        "CheckedDate",
+        "AssignedDate",
+        "MajorMinor",
+        "ReviewRejected",
+        "ReviewComments",
+        "ReviewStatus",
+        "ReviewDate",
+        "SeverityRating",
+        "PredictiveRisks",
+        "CorrectiveActions",
+        "UnderlyingCause",
+        "WhyToVerify",
+        "WhatToVerify",
+        "SuggestedActionPlan",
+        "MitigationDate",
+        "ResponsibleForPlan",
+        "ReAudit",
+        "ReAuditDate",
+        "Report",
+        "FrameworkId"
+      ],
+      "row_count": 1,
+      "column_details": [
+        {
+          "name": "AuditFindingsId",
+          "type": "int",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "AuditId",
+          "type": "int",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ComplianceId",
+          "type": "int",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Evidence",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "UserId",
+          "type": "int",
+          "null": "NO",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Check",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "HowToVerify",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Impact",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Recommendation",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "DetailsOfFinding",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Comments",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "CheckedDate",
+          "type": "datetime",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "AssignedDate",
+          "type": "timestamp",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "MajorMinor",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ReviewRejected",
+          "type": "tinyint",
+          "null": "YES",
+          "key": "",
+          "default": "0",
+          "extra": ""
+        },
+        {
+          "name": "ReviewComments",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ReviewStatus",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ReviewDate",
+          "type": "datetime",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "SeverityRating",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PredictiveRisks",
+          "type": "json",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "CorrectiveActions",
+          "type": "json",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "UnderlyingCause",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "WhyToVerify",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "WhatToVerify",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "SuggestedActionPlan",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "MitigationDate",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ResponsibleForPlan",
+          "type": "varchar(100)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ReAudit",
+          "type": "tinyint",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ReAuditDate",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Report",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "FrameworkId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        }
+      ]
+    },
+    "audit_report": {
+      "columns": [
+        "ReportId",
+        "AuditId",
+        "Report",
+        "PolicyId",
+        "SubPolicyId",
+        "FrameworkId"
+      ],
+      "row_count": 0,
+      "column_details": [
+        {
+          "name": "ReportId",
+          "type": "int",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "AuditId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Report",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PolicyId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "SubPolicyId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "FrameworkId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        }
+      ]
+    },
+    "audit_reports": {
+      "columns": [
+        "id",
+        "audit_id",
+        "report_type",
+        "report_format",
+        "file_name",
+        "file_path",
+        "file_size",
+        "generation_status",
+        "generation_progress",
+        "error_message",
+        "report_metadata",
+        "GeneratedBy_id",
+        "generation_timestamp",
+        "download_count",
+        "created_at",
+        "updated_at"
+      ],
+      "row_count": 0,
+      "column_details": [
+        {
+          "name": "id",
+          "type": "int",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "audit_id",
+          "type": "int",
+          "null": "NO",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "report_type",
+          "type": "varchar(20)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "report_format",
+          "type": "varchar(10)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "file_name",
+          "type": "varchar(255)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "file_path",
+          "type": "varchar(500)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "file_size",
+          "type": "bigint",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "generation_status",
+          "type": "varchar(20)",
+          "null": "NO",
+          "key": "",
+          "default": "pending",
+          "extra": ""
+        },
+        {
+          "name": "generation_progress",
+          "type": "int",
+          "null": "NO",
+          "key": "",
+          "default": "0",
+          "extra": ""
+        },
+        {
+          "name": "error_message",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "report_metadata",
+          "type": "json",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "GeneratedBy_id",
+          "type": "int",
+          "null": "NO",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "generation_timestamp",
+          "type": "datetime",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "download_count",
+          "type": "int",
+          "null": "NO",
+          "key": "",
+          "default": "0",
+          "extra": ""
+        },
+        {
+          "name": "created_at",
+          "type": "datetime",
+          "null": "NO",
+          "key": "",
+          "default": "CURRENT_TIMESTAMP",
+          "extra": "DEFAULT_GENERATED"
+        },
+        {
+          "name": "updated_at",
+          "type": "datetime",
+          "null": "NO",
+          "key": "",
+          "default": "CURRENT_TIMESTAMP",
+          "extra": "DEFAULT_GENERATED on update CURRENT_TIMESTAMP"
+        }
+      ]
+    },
+    "audit_document": {
+      "columns": [
+        "document_id",
+        "audit_id",
+        "document_name",
+        "document_path",
+        "document_type",
+        "file_size",
+        "mime_type",
+        "uploaded_by",
+        "uploaded_date",
+        "upload_status",
+        "ai_processing_status",
+        "policy_id",
+        "subpolicy_id",
+        "external_source",
+        "external_id",
+        "created_at",
+        "updated_at",
+        "FrameworkId"
+      ],
+      "row_count": 0,
+      "column_details": [
+        {
+          "name": "document_id",
+          "type": "int",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "audit_id",
+          "type": "int",
+          "null": "NO",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "document_name",
+          "type": "varchar(255)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "document_path",
+          "type": "varchar(500)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "document_type",
+          "type": "varchar(50)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "file_size",
+          "type": "bigint",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "mime_type",
+          "type": "varchar(100)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "uploaded_by",
+          "type": "int",
+          "null": "NO",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "uploaded_date",
+          "type": "datetime",
+          "null": "YES",
+          "key": "",
+          "default": "CURRENT_TIMESTAMP",
+          "extra": "DEFAULT_GENERATED"
+        },
+        {
+          "name": "upload_status",
+          "type": "varchar(20)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ai_processing_status",
+          "type": "varchar(20)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "policy_id",
+          "type": "int",
+          "null": "NO",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "subpolicy_id",
+          "type": "int",
+          "null": "NO",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "external_source",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": "manual",
+          "extra": ""
+        },
+        {
+          "name": "external_id",
+          "type": "varchar(100)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "created_at",
+          "type": "datetime",
+          "null": "YES",
+          "key": "",
+          "default": "CURRENT_TIMESTAMP",
+          "extra": "DEFAULT_GENERATED"
+        },
+        {
+          "name": "updated_at",
+          "type": "datetime",
+          "null": "YES",
+          "key": "",
+          "default": "CURRENT_TIMESTAMP",
+          "extra": "DEFAULT_GENERATED on update CURRENT_TIMESTAMP"
+        },
+        {
+          "name": "FrameworkId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        }
+      ]
+    },
+    "audit_documents": {
+      "columns": [
+        "DocumentId",
+        "DocumentName",
+        "DocumentType",
+        "FilePath",
+        "FileSize",
+        "FileExtension",
+        "MimeType",
+        "UploadedDate",
+        "UploadStatus",
+        "ProcessingStatus",
+        "ProcessingResults",
+        "ProcessingError",
+        "ProcessedDate",
+        "ComplianceMapping",
+        "ExtractedText",
+        "DocumentSummary",
+        "ExternalSource",
+        "ExternalId",
+        "AuditId",
+        "ComplianceId",
+        "PolicyId",
+        "SubPolicyId",
+        "UploadedBy",
+        "FrameworkId"
+      ],
+      "row_count": 0,
+      "column_details": [
+        {
+          "name": "DocumentId",
+          "type": "int",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "DocumentName",
+          "type": "varchar(255)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "DocumentType",
+          "type": "varchar(50)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "FilePath",
+          "type": "varchar(500)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "FileSize",
+          "type": "bigint",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "FileExtension",
+          "type": "varchar(10)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "MimeType",
+          "type": "varchar(100)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "UploadedDate",
+          "type": "datetime(6)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "UploadStatus",
+          "type": "varchar(20)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ProcessingStatus",
+          "type": "varchar(20)",
+          "null": "NO",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ProcessingResults",
+          "type": "json",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ProcessingError",
+          "type": "longtext",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ProcessedDate",
+          "type": "datetime(6)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ComplianceMapping",
+          "type": "json",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ExtractedText",
+          "type": "longtext",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "DocumentSummary",
+          "type": "longtext",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ExternalSource",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ExternalId",
+          "type": "varchar(100)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "AuditId",
+          "type": "int",
+          "null": "NO",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ComplianceId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PolicyId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "SubPolicyId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "UploadedBy",
+          "type": "int",
+          "null": "NO",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "FrameworkId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        }
+      ]
+    },
+    "audit_document_mappings": {
+      "columns": [
+        "MappingId",
+        "SectionTitle",
+        "SectionContent",
+        "PageNumber",
+        "StartPosition",
+        "EndPosition",
+        "ComplianceStatus",
+        "ConfidenceScore",
+        "AIRecommendations",
+        "RiskLevel",
+        "ReviewedDate",
+        "ReviewComments",
+        "ComplianceId",
+        "DocumentId",
+        "ReviewedBy",
+        "FrameworkId"
+      ],
+      "row_count": 0,
+      "column_details": [
+        {
+          "name": "MappingId",
+          "type": "int",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "SectionTitle",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "SectionContent",
+          "type": "longtext",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PageNumber",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "StartPosition",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "EndPosition",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ComplianceStatus",
+          "type": "varchar(20)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ConfidenceScore",
+          "type": "double",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "AIRecommendations",
+          "type": "longtext",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskLevel",
+          "type": "varchar(20)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ReviewedDate",
+          "type": "datetime(6)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ReviewComments",
+          "type": "longtext",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ComplianceId",
+          "type": "int",
+          "null": "NO",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "DocumentId",
+          "type": "int",
+          "null": "NO",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ReviewedBy",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "FrameworkId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        }
+      ]
+    },
+    "audit_document_validation": {
+      "columns": [
+        "id",
+        "audit_id",
+        "required_document_id",
+        "uploaded_document_id",
+        "validation_status",
+        "validation_score",
+        "validation_notes",
+        "missing_elements",
+        "ai_analysis",
+        "ValidatedBy_id",
+        "validated_at",
+        "created_at",
+        "updated_at"
+      ],
+      "row_count": 0,
+      "column_details": [
+        {
+          "name": "id",
+          "type": "int",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "audit_id",
+          "type": "int",
+          "null": "NO",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "required_document_id",
+          "type": "int",
+          "null": "NO",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "uploaded_document_id",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "validation_status",
+          "type": "varchar(20)",
+          "null": "NO",
+          "key": "",
+          "default": "pending",
+          "extra": ""
+        },
+        {
+          "name": "validation_score",
+          "type": "float",
+          "null": "NO",
+          "key": "",
+          "default": "0",
+          "extra": ""
+        },
+        {
+          "name": "validation_notes",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "missing_elements",
+          "type": "json",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ai_analysis",
+          "type": "json",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ValidatedBy_id",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "validated_at",
+          "type": "datetime",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "created_at",
+          "type": "datetime",
+          "null": "NO",
+          "key": "",
+          "default": "CURRENT_TIMESTAMP",
+          "extra": "DEFAULT_GENERATED"
+        },
+        {
+          "name": "updated_at",
+          "type": "datetime",
+          "null": "NO",
+          "key": "",
+          "default": "CURRENT_TIMESTAMP",
+          "extra": "DEFAULT_GENERATED on update CURRENT_TIMESTAMP"
+        }
+      ]
+    },
+    "audit_review": {
+      "columns": [
+        "id",
+        "audit_id",
+        "ReviewerId_id",
+        "review_status",
+        "approval_status",
+        "overall_compliance_score",
+        "review_comments",
+        "review_timestamp",
+        "approval_timestamp",
+        "review_details",
+        "created_at",
+        "updated_at"
+      ],
+      "row_count": 0,
+      "column_details": [
+        {
+          "name": "id",
+          "type": "int",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "audit_id",
+          "type": "int",
+          "null": "NO",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ReviewerId_id",
+          "type": "int",
+          "null": "NO",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "review_status",
+          "type": "varchar(20)",
+          "null": "NO",
+          "key": "",
+          "default": "pending",
+          "extra": ""
+        },
+        {
+          "name": "approval_status",
+          "type": "varchar(20)",
+          "null": "NO",
+          "key": "",
+          "default": "pending",
+          "extra": ""
+        },
+        {
+          "name": "overall_compliance_score",
+          "type": "float",
+          "null": "NO",
+          "key": "",
+          "default": "0",
+          "extra": ""
+        },
+        {
+          "name": "review_comments",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "review_timestamp",
+          "type": "datetime",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "approval_timestamp",
+          "type": "datetime",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "review_details",
+          "type": "json",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "created_at",
+          "type": "datetime",
+          "null": "NO",
+          "key": "",
+          "default": "CURRENT_TIMESTAMP",
+          "extra": "DEFAULT_GENERATED"
+        },
+        {
+          "name": "updated_at",
+          "type": "datetime",
+          "null": "NO",
+          "key": "",
+          "default": "CURRENT_TIMESTAMP",
+          "extra": "DEFAULT_GENERATED on update CURRENT_TIMESTAMP"
+        }
+      ]
+    },
+    "audit_review_comments": {
+      "columns": [
+        "id",
+        "audit_id",
+        "compliance_analysis_id",
+        "ReviewerId_id",
+        "comment_type",
+        "comment_text",
+        "old_status",
+        "new_status",
+        "is_override",
+        "created_at"
+      ],
+      "row_count": 0,
+      "column_details": [
+        {
+          "name": "id",
+          "type": "int",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "audit_id",
+          "type": "int",
+          "null": "NO",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "compliance_analysis_id",
+          "type": "int",
+          "null": "NO",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ReviewerId_id",
+          "type": "int",
+          "null": "NO",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "comment_type",
+          "type": "varchar(20)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "comment_text",
+          "type": "text",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "old_status",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "new_status",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "is_override",
+          "type": "tinyint(1)",
+          "null": "NO",
+          "key": "",
+          "default": "0",
+          "extra": ""
+        },
+        {
+          "name": "created_at",
+          "type": "datetime",
+          "null": "NO",
+          "key": "",
+          "default": "CURRENT_TIMESTAMP",
+          "extra": "DEFAULT_GENERATED"
+        }
+      ]
+    }
+  }
+}

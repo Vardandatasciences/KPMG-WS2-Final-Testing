@@ -1,0 +1,1577 @@
+{
+  "framework": {
+    "FrameworkId": 364,
+    "FrameworkName": "Enhanced Due Diligence (EDD)",
+    "FrameworkDescription": "Enhanced Due Diligence (EDD) is a critical component in international banking and private banking, particularly in high-risk situations. It aims to mitigate risks associated with money laundering, terrorist financing, and other financial crimes by requiring financial institutions to conduct comprehensive risk assessments and implement robust anti-money laundering (AML) measures.",
+    "Category": "Financial Security and Compliance",
+    "InternalExternal": "External",
+    "Identifier": "FW-364",
+    "Status": "Approved",
+    "CurrentVersion": 1.0
+  },
+  "module": "policies",
+  "tables": {
+    "policies": [
+      {
+        "PolicyId": 3002,
+        "PolicyName": "Enhanced Due Diligence Policy",
+        "PolicyDescription": "This policy outlines the requirements for Enhanced Due Diligence (EDD) in international and private banking contexts, particularly for high-risk situations. It aims to mitigate risks associated with money laundering, terrorist financing, and other financial crimes by mandating comprehensive risk assessments and robust anti-money laundering measures. The policy ensures that financial institutions understand their vulnerabilities and implement effective EDD practices.",
+        "PolicyType": "Compliance",
+        "PolicyCategory": "Regulatory adherence",
+        "Scope": "This policy applies to all organizational units involved in customer onboarding, risk assessment, and transaction monitoring within the financial institution. It covers all systems and applications used for customer due diligence, including on-premises and cloud-based solutions. The policy is applicable across all geographic locations where the institution operates and includes third-party relationships that may impact the institution's risk profile. It encompasses all data types related to customer identity, transaction history, and risk assessments.",
+        "Objective": "The primary objective of this policy is to establish a comprehensive framework for conducting Enhanced Due Diligence (EDD) to effectively mitigate risks associated with money laundering and terrorist financing. Specific goals include ensuring compliance with regulatory requirements, enhancing the understanding of high-risk customers, and improving the institution's overall risk management capabilities. The policy aims to protect stakeholders by ensuring that only acceptable risks are undertaken and that all necessary measures are in place to monitor and manage those risks."
+      },
+      {
+        "PolicyId": 3003,
+        "PolicyName": "Enhanced Due Diligence for Client Onboarding",
+        "PolicyDescription": "This policy outlines the requirements for conducting Enhanced Due Diligence (EDD) during the client onboarding process. It emphasizes the importance of verifying the source of wealth and ensuring that client information is accurate and comprehensive. The policy aims to mitigate risks associated with money laundering and terrorist financing by establishing robust procedures for assessing high-risk clients, particularly Politically Exposed Persons (PEPs).",
+        "PolicyType": "Compliance",
+        "PolicyCategory": "Regulatory adherence",
+        "Scope": "This policy applies to all organizational units involved in client onboarding, including compliance, risk management, and customer service departments. It covers all systems and applications used for client data management, including CRM systems and document management platforms. The policy is applicable across all geographic locations where the institution operates and includes relationships with third-party vendors involved in client verification. It encompasses all types of client data, including personal, financial, and transactional information.",
+        "Objective": "The primary objective of this policy is to ensure that financial institutions conduct thorough Enhanced Due Diligence during client onboarding to prevent financial crimes. Specific goals include achieving a 100% verification rate of source of wealth for high-risk clients, maintaining compliance with regulatory requirements, and reducing the risk of engaging with clients involved in illicit activities. The policy aims to enhance operational effectiveness by establishing clear procedures for information collection and verification."
+      },
+      {
+        "PolicyId": 3004,
+        "PolicyName": "Enhanced Due Diligence for Private Banking and Wealth Management",
+        "PolicyDescription": "This policy outlines the Enhanced Due Diligence (EDD) requirements for private banking and wealth management services, focusing on high-risk clients, including Politically Exposed Persons (PEPs). It aims to mitigate risks associated with money laundering and financial crimes by ensuring comprehensive risk assessments and ongoing monitoring of client relationships.",
+        "PolicyType": "Compliance",
+        "PolicyCategory": "Regulatory adherence",
+        "Scope": "This policy applies to all personnel involved in private banking and wealth management services across all organizational units. It encompasses all systems and applications used for client onboarding, transaction processing, and monitoring, including on-premises and cloud-based solutions. The policy covers all geographic jurisdictions where the institution operates and includes third-party relationships that may impact client risk assessments.",
+        "Objective": "The objective of this policy is to establish a comprehensive framework for Enhanced Due Diligence in private banking and wealth management, ensuring compliance with regulatory requirements and mitigating risks associated with financial crimes. Specific goals include achieving a 100% compliance rate with EDD protocols, reducing the incidence of undetected money laundering activities, and enhancing the institution's ability to identify and manage high-risk clients effectively."
+      },
+      {
+        "PolicyId": 3005,
+        "PolicyName": "Enhanced Due Diligence for Private Banking and Wealth Management",
+        "PolicyDescription": "This policy outlines the Enhanced Due Diligence (EDD) requirements for private banking and wealth management services, focusing on high-risk elements such as concentration accounts, cross-border transfers, and investments in precious metals, stones, and art. It emphasizes the need for specialized training for front-line staff to identify potential financial crime risks and ensure compliance with regulatory standards.",
+        "PolicyType": "Compliance",
+        "PolicyCategory": "Regulatory adherence",
+        "Scope": "This policy applies to all personnel involved in private banking and wealth management services across all organizational units. It encompasses all systems and applications used for client onboarding, transaction processing, and risk assessment. The policy covers all geographic regions where the institution operates and includes third-party relationships with vendors and charities. It addresses all types of financial data and client information relevant to EDD.",
+        "Objective": "The primary objective of this policy is to enhance the institution's ability to identify and mitigate risks associated with high-value transactions and clients in private banking. Specific goals include ensuring compliance with regulatory requirements, improving the effectiveness of risk assessments, and protecting stakeholders from financial crime. Measurable outcomes include the reduction of identified risks, increased staff competency in EDD practices, and improved client onboarding processes."
+      },
+      {
+        "PolicyId": 3006,
+        "PolicyName": "Enhanced Due Diligence for High-Risk Customers",
+        "PolicyDescription": "This policy outlines the requirements for conducting Enhanced Due Diligence (EDD) on high-risk customers, particularly in international banking and private banking contexts. It aims to ensure that financial institutions develop a comprehensive understanding of their clients' circumstances, including the source of funds and wealth, to mitigate risks associated with money laundering and terrorist financing. The policy establishes a framework for risk assessment, monitoring, and auditing of EDD processes.",
+        "PolicyType": "Compliance",
+        "PolicyCategory": "Regulatory adherence",
+        "Scope": "This policy applies to all organizational units involved in customer onboarding and risk assessment, including compliance, risk management, and customer service departments. It covers all systems and applications used for customer due diligence, including customer relationship management (CRM) systems and transaction monitoring tools. The policy is applicable across all geographic locations where the institution operates, including jurisdictions with high-risk profiles. It also encompasses third-party relationships and vendor services that may impact customer risk assessments. Data types covered include personal identification information, financial records, and transaction histories.",
+        "Objective": "The objective of this policy is to establish a robust framework for Enhanced Due Diligence (EDD) that ensures financial institutions effectively identify, assess, and mitigate risks associated with high-risk customers. Specific goals include achieving a 100% compliance rate with EDD requirements, reducing the incidence of undetected suspicious activities by 50% within the first year of implementation, and ensuring that all staff involved in EDD processes receive appropriate training at least annually. The policy aims to enhance operational effectiveness and protect stakeholders by ensuring thorough understanding of client circumstances."
+      },
+      {
+        "PolicyId": 3007,
+        "PolicyName": "Enhanced Due Diligence Policy",
+        "PolicyDescription": "This policy outlines the requirements for implementing Enhanced Due Diligence (EDD) in international and private banking contexts, particularly in high-risk situations. It aims to mitigate risks associated with money laundering, terrorist financing, and other financial crimes by establishing comprehensive risk assessment protocols and ongoing monitoring measures. The policy emphasizes the importance of understanding customer profiles, sources of wealth, and transaction behaviors to ensure compliance with regulatory standards.",
+        "PolicyType": "Compliance",
+        "PolicyCategory": "Regulatory adherence",
+        "Scope": "This policy applies to all organizational units involved in customer onboarding, risk assessment, and transaction monitoring within the financial institution. It covers all systems and applications used for customer due diligence, including on-premises and cloud-based solutions. The policy is applicable across all geographic locations where the institution operates and includes third-party relationships that may impact risk exposure. It encompasses all types of data related to customer identity, transaction history, and risk assessments.",
+        "Objective": "The objective of this policy is to establish a robust framework for Enhanced Due Diligence that ensures compliance with international regulations and mitigates risks associated with money laundering and terrorist financing. Specific goals include improving the accuracy of customer risk profiles, enhancing transaction monitoring capabilities, and ensuring that all high-risk relationships are managed in accordance with regulatory requirements. The policy aims to protect the institution from financial crime risks while maintaining operational effectiveness."
+      },
+      {
+        "PolicyId": 3008,
+        "PolicyName": "Source of Wealth Verification Policy",
+        "PolicyDescription": "This policy outlines the requirements for verifying the source of wealth for clients, particularly focusing on Politically Exposed Persons (PEPs). It aims to ensure that financial institutions conduct thorough assessments to confirm the legitimacy of clients' wealth, thereby mitigating risks associated with money laundering and financial crimes.",
+        "PolicyType": "Compliance",
+        "PolicyCategory": "Regulatory adherence",
+        "Scope": "This policy applies to all organizational units involved in client onboarding and risk assessment, including compliance, risk management, and customer service departments. It covers all clients, with a particular focus on PEPs, across all geographic locations where the institution operates. The policy encompasses all systems used for client data management and verification, including CRM systems and document management platforms.",
+        "Objective": "The objective of this policy is to establish a comprehensive framework for verifying the source of wealth of clients to ensure compliance with anti-money laundering regulations. Specific goals include reducing the risk of financial crime, ensuring accurate client profiling, and enhancing the institution's reputation by demonstrating due diligence in client assessments."
+      },
+      {
+        "PolicyId": 3009,
+        "PolicyName": "Enhanced Due Diligence Policy",
+        "PolicyDescription": "The Enhanced Due Diligence (EDD) Policy establishes the framework for conducting thorough risk assessments and implementing robust measures to combat money laundering and terrorist financing. This policy is essential for financial institutions operating in high-risk environments, ensuring compliance with international standards and safeguarding the integrity of the financial system.",
+        "PolicyType": "Compliance",
+        "PolicyCategory": "Regulatory adherence",
+        "Scope": "This policy applies to all employees, departments, and branches of the financial institution, including those operating in international jurisdictions. It covers all systems and applications used for customer onboarding, transaction monitoring, and record-keeping. The policy also extends to third-party vendors and partners involved in customer due diligence processes.",
+        "Objective": "The primary objective of this policy is to mitigate risks associated with money laundering and terrorist financing by ensuring that all high-risk customers undergo rigorous due diligence. Specific goals include achieving 100% compliance with regulatory requirements, reducing the incidence of financial crime, and enhancing the institution's reputation for integrity and security."
+      },
+      {
+        "PolicyId": 3010,
+        "PolicyName": "Enhanced Due Diligence for International Banking",
+        "PolicyDescription": "This policy outlines the requirements for conducting Enhanced Due Diligence (EDD) in the context of international banking. It aims to mitigate risks associated with money laundering (ML) and terrorist financing (TF) by ensuring that financial institutions thoroughly assess and monitor high-risk customers and their transactions. The policy emphasizes the importance of understanding complex ownership structures and the legitimacy of customer activities.",
+        "PolicyType": "Compliance",
+        "PolicyCategory": "Regulatory adherence",
+        "Scope": "This policy applies to all organizational units involved in international banking services, including compliance, risk management, and customer service departments. It covers all systems and applications used for customer onboarding, transaction processing, and monitoring. The policy is applicable across all geographic locations where the institution operates, including jurisdictions with varying levels of regulatory oversight. It also encompasses relationships with third-party service providers and vendors involved in customer introductions and due diligence processes.",
+        "Objective": "The objective of this policy is to enhance the financial institution's ability to identify, assess, and mitigate risks associated with money laundering and terrorist financing in international banking. Specific goals include ensuring compliance with regulatory requirements, improving the effectiveness of customer due diligence processes, and safeguarding the institution from reputational and financial risks. The policy aims to establish a robust framework for monitoring high-risk customers and their transactions, thereby protecting stakeholders and maintaining the integrity of the financial system."
+      },
+      {
+        "PolicyId": 3011,
+        "PolicyName": "Regulatory Compliance and Audit of Enhanced Due Diligence Processes",
+        "PolicyDescription": "This policy outlines the requirements for regulatory compliance and auditing of Enhanced Due Diligence (EDD) processes within financial institutions. It emphasizes the importance of a risk-based approach to identify, analyze, and mitigate risks associated with customers, products, and services. The policy ensures that financial institutions maintain robust documentation and training for staff involved in EDD processes.",
+        "PolicyType": "Compliance",
+        "PolicyCategory": "Regulatory adherence",
+        "Scope": "This policy applies to all organizational units involved in customer onboarding, risk assessment, and transaction monitoring within the financial institution. It covers all systems and applications used for EDD, including customer relationship management (CRM) systems, compliance software, and documentation repositories. The policy is applicable across all geographic locations where the institution operates and includes third-party vendors involved in the EDD process. It encompasses all data types related to customer identification, risk assessment, and transaction monitoring.",
+        "Objective": "The objective of this policy is to ensure that financial institutions effectively implement and audit their Enhanced Due Diligence processes to comply with regulatory requirements and mitigate risks associated with financial crimes. Specific goals include maintaining accurate and comprehensive customer profiles, ensuring timely and effective training for staff, and establishing a clear methodology for auditing EDD processes. The policy aims to enhance operational effectiveness and protect stakeholders by ensuring robust risk management practices."
+      },
+      {
+        "PolicyId": 3012,
+        "PolicyName": "Enhanced Due Diligence Audit and Monitoring Policy",
+        "PolicyDescription": "This policy outlines the requirements for conducting audits and monitoring of Enhanced Due Diligence (EDD) processes within financial institutions. It emphasizes the importance of rigorous scrutiny of transactions, timely investigations of suspicious activities, and the necessity for periodic reviews of higher-risk customers to ensure compliance with regulatory standards and mitigate financial crime risks.",
+        "PolicyType": "Compliance",
+        "PolicyCategory": "Regulatory adherence",
+        "Scope": "This policy applies to all organizational units involved in EDD processes, including compliance, risk management, and audit departments. It covers all systems and applications used for transaction monitoring and customer due diligence, including on-premises and cloud-based solutions. The policy is applicable across all geographic regions where the institution operates and includes third-party relationships that may impact EDD processes. It encompasses all data types related to customer transactions and risk assessments.",
+        "Objective": "The objective of this policy is to ensure that EDD processes are effectively audited and monitored to mitigate risks associated with money laundering and terrorist financing. Specific goals include achieving timely identification and investigation of suspicious activities, ensuring compliance with regulatory requirements, and enhancing the overall efficiency of the EDD process. The policy aims to establish a framework for continuous improvement in EDD practices through regular audits and follow-ups."
+      },
+      {
+        "PolicyId": 3013,
+        "PolicyName": "Enhanced Due Diligence for High-Risk Customers",
+        "PolicyDescription": "This policy outlines the requirements for conducting Enhanced Due Diligence (EDD) on high-risk customers in international and private banking. It aims to mitigate risks associated with money laundering and terrorist financing by ensuring that financial institutions have a comprehensive understanding of their customers' affairs. The policy emphasizes the importance of a risk-based approach, critical thinking, and timely action on recommendations from internal auditors and regulators.",
+        "PolicyType": "Compliance",
+        "PolicyCategory": "Regulatory adherence",
+        "Scope": "This policy applies to all organizational units involved in customer onboarding and transaction monitoring, including compliance, risk management, and customer service departments. It covers all systems and applications used for customer due diligence, including customer relationship management (CRM) systems and transaction monitoring software. The policy is applicable across all geographic locations where the institution operates and includes third-party relationships with vendors and service providers. It encompasses all types of customer data, including personal identification information, financial records, and transaction histories.",
+        "Objective": "The primary objective of this policy is to ensure that financial institutions effectively identify and mitigate risks associated with high-risk customers. Specific goals include achieving a 100% compliance rate with EDD procedures, reducing the incidence of financial crimes by 20% within the first year of implementation, and ensuring timely action on all internal audit recommendations. The policy aims to enhance operational effectiveness and protect stakeholders by fostering a culture of compliance and ethical conduct."
+      },
+      {
+        "PolicyId": 3014,
+        "PolicyName": "Risk Assessment and Risk Appetite Statement",
+        "PolicyDescription": "This policy outlines the requirements for conducting comprehensive risk assessments to identify and evaluate the inherent risks of money laundering (ML) and terrorist financing (TF) faced by financial institutions. It emphasizes the importance of understanding the risk profile of customers, products, services, and jurisdictions to effectively mitigate risks. The policy also establishes the framework for defining the institution's risk appetite and tolerance levels in relation to ML/TF risks.",
+        "PolicyType": "Risk Management",
+        "PolicyCategory": "Risk Assessment",
+        "Scope": "This policy applies to all organizational units involved in risk management, compliance, and operations within the financial institution. It encompasses all systems and applications used for risk assessment, including customer due diligence processes, transaction monitoring systems, and reporting mechanisms. The policy covers all geographic jurisdictions where the institution operates and includes third-party relationships that may impact risk exposure. It applies to all data types related to customer information, transaction records, and risk assessment documentation.",
+        "Objective": "The primary objective of this policy is to establish a robust framework for identifying, assessing, and mitigating ML/TF risks within the financial institution. Specific goals include achieving compliance with regulatory requirements, enhancing operational effectiveness in risk management, and protecting stakeholders by ensuring informed decision-making regarding risk appetite. The policy aims to facilitate a proactive approach to risk management that aligns with the institution's strategic objectives and risk tolerance levels."
+      },
+      {
+        "PolicyId": 3015,
+        "PolicyName": "Source of Wealth Verification Policy",
+        "PolicyDescription": "This policy outlines the procedures for establishing and verifying the source of wealth for clients during the Enhanced Due Diligence (EDD) process. It aims to mitigate risks associated with money laundering and ensure compliance with regulatory requirements by implementing a structured approach to assess the legitimacy of clients' wealth.",
+        "PolicyType": "Compliance",
+        "PolicyCategory": "Regulatory adherence",
+        "Scope": "This policy applies to all organizational units involved in client onboarding and risk assessment, including compliance, risk management, and customer service departments. It covers all clients, including individuals and entities, across all geographic locations where the institution operates. The policy encompasses all systems and applications used for client data management and verification, including third-party vendor relationships and data sources.",
+        "Objective": "The primary objective of this policy is to ensure that the source of wealth for all clients is established and verified in a manner that complies with regulatory standards and mitigates financial crime risks. Specific goals include achieving a 100% verification rate for high-risk clients, maintaining accurate documentation for all assessments, and ensuring that all staff involved in the process are trained and aware of the requirements."
+      },
+      {
+        "PolicyId": 3016,
+        "PolicyName": "Source of Funds and Source of Wealth Verification Policy",
+        "PolicyDescription": "This policy outlines the requirements for verifying the source of funds and source of wealth for clients as part of the Enhanced Due Diligence (EDD) process. It aims to ensure that financial institutions can effectively assess and mitigate risks associated with money laundering and terrorist financing by obtaining comprehensive and verifiable information about clients' financial backgrounds. The policy applies to all client relationships and transactions undertaken by the institution.",
+        "PolicyType": "Compliance",
+        "PolicyCategory": "Regulatory adherence",
+        "Scope": "This policy applies to all organizational units involved in client onboarding, transaction processing, and compliance monitoring. It covers all systems and applications used for customer due diligence, including customer relationship management (CRM) systems and transaction monitoring tools. The policy is applicable across all geographic locations where the institution operates and includes third-party relationships that may impact client due diligence processes. It encompasses all types of financial transactions, including deposits, investments, and remittances.",
+        "Objective": "The objective of this policy is to establish a robust framework for verifying the source of funds and source of wealth of clients to prevent financial crimes. Specific goals include ensuring compliance with regulatory requirements, enhancing the effectiveness of transaction monitoring, and mitigating risks associated with illicit financial activities. The policy aims to achieve measurable outcomes such as a reduction in suspicious transaction reports and improved accuracy in client risk assessments."
+      },
+      {
+        "PolicyId": 3017,
+        "PolicyName": "Enhanced Due Diligence Policy",
+        "PolicyDescription": "This policy outlines the requirements for conducting Enhanced Due Diligence (EDD) on high-risk customers, products, and geographies. It aims to establish a comprehensive understanding of customer profiles and transactional behaviors to mitigate risks associated with financial crimes. The policy mandates continuous monitoring and adjustment of customer profiles based on evolving data and behaviors.",
+        "PolicyType": "Compliance",
+        "PolicyCategory": "Regulatory adherence",
+        "Scope": "This policy applies to all organizational units involved in customer onboarding, risk assessment, and transaction monitoring. It covers all systems and applications used for customer data management, including on-premises and cloud-based solutions. The policy is applicable across all geographic locations where the institution operates and includes third-party relationships that may impact customer due diligence. It encompasses all types of customer data, including personal, financial, and transactional information.",
+        "Objective": "The objective of this policy is to enhance the understanding of customer banking activities and mitigate risks associated with money laundering and terrorist financing. Specific goals include establishing robust customer profiles, ensuring compliance with regulatory requirements, and implementing effective monitoring mechanisms. The policy aims to achieve measurable outcomes such as reduced instances of financial crime and improved accuracy in customer risk assessments."
+      },
+      {
+        "PolicyId": 3018,
+        "PolicyName": "Enhanced Due Diligence Procedures",
+        "PolicyDescription": "This policy outlines the procedures for conducting Enhanced Due Diligence (EDD) in financial institutions to mitigate risks associated with money laundering and terrorist financing. It emphasizes the importance of collecting, verifying, and monitoring customer information throughout the customer lifecycle. The policy aims to ensure that institutions maintain comprehensive and up-to-date records to comply with regulatory requirements and enhance overall financial security.",
+        "PolicyType": "Compliance",
+        "PolicyCategory": "Regulatory adherence",
+        "Scope": "This policy applies to all organizational units involved in customer onboarding, risk assessment, and transaction monitoring within the financial institution. It covers all systems and applications used for customer data management, including on-premises and cloud-based solutions. The policy is applicable across all geographic locations where the institution operates and includes third-party vendors involved in customer verification processes. Data types covered include personal identification information, transaction records, and risk assessment documentation.",
+        "Objective": "The primary objective of this policy is to establish a robust framework for conducting Enhanced Due Diligence (EDD) that ensures compliance with regulatory requirements and mitigates risks associated with financial crimes. Specific goals include achieving a 100% compliance rate with EDD procedures, reducing the incidence of undetected suspicious activities by 50%, and ensuring that customer information is refreshed at least annually. The policy aims to protect stakeholders by enhancing the institution's ability to detect and prevent financial crimes."
+      },
+      {
+        "PolicyId": 3019,
+        "PolicyName": "Enhanced Due Diligence for Politically Exposed Persons (PEPs)",
+        "PolicyDescription": "This policy outlines the requirements for conducting Enhanced Due Diligence (EDD) on Politically Exposed Persons (PEPs) and their associates. It aims to mitigate the risks associated with financial crimes such as bribery and corruption that may arise from the unique positions of PEPs. The policy ensures that financial institutions implement rigorous risk management processes when dealing with PEPs and related customers.",
+        "PolicyType": "Compliance",
+        "PolicyCategory": "Regulatory adherence",
+        "Scope": "This policy applies to all organizational units involved in customer onboarding, transaction monitoring, and compliance within the financial institution. It covers all systems and applications used for customer due diligence, including databases for PEP and sanctions screening. The policy is applicable across all geographic jurisdictions where the institution operates and includes third-party relationships that may involve PEPs. It encompasses all data types related to customer identification and transaction records.",
+        "Objective": "The objective of this policy is to ensure that the financial institution effectively identifies, assesses, and manages the risks associated with PEPs. Specific goals include achieving 100% compliance with regulatory requirements regarding PEPs, reducing the incidence of financial crime linked to PEPs by 50% within two years, and enhancing the institution's reputation for integrity and transparency in financial dealings."
+      },
+      {
+        "PolicyId": 3020,
+        "PolicyName": "Integration of Other Regulations in Enhanced Due Diligence",
+        "PolicyDescription": "This policy outlines the integration of existing financial regulations, such as MIFID, into the Enhanced Due Diligence (EDD) framework to enhance risk assessment and customer profiling. By leveraging regulatory requirements, financial institutions can improve their understanding of client financial situations, thereby mitigating risks associated with money laundering and terrorist financing. The policy aims to ensure that all investment services offered are compliant with both EDD and relevant financial regulations.",
+        "PolicyType": "Compliance",
+        "PolicyCategory": "Regulatory adherence",
+        "Scope": "This policy applies to all organizational units involved in private banking and investment services, including compliance, risk management, and customer service departments. It covers all systems and applications used for client onboarding and risk assessment, including CRM systems and financial analysis tools. The policy is applicable across all geographic locations where the institution operates and includes third-party vendors involved in client assessments. It encompasses all types of financial data and client information relevant to investment services.",
+        "Objective": "The objective of this policy is to enhance the effectiveness of Enhanced Due Diligence processes by integrating existing regulatory requirements. Specific goals include improving client risk assessments, ensuring compliance with financial regulations, and reducing the potential for financial crimes. The policy aims to achieve measurable outcomes such as increased accuracy in client profiling and a reduction in compliance breaches related to EDD."
+      },
+      {
+        "PolicyId": 3021,
+        "PolicyName": "Management of Other Risks in Private Banking",
+        "PolicyDescription": "This policy outlines the requirements for managing additional risks associated with private banking services, particularly in relation to high-value cross-border transactions, investment services, and the handling of high-value assets such as precious metals, stones, and art. It emphasizes the importance of aligning transactions with customer profiles and the institution's risk appetite, while ensuring robust training and oversight for front-line staff.",
+        "PolicyType": "Compliance",
+        "PolicyCategory": "Regulatory adherence",
+        "Scope": "This policy applies to all private banking units and personnel involved in client onboarding, transaction processing, and risk assessment. It covers all systems and applications used for managing private banking services, including those for cross-border transactions and investment services. The policy is applicable across all geographic locations where the institution operates and includes third-party relationships with vendors and service providers involved in private banking. It encompasses all data types related to client transactions, investment portfolios, and asset valuations.",
+        "Objective": "The objective of this policy is to ensure that all private banking transactions are conducted within a framework that mitigates risks associated with money laundering, terrorist financing, and other financial crimes. Specific goals include enhancing the training of front-line staff, improving transaction oversight, and ensuring compliance with regulatory requirements. The policy aims to achieve measurable outcomes such as reduced instances of financial crime, improved risk assessment processes, and enhanced client due diligence."
+      },
+      {
+        "PolicyId": 3022,
+        "PolicyName": "Enhanced Due Diligence for High-Risk Customers",
+        "PolicyDescription": "This policy outlines the requirements for conducting Enhanced Due Diligence (EDD) on high-risk customers seeking banking services in International Financial Centers (IFCs). It emphasizes the importance of understanding the customer's motivations, verifying documentation, and monitoring transactions to mitigate risks associated with money laundering and other financial crimes.",
+        "PolicyType": "Compliance",
+        "PolicyCategory": "Regulatory adherence",
+        "Scope": "This policy applies to all organizational units involved in customer onboarding, risk assessment, and transaction monitoring within the financial institution. It covers all systems and applications used for customer due diligence, including those in cloud and on-premises environments. The policy is applicable to all geographic locations where the institution operates and includes third-party relationships that may impact customer risk assessments.",
+        "Objective": "The objective of this policy is to enhance the institution's ability to identify, assess, and mitigate risks associated with high-risk customers. Specific goals include ensuring compliance with regulatory requirements, improving the accuracy of risk assessments, and enhancing the effectiveness of transaction monitoring processes. The policy aims to protect the institution from financial crimes while facilitating legitimate business activities."
+      },
+      {
+        "PolicyId": 3023,
+        "PolicyName": "Enhanced Due Diligence for Complex Structures",
+        "PolicyDescription": "This policy outlines the requirements for conducting Enhanced Due Diligence (EDD) on customers utilizing complex legal structures. It emphasizes the need for financial institutions to thoroughly understand the ownership layers, legal arrangements, and the rationale behind such structures to mitigate risks associated with money laundering and other financial crimes.",
+        "PolicyType": "Compliance",
+        "PolicyCategory": "Regulatory adherence",
+        "Scope": "This policy applies to all organizational units involved in customer onboarding, compliance, and risk management. It covers all systems and applications used for customer due diligence, including those in on-premises, cloud, and remote environments. The policy encompasses all geographic jurisdictions where the institution operates and includes third-party relationships with corporate service providers and introducers.",
+        "Objective": "The objective of this policy is to ensure that financial institutions effectively identify, assess, and mitigate risks associated with complex legal structures. This includes achieving compliance with regulatory requirements, enhancing operational effectiveness in risk management, and protecting stakeholders from potential financial crimes."
+      },
+      {
+        "PolicyId": 3024,
+        "PolicyName": "Enhanced Due Diligence Audit Policy",
+        "PolicyDescription": "This policy outlines the framework for conducting audits of Enhanced Due Diligence (EDD) processes within financial institutions. It aims to ensure that EDD practices are effective, compliant with regulations, and tailored to the specific risks associated with international and private banking. The policy establishes a systematic approach to auditing EDD processes, including risk assessments, policy reviews, and staff training evaluations.",
+        "PolicyType": "Compliance",
+        "PolicyCategory": "Regulatory adherence",
+        "Scope": "This policy applies to all organizational units involved in EDD processes, including compliance, risk management, and operations. It covers all systems and applications used for customer onboarding, transaction monitoring, and record-keeping. The policy is applicable across all geographic locations where the financial institution operates and includes third-party relationships. It encompasses all data types related to customer information, transaction records, and audit documentation.",
+        "Objective": "The objective of this policy is to ensure that EDD processes are rigorously audited to identify and mitigate risks associated with money laundering and terrorist financing. The policy aims to achieve compliance with regulatory requirements, enhance operational effectiveness, and ensure that staff are equipped with the necessary knowledge and skills to perform EDD effectively. Specific measurable outcomes include timely identification of weaknesses, implementation of corrective actions, and improved customer profiling accuracy."
+      },
+      {
+        "PolicyId": 3025,
+        "PolicyName": "Enhanced Due Diligence Audit Policy",
+        "PolicyDescription": "This policy outlines the requirements for conducting audits of Enhanced Due Diligence (EDD) processes within financial institutions. It emphasizes the need for tailored audit steps that consider the unique characteristics of the institution, its clientele, and the specific risks associated with its operations. The policy aims to ensure that EDD audits are conducted effectively and efficiently by qualified personnel.",
+        "PolicyType": "Compliance",
+        "PolicyCategory": "Regulatory adherence",
+        "Scope": "This policy applies to all organizational units involved in EDD processes, including compliance, risk management, and internal audit teams. It encompasses all systems and applications used for EDD, as well as third-party vendors involved in customer due diligence. The policy covers all geographic regions where the institution operates and includes all types of customer data and financial transactions.",
+        "Objective": "The primary objective of this policy is to establish a comprehensive framework for auditing EDD processes to ensure compliance with regulatory requirements and to mitigate risks associated with money laundering and terrorist financing. Specific goals include enhancing the effectiveness of EDD measures, ensuring timely identification of deficiencies, and promoting continuous improvement in compliance practices."
+      }
+    ],
+    "policyversions": [
+      {
+        "VersionId": 2002,
+        "PolicyId": 3002,
+        "Version": "1.0",
+        "PolicyName": "Enhanced Due Diligence Policy",
+        "CreatedBy": "radha.sharma",
+        "CreatedDate": "2025-11-11",
+        "PreviousVersionId": null,
+        "frameworkId": 364
+      },
+      {
+        "VersionId": 2003,
+        "PolicyId": 3003,
+        "Version": "1.0",
+        "PolicyName": "Enhanced Due Diligence for Client Onboarding",
+        "CreatedBy": "radha.sharma",
+        "CreatedDate": "2025-11-11",
+        "PreviousVersionId": null,
+        "frameworkId": 364
+      },
+      {
+        "VersionId": 2004,
+        "PolicyId": 3004,
+        "Version": "1.0",
+        "PolicyName": "Enhanced Due Diligence for Private Banking and Wealth Management",
+        "CreatedBy": "radha.sharma",
+        "CreatedDate": "2025-11-11",
+        "PreviousVersionId": null,
+        "frameworkId": 364
+      },
+      {
+        "VersionId": 2005,
+        "PolicyId": 3005,
+        "Version": "1.0",
+        "PolicyName": "Enhanced Due Diligence for Private Banking and Wealth Management",
+        "CreatedBy": "radha.sharma",
+        "CreatedDate": "2025-11-11",
+        "PreviousVersionId": null,
+        "frameworkId": 364
+      },
+      {
+        "VersionId": 2006,
+        "PolicyId": 3006,
+        "Version": "1.0",
+        "PolicyName": "Enhanced Due Diligence for High-Risk Customers",
+        "CreatedBy": "radha.sharma",
+        "CreatedDate": "2025-11-11",
+        "PreviousVersionId": null,
+        "frameworkId": 364
+      },
+      {
+        "VersionId": 2007,
+        "PolicyId": 3007,
+        "Version": "1.0",
+        "PolicyName": "Enhanced Due Diligence Policy",
+        "CreatedBy": "radha.sharma",
+        "CreatedDate": "2025-11-11",
+        "PreviousVersionId": null,
+        "frameworkId": 364
+      },
+      {
+        "VersionId": 2008,
+        "PolicyId": 3008,
+        "Version": "1.0",
+        "PolicyName": "Source of Wealth Verification Policy",
+        "CreatedBy": "radha.sharma",
+        "CreatedDate": "2025-11-11",
+        "PreviousVersionId": null,
+        "frameworkId": 364
+      },
+      {
+        "VersionId": 2009,
+        "PolicyId": 3009,
+        "Version": "1.0",
+        "PolicyName": "Enhanced Due Diligence Policy",
+        "CreatedBy": "radha.sharma",
+        "CreatedDate": "2025-11-11",
+        "PreviousVersionId": null,
+        "frameworkId": 364
+      },
+      {
+        "VersionId": 2010,
+        "PolicyId": 3010,
+        "Version": "1.0",
+        "PolicyName": "Enhanced Due Diligence for International Banking",
+        "CreatedBy": "radha.sharma",
+        "CreatedDate": "2025-11-11",
+        "PreviousVersionId": null,
+        "frameworkId": 364
+      },
+      {
+        "VersionId": 2011,
+        "PolicyId": 3011,
+        "Version": "1.0",
+        "PolicyName": "Regulatory Compliance and Audit of Enhanced Due Diligence Processes",
+        "CreatedBy": "radha.sharma",
+        "CreatedDate": "2025-11-11",
+        "PreviousVersionId": null,
+        "frameworkId": 364
+      },
+      {
+        "VersionId": 2012,
+        "PolicyId": 3012,
+        "Version": "1.0",
+        "PolicyName": "Enhanced Due Diligence Audit and Monitoring Policy",
+        "CreatedBy": "radha.sharma",
+        "CreatedDate": "2025-11-11",
+        "PreviousVersionId": null,
+        "frameworkId": 364
+      },
+      {
+        "VersionId": 2013,
+        "PolicyId": 3013,
+        "Version": "1.0",
+        "PolicyName": "Enhanced Due Diligence for High-Risk Customers",
+        "CreatedBy": "radha.sharma",
+        "CreatedDate": "2025-11-11",
+        "PreviousVersionId": null,
+        "frameworkId": 364
+      },
+      {
+        "VersionId": 2014,
+        "PolicyId": 3014,
+        "Version": "1.0",
+        "PolicyName": "Risk Assessment and Risk Appetite Statement",
+        "CreatedBy": "radha.sharma",
+        "CreatedDate": "2025-11-11",
+        "PreviousVersionId": null,
+        "frameworkId": 364
+      },
+      {
+        "VersionId": 2015,
+        "PolicyId": 3015,
+        "Version": "1.0",
+        "PolicyName": "Source of Wealth Verification Policy",
+        "CreatedBy": "radha.sharma",
+        "CreatedDate": "2025-11-11",
+        "PreviousVersionId": null,
+        "frameworkId": 364
+      },
+      {
+        "VersionId": 2016,
+        "PolicyId": 3016,
+        "Version": "1.0",
+        "PolicyName": "Source of Funds and Source of Wealth Verification Policy",
+        "CreatedBy": "radha.sharma",
+        "CreatedDate": "2025-11-11",
+        "PreviousVersionId": null,
+        "frameworkId": 364
+      },
+      {
+        "VersionId": 2017,
+        "PolicyId": 3017,
+        "Version": "1.0",
+        "PolicyName": "Enhanced Due Diligence Policy",
+        "CreatedBy": "radha.sharma",
+        "CreatedDate": "2025-11-11",
+        "PreviousVersionId": null,
+        "frameworkId": 364
+      },
+      {
+        "VersionId": 2018,
+        "PolicyId": 3018,
+        "Version": "1.0",
+        "PolicyName": "Enhanced Due Diligence Procedures",
+        "CreatedBy": "radha.sharma",
+        "CreatedDate": "2025-11-11",
+        "PreviousVersionId": null,
+        "frameworkId": 364
+      },
+      {
+        "VersionId": 2019,
+        "PolicyId": 3019,
+        "Version": "1.0",
+        "PolicyName": "Enhanced Due Diligence for Politically Exposed Persons (PEPs)",
+        "CreatedBy": "radha.sharma",
+        "CreatedDate": "2025-11-11",
+        "PreviousVersionId": null,
+        "frameworkId": 364
+      },
+      {
+        "VersionId": 2020,
+        "PolicyId": 3020,
+        "Version": "1.0",
+        "PolicyName": "Integration of Other Regulations in Enhanced Due Diligence",
+        "CreatedBy": "radha.sharma",
+        "CreatedDate": "2025-11-11",
+        "PreviousVersionId": null,
+        "frameworkId": 364
+      },
+      {
+        "VersionId": 2021,
+        "PolicyId": 3021,
+        "Version": "1.0",
+        "PolicyName": "Management of Other Risks in Private Banking",
+        "CreatedBy": "radha.sharma",
+        "CreatedDate": "2025-11-11",
+        "PreviousVersionId": null,
+        "frameworkId": 364
+      },
+      {
+        "VersionId": 2022,
+        "PolicyId": 3022,
+        "Version": "1.0",
+        "PolicyName": "Enhanced Due Diligence for High-Risk Customers",
+        "CreatedBy": "radha.sharma",
+        "CreatedDate": "2025-11-11",
+        "PreviousVersionId": null,
+        "frameworkId": 364
+      },
+      {
+        "VersionId": 2023,
+        "PolicyId": 3023,
+        "Version": "1.0",
+        "PolicyName": "Enhanced Due Diligence for Complex Structures",
+        "CreatedBy": "radha.sharma",
+        "CreatedDate": "2025-11-11",
+        "PreviousVersionId": null,
+        "frameworkId": 364
+      },
+      {
+        "VersionId": 2024,
+        "PolicyId": 3024,
+        "Version": "1.0",
+        "PolicyName": "Enhanced Due Diligence Audit Policy",
+        "CreatedBy": "radha.sharma",
+        "CreatedDate": "2025-11-11",
+        "PreviousVersionId": null,
+        "frameworkId": 364
+      },
+      {
+        "VersionId": 2025,
+        "PolicyId": 3025,
+        "Version": "1.0",
+        "PolicyName": "Enhanced Due Diligence Audit Policy",
+        "CreatedBy": "radha.sharma",
+        "CreatedDate": "2025-11-11",
+        "PreviousVersionId": null,
+        "frameworkId": 364
+      }
+    ],
+    "policycategories": [
+      {
+        "Id": 973,
+        "PolicyType": "Compliance",
+        "PolicyCategory": "Regulatory adherence",
+        "PolicySubCategory": "Anti-Money Laundering (AML)",
+        "FrameworkId": 364
+      },
+      {
+        "Id": 974,
+        "PolicyType": "Compliance",
+        "PolicyCategory": "Regulatory adherence",
+        "PolicySubCategory": "Client onboarding",
+        "FrameworkId": 364
+      },
+      {
+        "Id": 975,
+        "PolicyType": "Compliance",
+        "PolicyCategory": "Regulatory adherence",
+        "PolicySubCategory": "Audit requirements",
+        "FrameworkId": 364
+      },
+      {
+        "Id": 976,
+        "PolicyType": "Risk Management",
+        "PolicyCategory": "Risk Assessment",
+        "PolicySubCategory": "Risk Appetite",
+        "FrameworkId": 364
+      },
+      {
+        "Id": 977,
+        "PolicyType": "Compliance",
+        "PolicyCategory": "Regulatory adherence",
+        "PolicySubCategory": "Client onboarding and risk assessment",
+        "FrameworkId": 364
+      },
+      {
+        "Id": 978,
+        "PolicyType": "Compliance",
+        "PolicyCategory": "Regulatory adherence",
+        "PolicySubCategory": "Customer Due Diligence",
+        "FrameworkId": 364
+      },
+      {
+        "Id": 979,
+        "PolicyType": "Compliance",
+        "PolicyCategory": "Regulatory adherence",
+        "PolicySubCategory": "Anti-Money Laundering",
+        "FrameworkId": 364
+      },
+      {
+        "Id": 980,
+        "PolicyType": "Compliance",
+        "PolicyCategory": "Regulatory adherence",
+        "PolicySubCategory": "Investment Services Compliance",
+        "FrameworkId": 364
+      },
+      {
+        "Id": 981,
+        "PolicyType": "Compliance",
+        "PolicyCategory": "Regulatory adherence",
+        "PolicySubCategory": "Risk management",
+        "FrameworkId": 364
+      },
+      {
+        "Id": 982,
+        "PolicyType": "Compliance",
+        "PolicyCategory": "Regulatory adherence",
+        "PolicySubCategory": "Risk assessment",
+        "FrameworkId": 364
+      }
+    ],
+    "subpolicies": [
+      {
+        "SubPolicyId": 4046,
+        "PolicyId": 3002,
+        "SubPolicyName": "Risk Assessment and Risk Appetite Statement",
+        "Description": "This subpolicy outlines the requirements for conducting comprehensive risk assessments to identify and evaluate the inherent risks associated with customers, products, and services. It also establishes guidelines for defining the institution's risk appetite statement, which articulates the level of risk the institution is willing to accept in pursuit of its strategic objectives.",
+        "Control": "WHAT: Conduct comprehensive risk assessments to identify and evaluate ML/TF risks. WHO: Risk management team and compliance officers. WHEN: Annually or upon significant changes in customer profiles or regulatory requirements. HOW: Utilize risk assessment frameworks and tools to analyze customer data, transaction patterns, and external risk factors. WHERE: Applicable to all customer segments and geographic locations where the institution operates."
+      },
+      {
+        "SubPolicyId": 4047,
+        "PolicyId": 3002,
+        "SubPolicyName": "Customer Information Collection and Verification",
+        "Description": "This subpolicy specifies the requirements for collecting and verifying additional information on high-risk customers, including their source of funds and source of wealth. It emphasizes the need for enhanced monitoring of customer transactions and ongoing updates to customer profiles.",
+        "Control": "WHAT: Collect and verify additional customer information, including occupation, source of funds, and source of wealth. WHO: Customer onboarding team and compliance officers. WHEN: At the time of onboarding and periodically thereafter, at least annually. HOW: Implement enhanced due diligence procedures, including public database checks and media searches. WHERE: Applicable to all high-risk customers across all business lines."
+      },
+      {
+        "SubPolicyId": 4048,
+        "PolicyId": 3002,
+        "SubPolicyName": "Senior Management Approval Process",
+        "Description": "This subpolicy outlines the requirement for obtaining senior management approval before establishing or continuing business relationships with high-risk customers. It ensures that all high-risk engagements are reviewed and sanctioned at the executive level.",
+        "Control": "WHAT: Obtain written approval from senior management for high-risk customer relationships. WHO: Relationship managers and senior management. WHEN: Prior to onboarding high-risk customers or when significant changes occur in the customer's risk profile. HOW: Document the approval process and maintain records for audit purposes. WHERE: Applicable to all high-risk customer engagements within the institution."
+      },
+      {
+        "SubPolicyId": 4049,
+        "PolicyId": 3003,
+        "SubPolicyName": "Source of Wealth Verification",
+        "Description": "This subpolicy outlines the procedures for verifying the source of wealth for clients during the onboarding process. It specifies the steps to be taken to gather, assess, and document information related to the client's wealth.",
+        "Control": "WHAT: Collect detailed information on the client's total net worth and source of wealth. WHO: Compliance officers and onboarding staff are responsible for gathering this information. WHEN: This information must be collected during the initial onboarding phase and updated annually or when significant changes occur. HOW: Use a combination of client interviews, public records, and third-party verification sources to gather information. WHERE: This process applies to all client onboarding activities across all branches and online platforms."
+      },
+      {
+        "SubPolicyId": 4050,
+        "PolicyId": 3003,
+        "SubPolicyName": "Ongoing Monitoring and Information Refresh",
+        "Description": "This subpolicy establishes the requirements for ongoing monitoring of client information and periodic refreshing of data to ensure continued compliance with EDD standards.",
+        "Control": "WHAT: Implement a system for ongoing monitoring of client transactions and periodic updates of client information. WHO: Compliance and risk management teams are responsible for monitoring and updating client data. WHEN: Monitoring should occur continuously, with formal reviews conducted at least annually. HOW: Utilize automated systems to flag unusual transactions and schedule regular reviews of client information. WHERE: This applies to all client accounts and transactions processed through the institution's systems."
+      },
+      {
+        "SubPolicyId": 4051,
+        "PolicyId": 3004,
+        "SubPolicyName": "Client Identification and Verification",
+        "Description": "This subpolicy outlines the requirements for identifying and verifying the identity of clients in private banking and wealth management, particularly focusing on high-risk individuals and PEPs.",
+        "Control": "WHAT: Conduct thorough identification and verification of clients using reliable and independent sources of information. WHO: Compliance officers and relationship managers are responsible for executing this process. WHEN: This process must be completed prior to the establishment of any client relationship and updated annually or upon significant changes in client circumstances. HOW: Utilize government-issued identification, financial statements, and third-party verification services to confirm client identity. WHERE: This control applies to all client onboarding processes across all branches and digital platforms."
+      },
+      {
+        "SubPolicyId": 4052,
+        "PolicyId": 3004,
+        "SubPolicyName": "Source of Wealth Assessment",
+        "Description": "This subpolicy mandates the assessment of the source of wealth for all high-net-worth clients, ensuring that their financial background is legitimate and transparent.",
+        "Control": "WHAT: Assess and document the source of wealth for all clients, particularly those classified as high-risk or PEPs. WHO: Relationship managers and compliance teams are responsible for conducting these assessments. WHEN: Assessments must be completed during the onboarding process and reviewed annually or when there are significant changes in client circumstances. HOW: Collect and analyze documentation such as tax returns, business ownership records, and investment portfolios. WHERE: This assessment applies to all private banking clients across all operational jurisdictions."
+      },
+      {
+        "SubPolicyId": 4053,
+        "PolicyId": 3004,
+        "SubPolicyName": "Ongoing Monitoring and Transaction Review",
+        "Description": "This subpolicy establishes the requirements for ongoing monitoring of client transactions to identify and mitigate potential risks associated with money laundering and financial crimes.",
+        "Control": "WHAT: Implement continuous monitoring of client transactions, focusing on high-value and high-frequency transactions. WHO: Compliance teams are responsible for monitoring and reporting suspicious activities. WHEN: Monitoring must occur in real-time, with periodic reviews conducted monthly. HOW: Utilize automated transaction monitoring systems and manual reviews to identify red flags. WHERE: This control applies to all transaction processing systems used in private banking and wealth management."
+      },
+      {
+        "SubPolicyId": 4054,
+        "PolicyId": 3005,
+        "SubPolicyName": "Training and Awareness for Front-Line Staff",
+        "Description": "This subpolicy mandates the training and continuous education of front-line staff in private banking to ensure they are equipped to perform Enhanced Due Diligence effectively. Training programs must cover risk identification, EDD procedures, and regulatory compliance.",
+        "Control": "WHAT: Conduct mandatory EDD training sessions for all front-line staff in private banking. WHO: Training will be the responsibility of the Compliance Department, with input from subject matter experts. WHEN: Training sessions must be conducted annually, with additional sessions scheduled as needed based on regulatory updates or identified risks. HOW: Training will utilize a combination of in-person workshops, online courses, and assessments to ensure comprehension. WHERE: Training will be conducted at the main office and via online platforms for remote staff."
+      },
+      {
+        "SubPolicyId": 4055,
+        "PolicyId": 3005,
+        "SubPolicyName": "Risk Assessment Procedures for High-Value Transactions",
+        "Description": "This subpolicy outlines the procedures for conducting risk assessments on high-value transactions, including those involving precious metals, stones, and art. It requires detailed documentation and analysis of each transaction's risk factors.",
+        "Control": "WHAT: Implement a standardized risk assessment framework for evaluating high-value transactions. WHO: The Risk Management Team will be responsible for conducting assessments, with oversight from the Compliance Department. WHEN: Risk assessments must be performed prior to the approval of any high-value transaction and reviewed quarterly. HOW: Assessments will utilize a risk scoring system based on predefined criteria, including transaction type, client profile, and geographic risk. WHERE: Assessments will be documented in the transaction management system and reviewed during compliance audits."
+      },
+      {
+        "SubPolicyId": 4056,
+        "PolicyId": 3005,
+        "SubPolicyName": "Oversight and Audit of EDD Practices",
+        "Description": "This subpolicy establishes the framework for regular oversight and auditing of EDD practices within private banking to ensure compliance and effectiveness in mitigating financial crime risks.",
+        "Control": "WHAT: Conduct regular audits of EDD practices and compliance with this policy. WHO: The Internal Audit Team will perform audits, with findings reported to senior management and the Board. WHEN: Audits will be conducted semi-annually, with additional audits triggered by significant changes in risk profiles or regulatory requirements. HOW: Audits will include reviews of transaction records, staff training logs, and risk assessment documentation. WHERE: Audits will cover all branches and departments involved in private banking operations."
+      },
+      {
+        "SubPolicyId": 4057,
+        "PolicyId": 3006,
+        "SubPolicyName": "Risk Assessment Procedures for High-Risk Customers",
+        "Description": "This subpolicy outlines the procedures for conducting risk assessments on high-risk customers, including the criteria for identifying such customers and the methodology for evaluating their risk profiles.",
+        "Control": "WHAT: Conduct comprehensive risk assessments for all high-risk customers, including the evaluation of customer profiles, transaction histories, and geographic risk factors. WHO: Compliance officers and risk management teams are responsible for conducting these assessments. WHEN: Risk assessments must be performed at the time of customer onboarding and reviewed annually or when significant changes occur in customer circumstances. HOW: Utilize risk assessment tools and methodologies to evaluate customer risk, including scoring systems and qualitative assessments. WHERE: Applicable to all customer accounts classified as high-risk within the institution's customer relationship management systems."
+      },
+      {
+        "SubPolicyId": 4058,
+        "PolicyId": 3006,
+        "SubPolicyName": "Training and Awareness for EDD Staff",
+        "Description": "This subpolicy details the training requirements for staff involved in Enhanced Due Diligence processes to ensure they are equipped to identify and manage risks associated with high-risk customers.",
+        "Control": "WHAT: Provide training sessions on EDD processes, red flag identification, and regulatory requirements for all staff involved in customer due diligence. WHO: The training program will be developed and delivered by the compliance department, with participation from all relevant staff members. WHEN: Training must be conducted at least annually, with additional sessions provided as needed when regulations change or new risks are identified. HOW: Utilize a combination of in-person workshops, online training modules, and assessments to ensure understanding and retention of EDD principles. WHERE: Training will be conducted in the institution's training facilities and through online platforms accessible to all staff."
+      },
+      {
+        "SubPolicyId": 4059,
+        "PolicyId": 3006,
+        "SubPolicyName": "Audit and Monitoring of EDD Processes",
+        "Description": "This subpolicy establishes the requirements for auditing and monitoring the effectiveness of Enhanced Due Diligence processes to ensure compliance and identify areas for improvement.",
+        "Control": "WHAT: Conduct regular audits of EDD processes, including reviews of customer risk profiles and compliance with EDD procedures. WHO: Internal audit teams and compliance officers are responsible for conducting these audits. WHEN: Audits must be performed at least semi-annually, with additional audits triggered by significant findings or changes in risk profiles. HOW: Utilize audit checklists and sampling methods to evaluate compliance and effectiveness of EDD measures. WHERE: Audits will cover all departments involved in EDD processes and will review documentation stored in the institution's compliance management systems."
+      },
+      {
+        "SubPolicyId": 4060,
+        "PolicyId": 3007,
+        "SubPolicyName": "Risk Assessment and Risk Appetite Statement",
+        "Description": "This subpolicy outlines the requirements for conducting comprehensive risk assessments to identify and evaluate the inherent and residual risks associated with customers, products, and services. It also establishes guidelines for defining the institution's risk appetite statement, which articulates the level of risk the institution is willing to accept in pursuit of its strategic objectives.",
+        "Control": "WHAT: Conduct comprehensive risk assessments to identify ML/TF risks and define the risk appetite statement. WHO: Risk management team and compliance officers. WHEN: Annually or when significant changes occur in customer profiles or regulatory requirements. HOW: Utilize risk assessment frameworks and tools to evaluate risks and document findings. WHERE: Across all business units and customer segments within the institution."
+      },
+      {
+        "SubPolicyId": 4061,
+        "PolicyId": 3007,
+        "SubPolicyName": "Customer Due Diligence and Enhanced Monitoring",
+        "Description": "This subpolicy specifies the requirements for collecting and verifying additional customer information, including the source of funds and source of wealth. It also outlines the procedures for enhanced monitoring of transactions and customer behavior to detect suspicious activities.",
+        "Control": "WHAT: Collect and verify additional customer information and conduct enhanced monitoring of transactions. WHO: Customer onboarding teams and compliance analysts. WHEN: At the time of onboarding and continuously throughout the customer relationship. HOW: Implement automated monitoring systems and manual reviews of high-risk transactions. WHERE: In all customer accounts classified as high-risk."
+      },
+      {
+        "SubPolicyId": 4062,
+        "PolicyId": 3008,
+        "SubPolicyName": "Client Onboarding and Wealth Assessment Procedures",
+        "Description": "This subpolicy details the procedures for collecting and assessing information regarding a client's total net worth and source of wealth during the onboarding process. It emphasizes the importance of obtaining detailed and verifiable information from clients.",
+        "Control": "WHAT: Financial institutions must collect detailed information on clients' total net worth and source of wealth during onboarding. WHO: Compliance officers and onboarding staff are responsible for gathering this information. WHEN: This information must be collected at the time of client onboarding. HOW: Use structured interviews and document requests to gather information, ensuring that responses are recorded and verified. WHERE: This process applies to all client onboarding activities across all branches and online platforms."
+      },
+      {
+        "SubPolicyId": 4063,
+        "PolicyId": 3008,
+        "SubPolicyName": "Source of Wealth Verification Process",
+        "Description": "This subpolicy outlines the steps for verifying the source of wealth, including the collection of supporting documentation and the use of independent sources for validation.",
+        "Control": "WHAT: Institutions must verify the source of wealth through a combination of client-provided information and independent documentation. WHO: Compliance teams and risk analysts are responsible for conducting the verification. WHEN: Verification must occur within 30 days of client onboarding or when significant transactions are identified. HOW: Utilize a risk-sensitive approach to assess the legitimacy of the wealth, including reviewing documents such as tax returns, bank statements, and third-party confirmations. WHERE: This verification process applies to all clients, with heightened scrutiny for PEPs and high-risk individuals."
+      },
+      {
+        "SubPolicyId": 4064,
+        "PolicyId": 3009,
+        "SubPolicyName": "Customer Risk Assessment Procedures",
+        "Description": "This subpolicy outlines the procedures for assessing the risk level of customers based on various factors, including geographic location, transaction history, and customer profile. It mandates the use of a standardized risk assessment tool to ensure consistency and accuracy.",
+        "Control": "WHAT: Conduct a risk assessment for each customer using a standardized tool. WHO: Compliance officers are responsible for performing the assessments. WHEN: Assessments must be completed prior to onboarding and reviewed annually. HOW: Utilize the risk assessment tool to evaluate customer risk factors and document findings. WHERE: Applicable to all customer accounts across all branches and departments."
+      },
+      {
+        "SubPolicyId": 4065,
+        "PolicyId": 3009,
+        "SubPolicyName": "Transaction Monitoring and Reporting",
+        "Description": "This subpolicy establishes the requirements for monitoring customer transactions for suspicious activity and reporting such activities to the appropriate authorities. It includes guidelines for setting thresholds for alerts and the process for escalating concerns.",
+        "Control": "WHAT: Monitor all transactions for suspicious activity and report findings. WHO: Transaction monitoring team is responsible for daily monitoring and reporting. WHEN: Continuous monitoring with reports generated weekly. HOW: Use automated monitoring systems to flag transactions that exceed predefined thresholds. WHERE: Applies to all transaction processing systems within the institution."
+      },
+      {
+        "SubPolicyId": 4066,
+        "PolicyId": 3009,
+        "SubPolicyName": "Staff Training and Awareness",
+        "Description": "This subpolicy mandates regular training for all employees on EDD procedures, recognizing suspicious activity, and understanding regulatory requirements. It aims to ensure that all staff are equipped to identify and respond to potential risks effectively.",
+        "Control": "WHAT: Provide training sessions on EDD and AML compliance. WHO: All employees must attend training sessions conducted by the compliance department. WHEN: Training sessions will be held quarterly and upon onboarding of new staff. HOW: Utilize a combination of in-person workshops and online training modules. WHERE: Training will be conducted at all branch locations and through the institution's online learning platform."
+      },
+      {
+        "SubPolicyId": 4067,
+        "PolicyId": 3010,
+        "SubPolicyName": "Customer Identification and Verification",
+        "Description": "This subpolicy outlines the requirements for identifying and verifying the identity of customers engaged in international banking activities. It includes procedures for assessing the legitimacy of customer documentation and understanding the customer's economic profile.",
+        "Control": "WHAT: Financial institutions must implement a robust customer identification and verification process. WHO: The compliance department is responsible for overseeing the implementation of this process. WHEN: This process must be conducted at the onboarding stage and reviewed annually or upon any significant change in customer circumstances. HOW: Institutions should utilize reliable identification methods, including government-issued IDs, and verify the authenticity of documents through independent sources. WHERE: This control applies to all customer onboarding processes across all branches and digital platforms."
+      },
+      {
+        "SubPolicyId": 4068,
+        "PolicyId": 3010,
+        "SubPolicyName": "Ongoing Monitoring of High-Risk Customers",
+        "Description": "This subpolicy establishes the requirements for the ongoing monitoring of customers identified as high-risk due to their international banking activities. It includes transaction monitoring and periodic reviews of customer profiles.",
+        "Control": "WHAT: Financial institutions must conduct ongoing monitoring of high-risk customers, including transaction analysis and profile reviews. WHO: The risk management team is responsible for executing this monitoring process. WHEN: Monitoring should occur continuously, with formal reviews conducted quarterly. HOW: Institutions should employ automated transaction monitoring systems to flag suspicious activities and conduct manual reviews of flagged transactions. WHERE: This control applies to all customer accounts classified as high-risk within the institution's transaction processing systems."
+      },
+      {
+        "SubPolicyId": 4069,
+        "PolicyId": 3010,
+        "SubPolicyName": "Assessment of Complex Ownership Structures",
+        "Description": "This subpolicy details the requirements for assessing and understanding complex ownership structures of customers engaged in international banking. It emphasizes the need for clarity regarding the beneficial ownership and legitimacy of legal arrangements.",
+        "Control": "WHAT: Financial institutions must conduct thorough assessments of customers with complex ownership structures, including identifying all beneficial owners and understanding the purpose of the legal arrangements. WHO: The compliance officer is responsible for ensuring these assessments are performed. WHEN: Assessments should be conducted at onboarding and reviewed whenever there are changes in ownership or structure. HOW: Institutions should require detailed documentation of ownership structures and perform due diligence on all parties involved. WHERE: This control applies to all customers with complex structures across all operational environments."
+      },
+      {
+        "SubPolicyId": 4070,
+        "PolicyId": 3011,
+        "SubPolicyName": "Risk Assessment Review",
+        "Description": "This subpolicy outlines the requirements for conducting a thorough review of the financial institution's risk assessment related to Enhanced Due Diligence. It specifies the need for regular updates and evaluations to ensure the risk assessment accurately reflects the institution's exposure to various risks.",
+        "Control": "The compliance team (WHO) must conduct a comprehensive review of the risk assessment (WHAT) at least annually (WHEN) using established risk assessment frameworks and methodologies (HOW). This review should include an analysis of customer profiles, products, services, and geographic risks (WHERE) to ensure alignment with the institution's risk appetite and regulatory requirements."
+      },
+      {
+        "SubPolicyId": 4071,
+        "PolicyId": 3011,
+        "SubPolicyName": "Policy and Procedure Evaluation",
+        "Description": "This subpolicy mandates the evaluation of existing policies and procedures related to Enhanced Due Diligence to ensure they are effective and aligned with the risk assessment.",
+        "Control": "The internal audit team (WHO) will evaluate the policies and procedures (WHAT) bi-annually (WHEN) by reviewing documentation, conducting interviews with staff, and assessing compliance with established guidelines (HOW). The evaluation will focus on the effectiveness of customer onboarding processes and transaction monitoring (WHERE)."
+      },
+      {
+        "SubPolicyId": 4072,
+        "PolicyId": 3011,
+        "SubPolicyName": "Staff Training and Competency Management",
+        "Description": "This subpolicy outlines the requirements for training staff involved in Enhanced Due Diligence processes to ensure they possess the necessary skills and knowledge.",
+        "Control": "The human resources department (WHO) must implement a comprehensive training program (WHAT) for all staff involved in EDD, including new hires and existing employees (WHEN). Training sessions should be conducted quarterly (HOW) and cover topics such as risk assessment, customer profiling, and regulatory compliance (WHERE). Attendance records and knowledge assessments must be maintained to ensure competency."
+      },
+      {
+        "SubPolicyId": 4073,
+        "PolicyId": 3011,
+        "SubPolicyName": "Documentation and Record Keeping",
+        "Description": "This subpolicy establishes requirements for documentation and record-keeping related to Enhanced Due Diligence processes to ensure compliance and facilitate audits.",
+        "Control": "All departments involved in EDD (WHO) must maintain accurate and comprehensive records of customer profiles, risk assessments, and audit findings (WHAT) for a minimum of five years (WHEN). Documentation must be organized and easily accessible (HOW) to support internal and external audits (WHERE)."
+      },
+      {
+        "SubPolicyId": 4074,
+        "PolicyId": 3012,
+        "SubPolicyName": "Transaction Monitoring and Investigation Procedures",
+        "Description": "This subpolicy details the procedures for monitoring transactions and investigating suspicious activities as part of the EDD process. It outlines the criteria for identifying high-risk customers and the steps to be taken when suspicious transactions are detected.",
+        "Control": "WHAT: Implement a transaction monitoring system that flags suspicious activities based on predefined criteria. WHO: Compliance officers are responsible for monitoring transactions and initiating investigations. WHEN: Monitoring should occur in real-time, with daily reviews of flagged transactions. HOW: Utilize automated tools for transaction monitoring and manual reviews for flagged transactions. WHERE: This control applies to all transaction processing systems used by the institution."
+      },
+      {
+        "SubPolicyId": 4075,
+        "PolicyId": 3012,
+        "SubPolicyName": "Audit Follow-Up and Remediation Action Plans",
+        "Description": "This subpolicy outlines the requirements for developing and implementing remediation action plans following EDD audits. It specifies the responsibilities of management and the audit team in ensuring that recommendations are acted upon.",
+        "Control": "WHAT: Develop a remediation action plan that addresses all audit findings with clear priorities. WHO: Management of the relevant business lines is responsible for implementing the action plan. WHEN: Action plans must be developed within two weeks of the audit report and implemented within agreed timelines. HOW: Regular progress reports must be submitted to the audit committee. WHERE: This control applies to all business lines involved in EDD processes."
+      },
+      {
+        "SubPolicyId": 4076,
+        "PolicyId": 3013,
+        "SubPolicyName": "Customer Risk Assessment Procedures",
+        "Description": "This subpolicy outlines the procedures for conducting risk assessments on customers identified as high-risk. It includes guidelines for evaluating customer profiles, transaction patterns, and potential red flags.",
+        "Control": "WHAT: Conduct a comprehensive risk assessment for each high-risk customer, evaluating their profile, transaction history, and any potential red flags. WHO: The compliance department is responsible for conducting the assessments, with input from customer service and risk management teams. WHEN: Risk assessments must be conducted at the time of onboarding and reviewed annually or when significant changes occur in the customer's profile. HOW: Utilize risk assessment tools and methodologies to evaluate customer risk levels, documenting findings in the customer file. WHERE: This control applies to all customer accounts classified as high-risk within the institution's CRM system."
+      },
+      {
+        "SubPolicyId": 4077,
+        "PolicyId": 3013,
+        "SubPolicyName": "Ongoing Monitoring and Reporting",
+        "Description": "This subpolicy details the requirements for ongoing monitoring of high-risk customers and the reporting of suspicious activities. It emphasizes the importance of timely reporting to relevant authorities.",
+        "Control": "WHAT: Implement ongoing monitoring of transactions for high-risk customers to identify suspicious activities. WHO: The transaction monitoring team is responsible for monitoring and reporting, with oversight from the compliance department. WHEN: Monitoring must occur continuously, with suspicious activities reported immediately upon detection. HOW: Use automated transaction monitoring systems to flag unusual patterns and generate alerts for further investigation. WHERE: This control applies to all transactions processed through the institution's transaction monitoring systems."
+      },
+      {
+        "SubPolicyId": 4078,
+        "PolicyId": 3014,
+        "SubPolicyName": "Comprehensive Risk Assessment Procedures",
+        "Description": "This subpolicy outlines the procedures for conducting comprehensive risk assessments to identify and evaluate ML/TF risks. It includes guidelines for data collection, risk factor analysis, and documentation of findings.",
+        "Control": "WHAT: Conduct comprehensive risk assessments that identify and evaluate ML/TF risks. WHO: Risk Management Department and Compliance Officers. WHEN: Annually, or more frequently if significant changes occur. HOW: Utilize established risk assessment frameworks and tools to analyze customer profiles, product offerings, and geographic exposure. WHERE: Across all operational units and jurisdictions where the institution operates."
+      },
+      {
+        "SubPolicyId": 4079,
+        "PolicyId": 3014,
+        "SubPolicyName": "Risk Appetite Statement Development",
+        "Description": "This subpolicy details the process for developing and maintaining the institution's risk appetite statement, including stakeholder engagement and approval processes.",
+        "Control": "WHAT: Develop and maintain a risk appetite statement that defines acceptable risk levels. WHO: Senior Management and Board of Directors. WHEN: Reviewed and updated annually or as needed. HOW: Engage stakeholders in discussions to align risk appetite with strategic objectives and document the statement for approval. WHERE: At the institutional level, ensuring alignment across all departments."
+      },
+      {
+        "SubPolicyId": 4080,
+        "PolicyId": 3015,
+        "SubPolicyName": "Client Net Worth Assessment",
+        "Description": "This subpolicy outlines the procedures for obtaining and assessing information regarding a client's total net worth during the onboarding process. It emphasizes the importance of collecting comprehensive data to establish a baseline for further verification.",
+        "Control": "WHAT: Collect general information on the client's total net worth during the onboarding process. WHO: Client onboarding team and compliance officers. WHEN: At the initial client onboarding stage. HOW: Utilize structured questionnaires and informal interviews to gather data. WHERE: In-person meetings, virtual consultations, or through secure online forms."
+      },
+      {
+        "SubPolicyId": 4081,
+        "PolicyId": 3015,
+        "SubPolicyName": "Source of Wealth Documentation",
+        "Description": "This subpolicy provides guidelines for obtaining information on the source of wealth from clients and other reliable sources. It includes methods for collecting data through interviews and public records.",
+        "Control": "WHAT: Obtain detailed information on the source of wealth through client interviews and public sources. WHO: Compliance officers and client relationship managers. WHEN: During the client onboarding and ongoing monitoring phases. HOW: Conduct informal interviews and research public records, including media outlets and financial statements. WHERE: Client meetings, online databases, and public registries."
+      },
+      {
+        "SubPolicyId": 4082,
+        "PolicyId": 3015,
+        "SubPolicyName": "Verification of Source of Wealth",
+        "Description": "This subpolicy outlines the verification process for the source of wealth, including the types of documentation required and the methods for assessing their validity.",
+        "Control": "WHAT: Verify the source of wealth using a combination of client-provided documents and independent third-party sources. WHO: Compliance officers and risk assessment teams. WHEN: Upon receipt of client information and periodically thereafter based on risk assessment. HOW: Review and validate documents such as tax returns, bank statements, and third-party confirmations. WHERE: Within the compliance management system and relevant client files."
+      },
+      {
+        "SubPolicyId": 4083,
+        "PolicyId": 3016,
+        "SubPolicyName": "Client Information Collection and Verification",
+        "Description": "This subpolicy details the requirements for collecting and verifying client information related to the source of funds and source of wealth. It mandates the collection of specific documentation and the verification of information through independent sources.",
+        "Control": "WHAT: Collect detailed information about the source of funds and source of wealth from clients, including specific documentation such as bank statements, tax returns, and employment contracts. WHO: Compliance officers and client onboarding teams are responsible for collecting and verifying this information. WHEN: Information must be collected at the time of client onboarding and verified within 30 days. HOW: Use standardized forms and checklists to ensure all required information is gathered and verified. WHERE: This process applies to all client onboarding activities across all branches and online platforms."
+      },
+      {
+        "SubPolicyId": 4084,
+        "PolicyId": 3016,
+        "SubPolicyName": "Ongoing Monitoring of PEP Transactions",
+        "Description": "This subpolicy outlines the requirements for the ongoing monitoring of transactions involving Politically Exposed Persons (PEPs) to ensure that their transactions are legitimate and consistent with their known sources of wealth.",
+        "Control": "WHAT: Implement transaction monitoring systems to flag and review transactions involving PEPs for unusual patterns or amounts. WHO: Compliance monitoring teams are responsible for conducting these reviews. WHEN: Transactions must be monitored in real-time, with reviews conducted weekly for flagged transactions. HOW: Utilize automated monitoring tools that integrate with transaction processing systems to identify and alert on suspicious activities. WHERE: This monitoring applies to all transactions processed through the institution's systems, including online and branch transactions."
+      },
+      {
+        "SubPolicyId": 4085,
+        "PolicyId": 3017,
+        "SubPolicyName": "Customer Information Collection and Verification",
+        "Description": "This subpolicy details the requirements for collecting and verifying additional customer information necessary for Enhanced Due Diligence. It emphasizes the importance of understanding the customer's background, source of wealth, and ongoing monitoring of their transactional behavior.",
+        "Control": "WHAT: Financial institutions must collect and verify additional information on customers, including occupation, volume of assets, and data from public databases. WHO: Compliance officers and customer service representatives are responsible for implementing this subpolicy. WHEN: Information must be collected at the time of onboarding and updated at least annually or when significant changes occur. HOW: Institutions will utilize automated systems for data collection and verification, supplemented by manual checks as necessary. WHERE: This control applies to all customer onboarding processes across all branches and digital platforms."
+      },
+      {
+        "SubPolicyId": 4086,
+        "PolicyId": 3017,
+        "SubPolicyName": "Ongoing Monitoring and Profile Adjustment",
+        "Description": "This subpolicy outlines the procedures for ongoing monitoring of customer transactions and the adjustment of customer profiles based on new information and behavioral changes.",
+        "Control": "WHAT: Institutions must conduct regular reviews of customer transactions and adjust profiles based on findings. WHO: Risk management teams and compliance officers are responsible for monitoring and adjustments. WHEN: Monitoring should occur continuously, with formal reviews conducted quarterly. HOW: Institutions will employ transaction monitoring systems and analytics to identify unusual patterns and behaviors. WHERE: This control is applicable to all customer accounts and transactions processed through the institution's systems."
+      },
+      {
+        "SubPolicyId": 4087,
+        "PolicyId": 3018,
+        "SubPolicyName": "Customer Information Collection and Verification",
+        "Description": "This subpolicy outlines the requirements for collecting and verifying customer information during the account opening process and throughout the customer relationship. It mandates the use of reliable sources for verification and establishes procedures for documenting the verification process.",
+        "Control": "WHAT: Financial institutions must collect and verify customer identification information using reliable sources such as government-issued IDs and third-party verification services. WHO: The Compliance Department is responsible for overseeing the collection and verification process. WHEN: Customer information must be collected at account opening and verified within 5 business days. HOW: Institutions will utilize automated verification tools and manual checks to ensure accuracy. WHERE: This control applies to all customer onboarding processes across all branches and digital platforms."
+      },
+      {
+        "SubPolicyId": 4088,
+        "PolicyId": 3018,
+        "SubPolicyName": "Ongoing Monitoring of Customer Transactions",
+        "Description": "This subpolicy details the requirements for ongoing monitoring of customer transactions to identify suspicious activities and ensure compliance with EDD standards. It includes guidelines for transaction analysis and escalation procedures.",
+        "Control": "WHAT: Institutions must implement transaction monitoring systems that analyze customer transactions for unusual patterns or activities. WHO: The Risk Management Team is responsible for monitoring transactions and escalating suspicious activities to the Compliance Department. WHEN: Monitoring must occur in real-time, with daily reviews of flagged transactions. HOW: Institutions will use automated monitoring systems with predefined thresholds for alerts. WHERE: This control applies to all transaction processing systems used by the institution."
+      },
+      {
+        "SubPolicyId": 4089,
+        "PolicyId": 3018,
+        "SubPolicyName": "Periodic Information Refresh",
+        "Description": "This subpolicy establishes the requirements for periodically refreshing customer information to ensure its accuracy and relevance. It outlines the frequency and methods for conducting information updates.",
+        "Control": "WHAT: Financial institutions must refresh customer information at least annually or upon significant changes in customer circumstances. WHO: The Customer Service Team is responsible for initiating the refresh process. WHEN: Information refreshes must be completed within 30 days of the scheduled review date. HOW: Institutions will utilize customer outreach methods, including emails and phone calls, to collect updated information. WHERE: This control applies to all customer accounts across all operational environments."
+      },
+      {
+        "SubPolicyId": 4090,
+        "PolicyId": 3019,
+        "SubPolicyName": "PEP Identification and Risk Assessment",
+        "Description": "This subpolicy outlines the procedures for identifying PEPs and conducting risk assessments to evaluate their potential risk levels. It includes guidelines for gathering information from reliable sources and documenting the assessment process.",
+        "Control": "WHAT: Conduct a thorough identification process for all customers to determine PEP status using reliable databases and media sources. WHO: Compliance officers and customer onboarding teams are responsible for this process. WHEN: This identification must occur at the time of customer onboarding and be reviewed annually or upon any significant change in customer circumstances. HOW: Utilize automated screening tools and manual checks against PEP lists and media reports. WHERE: This control applies to all customer onboarding processes across all branches and online platforms."
+      },
+      {
+        "SubPolicyId": 4091,
+        "PolicyId": 3019,
+        "SubPolicyName": "Ongoing Monitoring of PEP Transactions",
+        "Description": "This subpolicy establishes the requirements for ongoing monitoring of transactions involving PEPs to detect any suspicious activities or changes in risk profile.",
+        "Control": "WHAT: Implement continuous monitoring of all transactions involving PEPs, including screening against updated PEP and sanctions lists. WHO: Transaction monitoring teams and compliance officers are responsible for this ongoing oversight. WHEN: Monitoring must occur in real-time for all transactions and be reviewed on a monthly basis for any flagged activities. HOW: Use transaction monitoring software to identify unusual patterns and generate alerts for further investigation. WHERE: This control is applicable across all transaction processing systems and platforms used by the institution."
+      },
+      {
+        "SubPolicyId": 4092,
+        "PolicyId": 3020,
+        "SubPolicyName": "Client Suitability and Appropriateness Assessment",
+        "Description": "This subpolicy mandates the implementation of a structured process for conducting suitability and appropriateness assessments for all prospective clients seeking investment services. It requires financial institutions to gather detailed financial information and assess the client's investment knowledge, experience, and risk tolerance.",
+        "Control": "WHAT: Conduct suitability and appropriateness assessments for all prospective clients. WHO: Compliance officers and relationship managers are responsible for executing assessments. WHEN: Assessments must be completed prior to the approval of any investment service. HOW: Utilize standardized assessment tools and questionnaires to gather client information and evaluate their financial situation. WHERE: Assessments are to be conducted within the institution's CRM system and documented in client files."
+      },
+      {
+        "SubPolicyId": 4093,
+        "PolicyId": 3021,
+        "SubPolicyName": "Training and Specialization for Front-line Staff",
+        "Description": "This subpolicy mandates specialized training for front-line staff in private banking to enhance their ability to perform Enhanced Due Diligence (EDD) and identify potential financial crime risks. Training programs should cover the identification of red flags, risk assessment techniques, and compliance with regulatory requirements.",
+        "Control": "WHAT: Implement a comprehensive training program focused on EDD and financial crime risk identification. WHO: Training will be conducted by the Compliance Department and external experts. WHEN: Training sessions will be held quarterly, with mandatory refreshers every six months. HOW: Training effectiveness will be measured through assessments and feedback surveys. WHERE: Training will take place in designated training facilities and online platforms accessible to all relevant staff."
+      },
+      {
+        "SubPolicyId": 4094,
+        "PolicyId": 3021,
+        "SubPolicyName": "Transaction Risk Assessment Procedures",
+        "Description": "This subpolicy outlines the procedures for assessing the risk of high-value and cross-border transactions in private banking. It requires that all transactions be evaluated against established risk criteria and documented accordingly.",
+        "Control": "WHAT: Conduct risk assessments for all high-value and cross-border transactions prior to approval. WHO: Transaction approval will be the responsibility of the Risk Management Team. WHEN: Assessments must be completed within 48 hours of transaction request. HOW: Risk assessments will utilize a standardized checklist and scoring system to evaluate transaction risks. WHERE: Assessments will be documented in the transaction management system."
+      },
+      {
+        "SubPolicyId": 4095,
+        "PolicyId": 3021,
+        "SubPolicyName": "Oversight and Monitoring of High-Value Assets",
+        "Description": "This subpolicy establishes oversight mechanisms for managing high-value assets, including precious metals, stones, and art, to mitigate risks associated with their valuation and potential misuse.",
+        "Control": "WHAT: Implement regular audits and monitoring of high-value asset transactions and valuations. WHO: The Internal Audit Department will conduct audits, with oversight from the Compliance Officer. WHEN: Audits will occur bi-annually, with additional reviews triggered by significant transactions. HOW: Audit findings will be documented and reported to senior management for review. WHERE: Audits will cover all locations where high-value assets are managed."
+      },
+      {
+        "SubPolicyId": 4096,
+        "PolicyId": 3022,
+        "SubPolicyName": "Verification of Customer Documentation",
+        "Description": "This subpolicy outlines the requirements for verifying customer documentation to ensure authenticity and legitimacy. It includes guidelines for assessing the source of wealth and funds, as well as the need for additional documentation for high-risk customers.",
+        "Control": "WHAT: Financial institutions must implement a verification process for all customer documentation, including source of wealth and funds. WHO: Compliance officers and customer service representatives are responsible for conducting verifications. WHEN: Documentation must be verified during the onboarding process and periodically thereafter, at least annually. HOW: Verification methods include cross-referencing documents with reliable sources, utilizing third-party verification services, and conducting interviews with customers. WHERE: This control applies to all customer onboarding processes across all branches and digital platforms."
+      },
+      {
+        "SubPolicyId": 4097,
+        "PolicyId": 3022,
+        "SubPolicyName": "Ongoing Transaction Monitoring",
+        "Description": "This subpolicy establishes the requirements for ongoing monitoring of transactions for high-risk customers. It includes criteria for identifying suspicious activities and the procedures for reporting such activities.",
+        "Control": "WHAT: Financial institutions must implement ongoing monitoring of transactions for high-risk customers, focusing on identifying unusual patterns or suspicious activities. WHO: Transaction monitoring teams and compliance officers are responsible for monitoring and reporting. WHEN: Monitoring must occur in real-time for all transactions and reviewed at least monthly for high-risk accounts. HOW: Monitoring will utilize automated systems to flag unusual transactions, supplemented by manual reviews as necessary. WHERE: This control applies to all transaction processing systems and customer accounts identified as high-risk."
+      },
+      {
+        "SubPolicyId": 4098,
+        "PolicyId": 3023,
+        "SubPolicyName": "Identification and Verification of Beneficial Owners",
+        "Description": "This subpolicy mandates the identification and verification of all beneficial owners, directors, and relevant officers associated with complex legal structures. Financial institutions must ensure that all parties are documented and their identities verified to prevent misuse of the structures.",
+        "Control": "WHAT: Conduct thorough identification and verification of all beneficial owners and relevant officers. WHO: Compliance officers and risk management teams are responsible for this process. WHEN: This verification must occur during the customer onboarding process and be updated annually or upon any significant change. HOW: Utilize reliable third-party verification services and maintain records of all verification activities. WHERE: This control applies to all customer accounts involving complex legal structures across all operational environments."
+      },
+      {
+        "SubPolicyId": 4099,
+        "PolicyId": 3023,
+        "SubPolicyName": "Assessment of Legal Arrangements",
+        "Description": "This subpolicy requires financial institutions to assess the legitimacy and necessity of the legal arrangements used by customers with complex structures. Institutions must document the rationale behind the setup and ensure that it aligns with the customer's business activities.",
+        "Control": "WHAT: Evaluate the legal arrangements for legitimacy and necessity. WHO: Compliance analysts and legal advisors are responsible for conducting these assessments. WHEN: Assessments should be performed at the time of onboarding and reviewed annually or when there are changes in the structure. HOW: Review legal documentation such as trust deeds and foundation bylaws, and consult with legal experts as needed. WHERE: This assessment applies to all complex structures identified in customer accounts across all jurisdictions."
+      },
+      {
+        "SubPolicyId": 4100,
+        "PolicyId": 3023,
+        "SubPolicyName": "Monitoring Transactions for Unusual Activity",
+        "Description": "This subpolicy outlines the requirements for monitoring transactions associated with complex legal structures to identify any unusual or suspicious activity that may indicate financial crime.",
+        "Control": "WHAT: Implement transaction monitoring systems to detect unusual patterns. WHO: The compliance monitoring team is responsible for this activity. WHEN: Continuous monitoring must occur for all transactions, with periodic reviews conducted monthly. HOW: Utilize automated transaction monitoring tools and conduct manual reviews of flagged transactions. WHERE: This monitoring applies to all transactions processed through accounts with complex legal structures."
+      },
+      {
+        "SubPolicyId": 4101,
+        "PolicyId": 3024,
+        "SubPolicyName": "Risk Assessment Review",
+        "Description": "This subpolicy outlines the requirements for reviewing the risk assessment documentation as part of the EDD audit process. Auditors must ensure that the risk assessment captures all relevant risks associated with customers, products, services, and geographies.",
+        "Control": "Auditors (WHO) will review the risk assessment documentation (WHAT) at the beginning of the audit process (WHEN) to ensure it is comprehensive and up-to-date. This review will include verifying that the risk assessment reflects changes in the organization and regulatory environment (HOW) by comparing it against current market conditions and regulatory updates (WHERE)."
+      },
+      {
+        "SubPolicyId": 4102,
+        "PolicyId": 3024,
+        "SubPolicyName": "Policy and Procedure Evaluation",
+        "Description": "This subpolicy details the evaluation of the financial institution's policies and procedures related to EDD. Auditors must assess whether these documents are aligned with the risk assessment and effectively mitigate identified risks.",
+        "Control": "Auditors (WHO) will evaluate the policies and procedures (WHAT) during the audit (WHEN) to ensure they are risk-based and effective. This evaluation will involve checking for alignment with the risk assessment and the ability to develop customer-specific profiles (HOW) by reviewing documentation and interviewing relevant staff (WHERE)."
+      },
+      {
+        "SubPolicyId": 4103,
+        "PolicyId": 3024,
+        "SubPolicyName": "Staff Training Assessment",
+        "Description": "This subpolicy outlines the requirements for assessing the training provided to staff involved in EDD processes. Auditors must ensure that staff have the necessary knowledge and skills to perform their duties effectively.",
+        "Control": "Auditors (WHO) will review training records and materials (WHAT) during the audit (WHEN) to assess the adequacy of training provided to staff. This will include evaluating attendance records and knowledge testing results (HOW) to ensure comprehensive training is delivered (WHERE)."
+      },
+      {
+        "SubPolicyId": 4104,
+        "PolicyId": 3024,
+        "SubPolicyName": "Record Keeping and Documentation Review",
+        "Description": "This subpolicy specifies the requirements for reviewing record-keeping practices related to EDD. Auditors must ensure that documentation is accurate, logical, and maintained for the required duration.",
+        "Control": "Auditors (WHO) will examine the record-keeping practices (WHAT) during the audit (WHEN) to ensure compliance with local regulations and organizational policies. This will involve checking the accessibility and accuracy of records (HOW) to confirm that they are maintained in a secure and organized manner (WHERE)."
+      },
+      {
+        "SubPolicyId": 4105,
+        "PolicyId": 3024,
+        "SubPolicyName": "Follow-Up on Audit Recommendations",
+        "Description": "This subpolicy outlines the process for following up on audit recommendations to ensure timely implementation and effectiveness of corrective actions.",
+        "Control": "Management of relevant business lines (WHO) will track the implementation of audit recommendations (WHAT) following the audit report (WHEN). This will involve regular updates and reporting on progress (HOW) to ensure that all actions are completed in a timely manner (WHERE)."
+      },
+      {
+        "SubPolicyId": 4106,
+        "PolicyId": 3025,
+        "SubPolicyName": "Audit Planning and Preparation",
+        "Description": "This subpolicy outlines the steps for planning and preparing for EDD audits, including defining the audit scope, objectives, and methodology tailored to the institution's specific needs.",
+        "Control": "WHAT: Develop an audit plan that outlines the scope, objectives, and methodology for the EDD audit. WHO: The compliance officer and internal audit team are responsible for creating the audit plan. WHEN: The audit plan must be developed at least 30 days prior to the audit start date. HOW: Utilize risk assessment tools and previous audit findings to inform the planning process. WHERE: The audit plan should be applicable to all relevant departments and systems involved in EDD."
+      },
+      {
+        "SubPolicyId": 4107,
+        "PolicyId": 3025,
+        "SubPolicyName": "Conducting the EDD Audit",
+        "Description": "This subpolicy details the procedures for executing the EDD audit, including data collection, analysis, and evaluation of EDD processes.",
+        "Control": "WHAT: Execute the audit plan by collecting and analyzing data related to EDD processes. WHO: The internal audit team, led by a qualified auditor, is responsible for conducting the audit. WHEN: The audit should be conducted within the timeframe specified in the audit plan. HOW: Use established audit methodologies and tools to assess compliance with EDD requirements. WHERE: The audit should cover all relevant systems, departments, and geographic locations involved in EDD."
+      },
+      {
+        "SubPolicyId": 4108,
+        "PolicyId": 3025,
+        "SubPolicyName": "Reporting and Follow-Up",
+        "Description": "This subpolicy specifies the requirements for reporting audit findings and implementing follow-up actions to address identified deficiencies.",
+        "Control": "WHAT: Prepare a comprehensive audit report detailing findings, recommendations, and action items. WHO: The lead auditor is responsible for drafting the report, while the compliance officer oversees the follow-up actions. WHEN: The audit report must be completed within 15 days of the audit conclusion, and follow-up actions should be initiated immediately thereafter. HOW: Utilize a standardized reporting template to ensure consistency and clarity in findings. WHERE: The report should be distributed to senior management and relevant stakeholders within the organization."
+      }
+    ],
+    "policyapproval": []
+  },
+  "schema": {
+    "policies": {
+      "columns": [
+        "PolicyId",
+        "CurrentVersion",
+        "Status",
+        "PolicyDescription",
+        "PolicyName",
+        "StartDate",
+        "EndDate",
+        "Department",
+        "CreatedByName",
+        "CreatedByDate",
+        "Applicability",
+        "DocURL",
+        "Scope",
+        "Objective",
+        "Identifier",
+        "PermanentTemporary",
+        "ActiveInactive",
+        "FrameworkId",
+        "Reviewer",
+        "CoverageRate",
+        "AcknowledgedUserIds",
+        "AcknowledgementCount",
+        "PolicyType",
+        "PolicyCategory",
+        "PolicySubCategory",
+        "Entities"
+      ],
+      "row_count": 24,
+      "column_details": [
+        {
+          "name": "PolicyId",
+          "type": "int",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "CurrentVersion",
+          "type": "double",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Status",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PolicyDescription",
+          "type": "longtext",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PolicyName",
+          "type": "varchar(255)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "StartDate",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "EndDate",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Department",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "CreatedByName",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "CreatedByDate",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Applicability",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "DocURL",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Scope",
+          "type": "longtext",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Objective",
+          "type": "longtext",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Identifier",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PermanentTemporary",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ActiveInactive",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "FrameworkId",
+          "type": "int",
+          "null": "NO",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Reviewer",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "CoverageRate",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "AcknowledgedUserIds",
+          "type": "json",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "AcknowledgementCount",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PolicyType",
+          "type": "varchar(225)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PolicyCategory",
+          "type": "varchar(225)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PolicySubCategory",
+          "type": "varchar(225)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Entities",
+          "type": "json",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        }
+      ]
+    },
+    "policyversions": {
+      "columns": [
+        "VersionId",
+        "PolicyId",
+        "Version",
+        "PolicyName",
+        "CreatedBy",
+        "CreatedDate",
+        "PreviousVersionId",
+        "frameworkId"
+      ],
+      "row_count": 24,
+      "column_details": [
+        {
+          "name": "VersionId",
+          "type": "int",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "PolicyId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Version",
+          "type": "varchar(20)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PolicyName",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "CreatedBy",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "CreatedDate",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PreviousVersionId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "frameworkId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        }
+      ]
+    },
+    "policycategories": {
+      "columns": [
+        "Id",
+        "PolicyType",
+        "PolicyCategory",
+        "PolicySubCategory",
+        "FrameworkId"
+      ],
+      "row_count": 10,
+      "column_details": [
+        {
+          "name": "Id",
+          "type": "int",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "PolicyType",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PolicyCategory",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PolicySubCategory",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "FrameworkId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        }
+      ]
+    },
+    "subpolicies": {
+      "columns": [
+        "SubPolicyId",
+        "PolicyId",
+        "SubPolicyName",
+        "CreatedByName",
+        "CreatedByDate",
+        "Identifier",
+        "Description",
+        "Status",
+        "PermanentTemporary",
+        "Control",
+        "FrameworkId"
+      ],
+      "row_count": 63,
+      "column_details": [
+        {
+          "name": "SubPolicyId",
+          "type": "int",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "PolicyId",
+          "type": "int",
+          "null": "NO",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "SubPolicyName",
+          "type": "varchar(255)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "CreatedByName",
+          "type": "varchar(255)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "CreatedByDate",
+          "type": "date",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Identifier",
+          "type": "varchar(45)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Description",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Status",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PermanentTemporary",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Control",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "FrameworkId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        }
+      ]
+    },
+    "policyapproval": {
+      "columns": [
+        "ApprovalId",
+        "ExtractedData",
+        "UserId",
+        "ReviewerId",
+        "Version",
+        "ApprovedNot",
+        "ApprovedDate",
+        "PolicyId",
+        "Identifier",
+        "ApprovalDueDate",
+        "FrameworkId"
+      ],
+      "row_count": 0,
+      "column_details": [
+        {
+          "name": "ApprovalId",
+          "type": "int",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "ExtractedData",
+          "type": "json",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "UserId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ReviewerId",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Version",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ApprovedNot",
+          "type": "tinyint(1)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ApprovedDate",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PolicyId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Identifier",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ApprovalDueDate",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "FrameworkId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        }
+      ]
+    }
+  }
+}

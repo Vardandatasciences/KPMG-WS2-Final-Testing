@@ -1,0 +1,1212 @@
+{
+  "framework": {
+    "FrameworkId": 354,
+    "FrameworkName": "ISO 27011",
+    "FrameworkDescription": "ISO 27001 standard provides companies of any size and from all sectors of activity with guidance for establishing, implementing, maintaining and continually improving an information security management system.",
+    "Category": "Information Security & Risk Management Framework",
+    "InternalExternal": "External",
+    "Identifier": "FW-354",
+    "Status": "Approved",
+    "CurrentVersion": 1.0
+  },
+  "module": "compliance",
+  "tables": {
+    "compliance": [
+      {
+        "ComplianceId": 2169,
+        "SubPolicyId": 1839,
+        "ComplianceTitle": "Role-Based Access Control Implementation",
+        "ComplianceItemDescription": "Implement role-based access control (RBAC) to restrict access to sensitive information.",
+        "ComplianceType": "Operational",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2170,
+        "SubPolicyId": 1840,
+        "ComplianceTitle": "Establish Incident Response Team",
+        "ComplianceItemDescription": "Establish an incident response team (IRT) consisting of representatives from IT, legal, and communications departments to handle security incidents.",
+        "ComplianceType": "Operational",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2171,
+        "SubPolicyId": 1840,
+        "ComplianceTitle": "Conduct Bi-Annual Incident Response Drills",
+        "ComplianceItemDescription": "Conduct bi-annual incident response drills to test the effectiveness of incident detection, reporting, response, and recovery processes.",
+        "ComplianceType": "Operational",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2172,
+        "SubPolicyId": 1841,
+        "ComplianceTitle": "Implementation of Role-Based Access Control (RBAC)",
+        "ComplianceItemDescription": "All telecommunications systems must implement role-based access control to ensure that only authorized personnel can access sensitive information.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2173,
+        "SubPolicyId": 1841,
+        "ComplianceTitle": "Quarterly Review of Access Rights",
+        "ComplianceItemDescription": "Access rights to telecommunications systems must be reviewed quarterly and updated as necessary.",
+        "ComplianceType": "Internal",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2174,
+        "SubPolicyId": 1842,
+        "ComplianceTitle": "Establish Incident Response Team",
+        "ComplianceItemDescription": "Establish an incident response team (IRT) consisting of members from IT, Legal, and Communications departments to handle security incidents.",
+        "ComplianceType": "Operational",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2175,
+        "SubPolicyId": 1842,
+        "ComplianceTitle": "Conduct Bi-annual Incident Response Drills",
+        "ComplianceItemDescription": "The Incident Response Team (IRT) must conduct incident response drills bi-annually to test and improve incident response procedures.",
+        "ComplianceType": "Operational",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2176,
+        "SubPolicyId": 1843,
+        "ComplianceTitle": "Bi-annual Risk Assessments",
+        "ComplianceItemDescription": "Conduct risk assessments every six months using standardized methodologies and tools.",
+        "ComplianceType": "Internal",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2177,
+        "SubPolicyId": 1844,
+        "ComplianceTitle": "Establish Incident Response Team",
+        "ComplianceItemDescription": "Establish an incident response team comprising of IT Security Team members to handle incident detection and response.",
+        "ComplianceType": "Operational",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2178,
+        "SubPolicyId": 1844,
+        "ComplianceTitle": "Develop Incident Response Plan",
+        "ComplianceItemDescription": "Develop a comprehensive incident response plan outlining procedures for incident detection, reporting, and recovery processes.",
+        "ComplianceType": "Operational",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2179,
+        "SubPolicyId": 1845,
+        "ComplianceTitle": "Bi-annual Training on ITU Recommendations",
+        "ComplianceItemDescription": "All relevant personnel must attend bi-annual training sessions on ITU Recommendations organized by the Compliance Officer. Training effectiveness will be measured through assessments and feedback.",
+        "ComplianceType": "Internal",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2180,
+        "SubPolicyId": 1846,
+        "ComplianceTitle": "Quarterly Compliance Monitoring",
+        "ComplianceItemDescription": "Implement a compliance monitoring system to track adherence to ITU Recommendations on a quarterly basis.",
+        "ComplianceType": "Operational",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2181,
+        "SubPolicyId": 1846,
+        "ComplianceTitle": "Compliance Reporting",
+        "ComplianceItemDescription": "Generate reports on compliance with ITU Recommendations based on monitoring system data.",
+        "ComplianceType": "Operational",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2182,
+        "SubPolicyId": 1847,
+        "ComplianceTitle": "Role-Based Access Controls Implementation",
+        "ComplianceItemDescription": "Implement role-based access controls to restrict access to information systems.",
+        "ComplianceType": "Internal",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2183,
+        "SubPolicyId": 1847,
+        "ComplianceTitle": "Quarterly Access Rights Review",
+        "ComplianceItemDescription": "Review access rights quarterly and update as necessary.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2184,
+        "SubPolicyId": 1848,
+        "ComplianceTitle": "Establish Incident Response Team",
+        "ComplianceItemDescription": "Establish an incident response team comprising of designated members from various organizational units to manage information security incidents effectively.",
+        "ComplianceType": "Operational",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2185,
+        "SubPolicyId": 1848,
+        "ComplianceTitle": "Incident Reporting Procedures",
+        "ComplianceItemDescription": "Define clear incident reporting procedures that specify the timeline for reporting incidents, the required information to be included, and the designated reporting channels.",
+        "ComplianceType": "Operational",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2186,
+        "SubPolicyId": 1849,
+        "ComplianceTitle": "Data Classification Framework Implementation",
+        "ComplianceItemDescription": "Implement a data classification framework to categorize organizational data into different categories (e.g., public, internal, confidential) and apply appropriate handling procedures based on the classification level.",
+        "ComplianceType": "Internal",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2187,
+        "SubPolicyId": 1850,
+        "ComplianceTitle": "Initiation of Investigation within 48 Hours",
+        "ComplianceItemDescription": "All alleged policy violations must be investigated within 48 hours of the reported incident.",
+        "ComplianceType": "Internal",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2188,
+        "SubPolicyId": 1850,
+        "ComplianceTitle": "Utilization of Standardized Investigation Forms",
+        "ComplianceItemDescription": "All investigations of alleged policy violations must utilize standardized investigation forms and interview protocols.",
+        "ComplianceType": "Internal",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2189,
+        "SubPolicyId": 1851,
+        "ComplianceTitle": "Secure Connection Usage",
+        "ComplianceItemDescription": "Employees must use secure connections (VPN) when accessing organizational systems remotely to ensure data protection.",
+        "ComplianceType": "Operational",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2190,
+        "SubPolicyId": 1851,
+        "ComplianceTitle": "Device Password Protection",
+        "ComplianceItemDescription": "Employees must ensure that their devices are password-protected before accessing organizational systems remotely.",
+        "ComplianceType": "Operational",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2191,
+        "SubPolicyId": 1852,
+        "ComplianceTitle": "Timely Reporting of Security Events",
+        "ComplianceItemDescription": "All employees and contractors must report security events via the designated incident reporting system within 24 hours of detection.",
+        "ComplianceType": "Operational",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2192,
+        "SubPolicyId": 1853,
+        "ComplianceTitle": "Role-based Access Control",
+        "ComplianceItemDescription": "Access to secure areas must be granted based on role and necessity.",
+        "ComplianceType": "Internal",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2193,
+        "SubPolicyId": 1853,
+        "ComplianceTitle": "Timely Access Review",
+        "ComplianceItemDescription": "Access requests must be reviewed within 48 hours.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2194,
+        "SubPolicyId": 1854,
+        "ComplianceTitle": "Implement Role-Based Access Control (RBAC)",
+        "ComplianceItemDescription": "Implement role-based access control for production environments to restrict access based on user roles and responsibilities.",
+        "ComplianceType": "Operational",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2195,
+        "SubPolicyId": 1855,
+        "ComplianceTitle": "Submission Deadline for Change Requests",
+        "ComplianceItemDescription": "All change requests must be submitted at least one week prior to the planned implementation date.",
+        "ComplianceType": "Operational",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2196,
+        "SubPolicyId": 1855,
+        "ComplianceTitle": "Evaluation Criteria for Change Requests",
+        "ComplianceItemDescription": "Change requests will be evaluated based on impact and risk assessments.",
+        "ComplianceType": "Operational",
+        "Criticality": "Critical"
+      },
+      {
+        "ComplianceId": 2197,
+        "SubPolicyId": 1856,
+        "ComplianceTitle": "Strict Access Controls Implementation",
+        "ComplianceItemDescription": "Implement strict access controls for auditors during testing to protect sensitive information and maintain system integrity.",
+        "ComplianceType": "Operational",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2198,
+        "SubPolicyId": 1856,
+        "ComplianceTitle": "Access Logs Maintenance",
+        "ComplianceItemDescription": "Maintain access logs for auditors during testing and review them post-audit.",
+        "ComplianceType": "Operational",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2199,
+        "SubPolicyId": 1857,
+        "ComplianceTitle": "Access Control Implementation",
+        "ComplianceItemDescription": "Implement role-based access control (RBAC) to restrict access to sensitive telecommunications information. Review access controls quarterly.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2200,
+        "SubPolicyId": 1857,
+        "ComplianceTitle": "Encryption Requirement",
+        "ComplianceItemDescription": "Apply encryption to all sensitive data at rest and in transit for telecommunications systems.",
+        "ComplianceType": "Internal",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2201,
+        "SubPolicyId": 1858,
+        "ComplianceTitle": "Implementation of checksums and digital signatures",
+        "ComplianceItemDescription": "Implement checksums and digital signatures to verify data integrity for all telecommunications data transmitted across networks.",
+        "ComplianceType": "Operational",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2202,
+        "SubPolicyId": 1858,
+        "ComplianceTitle": "Validation of telecommunications data integrity",
+        "ComplianceItemDescription": "Establish procedures for validating the integrity of telecommunications data after any system update or installation.",
+        "ComplianceType": "Operational",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2203,
+        "SubPolicyId": 1859,
+        "ComplianceTitle": "Development of Business Continuity Plan",
+        "ComplianceItemDescription": "Develop and implement a business continuity plan that prioritizes essential communications.",
+        "ComplianceType": "Operational",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2204,
+        "SubPolicyId": 1859,
+        "ComplianceTitle": "Annual Testing of Business Continuity Plan",
+        "ComplianceItemDescription": "The business continuity plan must be tested annually and updated as necessary.",
+        "ComplianceType": "Operational",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2205,
+        "SubPolicyId": 1860,
+        "ComplianceTitle": "Annual Risk Assessment Conduct",
+        "ComplianceItemDescription": "Conduct annual risk assessments to identify potential security threats and vulnerabilities within telecommunications operations.",
+        "ComplianceType": "Internal",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2206,
+        "SubPolicyId": 1860,
+        "ComplianceTitle": "Risk Assessment for Significant Changes",
+        "ComplianceItemDescription": "Conduct risk assessments whenever significant changes occur in the telecommunications environment to identify and mitigate new risks.",
+        "ComplianceType": "Internal",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2207,
+        "SubPolicyId": 1861,
+        "ComplianceTitle": "Establish Incident Response Plan",
+        "ComplianceItemDescription": "Develop and maintain an incident response plan that outlines roles, responsibilities, and procedures for incident management.",
+        "ComplianceType": "Operational",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2208,
+        "SubPolicyId": 1861,
+        "ComplianceTitle": "Bi-annual Review and Testing of Incident Response Plan",
+        "ComplianceItemDescription": "Review and test the incident response plan at least bi-annually to ensure its effectiveness and relevance.",
+        "ComplianceType": "Operational",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2209,
+        "SubPolicyId": 1862,
+        "ComplianceTitle": "Bi-annual Review of Normative References",
+        "ComplianceItemDescription": "Conduct a bi-annual review of all normative references and update organizational practices accordingly.",
+        "ComplianceType": "Internal",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2210,
+        "SubPolicyId": 1863,
+        "ComplianceTitle": "Submission of New Terms and Abbreviations",
+        "ComplianceItemDescription": "All personnel involved in policy development must submit new terms and abbreviations for approval using the designated form and review process.",
+        "ComplianceType": "Internal",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2211,
+        "SubPolicyId": 1864,
+        "ComplianceTitle": "Role-Based Access Control Implementation",
+        "ComplianceItemDescription": "Implement role-based access control (RBAC) to restrict access to information systems.",
+        "ComplianceType": "Internal",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2212,
+        "SubPolicyId": 1865,
+        "ComplianceTitle": "Establish Incident Response Team",
+        "ComplianceItemDescription": "Establish an incident response team led by the Incident Response Manager to handle security incidents.",
+        "ComplianceType": "Operational",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2213,
+        "SubPolicyId": 1865,
+        "ComplianceTitle": "Immediate Incident Reporting",
+        "ComplianceItemDescription": "Incidents must be reported immediately upon detection using the incident management system.",
+        "ComplianceType": "Operational",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2214,
+        "SubPolicyId": 1866,
+        "ComplianceTitle": "Implementation of Data Encryption",
+        "ComplianceItemDescription": "All sensitive data at rest and in transit must be encrypted to protect against unauthorized access.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2215,
+        "SubPolicyId": 1866,
+        "ComplianceTitle": "Annual Review of Data Protection Measures",
+        "ComplianceItemDescription": "Data protection measures must be reviewed annually to ensure compliance with data protection standards.",
+        "ComplianceType": "Internal",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2216,
+        "SubPolicyId": 1867,
+        "ComplianceTitle": "Implementation of Role-Based Access Controls (RBAC)",
+        "ComplianceItemDescription": "Implement role-based access controls to restrict access to telecommunications systems as per defined roles and access levels.",
+        "ComplianceType": "Operational",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2217,
+        "SubPolicyId": 1868,
+        "ComplianceTitle": "Development of Incident Response Plan",
+        "ComplianceItemDescription": "Develop and implement an incident response plan that includes identification, containment, eradication, and recovery steps.",
+        "ComplianceType": "Operational",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2218,
+        "SubPolicyId": 1868,
+        "ComplianceTitle": "Annual Testing and Updating of Incident Response Plan",
+        "ComplianceItemDescription": "The incident response plan must be tested annually and updated as necessary.",
+        "ComplianceType": "Operational",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2219,
+        "SubPolicyId": 1869,
+        "ComplianceTitle": "Weekly Malware Scans",
+        "ComplianceItemDescription": "All end systems and communications infrastructure must undergo weekly malware scans using automated tools.",
+        "ComplianceType": "Operational",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2220,
+        "SubPolicyId": 1869,
+        "ComplianceTitle": "Immediate Malware Protection Updates",
+        "ComplianceItemDescription": "IT Operations Team must apply malware protection tool updates immediately upon release.",
+        "ComplianceType": "Operational",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2221,
+        "SubPolicyId": 1870,
+        "ComplianceTitle": "Roles and Responsibilities Documentation",
+        "ComplianceItemDescription": "All personnel involved in information security must have their roles and responsibilities defined and documented annually or upon changes in personnel.",
+        "ComplianceType": "Internal",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2222,
+        "SubPolicyId": 1871,
+        "ComplianceTitle": "Information Security Training Program Implementation",
+        "ComplianceItemDescription": "Implement a training program covering information security policies, procedures, and best practices for all employees and contractors.",
+        "ComplianceType": "Internal",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2223,
+        "SubPolicyId": 1872,
+        "ComplianceTitle": "Implementation of Role-Based Access Controls",
+        "ComplianceItemDescription": "All information systems must have role-based access controls implemented by the IT Security Team and System Administrators at the time of user account creation and during access reviews. Access control management tools should be used to assign and monitor access rights.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2224,
+        "SubPolicyId": 1873,
+        "ComplianceTitle": "Quarterly Access Reviews",
+        "ComplianceItemDescription": "Conduct quarterly access reviews to identify and revoke unnecessary access rights.",
+        "ComplianceType": "Internal",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2225,
+        "SubPolicyId": 1873,
+        "ComplianceTitle": "Role Change Access Reviews",
+        "ComplianceItemDescription": "Conduct access reviews upon role changes to ensure appropriate access rights.",
+        "ComplianceType": "Internal",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2226,
+        "SubPolicyId": 1874,
+        "ComplianceTitle": "Inclusion of Data Protection Clauses in Supplier Agreements",
+        "ComplianceItemDescription": "All supplier agreements must include clauses that prohibit unauthorized disclosure of customer data and require compliance with data protection standards.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2227,
+        "SubPolicyId": 1875,
+        "ComplianceTitle": "Immediate Reporting of Incidents",
+        "ComplianceItemDescription": "All information security incidents involving customer data must be reported immediately upon identification.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2228,
+        "SubPolicyId": 1875,
+        "ComplianceTitle": "Escalation Procedures Activation",
+        "ComplianceItemDescription": "Escalation procedures must be activated if service levels for incident response are not met.",
+        "ComplianceType": "Internal",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2229,
+        "SubPolicyId": 1876,
+        "ComplianceTitle": "Documentation of Operating Procedures",
+        "ComplianceItemDescription": "All operating procedures related to information security must be documented, clearly defined, accessible, and regularly updated.",
+        "ComplianceType": "Internal",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2230,
+        "SubPolicyId": 1877,
+        "ComplianceTitle": "Development and Implementation of Spam Response Policies",
+        "ComplianceItemDescription": "Develop and implement policies for responding to spam incidents within telecommunications services.",
+        "ComplianceType": "Internal",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2231,
+        "SubPolicyId": 1877,
+        "ComplianceTitle": "Bi-Annual Review of Spam Response Policies",
+        "ComplianceItemDescription": "Review spam response policies bi-annually or as incidents arise.",
+        "ComplianceType": "Internal",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2232,
+        "SubPolicyId": 1878,
+        "ComplianceTitle": "Establish and Implement Response Procedures for DoS/DDoS Attacks",
+        "ComplianceItemDescription": "This compliance requires the establishment and implementation of response procedures for Denial of Service (DoS) and Distributed Denial of Service (DDoS) attacks. These procedures should outline the actions to be taken to mitigate the impact of such attacks on telecommunications services.",
+        "ComplianceType": "Operational",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2233,
+        "SubPolicyId": 1879,
+        "ComplianceTitle": "Implementation of Packet Filtering Protocols",
+        "ComplianceItemDescription": "Implement packet filtering protocols to identify and block malicious traffic at all network entry points.",
+        "ComplianceType": "Operational",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2234,
+        "SubPolicyId": 1879,
+        "ComplianceTitle": "Continuous Monitoring for DDoS Attacks",
+        "ComplianceItemDescription": "Implement continuous monitoring for DDoS attacks and take immediate action upon detection.",
+        "ComplianceType": "Operational",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2235,
+        "SubPolicyId": 1880,
+        "ComplianceTitle": "Immediate Suspension of Services",
+        "ComplianceItemDescription": "Telecommunications services must be suspended immediately for customers identified as sources of DoS/DDoS attacks.",
+        "ComplianceType": "Operational",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2236,
+        "SubPolicyId": 1880,
+        "ComplianceTitle": "Customer Notification Protocol",
+        "ComplianceItemDescription": "Established protocols must be followed for notifying customers of service suspension due to DoS/DDoS attacks.",
+        "ComplianceType": "Operational",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2237,
+        "SubPolicyId": 1881,
+        "ComplianceTitle": "Establishment of Confidentiality Agreements",
+        "ComplianceItemDescription": "All personnel handling sensitive communications must have confidentiality agreements in place before accessing such information.",
+        "ComplianceType": "Internal",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2238,
+        "SubPolicyId": 1881,
+        "ComplianceTitle": "Review Process for Confidentiality Agreements",
+        "ComplianceItemDescription": "Utilize standardized templates and review processes for confidentiality agreements to ensure consistency and effectiveness.",
+        "ComplianceType": "Operational",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2239,
+        "SubPolicyId": 1882,
+        "ComplianceTitle": "Establish Data Retention Periods",
+        "ComplianceItemDescription": "Define specific timeframes for retaining telecommunications data in compliance with legal requirements.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2240,
+        "SubPolicyId": 1882,
+        "ComplianceTitle": "Implement Automated Data Deletion Protocols",
+        "ComplianceItemDescription": "Utilize automated data management tools to enforce deletion of telecommunications data immediately after the retention period ends.",
+        "ComplianceType": "Operational",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2241,
+        "SubPolicyId": 1883,
+        "ComplianceTitle": "Activation of Emergency Communication Protocols",
+        "ComplianceItemDescription": "Emergency response team must activate communication protocols immediately upon identification of an emergency.",
+        "ComplianceType": "Operational",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2242,
+        "SubPolicyId": 1883,
+        "ComplianceTitle": "Utilization of Communication Management Systems",
+        "ComplianceItemDescription": "Utilize communication management systems to facilitate priority messaging during emergencies.",
+        "ComplianceType": "Operational",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2243,
+        "SubPolicyId": 1884,
+        "ComplianceTitle": "Establish Inter-Agency Communication Agreements",
+        "ComplianceItemDescription": "Legal and compliance teams must draft agreements with relevant organizations for essential communication prioritization. Agreements must be in place prior to emergency situations and regularly reviewed and updated.",
+        "ComplianceType": "Operational",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2244,
+        "SubPolicyId": 1885,
+        "ComplianceTitle": "Immediate Incident Coordination",
+        "ComplianceItemDescription": "All relevant internal teams and external stakeholders must be coordinated immediately upon identification of an information security incident.",
+        "ComplianceType": "Operational",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2245,
+        "SubPolicyId": 1885,
+        "ComplianceTitle": "Established Communication Channels",
+        "ComplianceItemDescription": "Utilize established communication channels for incident coordination to ensure timely and effective responses.",
+        "ComplianceType": "Operational",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2246,
+        "SubPolicyId": 1886,
+        "ComplianceTitle": "Installation of Physical Barriers and Intruder Detection Systems",
+        "ComplianceItemDescription": "Implement physical barriers and intruder detection systems around all telecommunications operations centers within 3 months of policy approval and review annually. Use industry-standard security measures and conduct regular audits.",
+        "ComplianceType": "Industry Standard",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2247,
+        "SubPolicyId": 1887,
+        "ComplianceTitle": "Visitor Logging and Access Control Implementation",
+        "ComplianceItemDescription": "Implement visitor logging and access control measures for all entry points to telecommunications operation rooms and control centers.",
+        "ComplianceType": "Operational",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2248,
+        "SubPolicyId": 1887,
+        "ComplianceTitle": "Real-time Visitor Log Maintenance",
+        "ComplianceItemDescription": "Maintain visitor logs in real-time and review them weekly for telecommunications operation rooms and control centers.",
+        "ComplianceType": "Operational",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2249,
+        "SubPolicyId": 1888,
+        "ComplianceTitle": "Implementation of Access Control Systems",
+        "ComplianceItemDescription": "All organizational offices and facilities must be secured with access control systems to prevent unauthorized access.",
+        "ComplianceType": "Operational",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2250,
+        "SubPolicyId": 1888,
+        "ComplianceTitle": "Regular Security Assessments",
+        "ComplianceItemDescription": "Conduct regular security assessments of all offices and facilities to identify vulnerabilities and ensure compliance with security measures.",
+        "ComplianceType": "Operational",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2251,
+        "SubPolicyId": 1889,
+        "ComplianceTitle": "Implementation of Surveillance Systems",
+        "ComplianceItemDescription": "All organizational facilities must implement surveillance systems within 3 months to monitor physical security measures.",
+        "ComplianceType": "Operational",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2252,
+        "SubPolicyId": 1890,
+        "ComplianceTitle": "Annual Risk Assessment for Environmental Threats",
+        "ComplianceItemDescription": "Conduct annual risk assessments to identify and mitigate environmental threats to organizational facilities.",
+        "ComplianceType": "Operational",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2253,
+        "SubPolicyId": 1890,
+        "ComplianceTitle": "Post-Event Risk Assessment for Environmental Threats",
+        "ComplianceItemDescription": "Conduct risk assessments after any significant environmental event to evaluate impact and implement corrective measures.",
+        "ComplianceType": "Operational",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2254,
+        "SubPolicyId": 1891,
+        "ComplianceTitle": "Implementation of HVAC Systems",
+        "ComplianceItemDescription": "All telecommunications equipment rooms must have industry-standard HVAC systems installed to regulate temperature and humidity levels.",
+        "ComplianceType": "Operational",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2255,
+        "SubPolicyId": 1891,
+        "ComplianceTitle": "Fire Suppression Systems Implementation",
+        "ComplianceItemDescription": "All telecommunications equipment rooms must have fire suppression systems installed to mitigate the risk of fire damage.",
+        "ComplianceType": "Operational",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2256,
+        "SubPolicyId": 1892,
+        "ComplianceTitle": "Implementation of Biometric Scanners and Keycard Access",
+        "ComplianceItemDescription": "All telecommunications equipment rooms must have access control systems in place, including biometric scanners and keycard access, to prevent unauthorized entry.",
+        "ComplianceType": "Operational",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2257,
+        "SubPolicyId": 1892,
+        "ComplianceTitle": "Operational Audits and Access Logs Maintenance",
+        "ComplianceItemDescription": "Regular audits and maintenance of access logs must be conducted to monitor access to telecommunications equipment rooms.",
+        "ComplianceType": "Operational",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2258,
+        "SubPolicyId": 1893,
+        "ComplianceTitle": "Earthquake-Proof Construction Requirement",
+        "ComplianceItemDescription": "All isolated operating areas must be constructed to withstand earthquake forces as per national and regional standards.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2259,
+        "SubPolicyId": 1893,
+        "ComplianceTitle": "Automatic Fire Control System Requirement",
+        "ComplianceItemDescription": "Isolated operating areas must be equipped with automatic fire control systems as per national and regional standards.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2260,
+        "SubPolicyId": 1894,
+        "ComplianceTitle": "Installation of Monitoring Systems",
+        "ComplianceItemDescription": "Install monitoring systems to detect facility failures, power failures, fire, humidity, and temperature changes in physically isolated operating areas.",
+        "ComplianceType": "Operational",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2261,
+        "SubPolicyId": 1894,
+        "ComplianceTitle": "Automated Alert Notifications",
+        "ComplianceItemDescription": "Use automated alerts to notify the operations center of any incidents detected by monitoring systems in physically isolated operating areas.",
+        "ComplianceType": "Operational",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2262,
+        "SubPolicyId": 1895,
+        "ComplianceTitle": "Implement Security Configurations on User Endpoint Devices",
+        "ComplianceItemDescription": "All user endpoint devices must have security configurations applied to ensure compliance with organizational standards.",
+        "ComplianceType": "Internal",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2263,
+        "SubPolicyId": 1895,
+        "ComplianceTitle": "Automated Monitoring of User Endpoint Devices",
+        "ComplianceItemDescription": "Utilize automated tools for monitoring user endpoint devices to ensure continuous compliance with organizational standards.",
+        "ComplianceType": "Internal",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2264,
+        "SubPolicyId": 1896,
+        "ComplianceTitle": "Role-Based Access Controls Implementation",
+        "ComplianceItemDescription": "Implement role-based access controls for privileged accounts to restrict access based on job responsibilities.",
+        "ComplianceType": "Internal",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2265,
+        "SubPolicyId": 1896,
+        "ComplianceTitle": "Bi-Annual Access Rights Review",
+        "ComplianceItemDescription": "Review access rights for privileged accounts bi-annually to ensure only authorized personnel have access.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2266,
+        "SubPolicyId": 1897,
+        "ComplianceTitle": "Data Classification and Access Controls Implementation",
+        "ComplianceItemDescription": "Implement data classification and access controls based on sensitivity levels to restrict access to sensitive information.",
+        "ComplianceType": "Operational",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2267,
+        "SubPolicyId": 1898,
+        "ComplianceTitle": "Enforce Multi-Factor Authentication",
+        "ComplianceItemDescription": "All user accounts must use multi-factor authentication to access organizational systems and applications.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2268,
+        "SubPolicyId": 1899,
+        "ComplianceTitle": "Implementation of Anti-Malware Solutions",
+        "ComplianceItemDescription": "All organizational systems and user endpoint devices must have anti-malware solutions implemented.",
+        "ComplianceType": "Operational",
+        "Criticality": "High"
+      }
+    ],
+    "complianceapproval": []
+  },
+  "schema": {
+    "compliance": {
+      "columns": [
+        "ComplianceId",
+        "SubPolicyId",
+        "PreviousComplianceVersionId",
+        "Identifier",
+        "ComplianceTitle",
+        "ComplianceItemDescription",
+        "ComplianceType",
+        "Scope",
+        "Objective",
+        "BusinessUnitsCovered",
+        "IsRisk",
+        "PossibleDamage",
+        "mitigation",
+        "Criticality",
+        "MandatoryOptional",
+        "ManualAutomatic",
+        "Impact",
+        "Probability",
+        "MaturityLevel",
+        "ActiveInactive",
+        "PermanentTemporary",
+        "CreatedByName",
+        "CreatedByDate",
+        "ComplianceVersion",
+        "Status",
+        "Applicability",
+        "PotentialRiskScenarios",
+        "RiskType",
+        "RiskCategory",
+        "RiskBusinessImpact",
+        "FrameworkId"
+      ],
+      "row_count": 100,
+      "column_details": [
+        {
+          "name": "ComplianceId",
+          "type": "int",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "SubPolicyId",
+          "type": "int",
+          "null": "NO",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PreviousComplianceVersionId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Identifier",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ComplianceTitle",
+          "type": "varchar(145)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ComplianceItemDescription",
+          "type": "longtext",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ComplianceType",
+          "type": "varchar(100)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Scope",
+          "type": "longtext",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Objective",
+          "type": "longtext",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "BusinessUnitsCovered",
+          "type": "varchar(225)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "IsRisk",
+          "type": "tinyint(1)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PossibleDamage",
+          "type": "longtext",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "mitigation",
+          "type": "longtext",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Criticality",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "MandatoryOptional",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ManualAutomatic",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Impact",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Probability",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "MaturityLevel",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ActiveInactive",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PermanentTemporary",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "CreatedByName",
+          "type": "varchar(250)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "CreatedByDate",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ComplianceVersion",
+          "type": "varchar(50)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Status",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Applicability",
+          "type": "varchar(450)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PotentialRiskScenarios",
+          "type": "longtext",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskType",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskCategory",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskBusinessImpact",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "FrameworkId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        }
+      ]
+    },
+    "complianceapproval": {
+      "columns": [
+        "ApprovalId",
+        "Identifier",
+        "ExtractedData",
+        "UserId",
+        "ReviewerId",
+        "Version",
+        "ApprovedNot",
+        "ApprovedDate",
+        "PolicyId",
+        "ApprovalDueDate",
+        "FrameworkId"
+      ],
+      "row_count": 0,
+      "column_details": [
+        {
+          "name": "ApprovalId",
+          "type": "int",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "Identifier",
+          "type": "varchar(45)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ExtractedData",
+          "type": "json",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "UserId",
+          "type": "int",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ReviewerId",
+          "type": "int",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Version",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ApprovedNot",
+          "type": "tinyint(1)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ApprovedDate",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PolicyId",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ApprovalDueDate",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "FrameworkId",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        }
+      ]
+    }
+  }
+}

@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.conf import settings
+from django.http import FileResponse, HttpResponse
 from django.db.models import Q
 from grc.models import (
     FileOperations,
@@ -36,6 +37,8 @@ from grc.utils.safe_paths import (
     UnsafePathError,
 )
 import re
+import mimetypes
+import requests
 
 logger = logging.getLogger(__name__)
 CLIENT_SAFE_ERROR = "An internal error occurred. Please try again later."
@@ -686,46 +689,193 @@ def get_document_download_url(request, doc_id: int):
         disposition = (request.GET.get("disposition", "attachment") or "attachment").strip().lower()
         if disposition not in ALLOWED_DISPOSITIONS:
             disposition = "attachment"
+        direct_mode = (request.GET.get("direct") or "").strip() == "1"
 
-        # Build candidate keys: s3_key, stored_name, and their basenames
+        def _normalized_key_variants(v: str):
+            out = []
+            if not v:
+                return out
+            raw = str(v).strip()
+            if raw and raw not in out:
+                out.append(raw)
+            # S3/object keys should use forward slashes. Some legacy rows store backslashes.
+            slash = raw.replace("\\", "/")
+            if slash and slash not in out:
+                out.append(slash)
+            return out
+
+        # Build candidate keys: s3_key/stored_name normalized variants and basenames.
         candidates = []
         for val in (key, stored_name):
-            if val and val not in candidates:
-                candidates.append(val)
-            if val and "/" in val:
-                base = val.split("/")[-1]
-                if base and base not in candidates:
-                    candidates.append(base)
+            for key_variant in _normalized_key_variants(val):
+                if key_variant and key_variant not in candidates:
+                    candidates.append(key_variant)
+                # Support basename extraction for both separators
+                normalized = key_variant.replace("\\", "/")
+                if "/" in normalized:
+                    base = normalized.split("/")[-1]
+                    if base and base not in candidates:
+                        candidates.append(base)
 
-        if candidates:
+        if candidates and not direct_mode:
             client = RenderS3Client()
             last_error = None
+            # Some direct download deployments are strict about the filename path segment.
+            # Try the user-facing filename first, then key basename variants.
+            file_name_candidates = []
+            if file_name:
+                file_name_candidates.append(file_name)
+            for val in (key, stored_name):
+                if not val:
+                    continue
+                base = val.split("/")[-1] if "/" in val else val
+                if base:
+                    safe_base = safe_upload_filename(base)
+                    if safe_base and safe_base not in file_name_candidates:
+                        file_name_candidates.append(safe_base)
+
             for candidate_key in candidates:
-                try:
-                    # Direct microservice uses only the key; bucket is implicit in its config
-                    download_url = client.get_presigned_download_url(candidate_key, file_name)
-                    if download_url:
-                        return Response(
-                            {
-                                "success": True,
-                                "downloadUrl": download_url,
-                                "legacy": False,
-                            },
-                            status=status.HTTP_200_OK,
+                for candidate_file_name in file_name_candidates:
+                    try:
+                        # Direct microservice uses only the key; bucket is implicit in its config
+                        download_url = client.get_presigned_download_url(candidate_key, candidate_file_name)
+                        if download_url:
+                            return Response(
+                                {
+                                    "success": True,
+                                    "downloadUrl": download_url,
+                                    "legacy": False,
+                                },
+                                status=status.HTTP_200_OK,
+                            )
+                    except Exception as exc:
+                        last_error = exc
+                        logger.error(
+                            f"Error generating presigned URL for document {doc_id} "
+                            f"with key '{candidate_key}' and file_name '{candidate_file_name}': {exc}",
+                            exc_info=True,
                         )
-                except Exception as exc:
-                    last_error = exc
-                    logger.error(
-                        f"Error generating presigned URL for document {doc_id} with key '{candidate_key}': {exc}",
-                        exc_info=True,
-                    )
 
             # If all candidates failed, fall through to legacy / error handling
             if last_error:
                 logger.error(
-                    f"Failed to generate presigned URL for document {doc_id} after trying candidates: {candidates}. "
+                    f"Failed to generate presigned URL for document {doc_id} after trying "
+                    f"key candidates: {candidates} and file_name candidates: {file_name_candidates}. "
                     f"Last error: {last_error}"
                 )
+
+                # Fallback: return a backend proxy URL that serves/streams the file directly.
+                # This avoids UI failures when external presign endpoint returns 404.
+                return Response(
+                    {
+                        "success": True,
+                        "downloadUrl": f"/api/documents/{doc_id}/download/?disposition={disposition}&direct=1",
+                        "legacy": True,
+                        "note": "Using backend proxy fallback",
+                    },
+                    status=status.HTTP_200_OK,
+                )
+
+        # Direct fallback mode: stream file from local path or via S3 download.
+        if direct_mode:
+            # First preference: local file path if available
+            local_candidates = []
+            for val in (stored_name, key):
+                if val:
+                    local_candidates.append(val)
+            for rel in local_candidates:
+                try:
+                    local_full = os.path.join(settings.MEDIA_ROOT, rel)
+                    if os.path.isfile(local_full):
+                        guessed_type, _ = mimetypes.guess_type(file_name)
+                        content_type = guessed_type or "application/octet-stream"
+                        resp = FileResponse(
+                            open(local_full, "rb"),
+                            as_attachment=(disposition == "attachment"),
+                            filename=file_name,
+                        )
+                        resp["Content-Type"] = content_type
+                        return resp
+                except Exception:
+                    continue
+
+            # If local file not present, use direct S3 download API and stream downloaded temp file
+            temp_paths_to_cleanup = []
+            try:
+                s3_client = create_direct_mysql_client()
+                temp_dir = tempfile.gettempdir()
+                user_id_str = str(getattr(current_user, "UserId", "") or "system")
+
+                # Try key candidates with fallback file names
+                file_name_candidates = [file_name]
+                for val in (key, stored_name):
+                    if not val:
+                        continue
+                    normalized = str(val).replace("\\", "/")
+                    base = normalized.split("/")[-1] if "/" in normalized else normalized
+                    safe_base = safe_upload_filename(base) if base else ""
+                    if safe_base and safe_base not in file_name_candidates:
+                        file_name_candidates.append(safe_base)
+
+                for candidate_key in candidates:
+                    for candidate_file_name in file_name_candidates:
+                        try:
+                            dl_result = s3_client.download(candidate_key, candidate_file_name, temp_dir, user_id_str)
+                            if dl_result.get("success"):
+                                temp_file_path = dl_result.get("file_path")
+                                if temp_file_path and os.path.isfile(temp_file_path):
+                                    temp_paths_to_cleanup.append(temp_file_path)
+                                    guessed_type, _ = mimetypes.guess_type(candidate_file_name)
+                                    content_type = guessed_type or "application/octet-stream"
+                                    resp = FileResponse(
+                                        open(temp_file_path, "rb"),
+                                        as_attachment=(disposition == "attachment"),
+                                        filename=candidate_file_name,
+                                    )
+                                    resp["Content-Type"] = content_type
+                                    return resp
+                        except Exception as exc:
+                            logger.warning(
+                                f"Direct fallback download failed for doc {doc_id} key '{candidate_key}' "
+                                f"file '{candidate_file_name}': {exc}"
+                            )
+            finally:
+                # Best-effort cleanup: safe to skip when response already streaming an opened handle.
+                # (Windows may keep file handle locked until response completes.)
+                for path in temp_paths_to_cleanup:
+                    try:
+                        pass
+                    except Exception:
+                        pass
+
+            # Final fallback: stream directly from persisted s3_url if available.
+            # Useful when the microservice key->download resolution fails but URL is valid.
+            s3_url = (file_op.s3_url or "").strip()
+            if s3_url.startswith("http://") or s3_url.startswith("https://"):
+                try:
+                    r = requests.get(s3_url, timeout=60, stream=True)
+                    if r.status_code == 200:
+                        temp_dir = tempfile.gettempdir()
+                        temp_name = f"doc_{doc_id}_{safe_upload_filename(file_name)}"
+                        temp_file_path = os.path.join(temp_dir, temp_name)
+                        with open(temp_file_path, "wb") as f:
+                            for chunk in r.iter_content(chunk_size=8192):
+                                if chunk:
+                                    f.write(chunk)
+                        if os.path.isfile(temp_file_path):
+                            guessed_type, _ = mimetypes.guess_type(file_name)
+                            content_type = guessed_type or "application/octet-stream"
+                            resp = FileResponse(
+                                open(temp_file_path, "rb"),
+                                as_attachment=(disposition == "attachment"),
+                                filename=file_name,
+                            )
+                            resp["Content-Type"] = content_type
+                            return resp
+                except Exception as exc:
+                    logger.warning(f"Direct URL fallback failed for doc {doc_id}: {exc}")
+
+            return HttpResponse("Document content unavailable", status=404)
 
         return Response(
             {

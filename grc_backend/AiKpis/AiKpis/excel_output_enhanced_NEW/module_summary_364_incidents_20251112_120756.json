@@ -1,0 +1,637 @@
+{
+  "framework": {
+    "FrameworkId": 364,
+    "FrameworkName": "Enhanced Due Diligence (EDD)",
+    "FrameworkDescription": "Enhanced Due Diligence (EDD) is a critical component in international banking and private banking, particularly in high-risk situations. It aims to mitigate risks associated with money laundering, terrorist financing, and other financial crimes by requiring financial institutions to conduct comprehensive risk assessments and implement robust anti-money laundering (AML) measures.",
+    "Category": "Financial Security and Compliance",
+    "InternalExternal": "External",
+    "Identifier": "FW-364",
+    "Status": "Approved",
+    "CurrentVersion": 1.0
+  },
+  "module": "incidents",
+  "tables": {
+    "incidents": [
+      {
+        "IncidentId": 677,
+        "IncidentTitle": "Non-compliance with Daily Review of Flagged Transactions in RiskManagement Department",
+        "Description": "During a routine audit check in the RiskManagement department, it was discovered that there was non-compliance with the daily review of flagged transactions. This critical process is essential in identifying and investigating suspicious activities that could potentially harm the reputation of the organization.",
+        "RiskCategory": "Reputational Risk",
+        "Criticality": "High",
+        "Status": "Scheduled",
+        "CostOfIncident": "7052"
+      },
+      {
+        "IncidentId": 678,
+        "IncidentTitle": "Non-compliance with Annual Risk Assessment in Treasury Department",
+        "Description": "During a recent audit finding, it was discovered that the Treasury department failed to conduct the annual comprehensive risk assessment as required by the company's policies. This non-compliance poses a significant reputational risk to the organization due to increased exposure to money laundering and terrorist financing risks.",
+        "RiskCategory": "Reputational Risk",
+        "Criticality": "High",
+        "Status": "Scheduled",
+        "CostOfIncident": "7441"
+      },
+      {
+        "IncidentId": 679,
+        "IncidentTitle": "Non-compliance with Development of Remediation Action Plans for Market Risk",
+        "Description": "During a recent audit check within the RiskManagement business unit, it was identified that there was non-compliance with the development of remediation action plans within the specified timeline for addressing market risk. This finding poses a significant risk to the organization as it can lead to prolonged exposure to identified risks, potential regulatory fines, and reputational damage.",
+        "RiskCategory": "Market Risk",
+        "Criticality": "High",
+        "Status": "Open",
+        "CostOfIncident": "5431"
+      },
+      {
+        "IncidentId": 680,
+        "IncidentTitle": "Non-compliance with Risk Assessment Framework in Treasury Department",
+        "Description": "During a recent audit check in the Treasury department, it was identified that the standardized risk assessment framework was not being followed as per the established guidelines. This non-compliance poses a significant risk to the organization in terms of liquidity management and exposure to financial crimes.",
+        "RiskCategory": "Liquidity Risk",
+        "Criticality": "High",
+        "Status": "Open",
+        "CostOfIncident": "5944"
+      },
+      {
+        "IncidentId": 681,
+        "IncidentTitle": "Non-compliance with customer identification verification process",
+        "Description": "During a recent audit, it was identified that the RiskManagement business unit failed to comply with the customer identification verification process as per regulatory requirements. This non-compliance poses a significant risk of financial crimes such as money laundering and identity theft.",
+        "RiskCategory": "Liquidity Risk",
+        "Criticality": "High",
+        "Status": "Open",
+        "CostOfIncident": "7771"
+      },
+      {
+        "IncidentId": 682,
+        "IncidentTitle": "Non-compliance with Bi-Annual Customer Onboarding Evaluation",
+        "Description": "During a recent audit check in the RiskManagement business unit, it was identified that the bi-annual evaluation of customer onboarding processes was not conducted as required. This non-compliance poses a significant risk to the organization as it could result in increased regulatory scrutiny, potential fines, reputational damage, and loss of customer trust. The audit finding highlighted a gap in the implementation of critical risk management practices within the Market Risk category.",
+        "RiskCategory": "Market Risk",
+        "Criticality": "High",
+        "Status": "Open",
+        "CostOfIncident": "7368"
+      },
+      {
+        "IncidentId": 683,
+        "IncidentTitle": "Non-compliance with Bi-annual Transaction Monitoring Evaluation in IT Department",
+        "Description": "During a recent audit check, it was identified that the IT Department within the organization had failed to conduct the bi-annual evaluation of transaction monitoring processes as required. This non-compliance poses a significant risk to the organization as it could lead to undetected risks and potential regulatory violations.",
+        "RiskCategory": "Physical Risk",
+        "Criticality": "High",
+        "Status": "Open",
+        "CostOfIncident": "5387"
+      },
+      {
+        "IncidentId": 684,
+        "IncidentTitle": "Non-compliance with Customer Risk Assessment Tool Utilization in IT Department",
+        "Description": "During a recent audit check, it was discovered that the IT Department within our organization was not fully utilizing the Customer Risk Assessment Tool as required. This tool is crucial for accurately evaluating risks associated with our customers and their transactions. The lack of compliance with its utilization raises concerns about the accuracy of our risk evaluations and the potential impact on regulatory compliance.",
+        "RiskCategory": "Market Risk",
+        "Criticality": "High",
+        "Status": "Open",
+        "CostOfIncident": "6180"
+      },
+      {
+        "IncidentId": 685,
+        "IncidentTitle": "Non-compliance with Monthly Review of Flagged PEP Transactions",
+        "Description": "During a routine audit check within the Treasury business unit, it was discovered that the monthly review of flagged Politically Exposed Person (PEP) transactions was not conducted as per the established compliance procedures. This non-compliance poses a significant risk to the financial institution as it could lead to undetected suspicious activities involving PEPs.",
+        "RiskCategory": "Compliance Risk",
+        "Criticality": "High",
+        "Status": "Open",
+        "CostOfIncident": "5325"
+      },
+      {
+        "IncidentId": 686,
+        "IncidentTitle": "Non-compliance with Annual EDD Training Requirement in IT Department",
+        "Description": "During a recent audit finding in the IT Department, it was discovered that a significant number of employees had not completed their annual Enhanced Due Diligence (EDD) training session as required by company policy. The EDD training is crucial for ensuring that employees are aware of the latest regulatory requirements and best practices in conducting due diligence processes.",
+        "RiskCategory": "Physical Risk",
+        "Criticality": "High",
+        "Status": "Scheduled",
+        "CostOfIncident": "7205"
+      },
+      {
+        "IncidentId": 687,
+        "IncidentTitle": "Non-compliance with Remediation Action Plans Leading to Potential Financial Losses",
+        "Description": "During a recent audit check in the RiskManagement business unit, it was identified that there was non-compliance with the implementation of remediation action plans aimed at addressing fraud risks. This non-compliance poses a significant threat to the organization's financial stability and reputation.",
+        "RiskCategory": "Fraud Risk",
+        "Criticality": "High",
+        "Status": "Scheduled",
+        "CostOfIncident": "7577"
+      },
+      {
+        "IncidentId": 688,
+        "IncidentTitle": "Non-compliance with Annual Client Information Review in Treasury Department",
+        "Description": "During a routine audit check in the Treasury department, it was identified that the annual client information review process was not being followed as per the established procedures. This non-compliance could potentially lead to inaccurate client data being used for financial transactions, increasing the risk of financial crimes and regulatory fines.",
+        "RiskCategory": "Credit Risk",
+        "Criticality": "High",
+        "Status": "Scheduled",
+        "CostOfIncident": "5377"
+      },
+      {
+        "IncidentId": 689,
+        "IncidentTitle": "Non-compliance with Enhanced Due Diligence Policy in IT Department",
+        "Description": "During an audit check, it was identified that the IT Department within the organization was not fully compliant with the Enhanced Due Diligence Policy. This policy is crucial in mitigating risks related to money laundering and terrorist financing activities. The non-compliance could potentially expose the organization to severe consequences.",
+        "RiskCategory": "Compliance Risk",
+        "Criticality": "High",
+        "Status": "Scheduled",
+        "CostOfIncident": "5575"
+      },
+      {
+        "IncidentId": 690,
+        "IncidentTitle": "Non-compliance with Annual Wealth Source Verification Audit",
+        "Description": "During a routine audit check on the annual wealth source verification process within the RiskManagement business unit, it was discovered that certain procedures were not being followed as required. This non-compliance poses a significant risk to the organization as it could lead to regulatory fines, reputational damage, and potential legal actions.",
+        "RiskCategory": "Physical Risk",
+        "Criticality": "High",
+        "Status": "Open",
+        "CostOfIncident": "5003"
+      },
+      {
+        "IncidentId": 691,
+        "IncidentTitle": "Non-compliance with Quarterly Customer Profile Reviews in Treasury Department",
+        "Description": "The Treasury department failed to conduct quarterly customer profile reviews as required by compliance regulations. This oversight has exposed the organization to potential fraud risks due to unidentified high-risk customers. The lack of regular reviews has left the department vulnerable to financial losses, regulatory penalties, and operational disruptions.",
+        "RiskCategory": "Fraud Risk",
+        "Criticality": "High",
+        "Status": "Open",
+        "CostOfIncident": "6992"
+      }
+    ],
+    "incident_approval": []
+  },
+  "schema": {
+    "incidents": {
+      "columns": [
+        "IncidentId",
+        "IncidentTitle",
+        "Description",
+        "PossibleDamage",
+        "Mitigation",
+        "AuditId",
+        "ComplianceId",
+        "Date",
+        "Time",
+        "UserId",
+        "Origin",
+        "Comments",
+        "RiskCategory",
+        "RiskPriority",
+        "Attachments",
+        "CreatedAt",
+        "Status",
+        "IdentifiedAt",
+        "RepeatedNot",
+        "CostOfIncident",
+        "ReopenedNot",
+        "RejectionSource",
+        "AffectedBusinessUnit",
+        "SystemsAssetsInvolved",
+        "GeographicLocation",
+        "Criticality",
+        "InitialImpactAssessment",
+        "InternalContacts",
+        "ExternalPartiesInvolved",
+        "RegulatoryBodies",
+        "RelevantPoliciesProceduresViolated",
+        "ControlFailures",
+        "LessonsLearned",
+        "IncidentClassification",
+        "AssignerId",
+        "ReviewerId",
+        "MitigationDueDate",
+        "AssignedDate",
+        "AssignmentNotes",
+        "IncidentFormDetails",
+        "MitigationCompletedDate",
+        "IncidentCategory",
+        "FrameworkId"
+      ],
+      "row_count": 15,
+      "column_details": [
+        {
+          "name": "IncidentId",
+          "type": "int",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "IncidentTitle",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Description",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PossibleDamage",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Mitigation",
+          "type": "json",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "AuditId",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ComplianceId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Date",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Time",
+          "type": "time",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "UserId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Origin",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Comments",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskCategory",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskPriority",
+          "type": "varchar(20)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Attachments",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "CreatedAt",
+          "type": "timestamp",
+          "null": "YES",
+          "key": "",
+          "default": "CURRENT_TIMESTAMP",
+          "extra": "DEFAULT_GENERATED"
+        },
+        {
+          "name": "Status",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "IdentifiedAt",
+          "type": "datetime",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RepeatedNot",
+          "type": "tinyint",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "CostOfIncident",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ReopenedNot",
+          "type": "tinyint",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RejectionSource",
+          "type": "varchar(20)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "AffectedBusinessUnit",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "SystemsAssetsInvolved",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "GeographicLocation",
+          "type": "varchar(100)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Criticality",
+          "type": "varchar(20)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "InitialImpactAssessment",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "InternalContacts",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ExternalPartiesInvolved",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RegulatoryBodies",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RelevantPoliciesProceduresViolated",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ControlFailures",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "LessonsLearned",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "IncidentClassification",
+          "type": "varchar(100)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "AssignerId",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ReviewerId",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "MitigationDueDate",
+          "type": "datetime",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "AssignedDate",
+          "type": "datetime",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "AssignmentNotes",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "IncidentFormDetails",
+          "type": "json",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "MitigationCompletedDate",
+          "type": "datetime",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "IncidentCategory",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "FrameworkId",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        }
+      ]
+    },
+    "incident_approval": {
+      "columns": [
+        "id",
+        "IncidentId",
+        "version",
+        "ExtractedInfo",
+        "AssigneeId",
+        "ReviewerId",
+        "ApprovedRejected",
+        "Date",
+        "FrameworkId"
+      ],
+      "row_count": 0,
+      "column_details": [
+        {
+          "name": "id",
+          "type": "int",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "IncidentId",
+          "type": "int",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "version",
+          "type": "varchar(45)",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ExtractedInfo",
+          "type": "json",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "AssigneeId",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ReviewerId",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ApprovedRejected",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Date",
+          "type": "datetime",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "FrameworkId",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        }
+      ]
+    }
+  }
+}

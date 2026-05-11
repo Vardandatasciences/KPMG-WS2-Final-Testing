@@ -1,0 +1,673 @@
+{
+  "framework": {
+    "FrameworkId": 970,
+    "FrameworkName": "ISO 45001",
+    "FrameworkDescription": "ISO 45001 is an international standard for occupational health and safety management systems, providing a framework to improve employee safety, reduce workplace risks, and create better, safer working conditions.",
+    "Category": "Healthcare Privacy and Security",
+    "InternalExternal": "External",
+    "Identifier": "FW-970",
+    "Status": "Approved",
+    "CurrentVersion": 2018.0
+  },
+  "module": "incidents",
+  "tables": {
+    "incidents": [
+      {
+        "IncidentId": 3271,
+        "IncidentTitle": "Non-compliance with Quarterly Hazard Identification and Risk Assessment Procedure",
+        "Description": "During a recent audit check (Audit Check 1) in the RiskManagement business unit, it was identified that there was non-compliance with the Quarterly Hazard Identification and Risk Assessment Procedure. This non-compliance could potentially lead to increased workplace accidents, injuries, and legal liabilities.",
+        "RiskCategory": "Reputational Risk",
+        "Criticality": "High",
+        "Status": "Open",
+        "CostOfIncident": "7924"
+      },
+      {
+        "IncidentId": 3272,
+        "IncidentTitle": "Non-compliance with Internal Audit Programme Implementation in IT Department",
+        "Description": "During a recent audit check (Check 1) in the IT Department, it was identified that there were several instances of non-compliance with the internal audit programme implementation. This non-compliance poses a significant risk to the organization as it can lead to ineffective risk management, potential regulatory violations, financial losses due to unidentified issues, and compromised occupational health and safety standards.",
+        "RiskCategory": "Reputational Risk",
+        "Criticality": "High",
+        "Status": "Scheduled",
+        "CostOfIncident": "7170"
+      },
+      {
+        "IncidentId": 3273,
+        "IncidentTitle": "Non-compliance with Annual Hazard Identification and Risk Assessment Process in Treasury Department",
+        "Description": "During a recent audit check, it was identified that the Treasury department of our organization failed to comply with the annual hazard identification and risk assessment process. This process is crucial in identifying potential risks and implementing preventive measures to ensure a safe working environment for employees. The lack of compliance raises concerns about the organization's commitment to operational risk management.",
+        "RiskCategory": "Operational Risk",
+        "Criticality": "High",
+        "Status": "Open",
+        "CostOfIncident": "5128"
+      },
+      {
+        "IncidentId": 3274,
+        "IncidentTitle": "Non-Compliance with Health and Safety KPIs in Treasury Department",
+        "Description": "During a recent audit check, it was identified that the Treasury department within the organization was not compliant with the establishment of key performance indicators related to health and safety metrics. This non-compliance poses a significant physical risk to employees working in the Treasury department. Without proper KPIs in place, the department may not be able to effectively monitor and address potential health and safety issues, leading to an increased risk of incidents and injuries.",
+        "RiskCategory": "Physical Risk",
+        "Criticality": "High",
+        "Status": "Scheduled",
+        "CostOfIncident": "7342"
+      },
+      {
+        "IncidentId": 3275,
+        "IncidentTitle": "Outdated Emergency Preparedness Procedures in Treasury Department",
+        "Description": "During an audit check in the Treasury department, it was discovered that the documented information for emergency preparedness had not been reviewed and updated as required. This non-compliance poses a significant risk to the department and the organization as a whole. Outdated procedures during an emergency could lead to confusion, delays, and potential safety risks to personnel.",
+        "RiskCategory": "Reputational Risk",
+        "Criticality": "High",
+        "Status": "Open",
+        "CostOfIncident": "6110"
+      },
+      {
+        "IncidentId": 3276,
+        "IncidentTitle": "Non-compliance with Bi-annual Risk Assessments in RiskManagement Business Unit",
+        "Description": "During a recent audit check, it was identified that the RiskManagement business unit has not been conducting bi-annual risk assessments as required. This non-compliance poses a significant liquidity risk to the organization as it can lead to unidentified occupational health and safety risks. Failure to identify and mitigate these risks can result in workplace incidents, regulatory fines, and reputational damage.",
+        "RiskCategory": "Liquidity Risk",
+        "Criticality": "High",
+        "Status": "Scheduled",
+        "CostOfIncident": "7147"
+      },
+      {
+        "IncidentId": 3277,
+        "IncidentTitle": "Non-compliance with Bi-Annual Risk Assessments in Treasury Department",
+        "Description": "The Treasury department failed to conduct its bi-annual risk assessments as required by company policy. This lapse in compliance has left the department vulnerable to potential occupational health and safety risks, including increased incidents of workplace injuries. The lack of risk assessments also exposes the organization to regulatory fines and reputational damage.",
+        "RiskCategory": "Strategic Risk",
+        "Criticality": "High",
+        "Status": "Scheduled",
+        "CostOfIncident": "6940"
+      },
+      {
+        "IncidentId": 3278,
+        "IncidentTitle": "Non-compliance with Competence Evaluation and Training Requirements in Risk Management Business Unit",
+        "Description": "During a recent audit check in the Risk Management business unit, it was identified that there was non-compliance with competence evaluation and training requirements. Employees were not adequately trained to handle risk management tasks, resulting in a lack of understanding of industry best practices and regulatory requirements. This could potentially lead to increased workplace accidents, reduced productivity, regulatory fines, and reputational damage.",
+        "RiskCategory": "Strategic Risk",
+        "Criticality": "High",
+        "Status": "Open",
+        "CostOfIncident": "5799"
+      },
+      {
+        "IncidentId": 3279,
+        "IncidentTitle": "Unauthorized Access to Emergency Preparedness Documentation",
+        "Description": "During a recent audit check on controlled storage and access of documented information for emergency preparedness within the Treasury business unit, it was discovered that there were gaps in the security measures in place. Specifically, certain employees had unauthorized access to sensitive emergency response procedures and documentation, putting the confidentiality and integrity of the information at risk.",
+        "RiskCategory": "Compliance Risk",
+        "Criticality": "High",
+        "Status": "Open",
+        "CostOfIncident": "7018"
+      },
+      {
+        "IncidentId": 3280,
+        "IncidentTitle": "Non-compliance with Competence Assessment Control in IT Department",
+        "Description": "During a recent audit in the IT Department, it was discovered that there was non-compliance with the Competence Assessment Control - Documentation and Review Compliance. This control is crucial for ensuring that employees are properly trained and competent in managing occupational health and safety risks. The lack of adherence to this control could lead to ineffective assessments of risks, potentially resulting in accidents within the department.",
+        "RiskCategory": "Physical Risk",
+        "Criticality": "High",
+        "Status": "Open",
+        "CostOfIncident": "6656"
+      },
+      {
+        "IncidentId": 3281,
+        "IncidentTitle": "Non-compliance with External Communication Legal Requirements",
+        "Description": "During audit check 1, it was identified that the RiskManagement business unit was not in compliance with external communication legal requirements. This non-compliance could lead to reputational damage, legal liabilities, financial penalties, and regulatory sanctions for the organization.",
+        "RiskCategory": "Strategic Risk",
+        "Criticality": "High",
+        "Status": "Open",
+        "CostOfIncident": "6681"
+      },
+      {
+        "IncidentId": 3282,
+        "IncidentTitle": "Non-Compliance with Management of Change Process - Change Impact Assessment",
+        "Description": "During the recent audit check 1 in the RiskManagement business unit, it was identified that there was non-compliance with the Management of Change Process - Change Impact Assessment. This process is crucial for assessing and mitigating risks associated with changes in the organization. Failure to follow this process can lead to increased risks to occupational health and safety, potential financial losses, regulatory penalties, and operational disruptions.",
+        "RiskCategory": "Physical Risk",
+        "Criticality": "High",
+        "Status": "Open",
+        "CostOfIncident": "6447"
+      },
+      {
+        "IncidentId": 3283,
+        "IncidentTitle": "Non-compliance with Documentation of Roles and Responsibilities in Treasury Department",
+        "Description": "During a recent audit finding in the Treasury department, it was revealed that there is a significant lack of documentation regarding roles and responsibilities within the team. This lack of clarity has led to confusion among team members, resulting in inefficiencies and increased risks of errors. The audit check highlighted the critical need for a structured approach to defining and documenting roles and responsibilities within the Treasury department.",
+        "RiskCategory": "Strategic Risk",
+        "Criticality": "High",
+        "Status": "Open",
+        "CostOfIncident": "6027"
+      },
+      {
+        "IncidentId": 3284,
+        "IncidentTitle": "Non-compliance with Context Analysis Review in IT Department",
+        "Description": "During a recent audit check (Audit Check: 1) in the IT Department, it was discovered that there was non-compliance with the internal and external context analysis review. This review is crucial for understanding the factors affecting occupational health and safety (OH&S) performance within the department. Failure to comply with this review could lead to increased risks, potential accidents, regulatory fines, and reputational damage.",
+        "RiskCategory": "Compliance Risk",
+        "Criticality": "High",
+        "Status": "Scheduled",
+        "CostOfIncident": "6917"
+      },
+      {
+        "IncidentId": 3285,
+        "IncidentTitle": "Non-compliance with Risk Assessment Controls in RiskManagement Business Unit",
+        "Description": "During a recent audit in the RiskManagement business unit, it was identified that there is a lack of compliance with the implementation of risk assessment controls. This non-compliance poses a significant threat to the organization as it increases the likelihood of workplace incidents, potential injuries to employees, regulatory fines, reputational damage, and operational disruptions leading to financial losses. The audit findings revealed gaps in the risk assessment process and a failure to adhere to established risk management protocols.",
+        "RiskCategory": "Market Risk",
+        "Criticality": "High",
+        "Status": "Scheduled",
+        "CostOfIncident": "6423"
+      }
+    ],
+    "incident_approval": []
+  },
+  "schema": {
+    "incidents": {
+      "columns": [
+        "IncidentId",
+        "IncidentTitle",
+        "Description",
+        "PossibleDamage",
+        "Mitigation",
+        "AuditId",
+        "ComplianceId",
+        "Date",
+        "Time",
+        "UserId",
+        "Origin",
+        "Comments",
+        "RiskCategory",
+        "RiskPriority",
+        "Attachments",
+        "CreatedAt",
+        "Status",
+        "IdentifiedAt",
+        "RepeatedNot",
+        "CostOfIncident",
+        "ReopenedNot",
+        "RejectionSource",
+        "AffectedBusinessUnit",
+        "SystemsAssetsInvolved",
+        "GeographicLocation",
+        "Criticality",
+        "InitialImpactAssessment",
+        "InternalContacts",
+        "ExternalPartiesInvolved",
+        "RegulatoryBodies",
+        "RelevantPoliciesProceduresViolated",
+        "ControlFailures",
+        "LessonsLearned",
+        "IncidentClassification",
+        "AssignerId",
+        "ReviewerId",
+        "MitigationDueDate",
+        "AssignedDate",
+        "AssignmentNotes",
+        "IncidentFormDetails",
+        "MitigationCompletedDate",
+        "IncidentCategory",
+        "FrameworkId",
+        "data_inventory",
+        "retentionExpiry",
+        "TenantId"
+      ],
+      "row_count": 15,
+      "column_details": [
+        {
+          "name": "IncidentId",
+          "type": "int",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "IncidentTitle",
+          "type": "varchar(1000)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Description",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PossibleDamage",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Mitigation",
+          "type": "json",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "AuditId",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ComplianceId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Date",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Time",
+          "type": "time",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "UserId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Origin",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Comments",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskCategory",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskPriority",
+          "type": "varchar(20)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Attachments",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "CreatedAt",
+          "type": "timestamp",
+          "null": "YES",
+          "key": "",
+          "default": "CURRENT_TIMESTAMP",
+          "extra": "DEFAULT_GENERATED"
+        },
+        {
+          "name": "Status",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "IdentifiedAt",
+          "type": "datetime",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RepeatedNot",
+          "type": "tinyint",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "CostOfIncident",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ReopenedNot",
+          "type": "tinyint",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RejectionSource",
+          "type": "varchar(20)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "AffectedBusinessUnit",
+          "type": "varchar(1000)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "SystemsAssetsInvolved",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "GeographicLocation",
+          "type": "varchar(1000)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Criticality",
+          "type": "varchar(20)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "InitialImpactAssessment",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "InternalContacts",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ExternalPartiesInvolved",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RegulatoryBodies",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RelevantPoliciesProceduresViolated",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ControlFailures",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "LessonsLearned",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "IncidentClassification",
+          "type": "varchar(100)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "AssignerId",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ReviewerId",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "MitigationDueDate",
+          "type": "datetime",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "AssignedDate",
+          "type": "datetime",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "AssignmentNotes",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "IncidentFormDetails",
+          "type": "json",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "MitigationCompletedDate",
+          "type": "datetime",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "IncidentCategory",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "FrameworkId",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "data_inventory",
+          "type": "json",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "retentionExpiry",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "TenantId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        }
+      ]
+    },
+    "incident_approval": {
+      "columns": [
+        "id",
+        "IncidentId",
+        "version",
+        "ExtractedInfo",
+        "AssigneeId",
+        "ReviewerId",
+        "ApprovedRejected",
+        "Date",
+        "FrameworkId",
+        "retentionExpiry"
+      ],
+      "row_count": 0,
+      "column_details": [
+        {
+          "name": "id",
+          "type": "int",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "IncidentId",
+          "type": "int",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "version",
+          "type": "varchar(45)",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ExtractedInfo",
+          "type": "json",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "AssigneeId",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ReviewerId",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ApprovedRejected",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Date",
+          "type": "datetime",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "FrameworkId",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "retentionExpiry",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        }
+      ]
+    }
+  }
+}

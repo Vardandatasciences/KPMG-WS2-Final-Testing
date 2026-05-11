@@ -1,0 +1,2744 @@
+{
+  "framework_id": 978,
+  "generated_at": "2026-05-11T10:43:58.326312",
+  "tables": {
+    "ai_audit_data": {
+      "columns": [
+        "id",
+        "audit_id",
+        "document_id",
+        "document_name",
+        "document_path",
+        "document_type",
+        "file_size",
+        "mime_type",
+        "uploaded_by",
+        "uploaded_date",
+        "ai_processing_status",
+        "processing_started_at",
+        "processing_completed_at",
+        "processing_error",
+        "compliance_status",
+        "confidence_score",
+        "compliance_analyses",
+        "audit_findings",
+        "recommendations",
+        "policy_id",
+        "subpolicy_id",
+        "upload_status",
+        "external_source",
+        "external_id",
+        "created_at",
+        "updated_at",
+        "FrameworkId",
+        "compliance_id"
+      ],
+      "row_count": 0,
+      "column_count": 28
+    },
+    "ai_audit_schedule": {
+      "columns": [
+        "id",
+        "TenantId",
+        "AuditId",
+        "CompanyFolderId",
+        "schedule_type",
+        "scheduled_at",
+        "cron_expression",
+        "CreatedById",
+        "created_at",
+        "updated_at",
+        "is_active",
+        "last_run_at",
+        "next_run_at",
+        "selected_compliance_ids",
+        "selected_file_operation_ids",
+        "start_date",
+        "CompanySubfolderId"
+      ],
+      "row_count": 6,
+      "column_count": 17
+    },
+    "ai_audit_schedule_run": {
+      "columns": [
+        "id",
+        "schedule_id",
+        "started_at",
+        "finished_at",
+        "status",
+        "result_summary",
+        "error_message"
+      ],
+      "row_count": 7,
+      "column_count": 7
+    },
+    "ai_auditor_recommendations": {
+      "columns": [
+        "id",
+        "task_id",
+        "task_type",
+        "recommended_auditor_id",
+        "recommended_reviewer_id",
+        "recommendation_score",
+        "match_reasons",
+        "confidence_level",
+        "admin_override",
+        "override_reason",
+        "created_at",
+        "updated_at",
+        "FrameworkId"
+      ],
+      "row_count": 0,
+      "column_count": 13
+    },
+    "ai_review_archive": {
+      "columns": [
+        "id",
+        "review_id",
+        "review_type",
+        "auditor_id",
+        "reviewer_id",
+        "review_date",
+        "outcome",
+        "policy_title",
+        "policy_description",
+        "risk_title",
+        "mitigation_summary",
+        "domain_tags",
+        "severity_level",
+        "department_id",
+        "linked_policies",
+        "reviewer_comments",
+        "auditor_rationale",
+        "attached_documents",
+        "turnaround_time_hours",
+        "flag_resolution_rate",
+        "review_clarity_score",
+        "created_at",
+        "updated_at",
+        "FrameworkId"
+      ],
+      "row_count": 0,
+      "column_count": 24
+    },
+    "ai_system_config": {
+      "columns": [
+        "id",
+        "config_key",
+        "config_value",
+        "config_type",
+        "description",
+        "created_at",
+        "updated_at",
+        "FrameworkId"
+      ],
+      "row_count": 0,
+      "column_count": 8
+    },
+    "ai_user_expertise": {
+      "columns": [
+        "id",
+        "user_id",
+        "expertise_domain",
+        "expertise_level",
+        "confidence_score",
+        "experience_count",
+        "last_updated",
+        "created_at",
+        "FrameworkId"
+      ],
+      "row_count": 0,
+      "column_count": 9
+    },
+    "ai_user_performance_profiles": {
+      "columns": [
+        "id",
+        "user_id",
+        "department_id",
+        "avg_turnaround_time",
+        "avg_review_clarity_score",
+        "flag_resolution_rate",
+        "issue_detection_rate",
+        "domain_expertise",
+        "specialization_areas",
+        "workload_current",
+        "workload_capacity",
+        "availability_status",
+        "last_updated",
+        "created_at",
+        "FrameworkId"
+      ],
+      "row_count": 0,
+      "column_count": 15
+    },
+    "api_user_daily_usage": {
+      "columns": [
+        "id",
+        "user_id",
+        "usage_date",
+        "request_count",
+        "api_usage_json",
+        "daily_limit",
+        "limit_exceeded",
+        "created_at",
+        "updated_at"
+      ],
+      "row_count": 1,
+      "column_count": 9
+    },
+    "applicability": {
+      "columns": [
+        "ApplicabilityId",
+        "EntityId",
+        "DepartmentId",
+        "CategoryId",
+        "StartDate",
+        "EndDate",
+        "IsMandatory",
+        "FrameworkId",
+        "retentionExpiry"
+      ],
+      "row_count": 0,
+      "column_count": 9
+    },
+    "approval_comments": {
+      "columns": [
+        "comment_id",
+        "approval_id",
+        "stage_id",
+        "parent_comment_id",
+        "comment_text",
+        "comment_type",
+        "commented_by",
+        "commented_by_name",
+        "is_internal",
+        "created_at",
+        "updated_at"
+      ],
+      "row_count": 0,
+      "column_count": 11
+    },
+    "approval_request_versions": {
+      "columns": [
+        "version_id",
+        "approval_id",
+        "version_number",
+        "version_label",
+        "json_payload",
+        "changes_summary",
+        "created_by",
+        "created_by_name",
+        "created_by_role",
+        "version_type",
+        "parent_version_id",
+        "is_current",
+        "is_approved",
+        "change_reason",
+        "created_at"
+      ],
+      "row_count": 0,
+      "column_count": 15
+    },
+    "approval_requests": {
+      "columns": [
+        "approval_id",
+        "workflow_id",
+        "request_title",
+        "request_description",
+        "requester_id",
+        "requester_department",
+        "priority",
+        "request_data",
+        "overall_status",
+        "submission_date",
+        "completion_date",
+        "expiry_date",
+        "created_at",
+        "updated_at"
+      ],
+      "row_count": 7,
+      "column_count": 14
+    },
+    "approval_stages": {
+      "columns": [
+        "stage_id",
+        "approval_id",
+        "stage_order",
+        "stage_name",
+        "stage_description",
+        "assigned_user_id",
+        "assigned_user_name",
+        "assigned_user_role",
+        "department",
+        "stage_type",
+        "stage_status",
+        "deadline_date",
+        "extended_deadline",
+        "extension_reason",
+        "started_at",
+        "completed_at",
+        "response_data",
+        "rejection_reason",
+        "escalation_level",
+        "is_mandatory",
+        "created_at",
+        "updated_at"
+      ],
+      "row_count": 3,
+      "column_count": 22
+    },
+    "approval_workflows": {
+      "columns": [
+        "workflow_id",
+        "workflow_name",
+        "workflow_type",
+        "description",
+        "business_object_type",
+        "is_active",
+        "created_by",
+        "created_at",
+        "updated_at"
+      ],
+      "row_count": 7,
+      "column_count": 9
+    },
+    "audit": {
+      "columns": [
+        "AuditId",
+        "assignee",
+        "auditor",
+        "AssignedDate",
+        "DueDate",
+        "Frequency",
+        "Status",
+        "CompletionDate",
+        "Reviewer",
+        "FrameworkId",
+        "PolicyId",
+        "ReviewStatus",
+        "ReviewerComments",
+        "AuditType",
+        "Evidence",
+        "Comments",
+        "SubPolicyId",
+        "ReviewStartDate",
+        "ReviewComments",
+        "ReviewDate",
+        "Title",
+        "Scope",
+        "Reports",
+        "Objective",
+        "BusinessUnit",
+        "Role",
+        "Responsibility",
+        "Report",
+        "retentionExpiry",
+        "data_inventory",
+        "TenantId",
+        "EvidenceReminderDays",
+        "AIReportSignoffHash",
+        "AIReportSignedById",
+        "AIReportSignedAt"
+      ],
+      "row_count": 0,
+      "column_count": 35
+    },
+    "audit_compliance_analysis": {
+      "columns": [
+        "id",
+        "audit_id",
+        "compliance_control_id",
+        "uploaded_document_id",
+        "analysis_status",
+        "compliance_status",
+        "confidence_score",
+        "evidence_found",
+        "missing_elements",
+        "ai_recommendations",
+        "supporting_excerpts",
+        "analysis_details",
+        "analyzed_by_ai",
+        "analysis_timestamp",
+        "ReviewedBy_id",
+        "reviewed_at",
+        "review_comments",
+        "created_at",
+        "updated_at"
+      ],
+      "row_count": 0,
+      "column_count": 19
+    },
+    "audit_document": {
+      "columns": [
+        "document_id",
+        "audit_id",
+        "document_name",
+        "document_path",
+        "document_type",
+        "file_size",
+        "mime_type",
+        "uploaded_by",
+        "uploaded_date",
+        "upload_status",
+        "ai_processing_status",
+        "policy_id",
+        "subpolicy_id",
+        "external_source",
+        "external_id",
+        "created_at",
+        "updated_at",
+        "FrameworkId"
+      ],
+      "row_count": 0,
+      "column_count": 18
+    },
+    "audit_document_mappings": {
+      "columns": [
+        "MappingId",
+        "SectionTitle",
+        "SectionContent",
+        "PageNumber",
+        "StartPosition",
+        "EndPosition",
+        "ComplianceStatus",
+        "ConfidenceScore",
+        "AIRecommendations",
+        "RiskLevel",
+        "ReviewedDate",
+        "ReviewComments",
+        "ComplianceId",
+        "DocumentId",
+        "ReviewedBy",
+        "FrameworkId",
+        "retentionExpiry"
+      ],
+      "row_count": 0,
+      "column_count": 17
+    },
+    "audit_document_validation": {
+      "columns": [
+        "id",
+        "audit_id",
+        "required_document_id",
+        "uploaded_document_id",
+        "validation_status",
+        "validation_score",
+        "validation_notes",
+        "missing_elements",
+        "ai_analysis",
+        "ValidatedBy_id",
+        "validated_at",
+        "created_at",
+        "updated_at"
+      ],
+      "row_count": 0,
+      "column_count": 13
+    },
+    "audit_documents": {
+      "columns": [
+        "DocumentId",
+        "DocumentName",
+        "DocumentType",
+        "FilePath",
+        "FileSize",
+        "FileExtension",
+        "MimeType",
+        "UploadedDate",
+        "UploadStatus",
+        "ProcessingStatus",
+        "ProcessingResults",
+        "ProcessingError",
+        "ProcessedDate",
+        "ComplianceMapping",
+        "ExtractedText",
+        "DocumentSummary",
+        "ExternalSource",
+        "ExternalId",
+        "AuditId",
+        "ComplianceId",
+        "PolicyId",
+        "SubPolicyId",
+        "UploadedBy",
+        "FrameworkId",
+        "retentionExpiry"
+      ],
+      "row_count": 0,
+      "column_count": 25
+    },
+    "audit_findings": {
+      "columns": [
+        "AuditFindingsId",
+        "AuditId",
+        "ComplianceId",
+        "Evidence",
+        "UserId",
+        "Check",
+        "HowToVerify",
+        "Impact",
+        "Recommendation",
+        "DetailsOfFinding",
+        "Comments",
+        "CheckedDate",
+        "AssignedDate",
+        "MajorMinor",
+        "ReviewRejected",
+        "ReviewComments",
+        "ReviewStatus",
+        "ReviewDate",
+        "SeverityRating",
+        "PredictiveRisks",
+        "CorrectiveActions",
+        "UnderlyingCause",
+        "WhyToVerify",
+        "WhatToVerify",
+        "SuggestedActionPlan",
+        "MitigationDate",
+        "ResponsibleForPlan",
+        "ReAudit",
+        "ReAuditDate",
+        "Report",
+        "FrameworkId",
+        "retentionExpiry",
+        "TenantId"
+      ],
+      "row_count": 0,
+      "column_count": 33
+    },
+    "audit_missing_areas": {
+      "columns": [
+        "id",
+        "audit_id",
+        "missing_type",
+        "title",
+        "description",
+        "related_control_id",
+        "related_document_id",
+        "priority",
+        "impact_assessment",
+        "recommendations",
+        "status",
+        "ResolvedBy_id",
+        "resolved_at",
+        "resolution_notes",
+        "created_at",
+        "updated_at"
+      ],
+      "row_count": 0,
+      "column_count": 16
+    },
+    "audit_report": {
+      "columns": [
+        "ReportId",
+        "AuditId",
+        "Report",
+        "PolicyId",
+        "SubPolicyId",
+        "FrameworkId",
+        "retentionExpiry"
+      ],
+      "row_count": 0,
+      "column_count": 7
+    },
+    "audit_reports": {
+      "columns": [
+        "id",
+        "audit_id",
+        "report_type",
+        "report_format",
+        "file_name",
+        "file_path",
+        "file_size",
+        "generation_status",
+        "generation_progress",
+        "error_message",
+        "report_metadata",
+        "GeneratedBy_id",
+        "generation_timestamp",
+        "download_count",
+        "created_at",
+        "updated_at"
+      ],
+      "row_count": 0,
+      "column_count": 16
+    },
+    "audit_review": {
+      "columns": [
+        "id",
+        "audit_id",
+        "ReviewerId_id",
+        "review_status",
+        "approval_status",
+        "overall_compliance_score",
+        "review_comments",
+        "review_timestamp",
+        "approval_timestamp",
+        "review_details",
+        "created_at",
+        "updated_at"
+      ],
+      "row_count": 0,
+      "column_count": 12
+    },
+    "audit_review_comments": {
+      "columns": [
+        "id",
+        "audit_id",
+        "compliance_analysis_id",
+        "ReviewerId_id",
+        "comment_type",
+        "comment_text",
+        "old_status",
+        "new_status",
+        "is_override",
+        "created_at"
+      ],
+      "row_count": 0,
+      "column_count": 10
+    },
+    "audit_version": {
+      "columns": [
+        "AuditId",
+        "Version",
+        "ExtractedInfo",
+        "UserId",
+        "ApproverId",
+        "ApprovedRejected",
+        "Date",
+        "ActiveInactive",
+        "FrameworkId",
+        "retentionExpiry"
+      ],
+      "row_count": 0,
+      "column_count": 10
+    },
+    "audit_workflow_status": {
+      "columns": [
+        "id",
+        "audit_id",
+        "workflow_step",
+        "step_status",
+        "step_data",
+        "completed_at",
+        "created_at",
+        "updated_at"
+      ],
+      "row_count": 0,
+      "column_count": 8
+    },
+    "audits": {
+      "columns": [
+        "AuditId",
+        "Title",
+        "Scope",
+        "Status",
+        "AuditType",
+        "DueDate",
+        "FrameworkId",
+        "CreatedDate",
+        "UpdatedDate"
+      ],
+      "row_count": 0,
+      "column_count": 9
+    },
+    "auth_group": {
+      "columns": [
+        "id",
+        "name"
+      ],
+      "row_count": 0,
+      "column_count": 2
+    },
+    "auth_group_permissions": {
+      "columns": [
+        "id",
+        "group_id",
+        "permission_id"
+      ],
+      "row_count": 0,
+      "column_count": 3
+    },
+    "auth_permission": {
+      "columns": [
+        "id",
+        "name",
+        "content_type_id",
+        "codename"
+      ],
+      "row_count": 912,
+      "column_count": 4
+    },
+    "auth_user": {
+      "columns": [
+        "id",
+        "password",
+        "last_login",
+        "is_superuser",
+        "username",
+        "first_name",
+        "last_name",
+        "email",
+        "is_staff",
+        "is_active",
+        "date_joined"
+      ],
+      "row_count": 15,
+      "column_count": 11
+    },
+    "auth_user_groups": {
+      "columns": [
+        "id",
+        "user_id",
+        "group_id"
+      ],
+      "row_count": 0,
+      "column_count": 3
+    },
+    "auth_user_user_permissions": {
+      "columns": [
+        "id",
+        "user_id",
+        "permission_id"
+      ],
+      "row_count": 0,
+      "column_count": 3
+    },
+    "aws_credentials": {
+      "columns": [
+        "id",
+        "accessKey",
+        "secretKey",
+        "region",
+        "bucketName",
+        "microServiceUrl",
+        "retentionExpiry"
+      ],
+      "row_count": 1,
+      "column_count": 7
+    },
+    "businessunits": {
+      "columns": [
+        "BusinessUnitId",
+        "Name",
+        "Code",
+        "Description",
+        "EntityId",
+        "IsActive",
+        "CreatedDate",
+        "FrameworkId",
+        "retentionExpiry"
+      ],
+      "row_count": 0,
+      "column_count": 9
+    },
+    "category": {
+      "columns": [
+        "CategoryId",
+        "CategoryName",
+        "Description",
+        "IsActive",
+        "FrameworkId",
+        "retentionExpiry"
+      ],
+      "row_count": 0,
+      "column_count": 6
+    },
+    "categoryunit": {
+      "columns": [
+        "id",
+        "source",
+        "value",
+        "FrameworkId",
+        "retentionExpiry",
+        "TenantId"
+      ],
+      "row_count": 0,
+      "column_count": 6
+    },
+    "company_folders": {
+      "columns": [
+        "FolderId",
+        "TenantId",
+        "Name",
+        "Code",
+        "Description",
+        "IsActive",
+        "CreatedById",
+        "UpdatedById",
+        "CreatedAt",
+        "UpdatedAt"
+      ],
+      "row_count": 13,
+      "column_count": 10
+    },
+    "company_subfolder_documents": {
+      "columns": [
+        "id",
+        "CompanySubfolderId",
+        "FileOperationId",
+        "DocumentLink",
+        "S3Key"
+      ],
+      "row_count": 26,
+      "column_count": 5
+    },
+    "company_subfolders": {
+      "columns": [
+        "SubfolderId",
+        "CompanyFolderId",
+        "TenantId",
+        "Name",
+        "Code",
+        "IsActive",
+        "CreatedAt"
+      ],
+      "row_count": 12,
+      "column_count": 7
+    },
+    "compliance": {
+      "columns": [
+        "ComplianceId",
+        "SubPolicyId",
+        "PreviousComplianceVersionId",
+        "Identifier",
+        "ComplianceTitle",
+        "ComplianceItemDescription",
+        "ComplianceType",
+        "Scope",
+        "Objective",
+        "BusinessUnitsCovered",
+        "IsRisk",
+        "PossibleDamage",
+        "mitigation",
+        "Criticality",
+        "MandatoryOptional",
+        "ManualAutomatic",
+        "Impact",
+        "Probability",
+        "MaturityLevel",
+        "ActiveInactive",
+        "PermanentTemporary",
+        "CreatedByName",
+        "CreatedByDate",
+        "ComplianceVersion",
+        "Status",
+        "Applicability",
+        "PotentialRiskScenarios",
+        "RiskType",
+        "RiskCategory",
+        "RiskBusinessImpact",
+        "FrameworkId",
+        "retentionExpiry",
+        "data_inventory",
+        "TenantId",
+        "ai_bse_enabled",
+        "AuditFrequency"
+      ],
+      "row_count": 0,
+      "column_count": 36
+    },
+    "compliance_control_mapping": {
+      "columns": [
+        "id",
+        "FrameworkId_id",
+        "control_id",
+        "control_title",
+        "control_description",
+        "control_category",
+        "required_evidence_types",
+        "validation_criteria",
+        "risk_level",
+        "is_mandatory",
+        "parent_control_id",
+        "created_at",
+        "updated_at"
+      ],
+      "row_count": 0,
+      "column_count": 13
+    },
+    "complianceapproval": {
+      "columns": [
+        "ApprovalId",
+        "Identifier",
+        "ExtractedData",
+        "UserId",
+        "ReviewerId",
+        "Version",
+        "ApprovedNot",
+        "ApprovedDate",
+        "PolicyId",
+        "ApprovalDueDate",
+        "FrameworkId",
+        "retentionExpiry"
+      ],
+      "row_count": 0,
+      "column_count": 12
+    },
+    "compliancebaseline": {
+      "columns": [
+        "BaselineId",
+        "FrameworkId",
+        "BaselineLevel",
+        "ComplianceId",
+        "Importance",
+        "CreatedBy",
+        "CreatedDate",
+        "ModifiedBy",
+        "ModifiedDate",
+        "Version",
+        "IsActive"
+      ],
+      "row_count": 0,
+      "column_count": 11
+    },
+    "consent_acceptance": {
+      "columns": [
+        "AcceptanceId",
+        "UserId",
+        "ConfigId",
+        "ActionType",
+        "AcceptedAt",
+        "IpAddress",
+        "UserAgent",
+        "FrameworkId",
+        "retentionExpiry"
+      ],
+      "row_count": 0,
+      "column_count": 9
+    },
+    "consent_configuration": {
+      "columns": [
+        "ConfigId",
+        "ActionType",
+        "ActionLabel",
+        "IsEnabled",
+        "ConsentText",
+        "FrameworkId",
+        "CreatedBy",
+        "CreatedAt",
+        "UpdatedBy",
+        "UpdatedAt",
+        "retentionExpiry"
+      ],
+      "row_count": 0,
+      "column_count": 11
+    },
+    "consent_withdrawal": {
+      "columns": [
+        "WithdrawalId",
+        "UserId",
+        "ConfigId",
+        "ActionType",
+        "WithdrawnAt",
+        "IpAddress",
+        "UserAgent",
+        "FrameworkId",
+        "Reason"
+      ],
+      "row_count": 0,
+      "column_count": 9
+    },
+    "cookie_preferences": {
+      "columns": [
+        "PreferenceId",
+        "UserId",
+        "SessionId",
+        "EssentialCookies",
+        "FunctionalCookies",
+        "AnalyticsCookies",
+        "MarketingCookies",
+        "PreferencesSaved",
+        "IpAddress",
+        "UserAgent",
+        "CreatedAt",
+        "UpdatedAt"
+      ],
+      "row_count": 10444,
+      "column_count": 12
+    },
+    "data_lifecycle_audit_log": {
+      "columns": [
+        "Id",
+        "ActionType",
+        "RecordType",
+        "RecordId",
+        "RecordName",
+        "RetentionTimelineId",
+        "BeforeStatus",
+        "AfterStatus",
+        "Reason",
+        "Details",
+        "NotificationRecipients",
+        "BackupId",
+        "PerformedBy",
+        "Timestamp"
+      ],
+      "row_count": 32,
+      "column_count": 14
+    },
+    "data_processing_agreements": {
+      "columns": [
+        "DPAId",
+        "AgreementName",
+        "AgreementNumber",
+        "Description",
+        "DataController",
+        "DataProcessor",
+        "ProcessorContact",
+        "ProcessorEmail",
+        "EffectiveDate",
+        "ExpiryDate",
+        "Status",
+        "FrameworkId",
+        "PurposeOfProcessing",
+        "TypesOfData",
+        "DataSubjects",
+        "SecurityMeasures",
+        "DataRetention",
+        "DataTransfer",
+        "SubProcessors",
+        "BreachNotification",
+        "AuditRights",
+        "DocumentURL",
+        "ReviewFrequency",
+        "LastReviewedDate",
+        "NextReviewDate",
+        "CreatedBy",
+        "CreatedAt",
+        "UpdatedBy",
+        "UpdatedAt",
+        "retentionExpiry"
+      ],
+      "row_count": 0,
+      "column_count": 30
+    },
+    "datasubjectrequest": {
+      "columns": [
+        "id",
+        "request_type",
+        "user_id",
+        "status",
+        "created_at",
+        "updated_at",
+        "verification_status",
+        "approved_by",
+        "audit_trail",
+        "expiration_date"
+      ],
+      "row_count": 66,
+      "column_count": 10
+    },
+    "department": {
+      "columns": [
+        "DepartmentId",
+        "EntityId",
+        "DepartmentName",
+        "DepartmentHead",
+        "IsActive",
+        "CreatedDate",
+        "BusinessUnitId",
+        "FrameworkId",
+        "retentionExpiry",
+        "TenantId",
+        "threshold_limit"
+      ],
+      "row_count": 0,
+      "column_count": 11
+    },
+    "django_admin_log": {
+      "columns": [
+        "id",
+        "action_time",
+        "object_id",
+        "object_repr",
+        "action_flag",
+        "change_message",
+        "content_type_id",
+        "user_id"
+      ],
+      "row_count": 0,
+      "column_count": 8
+    },
+    "django_cache": {
+      "columns": [
+        "cache_key",
+        "value",
+        "expires"
+      ],
+      "row_count": 52,
+      "column_count": 3
+    },
+    "django_content_type": {
+      "columns": [
+        "id",
+        "app_label",
+        "model"
+      ],
+      "row_count": 228,
+      "column_count": 3
+    },
+    "django_migrations": {
+      "columns": [
+        "id",
+        "app",
+        "name",
+        "applied"
+      ],
+      "row_count": 71,
+      "column_count": 4
+    },
+    "django_session": {
+      "columns": [
+        "session_key",
+        "session_data",
+        "expire_date"
+      ],
+      "row_count": 13057,
+      "column_count": 3
+    },
+    "document_audit_relevance": {
+      "columns": [
+        "id",
+        "file_operation_id",
+        "audit_id",
+        "s3_url",
+        "relevance_score",
+        "relevance_reason",
+        "matched_policies",
+        "matched_subpolicies",
+        "matched_compliances",
+        "analyzed_at",
+        "created_at",
+        "updated_at"
+      ],
+      "row_count": 17,
+      "column_count": 12
+    },
+    "domain": {
+      "columns": [
+        "domain_id",
+        "domain_name",
+        "isActive"
+      ],
+      "row_count": 5,
+      "column_count": 3
+    },
+    "enterprise_audit_logs": {
+      "columns": [
+        "log_id",
+        "timestamp",
+        "user_id",
+        "user_name",
+        "user_email",
+        "action",
+        "severity",
+        "status",
+        "resource_type",
+        "resource_id",
+        "resource_name",
+        "old_value",
+        "new_value",
+        "changes",
+        "ip_address",
+        "user_agent",
+        "request_method",
+        "request_path",
+        "request_id",
+        "description",
+        "details",
+        "error_message",
+        "stack_trace",
+        "tenant_id",
+        "log_hash",
+        "previous_hash",
+        "retention_until",
+        "is_pii"
+      ],
+      "row_count": 0,
+      "column_count": 28
+    },
+    "entities": {
+      "columns": [
+        "Id",
+        "EntityName",
+        "Location",
+        "FrameworkId",
+        "retentionExpiry"
+      ],
+      "row_count": 0,
+      "column_count": 5
+    },
+    "events": {
+      "columns": [
+        "EventId",
+        "EventTitle",
+        "EventId_Generated",
+        "Description",
+        "FrameworkId",
+        "FrameworkName",
+        "Module",
+        "LinkedRecordType",
+        "LinkedRecordId",
+        "LinkedRecordName",
+        "Category",
+        "OwnerId",
+        "ReviewerId",
+        "RecurrenceType",
+        "Frequency",
+        "StartDate",
+        "EndDate",
+        "Status",
+        "Priority",
+        "Evidence",
+        "CreatedById",
+        "CreatedAt",
+        "UpdatedAt",
+        "ApprovedAt",
+        "IsTemplate",
+        "comments",
+        "EventTypeId",
+        "DynamicFieldsData",
+        "SubEventType",
+        "retentionExpiry",
+        "data_inventory",
+        "TenantId"
+      ],
+      "row_count": 0,
+      "column_count": 32
+    },
+    "eventtype": {
+      "columns": [
+        "eventtype_id",
+        "FrameworkName",
+        "eventtype",
+        "eventsubtype",
+        "FrameworkId",
+        "retentionExpiry"
+      ],
+      "row_count": 0,
+      "column_count": 6
+    },
+    "exported_files": {
+      "columns": [
+        "id",
+        "export_data",
+        "file_type",
+        "user_id",
+        "s3_url",
+        "file_name",
+        "status",
+        "error",
+        "metadata",
+        "created_at",
+        "updated_at",
+        "completed_at",
+        "FrameworkId",
+        "retentionExpiry"
+      ],
+      "row_count": 0,
+      "column_count": 14
+    },
+    "external_application_connections": {
+      "columns": [
+        "id",
+        "application_id",
+        "user_id",
+        "connection_token",
+        "refresh_token",
+        "token_expires_at",
+        "connection_status",
+        "last_used",
+        "created_at",
+        "updated_at",
+        "projects_data",
+        "FrameworkId",
+        "retentionExpiry"
+      ],
+      "row_count": 0,
+      "column_count": 13
+    },
+    "external_application_sync_logs": {
+      "columns": [
+        "id",
+        "application_id",
+        "user_id",
+        "sync_type",
+        "sync_status",
+        "records_synced",
+        "error_message",
+        "sync_started_at",
+        "sync_completed_at",
+        "created_at",
+        "FrameworkId",
+        "retentionExpiry"
+      ],
+      "row_count": 0,
+      "column_count": 12
+    },
+    "external_applications": {
+      "columns": [
+        "id",
+        "name",
+        "category",
+        "type",
+        "description",
+        "icon_class",
+        "version",
+        "status",
+        "last_sync",
+        "created_at",
+        "updated_at",
+        "is_active",
+        "configuration",
+        "api_endpoint",
+        "oauth_url",
+        "features",
+        "FrameworkId",
+        "retentionExpiry"
+      ],
+      "row_count": 0,
+      "column_count": 18
+    },
+    "file_operations": {
+      "columns": [
+        "id",
+        "operation_type",
+        "module",
+        "user_id",
+        "file_name",
+        "original_name",
+        "stored_name",
+        "s3_url",
+        "s3_key",
+        "s3_bucket",
+        "file_type",
+        "file_size",
+        "content_type",
+        "export_format",
+        "record_count",
+        "status",
+        "error",
+        "metadata",
+        "platform",
+        "created_at",
+        "updated_at",
+        "completed_at",
+        "FrameworkId",
+        "summary",
+        "possible_future_uses",
+        "retentionExpiry"
+      ],
+      "row_count": 0,
+      "column_count": 26
+    },
+    "framework_entities": {
+      "columns": [
+        "id",
+        "FrameworkId",
+        "EntityId"
+      ],
+      "row_count": 0,
+      "column_count": 3
+    },
+    "framework_required_documents": {
+      "columns": [
+        "id",
+        "FrameworkId_id",
+        "document_type",
+        "document_name",
+        "description",
+        "is_mandatory",
+        "document_category",
+        "template_url",
+        "validation_criteria",
+        "priority",
+        "created_at",
+        "updated_at"
+      ],
+      "row_count": 0,
+      "column_count": 12
+    },
+    "frameworkapproval": {
+      "columns": [
+        "ApprovalId",
+        "FrameworkId",
+        "ExtractedData",
+        "UserID",
+        "ReviewerId",
+        "Version",
+        "ApprovedNot",
+        "ApprovedDate",
+        "retentionExpiry"
+      ],
+      "row_count": 0,
+      "column_count": 9
+    },
+    "frameworks": {
+      "columns": [
+        "FrameworkId",
+        "domainId",
+        "FrameworkName",
+        "CurrentVersion",
+        "FrameworkDescription",
+        "EffectiveDate",
+        "CreatedByName",
+        "CreatedByDate",
+        "Category",
+        "DocURL",
+        "Identifier",
+        "StartDate",
+        "EndDate",
+        "Status",
+        "ActiveInactive",
+        "Reviewer",
+        "InternalExternal",
+        "Amendment",
+        "latestAmmendmentDate",
+        "latestComparisionCheckDate",
+        "retentionExpiry",
+        "data_inventory",
+        "TenantId"
+      ],
+      "row_count": 1,
+      "column_count": 23
+    },
+    "frameworkversions": {
+      "columns": [
+        "VersionId",
+        "FrameworkId",
+        "Version",
+        "FrameworkName",
+        "CreatedBy",
+        "CreatedDate",
+        "PreviousVersionId",
+        "retentionExpiry"
+      ],
+      "row_count": 1,
+      "column_count": 8
+    },
+    "grc_audit": {
+      "columns": [
+        "audit_id",
+        "assignee",
+        "auditor",
+        "assigned_date",
+        "duedate",
+        "frequency",
+        "status",
+        "completion_date",
+        "reviewer",
+        "framework_id",
+        "policy_id",
+        "review_status",
+        "auditcol",
+        "reviewer_comments",
+        "audit_type",
+        "reports"
+      ],
+      "row_count": 0,
+      "column_count": 16
+    },
+    "grc_compliance": {
+      "columns": [
+        "SubPolicyId",
+        "ComplianceId",
+        "ComplianceItemDescription",
+        "IsRisk",
+        "PossibleDamage",
+        "Criticality",
+        "MandatoryOptional",
+        "ManualAutomatic",
+        "Impact",
+        "Probability",
+        "ApprovalStatus"
+      ],
+      "row_count": 0,
+      "column_count": 11
+    },
+    "grc_framework": {
+      "columns": [
+        "FrameworkId",
+        "FrameworkName",
+        "Version",
+        "FrameworkDetails",
+        "Date",
+        "CreatedByName",
+        "CreatedByDate",
+        "AuthorisedByName",
+        "AuthorisedByDate",
+        "Category",
+        "DocURL",
+        "identifier"
+      ],
+      "row_count": 0,
+      "column_count": 12
+    },
+    "grc_grcprofile": {
+      "columns": [
+        "id"
+      ],
+      "row_count": 0,
+      "column_count": 1
+    },
+    "grc_logs": {
+      "columns": [
+        "LogId",
+        "Timestamp",
+        "UserId",
+        "UserName",
+        "Module",
+        "ActionType",
+        "EntityId",
+        "EntityType",
+        "LogLevel",
+        "Description",
+        "IPAddress",
+        "AdditionalInfo",
+        "FrameworkId",
+        "retentionExpiry",
+        "PreviousHash",
+        "IntegrityHash"
+      ],
+      "row_count": 6,
+      "column_count": 16
+    },
+    "grc_modules": {
+      "columns": [
+        "ModuleId",
+        "ModuleName",
+        "ModuleDescription",
+        "IsActive"
+      ],
+      "row_count": 6,
+      "column_count": 4
+    },
+    "grc_permissions": {
+      "columns": [
+        "PermissionId",
+        "PermissionName",
+        "PermissionDescription",
+        "IsActive"
+      ],
+      "row_count": 10,
+      "column_count": 4
+    },
+    "grc_policy": {
+      "columns": [
+        "FrameworkId",
+        "PolicyId",
+        "Version",
+        "Status",
+        "PolicyDetails",
+        "PolicyName",
+        "EffectiveStartDate",
+        "EndDate",
+        "Department",
+        "CreatedByName",
+        "CreatedByDate",
+        "AuthorisedByName",
+        "AuthorisedByDate",
+        "Applicability",
+        "DocURL",
+        "scope",
+        "objective",
+        "frequency",
+        "identifier"
+      ],
+      "row_count": 0,
+      "column_count": 19
+    },
+    "grc_users": {
+      "columns": [
+        "UserId",
+        "UserName",
+        "MobileNo",
+        "Email",
+        "Department",
+        "Designation",
+        "Password",
+        "CreatedAt",
+        "UpdatedAt",
+        "role",
+        "branch"
+      ],
+      "row_count": 0,
+      "column_count": 11
+    },
+    "holidays": {
+      "columns": [
+        "HolidayId",
+        "EntityId",
+        "HolidayDate",
+        "HolidayName",
+        "IsNational",
+        "retentionExpiry"
+      ],
+      "row_count": 6,
+      "column_count": 6
+    },
+    "incident_approval": {
+      "columns": [
+        "id",
+        "IncidentId",
+        "version",
+        "ExtractedInfo",
+        "AssigneeId",
+        "ReviewerId",
+        "ApprovedRejected",
+        "Date",
+        "FrameworkId",
+        "retentionExpiry"
+      ],
+      "row_count": 0,
+      "column_count": 10
+    },
+    "incidents": {
+      "columns": [
+        "IncidentId",
+        "IncidentTitle",
+        "Description",
+        "PossibleDamage",
+        "Mitigation",
+        "AuditId",
+        "ComplianceId",
+        "Date",
+        "Time",
+        "UserId",
+        "Origin",
+        "Comments",
+        "RiskCategory",
+        "RiskPriority",
+        "Attachments",
+        "CreatedAt",
+        "Status",
+        "IdentifiedAt",
+        "RepeatedNot",
+        "CostOfIncident",
+        "ReopenedNot",
+        "RejectionSource",
+        "AffectedBusinessUnit",
+        "SystemsAssetsInvolved",
+        "GeographicLocation",
+        "Criticality",
+        "InitialImpactAssessment",
+        "InternalContacts",
+        "ExternalPartiesInvolved",
+        "RegulatoryBodies",
+        "RelevantPoliciesProceduresViolated",
+        "ControlFailures",
+        "LessonsLearned",
+        "IncidentClassification",
+        "AssignerId",
+        "ReviewerId",
+        "MitigationDueDate",
+        "AssignedDate",
+        "AssignmentNotes",
+        "IncidentFormDetails",
+        "MitigationCompletedDate",
+        "IncidentCategory",
+        "FrameworkId",
+        "data_inventory",
+        "retentionExpiry",
+        "TenantId"
+      ],
+      "row_count": 15,
+      "column_count": 46
+    },
+    "integration_data_list": {
+      "columns": [
+        "id",
+        "heading",
+        "source",
+        "username",
+        "time",
+        "data",
+        "metadata",
+        "created_at",
+        "updated_at",
+        "retentionExpiry"
+      ],
+      "row_count": 73,
+      "column_count": 10
+    },
+    "kpis": {
+      "columns": [
+        "Id",
+        "FrameworkId",
+        "FrameworkName",
+        "Name",
+        "Description",
+        "Value",
+        "DataType",
+        "FromWhereToAccessData",
+        "Formula",
+        "DisplayType",
+        "AuditTrail",
+        "CreatedAt",
+        "UpdatedAt",
+        "Module",
+        "retentionExpiry"
+      ],
+      "row_count": 0,
+      "column_count": 15
+    },
+    "lastchecklistitemverified": {
+      "columns": [
+        "ComplianceId",
+        "SubPolicyId",
+        "PolicyId",
+        "FrameworkId",
+        "Date",
+        "Time",
+        "User",
+        "Complied",
+        "Comments",
+        "Count",
+        "AuditFindingsId",
+        "retentionExpiry"
+      ],
+      "row_count": 10,
+      "column_count": 12
+    },
+    "licenses": {
+      "columns": [
+        "LicenseId",
+        "LicenseKey",
+        "UserId",
+        "IsActive",
+        "CreatedAt",
+        "UpdatedAt",
+        "ExpiryDate",
+        "LicenseType",
+        "MaxUsers",
+        "CurrentUsers",
+        "FrameworkId"
+      ],
+      "row_count": 0,
+      "column_count": 11
+    },
+    "locations": {
+      "columns": [
+        "LocationID",
+        "AddressLine",
+        "City",
+        "State",
+        "Country",
+        "PostalCode",
+        "FrameworkId",
+        "retentionExpiry"
+      ],
+      "row_count": 0,
+      "column_count": 8
+    },
+    "login_anomaly_alerts": {
+      "columns": [
+        "AlertId",
+        "UserId",
+        "GeoEventId",
+        "RuleId",
+        "Description",
+        "IpAddress",
+        "DetectedAt",
+        "AlertSentAt",
+        "Resolved",
+        "ResolvedBy",
+        "ResolvedAt"
+      ],
+      "row_count": 4,
+      "column_count": 11
+    },
+    "login_geo_events": {
+      "columns": [
+        "EventId",
+        "UserId",
+        "IpAddress",
+        "CountryCode",
+        "Country",
+        "City",
+        "Region",
+        "Latitude",
+        "Longitude",
+        "Isp",
+        "LoginAt",
+        "IsAnomalous",
+        "AnomalyReason"
+      ],
+      "row_count": 12,
+      "column_count": 13
+    },
+    "mainentities": {
+      "columns": [
+        "Id",
+        "EntityName",
+        "EntityType",
+        "ParentEntityId",
+        "LocationId",
+        "IsActive",
+        "CreatedDate",
+        "FrameworkId",
+        "retentionExpiry"
+      ],
+      "row_count": 0,
+      "column_count": 9
+    },
+    "mfa_audit_log": {
+      "columns": [
+        "MfaEventId",
+        "UserId",
+        "EventType",
+        "DetailJson",
+        "IpAddress",
+        "UserAgent",
+        "CreatedAt"
+      ],
+      "row_count": 459,
+      "column_count": 7
+    },
+    "mfa_email_challenges": {
+      "columns": [
+        "ChallengeId",
+        "UserId",
+        "OtpHash",
+        "ExpiresAt",
+        "Attempts",
+        "Status",
+        "IpAddress",
+        "UserAgent",
+        "CreatedAt",
+        "UsedAt"
+      ],
+      "row_count": 251,
+      "column_count": 10
+    },
+    "mfa_preferences": {
+      "columns": [
+        "UserId",
+        "PreferredMethod",
+        "UpdatedAt"
+      ],
+      "row_count": 0,
+      "column_count": 3
+    },
+    "mfa_totp_devices": {
+      "columns": [
+        "DeviceId",
+        "UserId",
+        "Secret",
+        "DeviceName",
+        "IsVerified",
+        "CreatedAt",
+        "LastUsedAt"
+      ],
+      "row_count": 0,
+      "column_count": 7
+    },
+    "modules": {
+      "columns": [
+        "moduleid",
+        "modulename",
+        "FrameworkId",
+        "retentionExpiry"
+      ],
+      "row_count": 0,
+      "column_count": 4
+    },
+    "notifications": {
+      "columns": [
+        "id",
+        "recipient",
+        "type",
+        "channel",
+        "success",
+        "error",
+        "created_at",
+        "FrameworkId",
+        "retentionExpiry",
+        "TenantId"
+      ],
+      "row_count": 0,
+      "column_count": 10
+    },
+    "oauth_states": {
+      "columns": [
+        "id",
+        "state",
+        "user_id",
+        "subdomain",
+        "provider",
+        "created_at",
+        "expires_at",
+        "retentionExpiry"
+      ],
+      "row_count": 745,
+      "column_count": 8
+    },
+    "organizational_controls": {
+      "columns": [
+        "OrgControlId",
+        "FrameworkId",
+        "PolicyId",
+        "SubPolicyId",
+        "ComplianceId",
+        "ControlText",
+        "ExtractedText",
+        "MappingStatus",
+        "AIAnalysis",
+        "ConfidenceScore",
+        "CreatedBy",
+        "CreatedAt",
+        "UpdatedAt",
+        "LastAuditedAt",
+        "BulkUploadId"
+      ],
+      "row_count": 0,
+      "column_count": 15
+    },
+    "organizational_documents": {
+      "columns": [
+        "DocumentId",
+        "OrgControlId",
+        "DocumentName",
+        "DocumentPath",
+        "DocumentType",
+        "FileSize",
+        "ExtractedText",
+        "UploadedBy",
+        "UploadedAt",
+        "IsPrimary"
+      ],
+      "row_count": 119,
+      "column_count": 10
+    },
+    "otp_verifications": {
+      "columns": [
+        "id",
+        "user_id",
+        "purpose",
+        "otp_hash",
+        "expires_at",
+        "consumed_at",
+        "attempts",
+        "ip_address",
+        "user_agent",
+        "status",
+        "created_at"
+      ],
+      "row_count": 2,
+      "column_count": 11
+    },
+    "password_logs": {
+      "columns": [
+        "LogId",
+        "UserId",
+        "UserName",
+        "OldPassword",
+        "NewPassword",
+        "ActionType",
+        "IPAddress",
+        "UserAgent",
+        "Timestamp",
+        "AdditionalInfo"
+      ],
+      "row_count": 285,
+      "column_count": 10
+    },
+    "policies": {
+      "columns": [
+        "PolicyId",
+        "CurrentVersion",
+        "Status",
+        "PolicyDescription",
+        "PolicyName",
+        "StartDate",
+        "EndDate",
+        "Department",
+        "CreatedByName",
+        "CreatedByDate",
+        "Applicability",
+        "DocURL",
+        "Scope",
+        "Objective",
+        "Identifier",
+        "PermanentTemporary",
+        "ActiveInactive",
+        "FrameworkId",
+        "Reviewer",
+        "CoverageRate",
+        "AcknowledgedUserIds",
+        "AcknowledgementCount",
+        "PolicyType",
+        "PolicyCategory",
+        "PolicySubCategory",
+        "Entities",
+        "retentionExpiry",
+        "data_inventory",
+        "TenantId"
+      ],
+      "row_count": 6,
+      "column_count": 29
+    },
+    "policy_acknowledgement_requests": {
+      "columns": [
+        "AcknowledgementRequestId",
+        "PolicyId",
+        "PolicyVersion",
+        "Title",
+        "Description",
+        "DueDate",
+        "TargetUserIds",
+        "TargetGroups",
+        "Status",
+        "TotalUsers",
+        "AcknowledgedCount",
+        "PendingCount",
+        "CreatedBy",
+        "CreatedAt",
+        "UpdatedAt",
+        "CompletedAt",
+        "EmailNotificationSent",
+        "FrameworkId",
+        "retentionExpiry"
+      ],
+      "row_count": 0,
+      "column_count": 19
+    },
+    "policy_acknowledgement_users": {
+      "columns": [
+        "AcknowledgementUserId",
+        "AcknowledgementRequestId",
+        "UserId",
+        "Status",
+        "AcknowledgedAt",
+        "IPAddress",
+        "UserAgent",
+        "Comments",
+        "AssignedAt",
+        "NotifiedAt",
+        "ReminderCount",
+        "LastReminderAt",
+        "Token",
+        "retentionExpiry"
+      ],
+      "row_count": 42,
+      "column_count": 14
+    },
+    "policyapproval": {
+      "columns": [
+        "ApprovalId",
+        "ExtractedData",
+        "UserId",
+        "ReviewerId",
+        "Version",
+        "ApprovedNot",
+        "ApprovedDate",
+        "PolicyId",
+        "Identifier",
+        "ApprovalDueDate",
+        "FrameworkId",
+        "retentionExpiry"
+      ],
+      "row_count": 0,
+      "column_count": 12
+    },
+    "policycategories": {
+      "columns": [
+        "Id",
+        "PolicyType",
+        "PolicyCategory",
+        "PolicySubCategory",
+        "FrameworkId",
+        "retentionExpiry"
+      ],
+      "row_count": 6,
+      "column_count": 6
+    },
+    "policyversions": {
+      "columns": [
+        "VersionId",
+        "PolicyId",
+        "Version",
+        "PolicyName",
+        "CreatedBy",
+        "CreatedDate",
+        "PreviousVersionId",
+        "frameworkId",
+        "retentionExpiry"
+      ],
+      "row_count": 6,
+      "column_count": 9
+    },
+    "product_versions": {
+      "columns": [
+        "id",
+        "version",
+        "description",
+        "release_date",
+        "status",
+        "min_supported",
+        "created_at",
+        "updated_at",
+        "created_by"
+      ],
+      "row_count": 2,
+      "column_count": 9
+    },
+    "rbac": {
+      "columns": [
+        "RBACId",
+        "UserId",
+        "UserName",
+        "Role",
+        "CreateCompliance",
+        "EditCompliance",
+        "ApproveCompliance",
+        "ViewAllCompliance",
+        "CompliancePerformanceAnalytics",
+        "CreatePolicy",
+        "EditPolicy",
+        "ApprovePolicy",
+        "CreateFramework",
+        "ApproveFramework",
+        "ViewAllPolicy",
+        "PolicyPerformanceAnalytics",
+        "AssignAudit",
+        "ConductAudit",
+        "ReviewAudit",
+        "ViewAuditReports",
+        "AuditPerformanceAnalytics",
+        "ViewAllAudits",
+        "CreateRisk",
+        "EditRisk",
+        "ApproveRisk",
+        "AssignRisk",
+        "EvaluateAssignedRisk",
+        "ViewAllRisk",
+        "RiskPerformanceAnalytics",
+        "CreateIncident",
+        "EditIncident",
+        "AssignIncident",
+        "EvaluateAssignedIncident",
+        "EscalateToRisk",
+        "ViewAllIncident",
+        "IncidentPerformanceAnalytics",
+        "CreateEvent",
+        "EditEvent",
+        "ApproveEvent",
+        "RejectEvent",
+        "ArchiveEvent",
+        "ViewAllEvents",
+        "ViewModuleEvents",
+        "EventPerformanceAnalytics",
+        "ViewExternalIntegrations",
+        "ViewStreamline",
+        "UploadDocument",
+        "ViewAllDocuments",
+        "ViewRetentionPolicies",
+        "ConfigureRetention",
+        "ManageRetentionActions",
+        "ViewKPIDashboard",
+        "ViewDataInventory",
+        "ViewAIPrivacyAnalysis",
+        "ViewChangeOverview",
+        "ViewFrameworkComparison",
+        "ViewGapAnalysis",
+        "RunChangeAnalysis",
+        "ViewAccount",
+        "EditAccount",
+        "ChangePassword",
+        "ViewConsentManagement",
+        "ManageConsentManagement",
+        "ViewRequests",
+        "ApproveRequests",
+        "ViewUserManagement",
+        "CreateUser",
+        "EditUser",
+        "ManageUserPermissions",
+        "CreatedAt",
+        "UpdatedAt",
+        "IsActive",
+        "FrameworkId",
+        "retentionExpiry"
+      ],
+      "row_count": 0,
+      "column_count": 74
+    },
+    "rbac1": {
+      "columns": [
+        "RBACId",
+        "UserId",
+        "Email",
+        "Role",
+        "Department",
+        "Entity",
+        "CreatedAt",
+        "UpdatedAt"
+      ],
+      "row_count": 41,
+      "column_count": 8
+    },
+    "rbac2": {
+      "columns": [
+        "id",
+        "user_id",
+        "email",
+        "role",
+        "department",
+        "entity",
+        "policy_create",
+        "policy_view",
+        "policy_edit",
+        "policy_approve",
+        "policy_delete",
+        "policy_assign",
+        "compliance_create",
+        "compliance_view",
+        "compliance_edit",
+        "compliance_approve",
+        "compliance_delete",
+        "compliance_assign",
+        "audit_create",
+        "audit_view",
+        "audit_edit",
+        "audit_approve",
+        "audit_delete",
+        "audit_assign",
+        "risk_create",
+        "risk_view",
+        "risk_edit",
+        "risk_approve",
+        "risk_delete",
+        "risk_assign",
+        "incident_create",
+        "incident_view",
+        "incident_edit",
+        "incident_approve",
+        "incident_delete",
+        "incident_assign",
+        "dept_grc",
+        "dept_policy",
+        "dept_compliance",
+        "dept_audit",
+        "dept_risk",
+        "dept_incident",
+        "dept_management",
+        "dept_general",
+        "entity_corporate",
+        "entity_test",
+        "entity_internal",
+        "entity_external",
+        "entity_north_america",
+        "entity_europe",
+        "entity_asia_pacific",
+        "can_view_all_departments",
+        "can_view_all_entities",
+        "can_export_data",
+        "can_import_data",
+        "can_manage_users",
+        "can_view_reports",
+        "can_create_reports",
+        "can_approve_workflows",
+        "is_active",
+        "created_at",
+        "updated_at"
+      ],
+      "row_count": 35,
+      "column_count": 62
+    },
+    "rbac_access_log": {
+      "columns": [
+        "LogId",
+        "UserId",
+        "Role",
+        "Module",
+        "Permission",
+        "ResourceType",
+        "ResourceId",
+        "AccessGranted",
+        "RequestPath",
+        "RequestMethod",
+        "Timestamp"
+      ],
+      "row_count": 0,
+      "column_count": 11
+    },
+    "rbac_department_access": {
+      "columns": [
+        "DeptAccessId",
+        "UserId",
+        "Department",
+        "CanAccess",
+        "CreatedAt",
+        "UpdatedAt"
+      ],
+      "row_count": 48,
+      "column_count": 6
+    },
+    "rbac_entity_access": {
+      "columns": [
+        "EntityAccessId",
+        "UserId",
+        "Entity",
+        "CanAccess",
+        "CreatedAt",
+        "UpdatedAt"
+      ],
+      "row_count": 29,
+      "column_count": 6
+    },
+    "rbac_resource_access": {
+      "columns": [
+        "AccessId",
+        "UserId",
+        "ResourceType",
+        "ResourceId",
+        "CanView",
+        "CanEdit",
+        "CanApprove",
+        "CanAssign",
+        "CreatedAt",
+        "UpdatedAt"
+      ],
+      "row_count": 0,
+      "column_count": 10
+    },
+    "rbac_role_hierarchy": {
+      "columns": [
+        "HierarchyId",
+        "ParentRole",
+        "ChildRole",
+        "CreatedAt"
+      ],
+      "row_count": 30,
+      "column_count": 4
+    },
+    "rbac_role_permission_matrix": {
+      "columns": [
+        "MatrixId",
+        "Role",
+        "Module",
+        "Permission",
+        "IsAllowed",
+        "CreatedAt",
+        "UpdatedAt"
+      ],
+      "row_count": 124,
+      "column_count": 7
+    },
+    "rbac_user_permission": {
+      "columns": [
+        "PermissionId",
+        "UserId",
+        "Module",
+        "Permission",
+        "IsAllowed",
+        "CreatedAt",
+        "UpdatedAt"
+      ],
+      "row_count": 8,
+      "column_count": 7
+    },
+    "retention_module_page_config": {
+      "columns": [
+        "Id",
+        "Module",
+        "SubPage",
+        "ChecklistStatus",
+        "RetentionDays",
+        "CreatedAt",
+        "UpdatedAt"
+      ],
+      "row_count": 126,
+      "column_count": 7
+    },
+    "retention_policies": {
+      "columns": [
+        "RetentionPolicyId",
+        "PolicyName",
+        "PolicyDescription",
+        "RetentionType",
+        "RetentionPeriodYears",
+        "RetentionPeriodMonths",
+        "RetentionPeriodDays",
+        "Status",
+        "FrameworkId",
+        "ApplicableTo",
+        "LegalBasis",
+        "RegulatoryRequirements",
+        "DisposalMethod",
+        "ReviewFrequency",
+        "LastReviewedDate",
+        "NextReviewDate",
+        "CreatedBy",
+        "CreatedAt",
+        "UpdatedBy",
+        "UpdatedAt",
+        "retentionExpiry"
+      ],
+      "row_count": 0,
+      "column_count": 21
+    },
+    "retention_timelines": {
+      "columns": [
+        "RetentionTimelineId",
+        "RetentionPolicyId",
+        "RecordType",
+        "RecordId",
+        "RecordName",
+        "CreatedDate",
+        "RetentionStartDate",
+        "RetentionEndDate",
+        "Status",
+        "IsArchived",
+        "ArchivedDate",
+        "ArchivedBy",
+        "ArchiveLocation",
+        "DeletionPaused",
+        "PauseReason",
+        "PauseUntil",
+        "AutoDeleteEnabled",
+        "BackupCreated",
+        "BackupLocation",
+        "FrameworkId",
+        "CreatedBy",
+        "CreatedAt",
+        "UpdatedBy",
+        "UpdatedAt"
+      ],
+      "row_count": 0,
+      "column_count": 24
+    },
+    "risk": {
+      "columns": [
+        "RiskId",
+        "ComplianceId",
+        "RiskTitle",
+        "Criticality",
+        "PossibleDamage",
+        "Category",
+        "RiskType",
+        "BusinessImpact",
+        "RiskDescription",
+        "RiskLikelihood",
+        "RiskImpact",
+        "inherent_risk_score",
+        "residual_risk_score",
+        "RiskExposureRating",
+        "RiskPriority",
+        "RiskMitigation",
+        "CreatedAt",
+        "FrameworkId",
+        "RiskMultiplierX",
+        "RiskMultiplierY",
+        "data_inventory",
+        "retentionExpiry",
+        "TenantId",
+        "Origin",
+        "functional_area"
+      ],
+      "row_count": 0,
+      "column_count": 25
+    },
+    "risk_approval": {
+      "columns": [
+        "RiskinstanceId",
+        "version",
+        "ExtractedInfo",
+        "UserId",
+        "ApproverId",
+        "ApprovedRejected",
+        "Date",
+        "FrameworkId"
+      ],
+      "row_count": 0,
+      "column_count": 8
+    },
+    "risk_instance": {
+      "columns": [
+        "RiskInstanceId",
+        "IncidentId",
+        "ComplianceId",
+        "RiskTitle",
+        "RiskDescription",
+        "PossibleDamage",
+        "RiskPriority",
+        "Criticality",
+        "Category",
+        "Origin",
+        "ReportedBy",
+        "RiskId",
+        "RiskLikelihood",
+        "RiskImpact",
+        "inherent_risk_score",
+        "residual_risk_score",
+        "RiskExposureRating",
+        "Appetite",
+        "RiskResponseType",
+        "RiskResponseDescription",
+        "RiskMitigation",
+        "RiskType",
+        "RiskOwner",
+        "RiskStatus",
+        "BusinessImpact",
+        "UserId",
+        "MitigationDueDate",
+        "ModifiedMitigations",
+        "MitigationStatus",
+        "MitigationCompletedDate",
+        "ReviewerCount",
+        "RiskFormDetails",
+        "RecurrenceCount",
+        "CreatedAt",
+        "Reviewer",
+        "ReviewerId",
+        "FirstResponseAt",
+        "FrameworkId",
+        "RiskMultiplierX",
+        "RiskMultiplierY",
+        "data_inventory",
+        "retentionExpiry",
+        "TenantId",
+        "functional_area"
+      ],
+      "row_count": 0,
+      "column_count": 44
+    },
+    "risk_test": {
+      "columns": [
+        "RiskId",
+        "ComplianceId",
+        "Criticality",
+        "PossibleDamage",
+        "Category",
+        "RiskDescription",
+        "RiskLikelihood",
+        "RiskImpact",
+        "RiskExposureRating",
+        "RiskPriority",
+        "RiskMitigation"
+      ],
+      "row_count": 129,
+      "column_count": 11
+    },
+    "s3_files": {
+      "columns": [
+        "id",
+        "url",
+        "file_type",
+        "file_name",
+        "user_id",
+        "metadata",
+        "uploaded_at",
+        "FrameworkId",
+        "retentionExpiry"
+      ],
+      "row_count": 0,
+      "column_count": 9
+    },
+    "subpolicies": {
+      "columns": [
+        "SubPolicyId",
+        "PolicyId",
+        "SubPolicyName",
+        "CreatedByName",
+        "CreatedByDate",
+        "Identifier",
+        "Description",
+        "Status",
+        "PermanentTemporary",
+        "Control",
+        "FrameworkId",
+        "retentionExpiry",
+        "data_inventory",
+        "TenantId"
+      ],
+      "row_count": 0,
+      "column_count": 14
+    },
+    "sys_params": {
+      "columns": [
+        "Phone_Number_ID",
+        "Phone_Number",
+        "Product_Name",
+        "Access_Token",
+        "Verify_Token",
+        "Waba_ID",
+        "openai_api",
+        "perplexity_api"
+      ],
+      "row_count": 1,
+      "column_count": 8
+    },
+    "system_identified_risk_queue": {
+      "columns": [
+        "id",
+        "tenant_id",
+        "source_module",
+        "source_record_id",
+        "source_ref",
+        "risk_title",
+        "risk_type",
+        "category",
+        "criticality",
+        "risk_description",
+        "possible_damage",
+        "business_impact",
+        "likelihood",
+        "impact",
+        "inherent_risk_score",
+        "residual_risk_score",
+        "exposure_rating",
+        "priority",
+        "mitigation_steps",
+        "ai_reasoning",
+        "confidence_score",
+        "velocity_score",
+        "functional_area",
+        "ai_metadata",
+        "status",
+        "review_notes",
+        "rejection_reason",
+        "reviewed_by_id",
+        "approved_by_id",
+        "created_at",
+        "updated_at",
+        "reviewed_at",
+        "approved_at",
+        "created_risk_id",
+        "retentionExpiry"
+      ],
+      "row_count": 95,
+      "column_count": 35
+    },
+    "tenants": {
+      "columns": [
+        "TenantId",
+        "Name",
+        "Subdomain",
+        "LicenseKey",
+        "SubscriptionTier",
+        "Status",
+        "MaxUsers",
+        "StorageLimitGB",
+        "CreatedAt",
+        "UpdatedAt",
+        "TrialEndsAt",
+        "Settings",
+        "PrimaryContactEmail",
+        "PrimaryContactName",
+        "PrimaryContactPhone"
+      ],
+      "row_count": 3,
+      "column_count": 15
+    },
+    "token_blacklist_blacklistedtoken": {
+      "columns": [
+        "id",
+        "blacklisted_at",
+        "token_id"
+      ],
+      "row_count": 40964,
+      "column_count": 3
+    },
+    "token_blacklist_outstandingtoken": {
+      "columns": [
+        "id",
+        "token",
+        "created_at",
+        "expires_at",
+        "user_id",
+        "jti"
+      ],
+      "row_count": 40965,
+      "column_count": 6
+    },
+    "user_sessions": {
+      "columns": [
+        "session_id",
+        "user_id",
+        "tenant_id",
+        "ip_address",
+        "user_agent",
+        "device_fingerprint",
+        "created_at",
+        "last_seen_at",
+        "revoked_at",
+        "expires_at",
+        "is_active"
+      ],
+      "row_count": 32,
+      "column_count": 11
+    },
+    "users": {
+      "columns": [
+        "UserId",
+        "UserName",
+        "Password",
+        "CreatedAt",
+        "UpdatedAt",
+        "Email",
+        "FirstName",
+        "LastName",
+        "PhoneNumber",
+        "Address",
+        "IsActive",
+        "DepartmentId",
+        "session_token",
+        "consent_accepted",
+        "license_key",
+        "EntityId",
+        "retentionExpiry",
+        "last_login",
+        "TenantId",
+        "username_hash",
+        "email_hash"
+      ],
+      "row_count": 259,
+      "column_count": 21
+    },
+    "users1": {
+      "columns": [
+        "UserId",
+        "UserName",
+        "Password",
+        "CreatedAt",
+        "UpdatedAt",
+        "Email",
+        "FirstName",
+        "LastName",
+        "IsActive"
+      ],
+      "row_count": 45,
+      "column_count": 9
+    },
+    "users_project_list": {
+      "columns": [
+        "id",
+        "project_id",
+        "project_name",
+        "project_key",
+        "project_details",
+        "users_list",
+        "list_type",
+        "assigned_by_id",
+        "created_at",
+        "updated_at",
+        "is_active",
+        "retentionExpiry"
+      ],
+      "row_count": 3,
+      "column_count": 12
+    },
+    "workflow": {
+      "columns": [
+        "id",
+        "finding_id",
+        "IncidentId",
+        "assignee_id",
+        "reviewer_id",
+        "assigned_at",
+        "retentionExpiry"
+      ],
+      "row_count": 3,
+      "column_count": 7
+    }
+  }
+}

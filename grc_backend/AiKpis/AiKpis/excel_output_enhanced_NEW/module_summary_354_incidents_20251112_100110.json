@@ -1,0 +1,637 @@
+{
+  "framework": {
+    "FrameworkId": 354,
+    "FrameworkName": "ISO 27011",
+    "FrameworkDescription": "ISO 27001 standard provides companies of any size and from all sectors of activity with guidance for establishing, implementing, maintaining and continually improving an information security management system.",
+    "Category": "Information Security & Risk Management Framework",
+    "InternalExternal": "External",
+    "Identifier": "FW-354",
+    "Status": "Approved",
+    "CurrentVersion": 1.0
+  },
+  "module": "incidents",
+  "tables": {
+    "incidents": [
+      {
+        "IncidentId": 436,
+        "IncidentTitle": "Unauthorized Access Due to RBAC Non-compliance",
+        "Description": "During a recent audit check in the Treasury business unit, it was discovered that the Role-Based Access Control (RBAC) implementation was not compliant with the established policies and procedures. This non-compliance could potentially lead to unauthorized access to sensitive information within the Treasury systems, posing a significant risk to data security and confidentiality.",
+        "RiskCategory": "Market Risk",
+        "Criticality": "High",
+        "Status": "Scheduled",
+        "CostOfIncident": "7152"
+      },
+      {
+        "IncidentId": 437,
+        "IncidentTitle": "Failure to Establish Incident Response Team in IT Department",
+        "Description": "During an audit check in the IT Department, it was identified that the organization failed to establish an incident response team as required. This team is crucial for timely and effective response to security incidents. Without this team in place, the organization is at a higher risk of delayed or ineffective response to security incidents.",
+        "RiskCategory": "Reputational Risk",
+        "Criticality": "High",
+        "Status": "Open",
+        "CostOfIncident": "5039"
+      },
+      {
+        "IncidentId": 438,
+        "IncidentTitle": "Delayed Reporting of Security Events in Treasury Department",
+        "Description": "The Treasury department failed to report a security incident in a timely manner as required by internal policies and regulatory guidelines. This incident originated from an audit finding that highlighted the lack of adherence to reporting procedures. The delay in reporting compromised the organization's ability to respond promptly to the security event.",
+        "RiskCategory": "Liquidity Risk",
+        "Criticality": "High",
+        "Status": "Open",
+        "CostOfIncident": "5082"
+      },
+      {
+        "IncidentId": 439,
+        "IncidentTitle": "Non-compliance with Annual Incident Response Plan Testing",
+        "Description": "During a recent audit check in the IT Department, it was discovered that the annual testing and updating of the incident response plan was not conducted as required. This lack of compliance poses a significant risk to the organization's strategic objectives as it could lead to inadequate preparedness to effectively respond to information security incidents.",
+        "RiskCategory": "Strategic Risk",
+        "Criticality": "High",
+        "Status": "Open",
+        "CostOfIncident": "5598"
+      },
+      {
+        "IncidentId": 440,
+        "IncidentTitle": "Non-compliance with Annual Incident Response Plan Testing",
+        "Description": "During a recent audit check in the IT Department, it was discovered that the annual testing and updating of the incident response plan was not conducted as required. This lack of compliance poses a significant operational risk to the organization as it could lead to ineffective response to information security incidents.",
+        "RiskCategory": "Operational Risk",
+        "Criticality": "High",
+        "Status": "Open",
+        "CostOfIncident": "6601"
+      },
+      {
+        "IncidentId": 441,
+        "IncidentTitle": "Non-compliance with Annual Data Protection Review in IT Department",
+        "Description": "During a routine audit check, it was identified that the IT Department failed to conduct the annual review of data protection measures as required. This non-compliance poses a significant risk to the organization's data security posture and could potentially lead to data breaches.",
+        "RiskCategory": "Physical Risk",
+        "Criticality": "High",
+        "Status": "Open",
+        "CostOfIncident": "5133"
+      },
+      {
+        "IncidentId": 442,
+        "IncidentTitle": "Non-compliance with Annual Business Continuity Plan Testing",
+        "Description": "During a recent audit check, it was discovered that the Treasury business unit failed to comply with the annual testing requirements of the business continuity plan. This lapse in compliance poses a significant operational risk to the organization.",
+        "RiskCategory": "Operational Risk",
+        "Criticality": "High",
+        "Status": "Open",
+        "CostOfIncident": "6610"
+      },
+      {
+        "IncidentId": 443,
+        "IncidentTitle": "Non-compliance with Bi-annual Review of Normative References in Treasury Department",
+        "Description": "During a recent audit check, it was discovered that the Treasury department failed to conduct the bi-annual review of normative references as required. This lapse in compliance with internal policies and procedures has exposed the department to operational risks and potential regulatory fines.",
+        "RiskCategory": "Operational Risk",
+        "Criticality": "High",
+        "Status": "Open",
+        "CostOfIncident": "7686"
+      },
+      {
+        "IncidentId": 444,
+        "IncidentTitle": "Non-compliance with Bi-annual Incident Response Drills in IT Department",
+        "Description": "The IT Department failed to conduct the required bi-annual incident response drills as mandated by internal policies and industry regulations. This lapse in compliance led to a lack of preparedness for real incidents, putting the company at risk.",
+        "RiskCategory": "Compliance Risk",
+        "Criticality": "High",
+        "Status": "Scheduled",
+        "CostOfIncident": "5221"
+      },
+      {
+        "IncidentId": 445,
+        "IncidentTitle": "Non-compliance with Data Encryption Implementation in RiskManagement Business Unit",
+        "Description": "During a recent audit, it was discovered that the RiskManagement business unit failed to comply with the implementation of data encryption protocols as per regulatory requirements. This non-compliance poses a significant threat to the confidentiality and security of sensitive data within the organization.",
+        "RiskCategory": "Liquidity Risk",
+        "Criticality": "High",
+        "Status": "Open",
+        "CostOfIncident": "5400"
+      },
+      {
+        "IncidentId": 446,
+        "IncidentTitle": "Non-compliance with Annual Business Continuity Plan Testing",
+        "Description": "During a recent audit check on the IT Department, it was discovered that the annual testing of the business continuity plan, specifically related to ensuring telecommunications availability during emergencies, was not conducted as required. This non-compliance poses a significant risk to the organization's reputation and operational resilience.",
+        "RiskCategory": "Reputational Risk",
+        "Criticality": "High",
+        "Status": "Open",
+        "CostOfIncident": "7601"
+      },
+      {
+        "IncidentId": 447,
+        "IncidentTitle": "Unauthorized Access Due to RBAC Non-compliance in Treasury Department",
+        "Description": "During a recent audit, it was discovered that the Treasury department's Role-Based Access Control (RBAC) implementation was not in compliance with the organization's security policies. This non-compliance poses a significant risk of unauthorized access to sensitive financial information within the department's systems. Without proper RBAC controls, unauthorized users could potentially gain access to critical financial data, leading to severe consequences for the organization.",
+        "RiskCategory": "Physical Risk",
+        "Criticality": "High",
+        "Status": "Scheduled",
+        "CostOfIncident": "7928"
+      },
+      {
+        "IncidentId": 448,
+        "IncidentTitle": "Unauthorized Access Resulting from RBAC Non-compliance in Treasury Department",
+        "Description": "During a recent audit check in the Treasury department, it was discovered that there was non-compliance with Role-Based Access Control (RBAC) implementation. This non-compliance could potentially lead to unauthorized access to sensitive financial information within the department's systems. This incident poses a serious threat to the confidentiality and integrity of financial data.",
+        "RiskCategory": "Liquidity Risk",
+        "Criticality": "High",
+        "Status": "Open",
+        "CostOfIncident": "6993"
+      },
+      {
+        "IncidentId": 449,
+        "IncidentTitle": "Failure to Establish Incident Response Team in RiskManagement Business Unit",
+        "Description": "During a recent audit check in the RiskManagement business unit, it was discovered that there was a failure to establish an incident response team as required. This team is crucial in responding promptly and effectively to security incidents. The absence of such a team can lead to delayed or ineffective responses, increasing the risk of potential data breaches, financial losses, regulatory fines, and reputational damage for the organization.",
+        "RiskCategory": "Reputational Risk",
+        "Criticality": "High",
+        "Status": "Scheduled",
+        "CostOfIncident": "6945"
+      },
+      {
+        "IncidentId": 450,
+        "IncidentTitle": "Delayed Reporting of Security Events in IT Department",
+        "Description": "During a routine audit check in the IT Department, it was identified that there have been instances of delayed reporting of security events. This non-compliance with timely reporting processes poses a significant strategic risk to the organization as it can lead to delayed incident response, increased severity of breaches, regulatory fines, reputational damage, and potential financial losses.",
+        "RiskCategory": "Strategic Risk",
+        "Criticality": "High",
+        "Status": "Scheduled",
+        "CostOfIncident": "7846"
+      }
+    ],
+    "incident_approval": []
+  },
+  "schema": {
+    "incidents": {
+      "columns": [
+        "IncidentId",
+        "IncidentTitle",
+        "Description",
+        "PossibleDamage",
+        "Mitigation",
+        "AuditId",
+        "ComplianceId",
+        "Date",
+        "Time",
+        "UserId",
+        "Origin",
+        "Comments",
+        "RiskCategory",
+        "RiskPriority",
+        "Attachments",
+        "CreatedAt",
+        "Status",
+        "IdentifiedAt",
+        "RepeatedNot",
+        "CostOfIncident",
+        "ReopenedNot",
+        "RejectionSource",
+        "AffectedBusinessUnit",
+        "SystemsAssetsInvolved",
+        "GeographicLocation",
+        "Criticality",
+        "InitialImpactAssessment",
+        "InternalContacts",
+        "ExternalPartiesInvolved",
+        "RegulatoryBodies",
+        "RelevantPoliciesProceduresViolated",
+        "ControlFailures",
+        "LessonsLearned",
+        "IncidentClassification",
+        "AssignerId",
+        "ReviewerId",
+        "MitigationDueDate",
+        "AssignedDate",
+        "AssignmentNotes",
+        "IncidentFormDetails",
+        "MitigationCompletedDate",
+        "IncidentCategory",
+        "FrameworkId"
+      ],
+      "row_count": 15,
+      "column_details": [
+        {
+          "name": "IncidentId",
+          "type": "int",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "IncidentTitle",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Description",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PossibleDamage",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Mitigation",
+          "type": "json",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "AuditId",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ComplianceId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Date",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Time",
+          "type": "time",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "UserId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Origin",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Comments",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskCategory",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskPriority",
+          "type": "varchar(20)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Attachments",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "CreatedAt",
+          "type": "timestamp",
+          "null": "YES",
+          "key": "",
+          "default": "CURRENT_TIMESTAMP",
+          "extra": "DEFAULT_GENERATED"
+        },
+        {
+          "name": "Status",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "IdentifiedAt",
+          "type": "datetime",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RepeatedNot",
+          "type": "tinyint",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "CostOfIncident",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ReopenedNot",
+          "type": "tinyint",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RejectionSource",
+          "type": "varchar(20)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "AffectedBusinessUnit",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "SystemsAssetsInvolved",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "GeographicLocation",
+          "type": "varchar(100)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Criticality",
+          "type": "varchar(20)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "InitialImpactAssessment",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "InternalContacts",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ExternalPartiesInvolved",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RegulatoryBodies",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RelevantPoliciesProceduresViolated",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ControlFailures",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "LessonsLearned",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "IncidentClassification",
+          "type": "varchar(100)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "AssignerId",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ReviewerId",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "MitigationDueDate",
+          "type": "datetime",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "AssignedDate",
+          "type": "datetime",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "AssignmentNotes",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "IncidentFormDetails",
+          "type": "json",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "MitigationCompletedDate",
+          "type": "datetime",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "IncidentCategory",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "FrameworkId",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        }
+      ]
+    },
+    "incident_approval": {
+      "columns": [
+        "id",
+        "IncidentId",
+        "version",
+        "ExtractedInfo",
+        "AssigneeId",
+        "ReviewerId",
+        "ApprovedRejected",
+        "Date",
+        "FrameworkId"
+      ],
+      "row_count": 0,
+      "column_details": [
+        {
+          "name": "id",
+          "type": "int",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "IncidentId",
+          "type": "int",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "version",
+          "type": "varchar(45)",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ExtractedInfo",
+          "type": "json",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "AssigneeId",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ReviewerId",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ApprovedRejected",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Date",
+          "type": "datetime",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "FrameworkId",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        }
+      ]
+    }
+  }
+}

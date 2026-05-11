@@ -1,0 +1,1212 @@
+{
+  "framework": {
+    "FrameworkId": 364,
+    "FrameworkName": "Enhanced Due Diligence (EDD)",
+    "FrameworkDescription": "Enhanced Due Diligence (EDD) is a critical component in international banking and private banking, particularly in high-risk situations. It aims to mitigate risks associated with money laundering, terrorist financing, and other financial crimes by requiring financial institutions to conduct comprehensive risk assessments and implement robust anti-money laundering (AML) measures.",
+    "Category": "Financial Security and Compliance",
+    "InternalExternal": "External",
+    "Identifier": "FW-364",
+    "Status": "Approved",
+    "CurrentVersion": 1.0
+  },
+  "module": "compliance",
+  "tables": {
+    "compliance": [
+      {
+        "ComplianceId": 2805,
+        "SubPolicyId": 4046,
+        "ComplianceTitle": "Annual Comprehensive Risk Assessment",
+        "ComplianceItemDescription": "Conduct a comprehensive risk assessment annually to identify and evaluate ML/TF risks associated with customers, products, and services.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2806,
+        "SubPolicyId": 4047,
+        "ComplianceTitle": "Collection and Verification of Customer Information",
+        "ComplianceItemDescription": "Collect and verify additional customer information, including occupation, source of funds, and source of wealth at the time of onboarding and periodically thereafter, at least annually. Implement enhanced due diligence procedures, including public database checks and media searches.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2807,
+        "SubPolicyId": 4048,
+        "ComplianceTitle": "Senior Management Approval Requirement",
+        "ComplianceItemDescription": "Obtain written approval from senior management for high-risk customer relationships before onboarding or when significant changes occur in the customer's risk profile. Document the approval process and maintain records for audit purposes.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2808,
+        "SubPolicyId": 4049,
+        "ComplianceTitle": "Client Net Worth Documentation",
+        "ComplianceItemDescription": "Compliance officers and onboarding staff must collect detailed information on the client's total net worth and document the sources of wealth.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2809,
+        "SubPolicyId": 4049,
+        "ComplianceTitle": "Annual Wealth Source Verification",
+        "ComplianceItemDescription": "Client wealth source information must be updated annually or when significant changes occur.",
+        "ComplianceType": "Internal",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2810,
+        "SubPolicyId": 4050,
+        "ComplianceTitle": "Automated Transaction Monitoring System Implementation",
+        "ComplianceItemDescription": "Implement an automated system for ongoing monitoring of client transactions to flag unusual activities.",
+        "ComplianceType": "Operational",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2811,
+        "SubPolicyId": 4050,
+        "ComplianceTitle": "Annual Client Information Review",
+        "ComplianceItemDescription": "Conduct formal reviews of client information at least annually to ensure accuracy and compliance with EDD standards.",
+        "ComplianceType": "Operational",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2812,
+        "SubPolicyId": 4051,
+        "ComplianceTitle": "Client Identification Process",
+        "ComplianceItemDescription": "Conduct thorough identification and verification of clients using reliable and independent sources of information.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2813,
+        "SubPolicyId": 4051,
+        "ComplianceTitle": "Annual Client Verification",
+        "ComplianceItemDescription": "Update client identification information annually or upon significant changes in client circumstances.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2814,
+        "SubPolicyId": 4052,
+        "ComplianceTitle": "Source of Wealth Assessment Documentation",
+        "ComplianceItemDescription": "All high-net-worth clients must provide documentation such as tax returns, business ownership records, and investment portfolios to assess their source of wealth.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2815,
+        "SubPolicyId": 4052,
+        "ComplianceTitle": "Annual Source of Wealth Review",
+        "ComplianceItemDescription": "High-net-worth clients' source of wealth must be reviewed annually or when significant changes in client circumstances occur.",
+        "ComplianceType": "Internal",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2816,
+        "SubPolicyId": 4053,
+        "ComplianceTitle": "Continuous Monitoring of High-Value Transactions",
+        "ComplianceItemDescription": "Implement continuous monitoring of client transactions, focusing on high-value transactions to identify and mitigate potential risks associated with money laundering and financial crimes.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2817,
+        "SubPolicyId": 4053,
+        "ComplianceTitle": "Real-Time Monitoring and Monthly Reviews",
+        "ComplianceItemDescription": "Ensure real-time monitoring of client transactions with periodic reviews conducted monthly to identify and mitigate potential risks associated with money laundering and financial crimes.",
+        "ComplianceType": "Internal",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2818,
+        "SubPolicyId": 4054,
+        "ComplianceTitle": "Annual EDD Training for Front-Line Staff",
+        "ComplianceItemDescription": "Conduct mandatory EDD training sessions annually for all front-line staff in private banking covering risk identification, EDD procedures, and regulatory compliance.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2819,
+        "SubPolicyId": 4054,
+        "ComplianceTitle": "EDD Training Delivery Methods",
+        "ComplianceItemDescription": "Utilize a combination of in-person workshops, online courses, and assessments for EDD training to ensure comprehension.",
+        "ComplianceType": "Internal",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2820,
+        "SubPolicyId": 4055,
+        "ComplianceTitle": "Implementation of Standardized Risk Assessment Framework",
+        "ComplianceItemDescription": "Implement a standardized risk assessment framework for evaluating high-value transactions.",
+        "ComplianceType": "Internal",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2821,
+        "SubPolicyId": 4055,
+        "ComplianceTitle": "Quarterly Review of Risk Assessments",
+        "ComplianceItemDescription": "Risk assessments must be reviewed quarterly for high-value transactions.",
+        "ComplianceType": "Internal",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2822,
+        "SubPolicyId": 4056,
+        "ComplianceTitle": "Semi-Annual Audit of EDD Practices",
+        "ComplianceItemDescription": "Conduct semi-annual audits of EDD practices and compliance with the policy by reviewing transaction records, staff training logs, and risk assessment documentation.",
+        "ComplianceType": "Internal",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2823,
+        "SubPolicyId": 4056,
+        "ComplianceTitle": "Triggered Audits for Significant Changes",
+        "ComplianceItemDescription": "Conduct additional audits triggered by significant changes in risk profiles or regulatory requirements by reviewing transaction records, staff training logs, and risk assessment documentation.",
+        "ComplianceType": "Internal",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2824,
+        "SubPolicyId": 4057,
+        "ComplianceTitle": "Conduct Comprehensive Risk Assessments for High-Risk Customers",
+        "ComplianceItemDescription": "Compliance officers and risk management teams must conduct thorough risk assessments for all high-risk customers, evaluating customer profiles, transaction histories, and geographic risk factors using risk assessment tools and methodologies.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2825,
+        "SubPolicyId": 4058,
+        "ComplianceTitle": "Annual EDD Training Session",
+        "ComplianceItemDescription": "All staff involved in Enhanced Due Diligence processes must attend an annual training session covering EDD processes, red flag identification, and regulatory requirements.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2826,
+        "SubPolicyId": 4058,
+        "ComplianceTitle": "Online EDD Training Modules",
+        "ComplianceItemDescription": "All staff involved in Enhanced Due Diligence processes must complete online training modules covering EDD principles.",
+        "ComplianceType": "Internal",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2827,
+        "SubPolicyId": 4059,
+        "ComplianceTitle": "Semi-Annual Audit of EDD Processes",
+        "ComplianceItemDescription": "Conduct semi-annual audits of Enhanced Due Diligence processes, including reviews of customer risk profiles and compliance with EDD procedures.",
+        "ComplianceType": "Internal",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2828,
+        "SubPolicyId": 4059,
+        "ComplianceTitle": "Triggered Audits for Significant Findings",
+        "ComplianceItemDescription": "Conduct additional audits triggered by significant findings or changes in risk profiles related to EDD processes.",
+        "ComplianceType": "Internal",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2829,
+        "SubPolicyId": 4060,
+        "ComplianceTitle": "Annual Comprehensive Risk Assessment",
+        "ComplianceItemDescription": "Conduct a comprehensive risk assessment annually to identify and evaluate ML/TF risks associated with customers, products, and services. Define the risk appetite statement.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2830,
+        "SubPolicyId": 4061,
+        "ComplianceTitle": "Customer Due Diligence Documentation",
+        "ComplianceItemDescription": "Collect and verify additional customer information including source of funds and source of wealth at the time of onboarding and continuously throughout the customer relationship.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2831,
+        "SubPolicyId": 4061,
+        "ComplianceTitle": "Enhanced Transaction Monitoring Procedures",
+        "ComplianceItemDescription": "Implement automated monitoring systems and conduct manual reviews of high-risk transactions to detect suspicious activities",
+        "ComplianceType": "Internal",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2832,
+        "SubPolicyId": 4062,
+        "ComplianceTitle": "Client Net Worth Documentation",
+        "ComplianceItemDescription": "All financial institutions must collect and document detailed information on clients' total net worth during the onboarding process.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2833,
+        "SubPolicyId": 4062,
+        "ComplianceTitle": "Source of Wealth Verification",
+        "ComplianceItemDescription": "Compliance officers and onboarding staff must verify the source of wealth declared by clients during the onboarding process.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2834,
+        "SubPolicyId": 4063,
+        "ComplianceTitle": "Verification of Source of Wealth Documentation",
+        "ComplianceItemDescription": "All institutions must collect and review client-provided documents such as tax returns, bank statements, and third-party confirmations to verify the legitimacy of the client's wealth.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2835,
+        "SubPolicyId": 4063,
+        "ComplianceTitle": "Verification of Significant Transactions",
+        "ComplianceItemDescription": "Institutions must conduct verification of the source of wealth for significant transactions identified within 30 days of client onboarding.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2836,
+        "SubPolicyId": 4064,
+        "ComplianceTitle": "Customer Risk Assessment Tool Utilization",
+        "ComplianceItemDescription": "Compliance officers must use the standardized risk assessment tool to evaluate customer risk factors and document findings.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2837,
+        "SubPolicyId": 4065,
+        "ComplianceTitle": "Transaction Monitoring Thresholds Setting",
+        "ComplianceItemDescription": "Establish predefined thresholds for monitoring customer transactions for suspicious activity.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2838,
+        "SubPolicyId": 4065,
+        "ComplianceTitle": "Escalation Process for Suspicious Activities",
+        "ComplianceItemDescription": "Define and implement a clear process for escalating concerns related to suspicious activities detected during transaction monitoring.",
+        "ComplianceType": "Internal",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2839,
+        "SubPolicyId": 4066,
+        "ComplianceTitle": "Quarterly EDD and AML Training Sessions",
+        "ComplianceItemDescription": "All employees must attend quarterly training sessions conducted by the compliance department on EDD and AML compliance.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2840,
+        "SubPolicyId": 4066,
+        "ComplianceTitle": "New Staff Onboarding Training",
+        "ComplianceItemDescription": "All new staff must undergo training on EDD procedures, recognizing suspicious activity, and understanding regulatory requirements upon onboarding.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2841,
+        "SubPolicyId": 4067,
+        "ComplianceTitle": "Customer Identification Process",
+        "ComplianceItemDescription": "Financial institutions must verify the identity of customers using reliable methods such as government-issued IDs.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2842,
+        "SubPolicyId": 4067,
+        "ComplianceTitle": "Annual Customer Profile Review",
+        "ComplianceItemDescription": "Financial institutions must review customer profiles annually or upon significant changes in circumstances.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2843,
+        "SubPolicyId": 4068,
+        "ComplianceTitle": "Ongoing Transaction Monitoring",
+        "ComplianceItemDescription": "Financial institutions must continuously monitor transactions of high-risk customers using automated systems to flag suspicious activities.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2844,
+        "SubPolicyId": 4068,
+        "ComplianceTitle": "Quarterly Customer Profile Reviews",
+        "ComplianceItemDescription": "Financial institutions must conduct quarterly reviews of high-risk customer profiles to ensure accuracy and detect any changes in risk levels.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2845,
+        "SubPolicyId": 4069,
+        "ComplianceTitle": "Beneficial Ownership Identification",
+        "ComplianceItemDescription": "Financial institutions must identify and document all beneficial owners of customers with complex ownership structures.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2846,
+        "SubPolicyId": 4069,
+        "ComplianceTitle": "Ownership Structure Documentation",
+        "ComplianceItemDescription": "Financial institutions must require detailed documentation of ownership structures from customers with complex ownership arrangements.",
+        "ComplianceType": "Internal",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2847,
+        "SubPolicyId": 4070,
+        "ComplianceTitle": "Annual Review of Risk Assessment",
+        "ComplianceItemDescription": "The compliance team must conduct a comprehensive review of the financial institution's risk assessment related to Enhanced Due Diligence at least annually using established risk assessment frameworks and methodologies. This review should include an analysis of customer profiles, products, services, and geographic risks to ensure alignment with the institution's risk appetite and regulatory requirements.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2848,
+        "SubPolicyId": 4071,
+        "ComplianceTitle": "Bi-annual Evaluation of Customer Onboarding Processes",
+        "ComplianceItemDescription": "The internal audit team will evaluate the effectiveness of customer onboarding processes related to Enhanced Due Diligence bi-annually by reviewing documentation, conducting interviews with staff, and assessing compliance with established guidelines.",
+        "ComplianceType": "Internal",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2849,
+        "SubPolicyId": 4071,
+        "ComplianceTitle": "Bi-annual Evaluation of Transaction Monitoring Processes",
+        "ComplianceItemDescription": "The internal audit team will evaluate the effectiveness of transaction monitoring processes related to Enhanced Due Diligence bi-annually by reviewing documentation, conducting interviews with staff, and assessing compliance with established guidelines.",
+        "ComplianceType": "Internal",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2850,
+        "SubPolicyId": 4072,
+        "ComplianceTitle": "Quarterly Training Sessions",
+        "ComplianceItemDescription": "All staff involved in EDD must attend quarterly training sessions covering risk assessment, customer profiling, and regulatory compliance.",
+        "ComplianceType": "Internal",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2851,
+        "SubPolicyId": 4073,
+        "ComplianceTitle": "Maintenance of Customer Profiles",
+        "ComplianceItemDescription": "All departments involved in EDD must maintain accurate and up-to-date customer profiles including identification documents, transaction history, and risk assessments for a minimum of five years.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2852,
+        "SubPolicyId": 4073,
+        "ComplianceTitle": "Retention of Audit Findings",
+        "ComplianceItemDescription": "All departments involved in EDD must retain audit findings, including remediation actions and outcomes, for a minimum of five years.",
+        "ComplianceType": "Internal",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2853,
+        "SubPolicyId": 4074,
+        "ComplianceTitle": "Implementation of Transaction Monitoring System",
+        "ComplianceItemDescription": "Implement a transaction monitoring system that flags suspicious activities based on predefined criteria.",
+        "ComplianceType": "Operational",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2854,
+        "SubPolicyId": 4074,
+        "ComplianceTitle": "Daily Review of Flagged Transactions",
+        "ComplianceItemDescription": "Conduct daily reviews of flagged transactions to investigate suspicious activities.",
+        "ComplianceType": "Operational",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2855,
+        "SubPolicyId": 4075,
+        "ComplianceTitle": "Development of Remediation Action Plan",
+        "ComplianceItemDescription": "Management of relevant business lines must develop a remediation action plan within two weeks of the audit report, addressing all audit findings with clear priorities.",
+        "ComplianceType": "Operational",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2856,
+        "SubPolicyId": 4075,
+        "ComplianceTitle": "Implementation of Remediation Action Plan",
+        "ComplianceItemDescription": "Management of relevant business lines must implement the remediation action plan within agreed timelines following its development.",
+        "ComplianceType": "Operational",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2857,
+        "SubPolicyId": 4076,
+        "ComplianceTitle": "Conduct Comprehensive Risk Assessment for High-Risk Customers",
+        "ComplianceItemDescription": "Conduct a thorough risk assessment for each high-risk customer, evaluating their profile, transaction history, and potential red flags using risk assessment tools and methodologies.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2858,
+        "SubPolicyId": 4077,
+        "ComplianceTitle": "Continuous Monitoring of High-Risk Customers",
+        "ComplianceItemDescription": "Implement ongoing monitoring of transactions for high-risk customers to identify suspicious activities.",
+        "ComplianceType": "Operational",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2859,
+        "SubPolicyId": 4077,
+        "ComplianceTitle": "Immediate Reporting of Suspicious Activities",
+        "ComplianceItemDescription": "Report suspicious activities immediately upon detection.",
+        "ComplianceType": "Operational",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2860,
+        "SubPolicyId": 4078,
+        "ComplianceTitle": "Annual Comprehensive Risk Assessment",
+        "ComplianceItemDescription": "Conduct a comprehensive risk assessment annually to identify and evaluate ML/TF risks across all operational units and jurisdictions.",
+        "ComplianceType": "Internal",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2861,
+        "SubPolicyId": 4079,
+        "ComplianceTitle": "Annual Review of Risk Appetite Statement",
+        "ComplianceItemDescription": "Senior Management and Board of Directors must review and update the risk appetite statement annually or as needed.",
+        "ComplianceType": "Internal",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2862,
+        "SubPolicyId": 4079,
+        "ComplianceTitle": "Stakeholder Engagement for Risk Appetite Statement Development",
+        "ComplianceItemDescription": "Engage stakeholders in discussions to align risk appetite with strategic objectives and document the statement for approval.",
+        "ComplianceType": "Internal",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2863,
+        "SubPolicyId": 4080,
+        "ComplianceTitle": "Client Net Worth Assessment Data Collection",
+        "ComplianceItemDescription": "Collect general information on the client's total net worth using structured questionnaires and informal interviews during the initial client onboarding stage.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2864,
+        "SubPolicyId": 4080,
+        "ComplianceTitle": "Secure Client Net Worth Data Handling",
+        "ComplianceItemDescription": "Ensure that client net worth data collected during onboarding is handled securely through in-person meetings, virtual consultations, or secure online forms.",
+        "ComplianceType": "Internal",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2865,
+        "SubPolicyId": 4081,
+        "ComplianceTitle": "Source of Wealth Documentation Collection",
+        "ComplianceItemDescription": "Compliance officers and client relationship managers must conduct detailed interviews with clients and research public records to obtain information on the source of wealth.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2866,
+        "SubPolicyId": 4082,
+        "ComplianceTitle": "Verification of Source of Wealth Documentation Review",
+        "ComplianceItemDescription": "Compliance officers and risk assessment teams must review and validate client-provided documents such as tax returns, bank statements, and third-party confirmations to verify the source of wealth.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2867,
+        "SubPolicyId": 4083,
+        "ComplianceTitle": "Collection of Source of Funds Documentation",
+        "ComplianceItemDescription": "Compliance officers and client onboarding teams must collect specific documentation such as bank statements, tax returns, and employment contracts from clients to verify the source of funds.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2868,
+        "SubPolicyId": 4083,
+        "ComplianceTitle": "Verification of Source of Wealth Information",
+        "ComplianceItemDescription": "Compliance officers and client onboarding teams must verify the source of wealth information provided by clients through independent sources within 30 days of client onboarding.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2869,
+        "SubPolicyId": 4084,
+        "ComplianceTitle": "Implementation of Automated Transaction Monitoring Systems",
+        "ComplianceItemDescription": "Implement transaction monitoring systems to flag and review transactions involving PEPs for unusual patterns or amounts using automated monitoring tools that integrate with transaction processing systems.",
+        "ComplianceType": "Operational",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2870,
+        "SubPolicyId": 4084,
+        "ComplianceTitle": "Real-Time Monitoring of PEP Transactions",
+        "ComplianceItemDescription": "Transactions involving PEPs must be monitored in real-time with reviews conducted weekly for flagged transactions.",
+        "ComplianceType": "Operational",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2871,
+        "SubPolicyId": 4085,
+        "ComplianceTitle": "Customer Information Collection Requirements",
+        "ComplianceItemDescription": "Financial institutions must collect and verify additional information on customers, including occupation, volume of assets, and data from public databases.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2872,
+        "SubPolicyId": 4086,
+        "ComplianceTitle": "Quarterly Transaction Review",
+        "ComplianceItemDescription": "Institutions must conduct formal reviews of customer transactions on a quarterly basis to identify any unusual patterns or behaviors.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2873,
+        "SubPolicyId": 4086,
+        "ComplianceTitle": "Continuous Monitoring",
+        "ComplianceItemDescription": "Institutions must continuously monitor customer transactions using transaction monitoring systems and analytics to identify unusual patterns and behaviors.",
+        "ComplianceType": "Internal",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2874,
+        "SubPolicyId": 4087,
+        "ComplianceTitle": "Customer Identification Verification",
+        "ComplianceItemDescription": "Financial institutions must verify customer identification information using reliable sources such as government-issued IDs and third-party verification services within 5 business days of account opening.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2875,
+        "SubPolicyId": 4087,
+        "ComplianceTitle": "Documentation of Verification Process",
+        "ComplianceItemDescription": "Financial institutions must establish procedures for documenting the customer verification process during account opening and throughout the customer relationship.",
+        "ComplianceType": "Internal",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2876,
+        "SubPolicyId": 4088,
+        "ComplianceTitle": "Implementation of Real-Time Transaction Monitoring System",
+        "ComplianceItemDescription": "Institutions must implement transaction monitoring systems that analyze customer transactions for unusual patterns or activities in real-time.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2877,
+        "SubPolicyId": 4088,
+        "ComplianceTitle": "Daily Review of Flagged Transactions",
+        "ComplianceItemDescription": "Institutions must conduct daily reviews of transactions flagged by the monitoring system for unusual patterns or activities.",
+        "ComplianceType": "Internal",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2878,
+        "SubPolicyId": 4089,
+        "ComplianceTitle": "Annual Customer Information Refresh",
+        "ComplianceItemDescription": "Financial institutions must refresh customer information at least annually to ensure accuracy and relevance.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2879,
+        "SubPolicyId": 4089,
+        "ComplianceTitle": "Timely Information Refresh Completion",
+        "ComplianceItemDescription": "Information refreshes must be completed within 30 days of the scheduled review date.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2880,
+        "SubPolicyId": 4090,
+        "ComplianceTitle": "PEP Identification Process",
+        "ComplianceItemDescription": "Conduct a thorough identification process for all customers to determine PEP status using reliable databases and media sources.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2881,
+        "SubPolicyId": 4090,
+        "ComplianceTitle": "Annual Review of PEP Status",
+        "ComplianceItemDescription": "Review the PEP status of customers annually or upon any significant change in customer circumstances.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2882,
+        "SubPolicyId": 4091,
+        "ComplianceTitle": "Real-time Monitoring of PEP Transactions",
+        "ComplianceItemDescription": "Implement continuous monitoring of all transactions involving PEPs in real-time using transaction monitoring software to detect any suspicious activities.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2883,
+        "SubPolicyId": 4091,
+        "ComplianceTitle": "Monthly Review of Flagged PEP Transactions",
+        "ComplianceItemDescription": "Review all flagged activities in transactions involving PEPs on a monthly basis to investigate any suspicious patterns or activities.",
+        "ComplianceType": "Internal",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2884,
+        "SubPolicyId": 4092,
+        "ComplianceTitle": "Client Suitability Assessment Completion",
+        "ComplianceItemDescription": "All compliance officers and relationship managers must complete suitability and appropriateness assessments for prospective clients before approving any investment service.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2885,
+        "SubPolicyId": 4093,
+        "ComplianceTitle": "Quarterly EDD Training Sessions",
+        "ComplianceItemDescription": "Conduct quarterly training sessions focused on Enhanced Due Diligence (EDD) and financial crime risk identification for front-line staff in private banking.",
+        "ComplianceType": "Internal",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2886,
+        "SubPolicyId": 4093,
+        "ComplianceTitle": "Bi-annual Mandatory Refresher Training",
+        "ComplianceItemDescription": "Require front-line staff in private banking to undergo mandatory refresher training every six months on EDD and financial crime risk identification.",
+        "ComplianceType": "Internal",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2887,
+        "SubPolicyId": 4094,
+        "ComplianceTitle": "High-Value Transaction Risk Assessment",
+        "ComplianceItemDescription": "Conduct risk assessments for all high-value transactions prior to approval using a standardized checklist and scoring system.",
+        "ComplianceType": "Operational",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2888,
+        "SubPolicyId": 4094,
+        "ComplianceTitle": "Cross-Border Transaction Risk Assessment",
+        "ComplianceItemDescription": "Conduct risk assessments for all cross-border transactions prior to approval using a standardized checklist and scoring system.",
+        "ComplianceType": "Operational",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2889,
+        "SubPolicyId": 4095,
+        "ComplianceTitle": "Bi-Annual Audit of High-Value Asset Transactions",
+        "ComplianceItemDescription": "Conduct bi-annual audits of high-value asset transactions and valuations to ensure compliance with policies and regulations.",
+        "ComplianceType": "Internal",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2890,
+        "SubPolicyId": 4095,
+        "ComplianceTitle": "Oversight of Significant High-Value Asset Transactions",
+        "ComplianceItemDescription": "Conduct additional reviews of high-value asset transactions triggered by significant transactions to ensure compliance and mitigate risks.",
+        "ComplianceType": "Internal",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2891,
+        "SubPolicyId": 4096,
+        "ComplianceTitle": "Verification of Customer Documentation Process",
+        "ComplianceItemDescription": "Financial institutions must implement a verification process for all customer documentation, including assessing the source of wealth and funds.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2892,
+        "SubPolicyId": 4097,
+        "ComplianceTitle": "Real-Time Transaction Monitoring",
+        "ComplianceItemDescription": "Financial institutions must implement real-time monitoring of transactions for high-risk customers to identify unusual patterns or suspicious activities.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2893,
+        "SubPolicyId": 4097,
+        "ComplianceTitle": "Monthly Review of High-Risk Accounts",
+        "ComplianceItemDescription": "High-risk customer accounts must be reviewed at least monthly for unusual patterns or suspicious activities.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2894,
+        "SubPolicyId": 4098,
+        "ComplianceTitle": "Beneficial Owner Identification Process",
+        "ComplianceItemDescription": "Conduct thorough identification and verification of all beneficial owners and relevant officers associated with complex legal structures.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2895,
+        "SubPolicyId": 4099,
+        "ComplianceTitle": "Assessment of Legal Arrangements Legitimacy",
+        "ComplianceItemDescription": "Financial institutions must evaluate the legitimacy of legal arrangements used by customers with complex structures.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2896,
+        "SubPolicyId": 4100,
+        "ComplianceTitle": "Implement Automated Transaction Monitoring Systems",
+        "ComplianceItemDescription": "Utilize automated transaction monitoring tools to detect unusual patterns in transactions associated with complex legal structures.",
+        "ComplianceType": "Operational",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2897,
+        "SubPolicyId": 4100,
+        "ComplianceTitle": "Conduct Monthly Manual Reviews of Flagged Transactions",
+        "ComplianceItemDescription": "The compliance monitoring team must conduct manual reviews of transactions flagged by the automated monitoring systems for unusual activity.",
+        "ComplianceType": "Operational",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2898,
+        "SubPolicyId": 4101,
+        "ComplianceTitle": "Review of Risk Assessment Documentation",
+        "ComplianceItemDescription": "Auditors must review the risk assessment documentation at the beginning of the audit process to ensure it captures all relevant risks associated with customers, products, services, and geographies.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2899,
+        "SubPolicyId": 4102,
+        "ComplianceTitle": "Alignment with Risk Assessment",
+        "ComplianceItemDescription": "Auditors must ensure that the financial institution's policies and procedures related to EDD are aligned with the risk assessment conducted by the institution.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2900,
+        "SubPolicyId": 4102,
+        "ComplianceTitle": "Customer-Specific Profiles Development",
+        "ComplianceItemDescription": "Auditors must assess the ability of the financial institution to develop customer-specific profiles based on the policies and procedures related to EDD.",
+        "ComplianceType": "Internal",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2901,
+        "SubPolicyId": 4103,
+        "ComplianceTitle": "Review of Staff Training Records",
+        "ComplianceItemDescription": "Auditors must review training records and materials to assess the adequacy of training provided to staff involved in EDD processes.",
+        "ComplianceType": "Internal",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2902,
+        "SubPolicyId": 4103,
+        "ComplianceTitle": "Evaluation of Knowledge Testing Results",
+        "ComplianceItemDescription": "Auditors must evaluate knowledge testing results to ensure comprehensive training is delivered to staff involved in EDD processes.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "Medium"
+      },
+      {
+        "ComplianceId": 2903,
+        "SubPolicyId": 4104,
+        "ComplianceTitle": "Review of EDD Record-Keeping Practices",
+        "ComplianceItemDescription": "Auditors must review and ensure the accuracy, logic, and maintenance of EDD-related record-keeping practices for the required duration.",
+        "ComplianceType": "Regulatory",
+        "Criticality": "High"
+      },
+      {
+        "ComplianceId": 2904,
+        "SubPolicyId": 4105,
+        "ComplianceTitle": "Tracking Implementation of Audit Recommendations",
+        "ComplianceItemDescription": "Management of relevant business lines must track the implementation of audit recommendations following the audit report by providing regular updates and reporting on progress.",
+        "ComplianceType": "Internal",
+        "Criticality": "High"
+      }
+    ],
+    "complianceapproval": []
+  },
+  "schema": {
+    "compliance": {
+      "columns": [
+        "ComplianceId",
+        "SubPolicyId",
+        "PreviousComplianceVersionId",
+        "Identifier",
+        "ComplianceTitle",
+        "ComplianceItemDescription",
+        "ComplianceType",
+        "Scope",
+        "Objective",
+        "BusinessUnitsCovered",
+        "IsRisk",
+        "PossibleDamage",
+        "mitigation",
+        "Criticality",
+        "MandatoryOptional",
+        "ManualAutomatic",
+        "Impact",
+        "Probability",
+        "MaturityLevel",
+        "ActiveInactive",
+        "PermanentTemporary",
+        "CreatedByName",
+        "CreatedByDate",
+        "ComplianceVersion",
+        "Status",
+        "Applicability",
+        "PotentialRiskScenarios",
+        "RiskType",
+        "RiskCategory",
+        "RiskBusinessImpact",
+        "FrameworkId"
+      ],
+      "row_count": 100,
+      "column_details": [
+        {
+          "name": "ComplianceId",
+          "type": "int",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "SubPolicyId",
+          "type": "int",
+          "null": "NO",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PreviousComplianceVersionId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Identifier",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ComplianceTitle",
+          "type": "varchar(145)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ComplianceItemDescription",
+          "type": "longtext",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ComplianceType",
+          "type": "varchar(100)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Scope",
+          "type": "longtext",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Objective",
+          "type": "longtext",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "BusinessUnitsCovered",
+          "type": "varchar(225)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "IsRisk",
+          "type": "tinyint(1)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PossibleDamage",
+          "type": "longtext",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "mitigation",
+          "type": "longtext",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Criticality",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "MandatoryOptional",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ManualAutomatic",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Impact",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Probability",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "MaturityLevel",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ActiveInactive",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PermanentTemporary",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "CreatedByName",
+          "type": "varchar(250)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "CreatedByDate",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ComplianceVersion",
+          "type": "varchar(50)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Status",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Applicability",
+          "type": "varchar(450)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PotentialRiskScenarios",
+          "type": "longtext",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskType",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskCategory",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskBusinessImpact",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "FrameworkId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        }
+      ]
+    },
+    "complianceapproval": {
+      "columns": [
+        "ApprovalId",
+        "Identifier",
+        "ExtractedData",
+        "UserId",
+        "ReviewerId",
+        "Version",
+        "ApprovedNot",
+        "ApprovedDate",
+        "PolicyId",
+        "ApprovalDueDate",
+        "FrameworkId"
+      ],
+      "row_count": 0,
+      "column_details": [
+        {
+          "name": "ApprovalId",
+          "type": "int",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "Identifier",
+          "type": "varchar(45)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ExtractedData",
+          "type": "json",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "UserId",
+          "type": "int",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ReviewerId",
+          "type": "int",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Version",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ApprovedNot",
+          "type": "tinyint(1)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ApprovedDate",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PolicyId",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ApprovalDueDate",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "FrameworkId",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        }
+      ]
+    }
+  }
+}

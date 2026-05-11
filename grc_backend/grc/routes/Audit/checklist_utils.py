@@ -460,14 +460,21 @@ def update_lastchecklistitem_verified(audit_id):
                 else:
                     debug_print(f"DEBUG:   -> Other status: {check_value}")
                 
-                # Check if a record already exists for this compliance
-                debug_print(f"DEBUG:   Checking if record exists for ComplianceId: {compliance_id}")
+                # Check existing record using the same composite key as table PK
+                # to avoid collisions across policy/subpolicy/framework combinations.
+                debug_print(
+                    f"DEBUG:   Checking if record exists for composite key: "
+                    f"ComplianceId={compliance_id}, SubPolicyId={subpolicy_id}, PolicyId={policy_id}, FrameworkId={framework_id}"
+                )
                 cursor.execute("""
                     SELECT Count 
                     FROM lastchecklistitemverified 
                     WHERE ComplianceId = %s
+                      AND SubPolicyId <=> %s
+                      AND PolicyId <=> %s
+                      AND FrameworkId <=> %s
                     LIMIT 1
-                """, [compliance_id])
+                """, [compliance_id, subpolicy_id, policy_id, framework_id])
                 
                 result = cursor.fetchone()
                 exists = result is not None
@@ -483,48 +490,51 @@ def update_lastchecklistitem_verified(audit_id):
                     debug_print(f"DEBUG:   Incrementing count to: {new_count}")
                 
                 try:
+                    # Single atomic upsert prevents duplicate PK errors under concurrency.
+                    debug_print(f"DEBUG:   Upserting record...")
+                    upsert_query = """
+                        INSERT INTO lastchecklistitemverified (
+                            ComplianceId,
+                            SubPolicyId,
+                            PolicyId,
+                            FrameworkId,
+                            Date,
+                            Time,
+                            User,
+                            Complied,
+                            Comments,
+                            Count,
+                            AuditFindingsId
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        ON DUPLICATE KEY UPDATE
+                            Date = VALUES(Date),
+                            Time = VALUES(Time),
+                            User = VALUES(User),
+                            Complied = VALUES(Complied),
+                            Comments = VALUES(Comments),
+                            Count = VALUES(Count),
+                            AuditFindingsId = VALUES(AuditFindingsId)
+                    """
+                    upsert_values = [
+                        compliance_id,
+                        subpolicy_id,
+                        policy_id,
+                        framework_id,
+                        current_date,
+                        current_time,
+                        user_id,
+                        check_value,
+                        comments,
+                        new_count,
+                        audit_findings_id
+                    ]
+                    debug_print(f"DEBUG:   Upsert values: {upsert_values}")
+                    cursor.execute(upsert_query, upsert_values)
+                    rows_affected = cursor.rowcount
+                    debug_print(f"DEBUG:   -> Rows affected by upsert: {rows_affected}")
+
                     if exists:
-                        # Update existing record
-                        debug_print(f"DEBUG:   Updating existing record...")
-                        update_query = """
-                            UPDATE lastchecklistitemverified
-                            SET 
-                                SubPolicyId = %s,
-                                PolicyId = %s,
-                                FrameworkId = %s,
-                                Date = %s,
-                                Time = %s,
-                                User = %s,
-                                Complied = %s,
-                                Comments = %s,
-                                Count = %s,
-                                AuditFindingsId = %s
-                            WHERE ComplianceId = %s
-                        """
-                        update_values = [
-                            subpolicy_id,
-                            policy_id,
-                            framework_id,
-                            current_date,
-                            current_time,
-                            user_id,
-                            check_value,
-                            comments,
-                            new_count,
-                            audit_findings_id,
-                            compliance_id
-                        ]
-                        
-                        debug_print(f"DEBUG:   Update query: {update_query}")
-                        debug_print(f"DEBUG:   Update values: {update_values}")
-                        
-                        cursor.execute(update_query, update_values)
-                        rows_affected = cursor.rowcount
-                        debug_print(f"DEBUG:   -> Rows affected by update: {rows_affected}")
                         updated_records += 1
-                        debug_print(f"DEBUG:   -> Record updated successfully")
-                        
-                        # Log record update
                         if check_value in ["0", "1"]:
                             send_log(
                                 module="Checklist",
@@ -540,47 +550,7 @@ def update_lastchecklistitem_verified(audit_id):
                                 }
                             )
                     else:
-                        # Insert new record
-                        debug_print(f"DEBUG:   Inserting new record...")
-                        insert_query = """
-                            INSERT INTO lastchecklistitemverified (
-                                ComplianceId,
-                                SubPolicyId,
-                                PolicyId,
-                                FrameworkId,
-                                Date,
-                                Time,
-                                User,
-                                Complied,
-                                Comments,
-                                Count,
-                                AuditFindingsId
-                            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                        """
-                        insert_values = [
-                            compliance_id,
-                            subpolicy_id,
-                            policy_id,
-                            framework_id,
-                            current_date,
-                            current_time,
-                            user_id,
-                            check_value,
-                            comments,
-                            new_count,
-                            audit_findings_id
-                        ]
-                        
-                        debug_print(f"DEBUG:   Insert query: {insert_query}")
-                        debug_print(f"DEBUG:   Insert values: {insert_values}")
-                        
-                        cursor.execute(insert_query, insert_values)
-                        rows_affected = cursor.rowcount
-                        debug_print(f"DEBUG:   -> Rows affected by insert: {rows_affected}")
                         inserted_records += 1
-                        debug_print(f"DEBUG:   -> Record inserted successfully")
-                        
-                        # Log record insertion
                         if check_value in ["0", "1"]:
                             send_log(
                                 module="Checklist",
@@ -669,21 +639,28 @@ def update_lastchecklistitem_verified(audit_id):
                     if non_compliant_count > 0:
                         # Get management emails (you can customize this logic)
                         cursor.execute("""
-                            SELECT Email FROM users WHERE Role = 'Manager' OR Role = 'Admin'
+                            SELECT DISTINCT u.Email
+                            FROM users u
+                            JOIN rbac r ON r.UserId = u.UserId
+                            WHERE r.Role IN ('Manager', 'Admin', 'GRC Administrator')
+                              AND u.Email IS NOT NULL
+                              AND u.Email != ''
                         """)
                         
                         managers = cursor.fetchall()
                         for manager in managers:
                             manager_email = manager[0]
                             notification_data = {
-                                'notification_type': 'auditNonCompliance',
+                                # Use an existing supported template type.
+                                # "auditNonCompliance" is not defined in notification_service.
+                                'notification_type': 'auditCompleted',
                                 'email': manager_email,
                                 'email_type': 'gmail',
                                 'template_data': [
-                                    "Manager",
-                                    f"Audit #{audit_id}",
-                                    str(non_compliant_count),
-                                    auditor_name or "Auditor"
+                                    "Management",
+                                    f"Audit #{audit_id} - Non-Compliance Alert ({non_compliant_count})",
+                                    auditor_name or "Auditor",
+                                    (current_datetime + timedelta(days=2)).strftime('%Y-%m-%d')
                                 ]
                             }
                             notification_service.send_multi_channel_notification(notification_data)

@@ -1037,7 +1037,12 @@
                       <i v-else class="fas fa-external-link-alt"></i>
                       View
                     </button>
-                    <button v-if="fileGroup.document_id" @click="deleteDocument(fileGroup.document_id)" class="btn btn-sm btn-danger">
+                    <button
+                      v-if="fileGroup.document_id"
+                      type="button"
+                      @click.stop.prevent="deleteDocument(fileGroup.document_id)"
+                      class="btn btn-sm btn-danger"
+                    >
                       <i class="fas fa-trash"></i> Delete
                     </button>
                     <button v-if="!areAllMappingsCompleted(fileGroup) && !shouldShowDetailsButton(fileGroup)" @click="checkDocumentCompliance(null, fileGroup)" class="btn btn-sm btn-primary" :disabled="isCheckingAnyMapping(fileGroup) || isAuditCompleted">
@@ -1309,6 +1314,9 @@
                 {{ viewingDocumentId === fileGroup.document_id ? 'Opening...' : 'View' }}
               </button>
               <button 
+                v-if="fileGroup.document_id"
+                type="button"
+                @click.stop.prevent="deleteDocument(fileGroup.document_id)"
                 class="btn btn-sm btn-danger"
               >
                 <i class="fas fa-trash"></i> Delete
@@ -1667,7 +1675,6 @@
 import apiService from '@/services/apiService';
 import { API_ENDPOINTS } from '@/config/api.js';
 import auditorDataService from '@/services/auditorService' // NEW: Use cached auditor data
-import { useAuditStore } from '@/stores/audit'
 import { compressFile, shouldCompressFile } from '@/utils/fileCompression.js'
 
 function formatRecommendation(val) {
@@ -2318,7 +2325,7 @@ export default {
       this.annualItems = []
       try {
         const data = await apiService.get(
-          API_ENDPOINTS.annualConsolidation(this.currentAuditId),
+          API_ENDPOINTS.AI_AUDIT_ANNUAL_CONSOLIDATION(this.currentAuditId),
           { params: { year: this.annualYear } }
         )
         if (!data || data.success === false) {
@@ -2428,7 +2435,7 @@ export default {
       this.auditHierarchyPolicies.forEach(policy => {
         (policy.subpolicies || []).forEach(sp => {
           (sp.compliances || []).forEach(c => {
-            const crit = (c.Criticality || c.criticality || '').toString().toLowerCase()
+            const crit = (c.Criticality || c.criticality || '').toString().trim().toLowerCase()
             if (crit === 'high') {
               const cidRaw = c.compliance_id || c.ComplianceId || c.id
               if (cidRaw !== undefined && cidRaw !== null) {
@@ -2516,7 +2523,7 @@ export default {
         this.auditHierarchyPolicies.forEach(policy => {
           (policy.subpolicies || []).forEach(sp => {
             (sp.compliances || []).forEach(c => {
-              const crit = (c.Criticality || c.criticality || '').toString().toLowerCase()
+              const crit = (c.Criticality || c.criticality || '').toString().trim().toLowerCase()
               if (crit === 'high') {
                 const cidRaw = c.compliance_id || c.ComplianceId || c.id
                 if (cidRaw !== undefined && cidRaw !== null) {
@@ -2540,21 +2547,28 @@ export default {
           return
         }
 
+        const normId = (id) => {
+          const n = typeof id === 'string' ? parseInt(id, 10) : id
+          return Number.isNaN(n) ? null : n
+        }
+
         // Merge with any existing selections (if present) but typically list is empty here
         const existingCompliance = new Set(
-          (this.selectedComplianceIds || []).map(id =>
-            typeof id === 'string' ? parseInt(id, 10) : id
-          ).filter(n => !Number.isNaN(n))
+          (this.selectedComplianceIds || []).map(id => normId(id)).filter(n => n !== null)
         )
         highComplianceIds.forEach(id => existingCompliance.add(id))
         this.selectedComplianceIds = Array.from(existingCompliance)
 
         // Ensure parent policies and subpolicies are also marked as selected
-        const existingPolicies = new Set(this.selectedPolicyIdsMulti || [])
+        const existingPolicies = new Set(
+          (this.selectedPolicyIdsMulti || []).map(id => normId(id)).filter(n => n !== null)
+        )
         highPolicyIds.forEach(id => existingPolicies.add(id))
         this.selectedPolicyIdsMulti = Array.from(existingPolicies)
 
-        const existingSubpolicies = new Set(this.selectedSubpolicyIdsMulti || [])
+        const existingSubpolicies = new Set(
+          (this.selectedSubpolicyIdsMulti || []).map(id => normId(id)).filter(n => n !== null)
+        )
         highSubpolicyIds.forEach(id => existingSubpolicies.add(id))
         this.selectedSubpolicyIdsMulti = Array.from(existingSubpolicies)
 
@@ -2577,6 +2591,49 @@ export default {
       } catch (e) {
         // Never block the page if something goes wrong here
         console.warn('Could not auto-select high criticality compliances:', e)
+      }
+    },
+    /**
+     * Compliances are lazy-loaded per subpolicy; high-criticality auto-select
+     * must run after those rows exist. Fetches all subpolicy compliances (bounded
+     * concurrency) when there is no saved compliance selection, then applies
+     * autoSelectHighCriticalityCompliances().
+     */
+    async preloadCompliancesThenAutoSelectHighCriticality() {
+      try {
+        if (this.selectedComplianceIds && this.selectedComplianceIds.length > 0) {
+          return
+        }
+        const pairs = []
+        this.auditHierarchyPolicies.forEach(policy => {
+          const pid = policy.policy_id
+          ;(policy.subpolicies || []).forEach(sp => {
+            if (sp && sp.subpolicy_id) {
+              pairs.push({ subpolicyId: sp.subpolicy_id, policyId: pid })
+            }
+          })
+        })
+        if (!pairs.length) {
+          this.autoSelectHighCriticalityCompliances()
+          return
+        }
+        const CONCURRENCY = 6
+        let index = 0
+        const workerCount = Math.min(CONCURRENCY, pairs.length)
+        await Promise.all(
+          Array.from({ length: workerCount }, async () => {
+            while (index < pairs.length) {
+              const currentIndex = index++
+              if (currentIndex >= pairs.length) break
+              const { subpolicyId, policyId } = pairs[currentIndex]
+              await this.ensureCompliancesForSubpolicy(subpolicyId, policyId)
+            }
+          })
+        )
+        this.autoSelectHighCriticalityCompliances()
+      } catch (e) {
+        console.warn('Could not preload compliances for high-criticality selection:', e)
+        this.autoSelectHighCriticalityCompliances()
       }
     },
     // Dropdown methods
@@ -2688,8 +2745,8 @@ export default {
         // Include all findings (manual + scheduled) so report matches Compliance Results list
 
         const url = API_ENDPOINTS.AI_AUDIT_REPORT_DOWNLOAD(auditId)
-        const blobData = await apiService.get(url, { responseType: 'blob', params })
-        const blob = new Blob([blobData], { type: 'application/pdf' })
+        const blobData = await apiService.get(url, params, { responseType: 'blob', skipCache: true })
+        const blob = blobData instanceof Blob ? blobData : new Blob([blobData], { type: 'application/pdf' })
         const link = document.createElement('a')
         const fileURL = window.URL.createObjectURL(blob)
         link.href = fileURL
@@ -3274,8 +3331,8 @@ export default {
         // Restore any saved selections for this audit
         if (this.auditHierarchyPolicies.length) {
           this.restoreSelectionsForAudit()
-          // If there is no saved selection, auto-select High criticality compliances
-          this.autoSelectHighCriticalityCompliances()
+          // If there is no saved selection, load compliances then auto-select High
+          await this.preloadCompliancesThenAutoSelectHighCriticality()
         }
       } catch (error) {
         console.error('❌ Error loading audit/framework compliance hierarchy:', error)
@@ -3290,17 +3347,21 @@ export default {
         
         console.log('🔍 [AIAuditUpload] Checking for cached audits data...')
         
-        const auditStore = useAuditStore()
-        if (!auditorDataService.hasAuditsCache()) {
-          console.log('🚀 [AIAuditUpload] Starting prefetch (Pinia auditStore)...')
+        // Check if prefetch was never started (user came directly to this page)
+        if (!window.auditorDataFetchPromise && !auditorDataService.hasAuditsCache()) {
+          console.log('🚀 [AIAuditUpload] Starting prefetch now (user came directly to this page)...')
+          window.auditorDataFetchPromise = auditorDataService.fetchAllAuditorData()
+        }
+        
+        // Wait for prefetch if it's running
+        if (window.auditorDataFetchPromise) {
+          console.log('⏳ [AIAuditUpload] Waiting for prefetch to complete...')
           try {
-            await auditStore.prefetchAuditDomain({ scope: 'my', force: false })
+            await window.auditorDataFetchPromise
             console.log('✅ [AIAuditUpload] Prefetch completed')
           } catch (error) {
             console.warn('⚠️ [AIAuditUpload] Prefetch failed, will fetch directly')
           }
-        } else {
-          auditStore.hydrateFromAuditorServiceOnly('assignedToMe')
         }
         
         let merged = []
@@ -3394,11 +3455,14 @@ export default {
         console.log('🔄 [AIAuditUpload] Manual refresh of assigned AI audits requested');
         this.isLoadingAudits = true
         this.auditLoadError = ''
-        // Clear cached audits so we always fetch latest list (service + Pinia in-flight keys)
+        // Clear cached audits so we always fetch latest list
         try {
-          useAuditStore().invalidateAuditCache(['audits', 'lookups'])
+          auditorDataService.clearCache()
         } catch (e) {
-          console.warn('⚠️ [AIAuditUpload] Failed to invalidate audit cache before refresh:', e)
+          console.warn('⚠️ [AIAuditUpload] Failed to clear auditorDataService cache before refresh:', e)
+        }
+        if (typeof window !== 'undefined' && window.auditorDataFetchPromise) {
+          window.auditorDataFetchPromise = null
         }
         await this.loadAvailableAudits()
       } finally {
@@ -4653,7 +4717,11 @@ export default {
           })
         }
 
-        const data = await apiService.get(API_ENDPOINTS.AI_AUDIT_DOCUMENTS(auditId));
+        const data = await apiService.get(
+          API_ENDPOINTS.AI_AUDIT_DOCUMENTS(auditId),
+          {},
+          { skipCache: fromPolling === true }
+        );
         
         if (data && Array.isArray(data.documents)) {
           // Map API response fields to component expected fields
@@ -6299,7 +6367,13 @@ export default {
       try {
         const data = await apiService.get(API_ENDPOINTS.AI_AUDIT_DOCUMENT_VIEW_URL(auditId, documentId))
         if (data && data.success) {
-          window.open(data.view_url, '_blank')
+          // Backend may return either viewUrl (camelCase) or view_url (snake_case).
+          const resolvedViewUrl = data.viewUrl || data.view_url
+          if (!resolvedViewUrl) {
+            this.$popup?.error('Document URL is missing in response.')
+            return
+          }
+          window.open(resolvedViewUrl, '_blank')
         } else {
           this.$popup?.error(data?.error || 'Could not open document.')
         }
@@ -6325,9 +6399,10 @@ export default {
           if (data && data.success) {
             console.log('✅ Document deleted successfully')
             this.$popup?.success('Document deleted successfully!')
+            apiService.invalidate(`/api/ai-audit/${auditId}/documents/`)
             
             // Reload the documents list
-            await this.loadUploadedDocuments()
+            await this.loadUploadedDocuments(true)
           } else {
             console.error('❌ Delete failed:', data.error)
             this.$popup?.error(`Delete failed: ${data.error}`)

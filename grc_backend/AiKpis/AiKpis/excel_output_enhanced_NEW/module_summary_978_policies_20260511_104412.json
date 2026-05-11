@@ -1,0 +1,858 @@
+{
+  "framework": {
+    "FrameworkId": 978,
+    "FrameworkName": "Carriage by Road Act, 2007",
+    "FrameworkDescription": "The Carriage by Road Act, 2007 is a legislative framework that regulates common carriers, limits their liability, and establishes procedures for determining liability in cases of loss or damage to goods during transportation.",
+    "Category": "Regulatory Compliance",
+    "InternalExternal": "External",
+    "Identifier": "FW-1159",
+    "Status": "Approved",
+    "CurrentVersion": 2007.0
+  },
+  "module": "policies",
+  "tables": {
+    "policies": [
+      {
+        "PolicyId": 8209,
+        "PolicyName": "Common Carrier Registration Policy",
+        "PolicyDescription": "This policy mandates that all persons engaged in the business of common carriers must obtain a certificate of registration as per the Carriage by Road Act, 2007. It aims to ensure compliance with regulatory requirements, limit liability, and establish a standardized process for registration. The policy applies to all individuals or entities operating as common carriers within India, excluding Jammu and Kashmir. Non-compliance may result in legal penalties and business disruptions.",
+        "PolicyType": "Compliance",
+        "PolicyCategory": "Regulatory Compliance",
+        "Scope": "This policy applies to all individuals or entities operating as common carriers within India, excluding Jammu and Kashmir. It covers the process of obtaining and renewing certificates of registration, maintaining registration records, and seeking permission for office relocation.",
+        "Objective": "The objective of this policy is to ensure that all common carriers comply with the registration requirements outlined in the Carriage by Road Act, 2007. It aims to establish a transparent and standardized process for registration, thereby limiting liability and enhancing regulatory adherence."
+      },
+      {
+        "PolicyId": 8210,
+        "PolicyName": "Registration and Compliance Certification",
+        "PolicyDescription": "This policy mandates common carriers to register with the designated authority, display their registration certificates prominently, and comply with weight restrictions. It aims to ensure regulatory compliance, limit liability, and maintain transparency in the transportation of goods.",
+        "PolicyType": "Compliance",
+        "PolicyCategory": "Regulatory Compliance",
+        "Scope": "All common carriers operating under the Carriage by Road Act, 2007, including their main and branch offices, are within the scope of this policy.",
+        "Objective": "To ensure that common carriers are registered, compliant with weight restrictions, and transparent in their operations to mitigate risks, maintain regulatory adherence, and protect stakeholders. The policy aims to facilitate efficient enforcement of regulations and fair treatment of consignors."
+      },
+      {
+        "PolicyId": 8211,
+        "PolicyName": "Complaint Handling and Enforcement",
+        "PolicyDescription": "This policy outlines the procedures for handling complaints against common carriers and enforcing compliance with regulations. It aims to address consignor grievances, ensure fair practices, and maintain accountability in the transportation of goods.",
+        "PolicyType": "Compliance",
+        "PolicyCategory": "Regulatory Compliance",
+        "Scope": "All common carriers and registering authorities under the Carriage by Road Act, 2007 fall within the scope of this policy.",
+        "Objective": "To establish a transparent process for handling consignor complaints, enforcing compliance with regulations, and ensuring accountability in the transportation sector. The policy aims to protect consignors' interests, maintain fair practices, and facilitate a structured appeals process."
+      },
+      {
+        "PolicyId": 8212,
+        "PolicyName": "Liability Limitation for Delay, Loss, or Damage to Goods",
+        "PolicyDescription": "This policy establishes the limitations of liability for common carriers in cases of delay, loss, or damage to goods during transportation. It aims to regulate compensation based on mutual agreements between consignors and carriers, limiting liability to freight charges within agreed periods. The policy mitigates risks associated with transportation delays and damages, ensuring compliance with the Carriage by Road Act, 2007.",
+        "PolicyType": "Compliance",
+        "PolicyCategory": "Regulatory Adherence",
+        "Scope": "This policy applies to all common carriers operating under the Carriage by Road Act, 2007, and involves consignors, carriers, and goods in transit.",
+        "Objective": "The objective is to establish clear liability limitations for common carriers, ensuring fair compensation for consignors, and promoting transparency in rate communication to mitigate risks of disputes and non-compliance."
+      },
+      {
+        "PolicyId": 8213,
+        "PolicyName": "Offence Composition and Rules Notification",
+        "PolicyDescription": "This policy governs the composition of offences and the notification of rules under the Carriage by Road Act, 2007. It aims to ensure compliance with the Act's provisions, mitigate the risk of non-compliance, and establish clear guidelines for penalties and notifications. The policy applies to all entities involved in the carriage of goods by road, including common carriers and companies.",
+        "PolicyType": "Compliance",
+        "PolicyCategory": "Regulatory Adherence",
+        "Scope": "This policy applies to all individuals and companies involved in the carriage of goods by road under the Carriage by Road Act, 2007.",
+        "Objective": "The objective of this policy is to ensure strict adherence to the Act's regulations, facilitate the composition of offences, and provide a framework for the notification of rules. It aims to deter non-compliance, promote transparency, and streamline the enforcement process."
+      },
+      {
+        "PolicyId": 8214,
+        "PolicyName": "Repeal and Saving Policy",
+        "PolicyDescription": "This policy governs the repeal and saving provisions under the Carriage by Road Act, 2007. It ensures that any actions taken under the previous Carriers Act, 1865, which are not inconsistent with the new Act, are deemed to have been done under the provisions of the Carriage by Road Act, 2007. The policy aims to maintain continuity in legal applicability and provides guidelines for the transition from the old Act to the new one.",
+        "PolicyType": "Compliance",
+        "PolicyCategory": "Regulatory Adherence",
+        "Scope": "This policy applies to all entities and individuals involved in the carriage of goods by road within the jurisdiction of India. It covers the transition from the Carriers Act, 1865, to the Carriage by Road Act, 2007, ensuring legal continuity and compliance.",
+        "Objective": "The objective of this policy is to ensure a smooth transition from the Carriers Act, 1865, to the Carriage by Road Act, 2007, by maintaining legal consistency and applicability. It aims to provide clarity on the treatment of actions taken under the previous Act and align them with the provisions of the new Act."
+      }
+    ],
+    "policyversions": [
+      {
+        "VersionId": 6858,
+        "PolicyId": 8209,
+        "Version": "1.0",
+        "PolicyName": "Common Carrier Registration Policy",
+        "CreatedBy": "radha.sharma",
+        "CreatedDate": "2026-03-05",
+        "PreviousVersionId": null,
+        "frameworkId": 978,
+        "retentionExpiry": null
+      },
+      {
+        "VersionId": 6859,
+        "PolicyId": 8210,
+        "Version": "1.0",
+        "PolicyName": "Registration and Compliance Certification",
+        "CreatedBy": "radha.sharma",
+        "CreatedDate": "2026-03-05",
+        "PreviousVersionId": null,
+        "frameworkId": 978,
+        "retentionExpiry": null
+      },
+      {
+        "VersionId": 6860,
+        "PolicyId": 8211,
+        "Version": "1.0",
+        "PolicyName": "Complaint Handling and Enforcement",
+        "CreatedBy": "radha.sharma",
+        "CreatedDate": "2026-03-05",
+        "PreviousVersionId": null,
+        "frameworkId": 978,
+        "retentionExpiry": null
+      },
+      {
+        "VersionId": 6861,
+        "PolicyId": 8212,
+        "Version": "1.0",
+        "PolicyName": "Liability Limitation for Delay, Loss, or Damage to Goods",
+        "CreatedBy": "radha.sharma",
+        "CreatedDate": "2026-03-05",
+        "PreviousVersionId": null,
+        "frameworkId": 978,
+        "retentionExpiry": null
+      },
+      {
+        "VersionId": 6862,
+        "PolicyId": 8213,
+        "Version": "1.0",
+        "PolicyName": "Offence Composition and Rules Notification",
+        "CreatedBy": "radha.sharma",
+        "CreatedDate": "2026-03-05",
+        "PreviousVersionId": null,
+        "frameworkId": 978,
+        "retentionExpiry": null
+      },
+      {
+        "VersionId": 6863,
+        "PolicyId": 8214,
+        "Version": "1.0",
+        "PolicyName": "Repeal and Saving Policy",
+        "CreatedBy": "radha.sharma",
+        "CreatedDate": "2026-03-05",
+        "PreviousVersionId": null,
+        "frameworkId": 978,
+        "retentionExpiry": null
+      }
+    ],
+    "policycategories": [
+      {
+        "Id": 2448,
+        "PolicyType": "Compliance",
+        "PolicyCategory": "Regulatory Compliance",
+        "PolicySubCategory": "Registration",
+        "FrameworkId": 978,
+        "retentionExpiry": null
+      },
+      {
+        "Id": 2449,
+        "PolicyType": "Compliance",
+        "PolicyCategory": "Regulatory Compliance",
+        "PolicySubCategory": "Registration and Certification",
+        "FrameworkId": 978,
+        "retentionExpiry": null
+      },
+      {
+        "Id": 2450,
+        "PolicyType": "Compliance",
+        "PolicyCategory": "Regulatory Compliance",
+        "PolicySubCategory": "Complaint Handling and Enforcement",
+        "FrameworkId": 978,
+        "retentionExpiry": null
+      },
+      {
+        "Id": 2451,
+        "PolicyType": "Compliance",
+        "PolicyCategory": "Regulatory Adherence",
+        "PolicySubCategory": "Liability Limitation",
+        "FrameworkId": 978,
+        "retentionExpiry": null
+      },
+      {
+        "Id": 2452,
+        "PolicyType": "Compliance",
+        "PolicyCategory": "Regulatory Adherence",
+        "PolicySubCategory": "Offence Composition and Rules Notification",
+        "FrameworkId": 978,
+        "retentionExpiry": null
+      },
+      {
+        "Id": 2453,
+        "PolicyType": "Compliance",
+        "PolicyCategory": "Regulatory Adherence",
+        "PolicySubCategory": "Repeal and Transition",
+        "FrameworkId": 978,
+        "retentionExpiry": null
+      }
+    ],
+    "subpolicies": [],
+    "policyapproval": []
+  },
+  "schema": {
+    "policies": {
+      "columns": [
+        "PolicyId",
+        "CurrentVersion",
+        "Status",
+        "PolicyDescription",
+        "PolicyName",
+        "StartDate",
+        "EndDate",
+        "Department",
+        "CreatedByName",
+        "CreatedByDate",
+        "Applicability",
+        "DocURL",
+        "Scope",
+        "Objective",
+        "Identifier",
+        "PermanentTemporary",
+        "ActiveInactive",
+        "FrameworkId",
+        "Reviewer",
+        "CoverageRate",
+        "AcknowledgedUserIds",
+        "AcknowledgementCount",
+        "PolicyType",
+        "PolicyCategory",
+        "PolicySubCategory",
+        "Entities",
+        "retentionExpiry",
+        "data_inventory",
+        "TenantId"
+      ],
+      "row_count": 6,
+      "column_details": [
+        {
+          "name": "PolicyId",
+          "type": "int",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "CurrentVersion",
+          "type": "double",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Status",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PolicyDescription",
+          "type": "longtext",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PolicyName",
+          "type": "varchar(1000)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "StartDate",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "EndDate",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Department",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "CreatedByName",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "CreatedByDate",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Applicability",
+          "type": "varchar(1000)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "DocURL",
+          "type": "varchar(1000)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Scope",
+          "type": "longtext",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Objective",
+          "type": "longtext",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Identifier",
+          "type": "varchar(500)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PermanentTemporary",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ActiveInactive",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "FrameworkId",
+          "type": "int",
+          "null": "NO",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Reviewer",
+          "type": "varchar(1000)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "CoverageRate",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "AcknowledgedUserIds",
+          "type": "json",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "AcknowledgementCount",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PolicyType",
+          "type": "varchar(1000)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PolicyCategory",
+          "type": "varchar(1000)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PolicySubCategory",
+          "type": "varchar(1000)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Entities",
+          "type": "json",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "retentionExpiry",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "data_inventory",
+          "type": "json",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "TenantId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        }
+      ]
+    },
+    "policyversions": {
+      "columns": [
+        "VersionId",
+        "PolicyId",
+        "Version",
+        "PolicyName",
+        "CreatedBy",
+        "CreatedDate",
+        "PreviousVersionId",
+        "frameworkId",
+        "retentionExpiry"
+      ],
+      "row_count": 6,
+      "column_details": [
+        {
+          "name": "VersionId",
+          "type": "int",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "PolicyId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Version",
+          "type": "varchar(20)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PolicyName",
+          "type": "varchar(1000)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "CreatedBy",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "CreatedDate",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PreviousVersionId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "frameworkId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "retentionExpiry",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        }
+      ]
+    },
+    "policycategories": {
+      "columns": [
+        "Id",
+        "PolicyType",
+        "PolicyCategory",
+        "PolicySubCategory",
+        "FrameworkId",
+        "retentionExpiry"
+      ],
+      "row_count": 6,
+      "column_details": [
+        {
+          "name": "Id",
+          "type": "int",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "PolicyType",
+          "type": "varchar(1000)",
+          "null": "NO",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PolicyCategory",
+          "type": "varchar(1000)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PolicySubCategory",
+          "type": "varchar(1000)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "FrameworkId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "retentionExpiry",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        }
+      ]
+    },
+    "subpolicies": {
+      "columns": [
+        "SubPolicyId",
+        "PolicyId",
+        "SubPolicyName",
+        "CreatedByName",
+        "CreatedByDate",
+        "Identifier",
+        "Description",
+        "Status",
+        "PermanentTemporary",
+        "Control",
+        "FrameworkId",
+        "retentionExpiry",
+        "data_inventory",
+        "TenantId"
+      ],
+      "row_count": 0,
+      "column_details": [
+        {
+          "name": "SubPolicyId",
+          "type": "int",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "PolicyId",
+          "type": "int",
+          "null": "NO",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "SubPolicyName",
+          "type": "varchar(1000)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "CreatedByName",
+          "type": "varchar(255)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "CreatedByDate",
+          "type": "date",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Identifier",
+          "type": "varchar(45)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Description",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Status",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PermanentTemporary",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Control",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "FrameworkId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "retentionExpiry",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "data_inventory",
+          "type": "json",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "TenantId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        }
+      ]
+    },
+    "policyapproval": {
+      "columns": [
+        "ApprovalId",
+        "ExtractedData",
+        "UserId",
+        "ReviewerId",
+        "Version",
+        "ApprovedNot",
+        "ApprovedDate",
+        "PolicyId",
+        "Identifier",
+        "ApprovalDueDate",
+        "FrameworkId",
+        "retentionExpiry"
+      ],
+      "row_count": 0,
+      "column_details": [
+        {
+          "name": "ApprovalId",
+          "type": "int",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "ExtractedData",
+          "type": "json",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "UserId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ReviewerId",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Version",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ApprovedNot",
+          "type": "tinyint(1)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ApprovedDate",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PolicyId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Identifier",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ApprovalDueDate",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "FrameworkId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "retentionExpiry",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        }
+      ]
+    }
+  }
+}

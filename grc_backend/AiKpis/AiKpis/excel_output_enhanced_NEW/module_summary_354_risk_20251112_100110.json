@@ -1,0 +1,1819 @@
+{
+  "framework": {
+    "FrameworkId": 354,
+    "FrameworkName": "ISO 27011",
+    "FrameworkDescription": "ISO 27001 standard provides companies of any size and from all sectors of activity with guidance for establishing, implementing, maintaining and continually improving an information security management system.",
+    "Category": "Information Security & Risk Management Framework",
+    "InternalExternal": "External",
+    "Identifier": "FW-354",
+    "Status": "Approved",
+    "CurrentVersion": 1.0
+  },
+  "module": "risk",
+  "tables": {
+    "risk": [
+      {
+        "RiskId": 1517,
+        "ComplianceId": 2169,
+        "RiskTitle": "Unauthorized Access Risk",
+        "RiskDescription": "Unauthorized access to sensitive information due to lack of RBAC implementation",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 1518,
+        "ComplianceId": 2170,
+        "RiskTitle": "Ineffective Incident Response Team",
+        "RiskDescription": "Failure to establish an incident response team may result in delayed or ineffective response to security incidents, leading to data breaches or service disruptions.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 1519,
+        "ComplianceId": 2171,
+        "RiskTitle": "Ineffective Incident Response Drills",
+        "RiskDescription": "Failure to conduct regular incident response drills may result in unpreparedness and inefficiency in responding to security incidents, increasing the impact and duration of incidents.",
+        "Category": "Operational",
+        "Criticality": "Medium",
+        "RiskImpact": 7,
+        "RiskLikelihood": 6
+      },
+      {
+        "RiskId": 1520,
+        "ComplianceId": 2172,
+        "RiskTitle": "Unauthorized Access to Sensitive Information",
+        "RiskDescription": "Unauthorized access to sensitive information can lead to data breaches and compromise confidentiality.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 1521,
+        "ComplianceId": 2173,
+        "RiskTitle": "Outdated Access Rights",
+        "RiskDescription": "Outdated access rights can lead to unauthorized access and potential data breaches.",
+        "Category": "Operational",
+        "Criticality": "Medium",
+        "RiskImpact": 8,
+        "RiskLikelihood": 6
+      },
+      {
+        "RiskId": 1522,
+        "ComplianceId": 2174,
+        "RiskTitle": "Inadequate Incident Response Team",
+        "RiskDescription": "Failure to establish a dedicated incident response team may lead to uncoordinated and inefficient responses to security incidents, increasing the risk of data breaches and regulatory non-compliance.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 1523,
+        "ComplianceId": 2175,
+        "RiskTitle": "Inadequate Incident Response Drills",
+        "RiskDescription": "Failure to conduct regular incident response drills may result in the IRT being unprepared and inefficient in responding to security incidents, increasing the risk of data breaches and regulatory non-compliance.",
+        "Category": "Operational",
+        "Criticality": "Medium",
+        "RiskImpact": 8,
+        "RiskLikelihood": 7
+      },
+      {
+        "RiskId": 1524,
+        "ComplianceId": 2176,
+        "RiskTitle": "Failure to Conduct Timely Risk Assessments",
+        "RiskDescription": "Failure to conduct bi-annual risk assessments may lead to unidentified vulnerabilities and potential data breaches.",
+        "Category": "IT",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 7
+      },
+      {
+        "RiskId": 1525,
+        "ComplianceId": 2177,
+        "RiskTitle": "Ineffective Incident Response Team",
+        "RiskDescription": "Failure to respond promptly and effectively to security incidents can result in significant damage to the organization.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 1526,
+        "ComplianceId": 2178,
+        "RiskTitle": "Incomplete Incident Response Plan",
+        "RiskDescription": "An incomplete or outdated incident response plan can lead to inefficiencies and inadequacies in responding to security incidents.",
+        "Category": "Operational",
+        "Criticality": "Medium",
+        "RiskImpact": 7,
+        "RiskLikelihood": 6
+      },
+      {
+        "RiskId": 1527,
+        "ComplianceId": 2179,
+        "RiskTitle": "Non-compliance with ITU Recommendations",
+        "RiskDescription": "Failure to comply with ITU Recommendations can lead to security vulnerabilities, data breaches, and regulatory fines.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 7
+      },
+      {
+        "RiskId": 1528,
+        "ComplianceId": 2180,
+        "RiskTitle": "Non-Compliance Risk",
+        "RiskDescription": "Failure to monitor compliance could lead to non-compliance with ITU Recommendations and subsequent penalties.",
+        "Category": "Compliance",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 7
+      },
+      {
+        "RiskId": 1529,
+        "ComplianceId": 2181,
+        "RiskTitle": "Reporting Accuracy Risk",
+        "RiskDescription": "Failure to generate accurate compliance reports could lead to misinformed decisions and potential non-compliance with ITU Recommendations.",
+        "Category": "Compliance",
+        "Criticality": "Medium",
+        "RiskImpact": 7,
+        "RiskLikelihood": 6
+      },
+      {
+        "RiskId": 1530,
+        "ComplianceId": 2182,
+        "RiskTitle": "Data Breach Due to Unauthorized Access",
+        "RiskDescription": "Unauthorized access to sensitive information could lead to data breaches and compromise the organization's security.",
+        "Category": "IT",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 1531,
+        "ComplianceId": 2183,
+        "RiskTitle": "Unauthorized Access Due to Outdated Access Rights",
+        "RiskDescription": "Outdated access rights could result in unauthorized access to sensitive information, leading to data breaches and compromising data integrity.",
+        "Category": "IT",
+        "Criticality": "Medium",
+        "RiskImpact": 7,
+        "RiskLikelihood": 6
+      },
+      {
+        "RiskId": 1532,
+        "ComplianceId": 2184,
+        "RiskTitle": "Ineffective Incident Response Team",
+        "RiskDescription": "Failure to establish an incident response team may lead to delayed or ineffective incident management, resulting in increased impact and potential data breaches.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 7
+      },
+      {
+        "RiskId": 1533,
+        "ComplianceId": 2185,
+        "RiskTitle": "Undefined Incident Reporting Procedures",
+        "RiskDescription": "Lack of defined incident reporting procedures may result in delays in incident identification and response, leading to increased impact and potential data breaches.",
+        "Category": "Operational",
+        "Criticality": "Medium",
+        "RiskImpact": 7,
+        "RiskLikelihood": 6
+      },
+      {
+        "RiskId": 1534,
+        "ComplianceId": 2186,
+        "RiskTitle": "Data Breach Risk",
+        "RiskDescription": "Unauthorized access to sensitive data due to improper data classification and handling processes",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 1535,
+        "ComplianceId": 2187,
+        "RiskTitle": "Delayed Investigation Initiation",
+        "RiskDescription": "Failure to initiate investigations within 48 hours may result in loss of key evidence, witness memory degradation, and compromised investigation integrity.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 7
+      },
+      {
+        "RiskId": 1536,
+        "ComplianceId": 2188,
+        "RiskTitle": "Inconsistent Investigation Procedures",
+        "RiskDescription": "Failure to utilize standardized investigation forms and protocols may result in inconsistent investigation procedures, incomplete findings, and biased outcomes.",
+        "Category": "Operational",
+        "Criticality": "Medium",
+        "RiskImpact": 7,
+        "RiskLikelihood": 6
+      },
+      {
+        "RiskId": 1537,
+        "ComplianceId": 2189,
+        "RiskTitle": "Data Breach via Unsecured Connection",
+        "RiskDescription": "Unauthorized access to organizational data due to lack of secure connection usage",
+        "Category": "IT",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 1538,
+        "ComplianceId": 2190,
+        "RiskTitle": "Unauthorized Device Access",
+        "RiskDescription": "Unauthorized access to organizational data due to lack of device password protection",
+        "Category": "IT",
+        "Criticality": "Medium",
+        "RiskImpact": 8,
+        "RiskLikelihood": 7
+      },
+      {
+        "RiskId": 1539,
+        "ComplianceId": 2191,
+        "RiskTitle": "Delayed Reporting of Security Events",
+        "RiskDescription": "Failure to report security events within the specified timeframe may result in escalated security incidents and compromised systems.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 7
+      },
+      {
+        "RiskId": 1540,
+        "ComplianceId": 2192,
+        "RiskTitle": "Unauthorized Access Risk",
+        "RiskDescription": "Unauthorized individuals gaining access to secure areas can lead to theft of physical assets or data, compromising organizational security.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 1541,
+        "ComplianceId": 2193,
+        "RiskTitle": "Delayed Access Review Risk",
+        "RiskDescription": "Delayed access reviews can allow unauthorized individuals to exploit the system and gain prolonged access to secure areas, increasing the risk of security breaches.",
+        "Category": "Operational",
+        "Criticality": "Medium",
+        "RiskImpact": 6,
+        "RiskLikelihood": 7
+      },
+      {
+        "RiskId": 1542,
+        "ComplianceId": 2194,
+        "RiskTitle": "Unauthorized Access to Production Environments",
+        "RiskDescription": "Unauthorized access to production environments can lead to data breaches, system disruptions, and loss of sensitive information.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 1543,
+        "ComplianceId": 2195,
+        "RiskTitle": "Late Submission of Change Requests",
+        "RiskDescription": "Late submission of change requests can lead to rushed approvals or delays in implementation, impacting operational efficiency and service delivery.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 7
+      },
+      {
+        "RiskId": 1544,
+        "ComplianceId": 2196,
+        "RiskTitle": "Inadequate Evaluation of Change Requests",
+        "RiskDescription": "Approval of changes without proper evaluation could result in system failures, data breaches, or service disruptions, impacting business operations and customer trust.",
+        "Category": "Operational",
+        "Criticality": "Critical",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 1545,
+        "ComplianceId": 2197,
+        "RiskTitle": "Unauthorized Access Risk",
+        "RiskDescription": "Risk of unauthorized individuals gaining access to sensitive information during audit testing, leading to potential data breaches and system compromise",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 1546,
+        "ComplianceId": 2198,
+        "RiskTitle": "Access Logs Maintenance Risk",
+        "RiskDescription": "Risk of not maintaining access logs for auditors during testing, leading to lack of accountability and potential inability to trace unauthorized actions",
+        "Category": "Operational",
+        "Criticality": "Medium",
+        "RiskImpact": 7,
+        "RiskLikelihood": 6
+      },
+      {
+        "RiskId": 1547,
+        "ComplianceId": 2199,
+        "RiskTitle": "Unauthorized Access Risk",
+        "RiskDescription": "Risk of unauthorized access to sensitive telecommunications information leading to data breaches and loss of confidentiality.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 1548,
+        "ComplianceId": 2200,
+        "RiskTitle": "Encryption Vulnerability Risk",
+        "RiskDescription": "Risk of exposure of sensitive telecommunications information due to lack of encryption, leading to data breaches and loss of confidentiality.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 7
+      },
+      {
+        "RiskId": 1549,
+        "ComplianceId": 2201,
+        "RiskTitle": "Data Integrity Compromise",
+        "RiskDescription": "Failure to implement checksums and digital signatures may lead to data corruption during transmission or unauthorized access to sensitive information.",
+        "Category": "IT",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 1550,
+        "ComplianceId": 2202,
+        "RiskTitle": "Data Integrity Validation Failure",
+        "RiskDescription": "Failure to validate data integrity after system updates or installations may lead to inaccurate information or system vulnerabilities.",
+        "Category": "IT",
+        "Criticality": "Medium",
+        "RiskImpact": 7,
+        "RiskLikelihood": 6
+      },
+      {
+        "RiskId": 1551,
+        "ComplianceId": 2203,
+        "RiskTitle": "Disruption of Essential Communications",
+        "RiskDescription": "Failure to prioritize essential communications during emergencies can lead to service disruptions, loss of critical information, and potential safety risks for employees and customers.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 1552,
+        "ComplianceId": 2204,
+        "RiskTitle": "Inadequate Response During Emergencies",
+        "RiskDescription": "Failure to test and update the business continuity plan annually can result in an inadequate response during emergencies, leading to disruptions in operations and potential financial losses.",
+        "Category": "Operational",
+        "Criticality": "Medium",
+        "RiskImpact": 7,
+        "RiskLikelihood": 6
+      },
+      {
+        "RiskId": 1553,
+        "ComplianceId": 2205,
+        "RiskTitle": "Data Breach Risk",
+        "RiskDescription": "Failure to identify and address security vulnerabilities may lead to unauthorized access to sensitive data",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 1554,
+        "ComplianceId": 2206,
+        "RiskTitle": "Change-Related Risk",
+        "RiskDescription": "Failure to assess risks associated with changes in the environment may result in unaddressed vulnerabilities",
+        "Category": "Operational",
+        "Criticality": "Medium",
+        "RiskImpact": 7,
+        "RiskLikelihood": 6
+      },
+      {
+        "RiskId": 1555,
+        "ComplianceId": 2207,
+        "RiskTitle": "Ineffective Incident Response",
+        "RiskDescription": "Failure to respond effectively to incidents can lead to prolonged downtime, data breaches, and financial losses.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 7
+      },
+      {
+        "RiskId": 1556,
+        "ComplianceId": 2208,
+        "RiskTitle": "Outdated Incident Response Plan",
+        "RiskDescription": "Failure to review and test the incident response plan may lead to outdated procedures and ineffective incident management.",
+        "Category": "Operational",
+        "Criticality": "Medium",
+        "RiskImpact": 7,
+        "RiskLikelihood": 6
+      },
+      {
+        "RiskId": 1557,
+        "ComplianceId": 2209,
+        "RiskTitle": "Outdated Normative References",
+        "RiskDescription": "Failure to update normative references may result in outdated practices, non-compliance with standards, and increased security vulnerabilities.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 7
+      },
+      {
+        "RiskId": 1558,
+        "ComplianceId": 2210,
+        "RiskTitle": "Misuse of Undefined Terms",
+        "RiskDescription": "Failure to define and approve new terms and abbreviations may result in inconsistent interpretation and usage across organizational documents.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 7
+      },
+      {
+        "RiskId": 1559,
+        "ComplianceId": 2211,
+        "RiskTitle": "Data Breach due to Unauthorized Access",
+        "RiskDescription": "Unauthorized access to sensitive information can lead to data breaches and compromise the organization's security.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 1560,
+        "ComplianceId": 2212,
+        "RiskTitle": "Ineffective Incident Response Team",
+        "RiskDescription": "Failure to respond effectively to security incidents due to lack of established incident response team",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 7
+      },
+      {
+        "RiskId": 1561,
+        "ComplianceId": 2213,
+        "RiskTitle": "Delayed Incident Reporting",
+        "RiskDescription": "Incidents not reported immediately upon detection leading to prolonged exposure to security threats and increased impact on operations",
+        "Category": "Operational",
+        "Criticality": "Medium",
+        "RiskImpact": 7,
+        "RiskLikelihood": 6
+      },
+      {
+        "RiskId": 1562,
+        "ComplianceId": 2214,
+        "RiskTitle": "Data Breach Risk",
+        "RiskDescription": "Risk of unauthorized access to sensitive data leading to data breaches and potential legal consequences",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 1563,
+        "ComplianceId": 2215,
+        "RiskTitle": "Data Protection Vulnerability Risk",
+        "RiskDescription": "Risk of data protection vulnerabilities due to outdated or ineffective measures, leading to potential data breaches",
+        "Category": "Operational",
+        "Criticality": "Medium",
+        "RiskImpact": 7,
+        "RiskLikelihood": 6
+      },
+      {
+        "RiskId": 1564,
+        "ComplianceId": 2216,
+        "RiskTitle": "Unauthorized Access to Telecommunications Systems",
+        "RiskDescription": "Unauthorized access to telecommunications systems can lead to data breaches, system compromise, and loss of sensitive information.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 1565,
+        "ComplianceId": 2217,
+        "RiskTitle": "Ineffective Incident Response",
+        "RiskDescription": "Failure to respond effectively to incidents may lead to prolonged service disruptions and financial losses.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 1566,
+        "ComplianceId": 2218,
+        "RiskTitle": "Outdated Incident Response Plan",
+        "RiskDescription": "Failure to update and test the incident response plan may result in delays and errors in responding to incidents, leading to service disruptions and financial losses.",
+        "Category": "Operational",
+        "Criticality": "Medium",
+        "RiskImpact": 8,
+        "RiskLikelihood": 6
+      },
+      {
+        "RiskId": 1567,
+        "ComplianceId": 2219,
+        "RiskTitle": "Malware Infection Risk",
+        "RiskDescription": "Failure to conduct weekly malware scans may result in undetected malware infections compromising system integrity and data security.",
+        "Category": "IT",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 7
+      },
+      {
+        "RiskId": 1568,
+        "ComplianceId": 2220,
+        "RiskTitle": "Delayed Malware Protection Updates Risk",
+        "RiskDescription": "Failure to apply immediate malware protection updates may leave systems vulnerable to new malware threats, potentially leading to data breaches and system compromise.",
+        "Category": "IT",
+        "Criticality": "Medium",
+        "RiskImpact": 7,
+        "RiskLikelihood": 6
+      },
+      {
+        "RiskId": 1569,
+        "ComplianceId": 2221,
+        "RiskTitle": "Confusion in Roles and Responsibilities",
+        "RiskDescription": "Lack of clarity in roles and responsibilities may lead to confusion, errors, and security breaches.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 7
+      },
+      {
+        "RiskId": 1570,
+        "ComplianceId": 2222,
+        "RiskTitle": "Insufficient Information Security Training",
+        "RiskDescription": "Lack of understanding of information security policies and procedures leading to increased risk of data breaches and non-compliance.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 7
+      },
+      {
+        "RiskId": 1571,
+        "ComplianceId": 2223,
+        "RiskTitle": "Unauthorized Access Risk",
+        "RiskDescription": "The risk of unauthorized access to information systems leading to potential data breaches and compliance violations.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 1572,
+        "ComplianceId": 2224,
+        "RiskTitle": "Data Breach Risk",
+        "RiskDescription": "Unauthorized access could lead to data breaches and misuse of resources, resulting in financial and reputational damage.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 1573,
+        "ComplianceId": 2225,
+        "RiskTitle": "Role Misalignment Risk",
+        "RiskDescription": "Failure to adjust access rights based on role changes could lead to unauthorized actions and compliance violations, impacting operations and regulatory compliance.",
+        "Category": "Operational",
+        "Criticality": "Medium",
+        "RiskImpact": 7,
+        "RiskLikelihood": 6
+      },
+      {
+        "RiskId": 1574,
+        "ComplianceId": 2226,
+        "RiskTitle": "Data Breach Due to Supplier Non-Compliance",
+        "RiskDescription": "Failure of suppliers to comply with data protection clauses in agreements may result in unauthorized disclosure of customer data and subsequent data breaches.",
+        "Category": "Compliance",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 1575,
+        "ComplianceId": 2227,
+        "RiskTitle": "Delayed Incident Reporting",
+        "RiskDescription": "Failure to report incidents promptly may result in extended exposure of sensitive customer data, leading to severe consequences for the organization.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 1576,
+        "ComplianceId": 2228,
+        "RiskTitle": "Failure to Escalate Incidents",
+        "RiskDescription": "Lack of timely escalation of incidents beyond defined service levels may result in extended service disruptions, leading to negative consequences for the organization.",
+        "Category": "Operational",
+        "Criticality": "Medium",
+        "RiskImpact": 8,
+        "RiskLikelihood": 6
+      },
+      {
+        "RiskId": 1577,
+        "ComplianceId": 2229,
+        "RiskTitle": "Inadequate Documentation Risk",
+        "RiskDescription": "Failure to document and maintain operating procedures can result in unauthorized access, data breaches, or system failures.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 7
+      },
+      {
+        "RiskId": 1578,
+        "ComplianceId": 2230,
+        "RiskTitle": "Ineffective Response to Spam Incidents",
+        "RiskDescription": "Failure to effectively respond to spam incidents can lead to an increase in spam, potential legal consequences, and damage to the organization's reputation.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 7
+      },
+      {
+        "RiskId": 1579,
+        "ComplianceId": 2231,
+        "RiskTitle": "Outdated Spam Response Policies",
+        "RiskDescription": "Failure to review spam response policies regularly may result in outdated procedures that are ineffective in addressing evolving spam threats, leading to potential security breaches and increased spam incidents.",
+        "Category": "Operational",
+        "Criticality": "Medium",
+        "RiskImpact": 7,
+        "RiskLikelihood": 6
+      },
+      {
+        "RiskId": 1580,
+        "ComplianceId": 2232,
+        "RiskTitle": "Impact of DoS/DDoS Attacks on Telecommunications Services",
+        "RiskDescription": "DoS/DDoS attacks can lead to service downtime, data breaches, and reputational damage, impacting the organization's operations and customer trust.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 1581,
+        "ComplianceId": 2233,
+        "RiskTitle": "Network Vulnerability to Malicious Traffic",
+        "RiskDescription": "Failure to implement packet filtering protocols may expose the network to malicious traffic, leading to potential cyber attacks and data breaches.",
+        "Category": "IT",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 1582,
+        "ComplianceId": 2234,
+        "RiskTitle": "DDoS Attack Impact on Network Availability",
+        "RiskDescription": "Failure to detect and mitigate DDoS attacks promptly may lead to prolonged network outages, service disruptions, and financial losses.",
+        "Category": "IT",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 1583,
+        "ComplianceId": 2235,
+        "RiskTitle": "Network Service Disruption",
+        "RiskDescription": "Failure to suspend services promptly may lead to prolonged network downtime and financial losses due to continued attacks",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 1584,
+        "ComplianceId": 2236,
+        "RiskTitle": "Customer Dissatisfaction",
+        "RiskDescription": "Inadequate customer notification may result in customer dissatisfaction, complaints, and potential legal disputes, impacting the organization's reputation",
+        "Category": "Operational",
+        "Criticality": "Medium",
+        "RiskImpact": 8,
+        "RiskLikelihood": 6
+      },
+      {
+        "RiskId": 1585,
+        "ComplianceId": 2237,
+        "RiskTitle": "Breach of Confidentiality Agreements",
+        "RiskDescription": "Failure to comply with confidentiality agreements may result in unauthorized disclosure of sensitive information, leading to legal consequences and reputational harm.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 1586,
+        "ComplianceId": 2238,
+        "RiskTitle": "Inadequate Review of Confidentiality Agreements",
+        "RiskDescription": "Lack of regular review and updates to confidentiality agreements may render them ineffective in safeguarding sensitive information, increasing the risk of unauthorized disclosures.",
+        "Category": "Operational",
+        "Criticality": "Medium",
+        "RiskImpact": 6,
+        "RiskLikelihood": 7
+      },
+      {
+        "RiskId": 1587,
+        "ComplianceId": 2239,
+        "RiskTitle": "Legal Penalties for Non-Compliance",
+        "RiskDescription": "Failure to establish data retention periods can result in non-compliance with legal requirements and subsequent penalties.",
+        "Category": "Compliance",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 1588,
+        "ComplianceId": 2240,
+        "RiskTitle": "Data Breaches Due to Retained Data",
+        "RiskDescription": "Failure to delete data promptly can result in unauthorized access to sensitive information, leading to data breaches and legal repercussions.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 7
+      },
+      {
+        "RiskId": 1589,
+        "ComplianceId": 2241,
+        "RiskTitle": "Miscommunication during emergencies",
+        "RiskDescription": "Failure to activate communication protocols immediately can lead to confusion, delays, and increased risks during emergencies.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 1590,
+        "ComplianceId": 2242,
+        "RiskTitle": "Inefficient communication management",
+        "RiskDescription": "Failure to utilize communication management systems effectively can lead to delays in communication, potentially impacting emergency response times.",
+        "Category": "Operational",
+        "Criticality": "Medium",
+        "RiskImpact": 7,
+        "RiskLikelihood": 6
+      },
+      {
+        "RiskId": 1591,
+        "ComplianceId": 2243,
+        "RiskTitle": "Miscommunication during Emergencies",
+        "RiskDescription": "Failure to establish communication agreements with external agencies may result in miscommunication during emergencies, impacting response time and effectiveness.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 1592,
+        "ComplianceId": 2244,
+        "RiskTitle": "Inadequate Incident Coordination",
+        "RiskDescription": "Failure to coordinate incident response effectively leading to increased severity of incidents and negative consequences",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 9
+      },
+      {
+        "RiskId": 1593,
+        "ComplianceId": 2245,
+        "RiskTitle": "Ineffective Communication Channels",
+        "RiskDescription": "Failure to utilize established communication channels leading to delays, errors, and inefficiencies in incident response",
+        "Category": "Operational",
+        "Criticality": "Medium",
+        "RiskImpact": 6,
+        "RiskLikelihood": 7
+      },
+      {
+        "RiskId": 1594,
+        "ComplianceId": 2246,
+        "RiskTitle": "Unauthorized Access to Facilities",
+        "RiskDescription": "Unauthorized individuals gaining access to critical infrastructure and data centers",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 1595,
+        "ComplianceId": 2247,
+        "RiskTitle": "Unauthorized Access Risk",
+        "RiskDescription": "Risk of unauthorized individuals gaining access to telecommunications operation rooms and control centers, leading to potential data breaches and operational disruptions",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 1596,
+        "ComplianceId": 2248,
+        "RiskTitle": "Outdated Visitor Logs Risk",
+        "RiskDescription": "Risk of security vulnerabilities and potential unauthorized access due to outdated visitor logs in telecommunications operation rooms and control centers",
+        "Category": "Operational",
+        "Criticality": "Medium",
+        "RiskImpact": 6,
+        "RiskLikelihood": 7
+      },
+      {
+        "RiskId": 1597,
+        "ComplianceId": 2249,
+        "RiskTitle": "Data Breach Due to Unauthorized Access",
+        "RiskDescription": "Unauthorized access to sensitive information can lead to data breaches and significant financial and reputational damage.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 1598,
+        "ComplianceId": 2250,
+        "RiskTitle": "Security Breach Due to Unidentified Vulnerabilities",
+        "RiskDescription": "Failure to identify and address security vulnerabilities can lead to security breaches and operational disruptions.",
+        "Category": "Operational",
+        "Criticality": "Medium",
+        "RiskImpact": 7,
+        "RiskLikelihood": 6
+      },
+      {
+        "RiskId": 1599,
+        "ComplianceId": 2251,
+        "RiskTitle": "Security Breach Due to Lack of Monitoring",
+        "RiskDescription": "Failure to monitor surveillance systems may result in delayed detection of security incidents, leading to unauthorized access and potential harm.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 7
+      },
+      {
+        "RiskId": 1600,
+        "ComplianceId": 2252,
+        "RiskTitle": "Risk of Facility Damage from Environmental Threats",
+        "RiskDescription": "Potential for facilities to be severely damaged by environmental threats leading to operational downtime and financial losses",
+        "Category": "Environmental",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 7
+      },
+      {
+        "RiskId": 1601,
+        "ComplianceId": 2253,
+        "RiskTitle": "Risk of Secondary Damage Post-Environmental Event",
+        "RiskDescription": "Failure to conduct post-event risk assessments could lead to secondary damage and prolonged operational disruptions",
+        "Category": "Environmental",
+        "Criticality": "Medium",
+        "RiskImpact": 7,
+        "RiskLikelihood": 6
+      },
+      {
+        "RiskId": 1602,
+        "ComplianceId": 2254,
+        "RiskTitle": "HVAC System Failure",
+        "RiskDescription": "Failure of HVAC systems can lead to equipment overheating, humidity damage, and service disruptions.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 1603,
+        "ComplianceId": 2255,
+        "RiskTitle": "Fire Hazard",
+        "RiskDescription": "Fire incidents can lead to equipment damage, data loss, and potential harm to personnel in the facility.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 7
+      },
+      {
+        "RiskId": 1604,
+        "ComplianceId": 2256,
+        "RiskTitle": "Unauthorized Access to Telecommunications Equipment Rooms",
+        "RiskDescription": "Unauthorized access to telecommunications equipment rooms can result in data breaches, equipment damage, and disruption of services, leading to significant financial and reputational losses.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 1605,
+        "ComplianceId": 2257,
+        "RiskTitle": "Undetected Unauthorized Access to Telecommunications Equipment Rooms",
+        "RiskDescription": "Failure to conduct regular audits and maintain access logs can result in undetected unauthorized access to telecommunications equipment rooms, leading to security breaches, data loss, and compromised security.",
+        "Category": "Operational",
+        "Criticality": "Medium",
+        "RiskImpact": 7,
+        "RiskLikelihood": 6
+      },
+      {
+        "RiskId": 1606,
+        "ComplianceId": 2258,
+        "RiskTitle": "Earthquake Structural Failure Risk",
+        "RiskDescription": "The risk of structural failure in isolated operating areas during seismic events due to inadequate construction standards.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 1607,
+        "ComplianceId": 2259,
+        "RiskTitle": "Fire Outbreak Risk",
+        "RiskDescription": "The risk of fire incidents in isolated operating areas due to the absence of automatic fire control systems.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 7
+      },
+      {
+        "RiskId": 1608,
+        "ComplianceId": 2260,
+        "RiskTitle": "Failure to Detect Fire Incident",
+        "RiskDescription": "Failure to detect a fire incident in an isolated operating area could result in equipment damage, safety hazards, and potential injuries to personnel.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 1609,
+        "ComplianceId": 2261,
+        "RiskTitle": "Delay in Incident Response",
+        "RiskDescription": "A delay in responding to incidents detected in isolated operating areas due to failure in automated alert notifications could result in extended downtime, safety risks, and financial losses.",
+        "Category": "Operational",
+        "Criticality": "Medium",
+        "RiskImpact": 8,
+        "RiskLikelihood": 6
+      },
+      {
+        "RiskId": 1610,
+        "ComplianceId": 2262,
+        "RiskTitle": "Data Breach Due to Inadequate Security Configurations",
+        "RiskDescription": "Inadequate security configurations may lead to vulnerabilities that could be exploited by malicious actors, resulting in a data breach.",
+        "Category": "IT",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 1611,
+        "ComplianceId": 2263,
+        "RiskTitle": "Failure to Detect Security Incidents on User Endpoint Devices",
+        "RiskDescription": "Inadequate monitoring of user endpoint devices may result in undetected security incidents such as malware infections or unauthorized access.",
+        "Category": "IT",
+        "Criticality": "Medium",
+        "RiskImpact": 8,
+        "RiskLikelihood": 6
+      },
+      {
+        "RiskId": 1612,
+        "ComplianceId": 2264,
+        "RiskTitle": "Unauthorized Access to Sensitive Data",
+        "RiskDescription": "Unauthorized access to sensitive data by unauthorized personnel leading to data breaches and potential misuse.",
+        "Category": "Operational",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 1613,
+        "ComplianceId": 2265,
+        "RiskTitle": "Outdated Access Rights",
+        "RiskDescription": "Outdated access rights for privileged accounts leading to unauthorized access, potential data breaches, and compliance violations.",
+        "Category": "Operational",
+        "Criticality": "Medium",
+        "RiskImpact": 7,
+        "RiskLikelihood": 6
+      },
+      {
+        "RiskId": 1614,
+        "ComplianceId": 2266,
+        "RiskTitle": "Unauthorized Access to Sensitive Information",
+        "RiskDescription": "Unauthorized access to sensitive information can lead to data breaches, loss of confidentiality, and potential legal repercussions.",
+        "Category": "Compliance",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 1615,
+        "ComplianceId": 2267,
+        "RiskTitle": "Unauthorized Access Risk",
+        "RiskDescription": "Risk of unauthorized individuals gaining access to sensitive data through compromised user accounts.",
+        "Category": "IT",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      },
+      {
+        "RiskId": 1616,
+        "ComplianceId": 2268,
+        "RiskTitle": "Malware Infection Risk",
+        "RiskDescription": "Failure to implement anti-malware solutions may lead to malware infections compromising system security and data integrity",
+        "Category": "IT",
+        "Criticality": "High",
+        "RiskImpact": 9,
+        "RiskLikelihood": 8
+      }
+    ],
+    "risk_instance": [
+      {
+        "RiskInstanceId": 267,
+        "IncidentId": 436,
+        "ComplianceId": 2173,
+        "RiskTitle": "Unauthorized Access Due to RBAC Non-compliance",
+        "RiskDescription": "During a recent audit check in the Treasury business unit, it was discovered that the Role-Based Access Control (RBAC) implementation was not compliant with the established policies and procedures, leading to possible unauthorized access to financial systems.",
+        "PossibleDamage": "Unauthorized access to sensitive financial data may cause data breaches, financial losses, and regulatory penalties.",
+        "RiskPriority": "Low",
+        "Criticality": "High",
+        "Category": "Market Risk",
+        "Origin": "Incident",
+        "ReportedBy": 1,
+        "RiskId": 160,
+        "RiskLikelihood": 3,
+        "RiskImpact": 4,
+        "RiskExposureRating": 3.0,
+        "Appetite": "Moderate",
+        "RiskResponseType": "Mitigation",
+        "RiskResponseDescription": "Corrective and preventive actions aligned with ISO 27011 security controls.",
+        "RiskMitigation": "{\"Owner\": \"CISO\", \"DueDate\": \"2025-12-31\", \"MitigationSteps\": [\"Re-evaluate RBAC roles and permissions\", \"Conduct access reviews quarterly\", \"Enforce least-privilege principle\"]}",
+        "RiskType": "Operational",
+        "RiskOwner": "Chief Information Security Officer",
+        "RiskStatus": "Approved",
+        "BusinessImpact": "Potential disruption to information-security posture and regulatory obligations.",
+        "UserId": 1,
+        "MitigationDueDate": "2025-12-31",
+        "ModifiedMitigations": "{}",
+        "MitigationStatus": "In Progress",
+        "MitigationCompletedDate": null,
+        "ReviewerCount": 1,
+        "RiskFormDetails": "{\"source\": \"incident_and_compliance\", \"incident_category\": \"Market Risk\", \"compliance_criticality\": \"High\"}",
+        "RecurrenceCount": 0,
+        "CreatedAt": "2025-10-31",
+        "Reviewer": "ISO 27011 Compliance Officer",
+        "ReviewerId": 15,
+        "FirstResponseAt": "2025-10-31",
+        "FrameworkId": 354,
+        "RiskMultiplierX": 0.1,
+        "RiskMultiplierY": 0.1
+      },
+      {
+        "RiskInstanceId": 268,
+        "IncidentId": 444,
+        "ComplianceId": 2171,
+        "RiskTitle": "Non-compliance with Bi-annual Incident Response Drills in IT Department",
+        "RiskDescription": "The IT Department failed to conduct required bi-annual incident-response drills as mandated by internal policies and industry regulations, reducing preparedness for real incidents.",
+        "PossibleDamage": "Increased downtime, data-breach risk, regulatory fines, and compromised business continuity.",
+        "RiskPriority": "Medium",
+        "Criticality": "High",
+        "Category": "Compliance Risk",
+        "Origin": "Incident",
+        "ReportedBy": 1,
+        "RiskId": 161,
+        "RiskLikelihood": 3,
+        "RiskImpact": 4,
+        "RiskExposureRating": 3.0,
+        "Appetite": "Moderate",
+        "RiskResponseType": "Mitigation",
+        "RiskResponseDescription": "Schedule and document incident-response drills per ISO 27011 requirements.",
+        "RiskMitigation": "{\"Owner\": \"IT Security Lead\", \"DueDate\": \"2025-12-31\", \"MitigationSteps\": [\"Plan semi-annual drills\", \"Document outcomes and improvements\", \"Escalate non-participation cases\"]}",
+        "RiskType": "Operational",
+        "RiskOwner": "Chief Information Security Officer",
+        "RiskStatus": "Rejected",
+        "BusinessImpact": "Potential impact on organizational resilience and compliance readiness.",
+        "UserId": 1,
+        "MitigationDueDate": "2025-12-31",
+        "ModifiedMitigations": "{}",
+        "MitigationStatus": "In Progress",
+        "MitigationCompletedDate": null,
+        "ReviewerCount": 1,
+        "RiskFormDetails": "{\"source\": \"incident_and_compliance\", \"incident_category\": \"Compliance Risk\", \"compliance_criticality\": \"High\"}",
+        "RecurrenceCount": 0,
+        "CreatedAt": "2025-10-31",
+        "Reviewer": "ISO 27011 Compliance Officer",
+        "ReviewerId": 15,
+        "FirstResponseAt": "2025-10-31",
+        "FrameworkId": 354,
+        "RiskMultiplierX": 0.1,
+        "RiskMultiplierY": 0.1
+      },
+      {
+        "RiskInstanceId": 269,
+        "IncidentId": 447,
+        "ComplianceId": 2172,
+        "RiskTitle": "Unauthorized Access Due to RBAC Non-compliance in Treasury Department",
+        "RiskDescription": "An audit found the Treasury department\u2019s RBAC implementation non-compliant with company security policy, creating risk of unauthorized access and fraud.",
+        "PossibleDamage": "Possible data breaches, fraud, regulatory penalties, and operational disruption.",
+        "RiskPriority": "Medium",
+        "Criticality": "High",
+        "Category": "Physical Risk",
+        "Origin": "Incident",
+        "ReportedBy": 1,
+        "RiskId": 162,
+        "RiskLikelihood": 3,
+        "RiskImpact": 4,
+        "RiskExposureRating": 3.0,
+        "Appetite": "Moderate",
+        "RiskResponseType": "Mitigation",
+        "RiskResponseDescription": "Strengthen RBAC enforcement and continuous monitoring as per ISO 27011 A.9 controls.",
+        "RiskMitigation": "{\"Owner\": \"Treasury Head\", \"DueDate\": \"2025-12-31\", \"MitigationSteps\": [\"Re-map roles to job functions\", \"Implement continuous access monitoring\", \"Enable multi-factor authentication\"]}",
+        "RiskType": "Operational",
+        "RiskOwner": "Chief Information Security Officer",
+        "RiskStatus": "Approved",
+        "BusinessImpact": "Potential compromise of treasury operations and data integrity.",
+        "UserId": 1,
+        "MitigationDueDate": "2025-12-31",
+        "ModifiedMitigations": "{}",
+        "MitigationStatus": "In Progress",
+        "MitigationCompletedDate": null,
+        "ReviewerCount": 1,
+        "RiskFormDetails": "{\"source\": \"incident_and_compliance\", \"incident_category\": \"Physical Risk\", \"compliance_criticality\": \"High\"}",
+        "RecurrenceCount": 0,
+        "CreatedAt": "2025-10-31",
+        "Reviewer": "ISO 27011 Compliance Officer",
+        "ReviewerId": 15,
+        "FirstResponseAt": "2025-10-31",
+        "FrameworkId": 354,
+        "RiskMultiplierX": 0.1,
+        "RiskMultiplierY": 0.1
+      },
+      {
+        "RiskInstanceId": 270,
+        "IncidentId": 449,
+        "ComplianceId": 2170,
+        "RiskTitle": "Failure to Establish Incident Response Team in Risk Management Business Unit",
+        "RiskDescription": "Audit revealed absence of a dedicated incident-response team, leaving the organization unprepared for security incidents.",
+        "PossibleDamage": "Extended exposure to threats, potential data compromise, and financial losses.",
+        "RiskPriority": "Medium",
+        "Criticality": "High",
+        "Category": "Reputational Risk",
+        "Origin": "Incident",
+        "ReportedBy": 1,
+        "RiskId": 163,
+        "RiskLikelihood": 3,
+        "RiskImpact": 4,
+        "RiskExposureRating": 3.0,
+        "Appetite": "Moderate",
+        "RiskResponseType": "Mitigation",
+        "RiskResponseDescription": "Formally establish and train a cross-functional incident-response team per ISO 27011 A.16.",
+        "RiskMitigation": "{\"Owner\": \"Risk Management Head\", \"DueDate\": \"2025-12-31\", \"MitigationSteps\": [\"Define team roles and escalation flow\", \"Conduct annual training\", \"Integrate with enterprise crisis-management plan\"]}",
+        "RiskType": "Operational",
+        "RiskOwner": "Chief Information Security Officer",
+        "RiskStatus": "Approved",
+        "BusinessImpact": "Reduced capability to contain incidents, affecting reputation and compliance.",
+        "UserId": 1,
+        "MitigationDueDate": "2025-12-31",
+        "ModifiedMitigations": "{}",
+        "MitigationStatus": "In Progress",
+        "MitigationCompletedDate": null,
+        "ReviewerCount": 1,
+        "RiskFormDetails": "{\"source\": \"incident_and_compliance\", \"incident_category\": \"Reputational Risk\", \"compliance_criticality\": \"High\"}",
+        "RecurrenceCount": 0,
+        "CreatedAt": "2025-10-31",
+        "Reviewer": "ISO 27011 Compliance Officer",
+        "ReviewerId": 15,
+        "FirstResponseAt": "2025-10-31",
+        "FrameworkId": 354,
+        "RiskMultiplierX": 0.1,
+        "RiskMultiplierY": 0.1
+      },
+      {
+        "RiskInstanceId": 271,
+        "IncidentId": 450,
+        "ComplianceId": 2191,
+        "RiskTitle": "Delayed Reporting of Security Events in IT Department",
+        "RiskDescription": "Routine audit identified delayed reporting of security events, violating timely-reporting processes required under ISO 27011.",
+        "PossibleDamage": "Compromised cybersecurity posture, longer incident-recovery time, regulatory penalties, and reputational harm.",
+        "RiskPriority": "Medium",
+        "Criticality": "High",
+        "Category": "Strategic Risk",
+        "Origin": "Incident",
+        "ReportedBy": 1,
+        "RiskId": 164,
+        "RiskLikelihood": 3,
+        "RiskImpact": 4,
+        "RiskExposureRating": 3.0,
+        "Appetite": "Moderate",
+        "RiskResponseType": "Mitigation",
+        "RiskResponseDescription": "Enforce immediate incident-reporting SLAs and automated alert mechanisms.",
+        "RiskMitigation": "{\"Owner\": \"SOC Manager\", \"DueDate\": \"2025-12-31\", \"MitigationSteps\": [\"Define 24-hour reporting SLA\", \"Automate alert generation\", \"Monitor and audit compliance metrics\"]}",
+        "RiskType": "Operational",
+        "RiskOwner": "Chief Information Security Officer",
+        "RiskStatus": "Revision Required by Reviewer",
+        "BusinessImpact": "Possible financial and reputational losses from delayed response to security events.",
+        "UserId": 1,
+        "MitigationDueDate": "2025-12-31",
+        "ModifiedMitigations": "{}",
+        "MitigationStatus": "In Progress",
+        "MitigationCompletedDate": null,
+        "ReviewerCount": 1,
+        "RiskFormDetails": "{\"source\": \"incident_and_compliance\", \"incident_category\": \"Strategic Risk\", \"compliance_criticality\": \"High\"}",
+        "RecurrenceCount": 0,
+        "CreatedAt": "2025-10-31",
+        "Reviewer": "ISO 27011 Compliance Officer",
+        "ReviewerId": 15,
+        "FirstResponseAt": "2025-10-31",
+        "FrameworkId": 354,
+        "RiskMultiplierX": 0.1,
+        "RiskMultiplierY": 0.1
+      }
+    ],
+    "risk_approval": []
+  },
+  "schema": {
+    "risk": {
+      "columns": [
+        "RiskId",
+        "ComplianceId",
+        "RiskTitle",
+        "Criticality",
+        "PossibleDamage",
+        "Category",
+        "RiskType",
+        "BusinessImpact",
+        "RiskDescription",
+        "RiskLikelihood",
+        "RiskImpact",
+        "RiskExposureRating",
+        "RiskPriority",
+        "RiskMitigation",
+        "CreatedAt",
+        "FrameworkId",
+        "RiskMultiplierX",
+        "RiskMultiplierY"
+      ],
+      "row_count": 100,
+      "column_details": [
+        {
+          "name": "RiskId",
+          "type": "int",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "ComplianceId",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskTitle",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Criticality",
+          "type": "varchar(50)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PossibleDamage",
+          "type": "text",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Category",
+          "type": "varchar(100)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskType",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "BusinessImpact",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskDescription",
+          "type": "text",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskLikelihood",
+          "type": "int",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskImpact",
+          "type": "int",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskExposureRating",
+          "type": "float",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskPriority",
+          "type": "varchar(50)",
+          "null": "NO",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskMitigation",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "CreatedAt",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "FrameworkId",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskMultiplierX",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": "0.1",
+          "extra": ""
+        },
+        {
+          "name": "RiskMultiplierY",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": "0.1",
+          "extra": ""
+        }
+      ]
+    },
+    "risk_instance": {
+      "columns": [
+        "RiskInstanceId",
+        "IncidentId",
+        "ComplianceId",
+        "RiskTitle",
+        "RiskDescription",
+        "PossibleDamage",
+        "RiskPriority",
+        "Criticality",
+        "Category",
+        "Origin",
+        "ReportedBy",
+        "RiskId",
+        "RiskLikelihood",
+        "RiskImpact",
+        "RiskExposureRating",
+        "Appetite",
+        "RiskResponseType",
+        "RiskResponseDescription",
+        "RiskMitigation",
+        "RiskType",
+        "RiskOwner",
+        "RiskStatus",
+        "BusinessImpact",
+        "UserId",
+        "MitigationDueDate",
+        "ModifiedMitigations",
+        "MitigationStatus",
+        "MitigationCompletedDate",
+        "ReviewerCount",
+        "RiskFormDetails",
+        "RecurrenceCount",
+        "CreatedAt",
+        "Reviewer",
+        "ReviewerId",
+        "FirstResponseAt",
+        "FrameworkId",
+        "RiskMultiplierX",
+        "RiskMultiplierY"
+      ],
+      "row_count": 5,
+      "column_details": [
+        {
+          "name": "RiskInstanceId",
+          "type": "int",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": "auto_increment"
+        },
+        {
+          "name": "IncidentId",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ComplianceId",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskTitle",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskDescription",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "PossibleDamage",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskPriority",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Criticality",
+          "type": "varchar(100)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Category",
+          "type": "varchar(100)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Origin",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ReportedBy",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskId",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskLikelihood",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskImpact",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskExposureRating",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Appetite",
+          "type": "varchar(100)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskResponseType",
+          "type": "varchar(100)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskResponseDescription",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskMitigation",
+          "type": "json",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskType",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskOwner",
+          "type": "varchar(255)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskStatus",
+          "type": "varchar(50)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "BusinessImpact",
+          "type": "text",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "UserId",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "MitigationDueDate",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ModifiedMitigations",
+          "type": "json",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "MitigationStatus",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "MitigationCompletedDate",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ReviewerCount",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskFormDetails",
+          "type": "json",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RecurrenceCount",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "CreatedAt",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Reviewer",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ReviewerId",
+          "type": "int",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "FirstResponseAt",
+          "type": "date",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "FrameworkId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "RiskMultiplierX",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": "0.1",
+          "extra": ""
+        },
+        {
+          "name": "RiskMultiplierY",
+          "type": "float",
+          "null": "YES",
+          "key": "",
+          "default": "0.1",
+          "extra": ""
+        }
+      ]
+    },
+    "risk_approval": {
+      "columns": [
+        "RiskinstanceId",
+        "version",
+        "ExtractedInfo",
+        "UserId",
+        "ApproverId",
+        "ApprovedRejected",
+        "Date",
+        "FrameworkId"
+      ],
+      "row_count": 0,
+      "column_details": [
+        {
+          "name": "RiskinstanceId",
+          "type": "int",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "version",
+          "type": "varchar(450)",
+          "null": "NO",
+          "key": "PRI",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ExtractedInfo",
+          "type": "json",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "UserId",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ApproverId",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "ApprovedRejected",
+          "type": "varchar(45)",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "Date",
+          "type": "datetime",
+          "null": "YES",
+          "key": "",
+          "default": null,
+          "extra": ""
+        },
+        {
+          "name": "FrameworkId",
+          "type": "int",
+          "null": "YES",
+          "key": "MUL",
+          "default": null,
+          "extra": ""
+        }
+      ]
+    }
+  }
+}
