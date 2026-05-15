@@ -995,19 +995,14 @@ const acceptConsent = async () => {
     isSubmitting.value = true
     errorMessage.value = ''
 
-    const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token')
-    if (!token) {
-      throw new Error('No access token found')
-    }
-
     const response = await axios.post(
       `${API_BASE_URL}/api/jwt/accept-consent/`,
       {},
       {
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
-        }
+        },
+        withCredentials: true // Ensure cookies are sent
       }
     )
 

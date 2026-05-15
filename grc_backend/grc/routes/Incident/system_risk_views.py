@@ -219,6 +219,11 @@ def run_manual_risk_scan(request):
     run_checklist = request.data.get('run_checklist', False)
     external_urls = request.data.get('external_urls', [])
     requested_limit = request.data.get('limit', 5)
+    framework_id = request.data.get('framework_id') or None
+    try:
+        framework_id = int(framework_id) if framework_id is not None else None
+    except (ValueError, TypeError):
+        framework_id = None
     
     try:
         requested_limit = int(requested_limit)
@@ -236,7 +241,8 @@ def run_manual_risk_scan(request):
             subfolder_ids=subfolder_ids,
             document_ids=document_ids,
             run_checklist=run_checklist,
-            external_urls=external_urls
+            external_urls=external_urls,
+            framework_id=framework_id
         )
         return Response({
             'status': 'success',
@@ -465,7 +471,47 @@ def list_system_risk_queue(request):
             print(f"[API] Filtering by velocity_min: {velocity_filter}")
         except Exception:
             pass
-    
+
+    framework_filter = request.GET.get('framework_reference')
+    if framework_filter:
+        queryset = queryset.filter(framework_reference__iexact=framework_filter)
+        print(f"[API] Filtering by framework_reference: {framework_filter}")
+
+    framework_id_filter = request.GET.get('framework_id')
+    if framework_id_filter:
+        try:
+            from grc.models import Framework
+            fw = Framework.objects.filter(FrameworkId=int(framework_id_filter), tenant=tenant_id).first()
+            if fw:
+                queryset = queryset.filter(framework_reference__iexact=fw.FrameworkName)
+                print(f"[API] Filtering by framework_id {framework_id_filter} => name: {fw.FrameworkName}")
+            else:
+                queryset = queryset.none()
+                print(f"[API] framework_id {framework_id_filter} not found for tenant")
+        except (ValueError, TypeError):
+            pass
+
+    risk_type_filter = request.GET.get('risk_type')
+    if risk_type_filter:
+        queryset = queryset.filter(risk_type=risk_type_filter)
+        print(f"[API] Filtering by risk_type: {risk_type_filter}")
+
+    confidence_min = request.GET.get('confidence_min')
+    if confidence_min:
+        try:
+            queryset = queryset.filter(confidence_score__gte=int(confidence_min))
+            print(f"[API] Filtering by confidence_min: {confidence_min}")
+        except Exception:
+            pass
+
+    confidence_max = request.GET.get('confidence_max')
+    if confidence_max:
+        try:
+            queryset = queryset.filter(confidence_score__lte=int(confidence_max))
+            print(f"[API] Filtering by confidence_max: {confidence_max}")
+        except Exception:
+            pass
+
     # Order by creation date (newest first)
     queryset = queryset.order_by('-created_at')
     
@@ -560,6 +606,7 @@ def list_system_risk_queue(request):
             'priority': item.priority,
             'ai_reasoning': item.ai_reasoning,
             'ai_metadata': item.ai_metadata,
+            'framework_reference': item.framework_reference or (item.ai_metadata or {}).get('framework_reference', ''),
             'confidence_justification': confidence_justification,
             'confidence_factors': confidence_factors,
             'status': effective_status,
@@ -614,6 +661,7 @@ def get_system_risk_detail(request, risk_id):
         'confidence_score': final_score,
         'velocity_score': risk.velocity_score,
         'functional_area': risk.functional_area,
+        'framework_reference': risk.framework_reference or (risk.ai_metadata or {}).get('framework_reference', ''),
         'confidence_justification': confidence_justification,
         'confidence_factors': confidence_factors,
         'ai_metadata': risk.ai_metadata,
@@ -1193,10 +1241,80 @@ def list_risks_exceeding_threshold(request):
         'data': data
     })
 
-@api_view(['GET'])
+@api_view(['GET', 'POST', 'DELETE'])
 @permission_classes([IsAuthenticated])
 @require_tenant
 def list_external_sources(request):
-    """List available external sources for risk scanning."""
-    sources = get_external_portals_list()
-    return Response({'status': 'success', 'data': sources})
+    """
+    GET  – Returns merged list: hardcoded default portals + user-added DB sources.
+    POST – Add a new custom external source (saved to DB).
+    DELETE – Remove a user-added custom external source by URL.
+    """
+    from ...models import CustomExternalSource
+
+    tenant_id = get_tenant_id_from_request(request)
+
+    if request.method == 'GET':
+        defaults = get_external_portals_list()
+        for s in defaults:
+            s['is_default'] = True
+
+        try:
+            custom_qs = CustomExternalSource.objects.filter(
+                tenant_id=tenant_id, is_active=True
+            )
+            custom = [
+                {
+                    'name': s.name,
+                    'url': s.url,
+                    'feed_type': s.feed_type,
+                    'category': s.feed_type,
+                    'is_default': False,
+                }
+                for s in custom_qs
+            ]
+        except Exception:
+            custom = []
+        return Response({'status': 'success', 'data': defaults + custom})
+
+    if request.method == 'POST':
+        url = (request.data.get('url') or '').strip()
+        name = (request.data.get('name') or url).strip()
+        feed_type = (request.data.get('feed_type') or 'News').strip()
+
+        if not url:
+            return Response({'status': 'error', 'message': 'url is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        obj, created = CustomExternalSource.objects.get_or_create(
+            tenant_id=tenant_id,
+            url=url,
+            defaults={
+                'name': name,
+                'feed_type': feed_type,
+                'is_active': True,
+                'created_by': _resolve_actor_user_id(request.user),
+            }
+        )
+        if not created:
+            obj.is_active = True
+            obj.name = name
+            obj.feed_type = feed_type
+            obj.save(update_fields=['is_active', 'name', 'feed_type'])
+
+        return Response({
+            'status': 'success',
+            'data': {'name': obj.name, 'url': obj.url, 'feed_type': obj.feed_type, 'is_default': False}
+        }, status=status.HTTP_201_CREATED)
+
+    if request.method == 'DELETE':
+        url = (request.data.get('url') or '').strip()
+        if not url:
+            return Response({'status': 'error', 'message': 'url is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        deleted, _ = CustomExternalSource.objects.filter(
+            tenant_id=tenant_id, url=url
+        ).delete()
+
+        if deleted:
+            return Response({'status': 'success', 'message': 'Source removed'})
+        return Response({'status': 'error', 'message': 'Source not found'}, status=status.HTTP_404_NOT_FOUND)

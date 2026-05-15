@@ -239,7 +239,7 @@ TEMPLATES = [
         "BACKEND": "django.template.backends.django.DjangoTemplates",
         "DIRS": [
             BASE_DIR / "templates",
-            BASE_DIR.parent / "frontend" / "dist",  # Vue.js production build
+            BASE_DIR.parent / "grc_frontend" / "dist",  # Vue.js production build
         ],
         "APP_DIRS": True,
         "OPTIONS": {

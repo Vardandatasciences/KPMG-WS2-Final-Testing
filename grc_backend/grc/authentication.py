@@ -1783,18 +1783,29 @@ def accept_consent(request):
     try:
         logger.info("Accept consent endpoint called")
         
-        # Always get user from token since middleware is skipped for this endpoint
+        # Get token from Authorization header or cookie
+        token = None
+        
+        # Try Authorization header first
         auth_header = request.headers.get('Authorization')
         logger.info(f"Authorization header: {auth_header}")
-        if not auth_header or not auth_header.startswith('Bearer '):
-            logger.error("Missing or invalid Authorization header")
+        if auth_header and auth_header.startswith('Bearer '):
+            token = auth_header.split(' ')[1]
+            logger.info(f"Extracted token from Authorization header: {token[:20]}...")
+        
+        # Fallback to cookie (for HttpOnly cookie-based auth)
+        if not token:
+            token = request.COOKIES.get('access_token') or request.COOKIES.get('session_token')
+            if token:
+                logger.info(f"Extracted token from cookie: {token[:20]}...")
+        
+        if not token:
+            logger.error("No token found in Authorization header or cookie")
             return Response({
                 'status': 'error',
-                'message': 'Authorization header with Bearer token is required'
+                'message': 'Authentication required'
             }, status=status.HTTP_401_UNAUTHORIZED)
         
-        token = auth_header.split(' ')[1]
-        logger.info(f"Extracted token: {token[:20]}...")
         user = get_user_from_token(token)
         logger.info(f"User from token: {user}")
         

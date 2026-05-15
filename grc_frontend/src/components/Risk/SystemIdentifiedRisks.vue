@@ -21,7 +21,7 @@
       <div class="system-risk-header-actions">
         <div class="premium-scan-container">
           <!-- Main Configuration Toggle -->
-          <div class="scan-config-trigger" @click="isDocHandlingExpanded = !isDocHandlingExpanded">
+          <div class="scan-config-trigger" @click="openConfigPanel">
             <div class="trigger-content">
               <i class="fas fa-sliders-h"></i>
               <span>Configure AI Scan</span>
@@ -45,126 +45,191 @@
             {{ loading ? 'Analyzing...' : 'Run AI Risk Scan' }}
           </button>
 
-          <!-- Dropdown Panel -->
-          <div v-if="isDocHandlingExpanded" class="scan-config-backdrop" @click="isDocHandlingExpanded = false"></div>
-          <div v-if="isDocHandlingExpanded" class="scan-config-panel glass-panel shadow-2xl">
-            <div class="panel-header">
-              <h3><i class="fas fa-robot"></i> AI Scan Configuration</h3>
-              <button type="button" class="panel-close-x" @click="isDocHandlingExpanded = false">
-                <i class="fas fa-times"></i>
-              </button>
-            </div>
+          <!-- Config Panel Backdrop -->
+          <div v-if="isDocHandlingExpanded" class="scp-backdrop" @click="isDocHandlingExpanded = false"></div>
 
-            <div class="panel-body-layout">
-              <div class="panel-left-col">
-                <div class="panel-section">
-                  <label><i class="fas fa-cubes"></i> Source Modules</label>
-                  <p class="section-desc">Select which modules the AI should analyze for risks.</p>
-                  <div class="module-grid">
-                    <div 
-                      v-for="source in ['COMPLIANCE', 'AUDIT', 'INCIDENT', 'EVENT', 'EXTERNAL_SOURCES']" 
-                      :key="source"
-                      class="module-option"
-                      :class="{ active: selectedSources.includes(source) }"
-                      @click="toggleSourceSelection(source)"
-                    >
-                      <i :class="getSourceIcon(source)"></i>
-                      <span>{{ source === 'EXTERNAL_SOURCES' ? 'External Sources' : source.charAt(0) + source.slice(1).toLowerCase() }}</span>
-                      <div class="check-indicator"><i class="fas fa-check"></i></div>
-                    </div>
-                  </div>
-                </div>
+          <!-- Sources Configuration Panel — centered modal -->
+          <div v-if="isDocHandlingExpanded" class="scp-modal-wrap">
+            <div class="scp-modal">
 
-                <div class="panel-section no-border">
-                  <label class="flex-label" @click="runChecklist = !runChecklist">
-                    <span><i class="fas fa-clipboard-check"></i> Analysis Checklist</span>
-                    <div class="toggle-switch" :class="{ active: runChecklist }">
-                      <div class="switch-knob"></div>
-                    </div>
-                  </label>
-                  <p class="section-hint">Perform analysis on all items currently checklisted for review in the system.</p>
+              <!-- Header -->
+              <div class="scp-header">
+                <div>
+                  <h3 class="scp-title">Sources Configuration</h3>
+                  <p class="scp-subtitle">Define what the engine reads from, how often, and what triggers an additional scan.</p>
                 </div>
+                <button type="button" class="scp-close" @click="isDocHandlingExpanded = false">
+                  <i class="fas fa-times"></i>
+                </button>
               </div>
 
-              <div class="panel-right-col">
-                <!-- External Sources Selection (Visible when EXTERNAL_SOURCES module is selected) -->
-                <div v-if="selectedSources.includes('EXTERNAL_SOURCES')" class="panel-section external-sources-section">
-                  <label><i class="fas fa-globe"></i> News Portals & Feeds</label>
-                  <p class="section-desc">Select specific news sources the AI should crawl for relevant risks.</p>
-                  
-                  <div v-if="loadingExternalSources" class="external-loading">
-                    <i class="fas fa-spinner fa-spin"></i> Loading sources...
-                  </div>
-                  <div v-else class="external-source-list custom-scrollbar">
-                    <div v-for="source in availableExternalSources" :key="source.url" class="external-source-item">
-                      <label class="premium-checkbox">
-                        <input type="checkbox" :value="source.url" v-model="selectedExternalUrls" />
-                        <span class="box"><i class="fas fa-check"></i></span>
-                        <div class="source-info">
-                          <span class="label">{{ source.name }}</span>
-                          <span class="url-hint">{{ source.url }}</span>
-                        </div>
-                      </label>
+              <div class="scp-body">
+
+                <!-- GRC Modules -->
+                <div class="scp-section-title">GRC Modules</div>
+
+                <!-- Framework filter for GRC Modules -->
+                <div class="scp-framework-row">
+                  <label class="scp-framework-label">Filter by Framework <span class="scp-optional">(optional)</span></label>
+                  <select v-model="selectedGrcFrameworkId" class="scp-framework-select">
+                    <option value="">All Frameworks</option>
+                    <option v-for="fw in frameworksList" :key="fw.id" :value="fw.id">{{ fw.name }}</option>
+                  </select>
+                </div>
+
+                <div class="scp-toggle-list">
+                  <div v-for="item in grcModuleOptions" :key="item.source" class="scp-toggle-row">
+                    <div class="scp-toggle-info">
+                      <span class="scp-toggle-name">{{ item.label }}</span>
+                      <span class="scp-toggle-desc">{{ item.desc }}</span>
                     </div>
+                    <button type="button" class="scp-toggle-btn" :class="{ on: selectedSources.includes(item.source) }" @click="toggleSourceSelection(item.source)">
+                      <span class="scp-toggle-knob"></span>
+                    </button>
                   </div>
                 </div>
 
-                <div class="panel-section" :class="{ 'with-top-margin': selectedSources.includes('EXTERNAL_SOURCES') }">
-                  <label><i class="fas fa-folder-tree"></i> Document Repository</label>
-                  <p class="section-desc">Choose specific documents or folders to include in the scan.</p>
-                  <div class="repo-controls">
-                    <select v-model="selectedFolderId" class="premium-select" @change="onFolderChange">
-                      <option value="">Select Company Folder...</option>
+                <!-- Document Folders -->
+                <div class="scp-section-header" style="margin-top:22px">
+                  <div class="scp-section-left">
+                    <span class="scp-section-title" style="margin:0">Document Folders</span>
+                  </div>
+                  <div class="scp-section-right">
+                    <button v-if="useFolders" type="button" class="scp-add-btn" @click="showFolderInput = !showFolderInput">
+                      <i class="fas fa-plus"></i> Add Folder
+                    </button>
+                    <button type="button" class="scp-toggle-btn" :class="{ on: useFolders }" @click="useFolders = !useFolders" style="margin-left:10px">
+                      <span class="scp-toggle-knob"></span>
+                    </button>
+                  </div>
+                </div>
+
+                <template v-if="useFolders">
+                  <!-- Folder picker -->
+                  <div v-if="showFolderInput" class="scp-add-row" style="margin-bottom:10px">
+                    <select v-model="selectedFolderId" class="scp-input" @change="onFolderChange" style="flex:1">
+                      <option value="">Select a company folder...</option>
                       <option v-for="folder in companyFolders" :key="folder.id" :value="folder.id">{{ folder.name }}</option>
                     </select>
-                    
-                    <div v-if="subFolders.length > 0" class="subfolder-selection">
-                      <p class="repo-hint">Select subfolders, then choose specific documents if needed.</p>
-                      <div class="subfolder-list custom-scrollbar">
-                        <div v-for="sub in subFolders" :key="sub.id" class="subfolder-item-wrapper">
-                          <label class="premium-checkbox">
-                            <input type="checkbox" :value="sub.id" v-model="selectedSubFolderIds" @change="onSubfolderToggle(sub)" />
-                            <span class="box"><i class="fas fa-check"></i></span>
-                            <span class="label">{{ sub.name }}</span>
-                          </label>
-                          
-                          <!-- Nested Documents -->
-                          <div v-if="selectedSubFolderIds.includes(sub.id)" class="nested-document-list">
-                            <div v-if="loadingDocuments[sub.id]" class="docs-loading">
-                              <i class="fas fa-spinner fa-spin"></i> Loading...
-                            </div>
-                            <div v-else-if="!subfolderDocuments[sub.id] || subfolderDocuments[sub.id].length === 0" class="docs-empty">
-                              No documents found.
-                            </div>
-                            <template v-else>
-                              <div class="docs-meta">
-                                <span>{{ subfolderDocuments[sub.id].length }} document(s) available</span>
-                              </div>
-                              <label v-for="doc in subfolderDocuments[sub.id]" :key="doc.id" class="premium-checkbox doc-checkbox">
-                                <input type="checkbox" :value="doc.id" v-model="selectedDocumentIds" />
-                                <span class="box"><i class="fas fa-check"></i></span>
-                                <span class="label doc-label" :title="doc.name">
-                                  <i class="far fa-file-alt"></i> {{ displayDocumentName(doc) }}
-                                </span>
-                              </label>
-                            </template>
+                    <template v-if="subFolders.length">
+                      <select v-model="pendingSubfolderId" class="scp-input" style="flex:1">
+                        <option value="">Select subfolder...</option>
+                        <option v-for="sub in subFolders" :key="sub.id" :value="sub.id">{{ sub.name }}</option>
+                      </select>
+                      <button type="button" class="scp-save-btn" @click="confirmAddSubfolder">Add</button>
+                    </template>
+                  </div>
+
+                  <!-- Added folders list -->
+                  <div class="scp-item-list">
+                    <template v-if="selectedSubFolderObjects.length">
+                      <div v-for="sub in selectedSubFolderObjects" :key="sub.id">
+                        <!-- Folder row -->
+                        <div class="scp-item-row scp-folder-row" @click="toggleExpandFolder(sub)">
+                          <div class="scp-item-info">
+                            <span class="scp-item-path">
+                              <i class="fas" :class="expandedFolderSubId === sub.id ? 'fa-folder-open' : 'fa-folder'" style="margin-right:7px;color:#6366f1"></i>
+                              /{{ sub.name }}/
+                            </span>
+                            <span class="scp-item-meta" style="color:#6b7280">{{ sub.lastScanned || 'not yet scanned' }}</span>
+                          </div>
+                          <div style="display:flex;align-items:center;gap:8px">
+                            <i class="fas" :class="expandedFolderSubId === sub.id ? 'fa-chevron-up' : 'fa-chevron-down'" style="font-size:12px;color:#9ca3af"></i>
+                            <button type="button" class="scp-item-delete" @click.stop="removeSubfolder(sub.id)" title="Remove">
+                              <i class="fas fa-trash"></i>
+                            </button>
                           </div>
                         </div>
+                        <!-- Documents inside folder -->
+                        <div v-if="expandedFolderSubId === sub.id" class="scp-docs-panel">
+                          <div v-if="loadingDocuments[sub.id]" class="scp-empty"><i class="fas fa-spinner fa-spin"></i> Loading documents...</div>
+                          <template v-else-if="subfolderDocuments[sub.id] && subfolderDocuments[sub.id].length">
+                            <label v-for="doc in subfolderDocuments[sub.id]" :key="doc.id" class="scp-doc-row">
+                              <input type="checkbox" :value="doc.id" v-model="selectedDocumentIds" />
+                              <i class="far fa-file-alt" style="color:#94a3b8;font-size:13px"></i>
+                              <span class="scp-doc-name">{{ doc.name || doc.title || doc.id }}</span>
+                            </label>
+                          </template>
+                          <div v-else class="scp-empty">No documents found in this folder.</div>
+                        </div>
                       </div>
-                    </div>
+                    </template>
+                    <div v-else class="scp-empty">No folders selected.</div>
+                  </div>
+                </template>
+
+                <!-- External Websites & Feeds -->
+                <div class="scp-section-header" style="margin-top:22px">
+                  <div class="scp-section-left">
+                    <span class="scp-section-title" style="margin:0">External Websites &amp; Feeds</span>
+                  </div>
+                  <div class="scp-section-right">
+                    <button v-if="useExternalSources" type="button" class="scp-add-btn" @click="showExtInput = !showExtInput">
+                      <i class="fas fa-plus"></i> Add Source
+                    </button>
+                    <button type="button" class="scp-toggle-btn" :class="{ on: useExternalSources }" @click="useExternalSources = !useExternalSources" style="margin-left:10px">
+                      <span class="scp-toggle-knob"></span>
+                    </button>
                   </div>
                 </div>
-              </div>
-            </div>
 
-            <div class="panel-footer">
-              <div class="footer-summary">
-                <span v-if="selectedSources.length">{{ selectedSources.length }} modules selected</span>
-                <span v-if="selectedSubFolderIds.length">{{ selectedSubFolderIds.length }} folders selected</span>
+                <template v-if="useExternalSources">
+                  <div class="scp-item-list">
+                    <div v-if="loadingExternalSources" class="scp-empty"><i class="fas fa-spinner fa-spin"></i> Loading...</div>
+                    <template v-else>
+                      <div v-for="source in availableExternalSources" :key="source.url" class="scp-item-row">
+                        <div class="scp-item-info">
+                          <span class="scp-item-name">
+                            <strong>{{ source.name }}</strong>
+                            <span class="scp-item-url"> &mdash; {{ source.url }}</span>
+                          </span>
+                          <span class="scp-item-meta">
+                            <span class="scp-tag">{{ source.feed_type || source.category || 'News' }}</span>
+                            <span v-if="source.is_default" class="scp-tag scp-tag-default">Default</span>
+                          </span>
+                        </div>
+                        <label class="scp-source-toggle">
+                          <input
+                            type="checkbox"
+                            :value="source.url"
+                            v-model="selectedExternalUrls"
+                            class="scp-toggle-input"
+                          />
+                          <span class="scp-toggle-track"></span>
+                        </label>
+                      </div>
+                      <div v-if="!availableExternalSources.length" class="scp-empty">No external sources available.</div>
+                    </template>
+                  </div>
+
+                  <!-- Add source form -->
+                  <div v-if="showExtInput" class="scp-add-block" style="margin-top:10px">
+                    <div class="scp-add-row">
+                      <input v-model="newExtName" type="text" class="scp-input" placeholder="Source name (e.g. Reuters Tech)" style="flex:1" />
+                    </div>
+                    <div class="scp-add-row" style="margin-top:6px">
+                      <input v-model="newExtUrl" type="url" class="scp-input" placeholder="https://example.com" style="flex:1" />
+                      <select v-model="newExtType" class="scp-input" style="width:auto">
+                        <option value="News">News</option>
+                        <option value="Advisory">Advisory</option>
+                        <option value="Uptime">Uptime</option>
+                        <option value="RSS">RSS</option>
+                      </select>
+                      <button type="button" class="scp-save-btn" @click="addExternalSource" :disabled="!newExtUrl">Save</button>
+                    </div>
+                  </div>
+                </template>
+
               </div>
-              <button type="button" class="config-save-btn" @click="isDocHandlingExpanded = false">
-                Apply & Save Configuration
-              </button>
+
+              <!-- Footer: Save Configuration -->
+              <div class="scp-footer">
+                <span class="scp-footer-hint">
+                  {{ selectedExternalUrls.length }} source{{ selectedExternalUrls.length !== 1 ? 's' : '' }} selected
+                </span>
+                <button type="button" class="scp-footer-cancel" @click="isDocHandlingExpanded = false">Cancel</button>
+                <button type="button" class="scp-footer-save" @click="saveConfiguration">Save Configuration</button>
+              </div>
             </div>
           </div>
         </div>
@@ -193,31 +258,36 @@
       <p v-if="testAnalysis.lastRecord" class="test-progress-last">Last processed: {{ testAnalysis.lastRecord }}</p>
     </div>
 
-    <div class="system-risk-stats">
-      <div class="stat-card clickable" :class="{ active: filters.status === 'PENDING_REVIEW' }" @click="setStatusFilter('PENDING_REVIEW')">
-        <p class="stat-value">{{ pendingCount }}</p>
-        <p class="stat-label">Live Risks</p>
+    <!-- AI engine status bar -->
+    <div class="ai-engine-statusbar">
+      <div class="ai-engine-statusbar-left">
+        <span class="ai-engine-dot"></span>
+        <span class="ai-engine-text">AI engine &mdash; last scanned: <strong>{{ lastAiRunText }}</strong></span>
+        <span class="ai-engine-next" v-if="nextScanText">Next scan: in {{ nextScanText }}</span>
+        <i class="fas fa-cog ai-engine-settings" title="Configure AI Scan" @click="isDocHandlingExpanded = !isDocHandlingExpanded"></i>
       </div>
-      <div class="stat-card clickable" :class="{ active: filters.status === 'ACCEPTED_PENDING_APPROVAL' }" @click="setStatusFilter('ACCEPTED_PENDING_APPROVAL')">
-        <p class="stat-value pending">{{ pendingApprovalCount }}</p>
-        <p class="stat-label">Pending Approval</p>
-      </div>
-      <div class="stat-card clickable" :class="{ active: filters.status === 'APPROVED_ADDED' }" @click="setStatusFilter('APPROVED_ADDED')">
-        <p class="stat-value accepted">{{ acceptedCount }}</p>
-        <p class="stat-label">Approved</p>
-      </div>
-      <div class="stat-card clickable" :class="{ active: filters.status === 'REJECTED' }" @click="setStatusFilter('REJECTED')">
-        <p class="stat-value rejected">{{ rejectedCount }}</p>
-        <p class="stat-label">Rejected</p>
-      </div>
+      <button type="button" class="btn-run-scan-now" @click="runManualScan" :disabled="loading">
+        {{ loading ? 'Scanning...' : 'Run Scan Now' }}
+      </button>
     </div>
 
-    <div class="ai-monitoring-meta">
-      <h4 class="resources-heading">AI Resources</h4>
-      <span class="meta-item">
-        <span class="meta-label">Last AI run:</span>
-        <span class="meta-value">{{ lastAiRunText }}</span>
-      </span>
+    <div class="system-risk-stats">
+      <div class="stat-card clickable" :class="{ active: filters.status === 'PENDING_REVIEW' }" @click="setStatusFilter('PENDING_REVIEW')">
+        <p class="stat-value stat-blue">{{ pendingCount }}</p>
+        <p class="stat-label">Pending</p>
+      </div>
+      <div class="stat-card clickable" :class="{ active: filters.status === 'ACCEPTED_PENDING_APPROVAL' }" @click="setStatusFilter('ACCEPTED_PENDING_APPROVAL')">
+        <p class="stat-value stat-green">{{ pendingApprovalCount }}</p>
+        <p class="stat-label">Accepted today</p>
+      </div>
+      <div class="stat-card clickable" :class="{ active: filters.status === 'REJECTED' }" @click="setStatusFilter('REJECTED')">
+        <p class="stat-value stat-red">{{ rejectedCount }}</p>
+        <p class="stat-label">Rejected today</p>
+      </div>
+      <div class="stat-card clickable" :class="{ active: filters.status === 'APPROVED_ADDED' }" @click="setStatusFilter('APPROVED_ADDED')">
+        <p class="stat-value stat-dark">{{ acceptedCount }}</p>
+        <p class="stat-label">Sources active</p>
+      </div>
     </div>
 
     <div class="source-chips">
@@ -242,41 +312,37 @@
         type="text"
         placeholder="Search by title, source, category..."
       />
-      <select v-model="uiFilters.type" class="monitoring-select">
+      <select v-model="filters.risk_type" class="monitoring-select" @change="onServerFilterChange">
         <option value="">Type: All</option>
         <option value="Current">Current</option>
         <option value="Emerging">Emerging</option>
       </select>
-      <select v-model="uiFilters.category" class="monitoring-select">
+      <select v-model="filters.category" class="monitoring-select" @change="onServerFilterChange">
         <option value="">Category: All</option>
         <option v-for="category in categoryOptions" :key="`filter-category-${category}`" :value="category">{{ category }}</option>
       </select>
-      <select v-model="uiFilters.confidence" class="monitoring-select">
+      <select v-model="confidenceBand" class="monitoring-select" @change="onServerFilterChange">
         <option value="">Confidence: All</option>
         <option value="high">High (80%+)</option>
         <option value="medium">Medium (60-79%)</option>
         <option value="low">Low (&lt;60%)</option>
       </select>
-      <select v-model="filters.status" class="monitoring-select" @change="loadRisks">
+      <select v-model="filters.status" class="monitoring-select" @change="onServerFilterChange">
         <option value="PENDING_REVIEW">Status: Pending Review</option>
         <option value="ACCEPTED_PENDING_APPROVAL">Status: Sent for Approval</option>
         <option value="APPROVED_ADDED">Status: Accepted to Register</option>
         <option value="REJECTED">Status: Rejected</option>
       </select>
-      <select v-model="uiFilters.sourceRef" class="monitoring-select">
-        <option value="">Source: All</option>
-        <option v-for="source in sourceReferenceOptions" :key="`filter-source-${source}`" :value="source">{{ source }}</option>
-      </select>
-      <select v-model="uiFilters.functionalArea" class="monitoring-select">
-        <option value="">Area: All</option>
-        <option v-for="area in functionalAreaOptions" :key="`filter-area-${area}`" :value="area">{{ area }}</option>
+      <select v-model="filters.framework_reference" class="monitoring-select" @change="onFrameworkDropdownChange">
+        <option value="">Framework: All</option>
+        <option v-for="fw in frameworkReferenceOptions" :key="`filter-fw-${fw}`" :value="fw">{{ fw }}</option>
       </select>
       
       <button
-        v-if="hasActiveUiFilters"
+        v-if="hasActiveUiFilters || hasActiveServerFilters"
         type="button"
         class="clear-filters-btn"
-        @click="clearUiFilters"
+        @click="clearAllFilters"
       >
         Clear
       </button>
@@ -284,154 +350,125 @@
 
     <div class="risk-list">
       <article v-for="risk in filteredRisks" :key="risk.id" class="risk-card">
-        <!-- Top row: Category and Confidence -->
-        <div class="risk-card-header">
-          <div class="risk-type-group">
-            <span class="risk-category-tag" :class="risk.category.toLowerCase().replace(' ', '-')">{{ risk.category }}</span>
-            <span class="risk-type-label">{{ risk.type }}</span>
+        <!-- Left accent bar based on criticality -->
+        <div class="risk-card-accent" :class="risk.criticality.toLowerCase()"></div>
+
+        <div class="risk-card-body">
+          <!-- Row 1: Category tag + Status badge (if non-pending) + Confidence -->
+          <div class="risk-card-toprow">
+            <div class="risk-card-toprow-left">
+              <span class="risk-category-tag" :class="risk.category.toLowerCase().replace(' ', '-')">{{ risk.category }}</span>
+              <template v-if="risk.status !== 'PENDING_REVIEW'">
+                <span class="card-status-badge" :class="statusClass(risk.status)">
+                  <i class="fas fa-circle"></i> {{ statusLabel(risk.status) }}
+                </span>
+              </template>
+            </div>
+            <div class="confidence-tag" :class="confidenceLevelClass(risk.confidence)">
+              {{ risk.confidence }}% confidence
+            </div>
           </div>
-          <div class="ai-confidence-indicator">
-            <template v-if="risk.status !== 'PENDING_REVIEW'">
-              <span class="card-status-badge" :class="statusClass(risk.status)">
-                <i class="fas fa-circle"></i> {{ statusLabel(risk.status) }}
+
+          <!-- Row 2: Title -->
+          <h3 class="risk-title">{{ risk.title }}</h3>
+
+          <!-- Row 3: Description -->
+          <p class="risk-summary-text">{{ risk.description }}</p>
+
+          <!-- Row 4: Metadata chips + Detected time -->
+          <div class="risk-meta-chips-row">
+            <div class="risk-meta-chips">
+              <span class="meta-chip">{{ risk.type }}</span>
+              <span class="meta-chip criticality-chip" :class="risk.criticality.toLowerCase()">{{ risk.criticality }}</span>
+              <span class="meta-chip">{{ risk.functionalArea }}</span>
+              <span class="meta-chip">{{ risk.source }}</span>
+            </div>
+            <span class="meta-detected">Detected: {{ risk.detected }}</span>
+          </div>
+
+          <!-- Row 5: AI Reasoning inline (always visible, no expand/collapse) -->
+          <div class="ai-reasoning-inline">
+            <span class="ai-reasoning-label"><i class="fas fa-robot"></i> AI Reasoning</span>
+            <span class="ai-reasoning-text">{{ risk.aiReasoning || risk.description }}</span>
+          </div>
+
+          <!-- Row 6: Score chips + Residual right-aligned -->
+          <div class="risk-score-chips-row">
+            <div class="risk-score-chips">
+              <span class="score-chip">Likelihood: {{ risk.likelihood }}</span>
+              <span class="score-chip">Impact: {{ risk.impact }}</span>
+              <span class="score-chip">Velocity: {{ risk.velocity }}</span>
+              <span class="score-chip">Exposure: {{ risk.exposure }}</span>
+            </div>
+            <span class="residual-score">Residual: {{ risk.residualScore || Math.round(risk.exposure * 0.65) }}</span>
+          </div>
+
+          <!-- Row 7: Mitigation preview -->
+          <div class="risk-mitigation-preview">
+            <strong>Mitigation:</strong>
+            <template v-if="Array.isArray(risk.mitigationSteps) && risk.mitigationSteps.length > 0">
+              {{ risk.mitigationSteps[0] }}
+              <span v-if="risk.mitigationSteps.length > 1" class="mitigation-more">
+                + {{ risk.mitigationSteps.length - 1 }} more
               </span>
             </template>
-            <div class="confidence-tag">
-              <i class="fas fa-robot"></i>
-              <span>{{ risk.confidence }}% AI</span>
-              
-              <!-- AI Justification Tooltip -->
-              <div class="justification-tooltip">
-                <div class="tooltip-header">
-                  <i class="fas fa-brain"></i> AI Confidence Basis
-                </div>
-                <div class="tooltip-body">
-                  {{ risk.confidenceJustification || 'AI calculated this confidence score based on the depth of evidence and impact factors.' }}
-                </div>
-                <div v-if="risk.confidenceFactors && risk.confidenceFactors.length" class="factor-list">
-                  <div v-for="factor in risk.confidenceFactors" :key="factor.name" class="factor-item">
-                    <span class="factor-name">{{ factor.name }}</span>
-                    <span class="factor-score">{{ factor.score }}%</span>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <template v-else-if="risk.mitigation">{{ risk.mitigation }}</template>
+            <template v-else><span style="color:#9ca3af">No mitigation steps identified</span></template>
           </div>
-        </div>
 
-        <h3 class="risk-title">{{ risk.title }}</h3>
-        
-        <!-- Integrated Metadata: Criticality, Area, Source -->
-        <div class="risk-metadata">
-          <span class="meta-criticality" :class="risk.criticality.toLowerCase()">{{ risk.criticality }}</span>
-          <span class="meta-divider">•</span>
-          <span class="meta-item">Multiplier: ME 4</span>
-          <span class="meta-divider">•</span>
-          <span class="meta-item">{{ risk.functionalArea }}</span>
-          <span class="meta-divider">•</span>
-          <span class="meta-item">Source: {{ risk.source }}</span>
-        </div>
-
-        <p class="risk-summary-text">{{ risk.description }}</p>
-
-        <!-- AI Reasoning section -->
-        <div class="ai-reasoning-section">
-          <div class="reasoning-toggle" @click="toggleReasoning(risk.id)">
-            <i class="fas" :class="isExpandedReasoning(risk.id) ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
-            AI Reasoning & Evidence
-          </div>
-          <div v-show="isExpandedReasoning(risk.id)" class="reasoning-content">
-            {{ risk.aiReasoning || risk.description }}
-          </div>
-        </div>
-
-        <!-- Integrated Scores Grid -->
-        <div class="risk-scores-grid">
-          <div class="score-stat">
-            <span class="stat-label">Likelihood</span>
-            <span class="stat-value">{{ risk.likelihood }}</span>
-            <div v-if="hasRationale(risk, 'likelihood')" class="justification-tooltip">
-              <div class="tooltip-header"><i class="fas fa-info-circle"></i> Basis</div>
-              <div class="tooltip-body">{{ getRationale(risk, 'likelihood') }}</div>
-            </div>
-          </div>
-          <div class="score-stat">
-            <span class="stat-label">Impact</span>
-            <span class="stat-value">{{ risk.impact }}</span>
-            <div v-if="hasRationale(risk, 'impact')" class="justification-tooltip">
-              <div class="tooltip-header"><i class="fas fa-info-circle"></i> Basis</div>
-              <div class="tooltip-body">{{ getRationale(risk, 'impact') }}</div>
-            </div>
-          </div>
-          <div class="score-stat">
-            <span class="stat-label">Velocity</span>
-            <span class="stat-value">{{ risk.velocity }}</span>
-            <div v-if="hasRationale(risk, 'velocity')" class="justification-tooltip">
-              <div class="tooltip-header"><i class="fas fa-info-circle"></i> Basis</div>
-              <div class="tooltip-body">{{ getRationale(risk, 'velocity') }}</div>
-            </div>
-          </div>
-          <div class="score-stat exposure">
-            <span class="stat-label">Exposure Score</span>
-            <span class="stat-value"><strong>{{ risk.exposure }}</strong></span>
-            <div v-if="hasRationale(risk, 'exposure')" class="justification-tooltip">
-              <div class="tooltip-header"><i class="fas fa-info-circle"></i> Basis</div>
-              <div class="tooltip-body">{{ getRationale(risk, 'exposure') }}</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="risk-mitigation-preview">
-          <strong>Proposed Mitigation:</strong> 
-          <span v-if="Array.isArray(risk.mitigationSteps) && risk.mitigationSteps.length > 0">
-            {{ risk.mitigationSteps.join('; ') }}
-          </span>
-          <span v-else-if="risk.mitigationSteps">{{ risk.mitigationSteps }}</span>
-          <span v-else>{{ risk.mitigation }}</span>
-        </div>
-
-
-        <!-- Actions row: Buttons on left, View Source on right -->
-        <div class="risk-actions-row">
-          <div class="risk-actions">
-            <template v-if="risk.status === 'PENDING_REVIEW'">
-              <button type="button" class="btn-review" @click="openReview(risk)">Review &amp; Accept</button>
-              <button type="button" class="btn-reject-ghost" @click="rejectFromList(risk.id)">Reject</button>
-            </template>
-            <template v-else-if="risk.status === 'ACCEPTED_PENDING_APPROVAL'">
-              <button v-if="!canApprove(risk)" type="button" class="btn-review pending" disabled>
-                <i class="fas fa-spinner fa-spin"></i> Approval In Progress
+          <!-- Row 8: Actions -->
+          <div class="risk-actions-row">
+            <div class="risk-actions">
+              <template v-if="risk.status === 'PENDING_REVIEW'">
+                <button type="button" class="btn-review" @click="openReview(risk)">Review &amp; Accept</button>
+                <button type="button" class="btn-reject-ghost" @click="rejectFromList(risk.id)">Reject</button>
+              </template>
+              <template v-else-if="risk.status === 'ACCEPTED_PENDING_APPROVAL'">
+                <button v-if="!canApprove(risk)" type="button" class="btn-review pending" disabled>
+                  <i class="fas fa-spinner fa-spin"></i> Approval In Progress
+                </button>
+                <button v-else type="button" class="btn-review approve" @click="openReview(risk)">
+                  Review & Approve
+                </button>
+                <button type="button" class="btn-review-ghost" @click="goToWorkflow(risk)">
+                  View Workflow <i class="fas fa-arrow-right"></i>
+                </button>
+              </template>
+              <template v-else-if="risk.status === 'APPROVED_ADDED'">
+                <span class="status-badge-outline approved">
+                  <i class="fas fa-check-circle"></i> Added to Register
+                </span>
+              </template>
+              <template v-else-if="risk.status === 'REJECTED'">
+                <span class="status-badge-outline rejected">
+                  <i class="fas fa-times-circle"></i> Rejected
+                </span>
+                <button type="button" class="btn-review-ghost" @click="openReview(risk)">Re-Review</button>
+              </template>
+              <template v-else>
+                <span class="status-badge">{{ statusLabel(risk.status) }}</span>
+              </template>
+              <button type="button" class="btn-view-source-link" @click="openSourceDrawer(risk)">
+                View Source
               </button>
-              <button v-else type="button" class="btn-review approve" @click="openReview(risk)">
-                Review & Approve
-              </button>
-              <button type="button" class="btn-review-ghost" @click="goToWorkflow(risk)">
-                View Workflow <i class="fas fa-arrow-right"></i>
-              </button>
-            </template>
-            <template v-else-if="risk.status === 'APPROVED_ADDED'">
-              <span class="status-badge-outline approved">
-                <i class="fas fa-check-circle"></i> Added to Register
-              </span>
-            </template>
-            <template v-else-if="risk.status === 'REJECTED'">
-              <span class="status-badge-outline rejected">
-                <i class="fas fa-times-circle"></i> Rejected
-              </span>
-              <button type="button" class="btn-review-ghost" @click="openReview(risk)">Re-Review</button>
-            </template>
-            <template v-else>
-              <span class="status-badge">{{ statusLabel(risk.status) }}</span>
-            </template>
+            </div>
           </div>
-          <button type="button" class="btn-view-source" @click="openSourceDrawer(risk)">
-            View Source <i class="fas fa-external-link-alt"></i>
-          </button>
         </div>
       </article>
       <div v-if="!loading && filteredRisks.length === 0" class="empty-risk-state">
         No risks match the selected filters.
       </div>
+    </div>
+
+    <!-- Pagination -->
+    <div v-if="pagination.totalPages > 1" class="risk-pagination">
+      <button class="page-btn" :disabled="pagination.page <= 1" @click="changePage(pagination.page - 1)">
+        <i class="fas fa-chevron-left"></i>
+      </button>
+      <span class="page-info">Page {{ pagination.page }} of {{ pagination.totalPages }} &nbsp;·&nbsp; {{ pagination.totalCount }} total</span>
+      <button class="page-btn" :disabled="pagination.page >= pagination.totalPages" @click="changePage(pagination.page + 1)">
+        <i class="fas fa-chevron-right"></i>
+      </button>
     </div>
 
     <div v-if="sourceDrawerOpen" class="source-drawer-overlay" @click.self="closeSourceDrawer">
@@ -1043,6 +1080,8 @@
 import apiService from '../../services/apiService.js';
 import { API_ENDPOINTS } from '../../config/api.js';
 import { useRiskStore } from '@/stores/risk';
+import { useFrameworkWatcher } from '@/composables/useFramework';
+import { useFrameworkStore } from '@/stores/framework';
 
 export default {
   name: 'SystemIdentifiedRisks',
@@ -1074,6 +1113,8 @@ export default {
       },
       selectedScanSource: 'COMPLIANCE', // Legacy single source
       selectedSources: ['INCIDENT'],     // New multi-source
+      selectedGrcFrameworkId: '',          // Optional framework filter for GRC modules
+      frameworksList: [],                  // [{id, name}] for GRC framework dropdown
       companyFolders: [],
       selectedFolderId: '',
       selectedFolderCode: '',
@@ -1087,6 +1128,21 @@ export default {
       selectedExternalUrls: [],
       isDocHandlingExpanded: false,
       runChecklist: false,
+      showFolderInput: false,
+      showExtInput: false,
+      pendingSubfolderId: '',
+      newExtUrl: '',
+      newExtName: '',
+      newExtType: 'News',
+      grcModuleOptions: [
+        { source: 'INCIDENT',   label: 'Incidents',          desc: 'Reads incident records as they are logged.' },
+        { source: 'AUDIT',      label: 'Audit Findings',     desc: 'Reads new and updated audit observations.' },
+        { source: 'COMPLIANCE', label: 'Compliance Controls',desc: 'Tracks effectiveness scores across assessment cycles.' },
+        { source: 'EVENT',      label: 'Events',             desc: 'Reads logged event records from the system.' }
+      ],
+      useFolders: false,
+      useExternalSources: false,
+      expandedFolderSubId: null,
       pagination: {
         page: 1,
         pageSize: 10,
@@ -1097,15 +1153,17 @@ export default {
         source: '',
         status: 'PENDING_REVIEW',
         category: '',
-        reviewer_status: ''
+        reviewer_status: '',
+        framework_reference: '',
+        framework_id: '',        // ID from home page framework selection
+        risk_type: '',
+        confidence_min: '',
+        confidence_max: ''
       },
+      confidenceBand: '',
       uiFilters: {
         search: '',
-        type: '',
-        category: '',
-        confidence: '',
         sourceRef: '',
-        functionalArea: '',
         velocityMin: 0
       },
       testAnalysis: {
@@ -1126,7 +1184,7 @@ export default {
       showWorkflowModal: false,
       workflowRiskData: null,
       controlEffectivenessOptions: ['Low', 'Medium', 'High'],
-      frameworkReferenceOptions: ['ME 4 (Infection Control)', 'NIST PR.AC-1', 'ISO 27001 A.5.1', 'GDPR Art. 32'],
+      frameworkReferenceOptions: [],
       userOptions: [],
       currentUser: null,
       reviewForm: {
@@ -1198,10 +1256,14 @@ export default {
         if (!key) continue;
         counts[key] = (counts[key] || 0) + 1;
       }
+      console.log('[DEBUG] sourceCounts computed:', counts);
       return counts;
     },
     fetchedSourceFilters() {
-      return this.sourceFilters.filter((sf) => (this.sourceCounts[sf.value] || 0) > 0);
+      const result = this.sourceFilters.filter((sf) => (this.sourceCounts[sf.value] || 0) > 0);
+      console.log('[DEBUG] fetchedSourceFilters computed:', result);
+      console.log('[DEBUG] sourceFilters:', this.sourceFilters);
+      return result;
     },
     sourceReferenceOptions() {
       return [...new Set((this.risks || []).map((r) => r.source).filter(Boolean))].sort();
@@ -1209,22 +1271,19 @@ export default {
     hasActiveUiFilters() {
       return Object.values(this.uiFilters).some((value) => Boolean(value));
     },
+    hasActiveServerFilters() {
+      return Boolean(
+        this.filters.framework_reference ||
+        this.filters.risk_type ||
+        this.filters.category ||
+        this.filters.confidence_min
+      );
+    },
     filteredRisks() {
       const searchTerm = (this.uiFilters.search || '').toLowerCase();
       return (this.risks || []).filter((risk) => {
-        if (this.uiFilters.type && risk.type !== this.uiFilters.type) return false;
-        if (this.uiFilters.category && risk.category !== this.uiFilters.category) return false;
         if (this.uiFilters.sourceRef && risk.source !== this.uiFilters.sourceRef) return false;
-        if (this.uiFilters.functionalArea && risk.functionalArea !== this.uiFilters.functionalArea) return false;
         if (this.uiFilters.velocityMin > 0 && Number(risk.velocity) < this.uiFilters.velocityMin) return false;
-
-        if (this.uiFilters.confidence === 'high' && Number(risk.confidence) < 80) return false;
-        if (
-          this.uiFilters.confidence === 'medium'
-          && (Number(risk.confidence) < 60 || Number(risk.confidence) >= 80)
-        ) return false;
-        if (this.uiFilters.confidence === 'low' && Number(risk.confidence) >= 60) return false;
-
         if (!searchTerm) return true;
         const searchCorpus = [
           risk.title,
@@ -1238,6 +1297,25 @@ export default {
           .toLowerCase();
         return searchCorpus.includes(searchTerm);
       });
+    },
+    selectedSubFolderObjects() {
+      return (this.selectedSubFolderIds || []).map(id => {
+        const folder = (this.subFolders || []).find(s => String(s.id) === String(id));
+        return folder ? { ...folder, lastScanned: folder.last_scanned || null } : { id, name: id, lastScanned: null };
+      });
+    },
+    nextScanText() {
+      if (!this.activeSchedules || !this.activeSchedules.length) return '';
+      const next = this.activeSchedules
+        .map(s => new Date(s.next_run_at))
+        .filter(d => !Number.isNaN(d.getTime()) && d > new Date())
+        .sort((a, b) => a - b)[0];
+      if (!next) return '';
+      const diffMs = next - new Date();
+      const diffH = Math.floor(diffMs / 3600000);
+      const diffM = Math.floor((diffMs % 3600000) / 60000);
+      if (diffH > 0) return `${diffH} hour${diffH !== 1 ? 's' : ''} ${diffM} minute${diffM !== 1 ? 's' : ''}`;
+      return `${diffM} minute${diffM !== 1 ? 's' : ''}`;
     },
     lastAiRunText() {
       if (!this.risks || this.risks.length === 0) {
@@ -1280,6 +1358,13 @@ export default {
       this.loadRisks();
     },
 
+    changePage(page) {
+      if (page < 1 || page > this.pagination.totalPages) return;
+      this.pagination.page = page;
+      this.loadRisks();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    },
+
     goToWorkflow(risk) {
       // Navigate to the Workflow page
       if (this.$router) {
@@ -1295,13 +1380,106 @@ export default {
     clearUiFilters() {
       this.uiFilters = {
         search: '',
-        type: '',
-        category: '',
-        confidence: '',
         sourceRef: '',
-        functionalArea: '',
         velocityMin: 0
       };
+    },
+    clearAllFilters() {
+      this.clearUiFilters();
+      this.confidenceBand = '';
+      this.filters.framework_reference = '';
+      this.filters.framework_id = '';
+      this.filters.risk_type = '';
+      this.filters.category = '';
+      this.filters.confidence_min = '';
+      this.filters.confidence_max = '';
+      this.pagination.page = 1;
+      this.loadRisks();
+    },
+    onFrameworkDropdownChange() {
+      // User manually selected a framework — clear the home-page framework_id so they don't conflict
+      this.filters.framework_id = '';
+      this.onServerFilterChange();
+    },
+    onServerFilterChange() {
+      // Map confidence band to min/max
+      const bandMap = { high: [80, ''], medium: [60, 79], low: ['', 59] };
+      if (this.confidenceBand && bandMap[this.confidenceBand]) {
+        const [min, max] = bandMap[this.confidenceBand];
+        this.filters.confidence_min = min !== '' ? String(min) : '';
+        this.filters.confidence_max = max !== '' ? String(max) : '';
+      } else {
+        this.filters.confidence_min = '';
+        this.filters.confidence_max = '';
+      }
+      this.pagination.page = 1;
+      this.loadRisks();
+    },
+    toggleSourceSelection(source) {
+      const idx = this.selectedSources.indexOf(source);
+      if (idx > -1) this.selectedSources.splice(idx, 1);
+      else this.selectedSources.push(source);
+    },
+    removeSubfolder(id) {
+      this.selectedSubFolderIds = this.selectedSubFolderIds.filter(s => String(s) !== String(id));
+      if (this.expandedFolderSubId === id) this.expandedFolderSubId = null;
+    },
+    confirmAddSubfolder() {
+      if (this.pendingSubfolderId && !this.selectedSubFolderIds.includes(this.pendingSubfolderId)) {
+        this.selectedSubFolderIds.push(this.pendingSubfolderId);
+      }
+      this.pendingSubfolderId = '';
+      this.selectedFolderId = '';
+      this.subFolders = [];
+      this.showFolderInput = false;
+    },
+    async toggleExpandFolder(sub) {
+      if (this.expandedFolderSubId === sub.id) {
+        this.expandedFolderSubId = null;
+        return;
+      }
+      this.expandedFolderSubId = sub.id;
+      if (!this.subfolderDocuments[sub.id]) {
+        await this.onSubfolderToggle(sub);
+      }
+    },
+    async addExternalSource() {
+      if (!this.newExtUrl) return;
+      try {
+        await apiService.post(API_ENDPOINTS.SYSTEM_RISKS_EXTERNAL_SOURCES, {
+          url: this.newExtUrl,
+          feed_type: this.newExtType,
+          name: this.newExtName || this.newExtUrl,
+        });
+        this.newExtUrl = '';
+        this.newExtName = '';
+        this.newExtType = 'News';
+        this.showExtInput = false;
+        await this.loadExternalSources();
+      } catch (error) {
+        console.error('Error adding external source:', error);
+      }
+    },
+    saveConfiguration() {
+      this.isDocHandlingExpanded = false;
+    },
+    async openConfigPanel() {
+      this.isDocHandlingExpanded = !this.isDocHandlingExpanded;
+      if (this.isDocHandlingExpanded) {
+        await Promise.all([
+          this.loadExternalSources(),
+          this.loadCompanyFolders(),
+          this.loadFrameworks(),
+        ]);
+      }
+    },
+    async removeExternalSource(url) {
+      try {
+        await apiService.delete(API_ENDPOINTS.SYSTEM_RISKS_EXTERNAL_SOURCES, { data: { url } });
+        await this.loadExternalSources();
+      } catch (error) {
+        this.availableExternalSources = this.availableExternalSources.filter(s => s.url !== url);
+      }
     },
     toggleSourceFilter(sourceValue) {
       // Clicking the active chip removes the filter (shows all sources)
@@ -1381,6 +1559,18 @@ export default {
       return '';
     },
 
+    async loadFrameworks() {
+      try {
+        const data = await apiService.get(`${API_ENDPOINTS.FRAMEWORKS}?include_all_status=true`, {}, { skipCache: true });
+        const list = Array.isArray(data) ? data : (data?.frameworks || data?.results || []);
+        const filtered = list.filter(fw => fw.FrameworkName);
+        this.frameworkReferenceOptions = filtered.map(fw => fw.FrameworkName);
+        this.frameworksList = filtered.map(fw => ({ id: fw.FrameworkId, name: fw.FrameworkName }));
+      } catch (error) {
+        console.error('Error loading frameworks:', error);
+      }
+    },
+
     async loadStats() {
       try {
         const data = await apiService.get(API_ENDPOINTS.SYSTEM_RISKS_STATS, {}, { background: true });
@@ -1401,16 +1591,23 @@ export default {
     async loadRisks() {
       this.loading = true;
       try {
+        const rawFilters = { ...this.filters };
+        delete rawFilters._confidence_band;
         const params = new URLSearchParams({
           page: this.pagination.page,
           page_size: this.pagination.pageSize ?? 10,
-          ...this.filters
         });
+        Object.entries(rawFilters).forEach(([k, v]) => { if (v !== '' && v !== null && v !== undefined) params.set(k, v); });
+        if (this.uiFilters.velocityMin > 0) params.set('velocity_min', this.uiFilters.velocityMin);
         
-        const response = await apiService.get(`${API_ENDPOINTS.SYSTEM_RISKS_LIST}?${params}`);
+        console.log('[DEBUG] Loading risks with params:', params.toString());
+        const response = await apiService.get(`${API_ENDPOINTS.SYSTEM_RISKS_LIST}?${params}`, {}, { skipCache: true });
         if (response && response.data) {
           // Transform API data to match component expectations
-          this.risks = response.data.map(item => ({
+          this.risks = response.data.map(item => {
+            const mappedSourceModule = (item.source_module === 'INTEGRATION' && (item.source_ref || '').startsWith('External:')) ? 'EXTERNAL_SOURCES' : item.source_module;
+            console.log('[DEBUG] Mapping source_module:', item.source_module, '->', mappedSourceModule, 'for item:', item.id);
+            return {
             id: item.id,
             category: item.category || 'Unknown',
             confidence: item.confidence_score || 0,
@@ -1420,7 +1617,7 @@ export default {
             criticality: item.criticality || 'Medium',
             source: item.source_title || item.source_ref || '',
             sourceRefId: this.extractSourceRefId(item.source_ref || ''),
-            sourceModule: (item.source_module === 'INTEGRATION' && (item.source_ref || '').startsWith('External:')) ? 'EXTERNAL_SOURCES' : item.source_module,
+            sourceModule: mappedSourceModule,
             createdAtRaw: item.created_at || null,
             detected: this.formatDate(item.created_at),
             likelihood: item.likelihood || 5,
@@ -1431,20 +1628,24 @@ export default {
             functionalArea: item.functional_area || 'General',
             businessImpact: Array.isArray(item.business_impact) ? item.business_impact : (item.business_impact ? [item.business_impact] : []),
             possibleDamage: item.possible_damage || '',
-            mitigation: (Array.isArray(item.mitigation_steps) && item.mitigation_steps.length > 0) 
-              ? item.mitigation_steps[0] 
-              : (item.mitigation_steps || 'No mitigation defined'),
-            mitigationSteps: Array.isArray(item.mitigation_steps) ? item.mitigation_steps : (item.mitigation_steps ? [item.mitigation_steps] : []),
+            mitigationSteps: Array.isArray(item.mitigation_steps) ? item.mitigation_steps : (item.mitigation_steps ? [String(item.mitigation_steps)] : []),
+            mitigation: (Array.isArray(item.mitigation_steps) && item.mitigation_steps.length > 0)
+              ? item.mitigation_steps[0]
+              : (typeof item.mitigation_steps === 'string' && item.mitigation_steps ? item.mitigation_steps : ''),
             status: String(item.status || '').trim().toUpperCase(),
             riskInstanceId: item.risk_instance_id || null, // Add risk instance ID for workflow
             reviewerId: item.reviewer_id || null,
+            frameworkReference: item.framework_reference || (item.ai_metadata?.framework_reference) || '',
             aiReasoning: item.ai_reasoning || '',
             aiMetadata: item.ai_metadata || {},
             confidenceJustification: item.confidence_justification || (item.ai_metadata?.confidence_justification || ''),
             confidenceFactors: Array.isArray(item.confidence_factors)
               ? item.confidence_factors
               : (Array.isArray(item.ai_metadata?.confidence_factors) ? item.ai_metadata.confidence_factors : [])
-          }));
+          };
+          });
+          console.log('[DEBUG] Total risks loaded:', this.risks.length);
+          console.log('[DEBUG] Sample risk data:', this.risks[0]);
           // Backend returns snake_case pagination keys; normalize to component camelCase.
           this.pagination = {
             page: response.pagination.page,
@@ -1537,8 +1738,9 @@ export default {
     },
 
     async runManualScan() {
-      if (this.selectedSources.length === 0 && this.selectedSubFolderIds.length === 0 && !this.runChecklist) {
-        this.$notify?.({ type: 'warn', title: 'No Source Selected', text: 'Please select at least one module, folder, or the checklist to scan.' });
+      const hasExternalUrls = this.useExternalSources && this.selectedExternalUrls.length > 0;
+      if (this.selectedSources.length === 0 && this.selectedSubFolderIds.length === 0 && !this.runChecklist && !hasExternalUrls) {
+        this.$notify?.({ type: 'warn', title: 'No Source Selected', text: 'Please select at least one module, folder, external source, or the checklist to scan.' });
         return;
       }
 
@@ -1550,7 +1752,8 @@ export default {
           subfolder_ids: this.selectedSubFolderIds,
           document_ids: this.selectedDocumentIds,
           external_urls: this.selectedExternalUrls,
-          run_checklist: this.runChecklist
+          run_checklist: this.runChecklist,
+          framework_id: this.selectedGrcFrameworkId || null
         };
         const response = await apiService.post(API_ENDPOINTS.SYSTEM_RISKS_RUN_SCAN_MANUAL, payload, { timeout: 600000 }); // 10 minute timeout for AI analysis
         
@@ -1603,9 +1806,7 @@ export default {
 
     async onFolderChange() {
       this.subFolders = [];
-      this.selectedSubFolderIds = [];
-      this.subfolderDocuments = {};
-      this.selectedDocumentIds = [];
+      this.pendingSubfolderId = '';
       this.selectedFolderCode = '';
       if (!this.selectedFolderId) return;
       const selectedFolder = (this.companyFolders || []).find(
@@ -1649,14 +1850,6 @@ export default {
       }
     },
 
-    toggleSourceSelection(source) {
-      const idx = this.selectedSources.indexOf(source);
-      if (idx > -1) {
-        this.selectedSources.splice(idx, 1);
-      } else {
-        this.selectedSources.push(source);
-      }
-    },
 
     getSourceIcon(source) {
       const icons = {
@@ -1765,7 +1958,7 @@ export default {
         impact: meta.impact || 5,
         velocity: meta.velocity_score || 5,
         controlEffectiveness: meta.control_effectiveness || 'Low',
-        frameworkReference: meta.framework_reference || '',
+        frameworkReference: risk.frameworkReference || meta.framework_reference || '',
         functionalArea: meta.functional_area || 'IT',
         mitigationSteps: Array.isArray(meta.mitigation_steps) ? [...meta.mitigation_steps] : []
       };
@@ -1795,7 +1988,7 @@ export default {
             impact: data.impact || 5,
             velocity: data.velocity_score || currentMeta.velocity_score || 5,
             controlEffectiveness: this.getValidOption(currentMeta.control_effectiveness || 'Low', this.controlEffectivenessOptions),
-            frameworkReference: currentMeta.framework_reference || '',
+            frameworkReference: this.getValidOption(data.framework_reference || currentMeta.framework_reference || risk.frameworkReference || '', this.frameworkReferenceOptions, true),
             functionalArea: this.getValidOption(data.functional_area || 'IT', this.functionalAreaOptions, true),
             riskOwner: data.user_id || this.currentUser?.id || this.currentUser?.UserId || '',
             reviewer: data.reviewer_id || '',
@@ -2214,6 +2407,11 @@ export default {
       if (score >= 60) return '#ffa502';
       return '#ff4757';
     },
+    confidenceLevelClass(score) {
+      if (score >= 80) return 'confidence-high';
+      if (score >= 60) return 'confidence-medium';
+      return 'confidence-low';
+    },
     getVelocityClass(velocity) {
       if (velocity >= 70) return 'velocity-high';
       if (velocity >= 40) return 'velocity-medium';
@@ -2312,14 +2510,45 @@ export default {
       /* non-fatal */
     }
 
+    // Apply framework from home page selection before initial load
+    const _fwStore = useFrameworkStore();
+    await _fwStore.loadFrameworkFromSession();
+    if (!_fwStore.isAllFrameworks && _fwStore.selectedFrameworkId) {
+      this.filters.framework_id = String(_fwStore.selectedFrameworkId);
+      console.log('[DEBUG] Initial framework_id filter set to:', this.filters.framework_id);
+    }
+
+    // Watch for framework changes from home page selection
+    useFrameworkWatcher(({ frameworkId, isAllFrameworks }) => {
+      const fwStore = useFrameworkStore();
+      const newId = (!isAllFrameworks && frameworkId) ? String(frameworkId) : '';
+      const newName = (!isAllFrameworks && fwStore.selectedFrameworkName && fwStore.selectedFrameworkName !== 'All Frameworks')
+        ? fwStore.selectedFrameworkName : '';
+      console.log('[DEBUG] Framework changed:', { frameworkId, isAllFrameworks, newId, newName });
+      if (this.filters.framework_id === newId) return;
+      this.filters.framework_id = newId;
+      this.filters.framework_reference = newName;
+      this.pagination.page = 1;
+      this.loadRisks();
+    });
+
     // Load initial data
     await this.loadStats();
     await this.loadRisks();
+    await this.loadFrameworks();
+    // After frameworks are loaded, sync the dropdown display with home page framework
+    if (this.filters.framework_id) {
+      const matchedFw = this.frameworksList.find(fw => String(fw.id) === this.filters.framework_id);
+      if (matchedFw && !this.filters.framework_reference) {
+        this.filters.framework_reference = matchedFw.name;
+      }
+    }
     await this.fetchUsers();
     await this.fetchCurrentUser();
     await this.loadCompanyFolders();
     await this.fetchDepartments();
     await this.loadExternalSources();
+    await this.loadSchedules();
   },
   beforeUnmount() {
     this.stopTestAnalysisPolling();
@@ -2361,29 +2590,6 @@ export default {
   border: 1px solid #f5c6cb;
 }
 
-/* Clickable Stats */
-.stat-card.clickable {
-  cursor: pointer;
-  transition: all 0.2s ease;
-  border: 1px solid transparent;
-}
-
-.stat-card.clickable:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-  border-color: #e2e8f0;
-}
-
-.stat-card.clickable.active {
-  background-color: #f0f4ff;
-  border-color: #6c5ce7;
-  box-shadow: 0 4px 12px rgba(108, 92, 231, 0.1);
-}
-
-.stat-card.clickable.active .stat-label {
-  color: #6c5ce7;
-  font-weight: 600;
-}
 
 /* Ghost Buttons */
 .btn-review-ghost {

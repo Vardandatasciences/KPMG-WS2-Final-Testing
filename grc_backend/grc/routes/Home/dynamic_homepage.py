@@ -18,6 +18,7 @@ from grc.models import (
 from ..changemanagement.login_framework_checking import auto_check_all_frameworks
 from rest_framework.request import Request
 from ...debug_utils import debug_print
+from ...tenant_utils import get_tenant_id_from_request
 
 # Audits in these states are not shown as "next" upcoming work
 AUDIT_TERMINAL_STATUSES = ('Completed', 'Cancelled', 'Canceled')
@@ -151,6 +152,10 @@ def get_homepage_data(request):
     debug_print(f"📥 Request Method: {request.method}")
     debug_print(f"📥 Request Path: {request.path}")
     debug_print(f"📥 Full Query String: {request.GET.urlencode()}")
+
+    # MULTI-TENANCY: Get tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    debug_print(f"📥 Tenant ID: {tenant_id}")
     
     try:
         # Get framework from query params or session
@@ -170,7 +175,11 @@ def get_homepage_data(request):
         if framework_id:
             try:
                 framework_id = int(framework_id)
-                selected_framework = Framework.objects.filter(FrameworkId=framework_id).first()
+                # MULTI-TENANCY: Filter by tenant_id
+                fw_qs = Framework.objects.filter(FrameworkId=framework_id)
+                if tenant_id:
+                    fw_qs = fw_qs.filter(tenant_id=tenant_id)
+                selected_framework = fw_qs.first()
                 framework_filter = Q(FrameworkId=framework_id)
                 debug_print(f"✅ Framework found: ID={framework_id}, Name={selected_framework.FrameworkName if selected_framework else 'None'}")
             except (ValueError, TypeError):
@@ -179,10 +188,14 @@ def get_homepage_data(request):
         
         # If no framework selected, use first active framework or all data
         if not selected_framework:
-            selected_framework = Framework.objects.filter(
+            fw_fallback_qs = Framework.objects.filter(
                 Status='Approved',
                 ActiveInactive='Active'
-            ).first()
+            )
+            # MULTI-TENANCY: Filter by tenant_id
+            if tenant_id:
+                fw_fallback_qs = fw_fallback_qs.filter(tenant_id=tenant_id)
+            selected_framework = fw_fallback_qs.first()
             if selected_framework:
                 framework_id = selected_framework.FrameworkId
                 framework_filter = Q(FrameworkId=framework_id)
@@ -858,11 +871,18 @@ def get_all_frameworks_data(request):
     debug_print("🌐 BACKEND: get_all_frameworks_data() CALLED")
     debug_print("=" * 80)
 
+    # MULTI-TENANCY: Get tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    debug_print(f"📥 Tenant ID: {tenant_id}")
+
     try:
         # ── 1. Fetch framework metadata (1 query) ─────────────────────────────
+        fw_qs = Framework.objects.filter(Status='Approved', ActiveInactive='Active')
+        # MULTI-TENANCY: Filter by tenant_id
+        if tenant_id:
+            fw_qs = fw_qs.filter(tenant_id=tenant_id)
         fw_rows = list(
-            Framework.objects.filter(Status='Approved', ActiveInactive='Active')
-            .values('FrameworkId', 'FrameworkName', 'FrameworkDescription', 'Category')
+            fw_qs.values('FrameworkId', 'FrameworkName', 'FrameworkDescription', 'Category')
         )
         fw_ids = [row['FrameworkId'] for row in fw_rows]
         debug_print(f"📋 Found {len(fw_ids)} active frameworks")
@@ -982,8 +1002,12 @@ def get_all_frameworks_data(request):
             and risk_multi.get('in_progress_risks', 0) == 0
             and risk_multi.get('mitigated_risks', 0) == 0
         ):
+            # MULTI-TENANCY: Filter by tenant_id
+            fallback_fw_qs = Framework.objects.filter(Status='Approved')
+            if tenant_id:
+                fallback_fw_qs = fallback_fw_qs.filter(tenant_id=tenant_id)
             approved_any_fw_ids = list(
-                Framework.objects.filter(Status='Approved').values_list('FrameworkId', flat=True)
+                fallback_fw_qs.values_list('FrameworkId', flat=True)
             )
             if approved_any_fw_ids:
                 risk_multi_any = aggregate_homepage_risk_metrics_multi(approved_any_fw_ids)

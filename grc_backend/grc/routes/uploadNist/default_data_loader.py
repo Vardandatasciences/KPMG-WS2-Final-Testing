@@ -100,6 +100,10 @@ def get_available_frameworks():
     """
     Scan TEMP_MEDIA_ROOT to find available frameworks
     Returns list of framework info dictionaries
+    
+    Supports two structures:
+    1. Flat structure: sections_<key> and policies_<key> directly in TEMP_MEDIA_ROOT
+    2. Nested structure: <folder>/sections_* and <folder>/policies_* inside subfolders
     """
     frameworks = []
     try:
@@ -107,13 +111,13 @@ def get_available_frameworks():
         if not os.path.exists(temp_media_root):
             return frameworks
         
-        # Look for directories matching the pattern: sections_* or policies_*
+        # First pass: Look for directories matching the pattern: sections_* or policies_*
         for item in os.listdir(temp_media_root):
             item_path = os.path.join(temp_media_root, item)
             if not os.path.isdir(item_path):
                 continue
             
-            # Check if it's a sections directory
+            # Check if it's a sections directory (flat structure)
             if item.startswith('sections_'):
                 framework_key = item.replace('sections_', '')
                 # Check if corresponding policies directory exists
@@ -121,27 +125,88 @@ def get_available_frameworks():
                 policies_path = os.path.join(temp_media_root, policies_dir_name)
                 
                 if os.path.exists(policies_path):
-                    # Format framework name for display
-                    framework_name = framework_key.replace('_', ' ').title()
-                    # Special handling for known frameworks
-                    if framework_key == 'PCI_DSS_2':
-                        framework_name = 'PCI DSS 2'
-                    elif framework_key == 'basel_3_framework':
-                        framework_name = 'Basel 3 Framework'
-                    
+                    framework_name = format_framework_name(framework_key)
                     frameworks.append({
                         'key': framework_key,
                         'name': framework_name,
                         'sections_dir': item,
-                        'policies_dir': policies_dir_name
+                        'policies_dir': policies_dir_name,
+                        'base_folder': None  # Flat structure, no parent folder
                     })
+            else:
+                # Check for nested structure (e.g., master_rbac/, dgca_framework/)
+                # These folders contain sections_* and policies_* inside them
+                try:
+                    nested_items = os.listdir(item_path)
+                    sections_dirs = [d for d in nested_items if d.startswith('sections_')]
+                    policies_dirs = [d for d in nested_items if d.startswith('policies_')]
+                    
+                    if sections_dirs and policies_dirs:
+                        # This is a framework folder with nested structure
+                        # Use the folder name as the framework key
+                        framework_key = item
+                        framework_name = format_framework_name(framework_key)
+                        
+                        frameworks.append({
+                            'key': framework_key,
+                            'name': framework_name,
+                            'sections_dir': sections_dirs[0],  # Use first sections dir
+                            'policies_dir': policies_dirs[0],   # Use first policies dir
+                            'base_folder': item  # Parent folder name
+                        })
+                except Exception as nested_error:
+                    logger.warning(f"Error checking nested structure in {item}: {nested_error}")
+                    continue
         
         # Sort frameworks by name
         frameworks.sort(key=lambda x: x['name'])
+        logger.info(f"Found {len(frameworks)} frameworks: {[f['key'] for f in frameworks]}")
         return frameworks
     except Exception as e:
         logger.exception(f"Error getting available frameworks: {str(e)}")
         return frameworks
+
+def format_framework_name(framework_key):
+    """
+    Format framework key into a display name
+    
+    Args:
+        framework_key: The framework key (e.g., 'master_rbac', 'dgca_framework', 'PCI_DSS_2')
+    
+    Returns:
+        str: Human-readable framework name
+    """
+    # Special handling for known frameworks
+    if framework_key == 'master_rbac':
+        return 'RBI Master Direction - NBFC'
+    elif framework_key == 'dgca_framework':
+        return 'DGCA CAR Section 7 Series J Part 3'
+    elif framework_key == 'PCI_DSS_2':
+        return 'PCI DSS 2'
+    elif framework_key == 'basel_3_framework':
+        return 'Basel 3 Framework'
+    elif framework_key == 'rbi_framework':
+        return 'RBI Master Direction - NBFC'
+    
+    # Default: replace underscores with spaces and title case
+    # But handle acronyms better (e.g., 'PCI_DSS' -> 'PCI DSS')
+    name = framework_key.replace('_', ' ').title()
+    
+    # Common acronym replacements
+    acronyms = {
+        'Pci': 'PCI',
+        'Dss': 'DSS',
+        'Rbi': 'RBI',
+        'Nbfc': 'NBFC',
+        'Dgca': 'DGCA',
+        'Car': 'CAR',
+        'Basel': 'Basel'
+    }
+    
+    for old, new in acronyms.items():
+        name = name.replace(old, new)
+    
+    return name
 
 @csrf_exempt
 @api_view(['GET'])
@@ -208,9 +273,8 @@ def load_default_data(request):
             
             if not policies_dir:
                 return JsonResponse({"success": False, "error": f"DGCA policies directory not found in {dgca_base}"}, status=404)
-        elif framework_key == 'rbi_framework':
+        elif framework_key in ['rbi_framework', 'master_rbac']:
             # RBI framework is in "master_rbac" folder
-            # Try exact match first
             rbi_base = os.path.join(temp_media_root, 'master_rbac')
             logger.info(f"Looking for RBI framework at: {rbi_base}")
             logger.info(f"TEMP_MEDIA_ROOT exists: {os.path.exists(temp_media_root)}")
@@ -379,6 +443,8 @@ def load_default_data(request):
         elif framework_key == 'dgca_framework':
             framework_name = 'DGCA Framework'
         elif framework_key == 'rbi_framework':
+            framework_name = 'RBI Master Direction - NBFC Framework'
+        elif framework_key == 'master_rbac':
             framework_name = 'RBI Master Direction - NBFC Framework'
         
         # Generate task ID for this default data session

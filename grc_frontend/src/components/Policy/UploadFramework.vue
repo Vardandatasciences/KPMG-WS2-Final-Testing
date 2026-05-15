@@ -159,16 +159,61 @@
       <!-- Load Default Data Section -->
       <div v-if="currentStep === 1" class="default-data-section">
         <div class="default-data-content">
-          <h3>Load Default RBI Framework Data</h3>
-          <p>Use pre-loaded RBI Master Direction - NBFC framework data from TEMP_MEDIA_ROOT folder for quick testing</p>
-          <button 
-            @click="loadDefaultData" 
-            :disabled="isLoadingDefault"
-            class="btn btn-load-default"
-          >
-            <i class="fas fa-download"></i>
-            {{ isLoadingDefault ? 'Loading RBI Data...' : 'Load RBI Data' }}
-          </button>
+          <h3>Load Pre-loaded Framework Data</h3>
+          <p>Select a framework from TEMP_MEDIA_ROOT folder for quick testing</p>
+          
+          <!-- Loading State -->
+          <div v-if="isLoadingFrameworks" class="framework-loading">
+            <i class="fas fa-spinner fa-spin"></i>
+            <span>Loading available frameworks...</span>
+          </div>
+          
+          <!-- Error State -->
+          <div v-else-if="frameworksError" class="framework-error">
+            <i class="fas fa-exclamation-triangle"></i>
+            <span>{{ frameworksError }}</span>
+            <button @click="fetchAvailableFrameworks" class="btn-retry">
+              <i class="fas fa-redo"></i> Retry
+            </button>
+          </div>
+          
+          <!-- Framework Dropdown -->
+          <div v-else-if="availableFrameworks.length > 0" class="framework-dropdown-wrapper">
+            <div class="framework-select-row">
+              <div class="custom-dropdown">
+                <select 
+                  v-model="selectedFrameworkKey" 
+                  class="framework-select"
+                  :disabled="isLoadingDefault"
+                >
+                  <option value="" disabled selected>-- Select Framework --</option>
+                  <option 
+                    v-for="framework in availableFrameworks" 
+                    :key="framework.key"
+                    :value="framework.key"
+                  >
+                    {{ framework.name }} {{ framework.base_folder ? `(${framework.base_folder})` : '' }}
+                  </option>
+                </select>
+                <i class="fas fa-chevron-down dropdown-arrow"></i>
+              </div>
+              <button 
+                @click="loadSelectedFramework" 
+                :disabled="!selectedFrameworkKey || isLoadingDefault"
+                class="btn btn-load-default"
+              >
+                <i v-if="isLoadingDefault" class="fas fa-spinner fa-spin"></i>
+                <i v-else class="fas fa-download"></i>
+                {{ isLoadingDefault ? 'Loading...' : 'Load Framework' }}
+              </button>
+            </div>
+          </div>
+          
+          <!-- No Frameworks Found -->
+          <div v-else class="framework-empty">
+            <i class="fas fa-folder-open"></i>
+            <p>No frameworks found in TEMP_MEDIA_ROOT</p>
+          </div>
         </div>
       </div>
 
@@ -1247,7 +1292,14 @@ export default {
           const isDragOver = ref(false)
       const isUploading = ref(false)
       const isLoadingDefault = ref(false)
-      const currentFrameworkKey = ref('dgca_framework') // Hardcoded to DGCA
+    const currentFrameworkKey = ref('dgca_framework') // Hardcoded to DGCA
+
+    // Available frameworks from TEMP_MEDIA_ROOT
+    const availableFrameworks = ref([])
+    const isLoadingFrameworks = ref(false)
+    const frameworksError = ref(null)
+    const loadingFramework = ref(null) // Track which framework is currently loading
+    const selectedFrameworkKey = ref('') // Selected framework from dropdown
 
     const isProcessing = ref(false)
     const processingComplete = ref(false)
@@ -2141,10 +2193,36 @@ export default {
         goToStep(3)
       }
 
-      // Load default data function
-      const loadDefaultData = async () => {
+      // Fetch available frameworks from TEMP_MEDIA_ROOT
+      const fetchAvailableFrameworks = async () => {
+        isLoadingFrameworks.value = true
+        frameworksError.value = null
+        
+        try {
+          console.log('🔄 Fetching available frameworks from TEMP_MEDIA_ROOT...')
+          const response = await apiService.get(API_ENDPOINTS.AI_LIST_FRAMEWORKS)
+          
+          if (response && response.success) {
+            availableFrameworks.value = response.frameworks || []
+            console.log(`✅ Found ${availableFrameworks.value.length} frameworks:`, availableFrameworks.value.map(f => f.name))
+          } else {
+            frameworksError.value = response?.error || 'Failed to load frameworks'
+            availableFrameworks.value = []
+          }
+        } catch (error) {
+          console.error('❌ Error fetching frameworks:', error)
+          frameworksError.value = error.response?.data?.error || error.message || 'Failed to load frameworks'
+          availableFrameworks.value = []
+        } finally {
+          isLoadingFrameworks.value = false
+        }
+      }
+
+      // Load default data function - now accepts frameworkKey parameter
+      const loadDefaultData = async (frameworkKey) => {
         // OPTIMIZATION: Load precomputed data with caching and enhanced performance
         isLoadingDefault.value = true
+        loadingFramework.value = frameworkKey
         uploadStatus.value = null
 
         // Clear any previous processing state so we don't resume old tasks
@@ -2164,7 +2242,10 @@ export default {
         saveProcessingState()
 
         try {
-          const framework = 'rbi_framework'
+          // Use the provided framework key or fall back to currentFrameworkKey
+          const framework = frameworkKey || currentFrameworkKey.value || 'rbi_framework'
+          
+          console.log(`📂 Loading default data for framework: ${framework}`)
           
           // OPTIMIZATION: Check cache first for default data
           const cached = policyFrameworkCacheService.getCachedDefaultData(framework)
@@ -2189,7 +2270,21 @@ export default {
           }
         } finally {
           isLoadingDefault.value = false
+          loadingFramework.value = null
         }
+      }
+      
+      // Load the selected framework from dropdown
+      const loadSelectedFramework = async () => {
+        if (!selectedFrameworkKey.value) {
+          uploadStatus.value = {
+            type: 'error',
+            message: 'Please select a framework first'
+          }
+          return
+        }
+        
+        await loadDefaultData(selectedFrameworkKey.value)
       }
       
       // Helper function to process default data response (extracted for reuse)
@@ -3913,6 +4008,9 @@ export default {
 
     onMounted(() => {
       console.log('🔄 UploadFramework component mounted')
+      
+      // Fetch available frameworks from TEMP_MEDIA_ROOT
+      fetchAvailableFrameworks()
 
       // OPTIMIZATION: Log initial cache state and performance metrics
       const initialCacheStats = policyFrameworkCacheService.getCacheStats()
@@ -3993,6 +4091,15 @@ export default {
       isUploading,
       isLoadingDefault,
       currentFrameworkKey,
+      
+      // Available frameworks
+      availableFrameworks,
+      isLoadingFrameworks,
+      frameworksError,
+      loadingFramework,
+      selectedFrameworkKey,
+      fetchAvailableFrameworks,
+      loadSelectedFramework,
 
       isProcessing,
       processingComplete,
@@ -4585,6 +4692,155 @@ export default {
 }
 
 /* Button now uses global .btn-load-default class from main.css */
+
+/* Framework Dropdown */
+.framework-dropdown-wrapper {
+  width: 100%;
+  max-width: 600px;
+  margin-top: 1rem;
+}
+
+.framework-select-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.custom-dropdown {
+  position: relative;
+  flex: 1;
+  min-width: 250px;
+  max-width: 400px;
+}
+
+.framework-select {
+  width: 100%;
+  padding: 0.875rem 2.5rem 0.875rem 1rem;
+  font-size: 0.95rem;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  background: white;
+  color: #1e293b;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  transition: all 0.2s ease;
+}
+
+.framework-select:hover:not(:disabled) {
+  border-color: #3183d7;
+}
+
+.framework-select:focus {
+  outline: none;
+  border-color: #3183d7;
+  box-shadow: 0 0 0 3px rgba(49, 131, 215, 0.1);
+}
+
+.framework-select:disabled {
+  background: #f1f5f9;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.framework-select option {
+  padding: 0.5rem;
+  font-size: 0.95rem;
+}
+
+.dropdown-arrow {
+  position: absolute;
+  right: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #64748b;
+  pointer-events: none;
+  font-size: 0.8rem;
+}
+
+/* Framework loading state */
+.framework-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 2rem;
+  color: #64748b;
+}
+
+.framework-loading i {
+  font-size: 1.25rem;
+  color: #3183d7;
+}
+
+/* Framework error state */
+.framework-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1.5rem;
+  color: #dc2626;
+  background: #fef2f2;
+  border-radius: 8px;
+  border: 1px solid #fecaca;
+}
+
+.framework-error i {
+  font-size: 1.5rem;
+}
+
+.btn-retry {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: #dc2626;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+}
+
+.btn-retry:hover {
+  background: #b91c1c;
+}
+
+/* Framework empty state */
+.framework-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 2rem;
+  color: #64748b;
+}
+
+.framework-empty i {
+  font-size: 2rem;
+  color: #94a3b8;
+}
+
+@media (max-width: 768px) {
+  .framework-select-row {
+    flex-direction: column;
+    width: 100%;
+  }
+  
+  .custom-dropdown {
+    max-width: 100%;
+    width: 100%;
+  }
+  
+  .btn-load-default {
+    width: 100%;
+  }
+}
 
 .divider-line {
   flex: 1;

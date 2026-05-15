@@ -1724,6 +1724,8 @@ class SystemIdentifiedRiskQueue(EncryptedFieldsMixin, models.Model):
                                 help_text="Low, Medium, High, or Critical")
     mitigation_steps = models.JSONField(null=True, blank=True, 
                                         help_text="Array of mitigation actions")
+    framework_reference = models.CharField(max_length=200, null=True, blank=True,
+                                           help_text="Framework/control reference (e.g. ISO 27001 A.12.6, NIST PR.AC-1)")
     
     # AI metadata
     ai_reasoning = models.TextField(null=True, blank=True,
@@ -2134,7 +2136,6 @@ class RBAC(EncryptedFieldsMixin, models.Model):
     created_at = models.DateTimeField(auto_now_add=True, db_column='CreatedAt')
     updated_at = models.DateTimeField(auto_now=True, db_column='UpdatedAt')
     is_active = models.CharField(max_length=1, default='Y', choices=[('Y', 'Yes'), ('N', 'No')], db_column='IsActive')
-    FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
     retentionExpiry = models.DateField(null=True, blank=True)
     class Meta:
         db_table = 'rbac'
@@ -4516,3 +4517,30 @@ class OrganizationalControlDocument(EncryptedFieldsMixin, models.Model):
    
     def __str__(self):
         return f"Document {self.DocumentId} - {self.DocumentName} (OrgControl {self.OrgControlId.OrgControlId})"
+
+
+class CustomExternalSource(models.Model):
+    """
+    User-added external websites/feeds for AI risk scanning.
+    The AI fetches and extracts text from these URLs to generate risk candidates.
+    """
+    id = models.AutoField(primary_key=True)
+    tenant = models.ForeignKey(
+        'Tenant', on_delete=models.CASCADE,
+        related_name='custom_external_sources', null=True, blank=True
+    )
+    name = models.CharField(max_length=255, help_text="Display name for this source")
+    url = models.URLField(max_length=2000, help_text="URL to extract text from")
+    feed_type = models.CharField(max_length=50, default='News',
+                                 help_text="News, Advisory, Uptime, RSS")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.IntegerField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'custom_external_sources'
+        unique_together = [['tenant', 'url']]
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.name} ({self.url})"

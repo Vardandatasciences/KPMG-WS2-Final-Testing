@@ -42,18 +42,27 @@
 /* Streaming status indicators for risk instances */
 .risk-card[data-streaming-status="pending"] {
   opacity: 0.7;
-  border-left: 4px solid #ffc107;
+}
+
+.risk-card[data-streaming-status="pending"] .risk-card-accent {
+  background: #ffc107;
 }
 
 .risk-card[data-streaming-status="active"] {
-  border-left: 4px solid #2196f3;
   box-shadow: 0 2px 10px rgba(33, 150, 243, 0.2);
   animation: activeRiskPulse 2s ease-in-out infinite;
 }
 
+.risk-card[data-streaming-status="active"] .risk-card-accent {
+  background: #2196f3;
+}
+
 .risk-card[data-streaming-status="completed"] {
-  border-left: 4px solid #4caf50;
   opacity: 1;
+}
+
+.risk-card[data-streaming-status="completed"] .risk-card-accent {
+  background: #4caf50;
 }
 
 @keyframes activeRiskPulse {

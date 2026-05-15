@@ -838,8 +838,9 @@ def identify_risks_task(
     """
     source_type = payload.get("source_type", "GENERAL")
     data_summary = payload.get("data_summary", "")
-    internal_context = payload.get("internal_context", "")  # Internal data for cross-referencing
-    existing_risks_summary = payload.get("existing_risks_summary", "")  # Existing register summary
+    internal_context = payload.get("internal_context", "")
+    existing_risks_summary = payload.get("existing_risks_summary", "")
+    frameworks_context = payload.get("frameworks_context", "")
 
     print(f"[AI-TASK] identify_risks_task START: source={source_type}")
 
@@ -852,13 +853,21 @@ def identify_risks_task(
         source_type, internal_context, existing_risks_summary
     )
 
+    frameworks_block = (
+        f"\n=== ORGANISATION FRAMEWORKS (MANDATORY) ===\n"
+        f"{frameworks_context}\n"
+        f"STRICT RULE: The 'framework_reference' field MUST contain ONLY a framework name from the list above.\n"
+        f"Any response using a framework NOT in that list (e.g. NIST, ISO 27001, GDPR, COBIT) will be REJECTED.\n"
+        f"===========================================\n"
+    ) if frameworks_context else ""
+
     prompt = f"""You are a senior GRC (Governance, Risk, Compliance) and Enterprise Risk Management expert.
 
 Analyze the following data from the {source_type} module and identify potential risks for the Risk Register.
 
 SOURCE DATA:
 \"\"\"{data_summary}\"\"\"
-
+{frameworks_block}
 {source_instructions}
 
 {_RISK_TITLE_INSTRUCTIONS}
@@ -890,7 +899,7 @@ OUTPUT FORMAT — Return ONLY a JSON array:
     "ai_reasoning": "Use exact cross-referencing format: [Source-specific fact with numbers]. Cross-referencing [with internal data/profile]: [specific internal metric or gap]. [Why this creates elevated risk]. Always cite specific evidence.",
     "confidence_score": 80,
     "control_effectiveness": "Low|Medium|High",
-    "framework_reference": "Specific code: ME 4, HRM 2, NIST PR.AC-1, DPDP-S8.6, KYC-AML, etc.",
+    "framework_reference": "MUST be one of the organisation frameworks listed above. Use exact name as given.",
     "functional_area": "IT|Finance|HR|Operations|Legal|Compliance|Security|Credit Risk|Fraud Management|etc",
     "mitigation_steps": [
       "Specific step 1 — name the action and target system/process",
