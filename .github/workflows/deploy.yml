@@ -1,0 +1,73 @@
+name: Deploy to Hostinger
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+    inputs:
+      confirm_deployment:
+        description: 'Type "DEPLOY" to confirm production deployment (manual only)'
+        required: false
+        default: ''
+      deployment_notes:
+        description: 'What are you deploying? (optional)'
+        required: false
+        default: ''
+
+env:
+  DEPLOY_PATH: /opt/apps/KPMG-WS2-Final-Testing
+
+jobs:
+  deploy:
+    name: Deploy to Hostinger
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: SAFETY CHECK - Manual confirmation required
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          if [[ "${{ github.event.inputs.confirm_deployment }}" != "DEPLOY" ]]; then
+            echo "DEPLOYMENT CANCELLED"
+            echo "You must type 'DEPLOY' exactly to confirm"
+            echo "This prevents accidental deployments"
+            exit 1
+          fi
+          echo "Manual deployment confirmed - proceeding"
+          echo "Deployment notes: ${{ github.event.inputs.deployment_notes }}"
+
+      - name: Install SSHpass
+        run: sudo apt-get install -y sshpass
+
+      - name: Pull latest code on server
+        run: |
+          SSHPASS='${{ secrets.HOSTINGER_PASSWORD }}' sshpass -e ssh -o StrictHostKeyChecking=no -o ConnectTimeout=30 ${{ secrets.HOSTINGER_USER }}@${{ secrets.HOSTINGER_HOST }} "
+            mkdir -p $DEPLOY_PATH &&
+            cd $DEPLOY_PATH &&
+            if [ ! -d .git ]; then
+              git clone https://github.com/Vardandatasciences/KPMG-WS2-Final-Testing.git .
+            else
+              git fetch origin && git reset --hard origin/main
+            fi
+          "
+
+      - name: Stop containers
+        run: |
+          SSHPASS='${{ secrets.HOSTINGER_PASSWORD }}' sshpass -e ssh -o StrictHostKeyChecking=no ${{ secrets.HOSTINGER_USER }}@${{ secrets.HOSTINGER_HOST }} "
+            cd $DEPLOY_PATH &&
+            docker compose -f deploy/docker-compose.production.yml down 2>/dev/null || true
+          "
+
+      - name: Build and start containers
+        run: |
+          SSHPASS='${{ secrets.HOSTINGER_PASSWORD }}' sshpass -e ssh -o StrictHostKeyChecking=no ${{ secrets.HOSTINGER_USER }}@${{ secrets.HOSTINGER_HOST }} "
+            cd $DEPLOY_PATH &&
+            docker compose -f deploy/docker-compose.production.yml build --no-cache &&
+            docker compose -f deploy/docker-compose.production.yml up -d
+          "
+
+      - name: Deployment Complete
+        run: |
+          echo "DEPLOYMENT DONE!"
+          echo "Server: ${{ secrets.HOSTINGER_HOST }}"
+          echo "Path: $DEPLOY_PATH"
+          echo "Commit: ${{ github.sha }}"

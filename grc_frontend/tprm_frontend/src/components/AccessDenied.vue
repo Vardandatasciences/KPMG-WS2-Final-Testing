@@ -26,6 +26,7 @@
             <Lock class="w-3.5 h-3.5 text-indigo-600" />
           </div>
         </div>
+        </div>
       </div>
       
       <!-- Content Section -->

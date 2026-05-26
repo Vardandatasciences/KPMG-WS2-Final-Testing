@@ -19,6 +19,7 @@ def _run_scheduled_ai_audits_loop():
         time.sleep(60)
 
 
+
 class GrcConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "grc"
@@ -33,3 +34,4 @@ class GrcConfig(AppConfig):
         if "runserver" in sys.argv and os.environ.get("RUN_MAIN") == "true":
             thread = threading.Thread(target=_run_scheduled_ai_audits_loop, daemon=True)
             thread.start()
+

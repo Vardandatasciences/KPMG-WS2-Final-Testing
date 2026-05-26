@@ -138,6 +138,21 @@ apiClient.interceptors.response.use((response) => {
     if (detail.toLowerCase().includes('expired') || error.response.data?.session_expired) {
       console.warn('⏰ [API] Session expired explicitly - purging and redirecting');
       purgeTokens();
+      localStorage.setItem('auth_logout_reason', 'session_expired');
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
+      return Promise.reject(error);
+    }
+
+    // Concurrent login: session was revoked by a newer login on another device/tab.
+    // Do NOT attempt refresh — the session is gone by design.
+    if (error.response.data?.session_invalidated === true) {
+      console.warn('🔒 [API] Session invalidated by concurrent login - purging and redirecting');
+      purgeTokens();
+      localStorage.removeItem('is_logged_in');
+      localStorage.removeItem('isAuthenticated');
+      localStorage.setItem('auth_logout_reason', 'session_invalidated');
       if (window.location.pathname !== '/login') {
         window.location.href = '/login';
       }
