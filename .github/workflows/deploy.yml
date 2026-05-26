@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       confirm_deployment:
-        description: '⚠️ Type "DEPLOY" to confirm production deployment (manual only)'
+        description: 'Type "DEPLOY" to confirm production deployment (manual only)'
         required: false
         default: ''
       deployment_notes:
@@ -18,36 +18,33 @@ env:
   DEPLOY_PATH: /home/grc-app
 
 jobs:
-  # ============================================
-  # JOB 1: Manual Deploy to Hostinger
-  # ============================================
   deploy:
     name: Deploy to Hostinger
     runs-on: ubuntu-latest
     
     steps:
-      - name: ⚠️ SAFETY CHECK - Manual confirmation required
+      - name: SAFETY CHECK - Manual confirmation required
         if: github.event_name == 'workflow_dispatch'
         run: |
           if [[ "${{ github.event.inputs.confirm_deployment }}" != "DEPLOY" ]]; then
-            echo "❌ DEPLOYMENT CANCELLED"
+            echo "DEPLOYMENT CANCELLED"
             echo "You must type 'DEPLOY' exactly to confirm"
             echo "This prevents accidental deployments"
             exit 1
           fi
-          echo "✅ Manual deployment confirmed - proceeding"
-          echo "📝 Deployment notes: ${{ github.event.inputs.deployment_notes }}"
+          echo "Manual deployment confirmed - proceeding"
+          echo "Deployment notes: ${{ github.event.inputs.deployment_notes }}"
 
-      - name: 🚀 AUTOMATIC DEPLOYMENT - Push detected
+      - name: AUTOMATIC DEPLOYMENT - Push detected
         if: github.event_name == 'push'
         run: |
-          echo "🚀 AUTOMATIC DEPLOYMENT TRIGGERED"
-          echo "📋 Commit: ${{ github.sha }}"
-          echo "👤 Pushed by: ${{ github.actor }}"
-          echo "🌿 Branch: ${{ github.ref_name }}"
+          echo "AUTOMATIC DEPLOYMENT TRIGGERED"
+          echo "Commit: ${{ github.sha }}"
+          echo "Pushed by: ${{ github.actor }}"
+          echo "Branch: ${{ github.ref_name }}"
           echo ""
-          echo "⚠️  This will deploy to production automatically!"
-          echo "⏳ Expected downtime: 2-5 minutes"
+          echo "This will deploy to production automatically!"
+          echo "Expected downtime: 2-5 minutes"
 
       - name: Checkout code
         uses: actions/checkout@v4
@@ -57,57 +54,57 @@ jobs:
       - name: Install SSHpass
         run: sudo apt-get update && sudo apt-get install -y sshpass
 
-      - name: 🔍 Pre-deployment checks
+      - name: Pre-deployment checks
         run: |
-          echo "🔍 Running pre-deployment checks..."
+          echo "Running pre-deployment checks..."
           
           # Check if we can connect to server
-          SSHPASS='${{ secrets.HOSTINGER_PASSWORD }}' sshpass -e ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 ${{ secrets.HOSTINGER_USER }}@${{ secrets.HOSTINGER_HOST }} "echo '✅ Server connection successful'" || {
-            echo "❌ Cannot connect to server - check credentials"
+          SSHPASS='${{ secrets.HOSTINGER_PASSWORD }}' sshpass -e ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 ${{ secrets.HOSTINGER_USER }}@${{ secrets.HOSTINGER_HOST }} "echo 'Server connection successful'" || {
+            echo "Cannot connect to server - check credentials"
             exit 1
           }
           
           # Check if deployment directory exists
-          SSHPASS='${{ secrets.HOSTINGER_PASSWORD }}' sshpass -e ssh -o StrictHostKeyChecking=no ${{ secrets.HOSTINGER_USER }}@${{ secrets.HOSTINGER_HOST }} "test -d $DEPLOY_PATH && echo '✅ Deployment directory exists' || { echo '❌ Deployment directory not found'; exit 1; }"
+          SSHPASS='${{ secrets.HOSTINGER_PASSWORD }}' sshpass -e ssh -o StrictHostKeyChecking=no ${{ secrets.HOSTINGER_USER }}@${{ secrets.HOSTINGER_HOST }} "test -d $DEPLOY_PATH && echo 'Deployment directory exists' || { echo 'Deployment directory not found'; exit 1; }"
           
           # Check Docker is running
-          SSHPASS='${{ secrets.HOSTINGER_PASSWORD }}' sshpass -e ssh -o StrictHostKeyChecking=no ${{ secrets.HOSTINGER_USER }}@${{ secrets.HOSTINGER_HOST }} "docker --version && echo '✅ Docker is available'" || {
-            echo "❌ Docker not available on server"
+          SSHPASS='${{ secrets.HOSTINGER_PASSWORD }}' sshpass -e ssh -o StrictHostKeyChecking=no ${{ secrets.HOSTINGER_USER }}@${{ secrets.HOSTINGER_HOST }} "docker --version && echo 'Docker is available'" || {
+            echo "Docker not available on server"
             exit 1
           }
 
-      - name: 📋 Show deployment info
+      - name: Show deployment info
         run: |
-          echo "🚀 DEPLOYMENT STARTED"
-          echo "📍 Server: ${{ secrets.HOSTINGER_HOST }}"
-          echo "👤 User: ${{ secrets.HOSTINGER_USER }}"
-          echo "📂 Path: $DEPLOY_PATH"
-          echo "🔗 Commit: ${{ github.sha }}"
-          echo "📝 Notes: ${{ github.event.inputs.deployment_notes }}"
+          echo "DEPLOYMENT STARTED"
+          echo "Server: ${{ secrets.HOSTINGER_HOST }}"
+          echo "User: ${{ secrets.HOSTINGER_USER }}"
+          echo "Path: $DEPLOY_PATH"
+          echo "Commit: ${{ github.sha }}"
+          echo "Notes: ${{ github.event.inputs.deployment_notes }}"
           echo ""
 
-      - name: ⏹️ Stop existing containers
+      - name: Stop existing containers
         run: |
-          echo "⏹️ Stopping existing containers..."
+          echo "Stopping existing containers..."
           SSHPASS='${{ secrets.HOSTINGER_PASSWORD }}' sshpass -e ssh -o StrictHostKeyChecking=no ${{ secrets.HOSTINGER_USER }}@${{ secrets.HOSTINGER_HOST }} "
             cd $DEPLOY_PATH && 
             echo 'Current containers:' &&
             docker compose -f deploy/docker-compose.production.yml ps 2>/dev/null || echo 'No containers running' &&
             echo 'Stopping containers...' &&
             docker compose -f deploy/docker-compose.production.yml down 2>/dev/null || echo 'No containers to stop' &&
-            echo '✅ Containers stopped'
+            echo 'Containers stopped'
           "
 
-      - name: 📦 Deploy code to Hostinger
+      - name: Deploy code to Hostinger
         run: |
-          echo "📦 Deploying code to Hostinger..."
+          echo "Deploying code to Hostinger..."
           
           # Create deployment script
           cat > deploy.sh << 'EOF'
           #!/bin/bash
           set -e
           
-          echo "📦 Syncing code to server..."
+          echo "Syncing code to server..."
           
           # Sync code to server using SSHpass
           sshpass -p '${{ secrets.HOSTINGER_PASSWORD }}' rsync -avz --delete \
@@ -119,61 +116,61 @@ jobs:
             --exclude='grc_backend/.env' \
             ./ ${{ secrets.HOSTINGER_USER }}@${{ secrets.HOSTINGER_HOST }}:$DEPLOY_PATH/
           
-          echo "✅ Code synced successfully"
+          echo "Code synced successfully"
           EOF
           
           chmod +x deploy.sh
           ./deploy.sh
 
-      - name: 🔨 Build and deploy Docker containers
+      - name: Build and deploy Docker containers
         run: |
-          echo "🔨 Building and starting Docker containers..."
+          echo "Building and starting Docker containers..."
           SSHPASS='${{ secrets.HOSTINGER_PASSWORD }}' sshpass -e ssh -o StrictHostKeyChecking=no ${{ secrets.HOSTINGER_USER }}@${{ secrets.HOSTINGER_HOST }} "
             cd $DEPLOY_PATH &&
-            echo '📋 Pulling latest changes...' &&
+            echo 'Pulling latest changes...' &&
             git pull origin main || git pull origin master &&
-            echo '🔨 Building Docker images...' &&
+            echo 'Building Docker images...' &&
             docker compose -f deploy/docker-compose.production.yml build --no-cache &&
-            echo '🚀 Starting containers...' &&
+            echo 'Starting containers...' &&
             docker compose -f deploy/docker-compose.production.yml up -d &&
-            echo '⏳ Waiting 30 seconds for services to start...' &&
+            echo 'Waiting 30 seconds for services to start...' &&
             sleep 30 &&
-            echo '📊 Container status:' &&
+            echo 'Container status:' &&
             docker compose -f deploy/docker-compose.production.yml ps
           "
 
-      - name: 📊 Check deployment status
+      - name: Check deployment status
         run: |
-          echo "📊 Checking deployment status..."
+          echo "Checking deployment status..."
           SSHPASS='${{ secrets.HOSTINGER_PASSWORD }}' sshpass -e ssh -o StrictHostKeyChecking=no ${{ secrets.HOSTINGER_USER }}@${{ secrets.HOSTINGER_HOST }} "
             cd $DEPLOY_PATH &&
-            echo '📊 Docker containers status:' &&
+            echo 'Docker containers status:' &&
             docker compose -f deploy/docker-compose.production.yml ps &&
             echo '' &&
-            echo '📋 Recent Backend Logs:' &&
+            echo 'Recent Backend Logs:' &&
             docker logs grc_tprm_backend_v2 --tail 10 2>/dev/null || echo 'No backend logs available' &&
             echo '' &&
-            echo '📋 Recent Frontend Logs:' &&
+            echo 'Recent Frontend Logs:' &&
             docker logs grc_tprm_frontend_v2 --tail 10 2>/dev/null || echo 'No frontend logs available'
           "
 
-      - name: 🧹 Cleanup old Docker images
+      - name: Cleanup old Docker images
         run: |
-          echo "🧹 Cleaning up old Docker images..."
+          echo "Cleaning up old Docker images..."
           SSHPASS='${{ secrets.HOSTINGER_PASSWORD }}' sshpass -e ssh -o StrictHostKeyChecking=no ${{ secrets.HOSTINGER_USER }}@${{ secrets.HOSTINGER_HOST }} "docker image prune -f" || echo "Cleanup completed with warnings"
 
-      - name: 🎉 Deployment Complete
+      - name: Deployment Complete
         run: |
           echo ""
-          echo "🎉 DEPLOYMENT COMPLETED SUCCESSFULLY!"
+          echo "DEPLOYMENT COMPLETED SUCCESSFULLY!"
           echo ""
-          echo "📍 Server: ${{ secrets.HOSTINGER_HOST }}"
-          echo "🌐 Frontend: http://${{ secrets.HOSTINGER_HOST }}:8081"
-          echo "🔧 Backend API: http://${{ secrets.HOSTINGER_HOST }}:8001"
-          echo "📊 Commit: ${{ github.sha }}"
-          echo "📝 Notes: ${{ github.event.inputs.deployment_notes }}"
+          echo "Server: ${{ secrets.HOSTINGER_HOST }}"
+          echo "Frontend: http://${{ secrets.HOSTINGER_HOST }}:8081"
+          echo "Backend API: http://${{ secrets.HOSTINGER_HOST }}:8001"
+          echo "Commit: ${{ github.sha }}"
+          echo "Notes: ${{ github.event.inputs.deployment_notes }}"
           echo ""
-          echo "🔍 To check logs manually:"
+          echo "To check logs manually:"
           echo "sshpass -p 'YOUR_PASSWORD' ssh ${{ secrets.HOSTINGER_USER }}@${{ secrets.HOSTINGER_HOST }} 'cd $DEPLOY_PATH && docker compose -f deploy/docker-compose.production.yml logs -f'"
           echo ""
-          echo "⚠️  Remember to test your application!"
+          echo "Remember to test your application!"
