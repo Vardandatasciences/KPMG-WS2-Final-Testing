@@ -8,10 +8,12 @@ on:
 
 env:
   PYTHON_VERSION: '3.11'
-  NODE_VERSION: '20'
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  NODE_VERSION: '18'
 
 jobs:
+  # ============================================
+  # JOB 1: Backend CI (Django)
+  # ============================================
   backend-ci:
     name: Backend CI
     runs-on: ubuntu-latest
@@ -24,6 +26,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
 
       - name: Install system dependencies
         run: |
@@ -53,7 +56,9 @@ jobs:
         working-directory: ./grc_backend
         continue-on-error: true
         run: |
+          # Stop the build if there are Python syntax errors or undefined names
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          # Exit-zero treats all errors as warnings
           flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
 
       - name: Check code formatting (black)
@@ -68,99 +73,38 @@ jobs:
         run: |
           isort --check-only --diff .
 
-      - name: Generate RSA keys for CI
-        run: |
-          openssl genpkey -algorithm RSA -out /tmp/ci_private.pem -pkeyopt rsa_keygen_bits:2048
-          openssl rsa -pubout -in /tmp/ci_private.pem -out /tmp/ci_public.pem
-
       - name: Create .env file for CI
         working-directory: ./grc_backend
-        env:
-          DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
-          DB_NAME: ${{ secrets.DB_NAME }}
-          DB_USER: ${{ secrets.DB_USER }}
-          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-          DB_HOST: ${{ secrets.DB_HOST }}
-          GRC_ENCRYPTION_KEY: ${{ secrets.GRC_ENCRYPTION_KEY }}
-          LOG_INTEGRITY_SECRET: ${{ secrets.LOG_INTEGRITY_SECRET }}
         run: |
-          PRIVATE_KEY=$(cat /tmp/ci_private.pem | awk 'NF {sub(/\r/, ""); printf "%s\\n",$0;}')
-          PUBLIC_KEY=$(cat /tmp/ci_public.pem | awk 'NF {sub(/\r/, ""); printf "%s\\n",$0;}')
-
-          cat > .env << EOF
-          DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY:-ci-fallback-secret-key}
-          DEBUG=False
-          ALLOWED_HOSTS=localhost,127.0.0.1
-          JWT_ALGORITHM=RS256
-          JWT_ISSUER=grc-backend
-          JWT_AUDIENCE=grc-frontend
-          JWT_PRIVATE_KEY=${PRIVATE_KEY}
-          JWT_PUBLIC_KEY=${PUBLIC_KEY}
-          RECAPTCHA_ENABLED=false
-          DB_NAME=${DB_NAME:-test_db}
-          DB_USER=${DB_USER:-test_user}
-          DB_PASSWORD=${DB_PASSWORD:-test_password}
-          DB_HOST=${DB_HOST:-localhost}
-          DB_PORT=3306
-          SESSION_TIMEOUT_ENABLED=false
-          SESSION_TIMEOUT_SECONDS=3600
-          SESSION_COOKIE_SECURE=False
-          SESSION_COOKIE_HTTPONLY=True
-          SESSION_COOKIE_SAMESITE=Lax
-          LICENSE_CHECK_ENABLED=false
-          MFA_ENABLED=false
-          FORCE_MFA_FOR_ALL=false
-          OPENAI_API_KEY=sk-test-ci-placeholder
-          OPENAI_MODEL=gpt-4o-mini
-          RISK_AI_PROVIDER=nvidia
-          NVIDIA_API_KEY=nvapi-test-ci-placeholder
-          NVIDIA_MODEL=nvidia/nemotron-3-nano-30b-a3b
-          NVIDIA_MODEL_LIGHT=nvidia/llama-3.1-nemotron-nano-4b-v1.1
-          NVIDIA_MODEL_MEDIUM=nvidia/nemotron-3-nano-30b-a3b
-          NVIDIA_MODEL_HEAVY=nvidia/nemotron-3-nano-30b-a3b
-          REDIS_URL=redis://localhost:6379/2
-          AWS_BUCKET_NAME=test-bucket
-          AWS_STORAGE_BUCKET_NAME=test-bucket
-          AWS_ACCESS_KEY_ID=test-access-key
-          AWS_SECRET_ACCESS_KEY=test-secret-key
-          AWS_REGION=ap-south-1
-          AWS_S3_REGION_NAME=ap-south-1
-          GRC_ENCRYPTION_KEY=${GRC_ENCRYPTION_KEY:-Me5DAqjQyATU2rW8pOhfEcxHboFLVYZkNQlG1uxdHss=}
-          LOG_INTEGRITY_SECRET=${LOG_INTEGRITY_SECRET:-dGVzdC1sb2ctaW50ZWdyaXR5LXNlY3JldC1mb3ItY2k=}
-          SECURITY_ALERT_EMAIL=ci@example.com
-          ALERT_USER_ON_LOGIN_ANOMALY=False
-          USER_INACTIVITY_DAYS=90
-          USER_INACTIVITY_EMAIL_ENABLED=false
-          USER_INACTIVITY_WARNING_DAYS=7
-          ENABLE_DEBUG_LOGGING=false
-          SKIP_OAUTH_STATE_VERIFICATION=true
-          USE_LOCAL_DEVELOPMENT=true
-          FRONTEND_URL=http://localhost:8080
-          CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8080
-          EXPORT_ALLOWED_DOMAINS=localhost
-          S3_MICRO_API_KEY=test-s3-key
-          SMTP_SERVER=smtp.gmail.com
-          SMTP_PORT=587
-          SMTP_EMAIL=ci@example.com
-          SMTP_PASSWORD=test-password
-          DEFAULT_FROM_EMAIL=ci@example.com
-          DEFAULT_FROM_NAME=CI Test
-          EOF
+          echo "DJANGO_SECRET_KEY=test-secret-key-for-ci-only" > .env
+          echo "DJANGO_SETTINGS_MODULE=backend.settings" >> .env
+          echo "DATABASE_URL=sqlite:///db.sqlite3" >> .env
+          echo "DEBUG=False" >> .env
+          echo "ALLOWED_HOSTS=localhost,127.0.0.1" >> .env
+          echo "SESSION_TIMEOUT_ENABLED=False" >> .env
+          echo "SESSION_TIMEOUT_SECONDS=3600" >> .env
+          echo "JWT_PRIVATE_KEY=test-private-key-for-ci-only-do-not-use-in-production" >> .env
+          echo "JWT_PUBLIC_KEY=test-public-key-for-ci-only-do-not-use-in-production" >> .env
 
       - name: Django system check
         working-directory: ./grc_backend
-        continue-on-error: true
+        env:
+          DJANGO_SETTINGS_MODULE: backend.settings
+          DJANGO_SECRET_KEY: test-secret-key-for-ci-only
         run: |
-          echo "=== Django check with debug info ==="
-          python manage.py check --deploy --verbosity=2 2>&1 || echo "Django check failed with status: $?"
+          python manage.py check --deploy
 
       - name: Run Django tests
         working-directory: ./grc_backend
-        continue-on-error: true
+        env:
+          DJANGO_SETTINGS_MODULE: backend.settings
+          DJANGO_SECRET_KEY: test-secret-key-for-ci-only
         run: |
-          echo "=== Running Django tests ==="
-          python manage.py test --no-input --keepdb --verbosity=2 2>&1 || echo "Tests completed with status: $?"
+          python manage.py test --no-input --keepdb 2>&1 || echo "Tests completed with status: $?"
 
+  # ============================================
+  # JOB 2: Frontend CI (Vue.js)
+  # ============================================
   frontend-ci:
     name: Frontend CI
     runs-on: ubuntu-latest
@@ -190,13 +134,11 @@ jobs:
 
       - name: Build frontend (production)
         working-directory: ./grc_frontend
-        continue-on-error: true
         run: |
           npm run build
 
       - name: Check build output
         working-directory: ./grc_frontend
-        continue-on-error: true
         run: |
           if [ -d "dist" ]; then
             echo "Build successful - dist directory created"
@@ -212,6 +154,9 @@ jobs:
         run: |
           npm run tprm:build
 
+  # ============================================
+  # JOB 3: Security Scanning
+  # ============================================
   security-scan:
     name: Security Scan
     runs-on: ubuntu-latest
