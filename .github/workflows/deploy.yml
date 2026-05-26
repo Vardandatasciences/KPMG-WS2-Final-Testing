@@ -51,127 +51,39 @@ jobs:
           echo "Branch: ${{ github.event.workflow_run.head_branch }}"
           echo "Expected downtime: 2-5 minutes"
 
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
       - name: Install SSHpass
-        run: sudo apt-get update && sudo apt-get install -y sshpass
+        run: sudo apt-get install -y sshpass
 
-      - name: Pre-deployment checks
+      - name: Pull latest code on server
         run: |
-          echo "Running pre-deployment checks..."
-          
-          # Check if we can connect to server
-          SSHPASS='${{ secrets.HOSTINGER_PASSWORD }}' sshpass -e ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 ${{ secrets.HOSTINGER_USER }}@${{ secrets.HOSTINGER_HOST }} "echo 'Server connection successful'" || {
-            echo "Cannot connect to server - check credentials"
-            exit 1
-          }
-          
-          # Create deployment directory if it doesn't exist
-          SSHPASS='${{ secrets.HOSTINGER_PASSWORD }}' sshpass -e ssh -o StrictHostKeyChecking=no ${{ secrets.HOSTINGER_USER }}@${{ secrets.HOSTINGER_HOST }} "
-            if [ ! -d $DEPLOY_PATH ]; then
-              echo 'Creating deployment directory...'
-              mkdir -p $DEPLOY_PATH
-              echo 'Directory created: $DEPLOY_PATH'
-            else
-              echo 'Deployment directory exists: $DEPLOY_PATH'
-            fi
-          "
-          
-          # Check Docker is running
-          SSHPASS='${{ secrets.HOSTINGER_PASSWORD }}' sshpass -e ssh -o StrictHostKeyChecking=no ${{ secrets.HOSTINGER_USER }}@${{ secrets.HOSTINGER_HOST }} "docker --version && echo 'Docker is available'" || {
-            echo "Docker not available on server"
-            exit 1
-          }
-
-      - name: Show deployment info
-        run: |
-          echo "DEPLOYMENT STARTED"
-          echo "Server: ${{ secrets.HOSTINGER_HOST }}"
-          echo "User: ${{ secrets.HOSTINGER_USER }}"
-          echo "Path: $DEPLOY_PATH"
-          echo "Commit: ${{ github.sha }}"
-          echo "Notes: ${{ github.event.inputs.deployment_notes }}"
-          echo ""
-
-      - name: Stop existing containers
-        run: |
-          echo "Stopping existing containers..."
-          SSHPASS='${{ secrets.HOSTINGER_PASSWORD }}' sshpass -e ssh -o StrictHostKeyChecking=no ${{ secrets.HOSTINGER_USER }}@${{ secrets.HOSTINGER_HOST }} "
-            cd $DEPLOY_PATH && 
-            echo 'Current containers:' &&
-            docker compose -f deploy/docker-compose.production.yml ps 2>/dev/null || echo 'No containers running' &&
-            echo 'Stopping containers...' &&
-            docker compose -f deploy/docker-compose.production.yml down 2>/dev/null || echo 'No containers to stop' &&
-            echo 'Containers stopped'
-          "
-
-      - name: Deploy code to Hostinger
-        run: |
-          echo "Deploying code to server via git..."
-          SSHPASS='${{ secrets.HOSTINGER_PASSWORD }}' sshpass -e ssh -o StrictHostKeyChecking=no ${{ secrets.HOSTINGER_USER }}@${{ secrets.HOSTINGER_HOST }} "
+          SSHPASS='${{ secrets.HOSTINGER_PASSWORD }}' sshpass -e ssh -o StrictHostKeyChecking=no -o ConnectTimeout=30 ${{ secrets.HOSTINGER_USER }}@${{ secrets.HOSTINGER_HOST }} "
+            mkdir -p $DEPLOY_PATH &&
             cd $DEPLOY_PATH &&
             if [ ! -d .git ]; then
-              echo 'No git repo found - cloning...' &&
-              git clone https://github.com/Vardandatasciences/KPMG-WS2-Final-Testing.git . &&
-              echo 'Repo cloned successfully'
+              git clone https://github.com/Vardandatasciences/KPMG-WS2-Final-Testing.git .
             else
-              echo 'Git repo found - pulling latest changes...' &&
-              git fetch origin &&
-              git reset --hard origin/main &&
-              echo 'Code updated successfully'
+              git fetch origin && git reset --hard origin/main
             fi
           "
 
-      - name: Build and deploy Docker containers
+      - name: Stop containers
         run: |
-          echo "Building and starting Docker containers..."
           SSHPASS='${{ secrets.HOSTINGER_PASSWORD }}' sshpass -e ssh -o StrictHostKeyChecking=no ${{ secrets.HOSTINGER_USER }}@${{ secrets.HOSTINGER_HOST }} "
             cd $DEPLOY_PATH &&
-            echo 'Building Docker images...' &&
+            docker compose -f deploy/docker-compose.production.yml down 2>/dev/null || true
+          "
+
+      - name: Build and start containers
+        run: |
+          SSHPASS='${{ secrets.HOSTINGER_PASSWORD }}' sshpass -e ssh -o StrictHostKeyChecking=no ${{ secrets.HOSTINGER_USER }}@${{ secrets.HOSTINGER_HOST }} "
+            cd $DEPLOY_PATH &&
             docker compose -f deploy/docker-compose.production.yml build --no-cache &&
-            echo 'Starting containers...' &&
-            docker compose -f deploy/docker-compose.production.yml up -d &&
-            echo 'Waiting 30 seconds for services to start...' &&
-            sleep 30 &&
-            echo 'Container status:' &&
-            docker compose -f deploy/docker-compose.production.yml ps
+            docker compose -f deploy/docker-compose.production.yml up -d
           "
-
-      - name: Check deployment status
-        run: |
-          echo "Checking deployment status..."
-          SSHPASS='${{ secrets.HOSTINGER_PASSWORD }}' sshpass -e ssh -o StrictHostKeyChecking=no ${{ secrets.HOSTINGER_USER }}@${{ secrets.HOSTINGER_HOST }} "
-            cd $DEPLOY_PATH &&
-            echo 'Docker containers status:' &&
-            docker compose -f deploy/docker-compose.production.yml ps &&
-            echo '' &&
-            echo 'Recent Backend Logs:' &&
-            docker logs grc_tprm_backend_v2 --tail 10 2>/dev/null || echo 'No backend logs available' &&
-            echo '' &&
-            echo 'Recent Frontend Logs:' &&
-            docker logs grc_tprm_frontend_v2 --tail 10 2>/dev/null || echo 'No frontend logs available'
-          "
-
-      - name: Cleanup old Docker images
-        run: |
-          echo "Cleaning up old Docker images..."
-          SSHPASS='${{ secrets.HOSTINGER_PASSWORD }}' sshpass -e ssh -o StrictHostKeyChecking=no ${{ secrets.HOSTINGER_USER }}@${{ secrets.HOSTINGER_HOST }} "docker image prune -f" || echo "Cleanup completed with warnings"
 
       - name: Deployment Complete
         run: |
-          echo ""
-          echo "DEPLOYMENT COMPLETED SUCCESSFULLY!"
-          echo ""
+          echo "DEPLOYMENT DONE!"
           echo "Server: ${{ secrets.HOSTINGER_HOST }}"
-          echo "Frontend: http://${{ secrets.HOSTINGER_HOST }}:8081"
-          echo "Backend API: http://${{ secrets.HOSTINGER_HOST }}:8001"
+          echo "Path: $DEPLOY_PATH"
           echo "Commit: ${{ github.sha }}"
-          echo "Notes: ${{ github.event.inputs.deployment_notes }}"
-          echo ""
-          echo "To check logs manually:"
-          echo "sshpass -p 'YOUR_PASSWORD' ssh ${{ secrets.HOSTINGER_USER }}@${{ secrets.HOSTINGER_HOST }} 'cd $DEPLOY_PATH && docker compose -f deploy/docker-compose.production.yml logs -f'"
-          echo ""
-          echo "Remember to test your application!"
