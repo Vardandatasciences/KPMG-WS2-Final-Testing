@@ -1,10 +1,9 @@
 name: CI - Backend & Frontend
 
 on:
-  push:
-    branches: [ main, master, develop, '**' ]
   pull_request:
     branches: [ main, master, develop ]
+  workflow_dispatch:
 
 env:
   PYTHON_VERSION: '3.11'
