@@ -144,6 +144,8 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
         public_path_prefixes = [
             # Auth / session bootstrap
             '/api/login/',
+            '/api/v1.0/login/',  # Versioned login (v1.0)
+            '/api/v2.0/login/',  # Versioned login (v2.0)
             '/api/jwt/login/',
             '/api/jwt/refresh/',
             '/api/jwt/verify/',
@@ -285,6 +287,15 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
                     _safe_path_for_log(path),
                 )
                 return None
+        
+        # Regex-based bypass for any versioned login route: /api/v{major}.{minor}/login/
+        # This handles v1.0, v2.0, and future versions without explicit list updates
+        if re.match(r'^/api/v\d+\.\d+/login/', path):
+            logger.debug(
+                "[JWT Middleware] Skipping authentication for versioned login path: %s",
+                _safe_path_for_log(path),
+            )
+            return None
         
         # Try JWT authentication first.
         # Prefer HttpOnly access_token cookie over Authorization: Bearer (matches UnifiedJWTAuthentication).
@@ -564,6 +575,8 @@ class SessionTimeoutMiddleware(MiddlewareMixin):
         # Skip timeout check for login/logout endpoints
         skip_paths = [
             '/api/login/',
+            '/api/v1.0/login/',  # Versioned login (v1.0)
+            '/api/v2.0/login/',  # Versioned login (v2.0)
             '/api/jwt/login/',
             '/api/logout/',
             '/api/jwt/logout/',
@@ -585,6 +598,10 @@ class SessionTimeoutMiddleware(MiddlewareMixin):
         for skip_path in skip_paths:
             if path.startswith(skip_path):
                 return None
+        
+        # Regex-based bypass for any versioned login route: /api/v{major}.{minor}/login/
+        if re.match(r'^/api/v\d+\.\d+/login/', path):
+            return None
         
         # Only check if user has a session
         if not request.session or not request.session.get('user_id'):

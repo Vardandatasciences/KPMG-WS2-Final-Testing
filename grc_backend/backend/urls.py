@@ -90,11 +90,20 @@ urlpatterns = [
     # Handles old invitation URLs and redirects to frontend vendor portal
     path('rfp/<int:rfp_id>/invitation', rfp_views.vendor_invitation_redirect, name='public_vendor_invitation_redirect'),
     
+    
     path('api/', include('grc.urls')),  # Use the correct app name for API routes
     path('api/csrf/', csrf_token_view, name='csrf-token'),
+    path('api/v1.0/csrf/', csrf_token_view, name='csrf-token-v1'),
+    path('api/v2.0/csrf/', csrf_token_view, name='csrf-token-v2'),
     # Versioned prefix for core GRC APIs (adds /api/v1/grc/* without breaking existing paths)
     path('api/v1/grc/', include('grc.urls')),
+    # API Versioning: v1.0 and v2.0 (expose same APIs under versioned prefixes)
+    path('api/v1.0/', include('grc.urls')),
+    path('api/v2.0/', include('grc.urls')),
     path('api/', include('backend.api.urls')),  # Include API module URLs
+    # API Versioning: v1.0 and v2.0 for backend API module
+    path('api/v1.0/', include('backend.api.urls')),
+    path('api/v2.0/', include('backend.api.urls')),
     # POST to /policies/... (no /api/) used to hit SPA catch-all → 403 CSRF, not this view. Alias for Postman/legacy clients.
     path(
         'policies/<int:policy_id>/request-status-change/',
@@ -111,6 +120,23 @@ urlpatterns = [
     path('api/bamboohr/sync-data/', bamboohr_sync_data, name='bamboohr-sync-data'),
     path('api/bamboohr/reports/', bamboohr_reports, name='bamboohr-reports'),
     path('api/bamboohr/debug/', bamboohr_debug, name='bamboohr-debug'),
+    # BambooHR v1.0 and v2.0
+    path('api/v1.0/bamboohr/oauth/', bamboohr_oauth, name='bamboohr-oauth-v1'),
+    path('api/v1.0/bamboohr/oauth-callback/', bamboohr_oauth_callback, name='bamboohr-oauth-callback-v1'),
+    path('api/v1.0/bamboohr/stored-data/', bamboohr_stored_data, name='bamboohr-stored-data-v1'),
+    path('api/v1.0/bamboohr/employees/', bamboohr_employees, name='bamboohr-employees-v1'),
+    path('api/v1.0/bamboohr/departments/', bamboohr_departments, name='bamboohr-departments-v1'),
+    path('api/v1.0/bamboohr/sync-data/', bamboohr_sync_data, name='bamboohr-sync-data-v1'),
+    path('api/v1.0/bamboohr/reports/', bamboohr_reports, name='bamboohr-reports-v1'),
+    path('api/v1.0/bamboohr/debug/', bamboohr_debug, name='bamboohr-debug-v1'),
+    path('api/v2.0/bamboohr/oauth/', bamboohr_oauth, name='bamboohr-oauth-v2'),
+    path('api/v2.0/bamboohr/oauth-callback/', bamboohr_oauth_callback, name='bamboohr-oauth-callback-v2'),
+    path('api/v2.0/bamboohr/stored-data/', bamboohr_stored_data, name='bamboohr-stored-data-v2'),
+    path('api/v2.0/bamboohr/employees/', bamboohr_employees, name='bamboohr-employees-v2'),
+    path('api/v2.0/bamboohr/departments/', bamboohr_departments, name='bamboohr-departments-v2'),
+    path('api/v2.0/bamboohr/sync-data/', bamboohr_sync_data, name='bamboohr-sync-data-v2'),
+    path('api/v2.0/bamboohr/reports/', bamboohr_reports, name='bamboohr-reports-v2'),
+    path('api/v2.0/bamboohr/debug/', bamboohr_debug, name='bamboohr-debug-v2'),
     
     # Jira Integration URLs (directly included)
     path('api/jira/oauth/', jira_oauth, name='jira-oauth'),
@@ -122,6 +148,25 @@ urlpatterns = [
     path('api/jira/users/', jira_users, name='jira-users'),
     path('api/jira/assign-project/', jira_assign_project, name='jira-assign-project'),
     path('api/jira/project-issues/', jira_project_issues, name='jira-project-issues'),
+    # Jira v1.0 and v2.0
+    path('api/v1.0/jira/oauth/', jira_oauth, name='jira-oauth-v1'),
+    path('api/v1.0/jira/oauth-callback/', jira_oauth_callback, name='jira-oauth-callback-v1'),
+    path('api/v1.0/jira/projects/', jira_projects, name='jira-projects-v1'),
+    path('api/v1.0/jira/project-details/', jira_project_details, name='jira-project-details-v1'),
+    path('api/v1.0/jira/resources/', jira_resources, name='jira-resources-v1'),
+    path('api/v1.0/jira/stored-data/', jira_stored_data, name='jira-stored-data-v1'),
+    path('api/v1.0/jira/users/', jira_users, name='jira-users-v1'),
+    path('api/v1.0/jira/assign-project/', jira_assign_project, name='jira-assign-project-v1'),
+    path('api/v1.0/jira/project-issues/', jira_project_issues, name='jira-project-issues-v1'),
+    path('api/v2.0/jira/oauth/', jira_oauth, name='jira-oauth-v2'),
+    path('api/v2.0/jira/oauth-callback/', jira_oauth_callback, name='jira-oauth-callback-v2'),
+    path('api/v2.0/jira/projects/', jira_projects, name='jira-projects-v2'),
+    path('api/v2.0/jira/project-details/', jira_project_details, name='jira-project-details-v2'),
+    path('api/v2.0/jira/resources/', jira_resources, name='jira-resources-v2'),
+    path('api/v2.0/jira/stored-data/', jira_stored_data, name='jira-stored-data-v2'),
+    path('api/v2.0/jira/users/', jira_users, name='jira-users-v2'),
+    path('api/v2.0/jira/assign-project/', jira_assign_project, name='jira-assign-project-v2'),
+    path('api/v2.0/jira/project-issues/', jira_project_issues, name='jira-project-issues-v2'),
 
     # Streamline Integration URLs
     path('api/streamline/user-projects/', get_user_projects, name='streamline-user-projects'),
@@ -130,11 +175,31 @@ urlpatterns = [
     path('api/streamline/save-task-action/', save_task_action, name='streamline-save-task-action'),
     path('api/streamline/save-project-tasks/', save_project_tasks, name='streamline-save-project-tasks'),
     path('api/streamline/user-task-actions/', get_user_task_actions, name='streamline-user-task-actions'),
+    # Streamline v1.0 and v2.0
+    path('api/v1.0/streamline/user-projects/', get_user_projects, name='streamline-user-projects-v1'),
+    path('api/v1.0/streamline/project-details/', get_project_details, name='streamline-project-details-v1'),
+    path('api/v1.0/streamline/user-statistics/', get_user_statistics, name='streamline-user-statistics-v1'),
+    path('api/v1.0/streamline/save-task-action/', save_task_action, name='streamline-save-task-action-v1'),
+    path('api/v1.0/streamline/save-project-tasks/', save_project_tasks, name='streamline-save-project-tasks-v1'),
+    path('api/v1.0/streamline/user-task-actions/', get_user_task_actions, name='streamline-user-task-actions-v1'),
+    path('api/v2.0/streamline/user-projects/', get_user_projects, name='streamline-user-projects-v2'),
+    path('api/v2.0/streamline/project-details/', get_project_details, name='streamline-project-details-v2'),
+    path('api/v2.0/streamline/user-statistics/', get_user_statistics, name='streamline-user-statistics-v2'),
+    path('api/v2.0/streamline/save-task-action/', save_task_action, name='streamline-save-task-action-v2'),
+    path('api/v2.0/streamline/save-project-tasks/', save_project_tasks, name='streamline-save-project-tasks-v2'),
+    path('api/v2.0/streamline/user-task-actions/', get_user_task_actions, name='streamline-user-task-actions-v2'),
     
     # External Applications endpoints
     path('api/external-applications/', get_external_applications, name='get-external-applications'),
     path('api/external-applications/refresh/', refresh_application_status, name='refresh-application-status'),
     path('api/external-applications/<int:application_id>/', get_application_details, name='get-application-details'),
+    # External Applications v1.0 and v2.0
+    path('api/v1.0/external-applications/', get_external_applications, name='get-external-applications-v1'),
+    path('api/v1.0/external-applications/refresh/', refresh_application_status, name='refresh-application-status-v1'),
+    path('api/v1.0/external-applications/<int:application_id>/', get_application_details, name='get-application-details-v1'),
+    path('api/v2.0/external-applications/', get_external_applications, name='get-external-applications-v2'),
+    path('api/v2.0/external-applications/refresh/', refresh_application_status, name='refresh-application-status-v2'),
+    path('api/v2.0/external-applications/<int:application_id>/', get_application_details, name='get-application-details-v2'),
     # Microsoft Sentinel OAuth URLs (root level for OAuth callbacks)
     # Using re_path with optional trailing slash to handle both with/without slash
     re_path(r'^auth/sentinel/?$', sentinel_oauth_start, name='sentinel-oauth-start'),
@@ -157,15 +222,58 @@ urlpatterns = [
     path('api/gmail/save-event-to-integration/', save_calendar_event_to_integration_list, name='gmail-save-event-to-integration'),
     path('api/gmail/debug-decrypt/', debug_decrypt_projects_data, name='gmail-debug-decrypt'),
     path('api/gmail/debug-database/', debug_gmail_database_state, name='gmail-debug-database'),
+    # Gmail v1.0 and v2.0
+    path('api/v1.0/gmail/oauth-initiate/', gmail_oauth_initiate, name='gmail-oauth-initiate-v1'),
+    path('api/v1.0/gmail/oauth-callback/', gmail_oauth_callback, name='gmail-oauth-callback-v1'),
+    path('api/v1.0/gmail/connection-status/', get_gmail_connection_status, name='gmail-connection-status-v1'),
+    path('api/v1.0/gmail/messages/', get_gmail_messages, name='gmail-messages-v1'),
+    path('api/v1.0/gmail/calendar-events/', get_calendar_events, name='gmail-calendar-events-v1'),
+    path('api/v1.0/gmail/download-attachment/', download_attachment, name='gmail-download-attachment-v1'),
+    path('api/v1.0/gmail/stored-data/', get_stored_gmail_data, name='gmail-stored-data-v1'),
+    path('api/v1.0/gmail/stored-data-formatted/', get_stored_gmail_data_formatted, name='gmail-stored-data-formatted-v1'),
+    path('api/v1.0/gmail/save-to-db/', save_gmail_data_to_db, name='gmail-save-to-db-v1'),
+    path('api/v1.0/gmail/disconnect/', disconnect_gmail, name='gmail-disconnect-v1'),
+    path('api/v1.0/gmail/test-headers/', test_gmail_headers, name='gmail-test-headers-v1'),
+    path('api/v1.0/gmail/save-message-to-integration/', save_gmail_message_to_integration_list, name='gmail-save-message-to-integration-v1'),
+    path('api/v1.0/gmail/save-event-to-integration/', save_calendar_event_to_integration_list, name='gmail-save-event-to-integration-v1'),
+    path('api/v1.0/gmail/debug-decrypt/', debug_decrypt_projects_data, name='gmail-debug-decrypt-v1'),
+    path('api/v1.0/gmail/debug-database/', debug_gmail_database_state, name='gmail-debug-database-v1'),
+    path('api/v2.0/gmail/oauth-initiate/', gmail_oauth_initiate, name='gmail-oauth-initiate-v2'),
+    path('api/v2.0/gmail/oauth-callback/', gmail_oauth_callback, name='gmail-oauth-callback-v2'),
+    path('api/v2.0/gmail/connection-status/', get_gmail_connection_status, name='gmail-connection-status-v2'),
+    path('api/v2.0/gmail/messages/', get_gmail_messages, name='gmail-messages-v2'),
+    path('api/v2.0/gmail/calendar-events/', get_calendar_events, name='gmail-calendar-events-v2'),
+    path('api/v2.0/gmail/download-attachment/', download_attachment, name='gmail-download-attachment-v2'),
+    path('api/v2.0/gmail/stored-data/', get_stored_gmail_data, name='gmail-stored-data-v2'),
+    path('api/v2.0/gmail/stored-data-formatted/', get_stored_gmail_data_formatted, name='gmail-stored-data-formatted-v2'),
+    path('api/v2.0/gmail/save-to-db/', save_gmail_data_to_db, name='gmail-save-to-db-v2'),
+    path('api/v2.0/gmail/disconnect/', disconnect_gmail, name='gmail-disconnect-v2'),
+    path('api/v2.0/gmail/test-headers/', test_gmail_headers, name='gmail-test-headers-v2'),
+    path('api/v2.0/gmail/save-message-to-integration/', save_gmail_message_to_integration_list, name='gmail-save-message-to-integration-v2'),
+    path('api/v2.0/gmail/save-event-to-integration/', save_calendar_event_to_integration_list, name='gmail-save-event-to-integration-v2'),
+    path('api/v2.0/gmail/debug-decrypt/', debug_decrypt_projects_data, name='gmail-debug-decrypt-v2'),
+    path('api/v2.0/gmail/debug-database/', debug_gmail_database_state, name='gmail-debug-database-v2'),
     path('api/external-applications/connect/', connect_external_application, name='connect-external-application'),
- 
     path('api/external-applications/disconnect/', disconnect_external_application, name='disconnect-external-application'),
- 
+    # External Applications connect/disconnect v1.0 and v2.0
+    path('api/v1.0/external-applications/connect/', connect_external_application, name='connect-external-application-v1'),
+    path('api/v1.0/external-applications/disconnect/', disconnect_external_application, name='disconnect-external-application-v1'),
+    path('api/v2.0/external-applications/connect/', connect_external_application, name='connect-external-application-v2'),
+    path('api/v2.0/external-applications/disconnect/', disconnect_external_application, name='disconnect-external-application-v2'),
     # Integration Database Update endpoints
     path('api/integrations/disconnect/', disconnect_integration, name='disconnect-integration'),
     path('api/integrations/connect/', connect_integration, name='connect-integration'),
     path('api/integrations/status/', get_integration_status, name='get-integration-status'),
     path('api/integrations/bulk-update/', bulk_update_integration_status, name='bulk-update-integration-status'),
+    # Integrations v1.0 and v2.0
+    path('api/v1.0/integrations/disconnect/', disconnect_integration, name='disconnect-integration-v1'),
+    path('api/v1.0/integrations/connect/', connect_integration, name='connect-integration-v1'),
+    path('api/v1.0/integrations/status/', get_integration_status, name='get-integration-status-v1'),
+    path('api/v1.0/integrations/bulk-update/', bulk_update_integration_status, name='bulk-update-integration-status-v1'),
+    path('api/v2.0/integrations/disconnect/', disconnect_integration, name='disconnect-integration-v2'),
+    path('api/v2.0/integrations/connect/', connect_integration, name='connect-integration-v2'),
+    path('api/v2.0/integrations/status/', get_integration_status, name='get-integration-status-v2'),
+    path('api/v2.0/integrations/bulk-update/', bulk_update_integration_status, name='bulk-update-integration-status-v2'),
     
     path('oauth/callback/', bamboohr_oauth_callback, name='oauth-callback'),  # OAuth callback at root level
     
@@ -176,69 +284,124 @@ urlpatterns = [
     
     # TPRM Authentication (MFA)
     path('api/tprm/auth/', include('tprm_backend.mfa_auth.urls')),
-    
+    # TPRM Auth v1.0 and v2.0
+    path('api/tprm/v1.0/auth/', include('tprm_backend.mfa_auth.urls')),
+    path('api/tprm/v2.0/auth/', include('tprm_backend.mfa_auth.urls')),
     # TPRM RBAC
     path('api/tprm/rbac/', include('tprm_backend.rbac.tprm_urls')),
+    # TPRM RBAC v1.0 and v2.0
+    path('api/tprm/v1.0/rbac/', include('tprm_backend.rbac.tprm_urls')),
+    path('api/tprm/v2.0/rbac/', include('tprm_backend.rbac.tprm_urls')),
     
     # GRC RBAC (for section 2 - Role-Based Access Control)
     path('api/grc/rbac/', include('grc.rbac_urls')),
+    # GRC RBAC v1.0 and v2.0
+    path('api/v1.0/grc/rbac/', include('grc.rbac_urls')),
+    path('api/v2.0/grc/rbac/', include('grc.rbac_urls')),
     # Frontend compatibility endpoint for user-role (without rbac prefix)
     path('api/grc/user-role/', views.get_user_role_simple, name='grc-user-role-frontend'),
+    # GRC user-role v1.0 and v2.0
+    path('api/v1.0/grc/user-role/', views.get_user_role_simple, name='grc-user-role-frontend-v1'),
+    path('api/v2.0/grc/user-role/', views.get_user_role_simple, name='grc-user-role-frontend-v2'),
     
     # TPRM Consent Management
     path('api/tprm/consent/', include('tprm_backend.consent.urls')),
-    
+    # TPRM Consent v1.0 and v2.0
+    path('api/tprm/v1.0/consent/', include('tprm_backend.consent.urls')),
+    path('api/tprm/v2.0/consent/', include('tprm_backend.consent.urls')),
     # TPRM Admin Access Control
     path('api/tprm/admin-access/', include('tprm_backend.admin_access.urls')),
-    
+    # TPRM Admin Access v1.0 and v2.0
+    path('api/tprm/v1.0/admin-access/', include('tprm_backend.admin_access.urls')),
+    path('api/tprm/v2.0/admin-access/', include('tprm_backend.admin_access.urls')),
     # TPRM Global Search
     path('api/tprm/global-search/', include('tprm_backend.global_search.urls')),
-    
+    # TPRM Global Search v1.0 and v2.0
+    path('api/tprm/v1.0/global-search/', include('tprm_backend.global_search.urls')),
+    path('api/tprm/v2.0/global-search/', include('tprm_backend.global_search.urls')),
     # TPRM Core APIs
     path('api/tprm/core/', include('tprm_backend.core.urls')),
-    
+    # TPRM Core v1.0 and v2.0
+    path('api/tprm/v1.0/core/', include('tprm_backend.core.urls')),
+    path('api/tprm/v2.0/core/', include('tprm_backend.core.urls')),
     # TPRM OCR APIs
     path('api/tprm/ocr/', include('tprm_backend.ocr_app.urls')),
-    
+    # TPRM OCR v1.0 and v2.0
+    path('api/tprm/v1.0/ocr/', include('tprm_backend.ocr_app.urls')),
+    path('api/tprm/v2.0/ocr/', include('tprm_backend.ocr_app.urls')),
     # TPRM SLA Management APIs
     path('api/tprm/slas/', include('tprm_backend.slas.urls')),
     path('api/tprm/v1/sla-dashboard/', include('tprm_backend.slas.urls')),  # Frontend v1 compatibility URL
-    
+    # TPRM SLA v1.0 and v2.0
+    path('api/tprm/v1.0/slas/', include('tprm_backend.slas.urls')),
+    path('api/tprm/v2.0/slas/', include('tprm_backend.slas.urls')),
     # TPRM Audit Management APIs
     path('api/tprm/audits/', include('tprm_backend.audits.urls')),
-    
+    # TPRM Audits v1.0 and v2.0
+    path('api/tprm/v1.0/audits/', include('tprm_backend.audits.urls')),
+    path('api/tprm/v2.0/audits/', include('tprm_backend.audits.urls')),
     # TPRM Notifications APIs
     path('api/tprm/notifications/', include('tprm_backend.notifications.urls')),
-    
+    # TPRM Notifications v1.0 and v2.0
+    path('api/tprm/v1.0/notifications/', include('tprm_backend.notifications.urls')),
+    path('api/tprm/v2.0/notifications/', include('tprm_backend.notifications.urls')),
     # TPRM Quick Access APIs
     path('api/tprm/quick-access/', include('tprm_backend.quick_access.urls')),
-    
+    # TPRM Quick Access v1.0 and v2.0
+    path('api/tprm/v1.0/quick-access/', include('tprm_backend.quick_access.urls')),
+    path('api/tprm/v2.0/quick-access/', include('tprm_backend.quick_access.urls')),
     # TPRM Compliance APIs
     path('api/tprm/compliance/', include('tprm_backend.compliance.urls')),
-    
+    # TPRM Compliance v1.0 and v2.0
+    path('api/tprm/v1.0/compliance/', include('tprm_backend.compliance.urls')),
+    path('api/tprm/v2.0/compliance/', include('tprm_backend.compliance.urls')),
     # TPRM BCP/DRP Management APIs
     path('api/tprm/bcpdrp/', include('tprm_backend.bcpdrp.urls')),
-    
+    # TPRM BCP/DRP v1.0 and v2.0
+    path('api/tprm/v1.0/bcpdrp/', include('tprm_backend.bcpdrp.urls')),
+    path('api/tprm/v2.0/bcpdrp/', include('tprm_backend.bcpdrp.urls')),
     # TPRM Risk Analysis APIs
     path('api/tprm/risk-analysis/', include('tprm_backend.risk_analysis.urls')),
-    
+    # TPRM Risk Analysis v1.0 and v2.0
+    path('api/tprm/v1.0/risk-analysis/', include('tprm_backend.risk_analysis.urls')),
+    path('api/tprm/v2.0/risk-analysis/', include('tprm_backend.risk_analysis.urls')),
     # TPRM Contract Management APIs
     path('api/tprm/contracts/', include('tprm_backend.contracts.urls')),
-    
+    # TPRM Contracts v1.0 and v2.0
+    path('api/tprm/v1.0/contracts/', include('tprm_backend.contracts.urls')),
+    path('api/tprm/v2.0/contracts/', include('tprm_backend.contracts.urls')),
     # TPRM Contract Audit APIs
     path('api/tprm/audits-contract/', include('tprm_backend.audits_contract.urls')),
     path('api/tprm/contract-risk-analysis/', include('tprm_backend.contract_risk_analysis.urls')),
-    
+    # TPRM Contract Audit v1.0 and v2.0
+    path('api/tprm/v1.0/audits-contract/', include('tprm_backend.audits_contract.urls')),
+    path('api/tprm/v1.0/contract-risk-analysis/', include('tprm_backend.contract_risk_analysis.urls')),
+    path('api/tprm/v2.0/audits-contract/', include('tprm_backend.audits_contract.urls')),
+    path('api/tprm/v2.0/contract-risk-analysis/', include('tprm_backend.contract_risk_analysis.urls')),
     # TPRM RFP Management APIs
     path('api/tprm/rfp/', include('tprm_backend.rfp.urls')),
     path('api/tprm/v1/', include('tprm_backend.rfp.urls')),  # Frontend compatibility for /api/tprm/v1/
     path('api/tprm/v1/', include('tprm_backend.rfp.rfi.urls')),  # RFI endpoints under /api/tprm/v1/
     path('api/tprm/rfp-approval/', include('tprm_backend.rfp_approval.urls')),
     path('api/tprm/rfp-risk-analysis/', include('tprm_backend.rfp_risk_analysis.urls')),
+    # TPRM RFP v1.0 and v2.0
+    path('api/tprm/v1.0/rfp/', include('tprm_backend.rfp.urls')),
+    path('api/tprm/v1.0/rfp/', include('tprm_backend.rfp.rfi.urls')),
+    path('api/tprm/v2.0/rfp/', include('tprm_backend.rfp.urls')),
+    path('api/tprm/v2.0/rfp/', include('tprm_backend.rfp.rfi.urls')),
+    path('api/tprm/v1.0/rfp-approval/', include('tprm_backend.rfp_approval.urls')),
+    path('api/tprm/v2.0/rfp-approval/', include('tprm_backend.rfp_approval.urls')),
+    path('api/tprm/v1.0/rfp-risk-analysis/', include('tprm_backend.rfp_risk_analysis.urls')),
+    path('api/tprm/v2.0/rfp-risk-analysis/', include('tprm_backend.rfp_risk_analysis.urls')),
     
     # RFP Approval URLs - Additional paths for compatibility
     path('api/approval/', include('tprm_backend.rfp_approval.urls')),
     path('api/rfp-approval/', include('tprm_backend.rfp_approval.urls')),
+    # RFP Approval v1.0 and v2.0
+    path('api/v1.0/approval/', include('tprm_backend.rfp_approval.urls')),
+    path('api/v1.0/rfp-approval/', include('tprm_backend.rfp_approval.urls')),
+    path('api/v2.0/approval/', include('tprm_backend.rfp_approval.urls')),
+    path('api/v2.0/rfp-approval/', include('tprm_backend.rfp_approval.urls')),
     
     # TPRM Vendor Management APIs
     path('api/tprm/vendor-core/', include('tprm_backend.apps.vendor_core.urls')),
@@ -249,6 +412,23 @@ urlpatterns = [
     path('api/tprm/vendor-lifecycle/', include('tprm_backend.apps.vendor_lifecycle.urls')),
     path('api/tprm/vendor-approval/', include('tprm_backend.apps.vendor_approval.urls')),
     path('api/tprm/risk-analysis-vendor/', include('tprm_backend.risk_analysis_vendor.urls')),
+    # TPRM Vendor Management v1.0 and v2.0
+    path('api/tprm/v1.0/vendor-core/', include('tprm_backend.apps.vendor_core.urls')),
+    path('api/tprm/v1.0/vendor-auth/', include('tprm_backend.apps.vendor_auth.urls')),
+    path('api/tprm/v1.0/vendor-risk/', include('tprm_backend.apps.vendor_risk.urls')),
+    path('api/tprm/v1.0/vendor-questionnaire/', include('tprm_backend.apps.vendor_questionnaire.urls')),
+    path('api/tprm/v1.0/vendor-dashboard/', include('tprm_backend.apps.vendor_dashboard.urls')),
+    path('api/tprm/v1.0/vendor-lifecycle/', include('tprm_backend.apps.vendor_lifecycle.urls')),
+    path('api/tprm/v1.0/vendor-approval/', include('tprm_backend.apps.vendor_approval.urls')),
+    path('api/tprm/v1.0/risk-analysis-vendor/', include('tprm_backend.risk_analysis_vendor.urls')),
+    path('api/tprm/v2.0/vendor-core/', include('tprm_backend.apps.vendor_core.urls')),
+    path('api/tprm/v2.0/vendor-auth/', include('tprm_backend.apps.vendor_auth.urls')),
+    path('api/tprm/v2.0/vendor-risk/', include('tprm_backend.apps.vendor_risk.urls')),
+    path('api/tprm/v2.0/vendor-questionnaire/', include('tprm_backend.apps.vendor_questionnaire.urls')),
+    path('api/tprm/v2.0/vendor-dashboard/', include('tprm_backend.apps.vendor_dashboard.urls')),
+    path('api/tprm/v2.0/vendor-lifecycle/', include('tprm_backend.apps.vendor_lifecycle.urls')),
+    path('api/tprm/v2.0/vendor-approval/', include('tprm_backend.apps.vendor_approval.urls')),
+    path('api/tprm/v2.0/risk-analysis-vendor/', include('tprm_backend.risk_analysis_vendor.urls')),
     
     # TPRM v1 API routes (for frontend compatibility - /api/tprm/v1/*)
     # Core TPRM modules
@@ -285,6 +465,11 @@ urlpatterns = [
     # Vendor management & lifecycle (management app)
     path('api/v1/management/', include('tprm_backend.apps.management.urls')),          # Core management endpoints
     path('api/tprm/v1/management/', include('tprm_backend.apps.management.urls')),    # TPRM-prefixed compatibility
+    # Management v1.0 and v2.0
+    path('api/v1.0/management/', include('tprm_backend.apps.management.urls')),
+    path('api/tprm/v1.0/management/', include('tprm_backend.apps.management.urls')),
+    path('api/v2.0/management/', include('tprm_backend.apps.management.urls')),
+    path('api/tprm/v2.0/management/', include('tprm_backend.apps.management.urls')),
     
     # Frontend v1 compatibility routes
     path('api/v1/', include('tprm_backend.rfp.urls')),  # Frontend compatibility for /api/v1/ (includes KPI endpoints)
@@ -303,6 +488,35 @@ urlpatterns = [
     path('api/v1/vendor-invitations/send/<int:rfp_id>/', rfp_views.send_vendor_invitations, name='send_vendor_invitations_v1'),
     path('api/v1/vendor-invitations/primary-contacts/', rfp_views.get_primary_contacts, name='get_primary_contacts_v1'),
     path('api/v1/vendor-dashboard/', include('tprm_backend.apps.vendor_dashboard.urls')),  # Frontend compatibility for /api/v1/vendor-dashboard/
+    # Frontend v1.0 and v2.0 compatibility routes
+    path('api/v1.0/', include('tprm_backend.rfp.urls')),
+    path('api/v1.0/rfps/', include('tprm_backend.rfp.urls')),
+    path('api/v1.0/vendor-approval/', include('tprm_backend.apps.vendor_approval.urls')),
+    path('api/v1.0/vendor-core/', include('tprm_backend.apps.vendor_core.urls')),
+    path('api/v1.0/vendor-questionnaire/', include('tprm_backend.apps.vendor_questionnaire.urls')),
+    path('api/v1.0/vendor-lifecycle/', include('tprm_backend.apps.vendor_lifecycle.urls')),
+    path('api/v1.0/rfp-responses-detail/<int:response_id>/', rfp_response_views.get_rfp_response_by_id, name='get_rfp_response_by_id_v10'),
+    path('api/v1.0/rfp-responses-list/', rfp_response_views.get_rfp_responses, name='get_rfp_responses_v10'),
+    path('api/v1.0/vendor-invitations/stats/<int:rfp_id>/', rfp_views.get_invitation_stats, name='get_invitation_stats_v10'),
+    path('api/v1.0/vendor-invitations/rfp/<int:rfp_id>/', rfp_views.get_invitations_by_rfp, name='get_invitations_by_rfp_v10'),
+    path('api/v1.0/vendor-invitations/create/<int:rfp_id>/', rfp_views.create_vendor_invitations, name='create_vendor_invitations_v10'),
+    path('api/v1.0/vendor-invitations/send/<int:rfp_id>/', rfp_views.send_vendor_invitations, name='send_vendor_invitations_v10'),
+    path('api/v1.0/vendor-invitations/primary-contacts/', rfp_views.get_primary_contacts, name='get_primary_contacts_v10'),
+    path('api/v1.0/vendor-dashboard/', include('tprm_backend.apps.vendor_dashboard.urls')),
+    path('api/v2.0/', include('tprm_backend.rfp.urls')),
+    path('api/v2.0/rfps/', include('tprm_backend.rfp.urls')),
+    path('api/v2.0/vendor-approval/', include('tprm_backend.apps.vendor_approval.urls')),
+    path('api/v2.0/vendor-core/', include('tprm_backend.apps.vendor_core.urls')),
+    path('api/v2.0/vendor-questionnaire/', include('tprm_backend.apps.vendor_questionnaire.urls')),
+    path('api/v2.0/vendor-lifecycle/', include('tprm_backend.apps.vendor_lifecycle.urls')),
+    path('api/v2.0/rfp-responses-detail/<int:response_id>/', rfp_response_views.get_rfp_response_by_id, name='get_rfp_response_by_id_v20'),
+    path('api/v2.0/rfp-responses-list/', rfp_response_views.get_rfp_responses, name='get_rfp_responses_v20'),
+    path('api/v2.0/vendor-invitations/stats/<int:rfp_id>/', rfp_views.get_invitation_stats, name='get_invitation_stats_v20'),
+    path('api/v2.0/vendor-invitations/rfp/<int:rfp_id>/', rfp_views.get_invitations_by_rfp, name='get_invitations_by_rfp_v20'),
+    path('api/v2.0/vendor-invitations/create/<int:rfp_id>/', rfp_views.create_vendor_invitations, name='create_vendor_invitations_v20'),
+    path('api/v2.0/vendor-invitations/send/<int:rfp_id>/', rfp_views.send_vendor_invitations, name='send_vendor_invitations_v20'),
+    path('api/v2.0/vendor-invitations/primary-contacts/', rfp_views.get_primary_contacts, name='get_primary_contacts_v20'),
+    path('api/v2.0/vendor-dashboard/', include('tprm_backend.apps.vendor_dashboard.urls')),
 ]
 
 # Serve media files during development
