@@ -1,11 +1,13 @@
-name: Deploy to Hostinger (Manual)
+name: Deploy to Hostinger
 
 on:
+  push:
+    branches: [ main, master ]
   workflow_dispatch:
     inputs:
       confirm_deployment:
-        description: '⚠️ Type "DEPLOY" to confirm production deployment'
-        required: true
+        description: '⚠️ Type "DEPLOY" to confirm production deployment (manual only)'
+        required: false
         default: ''
       deployment_notes:
         description: 'What are you deploying? (optional)'
@@ -25,6 +27,7 @@ jobs:
     
     steps:
       - name: ⚠️ SAFETY CHECK - Manual confirmation required
+        if: github.event_name == 'workflow_dispatch'
         run: |
           if [[ "${{ github.event.inputs.confirm_deployment }}" != "DEPLOY" ]]; then
             echo "❌ DEPLOYMENT CANCELLED"
@@ -32,8 +35,19 @@ jobs:
             echo "This prevents accidental deployments"
             exit 1
           fi
-          echo "✅ Deployment confirmed - proceeding"
+          echo "✅ Manual deployment confirmed - proceeding"
           echo "📝 Deployment notes: ${{ github.event.inputs.deployment_notes }}"
+
+      - name: 🚀 AUTOMATIC DEPLOYMENT - Push detected
+        if: github.event_name == 'push'
+        run: |
+          echo "🚀 AUTOMATIC DEPLOYMENT TRIGGERED"
+          echo "📋 Commit: ${{ github.sha }}"
+          echo "👤 Pushed by: ${{ github.actor }}"
+          echo "🌿 Branch: ${{ github.ref_name }}"
+          echo ""
+          echo "⚠️  This will deploy to production automatically!"
+          echo "⏳ Expected downtime: 2-5 minutes"
 
       - name: Checkout code
         uses: actions/checkout@v4
