@@ -73,12 +73,20 @@ jobs:
         run: |
           isort --check-only --diff .
 
+      - name: Create .env file for CI
+        working-directory: ./grc_backend
+        run: |
+          echo "DJANGO_SECRET_KEY=test-secret-key-for-ci-only" > .env
+          echo "DJANGO_SETTINGS_MODULE=backend.settings" >> .env
+          echo "DATABASE_URL=sqlite:///db.sqlite3" >> .env
+          echo "DEBUG=False" >> .env
+          echo "ALLOWED_HOSTS=localhost,127.0.0.1" >> .env
+
       - name: Django system check
         working-directory: ./grc_backend
         env:
           DJANGO_SETTINGS_MODULE: backend.settings
-          SECRET_KEY: test-secret-key-for-ci
-          DATABASE_URL: sqlite:///db.sqlite3
+          DJANGO_SECRET_KEY: test-secret-key-for-ci-only
         run: |
           python manage.py check --deploy
 
@@ -86,8 +94,7 @@ jobs:
         working-directory: ./grc_backend
         env:
           DJANGO_SETTINGS_MODULE: backend.settings
-          SECRET_KEY: test-secret-key-for-ci
-          DATABASE_URL: sqlite:///db.sqlite3
+          DJANGO_SECRET_KEY: test-secret-key-for-ci-only
         run: |
           python manage.py test --no-input --keepdb 2>&1 || echo "Tests completed with status: $?"
 
