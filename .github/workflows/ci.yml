@@ -81,6 +81,8 @@ jobs:
           echo "DATABASE_URL=sqlite:///db.sqlite3" >> .env
           echo "DEBUG=False" >> .env
           echo "ALLOWED_HOSTS=localhost,127.0.0.1" >> .env
+          echo "SESSION_TIMEOUT_ENABLED=False" >> .env
+          echo "SESSION_TIMEOUT_SECONDS=3600" >> .env
 
       - name: Django system check
         working-directory: ./grc_backend
