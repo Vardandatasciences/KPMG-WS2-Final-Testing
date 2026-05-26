@@ -17,7 +17,7 @@ on:
         default: ''
 
 env:
-  DEPLOY_PATH: /home/grc-app
+  DEPLOY_PATH: /opt/apps/KPMG-WS2-Final-Testing
 
 jobs:
   deploy:
@@ -69,8 +69,16 @@ jobs:
             exit 1
           }
           
-          # Check if deployment directory exists
-          SSHPASS='${{ secrets.HOSTINGER_PASSWORD }}' sshpass -e ssh -o StrictHostKeyChecking=no ${{ secrets.HOSTINGER_USER }}@${{ secrets.HOSTINGER_HOST }} "test -d $DEPLOY_PATH && echo 'Deployment directory exists' || { echo 'Deployment directory not found'; exit 1; }"
+          # Create deployment directory if it doesn't exist
+          SSHPASS='${{ secrets.HOSTINGER_PASSWORD }}' sshpass -e ssh -o StrictHostKeyChecking=no ${{ secrets.HOSTINGER_USER }}@${{ secrets.HOSTINGER_HOST }} "
+            if [ ! -d $DEPLOY_PATH ]; then
+              echo 'Creating deployment directory...'
+              mkdir -p $DEPLOY_PATH
+              echo 'Directory created: $DEPLOY_PATH'
+            else
+              echo 'Deployment directory exists: $DEPLOY_PATH'
+            fi
+          "
           
           # Check Docker is running
           SSHPASS='${{ secrets.HOSTINGER_PASSWORD }}' sshpass -e ssh -o StrictHostKeyChecking=no ${{ secrets.HOSTINGER_USER }}@${{ secrets.HOSTINGER_HOST }} "docker --version && echo 'Docker is available'" || {
@@ -102,28 +110,26 @@ jobs:
 
       - name: Deploy code to Hostinger
         run: |
-          echo "Deploying code to Hostinger..."
-          echo "Syncing code to server..."
-          
-          sshpass -p '${{ secrets.HOSTINGER_PASSWORD }}' rsync -avz --delete \
-            --exclude='.git' \
-            --exclude='node_modules' \
-            --exclude='__pycache__' \
-            --exclude='*.pyc' \
-            --exclude='.DS_Store' \
-            --exclude='grc_backend/.env' \
-            -e "ssh -o StrictHostKeyChecking=no" \
-            ./ ${{ secrets.HOSTINGER_USER }}@${{ secrets.HOSTINGER_HOST }}:${{ env.DEPLOY_PATH }}/
-          
-          echo "Code synced successfully"
+          echo "Deploying code to server via git..."
+          SSHPASS='${{ secrets.HOSTINGER_PASSWORD }}' sshpass -e ssh -o StrictHostKeyChecking=no ${{ secrets.HOSTINGER_USER }}@${{ secrets.HOSTINGER_HOST }} "
+            cd $DEPLOY_PATH &&
+            if [ ! -d .git ]; then
+              echo 'No git repo found - cloning...' &&
+              git clone https://github.com/Vardandatasciences/KPMG-WS2-Final-Testing.git . &&
+              echo 'Repo cloned successfully'
+            else
+              echo 'Git repo found - pulling latest changes...' &&
+              git fetch origin &&
+              git reset --hard origin/main &&
+              echo 'Code updated successfully'
+            fi
+          "
 
       - name: Build and deploy Docker containers
         run: |
           echo "Building and starting Docker containers..."
           SSHPASS='${{ secrets.HOSTINGER_PASSWORD }}' sshpass -e ssh -o StrictHostKeyChecking=no ${{ secrets.HOSTINGER_USER }}@${{ secrets.HOSTINGER_HOST }} "
             cd $DEPLOY_PATH &&
-            echo 'Pulling latest changes...' &&
-            git pull origin main || git pull origin master &&
             echo 'Building Docker images...' &&
             docker compose -f deploy/docker-compose.production.yml build --no-cache &&
             echo 'Starting containers...' &&
