@@ -19,7 +19,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from django.contrib.auth.hashers import make_password, check_password
 from .models import Users, GRCLog, RBAC, Framework
-from .models import Users, GRCLog, ProductVersion
+from .models import Users, GRCLog, ProductVersion, UserSession
 from .rbac.utils import RBACUtils
 from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from .mfa_service import MfaService
@@ -93,56 +93,73 @@ def _get_default_framework():
     return None
 
 def _get_user_session_token(user_id):
-    """Get the active session token for a user"""
-    cache_key = f"user_session_{user_id}"
-    return cache.get(cache_key)
+    """Return the session_id of the most recent active DB session for a user, or None."""
+    try:
+        row = UserSession.objects.filter(user_id=user_id, is_active=True).order_by('-created_at').first()
+        return row.session_id if row else None
+    except Exception as e:
+        logger.error(f"[AUTH] _get_user_session_token DB error for user {user_id}: {e}")
+        return None
 
-def _set_user_session_token(user_id, session_token):
-    """Set the active session token for a user with a grace period for rotation"""
-    cache_key = f"user_session_{user_id}"
-    grace_key = f"user_session_grace_{user_id}"
-    
-    # Store current token as grace to prevent race conditions during rotation (long requests / multi-tab).
-    current_token = cache.get(cache_key)
-    if current_token:
-        cache.set(grace_key, current_token, 120)
-        
-    # Set new active token for 7 days
-    cache.set(cache_key, session_token, 7 * 24 * 60 * 60)
-    logger.debug(f"[AUTH] Session token set for user {user_id}: {session_token} (Grace set: {bool(current_token)})")
+def _set_user_session_token(user, session_token, expires_at=None, ip_address=None, user_agent=None):
+    """
+    Revoke all previous active sessions for the user, then create a new DB session row.
+    *user* can be a Users instance or a plain user_id integer.
+    """
+    from django.utils import timezone as tz
+    user_id = None
+    try:
+        user_id = user.UserId if hasattr(user, 'UserId') else int(user)
+
+        revoked = UserSession.revoke_all_for_user(user_id)
+        if revoked:
+            logger.info(f"[AUTH] Revoked {revoked} previous active session(s) for user {user_id}")
+
+        if expires_at is None:
+            expires_at = tz.now() + JWT_REFRESH_TOKEN_LIFETIME
+
+        tenant_id = None
+        if hasattr(user, 'tenant') and user.tenant:
+            tenant_id = user.tenant.tenant_id
+        elif hasattr(user, 'tenant_id') and user.tenant_id:
+            tenant_id = user.tenant_id
+
+        UserSession.create_session(
+            user_id=user_id,
+            session_id=session_token,
+            expires_at=expires_at,
+            tenant_id=tenant_id,
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
+        logger.debug(f"[AUTH] Created DB session for user {user_id}: {session_token}")
+    except Exception as e:
+        logger.error(f"[AUTH] _set_user_session_token DB error for user {user_id}: {e}")
 
 def _invalidate_user_session(user_id):
-    """Invalidate the active session for a user (used when logging in from new location)"""
-    cache_key = f"user_session_{user_id}"
-    cache.delete(cache_key)
-    logger.info(f"Session invalidated for user {user_id}")
+    """Revoke all active DB sessions for user_id (used on logout)."""
+    try:
+        revoked = UserSession.revoke_all_for_user(user_id)
+        logger.info(f"[AUTH] Invalidated {revoked} DB session(s) for user {user_id}")
+    except Exception as e:
+        logger.error(f"[AUTH] _invalidate_user_session DB error for user {user_id}: {e}")
 
 def _is_session_token_valid(user_id, session_token):
-    """Check if a session token is valid for a user (checks active and grace tokens)"""
-    # Backward compatibility: if session_token is None, allow
+    """
+    Validate session_token against the user_sessions table.
+    Returns False if the session is revoked, expired, or not found.
+    Backward-compat: if session_token is None, allow (old tokens without jti).
+    """
     if session_token is None:
         return True
-    
-    cache_key = f"user_session_{user_id}"
-    grace_key = f"user_session_grace_{user_id}"
-    
-    active_session_token = cache.get(cache_key)
-    grace_session_token = cache.get(grace_key)
-    
-    if active_session_token is None and grace_session_token is None:
-        logger.warning(f"[AUTH] No valid session token found in cache for user {user_id}. Access denied.")
+    try:
+        valid = UserSession.is_valid(session_id=session_token)
+        if not valid:
+            logger.warning(f"[AUTH] session_id {session_token} is invalid/revoked/expired for user {user_id}")
+        return valid
+    except Exception as e:
+        logger.error(f"[AUTH] _is_session_token_valid DB error for user {user_id}: {e}")
         return False
-    
-    # Valid if matches active OR grace token
-    if active_session_token == session_token:
-        return True
-    
-    if grace_session_token == session_token:
-        logger.debug(f"[AUTH] Accepting grace session token for user {user_id} during rotation.")
-        return True
-        
-    logger.warning(f"[AUTH] Session token mismatch for user {user_id}. Expected {active_session_token} or {grace_session_token}, got {session_token}.")
-    return False
 
 def _log_failed_login(username, login_type, client_ip, reason, failed_attempts=None, additional_info=None):
     """Log failed login attempt to grc_logs table"""
@@ -1118,7 +1135,12 @@ def jwt_login(request):
         
         # Generate fresh tokens and mark this as the only active session.
         tokens = generate_jwt_tokens(user)
-        _set_user_session_token(user.UserId, tokens['session_token'])
+        _set_user_session_token(
+            user,
+            tokens['session_token'],
+            ip_address=client_ip,
+            user_agent=request.META.get('HTTP_USER_AGENT', '')[:512],
+        )
         
         # Store user info in session for compatibility with consistent naming
         # Decrypt username before storing in session
@@ -1391,8 +1413,16 @@ def jwt_refresh(request):
                 # Continue even if blacklisting fails, as new tokens are already generated
                 pass
             
-            # Keep active session key aligned with refreshed token.
-            _set_user_session_token(user.UserId, tokens['session_token'])
+            # Extend the existing DB session expiry to match the new refresh token lifetime.
+            from django.utils import timezone as tz
+            new_expiry = tz.now() + JWT_REFRESH_TOKEN_LIFETIME
+            try:
+                UserSession.objects.filter(
+                    session_id=old_session_token,
+                    is_active=True,
+                ).update(expires_at=new_expiry)
+            except Exception as _sess_ext_err:
+                logger.warning(f"[AUTH] Could not extend session expiry for {old_session_token}: {_sess_ext_err}")
 
             # No logging for successful refresh to keep terminal clean
             
@@ -1556,13 +1586,31 @@ def jwt_logout(request):
         logger.info(f"Final user info - user_id: {user_id}, username: {username}, framework_id: {framework_id}")
         print(f"[DEBUG] Final user info - user_id: {user_id}, username: {username}, framework_id: {framework_id}")
         
-        # Invalidate session token for multi-session management
+        # Revoke the specific DB session (jti from token) then fall back to all sessions
         if user_id:
             try:
-                _invalidate_user_session(user_id)
-                logger.info(f"🔐 Session token invalidated for user {user_id} on logout")
+                revoked_specific = False
+                auth_header_logout = request.headers.get('Authorization')
+                access_token_logout = None
+                if auth_header_logout and auth_header_logout.startswith('Bearer '):
+                    access_token_logout = auth_header_logout.split(' ', 1)[1].strip()
+                if not access_token_logout:
+                    access_token_logout = request.COOKIES.get('access_token')
+                if access_token_logout:
+                    try:
+                        _payload = verify_jwt_token(access_token_logout)
+                        _jti = _payload.get('jti') if _payload else None
+                        if _jti:
+                            UserSession.revoke_session(_jti)
+                            revoked_specific = True
+                            logger.info(f"🔐 Revoked specific DB session {_jti} for user {user_id} on logout")
+                    except Exception:
+                        pass
+                if not revoked_specific:
+                    _invalidate_user_session(user_id)
+                    logger.info(f"🔐 Revoked all DB sessions for user {user_id} on logout (fallback)")
             except Exception as session_error:
-                logger.warning(f"Error invalidating session token: {str(session_error)}")
+                logger.warning(f"Error revoking DB session on logout: {str(session_error)}")
         
         # Log logout to grc_logs before clearing session - ALWAYS LOG, even if user_id is None
         log_saved = False

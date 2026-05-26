@@ -4510,3 +4510,80 @@ class OrganizationalControlDocument(EncryptedFieldsMixin, models.Model):
    
     def __str__(self):
         return f"Document {self.DocumentId} - {self.DocumentName} (OrgControl {self.OrgControlId.OrgControlId})"
+
+
+# =========================================================================
+# USER SESSIONS - Concurrent login / single-active-session management
+# =========================================================================
+
+class UserSession(models.Model):
+    """
+    Maps to the existing ``user_sessions`` table.
+    On every new login all previous active rows for the user are revoked
+    (is_active=0, revoked_at=now), then a new row is inserted.
+    The session_id is embedded in the JWT ``jti`` claim and validated on
+    every protected request.
+    """
+
+    session_id = models.CharField(max_length=255, primary_key=True, db_column='session_id')
+    user_id = models.IntegerField(db_column='user_id', db_index=True)
+    tenant_id = models.IntegerField(null=True, blank=True, db_column='tenant_id')
+    ip_address = models.CharField(max_length=45, null=True, blank=True, db_column='ip_address')
+    user_agent = models.TextField(null=True, blank=True, db_column='user_agent')
+    device_fingerprint = models.CharField(max_length=255, null=True, blank=True, db_column='device_fingerprint')
+    created_at = models.DateTimeField(auto_now_add=True, db_column='created_at')
+    last_seen_at = models.DateTimeField(auto_now=True, db_column='last_seen_at')
+    revoked_at = models.DateTimeField(null=True, blank=True, db_column='revoked_at')
+    expires_at = models.DateTimeField(null=True, blank=True, db_column='expires_at')
+    is_active = models.BooleanField(default=True, db_column='is_active')
+
+    class Meta:
+        db_table = 'user_sessions'
+        managed = False  # Table already exists — Django should not create/alter it
+
+    def __str__(self):
+        return f"UserSession({self.user_id}, {self.session_id}, active={self.is_active})"
+
+    @classmethod
+    def revoke_all_for_user(cls, user_id):
+        """Revoke every active session for *user_id*.  Returns count revoked."""
+        now = timezone.now()
+        return cls.objects.filter(user_id=user_id, is_active=True).update(
+            is_active=False,
+            revoked_at=now,
+        )
+
+    @classmethod
+    def create_session(cls, user_id, session_id, expires_at,
+                       tenant_id=None, ip_address=None, user_agent=None):
+        """Create a new active session row and return it."""
+        return cls.objects.create(
+            session_id=session_id,
+            user_id=user_id,
+            tenant_id=tenant_id,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            expires_at=expires_at,
+            is_active=True,
+        )
+
+    @classmethod
+    def is_valid(cls, session_id):
+        """
+        Return True only when session_id exists, is_active=True, and not expired.
+        """
+        now = timezone.now()
+        return cls.objects.filter(
+            session_id=session_id,
+            is_active=True,
+            expires_at__gt=now,
+        ).exists()
+
+    @classmethod
+    def revoke_session(cls, session_id):
+        """Revoke a single session by its session_id."""
+        now = timezone.now()
+        return cls.objects.filter(session_id=session_id, is_active=True).update(
+            is_active=False,
+            revoked_at=now,
+        )
