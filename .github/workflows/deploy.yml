@@ -98,15 +98,8 @@ jobs:
       - name: Deploy code to Hostinger
         run: |
           echo "Deploying code to Hostinger..."
-          
-          # Create deployment script
-          cat > deploy.sh << 'EOF'
-          #!/bin/bash
-          set -e
-          
           echo "Syncing code to server..."
           
-          # Sync code to server using SSHpass
           sshpass -p '${{ secrets.HOSTINGER_PASSWORD }}' rsync -avz --delete \
             --exclude='.git' \
             --exclude='node_modules' \
@@ -114,13 +107,10 @@ jobs:
             --exclude='*.pyc' \
             --exclude='.DS_Store' \
             --exclude='grc_backend/.env' \
-            ./ ${{ secrets.HOSTINGER_USER }}@${{ secrets.HOSTINGER_HOST }}:$DEPLOY_PATH/
+            -e "ssh -o StrictHostKeyChecking=no" \
+            ./ ${{ secrets.HOSTINGER_USER }}@${{ secrets.HOSTINGER_HOST }}:${{ env.DEPLOY_PATH }}/
           
           echo "Code synced successfully"
-          EOF
-          
-          chmod +x deploy.sh
-          ./deploy.sh
 
       - name: Build and deploy Docker containers
         run: |
