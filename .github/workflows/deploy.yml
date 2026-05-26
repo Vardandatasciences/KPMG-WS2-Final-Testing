@@ -1,8 +1,10 @@
 name: Deploy to Hostinger
 
 on:
-  push:
-    branches: [ main, master ]
+  workflow_run:
+    workflows: ["CI - Backend & Frontend"]
+    types: [completed]
+    branches: [main, master]
   workflow_dispatch:
     inputs:
       confirm_deployment:
@@ -35,15 +37,18 @@ jobs:
           echo "Manual deployment confirmed - proceeding"
           echo "Deployment notes: ${{ github.event.inputs.deployment_notes }}"
 
-      - name: AUTOMATIC DEPLOYMENT - Push detected
-        if: github.event_name == 'push'
+      - name: Check CI passed before deploying
+        if: github.event_name == 'workflow_run'
         run: |
-          echo "AUTOMATIC DEPLOYMENT TRIGGERED"
-          echo "Commit: ${{ github.sha }}"
-          echo "Pushed by: ${{ github.actor }}"
-          echo "Branch: ${{ github.ref_name }}"
-          echo ""
-          echo "This will deploy to production automatically!"
+          if [[ "${{ github.event.workflow_run.conclusion }}" != "success" ]]; then
+            echo "CI FAILED - Skipping deployment"
+            echo "CI result: ${{ github.event.workflow_run.conclusion }}"
+            echo "Fix CI errors before deploying to production"
+            exit 1
+          fi
+          echo "CI passed - proceeding with deployment"
+          echo "Commit: ${{ github.event.workflow_run.head_sha }}"
+          echo "Branch: ${{ github.event.workflow_run.head_branch }}"
           echo "Expected downtime: 2-5 minutes"
 
       - name: Checkout code
