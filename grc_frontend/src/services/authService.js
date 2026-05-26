@@ -72,8 +72,20 @@ authApi.interceptors.response.use(
           window.location.href = '/login'
         }
       }
-      // Note: session_invalidated is no longer used since we disabled the session
-      // token cache check. Don't treat it as a reason to wipe tokens.
+      // session_invalidated: fired when a new login from another device/browser
+      // revokes this session (concurrent login prevention).
+      if (data.session_invalidated === true) {
+        removeSensitive('session_token')
+        removeSensitive('access_token')
+        removeSensitive('refresh_token')
+        removeSensitive('current_user')
+        localStorage.removeItem('is_logged_in')
+        localStorage.removeItem('isAuthenticated')
+        localStorage.setItem('auth_logout_reason', 'session_invalidated')
+        if (window.location.pathname !== '/login' && window.location.pathname !== '/Login') {
+          window.location.href = '/login'
+        }
+      }
     }
     return Promise.reject(error)
   }

@@ -52,7 +52,8 @@ export default {
     return {
       isAuthenticated: false,
       hasExplicitlyLoggedIn: false,
-      showSessionReconnectBanner: false
+      showSessionReconnectBanner: false,
+      concurrentLoginPollTimer: null
     }
   },
   created() {
@@ -101,6 +102,7 @@ export default {
   },
   beforeUnmount() {
     window.removeEventListener('authChanged', this.checkAuthStatus)
+    this.stopConcurrentLoginPoll()
   },
   methods: {
     isLoginRoute(path) {
@@ -179,6 +181,10 @@ export default {
       // If user is authenticated on page refresh, set hasExplicitlyLoggedIn to true
       if (this.isAuthenticated && !this.hasExplicitlyLoggedIn) {
         this.hasExplicitlyLoggedIn = true
+        // Auto-start concurrent login poll for sessions that were already active on page load
+        if (!this.concurrentLoginPollTimer) {
+          this.startConcurrentLoginPoll()
+        }
       }
      
       console.log('🔐 Authentication check:', {
@@ -222,6 +228,8 @@ export default {
       // Load framework after successful login
       this.loadFrameworkFromSession()
       this.startPeriodicTokenRefresh()
+      // Start polling to detect if this session gets revoked by a new login elsewhere
+      this.startConcurrentLoginPoll()
       // Trigger auth changed event for session timeout service
       window.dispatchEvent(new Event('authChanged'))
       
@@ -237,6 +245,7 @@ export default {
     async onLogout() {
       this.hasExplicitlyLoggedIn = false
       this.isAuthenticated = false
+      this.stopConcurrentLoginPoll()
       sessionStorage.removeItem('access_token')
       sessionStorage.removeItem('refresh_token')
       sessionStorage.removeItem('user_id')
@@ -267,6 +276,42 @@ export default {
       this.checkAuthStatus()
     },
    
+    // Poll backend every 15 s to detect concurrent-login session revocation
+    startConcurrentLoginPoll() {
+      this.stopConcurrentLoginPoll()
+      this.concurrentLoginPollTimer = setInterval(async () => {
+        const isLoggedIn = localStorage.getItem('is_logged_in') === 'true' ||
+                           localStorage.getItem('isAuthenticated') === 'true'
+        if (!isLoggedIn) {
+          this.stopConcurrentLoginPoll()
+          return
+        }
+        try {
+          const { default: authService } = await import('./services/authService.js')
+          const result = await authService.validateSession()
+          if (result && result.isAuthError === true) {
+            console.warn('🔒 [App] Session no longer valid (concurrent login detected) - logging out')
+            this.stopConcurrentLoginPoll()
+            sessionStorage.removeItem('cookie_session_validated')
+            localStorage.removeItem('is_logged_in')
+            localStorage.removeItem('isAuthenticated')
+            localStorage.setItem('auth_logout_reason', 'session_invalidated')
+            window.location.href = '/login'
+          }
+        } catch (e) {
+          // Network error - ignore, will retry next interval
+        }
+      }, 15000)
+      console.log('🔒 Concurrent login poll started (15s interval)')
+    },
+
+    stopConcurrentLoginPoll() {
+      if (this.concurrentLoginPollTimer) {
+        clearInterval(this.concurrentLoginPollTimer)
+        this.concurrentLoginPollTimer = null
+      }
+    },
+
     // Method to start periodic token refresh (optional if implemented in service)
     async startPeriodicTokenRefresh() {
       try {

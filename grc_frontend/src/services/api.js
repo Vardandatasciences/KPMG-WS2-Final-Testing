@@ -58,6 +58,24 @@ api.interceptors.response.use(
         sessionError.isSessionExpired = true;
         return Promise.reject(sessionError);
       }
+
+      // Concurrent login: this session was revoked by a newer login elsewhere.
+      const isSessionInvalidated = responseData.session_invalidated === true;
+      if (isSessionInvalidated) {
+        console.warn('🔒 [API] Session invalidated by concurrent login - logging out user');
+        clearLegacyClientJwtKeys();
+        sessionStorage.clear();
+        localStorage.removeItem('is_logged_in');
+        localStorage.removeItem('isAuthenticated');
+        localStorage.setItem('auth_logout_reason', 'session_invalidated');
+        window.dispatchEvent(new Event('authChanged'));
+        if (window.location.pathname !== '/login') {
+          window.location.href = '/login';
+        }
+        const invalidatedError = new Error('Logged in from another device. Please log in again.');
+        invalidatedError.isSessionInvalidated = true;
+        return Promise.reject(invalidatedError);
+      }
     }
     
     // Handle timeout errors gracefully
