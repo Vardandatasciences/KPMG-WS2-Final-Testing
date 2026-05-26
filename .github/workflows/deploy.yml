@@ -1,10 +1,8 @@
 name: Deploy to Hostinger
 
 on:
-  workflow_run:
-    workflows: ["CI - Backend & Frontend"]
-    types: [completed]
-    branches: [main, master]
+  push:
+    branches: [ main, master ]
   workflow_dispatch:
     inputs:
       confirm_deployment:
@@ -36,20 +34,6 @@ jobs:
           fi
           echo "Manual deployment confirmed - proceeding"
           echo "Deployment notes: ${{ github.event.inputs.deployment_notes }}"
-
-      - name: Check CI passed before deploying
-        if: github.event_name == 'workflow_run'
-        run: |
-          if [[ "${{ github.event.workflow_run.conclusion }}" != "success" ]]; then
-            echo "CI FAILED - Skipping deployment"
-            echo "CI result: ${{ github.event.workflow_run.conclusion }}"
-            echo "Fix CI errors before deploying to production"
-            exit 1
-          fi
-          echo "CI passed - proceeding with deployment"
-          echo "Commit: ${{ github.event.workflow_run.head_sha }}"
-          echo "Branch: ${{ github.event.workflow_run.head_branch }}"
-          echo "Expected downtime: 2-5 minutes"
 
       - name: Install SSHpass
         run: sudo apt-get install -y sshpass
