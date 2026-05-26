@@ -73,12 +73,6 @@ jobs:
         run: |
           isort --check-only --diff .
 
-      - name: Generate RSA keys for JWT
-        working-directory: ./grc_backend
-        run: |
-          openssl genrsa -out private_key.pem 2048
-          openssl rsa -in private_key.pem -pubout -out public_key.pem
-
       - name: Create .env file for CI
         working-directory: ./grc_backend
         run: |
@@ -89,8 +83,8 @@ jobs:
           echo "ALLOWED_HOSTS=localhost,127.0.0.1" >> .env
           echo "SESSION_TIMEOUT_ENABLED=False" >> .env
           echo "SESSION_TIMEOUT_SECONDS=3600" >> .env
-          echo "JWT_PRIVATE_KEY=$(cat private_key.pem)" >> .env
-          echo "JWT_PUBLIC_KEY=$(cat public_key.pem)" >> .env
+          echo "JWT_PRIVATE_KEY=test-private-key-for-ci-only-do-not-use-in-production" >> .env
+          echo "JWT_PUBLIC_KEY=test-public-key-for-ci-only-do-not-use-in-production" >> .env
 
       - name: Django system check
         working-directory: ./grc_backend
