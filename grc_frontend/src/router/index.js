@@ -97,6 +97,8 @@ import ComplianceDebug from '../components/Compliance/ComplianceDebug.vue'
 import Notifications from '../views/Notifications.vue'
 import SystemLogs from '../views/SystemLogs.vue'
 import PublicPolicyAcknowledgement from '../views/PublicPolicyAcknowledgement.vue'
+
+// Tenant Admin views (Phase 4 — Enterprise Multi-Tenancy) — inline to satisfy no-unused-vars
  
 import BaselineConfiguration from '../components/Compliance/BaselineConfiguration.vue'
  
@@ -1174,6 +1176,34 @@ const routes = [
   component: SentinelIntegration,
   meta: { requiresAuth: true }
 },
+  // ── Tenant Admin routes (Phase 4 — Enterprise Multi-Tenancy) ──────────────
+  {
+    path: '/tenant-admin',
+    name: 'TenantList',
+    component: () => import('../views/TenantAdmin/TenantList.vue'),
+    meta: { requiresAuth: true, requiresGlobalAdmin: true }
+  },
+  {
+    path: '/tenant-admin/create',
+    name: 'TenantCreate',
+    component: () => import('../views/TenantAdmin/TenantCreate.vue'),
+    meta: { requiresAuth: true, requiresGlobalAdmin: true }
+  },
+  {
+    path: '/tenant-admin/:tenantId',
+    name: 'TenantDetail',
+    component: () => import('../views/TenantAdmin/TenantDetail.vue'),
+    props: true,
+    meta: { requiresAuth: true, requiresGlobalAdminOrOwnTenant: true }
+  },
+  {
+    path: '/tenant-admin/:tenantId/entity-tree',
+    name: 'EntityTree',
+    component: () => import('../views/TenantAdmin/EntityTree.vue'),
+    props: true,
+    meta: { requiresAuth: true, requiresGlobalAdminOrOwnTenant: true }
+  },
+
   // TPRM embedded app routes - use a distinct prefix so browser refresh keeps the GRC shell
   {
     path: '/tprm-app',
@@ -1279,6 +1309,26 @@ router.beforeEach(async (to, from) => {
     if (to.meta.requiresAuth && !isAuthenticated) {
       console.log('🚫 Access denied - redirecting to login')
       return '/login'
+    }
+
+    if (to.meta.requiresGlobalAdmin && isAuthenticated) {
+      const isGlobalAdmin = localStorage.getItem('is_global_admin') === 'true'
+      if (!isGlobalAdmin) {
+        console.log('🚫 Tenant-scoped user blocked from global admin route')
+        return '/home'
+      }
+    }
+
+    if (to.meta.requiresGlobalAdminOrOwnTenant && isAuthenticated) {
+      const isGlobalAdmin = localStorage.getItem('is_global_admin') === 'true'
+      if (!isGlobalAdmin) {
+        const myTenantId = localStorage.getItem('tenant_id')
+        const requestedTenantId = to.params.tenantId
+        if (!myTenantId || String(requestedTenantId) !== String(myTenantId)) {
+          console.log('🚫 Tenant-scoped user blocked from another tenant detail')
+          return '/home'
+        }
+      }
     }
 
     if (isAuthenticated && isLoginPath(to.path)) {

@@ -70,12 +70,18 @@ class Tenant(EncryptedFieldsMixin, models.Model):
                                             ('professional', 'Professional'),
                                             ('enterprise', 'Enterprise')
                                         ])
-    status = models.CharField(max_length=20, default='trial', db_column='Status',
+    status = models.CharField(max_length=30, default='trial', db_column='Status',
                              choices=[
                                  ('trial', 'Trial'),
+                                 ('draft', 'Draft'),
+                                 ('onboarding', 'Onboarding'),
+                                 ('configuration_pending', 'Configuration Pending'),
+                                 ('security_setup_pending', 'Security Setup Pending'),
                                  ('active', 'Active'),
                                  ('suspended', 'Suspended'),
-                                 ('cancelled', 'Cancelled')
+                                 ('inactive', 'Inactive'),
+                                 ('archived', 'Archived'),
+                                 ('cancelled', 'Cancelled'),
                              ])
     max_users = models.IntegerField(default=10, db_column='MaxUsers', 
                                     help_text="Maximum number of users allowed for this tenant")
@@ -581,7 +587,38 @@ class Framework(EncryptedFieldsMixin, models.Model):
 
     class Meta:
         db_table = 'frameworks'
- 
+
+
+class FrameworkTenantMapping(models.Model):
+    """
+    Many-to-many mapping between frameworks and tenants.
+    Replaces the single tenant FK for multi-tenant framework access.
+    Platform-level shared frameworks (HIPAA, NIST, SOC2) have rows for every tenant.
+    """
+    id = models.AutoField(primary_key=True)
+    framework = models.ForeignKey(
+        'Framework',
+        on_delete=models.CASCADE,
+        db_column='FrameworkId',
+        related_name='framework_tenant_mappings'
+    )
+    tenant = models.ForeignKey(
+        'Tenant',
+        on_delete=models.CASCADE,
+        db_column='TenantId',
+        related_name='framework_tenant_mappings'
+    )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'framework_tenant_mapping'
+        unique_together = ('framework', 'tenant')
+
+    def __str__(self):
+        return f"{self.framework_id} → {self.tenant_id}"
+
 
 # Product versioning for patch enforcement
 class ProductVersion(EncryptedFieldsMixin, models.Model):
@@ -1968,6 +2005,9 @@ class Entity(EncryptedFieldsMixin, models.Model):
     Location = models.CharField(max_length=1000)  # Increased for encryption support
     FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
     retentionExpiry = models.DateField(null=True, blank=True)
+    # MULTI-TENANCY: Link entity to tenant
+    tenant = models.ForeignKey('Tenant', on_delete=models.CASCADE, db_column='TenantId',
+                               related_name='entities', null=True, blank=True)
     class Meta:
         db_table = 'entities'
         verbose_name_plural = 'Entities'
@@ -2080,6 +2120,9 @@ class RBAC(EncryptedFieldsMixin, models.Model):
     ]
 
     rbac_id = models.AutoField(primary_key=True, db_column='RBACId')
+    # MULTI-TENANCY: Link RBAC record to tenant
+    tenant = models.ForeignKey('Tenant', on_delete=models.CASCADE, db_column='TenantId',
+                               related_name='rbac_records', null=True, blank=True)
     user = models.ForeignKey(Users, on_delete=models.CASCADE, db_column='UserId')
     username = models.CharField(max_length=255, db_column='UserName')
     role = models.CharField(max_length=100, choices=ROLE_CHOICES, db_column='Role')
@@ -2531,7 +2574,7 @@ class Department(EncryptedFieldsMixin, models.Model):
     CreatedDate = models.DateTimeField()
     BusinessUnitId = models.IntegerField()
     threshold_limit = models.IntegerField(default=50, help_text="AI confidence threshold for risk identification (0-100)")
-    FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
+    FrameworkId = models.ForeignKey('Framework', on_delete=models.SET_NULL, db_column='FrameworkId', null=True, blank=True)
     retentionExpiry = models.DateField(null=True, blank=True)
     class Meta:
         db_table = 'department'
@@ -2543,7 +2586,9 @@ class Department(EncryptedFieldsMixin, models.Model):
 class Entity(EncryptedFieldsMixin, models.Model):
     Id = models.AutoField(primary_key=True)
     EntityName = models.CharField(max_length=1000)  # Increased for encryption support
+    EntityCode = models.CharField(max_length=100, null=True, blank=True, db_column='EntityCode')
     EntityType = models.CharField(max_length=255)
+    Description = models.TextField(null=True, blank=True, db_column='Description')
     ParentEntityId = models.IntegerField(null=True, blank=True)
     LocationId = models.IntegerField()
     IsActive = models.BooleanField(default=True)
@@ -4544,3 +4589,310 @@ class CustomExternalSource(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.url})"
+
+
+# =====================================================
+# PHASE 1 MULTI-TENANCY ENHANCEMENT MODELS
+# =====================================================
+
+
+class TenantBusinessUnit(EncryptedFieldsMixin, models.Model):
+    """Business Unit scoped to a tenant + entity, with hierarchy support."""
+    id = models.AutoField(primary_key=True)
+    tenant = models.ForeignKey('Tenant', on_delete=models.CASCADE, db_column='TenantId')
+    entity = models.ForeignKey('Entity', on_delete=models.CASCADE, db_column='EntityId')
+    name = models.CharField(max_length=255)
+    code = models.CharField(max_length=50, unique=True)
+    description = models.TextField(null=True, blank=True)
+    head = models.ForeignKey('Users', on_delete=models.SET_NULL, null=True, blank=True,
+                             db_column='HeadUserId')
+    parent_bu = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True,
+                                  db_column='ParentBUId')
+    status = models.CharField(max_length=20, default='active')
+    is_deleted = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'business_units'
+        verbose_name = 'Business Unit (Tenant)'
+        verbose_name_plural = 'Business Units (Tenant)'
+
+    def __str__(self):
+        return f"{self.name} ({self.code})"
+
+
+class TenantUserMapping(EncryptedFieldsMixin, models.Model):
+    """Maps a user to a tenant with a role. Supports users belonging to multiple tenants."""
+    id = models.AutoField(primary_key=True)
+    tenant = models.ForeignKey('Tenant', on_delete=models.CASCADE, db_column='TenantId')
+    user = models.ForeignKey('Users', on_delete=models.CASCADE, db_column='UserId')
+    role = models.CharField(max_length=100)
+    is_primary = models.BooleanField(default=False)
+    assigned_by = models.ForeignKey('Users', on_delete=models.SET_NULL, null=True,
+                                    related_name='tenant_assignments', db_column='AssignedById')
+    assigned_at = models.DateTimeField(auto_now_add=True)
+    status = models.CharField(max_length=20, default='active')
+    is_deleted = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'tenant_user_mapping'
+        unique_together = ['tenant', 'user']
+        verbose_name = 'Tenant User Mapping'
+        verbose_name_plural = 'Tenant User Mappings'
+
+    def __str__(self):
+        return f"{self.user_id} -> {self.tenant_id} ({self.role})"
+
+
+class UserEntityMapping(EncryptedFieldsMixin, models.Model):
+    """Maps a user to a specific entity with an access level."""
+    ACCESS_LEVELS = [
+        ('read', 'Read Only'),
+        ('write', 'Read Write'),
+        ('admin', 'Admin'),
+    ]
+
+    id = models.AutoField(primary_key=True)
+    user = models.ForeignKey('Users', on_delete=models.CASCADE, db_column='UserId')
+    entity = models.ForeignKey('Entity', on_delete=models.CASCADE, db_column='EntityId')
+    tenant = models.ForeignKey('Tenant', on_delete=models.CASCADE, db_column='TenantId')
+    role = models.CharField(max_length=100)
+    access_level = models.CharField(max_length=20, choices=ACCESS_LEVELS, default='read')
+    assigned_by = models.ForeignKey('Users', on_delete=models.SET_NULL, null=True,
+                                    related_name='entity_assignments', db_column='AssignedById')
+    assigned_at = models.DateTimeField(auto_now_add=True)
+    status = models.CharField(max_length=20, default='active')
+    is_deleted = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'user_entity_mapping'
+        unique_together = ['user', 'entity']
+        verbose_name = 'User Entity Mapping'
+        verbose_name_plural = 'User Entity Mappings'
+
+    def __str__(self):
+        return f"{self.user_id} -> Entity {self.entity_id} ({self.access_level})"
+
+
+class TenantModule(EncryptedFieldsMixin, models.Model):
+    """Tracks which modules are enabled for a tenant, with license and limit metadata."""
+    MODULE_CHOICES = [
+        ('framework', 'Framework'),
+        ('policy', 'Policy'),
+        ('compliance', 'Compliance'),
+        ('audit', 'Audit'),
+        ('risk', 'Risk'),
+        ('incident', 'Incident'),
+        ('event', 'Event'),
+    ]
+
+    id = models.AutoField(primary_key=True)
+    tenant = models.ForeignKey('Tenant', on_delete=models.CASCADE, db_column='TenantId')
+    module_code = models.CharField(max_length=50, choices=MODULE_CHOICES)
+    is_enabled = models.BooleanField(default=True)
+    license_tier = models.CharField(max_length=50, default='basic')
+    effective_from = models.DateField(null=True, blank=True)
+    effective_to = models.DateField(null=True, blank=True)
+    user_limit = models.IntegerField(null=True, blank=True)
+    storage_limit_gb = models.IntegerField(null=True, blank=True)
+    api_limit = models.IntegerField(null=True, blank=True)
+    ai_limit = models.IntegerField(null=True, blank=True)
+    configured_by = models.ForeignKey('Users', on_delete=models.SET_NULL, null=True,
+                                      db_column='ConfiguredById')
+    configured_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'tenant_modules'
+        unique_together = ['tenant', 'module_code']
+        verbose_name = 'Tenant Module'
+        verbose_name_plural = 'Tenant Modules'
+
+    def __str__(self):
+        status = 'enabled' if self.is_enabled else 'disabled'
+        return f"{self.tenant_id} - {self.module_code} ({status})"
+
+
+class TenantSecuritySettings(EncryptedFieldsMixin, models.Model):
+    """Per-tenant security policy: MFA, SSO, IP restrictions, session, password, export."""
+    id = models.AutoField(primary_key=True)
+    tenant = models.OneToOneField('Tenant', on_delete=models.CASCADE, db_column='TenantId',
+                                  related_name='security_settings')
+
+    # MFA
+    mfa_required = models.BooleanField(default=False)
+    mfa_methods = models.JSONField(default=list, help_text="['email', 'totp']")
+
+    # SSO
+    sso_enabled = models.BooleanField(default=False)
+    sso_provider = models.CharField(max_length=50, null=True, blank=True)
+    sso_config = models.JSONField(default=dict)
+
+    # Access Control
+    allowed_email_domains = models.JSONField(default=list,
+                                             help_text="['company.com', 'subsidiary.com']")
+    ip_restriction_enabled = models.BooleanField(default=False)
+    allowed_ip_ranges = models.JSONField(default=list,
+                                         help_text="['192.168.1.0/24', '10.0.0.0/8']")
+
+    # Session & Password
+    session_timeout_minutes = models.IntegerField(default=30)
+    password_expiry_days = models.IntegerField(default=90)
+
+    # Export
+    export_allowed = models.BooleanField(default=True)
+    export_requires_approval = models.BooleanField(default=False)
+
+    # Audit
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey('Users', on_delete=models.SET_NULL, null=True,
+                                   db_column='UpdatedById')
+
+    class Meta:
+        db_table = 'tenant_security_settings'
+        verbose_name = 'Tenant Security Settings'
+        verbose_name_plural = 'Tenant Security Settings'
+
+    def __str__(self):
+        return f"Security Settings for Tenant {self.tenant_id}"
+
+
+class TenantBranding(EncryptedFieldsMixin, models.Model):
+    """Per-tenant white-labelling: logo, colours, CSS, email templates."""
+    id = models.AutoField(primary_key=True)
+    tenant = models.OneToOneField('Tenant', on_delete=models.CASCADE, db_column='TenantId',
+                                  related_name='branding')
+
+    # Assets
+    logo_url = models.CharField(max_length=500, null=True, blank=True)
+    favicon_url = models.CharField(max_length=500, null=True, blank=True)
+
+    # Colors
+    primary_color = models.CharField(max_length=7, default='#1976D2')
+    secondary_color = models.CharField(max_length=7, default='#424242')
+    accent_color = models.CharField(max_length=7, default='#82B1FF')
+
+    # Customisation
+    custom_css = models.TextField(null=True, blank=True)
+    login_page_custom_html = models.TextField(null=True, blank=True)
+
+    # Email
+    email_template_logo = models.CharField(max_length=500, null=True, blank=True)
+    email_footer_text = models.TextField(null=True, blank=True)
+
+    # Metadata
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey('Users', on_delete=models.SET_NULL, null=True,
+                                   db_column='UpdatedById')
+
+    class Meta:
+        db_table = 'tenant_branding'
+        verbose_name = 'Tenant Branding'
+        verbose_name_plural = 'Tenant Branding'
+
+    def __str__(self):
+        return f"Branding for Tenant {self.tenant_id}"
+
+
+class TenantAuditLog(EncryptedFieldsMixin, models.Model):
+    """Immutable audit trail for all tenant-level administrative actions."""
+    ACTION_CHOICES = [
+        ('CREATE', 'Create'),
+        ('UPDATE', 'Update'),
+        ('DELETE', 'Delete'),
+        ('ACTIVATE', 'Activate'),
+        ('SUSPEND', 'Suspend'),
+        ('ARCHIVE', 'Archive'),
+        ('MAP_USER', 'Map User'),
+        ('UNMAP_USER', 'Unmap User'),
+        ('ENABLE_MODULE', 'Enable Module'),
+        ('DISABLE_MODULE', 'Disable Module'),
+    ]
+
+    ENTITY_TYPE_CHOICES = [
+        ('tenant', 'Tenant'),
+        ('entity', 'Entity'),
+        ('business_unit', 'Business Unit'),
+        ('department', 'Department'),
+        ('user', 'User'),
+        ('module', 'Module'),
+        ('security', 'Security Settings'),
+        ('branding', 'Branding'),
+        ('support_access', 'Support Access'),
+    ]
+
+    id = models.AutoField(primary_key=True)
+    tenant = models.ForeignKey('Tenant', on_delete=models.CASCADE, db_column='TenantId')
+
+    action_type = models.CharField(max_length=50, choices=ACTION_CHOICES)
+    entity_type = models.CharField(max_length=50, choices=ENTITY_TYPE_CHOICES)
+    entity_id = models.IntegerField()
+    entity_name = models.CharField(max_length=255)
+
+    old_value = models.JSONField(null=True, blank=True)
+    new_value = models.JSONField(null=True, blank=True)
+
+    performed_by = models.ForeignKey('Users', on_delete=models.SET_NULL, null=True,
+                                     db_column='PerformedById')
+    performed_at = models.DateTimeField(auto_now_add=True)
+    ip_address = models.CharField(max_length=45, null=True, blank=True)
+    user_agent = models.TextField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'tenant_audit_log'
+        ordering = ['-performed_at']
+        verbose_name = 'Tenant Audit Log'
+        verbose_name_plural = 'Tenant Audit Logs'
+
+    def __str__(self):
+        return f"{self.action_type} on {self.entity_type} {self.entity_id} by User {self.performed_by_id}"
+
+
+class SupportAccessRequest(EncryptedFieldsMixin, models.Model):
+    """Tracks support team requests to access a tenant's data, with approval workflow."""
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('approved', 'Approved'),
+        ('revoked', 'Revoked'),
+        ('expired', 'Expired'),
+    ]
+
+    id = models.AutoField(primary_key=True)
+    tenant = models.ForeignKey('Tenant', on_delete=models.CASCADE, db_column='TenantId')
+
+    support_user = models.ForeignKey('Users', on_delete=models.CASCADE,
+                                     related_name='support_access_requests',
+                                     db_column='SupportUserId')
+    request_reason = models.TextField()
+    requested_at = models.DateTimeField(auto_now_add=True)
+
+    approved_by = models.ForeignKey('Users', on_delete=models.SET_NULL, null=True, blank=True,
+                                    related_name='approved_support_access',
+                                    db_column='ApprovedById')
+    approved_at = models.DateTimeField(null=True, blank=True)
+
+    valid_from = models.DateTimeField(null=True, blank=True)
+    valid_to = models.DateTimeField(null=True, blank=True)
+
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    access_token = models.CharField(max_length=255, unique=True, null=True, blank=True)
+
+    last_used_at = models.DateTimeField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'support_access_request'
+        verbose_name = 'Support Access Request'
+        verbose_name_plural = 'Support Access Requests'
+
+    def __str__(self):
+        return f"SupportAccess #{self.id} - Tenant {self.tenant_id} ({self.status})"

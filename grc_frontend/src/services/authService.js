@@ -142,6 +142,12 @@ export default {
       if (response.data.tenant_name) {
         localStorage.setItem('tenant_name', response.data.tenant_name)
       }
+      // Global admin flag: user with no tenant_id is a platform-level admin
+      const hasTenantId = !!(
+        (response.data.user && response.data.user.tenant_id) ||
+        response.data.tenant_id
+      )
+      localStorage.setItem('is_global_admin', hasTenantId ? 'false' : 'true')
       if (response.data.access_token_expires) {
         localStorage.setItem('access_token_expires', response.data.access_token_expires)
       }
@@ -166,7 +172,16 @@ export default {
       // CRITICAL: Set is_logged_in flag - this is required for App.vue to show sidebar/navbar
       localStorage.setItem('is_logged_in', 'true')
       localStorage.setItem('isAuthenticated', 'true')
- 
+
+      // MULTI-TENANCY: Hydrate tenant store with full context from login response
+      try {
+        const { useTenantStore } = await import('@/stores/tenant.js')
+        const tenantStore = useTenantStore()
+        tenantStore.initFromLoginResponse(response.data)
+      } catch (e) {
+        /* ignore — store may not be ready yet */
+      }
+
       return {
         success: true,
         data: response.data,
@@ -328,6 +343,9 @@ export default {
     localStorage.removeItem('refresh_token_expires')
     localStorage.removeItem('isAuthenticated')
     localStorage.removeItem('is_logged_in')
+    localStorage.removeItem('is_global_admin')
+    localStorage.removeItem('tenant_id')
+    localStorage.removeItem('tenant_name')
     // Session / context identifiers: prevent cross-session reuse (client isolation)
     localStorage.removeItem('framework_id')
     localStorage.removeItem('framework_id_for_compliances')

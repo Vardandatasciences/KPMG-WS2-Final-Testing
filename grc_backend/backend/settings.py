@@ -226,6 +226,10 @@ MIDDLEWARE = [
     # MULTI-TENANCY: Add tenant context middleware (after JWT authentication)
     "grc.tenant_middleware.TenantContextMiddleware",
     "grc.tenant_middleware.TenantIsolationMiddleware",
+    # Phase 3: Tenant security, module, and entity enforcement (fail-open; all cached)
+    "grc.security_middleware.TenantSecurityMiddleware",
+    "grc.module_middleware.ModuleEnforcementMiddleware",
+    "grc.entity_middleware.EntityAccessMiddleware",
     "grc.middleware.AuditLoggingMiddleware",
     # AUTO-DECRYPT: Automatically decrypt any encrypted data in API responses (safety net)
     "grc.utils.auto_decrypt_middleware.AutoDecryptMiddleware",

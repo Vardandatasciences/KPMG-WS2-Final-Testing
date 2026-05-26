@@ -602,41 +602,25 @@ def get_user_event_permissions(request):
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_frameworks_for_events(request):
     """
-    Get all frameworks for event creation
+    Get all frameworks for event creation.
+    Delegates to get_approved_active_frameworks (via FrameworkTenantMapping) so both
+    endpoints stay in sync — no duplicate query logic.
+    Response is normalised to { success, frameworks } to preserve the existing contract.
     """
-    # MULTI-TENANCY: Extract tenant_id from request
-    tenant_id = get_tenant_id_from_request(request)
+    from ..Framework.frameworks import get_approved_active_frameworks
+    inner = get_approved_active_frameworks(request)
 
-    debug_print("DEBUG: get_frameworks_for_events called")
-    debug_print(f"DEBUG: Request path: {request.path}")
-    debug_print(f"DEBUG: Request method: {request.method}")
-    
     try:
-        # Try to get all frameworks first
-        all_frameworks = Framework.objects.filter(tenant_id=tenant_id)
-        debug_print(f"DEBUG: Total frameworks in database: {all_frameworks.count()}")
-        
-        # Then filter for active ones
-        frameworks = Framework.objects.filter(tenant_id=tenant_id, ActiveInactive='Active').values(
-            'FrameworkId', 'FrameworkName'
-        )
-        
-        debug_print(f"DEBUG: Found {frameworks.count()} active frameworks")
-        
-        # If no active frameworks, return all frameworks
-        if frameworks.count() == 0:
-            debug_print("DEBUG: No active frameworks found, returning all frameworks")
-            frameworks = Framework.objects.filter(tenant_id=tenant_id).values(
-                'FrameworkId', 'FrameworkName'
-            )
-        
-        frameworks_list = list(frameworks)
-        debug_print(f"DEBUG: Returning {len(frameworks_list)} frameworks")
-        
+        payload = inner.data if hasattr(inner, 'data') else {}
+        rows = payload.get('data', [])
+        frameworks_list = [
+            {'FrameworkId': f.get('FrameworkId'), 'FrameworkName': f.get('FrameworkName', '')}
+            for f in rows
+        ]
         return Response({
             'success': True,
             'frameworks': frameworks_list
-        })
+        }, status=inner.status_code if hasattr(inner, 'status_code') else 200)
     except Exception as e:
         _log_exception(e, context='get_frameworks_for_events')
         return Response({

@@ -10,17 +10,49 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from django.db import connection
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import AllowAny
-from ...models import Tenant, Users
-from ...tenant_utils import require_tenant, get_tenant_from_request
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from ...models import Tenant, Users, TenantAuditLog
+from ...tenant_utils import require_tenant, get_tenant_from_request, get_tenant_id_from_request
+from ...rbac.utils import RBACUtils
+
+
+def _is_global_admin(request):
+    """
+    Returns True if the requesting user is a platform-level (global) admin.
+    Global admins have no tenant assignment (tenant_id is None).
+    Tenant-scoped users always have a tenant_id.
+    """
+    try:
+        user_id = RBACUtils.get_user_id_from_request(request)
+        if not user_id:
+            return False
+        user = Users.objects.filter(UserId=user_id).first()
+        if not user:
+            return False
+        return user.tenant_id is None
+    except Exception:
+        return False
+
+
+def _get_requesting_user(request):
+    """Return the Users object for the requesting user, or None."""
+    try:
+        user_id = RBACUtils.get_user_id_from_request(request)
+        if user_id:
+            return Users.objects.filter(UserId=user_id).first()
+    except Exception:
+        pass
+    return None
 
 logger = logging.getLogger(__name__)
 
 
 @api_view(['POST'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 @csrf_exempt
 def create_tenant(request):
+    if not _is_global_admin(request):
+        return JsonResponse({'status': 'error', 'message': 'Permission denied'}, status=403)
     """
     Create a new tenant (organization)
     
@@ -109,15 +141,26 @@ def create_tenant(request):
 
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def list_tenants(request):
     """
-    List all tenants (for super admin)
-    
+    List tenants.
+    - Global admins (tenant_id=None): see all tenants.
+    - Tenant-scoped users: see only their own tenant.
+
     GET /api/tenants/list/
     """
     try:
-        tenants = Tenant.objects.all().order_by('-created_at')
+        user = _get_requesting_user(request)
+        if not user:
+            return JsonResponse({'status': 'error', 'message': 'Authentication required'}, status=401)
+
+        if user.tenant_id is None:
+            # Platform-level admin — return all tenants
+            tenants = Tenant.objects.all().order_by('-created_at')
+        else:
+            # Tenant-scoped user — return only their own tenant
+            tenants = Tenant.objects.filter(tenant_id=user.tenant_id)
         
         tenant_list = []
         for tenant in tenants:
@@ -143,7 +186,8 @@ def list_tenants(request):
         return JsonResponse({
             'status': 'success',
             'count': len(tenant_list),
-            'tenants': tenant_list
+            'tenants': tenant_list,
+            'is_global_admin': user.tenant_id is None
         })
         
     except Exception as e:
@@ -205,22 +249,21 @@ def get_tenant_info(request):
         }, status=500)
 
 
-@api_view(['PUT'])
-@permission_classes([AllowAny])
+@api_view(['GET', 'PUT'])
+@permission_classes([IsAuthenticated])
 @csrf_exempt
 def update_tenant(request, tenant_id):
+    user = _get_requesting_user(request)
+    if not user:
+        return JsonResponse({'status': 'error', 'message': 'Authentication required'}, status=401)
+    # Tenant-scoped users may only read/update their own tenant
+    if user.tenant_id is not None and str(user.tenant_id) != str(tenant_id):
+        return JsonResponse({'status': 'error', 'message': 'Permission denied'}, status=403)
     """
-    Update tenant information
+    Get or update tenant information
     
-    PUT /api/tenants/{tenant_id}/update/
-    Body:
-    {
-        "name": "Updated Name",
-        "subscription_tier": "enterprise",
-        "status": "active",
-        "max_users": 100,
-        "storage_limit_gb": 500
-    }
+    GET /api/tenants/{tenant_id}/update/  — fetch tenant detail
+    PUT /api/tenants/{tenant_id}/update/  — update tenant fields
     """
     try:
         tenant = Tenant.objects.filter(tenant_id=tenant_id).first()
@@ -230,6 +273,31 @@ def update_tenant(request, tenant_id):
                 'status': 'error',
                 'message': 'Tenant not found'
             }, status=404)
+
+        if request.method == 'GET':
+            user_count = Users.objects.filter(tenant=tenant).count()
+            return JsonResponse({
+                'status': 'success',
+                'tenant': {
+                    'tenant_id': tenant.tenant_id,
+                    'name': tenant.name,
+                    'subdomain': tenant.subdomain,
+                    'subscription_tier': tenant.subscription_tier,
+                    'status': tenant.status,
+                    'max_users': tenant.max_users,
+                    'current_users': user_count,
+                    'storage_limit_gb': tenant.storage_limit_gb,
+                    'trial_ends_at': tenant.trial_ends_at.isoformat() if tenant.trial_ends_at else None,
+                    'is_trial_expired': tenant.is_trial_expired(),
+                    'is_active': tenant.is_active(),
+                    'settings': tenant.settings,
+                    'primary_contact_email': tenant.primary_contact_email,
+                    'primary_contact_name': tenant.primary_contact_name,
+                    'primary_contact_phone': tenant.primary_contact_phone,
+                    'created_at': tenant.created_at.isoformat(),
+                    'updated_at': tenant.updated_at.isoformat()
+                }
+            })
         
         data = request.data if hasattr(request, 'data') else request.POST
         
@@ -281,9 +349,11 @@ def update_tenant(request, tenant_id):
 
 
 @api_view(['DELETE'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 @csrf_exempt
 def delete_tenant(request, tenant_id):
+    if not _is_global_admin(request):
+        return JsonResponse({'status': 'error', 'message': 'Permission denied'}, status=403)
     """
     Delete a tenant (WARNING: This will delete all associated data!)
     
@@ -320,9 +390,11 @@ def delete_tenant(request, tenant_id):
 
 
 @api_view(['POST'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 @csrf_exempt
 def activate_tenant(request, tenant_id):
+    if not _is_global_admin(request):
+        return JsonResponse({'status': 'error', 'message': 'Permission denied'}, status=403)
     """
     Activate a tenant (change status from trial to active)
     
@@ -362,9 +434,11 @@ def activate_tenant(request, tenant_id):
 
 
 @api_view(['POST'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 @csrf_exempt
 def suspend_tenant(request, tenant_id):
+    if not _is_global_admin(request):
+        return JsonResponse({'status': 'error', 'message': 'Permission denied'}, status=403)
     """
     Suspend a tenant (change status to suspended)
     
@@ -400,4 +474,153 @@ def suspend_tenant(request, tenant_id):
             'status': 'error',
             'message': f'Error suspending tenant: {str(e)}'
         }, status=500)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@csrf_exempt
+def archive_tenant(request, tenant_id):
+    if not _is_global_admin(request):
+        return JsonResponse({'status': 'error', 'message': 'Permission denied'}, status=403)
+    """
+    POST /api/tenants/{tenant_id}/archive/
+    Archives a tenant (soft inactive state – data retained).
+    """
+    try:
+        tenant = Tenant.objects.filter(tenant_id=tenant_id).first()
+        if not tenant:
+            return JsonResponse({'status': 'error', 'message': 'Tenant not found'}, status=404)
+
+        old_status = tenant.status
+        tenant.status = 'archived'
+        tenant.save()
+
+        try:
+            performer_id = None
+            if hasattr(request, 'user') and request.user and request.user.is_authenticated:
+                performer_id = getattr(request.user, 'UserId', getattr(request.user, 'id', None))
+            TenantAuditLog.objects.create(
+                tenant_id=tenant_id,
+                action_type='ARCHIVE',
+                entity_type='tenant',
+                entity_id=tenant_id,
+                entity_name=tenant.name,
+                old_value={'status': old_status},
+                new_value={'status': 'archived'},
+                performed_by_id=performer_id,
+                ip_address=request.META.get('REMOTE_ADDR', ''),
+            )
+        except Exception:
+            pass
+
+        logger.info(f"📦 Archived tenant: {tenant.name} ({tenant.tenant_id})")
+        return JsonResponse({
+            'status': 'success',
+            'message': f'Tenant "{tenant.name}" archived successfully',
+            'tenant': {'tenant_id': tenant.tenant_id, 'name': tenant.name, 'status': tenant.status},
+        })
+    except Exception as e:
+        logger.error(f"❌ Error archiving tenant: {str(e)}")
+        return JsonResponse({'status': 'error', 'message': f'Error archiving tenant: {str(e)}'}, status=500)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def list_tenant_users(request, tenant_id):
+    """
+    GET /api/tenants/{tenant_id}/users/
+    Returns all user mappings for the tenant with user details.
+    """
+    user = _get_requesting_user(request)
+    if not user:
+        return JsonResponse({'status': 'error', 'message': 'Authentication required'}, status=401)
+    if user.tenant_id is not None and str(user.tenant_id) != str(tenant_id):
+        return JsonResponse({'status': 'error', 'message': 'Permission denied'}, status=403)
+
+    try:
+        from ...models import TenantUserMapping
+        mappings = TenantUserMapping.objects.filter(
+            tenant_id=tenant_id, is_deleted=False
+        ).select_related('user')
+
+        result = []
+        for m in mappings:
+            u = m.user
+            result.append({
+                'id': m.id,
+                'user_id': m.user_id,
+                'user_name': getattr(u, 'UserName', ''),
+                'user_email': getattr(u, 'Email', ''),
+                'first_name': getattr(u, 'FirstName', ''),
+                'last_name': getattr(u, 'LastName', ''),
+                'role': m.role,
+                'is_primary': m.is_primary,
+                'status': m.status,
+                'assigned_at': m.assigned_at.isoformat() if m.assigned_at else None,
+            })
+
+        return JsonResponse({'status': 'success', 'count': len(result), 'users': result})
+    except Exception as exc:
+        logger.error(f"[list_tenant_users] error: {exc}")
+        return JsonResponse({'status': 'error', 'message': str(exc)}, status=500)
+
+
+@api_view(['GET'])
+@require_tenant
+def get_tenant_audit_logs(request, tenant_id):
+    """
+    GET /api/tenants/{tenant_id}/audit-logs/
+    Returns the audit log for tenant-level administrative actions.
+    Query params: ?limit=50&offset=0&action_type=<str>&entity_type=<str>
+    """
+    session_tenant_id = get_tenant_id_from_request(request)
+    if int(tenant_id) != int(session_tenant_id):
+        return JsonResponse({'status': 'error', 'message': 'Access denied'}, status=403)
+
+    try:
+        qs = TenantAuditLog.objects.filter(tenant_id=tenant_id).order_by('-performed_at')
+
+        action_type = request.GET.get('action_type')
+        entity_type = request.GET.get('entity_type')
+        if action_type:
+            qs = qs.filter(action_type=action_type)
+        if entity_type:
+            qs = qs.filter(entity_type=entity_type)
+
+        total = qs.count()
+        limit = int(request.GET.get('limit', 50))
+        offset = int(request.GET.get('offset', 0))
+        qs = qs[offset:offset + limit]
+
+        logs = [
+            {
+                'id': log.id,
+                'action_type': log.action_type or '',
+                'entity_type': log.entity_type or '',
+                'entity_id': log.entity_id,
+                'entity_name': log.entity_name or '',
+                'old_value': log.old_value,
+                'new_value': log.new_value,
+                'performed_by_id': log.performed_by_id,
+                'performed_by_name': (
+                    f"{log.performed_by.FirstName or ''} {log.performed_by.LastName or ''}".strip()
+                    or getattr(log.performed_by, 'UserName', '')
+                ) if log.performed_by else '',
+                'performed_at': log.performed_at.isoformat() if log.performed_at else None,
+                'ip_address': log.ip_address or '',
+                'user_agent': log.user_agent or '',
+            }
+            for log in qs
+        ]
+
+        return JsonResponse({
+            'status': 'success',
+            'total': total,
+            'limit': limit,
+            'offset': offset,
+            'audit_logs': logs,
+        })
+    except Exception as e:
+        logger.error(f"❌ Error fetching audit logs: {str(e)}")
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 

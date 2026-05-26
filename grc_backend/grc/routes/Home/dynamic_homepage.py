@@ -39,21 +39,22 @@ def select_next_audit(audits_qs):
     return open_qs.order_by('DueDate').first()
 
 
-def aggregate_homepage_risk_metrics(framework_filter, framework_id):
+def aggregate_homepage_risk_metrics(framework_filter, framework_id, tenant_q=None):
     """
     Combine the risk register (`Risk` → table `risk`, FrameworkId int) with operational
     `RiskInstance` rows. Totals dedupe by RiskId so catalog-only risks still count.
     Mitigated / in-progress / accepted metrics stay instance-based (MitigationStatus etc.).
     """
+    tq = tenant_q if tenant_q is not None else Q()
     if framework_id is not None:
-        risk_register_qs = Risk.objects.filter(FrameworkId=framework_id)
+        risk_register_qs = Risk.objects.filter(tq, FrameworkId=framework_id)
     else:
-        risk_register_qs = Risk.objects.all()
+        risk_register_qs = Risk.objects.filter(tq)
 
     if framework_filter:
-        risk_instances_qs = RiskInstance.objects.filter(framework_filter)
+        risk_instances_qs = RiskInstance.objects.filter(tq & framework_filter)
     else:
-        risk_instances_qs = RiskInstance.objects.all()
+        risk_instances_qs = RiskInstance.objects.filter(tq)
 
     register_risk_ids = set(risk_register_qs.values_list('RiskId', flat=True))
     instance_risk_ids = set(
@@ -175,26 +176,47 @@ def get_homepage_data(request):
         if framework_id:
             try:
                 framework_id = int(framework_id)
-                # MULTI-TENANCY: Filter by tenant_id
-                fw_qs = Framework.objects.filter(FrameworkId=framework_id)
+                # Verify this framework is assigned to the tenant via mapping table
                 if tenant_id:
-                    fw_qs = fw_qs.filter(tenant_id=tenant_id)
-                selected_framework = fw_qs.first()
+                    try:
+                        from grc.models import FrameworkTenantMapping
+                        is_mapped = FrameworkTenantMapping.objects.filter(
+                            framework_id=framework_id,
+                            tenant_id=tenant_id,
+                            is_active=True
+                        ).exists()
+                        if is_mapped:
+                            selected_framework = Framework.objects.filter(FrameworkId=framework_id).first()
+                    except Exception:
+                        selected_framework = Framework.objects.filter(
+                            FrameworkId=framework_id
+                        ).filter(Q(tenant_id=tenant_id) | Q(tenant_id__isnull=True)).first()
+                else:
+                    selected_framework = Framework.objects.filter(FrameworkId=framework_id).first()
                 framework_filter = Q(FrameworkId=framework_id)
                 debug_print(f"✅ Framework found: ID={framework_id}, Name={selected_framework.FrameworkName if selected_framework else 'None'}")
             except (ValueError, TypeError):
                 debug_print(f"⚠️ Invalid framework_id format: {framework_id}")
                 pass
         
-        # If no framework selected, use first active framework or all data
+        # If no framework selected, use first assigned framework for this tenant
         if not selected_framework:
-            fw_fallback_qs = Framework.objects.filter(
-                Status='Approved',
-                ActiveInactive='Active'
-            )
-            # MULTI-TENANCY: Filter by tenant_id
             if tenant_id:
-                fw_fallback_qs = fw_fallback_qs.filter(tenant_id=tenant_id)
+                try:
+                    from grc.models import FrameworkTenantMapping
+                    mapped_fw_ids = list(
+                        FrameworkTenantMapping.objects.filter(
+                            tenant_id=tenant_id,
+                            is_active=True
+                        ).values_list('framework_id', flat=True)
+                    )
+                    fw_fallback_qs = Framework.objects.filter(FrameworkId__in=mapped_fw_ids)
+                except Exception:
+                    fw_fallback_qs = Framework.objects.filter(
+                        Q(tenant_id=tenant_id) | Q(tenant_id__isnull=True)
+                    )
+            else:
+                fw_fallback_qs = Framework.objects.filter(Status='Approved', ActiveInactive='Active')
             selected_framework = fw_fallback_qs.first()
             if selected_framework:
                 framework_id = selected_framework.FrameworkId
@@ -243,7 +265,8 @@ def get_homepage_data(request):
         if selected_framework:
             debug_print(f"📊 Selected Framework Name: {selected_framework.FrameworkName}")
         
-        policies_qs = Policy.objects.filter(framework_filter) if framework_filter else Policy.objects.all()
+        tenant_q = Q(tenant_id=tenant_id) if tenant_id else Q()
+        policies_qs = Policy.objects.filter(tenant_q & framework_filter) if framework_filter else Policy.objects.filter(tenant_q)
         
         # Step 2: Count total policies (all statuses)
         total_policies_all = policies_qs.count()
@@ -483,7 +506,7 @@ def get_homepage_data(request):
         # ====================================================================
         # MODULE METRICS - COMPLIANCE
         # ====================================================================
-        compliances_qs = Compliance.objects.filter(framework_filter) if framework_filter else Compliance.objects.all()
+        compliances_qs = Compliance.objects.filter(tenant_q & framework_filter) if framework_filter else Compliance.objects.filter(tenant_q)
         
         # Count total compliances (all statuses)
         total_compliances_all = compliances_qs.count()
@@ -521,7 +544,7 @@ def get_homepage_data(request):
         # ====================================================================
         # MODULE METRICS - RISK (register `risk` + operational `risk_instance`)
         # ====================================================================
-        _risk_agg = aggregate_homepage_risk_metrics(framework_filter, framework_id)
+        _risk_agg = aggregate_homepage_risk_metrics(framework_filter, framework_id, tenant_q)
         total_risks = _risk_agg['total_risks']
         accepted_risks = _risk_agg['accepted_risks']
         mitigated_risks = _risk_agg['mitigated_risks']
@@ -545,7 +568,7 @@ def get_homepage_data(request):
         # ====================================================================
         # MODULE METRICS - INCIDENT
         # ====================================================================
-        incidents_qs = Incident.objects.filter(framework_filter) if framework_filter else Incident.objects.all()
+        incidents_qs = Incident.objects.filter(tenant_q & framework_filter) if framework_filter else Incident.objects.filter(tenant_q)
         
         total_incidents = incidents_qs.count()
         
@@ -591,7 +614,7 @@ def get_homepage_data(request):
         # ====================================================================
         # MODULE METRICS - AUDIT
         # ====================================================================
-        audits_qs = Audit.objects.filter(framework_filter) if framework_filter else Audit.objects.all()
+        audits_qs = Audit.objects.filter(tenant_q & framework_filter) if framework_filter else Audit.objects.filter(tenant_q)
         
         total_audits = audits_qs.count()
         completed_audits = audits_qs.filter(Status='Completed').count()
@@ -617,6 +640,7 @@ def get_homepage_data(request):
         # ====================================================================
         # Calculate compliant compliances (based on audit findings with Check='2')
         compliant_compliances = AuditFinding.objects.filter(
+            tenant_q,
             framework_filter,
             Check='2'  # Completed = Compliant
         ).values('ComplianceId').distinct().count()
@@ -877,10 +901,23 @@ def get_all_frameworks_data(request):
 
     try:
         # ── 1. Fetch framework metadata (1 query) ─────────────────────────────
-        fw_qs = Framework.objects.filter(Status='Approved', ActiveInactive='Active')
-        # MULTI-TENANCY: Filter by tenant_id
+        # Use FrameworkTenantMapping as source of truth for tenant-assigned frameworks
         if tenant_id:
-            fw_qs = fw_qs.filter(tenant_id=tenant_id)
+            try:
+                from grc.models import FrameworkTenantMapping
+                mapped_fw_ids = list(
+                    FrameworkTenantMapping.objects.filter(
+                        tenant_id=tenant_id,
+                        is_active=True
+                    ).values_list('framework_id', flat=True)
+                )
+                fw_qs = Framework.objects.filter(FrameworkId__in=mapped_fw_ids)
+            except Exception:
+                fw_qs = Framework.objects.filter(
+                    Q(tenant_id=tenant_id) | Q(tenant_id__isnull=True)
+                )
+        else:
+            fw_qs = Framework.objects.all()
         fw_rows = list(
             fw_qs.values('FrameworkId', 'FrameworkName', 'FrameworkDescription', 'Category')
         )

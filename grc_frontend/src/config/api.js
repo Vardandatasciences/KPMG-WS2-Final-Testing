@@ -861,7 +861,60 @@ export const API_ENDPOINTS = {
   CHANGE_MGMT_DOCUMENT_INFO: (frameworkId) => `${API_BASE_URL}/api/change-management/framework/${frameworkId}/document-info/`,
   CHANGE_MGMT_AUTO_CHECK_ALL: `${API_BASE_URL}/api/change-management/auto-check-frameworks/`,
   CHANGE_MGMT_START_ANALYSIS: (frameworkId) => `${API_BASE_URL}/api/change-management/framework/${frameworkId}/start-analysis/`,
-  CHANGE_MGMT_CANCEL_ANALYSIS: (frameworkId) => `${API_BASE_URL}/api/change-management/framework/${frameworkId}/cancel-analysis/`
+  CHANGE_MGMT_CANCEL_ANALYSIS: (frameworkId) => `${API_BASE_URL}/api/change-management/framework/${frameworkId}/cancel-analysis/`,
+
+  // ========================================================================
+  // TENANT MANAGEMENT (Phase 4 — Enterprise Multi-Tenancy)
+  // ========================================================================
+  TENANTS: `${API_BASE_URL}/api/tenants/`,
+  TENANT_CREATE: `${API_BASE_URL}/api/tenants/create/`,
+  TENANT_DETAIL: (tenantId) => `${API_BASE_URL}/api/tenants/${tenantId}/`,
+  TENANT_UPDATE: (tenantId) => `${API_BASE_URL}/api/tenants/${tenantId}/update/`,
+  TENANT_ACTIVATE: (tenantId) => `${API_BASE_URL}/api/tenants/${tenantId}/activate/`,
+  TENANT_SUSPEND: (tenantId) => `${API_BASE_URL}/api/tenants/${tenantId}/suspend/`,
+  TENANT_ARCHIVE: (tenantId) => `${API_BASE_URL}/api/tenants/${tenantId}/archive/`,
+  TENANT_AUDIT_LOGS: (tenantId) => `${API_BASE_URL}/api/tenants/${tenantId}/audit-logs/`,
+
+  TENANT_ENTITIES: (tenantId) => `${API_BASE_URL}/api/tenants/${tenantId}/entities/`,
+  TENANT_ENTITY_TREE: (tenantId) => `${API_BASE_URL}/api/tenants/${tenantId}/entities/tree/`,
+  ENTITY_DETAIL: (entityId) => `${API_BASE_URL}/api/entities/${entityId}/`,
+  ENTITY_USERS: (entityId) => `${API_BASE_URL}/api/entities/${entityId}/users/`,
+  ENTITY_MAP_USER: (entityId) => `${API_BASE_URL}/api/entities/${entityId}/map-user/`,
+  ENTITY_BUSINESS_UNITS: (entityId) => `${API_BASE_URL}/api/entities/${entityId}/business-units/`,
+
+  BUSINESS_UNIT_DETAIL: (buId) => `${API_BASE_URL}/api/business-units/${buId}/`,
+  BUSINESS_UNIT_DEPARTMENTS: (buId) => `${API_BASE_URL}/api/business-units/${buId}/departments/`,
+
+  DEPARTMENT_DETAIL: (deptId) => `${API_BASE_URL}/api/departments/${deptId}/`,
+  DEPARTMENT_ASSIGN_USER: (deptId) => `${API_BASE_URL}/api/departments/${deptId}/assign-user/`,
+
+  TENANT_MAP_USER: (tenantId) => `${API_BASE_URL}/api/tenants/${tenantId}/map-user/`,
+  TENANT_UNMAP_USER: (tenantId, userId) => `${API_BASE_URL}/api/tenants/${tenantId}/unmap-user/${userId}/`,
+  TENANT_SET_PRIMARY_USER: (tenantId, userId) => `${API_BASE_URL}/api/tenants/${tenantId}/set-primary-user/${userId}/`,
+  USER_TENANTS: (userId) => `${API_BASE_URL}/api/users/${userId}/tenants/`,
+  USER_ENTITIES: (userId) => `${API_BASE_URL}/api/users/${userId}/entities/`,
+
+  TENANT_MODULES: (tenantId) => `${API_BASE_URL}/api/tenants/${tenantId}/modules/`,
+  TENANT_MODULE_STATUS: (tenantId, moduleCode) => `${API_BASE_URL}/api/tenants/${tenantId}/module-status/${moduleCode}/`,
+  MODULES_AVAILABLE: `${API_BASE_URL}/api/modules/available/`,
+
+  TENANT_SECURITY_SETTINGS: (tenantId) => `${API_BASE_URL}/api/tenants/${tenantId}/security-settings/`,
+  TENANT_TEST_IP: (tenantId) => `${API_BASE_URL}/api/tenants/${tenantId}/test-ip-restriction/`,
+  TENANT_SECURITY_AUDIT: (tenantId) => `${API_BASE_URL}/api/tenants/${tenantId}/security-audit/`,
+
+  TENANT_BRANDING: (tenantId) => `${API_BASE_URL}/api/tenants/${tenantId}/branding/`,
+  TENANT_BRANDING_UPLOAD_LOGO: (tenantId) => `${API_BASE_URL}/api/tenants/${tenantId}/branding/upload-logo/`,
+  PUBLIC_BRANDING: (tenantId) => `${API_BASE_URL}/api/public/branding/${tenantId}/`,
+
+  SUPPORT_ACCESS_REQUEST: `${API_BASE_URL}/api/support-access/request/`,
+  SUPPORT_REQUESTS_FOR_TENANT: (tenantId) => `${API_BASE_URL}/api/tenant-admins/${tenantId}/support-requests/`,
+  SUPPORT_ACCESS_APPROVE: (requestId) => `${API_BASE_URL}/api/support-access/${requestId}/approve/`,
+  SUPPORT_ACCESS_REVOKE: (requestId) => `${API_BASE_URL}/api/support-access/${requestId}/revoke/`,
+  SUPPORT_ACCESS_MY: `${API_BASE_URL}/api/support-access/my-accesses/`,
+  TENANT_SUPPORT_HISTORY: (tenantId) => `${API_BASE_URL}/api/tenants/${tenantId}/support-history/`,
+
+  TENANT_MY_CONTEXT: `${API_BASE_URL}/api/users/me/tenant-context/`,
+  TENANT_SWITCH: `${API_BASE_URL}/api/users/me/switch-tenant/`
 };
 
 // Axios instance configuration with JWT authentication

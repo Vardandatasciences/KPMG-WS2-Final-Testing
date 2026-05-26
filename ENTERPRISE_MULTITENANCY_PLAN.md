@@ -729,7 +729,7 @@ export const useTenantStore = defineStore('tenant', {
 
 **File Structure:**
 ```
-grc_frontend/src/views/TenantAdmin/
+grc_frontend/src/components/TenantAdmin/
 ├── TenantList.vue
 ├── TenantCreate.vue
 ├── TenantDetail.vue

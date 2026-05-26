@@ -192,6 +192,7 @@ const fetchFrameworks = async () => {
     error.value = null
     isLoadingTree.value = true
     console.log('🔍 [TreePolicies] Checking for cached frameworks...')
+    console.log('📡 [TreePolicies] Framework endpoint:', API_ENDPOINTS.FRAMEWORKS)
 
     if (policyStore.hasFrameworksCache()) {
       const raw = policyStore.getFrameworksCached()
@@ -233,14 +234,17 @@ const fetchFrameworks = async () => {
       return
     }
 
-    console.log('⚠️ [TreePolicies] No cached data found, fetching frameworks from policy store...')
-    const response = await policyStore.getAllFrameworks()
-    frameworks.value = response.map(fw => ({
+    console.log('⚠️ [TreePolicies] No cached data found, fetching frameworks from API...')
+    // Use direct API call to ensure correct endpoint (/api/frameworks/, not /api/tree/frameworks/)
+    const response = await apiService.get(API_ENDPOINTS.FRAMEWORKS, { include_all_status: true })
+    const frameworksData = Array.isArray(response) ? response : (response?.frameworks || response?.data || [])
+    console.log('✅ [TreePolicies] Fetched frameworks from /api/frameworks/, count:', frameworksData.length)
+    frameworks.value = frameworksData.map(fw => ({
       id: fw.FrameworkId || fw.id,
       title: fw.FrameworkName || fw.name
     }))
 
-    policyDataService.setFrameworksList(response)
+    policyDataService.setFrameworksList(frameworksData)
 
     await checkSelectedFrameworkFromSession()
   } catch (err) {

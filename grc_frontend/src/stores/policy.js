@@ -280,7 +280,7 @@ export const usePolicyStore = defineStore('policy', {
       this.loading.frameworks = true
       this.errors.frameworks = null
       try {
-        const response = await dashboardService.getAllFrameworks()
+        const response = await dashboardService.getAllFrameworks({ force })
         const frameworks = Array.isArray(response)
           ? response
           : response?.frameworks ?? response?.data ?? []

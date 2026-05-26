@@ -1138,6 +1138,65 @@
            <i class="fas fa-cog icon"></i>
            <span>Settings</span>
          </div>
+
+         <!-- My Organization (visible to tenant-scoped users to view their own tenant info) -->
+         <div v-if="!isGlobalAdmin && myTenantId" @click="toggleSubmenu('myOrg')" class="menu-item has-submenu" :class="{'expanded': openMenus.myOrg}">
+           <i class="fas fa-building icon"></i>
+           <span>My Organization</span>
+           <i class="fas fa-chevron-right submenu-arrow"></i>
+         </div>
+         <div v-if="!isGlobalAdmin && myTenantId && openMenus.myOrg" class="submenu tenant-pages-submenu">
+           <div class="menu-item" @click="navigateToTenantTab(myTenantId,'overview')"      :class="{'active': isActive('/tenant-admin/'+myTenantId) && $route.query.tab==='overview'}"><i class="fas fa-info-circle icon"></i><span>Overview</span></div>
+           <div class="menu-item" @click="navigateToTenantTab(myTenantId,'entities')"      :class="{'active': $route.query.tab==='entities'}"><i class="fas fa-sitemap icon"></i><span>Entities</span></div>
+           <div class="menu-item" @click="navigateToTenantTab(myTenantId,'business_units')" :class="{'active': $route.query.tab==='business_units'}"><i class="fas fa-layer-group icon"></i><span>Business Units</span></div>
+           <div class="menu-item" @click="navigateToTenantTab(myTenantId,'departments')"   :class="{'active': $route.query.tab==='departments'}"><i class="fas fa-users icon"></i><span>Departments</span></div>
+           <div class="menu-item" @click="navigateToTenantTab(myTenantId,'users')"         :class="{'active': $route.query.tab==='users'}"><i class="fas fa-user icon"></i><span>Users</span></div>
+           <div class="menu-item" @click="navigateToTenantTab(myTenantId,'roles')"         :class="{'active': $route.query.tab==='roles'}"><i class="fas fa-shield-alt icon"></i><span>Roles</span></div>
+           <div class="menu-item" @click="navigateToTenantTab(myTenantId,'modules')"       :class="{'active': $route.query.tab==='modules'}"><i class="fas fa-th-large icon"></i><span>Modules</span></div>
+           <div class="menu-item" @click="navigateToTenantTab(myTenantId,'security')"      :class="{'active': $route.query.tab==='security'}"><i class="fas fa-lock icon"></i><span>Security</span></div>
+           <div class="menu-item" @click="navigateToTenantTab(myTenantId,'branding')"      :class="{'active': $route.query.tab==='branding'}"><i class="fas fa-palette icon"></i><span>Branding</span></div>
+           <div class="menu-item" @click="navigateToTenantTab(myTenantId,'audit_logs')"    :class="{'active': $route.query.tab==='audit_logs'}"><i class="fas fa-history icon"></i><span>Audit Logs</span></div>
+         </div>
+
+         <!-- Tenant Administration (only visible to global/platform admins) -->
+         <div v-if="isGlobalAdmin" @click="toggleSubmenu('tenantAdmin')" class="menu-item has-submenu" :class="{'expanded': openMenus.tenantAdmin}">
+           <i class="fas fa-building icon"></i>
+           <span>Tenant Administration</span>
+           <i class="fas fa-chevron-right submenu-arrow"></i>
+         </div>
+         <div v-if="isGlobalAdmin && openMenus.tenantAdmin" class="submenu">
+           <div class="menu-item" @click="navigate('/tenant-admin')" :class="{'active': isActive('/tenant-admin')}">
+             <i class="fas fa-list icon"></i>
+             <span>All Tenants</span>
+           </div>
+           <div class="menu-item" @click="navigate('/tenant-admin/create')" :class="{'active': isActive('/tenant-admin/create')}">
+             <i class="fas fa-plus icon"></i>
+             <span>Create Tenant</span>
+           </div>
+           <!-- Dynamic tenant list -->
+           <div v-for="t in tenantList" :key="t.tenant_id" class="tenant-nav-group">
+             <div class="menu-item has-submenu tenant-nav-item" :class="{'expanded': tenantMenuOpen[t.tenant_id]}" @click="toggleTenantMenu(t.tenant_id)">
+               <span class="tenant-nav-avatar">{{ (t.name||'?')[0].toUpperCase() }}</span>
+               <span class="tenant-nav-name">{{ t.name }}</span>
+               <i class="fas fa-chevron-right submenu-arrow"></i>
+             </div>
+             <div v-if="tenantMenuOpen[t.tenant_id]" class="submenu tenant-pages-submenu">
+               <div class="menu-item" @click="navigateToTenantTab(t.tenant_id,'overview')"      :class="{'active': isActive('/tenant-admin/'+t.tenant_id) && $route.query.tab==='overview'}"><i class="fas fa-info-circle icon"></i><span>Overview</span></div>
+               <div class="menu-item" @click="navigateToTenantTab(t.tenant_id,'entities')"      :class="{'active': $route.query.tab==='entities'}"><i class="fas fa-sitemap icon"></i><span>Entities</span></div>
+               <div class="menu-item" @click="navigateToTenantTab(t.tenant_id,'business_units')" :class="{'active': $route.query.tab==='business_units'}"><i class="fas fa-layer-group icon"></i><span>Business Units</span></div>
+               <div class="menu-item" @click="navigateToTenantTab(t.tenant_id,'departments')"   :class="{'active': $route.query.tab==='departments'}"><i class="fas fa-users icon"></i><span>Departments</span></div>
+               <div class="menu-item" @click="navigateToTenantTab(t.tenant_id,'users')"         :class="{'active': $route.query.tab==='users'}"><i class="fas fa-user icon"></i><span>Users</span></div>
+               <div class="menu-item" @click="navigateToTenantTab(t.tenant_id,'roles')"         :class="{'active': $route.query.tab==='roles'}"><i class="fas fa-shield-alt icon"></i><span>Roles</span></div>
+               <div class="menu-item" @click="navigateToTenantTab(t.tenant_id,'modules')"       :class="{'active': $route.query.tab==='modules'}"><i class="fas fa-th-large icon"></i><span>Modules</span></div>
+               <div class="menu-item" @click="navigateToTenantTab(t.tenant_id,'security')"      :class="{'active': $route.query.tab==='security'}"><i class="fas fa-lock icon"></i><span>Security</span></div>
+               <div class="menu-item" @click="navigateToTenantTab(t.tenant_id,'branding')"      :class="{'active': $route.query.tab==='branding'}"><i class="fas fa-palette icon"></i><span>Branding</span></div>
+               <div class="menu-item" @click="navigateToTenantTab(t.tenant_id,'workflows')"     :class="{'active': $route.query.tab==='workflows'}"><i class="fas fa-project-diagram icon"></i><span>Workflows</span></div>
+               <div class="menu-item" @click="navigateToTenantTab(t.tenant_id,'license')"       :class="{'active': $route.query.tab==='license'}"><i class="fas fa-certificate icon"></i><span>License</span></div>
+               <div class="menu-item" @click="navigateToTenantTab(t.tenant_id,'audit_logs')"    :class="{'active': $route.query.tab==='audit_logs'}"><i class="fas fa-history icon"></i><span>Audit Logs</span></div>
+               <div class="menu-item" @click="navigateToTenantTab(t.tenant_id,'support')"       :class="{'active': $route.query.tab==='support'}"><i class="fas fa-headset icon"></i><span>Support Access</span></div>
+             </div>
+           </div>
+         </div>
        </div>
      </div>
       
@@ -1166,6 +1225,7 @@ import { useFrameworkStore } from '@/stores/framework'
 import logo from '../../assets/RiskaVaire.png'
 import '@fortawesome/fontawesome-free/css/all.min.css'
 import eventBus, { LOGOUT_EVENT } from '../../utils/eventBus.js'
+import tenantService from '../../services/tenantService.js'
 
 export default {
   name: 'PolicySidebar',
@@ -1180,6 +1240,40 @@ export default {
     const currentColorblindMode = ref(null)
     const username = ref('User')
     const pendingRiskCount = ref(0)
+    const tenantList = ref([])
+    const tenantMenuOpen = ref({})
+    const isGlobalAdmin = ref(localStorage.getItem('is_global_admin') === 'true')
+    const myTenantId = ref(localStorage.getItem('tenant_id') || null)
+    const myTenantName = ref(localStorage.getItem('tenant_name') || 'My Organization')
+
+    const loadTenants = async () => {
+      try {
+        const res = await tenantService.listTenants()
+        const tenants = res?.data?.tenants ?? []
+        tenantList.value = tenants
+        isGlobalAdmin.value = res?.data?.is_global_admin === true
+        // For tenant-scoped users: backend returns exactly their own tenant
+        // Refresh myTenantId/Name from response so it's always accurate
+        if (!isGlobalAdmin.value && tenants.length === 1) {
+          myTenantId.value = String(tenants[0].tenant_id)
+          myTenantName.value = tenants[0].name || 'My Organization'
+          localStorage.setItem('tenant_id', myTenantId.value)
+          localStorage.setItem('tenant_name', myTenantName.value)
+        }
+        const m = route.path.match(/\/tenant-admin\/(\d+)/)
+        if (m) tenantMenuOpen.value[m[1]] = true
+      } catch (e) {
+        isGlobalAdmin.value = false
+      }
+    }
+
+    const toggleTenantMenu = (id) => {
+      tenantMenuOpen.value = { ...tenantMenuOpen.value, [id]: !tenantMenuOpen.value[id] }
+    }
+
+    const navigateToTenantTab = (tenantId, tab) => {
+      router.push({ path: `/tenant-admin/${tenantId}`, query: { tab } })
+    }
     
     // Compute current route path for active highlighting
     const currentPath = computed(() => route.path)
@@ -1248,7 +1342,9 @@ export default {
       eventHandling: false,
       eventManagement: false,
       help: false,
-      domains: false
+      domains: false,
+      tenantAdmin: false,
+      myOrg: false
     })
 
     // Check if route is active
@@ -1485,6 +1581,7 @@ export default {
     onMounted(() => {
       fetchUsername();
       fetchPendingRiskCount();
+      loadTenants();
       
       // Set up polling for pending risk count (every 5 minutes)
       const riskPollingInterval = setInterval(fetchPendingRiskCount, 5 * 60 * 1000)
@@ -1564,7 +1661,15 @@ export default {
       kpiLabel,
       isBaselFramework,
       pendingRiskCount,
-      fetchPendingRiskCount
+      fetchPendingRiskCount,
+      tenantList,
+      tenantMenuOpen,
+      toggleTenantMenu,
+      navigateToTenantTab,
+      loadTenants,
+      isGlobalAdmin,
+      myTenantId,
+      myTenantName
     }
   }
 }
@@ -1777,6 +1882,38 @@ export default {
 /* Bold text class */
 .bold-text {
   font-weight: bold !important;
+}
+
+/* Tenant nav items */
+.tenant-nav-item {
+  padding-left: 28px !important;
+}
+.tenant-nav-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: #003399;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+.tenant-nav-name {
+  flex: 1;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #1f2937;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tenant-pages-submenu .menu-item {
+  padding-left: 40px !important;
+  font-size: 0.8rem;
 }
 
 /* Notification Badge Styles */

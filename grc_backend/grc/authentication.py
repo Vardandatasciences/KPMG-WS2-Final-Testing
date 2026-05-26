@@ -826,6 +826,97 @@ def verify_recaptcha(captcha_token):
         logger.error(f"Error verifying reCAPTCHA: {str(e)}")
         return False
 
+def _build_tenant_context_for_login(user, tenant_id):
+    """
+    Phase 3.5 — collect tenant context to enrich the login response.
+    Every block is independently wrapped so a single failure never breaks login.
+    Returns a dict that is merged into the response payload.
+    """
+    ctx = {}
+
+    # ── Tenant id / name ─────────────────────────────────────────────────
+    try:
+        ctx['tenant_id'] = tenant_id
+        if hasattr(user, 'tenant') and user.tenant:
+            ctx['tenant_name'] = user.tenant.name
+    except Exception:
+        pass
+
+    # ── Allowed tenants (TenantUserMapping) ──────────────────────────────
+    try:
+        from .models import TenantUserMapping
+        mappings = TenantUserMapping.objects.filter(
+            user_id=user.UserId, status='active', is_deleted=False
+        ).select_related('tenant')
+        ctx['allowed_tenants'] = [
+            {'id': m.tenant_id, 'name': m.tenant.name if m.tenant else None, 'role': m.role}
+            for m in mappings
+        ]
+    except Exception:
+        ctx['allowed_tenants'] = []
+
+    # ── Allowed entities (UserEntityMapping) ─────────────────────────────
+    try:
+        from .models import UserEntityMapping
+        entity_mappings = UserEntityMapping.objects.filter(
+            user_id=user.UserId, tenant_id=tenant_id, status='active', is_deleted=False
+        ).select_related('entity')
+        ctx['allowed_entities'] = [
+            {
+                'id': em.entity_id,
+                'name': em.entity.EntityName if em.entity else None,
+                'access_level': em.access_level,
+                'role': em.role,
+            }
+            for em in entity_mappings
+        ]
+        ctx['selected_entity_id'] = (
+            ctx['allowed_entities'][0]['id'] if ctx['allowed_entities'] else None
+        )
+    except Exception:
+        ctx['allowed_entities'] = []
+        ctx['selected_entity_id'] = None
+
+    # ── Enabled modules (TenantModule) ───────────────────────────────────
+    try:
+        from .models import TenantModule
+        modules = TenantModule.objects.filter(
+            tenant_id=tenant_id, is_enabled=True
+        )
+        ctx['enabled_modules'] = [m.module_code for m in modules]
+    except Exception:
+        ctx['enabled_modules'] = []
+
+    # ── Security settings (TenantSecuritySettings) ───────────────────────
+    try:
+        from .models import TenantSecuritySettings
+        sec = TenantSecuritySettings.objects.filter(tenant_id=tenant_id).first()
+        if sec:
+            ctx['security_settings'] = {
+                'mfa_required': sec.mfa_required,
+                'session_timeout_minutes': sec.session_timeout_minutes,
+                'password_expiry_days': sec.password_expiry_days,
+            }
+    except Exception:
+        pass
+
+    # ── Branding (TenantBranding) ─────────────────────────────────────────
+    try:
+        from .models import TenantBranding
+        branding = TenantBranding.objects.filter(tenant_id=tenant_id).first()
+        if branding:
+            ctx['branding'] = {
+                'logo_url': branding.logo_url,
+                'primary_color': branding.primary_color,
+                'secondary_color': branding.secondary_color,
+                'accent_color': branding.accent_color,
+            }
+    except Exception:
+        pass
+
+    return ctx
+
+
 @api_view(['POST'])
 @permission_classes([AllowAny])
 @authentication_classes([])  # Login itself should not require prior authentication
@@ -1296,6 +1387,18 @@ def jwt_login(request):
         consent_accepted_value = str(user.consent_accepted) if user.consent_accepted is not None else '0'
         consent_required = consent_accepted_value != '1'
         
+        # ── Phase 3.5: Build tenant context (non-blocking) ───────────────
+        tenant_ctx = {}
+        try:
+            _tenant_id = (
+                (tokens['access'].payload.get('tenant_id') if hasattr(tokens['access'], 'payload') else None)
+                or getattr(user, 'tenant_id', None)
+            )
+            tenant_ctx = _build_tenant_context_for_login(user, _tenant_id)
+        except Exception as _tc_err:
+            logger.debug("[AUTH] Tenant context enrichment skipped: %s", _tc_err)
+        # ─────────────────────────────────────────────────────────────────
+
         response = Response({
             'status': 'success',
             'message': 'Login successful',
@@ -1318,7 +1421,9 @@ def jwt_login(request):
                 'IsActive': user.IsActive,
                 'consent_accepted': consent_accepted_value,
                 'license_key': user.license_key  # Include the validated license 
-            }
+            },
+            # ── Phase 3.5: Tenant context fields (all optional / empty if not configured) ──
+            **tenant_ctx,
         })
 
         # Set HttpOnly cookies for tokens (mitigates XSS token theft).

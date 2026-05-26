@@ -36,9 +36,9 @@ from django.contrib.auth import authenticate
 from rest_framework_simplejwt.tokens import RefreshToken
 from ...serializers import UserSerializer
 from ...models import (
-    User, Framework, Policy, SubPolicy, Compliance, PolicyApproval, ComplianceApproval, 
+    User, Framework, Policy, SubPolicy, Compliance, PolicyApproval, ComplianceApproval,
     Notification, FrameworkVersion, PolicyVersion, LastChecklistItemVerified,
-    AuditVersion, AuditFinding, RiskInstance, ExportTask, GRCLog
+    AuditVersion, AuditFinding, RiskInstance, ExportTask, GRCLog, FrameworkTenantMapping
     # CategoryBusinessUnit will be imported locally in functions
 )
 from ...serializers import *
@@ -974,27 +974,45 @@ def get_frameworks(request):
     try:
         # OPTIMIZATION: Use values() to get only needed fields directly from database
         # This avoids loading full objects and related data (policies, subpolicies)
-        # MULTI-TENANCY: Filter by tenant_id
+        # MULTI-TENANCY: Filter by tenant_id using mapped IDs
         # By default, show only active frameworks for dropdowns. Use show_all=true to show both active and inactive.
         show_all = request.GET.get('show_all', 'false').lower() == 'true'
-        
+
+        # Get mapped framework IDs for this tenant
+        try:
+            _mapped_ids = list(
+                FrameworkTenantMapping.objects.filter(
+                    tenant_id=tenant_id
+                ).values_list('framework_id', flat=True)
+            )
+        except Exception:
+            _mapped_ids = []
+
         if show_all:
             # Show both active and inactive frameworks
-            frameworks = Framework.objects.filter(tenant=tenant_id).values(
-                'FrameworkId', 
-                'FrameworkName', 
-                'Category', 
-                'ActiveInactive', 
+            if _mapped_ids:
+                qs = Framework.objects.filter(FrameworkId__in=_mapped_ids)
+            else:
+                qs = Framework.objects.filter(tenant=tenant_id)
+            frameworks = qs.values(
+                'FrameworkId',
+                'FrameworkName',
+                'Category',
+                'ActiveInactive',
                 'FrameworkDescription',
                 'Status'
             ).order_by('FrameworkName')
         else:
             # Show only active frameworks (default for dropdowns)
-            frameworks = Framework.objects.filter(tenant=tenant_id, ActiveInactive='Active').values(
-                'FrameworkId', 
-                'FrameworkName', 
-                'Category', 
-                'ActiveInactive', 
+            if _mapped_ids:
+                qs = Framework.objects.filter(FrameworkId__in=_mapped_ids, ActiveInactive='Active')
+            else:
+                qs = Framework.objects.filter(tenant=tenant_id, ActiveInactive='Active')
+            frameworks = qs.values(
+                'FrameworkId',
+                'FrameworkName',
+                'Category',
+                'ActiveInactive',
                 'FrameworkDescription',
                 'Status'
             ).order_by('FrameworkName')
@@ -5197,14 +5215,28 @@ def all_policies_get_frameworks(request):
     try:
         # Check if active_only parameter is set (for dropdowns)
         active_only = request.GET.get('active_only', 'false').lower() == 'true'
-        
-        # Filter by tenant
-        if active_only:
-            # Show only active frameworks for dropdowns
-            frameworks = Framework.objects.filter(tenant=tenant_id, ActiveInactive='Active')
+
+        # MULTI-TENANCY: Get mapped framework IDs for tenant access
+        try:
+            _mapped_ids = list(
+                FrameworkTenantMapping.objects.filter(
+                    tenant_id=tenant_id
+                ).values_list('framework_id', flat=True)
+            )
+        except Exception:
+            _mapped_ids = []
+
+        # Filter by tenant using mapped IDs
+        if _mapped_ids:
+            if active_only:
+                frameworks = Framework.objects.filter(FrameworkId__in=_mapped_ids, ActiveInactive='Active')
+            else:
+                frameworks = Framework.objects.filter(FrameworkId__in=_mapped_ids)
         else:
-            # Show all frameworks (active and inactive) for Control Management table
-            frameworks = Framework.objects.filter(tenant=tenant_id)
+            if active_only:
+                frameworks = Framework.objects.filter(tenant=tenant_id, ActiveInactive='Active')
+            else:
+                frameworks = Framework.objects.filter(tenant=tenant_id)
        
         frameworks_data = []
         for framework in frameworks:
@@ -5614,10 +5646,23 @@ def all_policies_get_framework_versions(request, framework_id):
 
     try:
         debug_print(f"Request received for framework versions, framework_id: {framework_id}")
-       
+
+        # MULTI-TENANCY: Get mapped framework IDs for tenant access
+        try:
+            _mapped_ids = list(
+                FrameworkTenantMapping.objects.filter(
+                    tenant_id=tenant_id
+                ).values_list('framework_id', flat=True)
+            )
+        except Exception:
+            _mapped_ids = []
+
         # Get the base framework
         try:
-            framework = Framework.objects.get(FrameworkId=framework_id, tenant_id=tenant_id)
+            if _mapped_ids:
+                framework = Framework.objects.get(FrameworkId=framework_id, FrameworkId__in=_mapped_ids)
+            else:
+                framework = Framework.objects.get(FrameworkId=framework_id, tenant=tenant_id)
             debug_print(f"Found framework: {framework.FrameworkName}")
         except Framework.DoesNotExist:
             debug_print(f"Framework with ID {framework_id} not found")

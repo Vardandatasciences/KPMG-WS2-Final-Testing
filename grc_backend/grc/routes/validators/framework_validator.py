@@ -942,12 +942,12 @@ def validate_tailored_policy_data(data: Dict[str, Any], index: int) -> Dict[str,
         allow_none=True
     )
     
-    # All fields are required
+    # Department is optional
     validated['department'] = validate_string(
-        data.get('department'), 
+        data.get('department', ''), 
         f'department for policy {index}', 
         max_length=255, 
-        allow_empty=False
+        allow_empty=True
     )
     
     validated['createdByName'] = validate_string(

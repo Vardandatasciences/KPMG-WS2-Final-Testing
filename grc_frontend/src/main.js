@@ -322,6 +322,11 @@ const initializeTheme = () => {
 // Apply theme before mounting
 initializeTheme()
 
+// MULTI-TENANCY: Hydrate tenant store from localStorage before first render (non-blocking)
+import('./stores/tenant.js').then(({ useTenantStore }) => {
+  try { useTenantStore().hydrateFromStorage() } catch (e) { /* non-fatal */ }
+}).catch(() => { /* ignore */ })
+
 // Wait for initial navigation; always mount so a stuck guard does not leave a blank document
 router.isReady().then(() => {
   app.mount('#app')

@@ -531,19 +531,19 @@ export default {
       this.loading = true
       this.error = null
       try {
-        const endpoint = API_ENDPOINTS.TREE_GET_FRAMEWORKS
+        // Use correct /api/frameworks/ endpoint (not /api/tree/frameworks/)
+        const endpoint = API_ENDPOINTS.FRAMEWORKS
         console.log('📡 Frameworks endpoint:', endpoint)
-        
-        const response = await axios.get(endpoint)
+
+        const response = await axios.get(endpoint, { params: { include_all_status: true } })
         console.log('✅ Frameworks API Response:', response.data)
-        
-        if (response.data.status === 'success') {
-          this.frameworks = response.data.data
-          console.log('✅ Frameworks loaded:', this.frameworks.length, 'items')
-        } else {
-          this.error = 'Failed to load frameworks'
-          console.log('⚠️ API returned non-success status')
-        }
+
+        // Handle different response formats
+        const frameworksData = Array.isArray(response.data)
+          ? response.data
+          : (response.data?.frameworks || response.data?.data || [])
+        this.frameworks = frameworksData
+        console.log('✅ Frameworks loaded:', this.frameworks.length, 'items')
       } catch (err) {
         this.error = err.response?.data?.message || 'Failed to load frameworks'
         console.error('❌ Error loading frameworks:', err)

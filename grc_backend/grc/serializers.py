@@ -35,7 +35,7 @@ class FrameworkSerializer(AutoDecryptingModelSerializer):
             'FrameworkId', 'FrameworkName', 'CurrentVersion', 'FrameworkDescription',
             'EffectiveDate', 'CreatedByName', 'CreatedByDate', 'Category',
             'DocURL', 'Identifier', 'StartDate', 'EndDate', 'Status',
-            'ActiveInactive', 'policies', 'Reviewer'
+            'ActiveInactive', 'policies', 'Reviewer', 'InternalExternal'
         ]
 
 

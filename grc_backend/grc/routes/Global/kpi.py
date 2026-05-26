@@ -10,6 +10,8 @@ from grc.models import Kpi, Framework
 from django.db.models import Q
 import json
 
+from grc.tenant_utils import get_tenant_id_from_request
+
 
 @csrf_exempt
 @require_http_methods(["GET"])
@@ -159,9 +161,14 @@ def get_kpis_by_module(request, module):
 def get_frameworks_for_kpi(request):
     """
     Get all frameworks for KPI filtering
+    MULTI-TENANCY: Only returns frameworks belonging to the user's tenant
     """
     try:
-        frameworks = Framework.objects.all().values('FrameworkId', 'FrameworkName')
+        tenant_id = get_tenant_id_from_request(request)
+        if tenant_id:
+            frameworks = Framework.objects.filter(tenant_id=tenant_id, ActiveInactive='Active').values('FrameworkId', 'FrameworkName')
+        else:
+            frameworks = Framework.objects.filter(ActiveInactive='Active').values('FrameworkId', 'FrameworkName')
         
         return JsonResponse({
             'status': 'success',

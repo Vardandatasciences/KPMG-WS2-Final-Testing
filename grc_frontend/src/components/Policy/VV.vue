@@ -3170,15 +3170,9 @@ name: 'VV',
 
   async hydrateFrameworksFromExplorerApi() {
     try {
-      const response = await apiService.get(API_ENDPOINTS.FRAMEWORK_EXPLORER, {
-        params: { active_only: 'true' },
-      })
-      const frameworksData = Array.isArray(response)
-        ? response
-        : Array.isArray(response?.frameworks)
-          ? response.frameworks
-          : []
-      this.frameworks = frameworksData.map((fw) => ({
+      const fresh = await usePolicyStore().getAllFrameworks({ force: true })
+      const list = Array.isArray(fresh) ? fresh : []
+      this.frameworks = list.map((fw) => ({
         id: fw.FrameworkId ?? fw.id,
         name: fw.FrameworkName ?? fw.name,
         description: fw.FrameworkDescription ?? fw.description,
@@ -3189,9 +3183,8 @@ name: 'VV',
         status: fw.Status ?? fw.status,
       }))
       await this.checkSelectedFrameworkFromSession()
-      void usePolicyStore().getAllFrameworks({ force: true }).catch(() => {})
     } catch (e) {
-      console.warn('[VV] Background framework explorer refresh failed:', e)
+      console.warn('[VV] Background framework refresh failed:', e)
     }
   },
 
@@ -3219,16 +3212,9 @@ name: 'VV',
         return
       }
 
-      console.log('=== Fetching frameworks...')
-      const response = await apiService.get(API_ENDPOINTS.FRAMEWORK_EXPLORER, {
-        params: { active_only: 'true' },
-      })
-      console.log('Raw framework response (framework_explorer):', response)
-      const frameworksData = Array.isArray(response)
-        ? response
-        : Array.isArray(response?.frameworks)
-          ? response.frameworks
-          : []
+      console.log('=== Fetching frameworks via Pinia...')
+      const rawFrameworks = await usePolicyStore().getAllFrameworks({ force: false })
+      const frameworksData = Array.isArray(rawFrameworks) ? rawFrameworks : []
 
       this.frameworks = frameworksData.map((fw) => ({
         id: fw.FrameworkId ?? fw.id,

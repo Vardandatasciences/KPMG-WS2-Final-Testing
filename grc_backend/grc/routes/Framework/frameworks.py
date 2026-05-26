@@ -3459,15 +3459,6 @@ def get_users_for_reviewer_selection(request):
             debug_print("DEBUG: No module specified, returning empty list")
             return Response([], status=status.HTTP_200_OK)
         
-        # Exclude current user if provided
-        if current_user_id:
-            try:
-                current_user_id_int = int(current_user_id)
-                rbac_query = rbac_query.exclude(user__UserId=current_user_id_int)
-                debug_print(f"DEBUG: Excluding current user ID: {current_user_id_int}")
-            except (ValueError, TypeError):
-                debug_print(f"DEBUG: Invalid current_user_id format: {current_user_id}")
-        
         # Get RBAC entries with approval permission
         rbac_entries = rbac_query.select_related('user').order_by('username')
         
@@ -3482,7 +3473,44 @@ def get_users_for_reviewer_selection(request):
                     'Role': rbac_entry.role
                 })
         
+        # Exclude current user AFTER building the list so the fallback threshold
+        # correctly fires when the only RBAC-approved user is the creator themselves
+        if current_user_id:
+            try:
+                current_user_id_int = int(current_user_id)
+                users_list = [u for u in users_list if u['UserId'] != current_user_id_int]
+                debug_print(f"DEBUG: Excluding current user ID: {current_user_id_int}")
+            except (ValueError, TypeError):
+                debug_print(f"DEBUG: Invalid current_user_id format: {current_user_id}")
+        
         debug_print(f"DEBUG: Found {len(users_list)} eligible reviewers: {[u['UserName'] for u in users_list]}")
+        
+        # FALLBACK: If no users with specific approval permission (after excluding creator),
+        # return all active users from tenant so the dropdown is never empty
+        if len(users_list) == 0:
+            debug_print(f"DEBUG: No users with specific approval permission found, falling back to all active users in tenant")
+            from ...models import User
+            all_users_query = User.objects.filter(tenant_id=tenant_id, is_active=True)
+            
+            # Exclude current user if provided
+            if current_user_id:
+                try:
+                    current_user_id_int = int(current_user_id)
+                    all_users_query = all_users_query.exclude(UserId=current_user_id_int)
+                    debug_print(f"DEBUG: Excluding current user ID: {current_user_id_int}")
+                except (ValueError, TypeError):
+                    debug_print(f"DEBUG: Invalid current_user_id format: {current_user_id}")
+            
+            all_users = all_users_query.order_by('UserName')
+            users_list = []
+            for user in all_users:
+                users_list.append({
+                    'UserId': user.UserId,
+                    'UserName': user.UserName,
+                    'Email': getattr(user, 'Email', ''),
+                    'Role': 'User'
+                })
+            debug_print(f"DEBUG: Fallback returned {len(users_list)} users: {[u['UserName'] for u in users_list]}")
         
         return Response(users_list, status=status.HTTP_200_OK)
         
@@ -3985,15 +4013,16 @@ def get_approved_active_frameworks(request):
                 'count': 0
             })
         
-        # Query frameworks without ordering to avoid MySQL sort memory issues
-        # We'll sort in Python after fetching and decrypting
-        # Query frameworks without ordering to avoid MySQL sort memory issues
-        # We'll sort in Python after fetching and decrypting
-        frameworks = Framework.objects.filter(
-            tenant_id=tenant_id, 
-            Status='Approved',
-            ActiveInactive='Active'
+        # Use FrameworkTenantMapping as source of truth for tenant-assigned frameworks
+        from django.db.models import Q
+        from ...models import FrameworkTenantMapping
+        mapped_fw_ids = list(
+            FrameworkTenantMapping.objects.filter(
+                tenant_id=tenant_id,
+                is_active=True
+            ).values_list('framework_id', flat=True)
         )
+        frameworks = Framework.objects.filter(FrameworkId__in=mapped_fw_ids)
         
         # Convert frameworks to list of dictionaries
         frameworks_list = []
@@ -4488,6 +4517,90 @@ def test_framework_approval_routing(request, approval_id):
         'request_method': request.method,
         'request_path': request.path
     })
+
+
+@api_view(['POST'])
+@permission_classes([PolicyViewPermission])
+@require_tenant
+@tenant_filter
+def set_selected_framework(request):
+    """
+    Persist the user's selected framework in the backend session.
+    """
+    try:
+        framework_id = request.data.get('frameworkId')
+        user_id = request.data.get('userId')
+        if framework_id:
+            request.session['selected_framework_id'] = str(framework_id)
+            request.session['selected_framework_user'] = str(user_id) if user_id else None
+        else:
+            request.session.pop('selected_framework_id', None)
+            request.session.pop('selected_framework_user', None)
+        return Response({'success': True, 'frameworkId': framework_id})
+    except Exception as e:
+        return Response({'success': False, 'error': str(e)}, status=500)
+
+
+@api_view(['GET'])
+@permission_classes([PolicyViewPermission])
+@require_tenant
+@tenant_filter
+def get_selected_framework(request):
+    """
+    Return the user's currently selected framework from the backend session.
+    """
+    try:
+        framework_id = request.session.get('selected_framework_id')
+        framework_name = None
+        if framework_id:
+            try:
+                fw = Framework.objects.get(FrameworkId=int(framework_id))
+                framework_name = fw.FrameworkName
+            except (Framework.DoesNotExist, ValueError):
+                framework_id = None
+        return Response({'success': True, 'frameworkId': framework_id, 'frameworkName': framework_name})
+    except Exception as e:
+        return Response({'success': False, 'error': str(e)}, status=500)
+
+
+@api_view(['GET'])
+@permission_classes([PolicyViewPermission])
+@require_tenant
+@tenant_filter
+def get_framework_compliance_stats(request, framework_id):
+    """
+    Return basic compliance statistics for a framework.
+    """
+    from django.db.models import Count
+    tenant_id = get_tenant_id_from_request(request)
+    try:
+        from ...models import Policy
+        policies_qs = Policy.objects.filter(FrameworkId=framework_id)
+        if tenant_id:
+            policies_qs = policies_qs.filter(tenant_id=tenant_id)
+        total = policies_qs.count()
+        approved = policies_qs.filter(Status='Approved').count()
+        active = policies_qs.filter(ActiveInactive='Active').count()
+        return Response({
+            'framework_id': framework_id,
+            'total_policies': total,
+            'approved_policies': approved,
+            'active_policies': active,
+        })
+    except Exception as e:
+        return Response({'error': str(e)}, status=500)
+
+
+@api_view(['GET'])
+@permission_classes([])
+def test_session_debug(request):
+    """Debug endpoint (DEBUG mode only) to inspect session state."""
+    return Response({
+        'session_keys': list(request.session.keys()) if hasattr(request, 'session') else [],
+        'user': str(request.user),
+        'selected_framework_id': request.session.get('selected_framework_id') if hasattr(request, 'session') else None,
+    })
+
 
 # Test endpoint for POST framework approval routing
 @api_view(['POST'])

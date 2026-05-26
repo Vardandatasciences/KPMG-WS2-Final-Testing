@@ -21,6 +21,18 @@ from .views import serve_document
 # MULTI-TENANCY: Tenant management views
 from .routes.Global import tenant_views, security_audit_views
 
+# PHASE 2: Tenant sub-module views
+from .routes.Tenant import (
+    entity_views,
+    business_unit_views,
+    department_views,
+    user_mapping_views,
+    module_views,
+    security_settings_views,
+    branding_views,
+    support_access_views,
+)
+
 from .routes.EventHandling import event_views, riskavaire_integration
 
 from .routes.DocumentHandling import document
@@ -773,8 +785,6 @@ policy_urlpatterns = [
     path('frameworks/set-selected/', set_selected_framework, name='set-selected-framework'),
 
     path('frameworks/get-selected/', get_selected_framework, name='get-selected-framework'),
-    
-    path('frameworks/<int:framework_id>/compliance-stats/', get_framework_compliance_stats, name='get-framework-compliance-stats'),
     
     path('frameworks/<int:framework_id>/compliance-stats/', get_framework_compliance_stats, name='get-framework-compliance-stats'),
 
@@ -2951,16 +2961,63 @@ notification_urlpatterns = [
 # MULTI-TENANCY: Tenant Management URL Patterns
 # =========================================================================
 tenant_urlpatterns = [
-    # Tenant CRUD operations
+    # ── 2.1 Tenant CRUD & Lifecycle ──────────────────────────────────────────
     path('tenants/create/', tenant_views.create_tenant, name='create-tenant'),
     path('tenants/list/', tenant_views.list_tenants, name='list-tenants'),
     path('tenants/current/', tenant_views.get_tenant_info, name='get-tenant-info'),
     path('tenants/<int:tenant_id>/update/', tenant_views.update_tenant, name='update-tenant'),
     path('tenants/<int:tenant_id>/delete/', tenant_views.delete_tenant, name='delete-tenant'),
-    
-    # Tenant status management
     path('tenants/<int:tenant_id>/activate/', tenant_views.activate_tenant, name='activate-tenant'),
     path('tenants/<int:tenant_id>/suspend/', tenant_views.suspend_tenant, name='suspend-tenant'),
+    path('tenants/<int:tenant_id>/archive/', tenant_views.archive_tenant, name='archive-tenant'),
+    path('tenants/<int:tenant_id>/users/', tenant_views.list_tenant_users, name='tenant-list-users'),
+    path('tenants/<int:tenant_id>/audit-logs/', tenant_views.get_tenant_audit_logs, name='tenant-audit-logs'),
+
+    # ── 2.2 Entity Management ────────────────────────────────────────────────
+    path('tenants/<int:tenant_id>/entities/', entity_views.entity_list_create, name='entity-list-create'),
+    path('tenants/<int:tenant_id>/entities/tree/', entity_views.entity_tree, name='entity-tree'),
+    path('entities/<int:entity_id>/', entity_views.entity_detail, name='entity-detail'),
+    path('entities/<int:entity_id>/users/', entity_views.entity_users, name='entity-users'),
+
+    # ── 2.3 Business Unit Management ────────────────────────────────────────
+    path('entities/<int:entity_id>/business-units/', business_unit_views.bu_list_create, name='bu-list-create'),
+    path('business-units/<int:bu_id>/', business_unit_views.bu_detail, name='bu-detail'),
+
+    # ── 2.4 Department Management ────────────────────────────────────────────
+    path('business-units/<int:bu_id>/departments/', department_views.department_list_create, name='dept-list-create'),
+    path('departments/<int:dept_id>/', department_views.department_update, name='dept-update'),
+    path('departments/<int:dept_id>/assign-user/', department_views.department_assign_user, name='dept-assign-user'),
+
+    # ── 2.5 User Mapping ─────────────────────────────────────────────────────
+    path('tenants/<int:tenant_id>/map-user/', user_mapping_views.map_user_to_tenant, name='tenant-map-user'),
+    path('tenants/<int:tenant_id>/unmap-user/<int:user_id>/', user_mapping_views.unmap_user_from_tenant, name='tenant-unmap-user'),
+    path('tenants/<int:tenant_id>/set-primary-user/<int:user_id>/', user_mapping_views.set_primary_user, name='tenant-set-primary-user'),
+    path('entities/<int:entity_id>/map-user/', user_mapping_views.map_user_to_entity, name='entity-map-user'),
+    path('users/<int:user_id>/tenants/', user_mapping_views.user_tenants, name='user-tenants'),
+    path('users/<int:user_id>/entities/', user_mapping_views.user_entities, name='user-entities'),
+
+    # ── 2.6 Module Management ────────────────────────────────────────────────
+    path('tenants/<int:tenant_id>/modules/', module_views.tenant_modules, name='tenant-modules'),
+    path('tenants/<int:tenant_id>/module-status/<str:module_code>/', module_views.module_status, name='tenant-module-status'),
+    path('modules/available/', module_views.available_modules, name='modules-available'),
+
+    # ── 2.7 Security Settings ────────────────────────────────────────────────
+    path('tenants/<int:tenant_id>/security-settings/', security_settings_views.security_settings, name='tenant-security-settings'),
+    path('tenants/<int:tenant_id>/test-ip-restriction/', security_settings_views.test_ip_restriction, name='tenant-test-ip'),
+    path('tenants/<int:tenant_id>/security-audit/', security_settings_views.security_audit, name='tenant-security-audit'),
+
+    # ── 2.8 Branding ─────────────────────────────────────────────────────────
+    path('tenants/<int:tenant_id>/branding/', branding_views.tenant_branding, name='tenant-branding'),
+    path('tenants/<int:tenant_id>/branding/upload-logo/', branding_views.upload_logo, name='tenant-upload-logo'),
+    path('public/branding/<int:tenant_id>/', branding_views.public_branding, name='public-branding'),
+
+    # ── 2.9 Support Access ───────────────────────────────────────────────────
+    path('support-access/request/', support_access_views.request_support_access, name='support-access-request'),
+    path('support-access/my-accesses/', support_access_views.my_support_accesses, name='support-access-mine'),
+    path('support-access/<int:request_id>/approve/', support_access_views.approve_support_access, name='support-access-approve'),
+    path('support-access/<int:request_id>/revoke/', support_access_views.revoke_support_access, name='support-access-revoke'),
+    path('tenant-admins/<int:tenant_id>/support-requests/', support_access_views.pending_support_requests, name='tenant-support-requests'),
+    path('tenants/<int:tenant_id>/support-history/', support_access_views.support_history, name='tenant-support-history'),
 ]
 
 urlpatterns = [

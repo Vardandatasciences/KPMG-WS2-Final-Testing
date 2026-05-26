@@ -53,7 +53,7 @@
             <!-- Framework Selection - Moved up to reduce white space -->
             <div class="framework-container-top">
               <label>Framework <span class="required-star">*</span></label>
-              <CustomDropdown :config="frameworkDropdownConfig" v-model="selectedFramework" />
+              <CustomDropdown :config="frameworkDropdownConfig" v-model="selectedFramework" :lockToSessionFramework="false" />
               <div class="tooltip-container">
                 <span class="info-icon">🛈</span>
                 <div class="tooltip-text">Select an existing framework or create a new one to associate with your policy.</div>
@@ -2305,11 +2305,8 @@ export default {
       if (refreshFrameworksInBackgroundPromise) return refreshFrameworksInBackgroundPromise
       refreshFrameworksInBackgroundPromise = (async () => {
         try {
-          const data = await apiService.get(API_ENDPOINTS.FRAMEWORK_EXPLORER, {
-            params: { active_only: 'true' }
-          })
-          const frameworksData = Array.isArray(data) ? data : data.frameworks || []
-          const latestFrameworks = normalizeFrameworkList(frameworksData)
+          const raw = await policyStore.getAllFrameworks({ force: true })
+          const latestFrameworks = normalizeFrameworkList(Array.isArray(raw) ? raw : [])
           const hasChanged = !areFrameworkListsEqual(frameworks.value, latestFrameworks)
 
           frameworkStore.setFrameworks(latestFrameworks.map((fw) => ({ ...fw })))
@@ -2339,15 +2336,21 @@ export default {
 
           // Default path: load from Pinia immediately, then revalidate in background.
           if (!force) {
-            frameworks.value = normalizeFrameworkList(frameworkStore.frameworks)
-            console.log('✅ DEBUG: Using frameworks from Pinia cache:', frameworks.value.length)
-            refreshFrameworksInBackground()
+            const cached = policyStore.frameworks
+            if (Array.isArray(cached) && cached.length > 0) {
+              frameworks.value = normalizeFrameworkList(cached)
+              console.log('✅ DEBUG: Using frameworks from policyStore cache:', frameworks.value.length)
+              refreshFrameworksInBackground()
+            } else {
+              console.log('⚠️ DEBUG: policyStore cache empty, fetching from API')
+              const raw = await policyStore.getAllFrameworks({ force: true })
+              frameworks.value = normalizeFrameworkList(Array.isArray(raw) ? raw : [])
+              frameworkStore.setFrameworks(frameworks.value.map((fw) => ({ ...fw })))
+              console.log('✅ DEBUG: Frameworks loaded from API:', frameworks.value.length)
+            }
           } else {
-            const data = await apiService.get(API_ENDPOINTS.FRAMEWORK_EXPLORER, {
-              params: { active_only: 'true' }
-            })
-            const frameworksData = Array.isArray(data) ? data : data.frameworks || []
-            frameworks.value = normalizeFrameworkList(frameworksData)
+            const raw = await policyStore.getAllFrameworks({ force: true })
+            frameworks.value = normalizeFrameworkList(Array.isArray(raw) ? raw : [])
             frameworkStore.setFrameworks(frameworks.value.map((fw) => ({ ...fw })))
             console.log('✅ DEBUG: Frameworks loaded from API:', frameworks.value.length)
           }

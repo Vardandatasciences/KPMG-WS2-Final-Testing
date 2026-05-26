@@ -29,9 +29,22 @@ def get_framework_policy_counts(request, framework_id):
     tenant_id = get_tenant_id_from_request(request)
     
     try:
-        # Check if framework exists
+        # MULTI-TENANCY: Check if framework exists using mapped IDs
+        from ...models import FrameworkTenantMapping
         try:
-            framework = Framework.objects.get(FrameworkId=framework_id, tenant_id=tenant_id)
+            _mapped_ids = list(
+                FrameworkTenantMapping.objects.filter(
+                    tenant_id=tenant_id
+                ).values_list('framework_id', flat=True)
+            )
+        except Exception:
+            _mapped_ids = []
+        
+        try:
+            if _mapped_ids:
+                framework = Framework.objects.get(FrameworkId=framework_id, FrameworkId__in=_mapped_ids)
+            else:
+                framework = Framework.objects.get(FrameworkId=framework_id, tenant=tenant_id)
         except Framework.DoesNotExist:
             return Response({
                 'error': f'Framework with ID {framework_id} does not exist'

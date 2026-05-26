@@ -2790,8 +2790,8 @@ import { usePolicyStore } from '@/stores/policy'
       // Second frameworks/? call for identifiers — run in background so it does not add 20s to first paint
       void this.fetchExistingFrameworkIdentifiers()
 
+      await this.fetchCurrentUser()
       await Promise.all([
-        this.fetchCurrentUser(),
         this.fetchPolicyCategories(),
         this.fetchEntities(),
         this.fetchUsers(),
@@ -2857,10 +2857,9 @@ import { usePolicyStore } from '@/stores/policy'
     // Add new identifier generation functions
     async fetchExistingFrameworkIdentifiers() {
       try {
-        const response = await apiService.get(API_ENDPOINTS.FRAMEWORKS, {
-          params: { include_all_for_identifiers: 'true' }
-        });
-        this.existingFrameworkIdentifiers = response
+        const response = await apiService.get(API_ENDPOINTS.FRAMEWORKS, { include_all_for_identifiers: 'true' });
+        const rows = Array.isArray(response) ? response : (response?.frameworks || response?.data || []);
+        this.existingFrameworkIdentifiers = rows
           .map(fw => fw.Identifier)
           .filter(id => id);
         console.log('Fetched existing framework identifiers:', this.existingFrameworkIdentifiers);
@@ -2981,9 +2980,10 @@ import { usePolicyStore } from '@/stores/policy'
       }))
     },
     applyTTFrameworkFilter(allFrameworks) {
-      return this.selectedTab === 'framework'
-        ? allFrameworks.filter((fw) => fw.internalExternal === 'Internal')
-        : allFrameworks
+      return allFrameworks.filter((fw) => {
+        const val = (fw.internalExternal || '').toLowerCase().trim()
+        return val === 'internal'
+      })
     },
     async fetchFrameworks() {
       try {
@@ -3080,7 +3080,7 @@ import { usePolicyStore } from '@/stores/policy'
             this.policies = []
             // Clear any framework-specific data
             if (this.selectedTab === 'framework') {
-              this.frameworkForm = this.getInitialFrameworkForm()
+              this.frameworkForm = { name: '', description: '', identifier: '', category: '', internalExternal: '', file: null, startDate: '', endDate: '', createdByName: '', reviewer: '' }
               this.policyTabs = []
             }
           }
@@ -3323,6 +3323,7 @@ import { usePolicyStore } from '@/stores/policy'
           createdByName: this.loggedInUsername,
           reviewer: reviewerName,
           data_inventory: frameworkDataInventory,
+          source_framework_id: this.selectedFramework || null,
           policies: this.policyTabs.map((policy, policyIndex) => {
             // Convert entities to proper format
             let entities = policy.entities;
@@ -3519,10 +3520,8 @@ import { usePolicyStore } from '@/stores/policy'
           reviewer: framework.Reviewer
         }
 
-        // Validate framework name when framework is selected
-        if (this.selectedTab === 'framework') {
-          this.validateFrameworkNameOnSelection(framework.FrameworkName);
-        }
+        // Clear any stale validation errors when loading existing framework
+        this.error = null;
 
         // Ensure policies is an array
         let policiesData = policies
@@ -3539,9 +3538,8 @@ import { usePolicyStore } from '@/stores/policy'
         } else {
           // Store raw data for fallback use
           this.rawPoliciesData = policiesData
-          // Filter policies to only show Approved and Active ones
+          // Load all policies for tailoring — user needs to see and edit them all
           this.policies = policiesData
-            .filter(p => p.Status === 'Approved' && p.ActiveInactive === 'Active')
             .map(p => ({ 
               id: p.PolicyId, 
               name: p.PolicyName,
@@ -3567,7 +3565,6 @@ import { usePolicyStore } from '@/stores/policy'
         if (this.selectedTab === 'framework') {
           const policiesWithDetails = await Promise.all(
             policies
-              .filter(p => p.Status === 'Approved' && p.ActiveInactive === 'Active')
               .map(async p => {
                 const subpolicies = await apiService.get(API_ENDPOINTS.POLICY_GET_SUBPOLICIES(p.PolicyId))
                 return {
@@ -3593,7 +3590,7 @@ import { usePolicyStore } from '@/stores/policy'
                   createdByName: p.CreatedByName,
                   reviewer: p.Reviewer,
                   activeSubPolicyTab: 0,
-                  subPolicies: subpolicies.map(sp => ({
+                  subPolicies: (Array.isArray(subpolicies) ? subpolicies : (subpolicies?.data || subpolicies?.subpolicies || [])).map(sp => ({
                     id: sp.SubPolicyId,
                     name: sp.SubPolicyName,
                     identifier: sp.Identifier,
@@ -3846,11 +3843,14 @@ import { usePolicyStore } from '@/stores/policy'
         const response = await apiService.get(API_ENDPOINTS.POLICY_CATEGORIES);
         console.log('Raw policy categories response:', response);
         
-        // Store complete policy data
-        this.policyData = response;
+        // apiService.get returns response.data directly (not an axios wrapper)
+        const items = Array.isArray(response) ? response : (response?.data ?? []);
+        
+        // Store complete policy data as flat array
+        this.policyData = items;
         
         // Extract unique policy types
-        this.policyTypes = [...new Set(response.data.map(item => item.PolicyType))];
+        this.policyTypes = [...new Set(items.map(item => item.PolicyType).filter(Boolean))];
         
         console.log('Available policy types:', this.policyTypes);
       } catch (error) {
@@ -3861,18 +3861,20 @@ import { usePolicyStore } from '@/stores/policy'
       }
     },
     getCategoriesForType(policyType) {
-      if (!policyType || !this.policyData) return [];
+      if (!policyType || !Array.isArray(this.policyData)) return [];
       const categories = this.policyData
         .filter(item => item.PolicyType === policyType)
-        .map(item => item.PolicyCategory);
+        .map(item => item.PolicyCategory)
+        .filter(Boolean);
       return [...new Set(categories)];
     },
 
     getSubCategoriesForCategory(policyType, policyCategory) {
-      if (!policyType || !policyCategory || !this.policyData) return [];
+      if (!policyType || !policyCategory || !Array.isArray(this.policyData)) return [];
       const subCategories = this.policyData
         .filter(item => item.PolicyType === policyType && item.PolicyCategory === policyCategory)
-        .map(item => item.PolicySubCategory);
+        .map(item => item.PolicySubCategory)
+        .filter(Boolean);
       return [...new Set(subCategories)];
     },
 

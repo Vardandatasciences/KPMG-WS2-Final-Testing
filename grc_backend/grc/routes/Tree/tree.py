@@ -1,7 +1,7 @@
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_protect as csrf_exempt
 from django.views.decorators.http import require_http_methods
-from grc.models import Framework, Policy, SubPolicy, Compliance, Risk, RiskInstance
+from grc.models import Framework, Policy, SubPolicy, Compliance, Risk, RiskInstance, FrameworkTenantMapping
 from django.db.models import Q
 import json
 
@@ -10,6 +10,18 @@ from ...tenant_utils import (
     require_tenant, tenant_filter, get_tenant_id_from_request,
     validate_tenant_access
 )
+
+
+def _get_tenant_framework_ids(tenant_id):
+    """Helper to get framework IDs mapped to a tenant."""
+    try:
+        return list(
+            FrameworkTenantMapping.objects.filter(
+                tenant_id=tenant_id
+            ).values_list('framework_id', flat=True)
+        )
+    except Exception:
+        return []
 
 @csrf_exempt
 @require_http_methods(["GET"])
@@ -24,11 +36,20 @@ def get_all_frameworks(request):
     tenant_id = get_tenant_id_from_request(request)
     
     try:
-        frameworks = Framework.objects.filter(
-            tenant_id=tenant_id,
-            Status='Approved',
-            ActiveInactive='Active'
-        ).values(
+        _mapped_ids = _get_tenant_framework_ids(tenant_id)
+        if _mapped_ids:
+            qs = Framework.objects.filter(
+                FrameworkId__in=_mapped_ids,
+                Status='Approved',
+                ActiveInactive='Active'
+            )
+        else:
+            qs = Framework.objects.filter(
+                tenant=tenant_id,
+                Status='Approved',
+                ActiveInactive='Active'
+            )
+        frameworks = qs.values(
             'FrameworkId',
             'FrameworkName',
             'FrameworkDescription',
@@ -61,8 +82,12 @@ def get_policies_by_framework(request, framework_id):
     tenant_id = get_tenant_id_from_request(request)
     
     try:
-        # MULTI-TENANCY: Validate framework belongs to tenant
-        framework = Framework.objects.filter(FrameworkId=framework_id, tenant_id=tenant_id).first()
+        # MULTI-TENANCY: Validate framework belongs to tenant using mapped IDs
+        _mapped_ids = _get_tenant_framework_ids(tenant_id)
+        if _mapped_ids:
+            framework = Framework.objects.filter(FrameworkId=framework_id, FrameworkId__in=_mapped_ids).first()
+        else:
+            framework = Framework.objects.filter(FrameworkId=framework_id, tenant=tenant_id).first()
         if not framework:
             return JsonResponse({
                 'status': 'error',
@@ -306,11 +331,20 @@ def get_tree_hierarchy(request):
     tenant_id = get_tenant_id_from_request(request)
     
     try:
-        frameworks = Framework.objects.filter(
-            tenant_id=tenant_id,
-            Status='Approved',
-            ActiveInactive='Active'
-        ).order_by('FrameworkName')
+        _mapped_ids = _get_tenant_framework_ids(tenant_id)
+        if _mapped_ids:
+            qs = Framework.objects.filter(
+                FrameworkId__in=_mapped_ids,
+                Status='Approved',
+                ActiveInactive='Active'
+            )
+        else:
+            qs = Framework.objects.filter(
+                tenant=tenant_id,
+                Status='Approved',
+                ActiveInactive='Active'
+            )
+        frameworks = qs.order_by('FrameworkName')
         
         tree_data = []
         
@@ -420,7 +454,11 @@ def get_framework_metadata(request, framework_id):
     tenant_id = get_tenant_id_from_request(request)
     
     try:
-        framework = Framework.objects.get(FrameworkId=framework_id, tenant_id=tenant_id)
+        _mapped_ids = _get_tenant_framework_ids(tenant_id)
+        if _mapped_ids:
+            framework = Framework.objects.get(FrameworkId=framework_id, FrameworkId__in=_mapped_ids)
+        else:
+            framework = Framework.objects.get(FrameworkId=framework_id, tenant=tenant_id)
         
         metadata = {
             'FrameworkId': framework.FrameworkId,

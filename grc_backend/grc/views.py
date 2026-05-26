@@ -248,7 +248,7 @@ Example payload:
 @permission_classes([IsAuthenticated])
 def framework_list(request):
     if request.method == 'GET':
-        frameworks = Framework.objects.filter(Status='Approved', ActiveInactive='Active')
+        frameworks = Framework.objects.filter(ActiveInactive='Active')
         serializer = FrameworkSerializer(frameworks, many=True)
         return Response(serializer.data)
  

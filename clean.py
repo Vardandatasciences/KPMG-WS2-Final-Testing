@@ -4,7 +4,7 @@ from pathlib import Path
 # -----------------------------
 # CONFIG: set your dump folder
 # -----------------------------
-DUMP_FOLDER = Path(r"C:\Users\Admin\Documents\dumps\Dump_ITSM")
+DUMP_FOLDER = Path(r"C:\Users\Admin\Documents\dumps\Dump20260520_tenant")
 
 # Output mode:
 # 1) same folder with suffix _clean.sql  (default)

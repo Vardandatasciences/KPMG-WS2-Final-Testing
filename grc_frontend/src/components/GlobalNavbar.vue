@@ -14,6 +14,7 @@
       </nav>
       
       <div class="header-actions">
+        <EntitySwitcher @entity-changed="onEntityChanged" />
         <label
           class="framework-mode-toggle"
           title="Specific framework changes are done on Home"
@@ -59,9 +60,11 @@ import logo from '../assets/RiskaVaire.png'
 import { API_ENDPOINTS, axiosInstance } from '../config/api.js'
 import authService from '../services/authService.js'
 import { useFrameworkStore } from '@/stores/framework'
+import EntitySwitcher from '@/components/EntitySwitcher.vue'
 
 export default {
   name: 'GlobalNavbar',
+  components: { EntitySwitcher },
   data() {
     return {
       isScrolled: false,
@@ -118,6 +121,10 @@ export default {
       } catch (error) {
         console.warn('[GlobalNavbar] Unable to sync framework mode state:', error?.message || error)
       }
+    },
+    onEntityChanged() {
+      // Optionally refresh current view data when entity changes
+      this.$router.go(0)
     },
     async handleFrameworkModeToggle(event) {
       const checked = !!event?.target?.checked

@@ -4668,7 +4668,6 @@ def get_all_risks_for_dropdown(request):
                     r.RiskPriority,
                     r.RiskMitigation,
                     r.CreatedAt,
-                    r.Origin,
                     u.UserName as CreatedBy,
                     CONCAT(u.FirstName, ' ', u.LastName) as CreatedByName,
                     d.DepartmentName,

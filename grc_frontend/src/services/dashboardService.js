@@ -71,7 +71,10 @@ export default {
         return _cachedGet('/api/policies/', undefined);
     },
     // Get all frameworks
-    getAllFrameworks() {
+    getAllFrameworks({ force = false } = {}) {
+        if (force) {
+            return apiService.get('/api/frameworks/', { include_all_status: true }, { skipCache: true });
+        }
         return _cachedGet('/api/frameworks/', { include_all_status: true });
     },
     // New: Get policies by framework

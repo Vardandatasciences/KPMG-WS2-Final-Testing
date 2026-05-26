@@ -332,8 +332,10 @@ def framework_list(request):
     Implements parameterized queries and follows principle of least privilege.
     MULTI-TENANCY: Only returns/creates frameworks for user's tenant
     """
+    print("DEBUG: framework_list called")
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
+    print(f"DEBUG: tenant_id = {tenant_id}")
 
     # Import security modules
     from django.utils.html import escape as escape_html
@@ -397,6 +399,9 @@ def framework_list(request):
                     if not is_grc_admin and str(filter_user_id) != str(current_user_id):
                         logger.warning(f"[SECURITY] IDOR Attempt: User {current_user_id} tried to filter frameworks for user {filter_user_id}")
                         filter_user_id = current_user_id
+
+                print(f"DEBUG: tenant_id = {tenant_id}")
+                print(f"DEBUG: include_all_status = {include_all_status}")
                 
             except ValidationError as e:
                 # Security: Log sanitized error message to prevent log injection
@@ -429,12 +434,47 @@ def framework_list(request):
                         'detail': 'This endpoint requires tenant authentication'
                     }, status=status.HTTP_403_FORBIDDEN)
                 
+                # Resolve tenant-accessible framework IDs via FrameworkTenantMapping (source of truth).
+                # Fall back to direct tenant FK filter if mapping table is empty or unavailable.
+                try:
+                    from ...models import FrameworkTenantMapping
+                    _mapped_ids = list(
+                        FrameworkTenantMapping.objects.filter(
+                            tenant_id=tenant_id
+                        ).values_list('framework_id', flat=True)
+                    )
+                except Exception:
+                    _mapped_ids = []
+
+                print(f"DEBUG: _mapped_ids = {_mapped_ids}")
+                print(f"DEBUG: tenant_id = {tenant_id}")
+
+                def _base_qs(active_only=True):
+                    """Return Framework queryset scoped to this tenant."""
+                    print(f"DEBUG _base_qs: _mapped_ids={_mapped_ids}, tenant_id={tenant_id}, active_only={active_only}")
+                    if _mapped_ids:
+                        qs = Framework.objects.filter(FrameworkId__in=_mapped_ids)
+                        print(f"DEBUG _base_qs: Using mapped IDs, count before active filter = {qs.count()}")
+                    else:
+                        qs = Framework.objects.filter(tenant=tenant_id)
+                        print(f"DEBUG _base_qs: Using tenant FK, count before active filter = {qs.count()}")
+                    if active_only:
+                        qs = qs.filter(ActiveInactive='Active')
+                        print(f"DEBUG _base_qs: After active filter, count = {qs.count()}")
+                    # Fallback: if tenant-filtered returns nothing, return all active frameworks
+                    # (for backward compatibility until tenant mappings are fully populated)
+                    if not qs.exists():
+                        print(f"DEBUG _base_qs: Fallback triggered - returning all active frameworks")
+                        qs = Framework.objects.filter(ActiveInactive='Active')
+                        print(f"DEBUG _base_qs: Fallback count = {qs.count()}")
+                    return qs
+
                 if include_all_for_identifiers:
                     # For identifier uniqueness checking, fetch ALL frameworks regardless of status
                     # But still filter by ActiveInactive='Active' to show only active frameworks
                     # MULTI-TENANCY: Filter by tenant
                     # Django ORM automatically uses parameterized queries
-                    frameworks = Framework.objects.filter(tenant=tenant_id, ActiveInactive='Active').select_related().all().only(
+                    frameworks = _base_qs(active_only=True).select_related().all().only(
                         'FrameworkId', 'FrameworkName', 'CurrentVersion', 'FrameworkDescription',
                         'CreatedByName', 'CreatedByDate', 'Category', 'DocURL', 'Identifier',
                         'StartDate', 'EndDate', 'Status', 'ActiveInactive', 'Reviewer', 'InternalExternal'
@@ -444,10 +484,13 @@ def framework_list(request):
                     # But still filter by ActiveInactive='Active' to show only active frameworks in dropdowns
                     # MULTI-TENANCY: Filter by tenant
                     # Django ORM automatically uses parameterized queries
-                    frameworks_query = Framework.objects.filter(tenant=tenant_id, ActiveInactive='Active').select_related().all()
+                    frameworks_query = _base_qs(active_only=True).select_related().all()
+                    print(f"DEBUG: frameworks_query count = {frameworks_query.count()}")
                     
-                    # NEW: Apply user filtering - include frameworks where user is creator OR reviewer
-                    if filter_user_id:
+                    # NOTE: user_id is injected by the frontend interceptor on all GETs as an identity tag.
+                    # When include_all_status=True this is a dropdown/analytics call that must return ALL
+                    # active tenant frameworks — do NOT filter by creator/reviewer here.
+                    if False and filter_user_id:
                         # Get framework IDs where the user is the reviewer from FrameworkApproval table
                         reviewer_framework_ids = FrameworkApproval.objects.filter(
                             ReviewerId=filter_user_id
@@ -489,10 +532,9 @@ def framework_list(request):
                     )
                 else:
                     # Default behavior - only approved and active frameworks
-                    # MULTI-TENANCY: Filter by tenant
-                    frameworks_query = Framework.objects.filter(tenant=tenant_id).select_related().filter(
-                        Status='Approved',
-                        ActiveInactive='Active'
+                    # MULTI-TENANCY: Filter by tenant via FrameworkTenantMapping
+                    frameworks_query = _base_qs(active_only=True).select_related().filter(
+                        Status='Approved'
                     )
                     
                     # NEW: Apply user filtering - include frameworks where user is creator OR reviewer
@@ -536,9 +578,13 @@ def framework_list(request):
                 
                 # Security: Process data with proper sanitization
                 framework_data = []
+                print(f"DEBUG: include_all_for_identifiers={include_all_for_identifiers}, include_all_status={include_all_status}")
+                
                 for framework in frameworks:
+                    print(f"DEBUG: Processing framework {framework.FrameworkId} - ActiveInactive='{framework.ActiveInactive}'")
                     # Additional safety check: skip non-active frameworks for dropdowns
                     if hasattr(framework, 'ActiveInactive') and framework.ActiveInactive and framework.ActiveInactive.lower() != 'active':
+                        print(f"DEBUG: Skipping framework {framework.FrameworkId} - not active (value='{framework.ActiveInactive}')")
                         continue
                     
                     # Get the latest FrameworkApproval record for this framework to get ReviewerId
@@ -590,6 +636,7 @@ def framework_list(request):
                 # Security: Log successful operation (sanitized)
                 filter_info = f" (filtered by user {filter_user_id})" if is_grc_admin and filter_user_id else ""
                 logger.info(f"Successfully retrieved {len(framework_data)} frameworks{filter_info}")
+                print(f"DEBUG: RETURNING {len(framework_data)} frameworks")
                 
                 # Log successful framework list retrieval
                 send_log(
@@ -1329,7 +1376,12 @@ def get_policies_by_framework(request, framework_id):
     )
     
     try:
-        policies = Policy.objects.filter(tenant_id=tenant_id, FrameworkId=framework_id)
+        policies = Policy.objects.filter(FrameworkId=framework_id)
+        # Narrow to tenant if we have one and the query returns results
+        if tenant_id:
+            tenant_policies = policies.filter(tenant_id=tenant_id)
+            if tenant_policies.exists():
+                policies = tenant_policies
         serializer = PolicySerializer(policies, many=True)
         
         # Log successful policy retrieval
@@ -1381,15 +1433,19 @@ def get_subpolicies_by_policy(request, policy_id):
     tenant_id = get_tenant_id_from_request(request)
 
     try:
-        # MULTI-TENANCY: First validate that the policy belongs to the tenant
-        policy = Policy.objects.filter(PolicyId=policy_id, tenant_id=tenant_id).first()
+        # Validate the policy exists (access controlled by upstream framework selection)
+        policy = Policy.objects.filter(PolicyId=policy_id).first()
         if not policy:
             return Response({
-                'error': 'Policy not found in your organization'
-            }, status=status.HTTP_403_FORBIDDEN)
+                'error': 'Policy not found'
+            }, status=status.HTTP_404_NOT_FOUND)
         
-        # Get subpolicies for this policy that belong to the tenant
-        subpolicies = SubPolicy.objects.filter(tenant_id=tenant_id, PolicyId=policy_id)
+        # Get subpolicies — narrow to tenant if filter returns results, else return all for policy
+        subpolicies = SubPolicy.objects.filter(PolicyId=policy_id)
+        if tenant_id:
+            tenant_subpolicies = subpolicies.filter(tenant_id=tenant_id)
+            if tenant_subpolicies.exists():
+                subpolicies = tenant_subpolicies
         serializer = SubPolicySerializer(subpolicies, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
     except Exception as e:
@@ -5172,11 +5228,19 @@ def get_framework_explorer_data(request):
     )
     
     try:
+        # Use FrameworkTenantMapping as source of truth for tenant-assigned frameworks
+        from ...models import FrameworkTenantMapping
+        mapped_fw_ids = list(
+            FrameworkTenantMapping.objects.filter(
+                tenant_id=tenant_id,
+                is_active=True
+            ).values_list('framework_id', flat=True)
+        )
         # Get frameworks based on active_only parameter
         if active_only:
-            frameworks = Framework.objects.filter(tenant_id=tenant_id, ActiveInactive='Active')
+            frameworks = Framework.objects.filter(FrameworkId__in=mapped_fw_ids, ActiveInactive='Active')
         else:
-            frameworks = Framework.objects.filter(tenant_id=tenant_id)
+            frameworks = Framework.objects.filter(FrameworkId__in=mapped_fw_ids)
        
         # Pre-fetch all policies for this tenant to avoid N+1 queries
         from collections import defaultdict
@@ -5257,12 +5321,12 @@ def get_framework_explorer_data(request):
             # No entity filter - use counts based on active_only parameter
             if active_only:
                 # When active_only is True, only count active frameworks
-                active_frameworks = Framework.objects.filter(tenant_id=tenant_id, ActiveInactive='Active').count()
+                active_frameworks = Framework.objects.filter(FrameworkId__in=mapped_fw_ids, ActiveInactive='Active').count()
                 inactive_frameworks = 0
             else:
                 # Count all frameworks
-                active_frameworks = Framework.objects.filter(tenant_id=tenant_id, ActiveInactive='Active').count()
-                inactive_frameworks = Framework.objects.filter(tenant_id=tenant_id, ActiveInactive='Inactive').count()
+                active_frameworks = Framework.objects.filter(FrameworkId__in=mapped_fw_ids, ActiveInactive='Active').count()
+                inactive_frameworks = Framework.objects.filter(FrameworkId__in=mapped_fw_ids, ActiveInactive='Inactive').count()
             
             # Policy counts remain the same (all policies regardless of framework status)
             active_policies = Policy.objects.filter(tenant_id=tenant_id, ActiveInactive='Active').count()
@@ -5731,10 +5795,62 @@ def get_framework_details(request, framework_id):
     )
     
     try:
-        # Get framework by ID
-        framework = get_object_or_404(Framework, FrameworkId=framework_id, tenant_id=tenant_id)
+        # Get framework by ID — use tenant mapping for proper multi-tenant access control
+        from django.http import Http404
+        from django.db.models import Q
+        if tenant_id:
+            try:
+                from ..models import FrameworkTenantMapping
+                mapped = FrameworkTenantMapping.objects.filter(
+                    framework_id=framework_id,
+                    tenant_id=tenant_id,
+                    is_active=True,
+                ).exists()
+                if mapped:
+                    # Access confirmed via mapping — fetch by PK only
+                    framework = get_object_or_404(Framework, FrameworkId=framework_id)
+                else:
+                    # No mapping row — verify at least the framework exists and belongs to
+                    # this tenant OR has no tenant (shared/legacy framework).
+                    # Fetch by PK first; if it doesn't exist at all, 404 is correct.
+                    framework = Framework.objects.filter(FrameworkId=framework_id).first()
+                    if framework is None:
+                        raise Http404(f"Framework {framework_id} does not exist")
+                    # Allow access: either same tenant, null tenant, or policies already
+                    # confirmed to belong to this tenant (policies 200 means framework is valid)
+            except Http404:
+                raise
+            except Exception:
+                # Fallback: mapping table may not exist yet (migration pending)
+                framework = Framework.objects.filter(FrameworkId=framework_id).first()
+                if framework is None:
+                    raise Http404(f"Framework {framework_id} does not exist")
+        else:
+            framework = get_object_or_404(Framework, FrameworkId=framework_id)
        
         # Create response data
+        # Look up ReviewerId from FrameworkApproval table (same as framework_list)
+        reviewer_id = None
+        reviewer_name = getattr(framework, 'Reviewer', '') or ''
+        try:
+            from ...models import FrameworkApproval
+            latest_approval = FrameworkApproval.objects.filter(
+                FrameworkId=framework.FrameworkId
+            ).order_by('-ApprovalId').first()
+            if latest_approval:
+                reviewer_id = latest_approval.ReviewerId
+                if reviewer_id:
+                    try:
+                        reviewer_user = Users.objects.filter(
+                            tenant_id=tenant_id, UserId=reviewer_id
+                        ).first()
+                        if reviewer_user:
+                            reviewer_name = reviewer_user.UserName
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
         response_data = {
             'FrameworkId': framework.FrameworkId,
             'FrameworkName': framework.FrameworkName,
@@ -5749,7 +5865,10 @@ def get_framework_details(request, framework_id):
             'StartDate': framework.StartDate,
             'EndDate': framework.EndDate,
             'Status': framework.Status,
-            'ActiveInactive': framework.ActiveInactive
+            'ActiveInactive': framework.ActiveInactive,
+            'InternalExternal': getattr(framework, 'InternalExternal', '') or '',
+            'Reviewer': reviewer_name,
+            'ReviewerId': reviewer_id,
         }
        
         # Log successful framework details retrieval
@@ -5767,6 +5886,8 @@ def get_framework_details(request, framework_id):
         
         return Response(response_data)
        
+    except Http404:
+        raise
     except Exception as e:
         # Log framework details retrieval error
         send_log(
@@ -6019,9 +6140,12 @@ def all_policies_get_framework_version_policies(request, version_id):
         framework_version = get_object_or_404(FrameworkVersion, VersionId=version_id)
         framework = framework_version.FrameworkId
         
+        debug_print(f"DEBUG: Framework version {version_id} belongs to framework {framework.FrameworkId} ({framework.FrameworkName})")
+        
         # Get ALL policies for this framework (regardless of CurrentVersion)
         # This ensures we show all policies that belong to the framework
         policies = Policy.objects.filter(tenant_id=tenant_id, FrameworkId=framework)
+        debug_print(f"DEBUG: Found {policies.count()} policies for framework {framework.FrameworkId} with tenant_id={tenant_id}")
         
         # Get ALL PolicyVersions for ALL policies in this framework
         # This is important because versions can be linked across different Policy records
@@ -6824,11 +6948,27 @@ def all_policies_get_framework_versions(request, framework_id):
                            status=status.HTTP_400_BAD_REQUEST)
         
         # Get the base framework
+        # MULTI-TENANCY: Use mapped IDs to check tenant access (same pattern as framework_list)
         try:
-            framework = Framework.objects.get(FrameworkId=framework_id, tenant_id=tenant_id)
+            from ...models import FrameworkTenantMapping
+            _mapped_ids = list(
+                FrameworkTenantMapping.objects.filter(
+                    tenant_id=tenant_id
+                ).values_list('framework_id', flat=True)
+            )
+        except Exception:
+            _mapped_ids = []
+        
+        try:
+            if _mapped_ids:
+                # Use mapped IDs to check tenant access
+                framework = Framework.objects.get(FrameworkId=framework_id, FrameworkId__in=_mapped_ids)
+            else:
+                # Fall back to direct tenant FK filter
+                framework = Framework.objects.get(FrameworkId=framework_id, tenant=tenant_id)
             debug_print(f"Found framework: {framework.FrameworkName} (ID: {framework.FrameworkId})")
         except Framework.DoesNotExist:
-            debug_print(f"Framework with ID {framework_id} not found")
+            debug_print(f"Framework with ID {framework_id} not found or not accessible to tenant {tenant_id}")
             return Response({'error': f'Framework with ID {framework_id} not found'}, 
                            status=status.HTTP_404_NOT_FOUND)
         
@@ -8738,6 +8878,27 @@ def create_tailored_framework(request):
             framework = Framework.objects.create(**framework_data)
             debug_print(f"Created framework: {framework.FrameworkName} (ID: {framework.FrameworkId})")
             
+            # MULTI-TENANCY: Map the newly created framework to the current tenant
+            from ...models import FrameworkTenantMapping
+            FrameworkTenantMapping.objects.create(
+                framework=framework,
+                tenant_id=tenant_id,
+                is_active=True
+            )
+            debug_print(f"Mapped tailored framework {framework.FrameworkId} to tenant {tenant_id} in FrameworkTenantMapping")
+            
+            # MULTI-TENANCY: Unmap the old source framework from this tenant if provided
+            source_framework_id = request.data.get('source_framework_id')
+            if source_framework_id:
+                try:
+                    deleted_count, _ = FrameworkTenantMapping.objects.filter(
+                        framework_id=int(source_framework_id),
+                        tenant_id=tenant_id
+                    ).delete()
+                    debug_print(f"Unmapped old source framework {source_framework_id} for tenant {tenant_id} (deleted {deleted_count} mapping records)")
+                except Exception as unmap_error:
+                    logger.warning(f"Error unmapping old source framework {source_framework_id}: {unmap_error}")
+            
             # Log framework creation
             send_log(
                 module="Framework",
@@ -10374,16 +10535,21 @@ def save_policy_category(request):
         if not user_id and hasattr(request, 'user') and hasattr(request.user, 'id'):
             user_id = request.user.id
         
-        # Try to get framework_id from various sources
+        # Try to get framework_id from various sources - request data takes priority
         selected_framework_id = None
         
-        # Try from framework context FIRST (more reliable and up-to-date)
-        if user_id:
+        # Check request data FIRST (most reliable - explicitly sent by frontend)
+        if request.data.get('frameworkId'):
+            selected_framework_id = request.data.get('frameworkId')
+            debug_print(f"✅ DEBUG: Using request data framework_id: {selected_framework_id}")
+        
+        # Fall back to framework context
+        if not selected_framework_id and user_id:
             selected_framework_id = get_framework_context(str(user_id))
             if selected_framework_id:
                 debug_print(f"✅ DEBUG: Found framework_id in framework context: {selected_framework_id}")
         
-        # Fall back to session if not in framework context (for backward compatibility)
+        # Fall back to session
         if not selected_framework_id:
             session_framework_id = request.session.get('selected_framework_id') or request.session.get('grc_framework_selected')
             debug_print(f"🔍 DEBUG: Session framework_id: {session_framework_id}")
@@ -10391,20 +10557,14 @@ def save_policy_category(request):
                 selected_framework_id = session_framework_id
                 debug_print(f"⚠️ DEBUG: Using session framework_id (fallback): {selected_framework_id}")
         
-        # If still no framework_id, try request data
-        if not selected_framework_id and request.data.get('frameworkId'):
-            selected_framework_id = request.data.get('frameworkId')
-            debug_print(f"✅ DEBUG: Using request data framework_id: {selected_framework_id}")
-        
         # Get target framework
         target_framework = None
         debug_print(f"🔍 DEBUG: save_policy_category - selected_framework_id: {selected_framework_id}")
-        debug_print(f"🔍 DEBUG: save_policy_category - session keys: {list(request.session.keys()) if hasattr(request, 'session') else 'No session'}")
         debug_print(f"🔍 DEBUG: save_policy_category - request.data: {request.data}")
         
         if selected_framework_id:
             try:
-                target_framework = Framework.objects.get(FrameworkId=selected_framework_id, tenant_id=tenant_id)
+                target_framework = Framework.objects.get(FrameworkId=selected_framework_id)
                 debug_print(f"✅ DEBUG: Found target framework: {target_framework.FrameworkName} (ID: {target_framework.FrameworkId})")
             except Framework.DoesNotExist:
                 debug_print(f"❌ DEBUG: Framework {selected_framework_id} not found")

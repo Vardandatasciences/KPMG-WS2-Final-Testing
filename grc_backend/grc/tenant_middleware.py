@@ -76,7 +76,16 @@ class TenantContextMiddleware(MiddlewareMixin):
             from .tenant_context import clear_current_tenant
             clear_current_tenant()
             # logger.debug(f"[Tenant Middleware] No tenant resolved for {request.method} {path}")
-        
+
+        # ── PHASE 3.1 ADDITIONS ──────────────────────────────────────────
+        # Resolve entity_id and attach to request (non-blocking)
+        request.entity_id = self._resolve_entity_id(request)
+
+        # Validate user-tenant mapping when both are present (non-blocking warning only)
+        if tenant and hasattr(request, 'user') and hasattr(request.user, 'UserId'):
+            self._validate_user_tenant_mapping(request)
+        # ─────────────────────────────────────────────────────────────────
+
         return None
     
     def _get_tenant_from_subdomain(self, request):
@@ -169,6 +178,93 @@ class TenantContextMiddleware(MiddlewareMixin):
             logger.error(f"[Tenant Middleware] Error extracting tenant from user: {e}")
         
         return None
+
+    # ── Phase 3.1 helpers (non-blocking) ────────────────────────────────
+
+    def _resolve_entity_id(self, request):
+        """
+        Resolve entity_id for the current request from:
+        1. Query string param
+        2. DRF / POST body
+        3. JWT payload (selected_entity_id claim)
+        Returns None when not found. Never raises.
+        """
+        try:
+            # Query string
+            eid = request.GET.get('entity_id')
+            if eid:
+                return eid
+
+            # POST / DRF body
+            if hasattr(request, 'data') and isinstance(request.data, dict):
+                eid = request.data.get('entity_id')
+                if eid:
+                    return eid
+
+            # JWT claim (selected_entity_id set during login)
+            auth_header = request.headers.get('Authorization', '')
+            if auth_header.startswith('Bearer '):
+                token = auth_header.split(' ', 1)[1].strip()
+                try:
+                    import jwt as pyjwt
+                    from django.conf import settings as django_settings
+                    verifying_key = getattr(django_settings, 'JWT_VERIFYING_KEY', None)
+                    if verifying_key:
+                        payload = pyjwt.decode(
+                            token,
+                            verifying_key,
+                            algorithms=getattr(django_settings, 'JWT_ALLOWED_ALGORITHMS', ['RS256']),
+                            options={"verify_exp": False},
+                        )
+                        eid = payload.get('selected_entity_id')
+                        if eid:
+                            return eid
+                except Exception:
+                    pass
+        except Exception as exc:
+            logger.debug("[Tenant Middleware] Could not resolve entity_id: %s", exc)
+        return None
+
+    def _validate_user_tenant_mapping(self, request):
+        """
+        Non-blocking check: logs a warning when TenantUserMapping records exist
+        for the tenant but the current user is not among them.
+        Does NOT block the request — enforcement is intentionally deferred to
+        a future stricter rollout phase.
+        """
+        try:
+            from django.core.cache import cache
+            tenant_id = request.tenant_id
+            user_id = request.user.UserId
+            cache_key = f"user_tenant_mapped_{user_id}_{tenant_id}"
+            cached = cache.get(cache_key)
+            if cached is not None:
+                return  # Already checked recently
+
+            from .models import TenantUserMapping
+            # Only validate when the tenant has at least one mapping record
+            tenant_has_mappings = TenantUserMapping.objects.filter(
+                tenant_id=tenant_id, is_deleted=False
+            ).exists()
+            if not tenant_has_mappings:
+                cache.set(cache_key, True, 60)
+                return  # Mappings not configured yet → skip
+
+            user_mapped = TenantUserMapping.objects.filter(
+                tenant_id=tenant_id,
+                user_id=user_id,
+                status='active',
+                is_deleted=False,
+            ).exists()
+            cache.set(cache_key, user_mapped, 60)
+            if not user_mapped:
+                logger.warning(
+                    "[Tenant Middleware] User %s is not mapped to tenant %s "
+                    "(request allowed — enforce in Phase 3 strict mode)",
+                    user_id, tenant_id
+                )
+        except Exception as exc:
+            logger.debug("[Tenant Middleware] User-tenant validation skipped: %s", exc)
 
 
 class TenantIsolationMiddleware(MiddlewareMixin):
