@@ -12,9 +12,6 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  # ============================================
-  # JOB 1: Backend CI (Django)
-  # ============================================
   backend-ci:
     name: Backend CI
     runs-on: ubuntu-latest
@@ -27,7 +24,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-          cache: 'pip'
 
       - name: Install system dependencies
         run: |
@@ -57,9 +53,7 @@ jobs:
         working-directory: ./grc_backend
         continue-on-error: true
         run: |
-          # Stop the build if there are Python syntax errors or undefined names
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-          # Exit-zero treats all errors as warnings
           flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
 
       - name: Check code formatting (black)
@@ -167,9 +161,6 @@ jobs:
           echo "=== Running Django tests ==="
           python manage.py test --no-input --keepdb --verbosity=2 2>&1 || echo "Tests completed with status: $?"
 
-  # ============================================
-  # JOB 2: Frontend CI (Vue.js)
-  # ============================================
   frontend-ci:
     name: Frontend CI
     runs-on: ubuntu-latest
@@ -221,9 +212,6 @@ jobs:
         run: |
           npm run tprm:build
 
-  # ============================================
-  # JOB 3: Security Scanning
-  # ============================================
   security-scan:
     name: Security Scan
     runs-on: ubuntu-latest
