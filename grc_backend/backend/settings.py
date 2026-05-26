@@ -199,6 +199,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "grc.middleware.RequestLoggingMiddleware",  # ADDED: Log all requests FIRST
     "grc.middleware.ApiAbuseDetectionMiddleware",  # Real-time abuse detection and alerting
+    "backend.middleware.APIVersionMiddleware",  # Adds X-API-Version header to API responses
     "corsheaders.middleware.CorsMiddleware",
     # "grc.middleware.CORSMiddleware",
     "django.middleware.security.SecurityMiddleware",
