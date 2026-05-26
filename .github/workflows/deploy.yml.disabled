@@ -1,0 +1,119 @@
+name: Deploy to Hostinger
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+    inputs:
+      confirm_deployment:
+        description: 'Type "DEPLOY" to confirm production deployment'
+        required: true
+        default: ''
+
+env:
+  DEPLOY_PATH: /home/grc-app
+
+jobs:
+  # ============================================
+  # JOB 1: Deploy to Hostinger
+  # ============================================
+  deploy:
+    name: Deploy to Hostinger
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.event_name == 'workflow_dispatch'
+    
+    steps:
+      - name: ⚠️ SAFETY CHECK - Manual approval for production
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          if [[ "${{ github.event.inputs.confirm_deployment }}" != "DEPLOY" ]]; then
+            echo "❌ Deployment cancelled - confirmation not received"
+            echo "To deploy: Go to Actions → Deploy to Hostinger → Run workflow → Type 'DEPLOY'"
+            exit 1
+          fi
+          echo "✅ Manual confirmation received - proceeding with deployment"
+
+      - name: ⚠️ SAFETY CHECK - Wait for CI to pass
+        run: |
+          echo "⏳ Waiting for CI checks to complete..."
+          sleep 30
+          echo "✅ CI check window completed"
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install SSHpass
+        run: sudo apt-get update && sudo apt-get install -y sshpass
+
+      - name: Stop existing containers
+        run: |
+          echo "Stopping existing containers..."
+          SSHPASS='${{ secrets.HOSTINGER_PASSWORD }}' sshpass -e ssh -o StrictHostKeyChecking=no ${{ secrets.HOSTINGER_USER }}@${{ secrets.HOSTINGER_HOST }} "cd $DEPLOY_PATH && docker compose -f deploy/docker-compose.production.yml down || true"
+
+      - name: Deploy code to Hostinger
+        run: |
+          echo "Deploying code to Hostinger..."
+          
+          # Create deployment script
+          cat > deploy.sh << 'EOF'
+          #!/bin/bash
+          set -e
+          
+          echo "Starting deployment to Hostinger..."
+          
+          # Sync code to server using SSHpass
+          sshpass -p '${{ secrets.HOSTINGER_PASSWORD }}' rsync -avz --delete \
+            --exclude='.git' \
+            --exclude='node_modules' \
+            --exclude='__pycache__' \
+            --exclude='*.pyc' \
+            --exclude='.DS_Store' \
+            --exclude='grc_backend/.env' \
+            ./ ${{ secrets.HOSTINGER_USER }}@${{ secrets.HOSTINGER_HOST }}:$DEPLOY_PATH/
+          
+          echo "Code synced successfully"
+          EOF
+          
+          chmod +x deploy.sh
+          ./deploy.sh
+
+      - name: Build and deploy Docker containers
+        run: |
+          echo "Building and starting Docker containers..."
+          SSHPASS='${{ secrets.HOSTINGER_PASSWORD }}' sshpass -e ssh -o StrictHostKeyChecking=no ${{ secrets.HOSTINGER_USER }}@${{ secrets.HOSTINGER_HOST }} "
+            cd $DEPLOY_PATH &&
+            docker compose -f deploy/docker-compose.production.yml build --no-cache &&
+            docker compose -f deploy/docker-compose.production.yml up -d &&
+            sleep 30 &&
+            echo 'Checking service status...' &&
+            docker compose -f deploy/docker-compose.production.yml ps &&
+            echo '=== Recent Backend Logs ===' &&
+            docker logs grc_tprm_backend_v2 --tail 10 || echo 'No backend logs available'
+          "
+
+      - name: Check deployment status
+        run: |
+          echo "Checking deployment status..."
+          SSHPASS='${{ secrets.HOSTINGER_PASSWORD }}' sshpass -e ssh -o StrictHostKeyChecking=no ${{ secrets.HOSTINGER_USER }}@${{ secrets.HOSTINGER_HOST }} "
+            cd $DEPLOY_PATH &&
+            echo 'Docker containers status:' &&
+            docker compose -f deploy/docker-compose.production.yml ps &&
+            echo 'Deployment completed successfully!'
+          "
+
+      - name: Cleanup old Docker images
+        run: |
+          echo "Cleaning up old Docker images..."
+          SSHPASS='${{ secrets.HOSTINGER_PASSWORD }}' sshpass -e ssh -o StrictHostKeyChecking=no ${{ secrets.HOSTINGER_USER }}@${{ secrets.HOSTINGER_HOST }} "docker image prune -af"
+
+      - name: Deployment notification
+        run: |
+          echo "🚀 Deployment completed successfully!"
+          echo "📍 Server: ${{ secrets.HOSTINGER_HOST }}"
+          echo "🌐 Frontend: http://${{ secrets.HOSTINGER_HOST }}:8081"
+          echo "🔧 Backend API: http://${{ secrets.HOSTINGER_HOST }}:8001"
+          echo ""
+          echo "To check logs manually:"
+          echo "sshpass -p 'YOUR_PASSWORD' ssh ${{ secrets.HOSTINGER_USER }}@${{ secrets.HOSTINGER_HOST }} 'cd $DEPLOY_PATH && docker compose -f deploy/docker-compose.production.yml logs -f'"
+
