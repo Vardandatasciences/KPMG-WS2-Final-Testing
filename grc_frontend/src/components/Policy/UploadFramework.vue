@@ -1884,7 +1884,7 @@ export default {
         }
         
         // Add user ID to the request
-        const userId = localStorage.getItem('user_id') || 'default'
+        const userId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || 'default'
         formData.append('userid', userId)
 
         // OPTIMIZATION: Use cached upload with deduplication
@@ -2098,7 +2098,7 @@ export default {
     const fetchExtractedContent = async () => {
       try {
         // Get user ID from localStorage or use the task ID as user ID
-        const userid = localStorage.getItem('user_id') || '1'
+        const userid = sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || '1'
         
         // OPTIMIZATION: Check cache first for sections data
         const cached = policyFrameworkCacheService.getCachedSections(userid, taskId.value)
@@ -2945,7 +2945,7 @@ export default {
         console.log('Saving selected items to checked_section.json:', requestData)
         
         // Add user_id to request data
-        requestData.user_id = localStorage.getItem('user_id') || '1'
+        requestData.user_id = sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || '1'
         
         // Clear compliance cache when selections change so next generate hits AI
         policyFrameworkCacheService.clearTaskCache(taskId.value)

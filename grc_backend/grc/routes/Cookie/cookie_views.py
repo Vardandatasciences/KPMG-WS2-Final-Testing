@@ -830,17 +830,24 @@ def save_cookie_preferences(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-@api_view(['GET'])
+@api_view(['POST'])
 @permission_classes([AllowAny])
 @authentication_classes([])
 def get_cookie_preferences(request):
     """
-    Get cookie preferences for a user or session
-    Query params: user_id (optional), session_id (optional)
+    Get cookie preferences for a user or session.
+    Accepts POST body: { "user_id": 1, "session_id": "..." }
+    Sensitive identifiers are kept in the request body, never in URL query params.
     """
     try:
-        user_id = request.GET.get('user_id')
-        session_id = request.GET.get('session_id')
+        data = request.data
+        user_id = data.get('user_id')
+        session_id = data.get('session_id')
+
+        # Prefer user_id derived from JWT cookie (HttpOnly) over body value
+        jwt_user = get_user_from_jwt(request)
+        if jwt_user:
+            user_id = jwt_user.UserId
         
         if not user_id and not session_id:
             return Response({

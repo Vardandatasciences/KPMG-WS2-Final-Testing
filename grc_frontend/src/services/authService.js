@@ -118,54 +118,63 @@ export default {
           response.data.user.userid ??
           response.data.user.id
         if (uid != null && uid !== '') {
-          localStorage.setItem('user_id', String(uid))
+          sessionStorage.setItem('user_id', String(uid))
+          localStorage.removeItem('user_id')
         }
-        // Set user name and email for navbar and other components
+        // Set user name and email for navbar and other components (sessionStorage only — not localStorage)
         if (response.data.user.UserName) {
-          localStorage.setItem('user_name', response.data.user.UserName)
+          sessionStorage.setItem('user_name', response.data.user.UserName)
+          localStorage.removeItem('user_name')
         }
         if (response.data.user.Email) {
-          localStorage.setItem('user_email', response.data.user.Email)
+          sessionStorage.setItem('user_email', response.data.user.Email)
+          localStorage.removeItem('user_email')
         }
-        // MULTI-TENANCY: Store tenant info if available
+        // MULTI-TENANCY: Store tenant info in sessionStorage only
         if (response.data.user.tenant_id) {
-          localStorage.setItem('tenant_id', response.data.user.tenant_id)
+          sessionStorage.setItem('tenant_id', response.data.user.tenant_id)
+          localStorage.removeItem('tenant_id')
         }
         if (response.data.user.tenant_name) {
-          localStorage.setItem('tenant_name', response.data.user.tenant_name)
+          sessionStorage.setItem('tenant_name', response.data.user.tenant_name)
+          localStorage.removeItem('tenant_name')
         }
       }
       // MULTI-TENANCY: Also check for tenant info in token response
       if (response.data.tenant_id) {
-        localStorage.setItem('tenant_id', response.data.tenant_id)
+        sessionStorage.setItem('tenant_id', response.data.tenant_id)
+        localStorage.removeItem('tenant_id')
       }
       if (response.data.tenant_name) {
-        localStorage.setItem('tenant_name', response.data.tenant_name)
+        sessionStorage.setItem('tenant_name', response.data.tenant_name)
+        localStorage.removeItem('tenant_name')
       }
-      if (response.data.access_token_expires) {
-        localStorage.setItem('access_token_expires', response.data.access_token_expires)
-      }
-      if (response.data.refresh_token_expires) {
-        localStorage.setItem('refresh_token_expires', response.data.refresh_token_expires)
-      }
+      // Token expiry timestamps removed from storage — not needed client-side with HttpOnly cookie auth
+      localStorage.removeItem('access_token_expires')
+      localStorage.removeItem('refresh_token_expires')
 
       // If user_id still missing, derive from JWT payload (router + shell need this)
-      if (!localStorage.getItem('user_id') && token) {
+      if (!sessionStorage.getItem('user_id') && token) {
         try {
           const payload = JSON.parse(atob(token.split('.')[1]))
           const fromJwt =
             payload.user_id ?? payload.userid ?? payload.UserId ?? payload.sub
           if (fromJwt != null && fromJwt !== '') {
-            localStorage.setItem('user_id', String(fromJwt))
+            sessionStorage.setItem('user_id', String(fromJwt))
+            localStorage.removeItem('user_id')
           }
         } catch (e) {
           /* ignore */
         }
       }
      
-      // CRITICAL: Set is_logged_in flag - this is required for App.vue to show sidebar/navbar
-      localStorage.setItem('is_logged_in', 'true')
-      localStorage.setItem('isAuthenticated', 'true')
+      // CRITICAL: Set is_logged_in flag in sessionStorage (clears on browser close)
+      sessionStorage.setItem('is_logged_in', 'true')
+      sessionStorage.setItem('isAuthenticated', 'true')
+      localStorage.removeItem('is_logged_in')
+      localStorage.removeItem('isAuthenticated')
+      sessionStorage.setItem('session_login_time', String(Math.floor(Date.now() / 1000)))
+      localStorage.removeItem('session_login_time')
  
       return {
         success: true,
@@ -239,21 +248,19 @@ export default {
    * @param {string} accessTokenExpires - Access token expiration
    * @param {string} refreshTokenExpires - Refresh token expiration
    */
-  async handleGoogleOAuthCallback(accessToken, refreshToken, userId, consentRequired, accessTokenExpires, refreshTokenExpires) {
+  async handleGoogleOAuthCallback(accessToken, refreshToken, userId, consentRequired) {
     try {
       // Cookie-first: backend sets HttpOnly cookies. Do not store tokens in browser storage.
       removeSensitive('session_token')
       removeSensitive('access_token')
       removeSensitive('refresh_token')
       if (userId) {
-        localStorage.setItem('user_id', userId)
+        sessionStorage.setItem('user_id', String(userId))
+        localStorage.removeItem('user_id')
       }
-      if (accessTokenExpires) {
-        localStorage.setItem('access_token_expires', accessTokenExpires)
-      }
-      if (refreshTokenExpires) {
-        localStorage.setItem('refresh_token_expires', refreshTokenExpires)
-      }
+      // Token expiry timestamps not needed client-side — backend manages expiry via HttpOnly cookie.
+      localStorage.removeItem('access_token_expires')
+      localStorage.removeItem('refresh_token_expires')
  
       // Fetch user data if needed
       if (userId) {
@@ -297,9 +304,13 @@ export default {
         }
       }
      
-      // CRITICAL: Set is_logged_in flag - this is required for App.vue to show sidebar/navbar
-      localStorage.setItem('is_logged_in', 'true')
-      localStorage.setItem('isAuthenticated', 'true')
+      // CRITICAL: Set is_logged_in flag in sessionStorage (clears on browser close)
+      sessionStorage.setItem('is_logged_in', 'true')
+      sessionStorage.setItem('isAuthenticated', 'true')
+      localStorage.removeItem('is_logged_in')
+      localStorage.removeItem('isAuthenticated')
+      sessionStorage.setItem('session_login_time', String(Math.floor(Date.now() / 1000)))
+      localStorage.removeItem('session_login_time')
  
       return {
         success: true,
@@ -486,14 +497,14 @@ export default {
    * MULTI-TENANCY: Get current tenant ID
    */
   getTenantId() {
-    return localStorage.getItem('tenant_id')
+    return sessionStorage.getItem('tenant_id') || localStorage.getItem('tenant_id')
   },
  
   /**
    * MULTI-TENANCY: Get current tenant name
    */
   getTenantName() {
-    return localStorage.getItem('tenant_name')
+    return sessionStorage.getItem('tenant_name') || localStorage.getItem('tenant_name')
   },
  
   /**
@@ -561,28 +572,32 @@ export default {
             response.data.user.userid ??
             response.data.user.id
           if (uid != null && uid !== '') {
-            localStorage.setItem('user_id', String(uid))
+            sessionStorage.setItem('user_id', String(uid))
+            localStorage.removeItem('user_id')
           }
-          // Set user name and email for navbar and other components
+          // Set user name and email in sessionStorage only (not localStorage)
           if (response.data.user.UserName) {
-            localStorage.setItem('user_name', response.data.user.UserName)
+            sessionStorage.setItem('user_name', response.data.user.UserName)
+            localStorage.removeItem('user_name')
           }
           if (response.data.user.Email) {
-            localStorage.setItem('user_email', response.data.user.Email)
+            sessionStorage.setItem('user_email', response.data.user.Email)
+            localStorage.removeItem('user_email')
           }
         }
-        if (response.data.access_token_expires) {
-          localStorage.setItem('access_token_expires', response.data.access_token_expires)
-        }
-        if (response.data.refresh_token_expires) {
-          localStorage.setItem('refresh_token_expires', response.data.refresh_token_expires)
-        }
+        // Token expiry timestamps removed from storage — not needed client-side with HttpOnly cookie auth
+        localStorage.removeItem('access_token_expires')
+        localStorage.removeItem('refresh_token_expires')
 
         // If we don't have a user_id, try to derive from response.user only (no token decoding).
        
-        // CRITICAL: Set is_logged_in flag - this is required for App.vue to show sidebar/navbar
-        localStorage.setItem('is_logged_in', 'true')
-        localStorage.setItem('isAuthenticated', 'true')
+        // CRITICAL: Set is_logged_in flag in sessionStorage (clears on browser close)
+        sessionStorage.setItem('is_logged_in', 'true')
+        sessionStorage.setItem('isAuthenticated', 'true')
+        localStorage.removeItem('is_logged_in')
+        localStorage.removeItem('isAuthenticated')
+        sessionStorage.setItem('session_login_time', String(Math.floor(Date.now() / 1000)))
+        localStorage.removeItem('session_login_time')
  
         return {
           success: true,

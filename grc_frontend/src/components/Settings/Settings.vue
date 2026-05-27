@@ -214,7 +214,7 @@ const toggleTheme = (event) => {
 
 const setTheme = async (theme) => {
   try {
-    const userId = localStorage.getItem('user_id')
+    const userId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id')
     const hasUpdateThemeApi = API_ENDPOINTS && typeof API_ENDPOINTS.UPDATE_USER_THEME === 'function'
     if (userId && hasUpdateThemeApi) {
       await axios.put(API_ENDPOINTS.UPDATE_USER_THEME(userId), {
@@ -279,7 +279,7 @@ const setColorblindMode = async (mode) => {
       localStorage.removeItem('selected-colorblind')
     }
     
-    const userId = localStorage.getItem('user_id')
+    const userId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id')
     const hasUpdateThemeApi = API_ENDPOINTS && typeof API_ENDPOINTS.UPDATE_USER_THEME === 'function'
     if (userId && hasUpdateThemeApi) {
       try {
@@ -315,7 +315,7 @@ const setColorblindMode = async (mode) => {
 
 const loadUserTheme = async () => {
   try {
-    const userId = localStorage.getItem('user_id')
+    const userId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id')
     let theme = 'light'
     let colorblind = null
     
@@ -406,7 +406,7 @@ const toggleUserMenu = () => {
 const fetchUnreadCount = async () => {
   try {
     const accessToken = getAuthToken()
-    const userId = localStorage.getItem('user_id')
+    const userId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id')
     
     if (!accessToken || !userId) {
       return
@@ -430,7 +430,7 @@ const fetchUnreadCount = async () => {
 }
 
 const loadUserData = () => {
-  const storedName = localStorage.getItem('user_name')
+  const storedName = sessionStorage.getItem('user_name') || localStorage.getItem('user_name')
   if (storedName) {
     userName.value = storedName
   }

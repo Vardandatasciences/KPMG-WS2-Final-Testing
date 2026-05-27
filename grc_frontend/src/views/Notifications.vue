@@ -186,8 +186,8 @@ const loadNotifications = async () => {
   try {
     // Try to load from backend first
     const response = await fetch(`${API_BASE_URL}/api/get-notifications/`, {
+      credentials: 'include',
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
         'Content-Type': 'application/json'
       }
     });
@@ -251,8 +251,8 @@ const markAsRead = async (notificationId) => {
   try {
     await fetch(`${API_BASE_URL}/api/mark-as-read/`, {
       method: 'POST',
+      credentials: 'include',
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ notification_id: notificationId })
@@ -282,11 +282,11 @@ const markAllAsRead = async () => {
   
   // Try to update backend (backend should also exclude acknowledgement notifications)
   try {
-    const userId = localStorage.getItem('user_id') || 'default_user';
+    const userId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || 'default_user';
     await fetch(`${API_BASE_URL}/api/mark-all-as-read/`, {
       method: 'POST',
+      credentials: 'include',
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ 

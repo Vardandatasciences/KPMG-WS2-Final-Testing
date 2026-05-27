@@ -2289,8 +2289,8 @@ export default {
     canApprove(risk) {
       if (risk.status !== 'ACCEPTED_PENDING_APPROVAL') return false;
       const currentUserId = Number(
-        localStorage.getItem('user_id')
-        || sessionStorage.getItem('user_id')
+        sessionStorage.getItem('user_id')
+        || localStorage.getItem('user_id')
         || 0
       );
       const assignedReviewerId = Number(risk.reviewerId || 0);

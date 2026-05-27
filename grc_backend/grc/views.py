@@ -136,13 +136,16 @@ def _password_reset_response_with_session_cookie(request, payload: dict, status_
     """Ensure session cookie is emitted so subsequent verify/reset use the same session."""
     response = Response(payload, status=status_code)
     if request.session.session_key:
+        # HttpOnly must always be True — session cookies must never be readable by JavaScript.
+        # Secure must be True in non-DEBUG environments (HTTPS-only transmission).
+        force_secure = not settings.DEBUG
         response.set_cookie(
             settings.SESSION_COOKIE_NAME,
             request.session.session_key,
             max_age=settings.SESSION_COOKIE_AGE,
-            httponly=settings.SESSION_COOKIE_HTTPONLY,
+            httponly=True,
             samesite=settings.SESSION_COOKIE_SAMESITE,
-            secure=settings.SESSION_COOKIE_SECURE,
+            secure=force_secure or settings.SESSION_COOKIE_SECURE,
             domain=settings.SESSION_COOKIE_DOMAIN,
             path=settings.SESSION_COOKIE_PATH,
         )

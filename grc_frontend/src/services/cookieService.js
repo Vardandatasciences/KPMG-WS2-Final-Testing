@@ -22,10 +22,10 @@ class CookieService {
     try {
       // CRITICAL: Ensure user_id is in the preferences object BEFORE sending
       // Check multiple sources for user_id
-      let userId = localStorage.getItem('user_id') || 
-                   localStorage.getItem('userId') ||
-                   sessionStorage.getItem('user_id') ||
-                   sessionStorage.getItem('userId');
+      let userId = sessionStorage.getItem('user_id') ||
+                   sessionStorage.getItem('userId') ||
+                   localStorage.getItem('user_id') ||
+                   localStorage.getItem('userId');
       
       // Also check current_user object
       if (!userId) {
@@ -74,11 +74,11 @@ class CookieService {
    */
   async getPreferences(userId = null, sessionId = null) {
     try {
-      const params = {}
-      if (userId) params.user_id = userId
-      if (sessionId) params.session_id = sessionId
+      const body = {}
+      if (userId) body.user_id = userId
+      if (sessionId) body.session_id = sessionId
 
-      const response = await api.get('/api/cookie/preferences/', { params })
+      const response = await api.post('/api/cookie/preferences/', body)
       return response.data
     } catch (error) {
       const status = error.response?.status

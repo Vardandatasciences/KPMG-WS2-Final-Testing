@@ -39,7 +39,7 @@ class IntegrationsService {
 
     try {
       // Get user ID
-      const userId = localStorage.getItem('user_id') || sessionStorage.getItem('user_id') || 1;
+      const userId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || 1;
 
       // Fetch all integration-related datasets
       await Promise.all([
