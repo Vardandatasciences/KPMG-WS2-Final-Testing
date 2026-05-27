@@ -104,8 +104,8 @@ const SENSITIVE_URL_PARAMS = ['access_token', 'refresh_token', 'id_token', 'toke
 
 // Cookie-first auth: HttpOnly cookies cannot be read by JS, so router should not check access_token.
 function hasShellAuthFlags() {
-  const userId = localStorage.getItem('user_id')
-  const isLoggedIn = localStorage.getItem('is_logged_in') === 'true'
+  const userId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id')
+  const isLoggedIn = sessionStorage.getItem('is_logged_in') === 'true' || localStorage.getItem('is_logged_in') === 'true'
   return !!(userId && isLoggedIn)
 }
 
@@ -1192,7 +1192,7 @@ const routes = [
     path: '/:pathMatch(.*)*',
     name: 'NotFound',
     redirect: (to) => {
-      const isLoggedIn = localStorage.getItem('is_logged_in') === 'true'
+      const isLoggedIn = sessionStorage.getItem('is_logged_in') === 'true' || localStorage.getItem('is_logged_in') === 'true'
       const hasToken = true // cookie token is not readable; rely on flags + verify guard
       console.log('🔄 Catch-all route triggered for:', to.path, 'Logged in:', isLoggedIn)
       return (isLoggedIn && hasToken) ? '/home' : '/login'
@@ -1270,8 +1270,8 @@ router.beforeEach(async (to, from) => {
 
     console.log('🔐 Authentication status:', {
       hasToken: undefined,
-      hasUserId: !!localStorage.getItem('user_id'),
-      isLoggedIn: localStorage.getItem('is_logged_in') === 'true',
+      hasUserId: !!(sessionStorage.getItem('user_id') || localStorage.getItem('user_id')),
+      isLoggedIn: sessionStorage.getItem('is_logged_in') === 'true' || localStorage.getItem('is_logged_in') === 'true',
       isTokenValid: undefined,
       isAuthenticated: isAuthenticated
     })

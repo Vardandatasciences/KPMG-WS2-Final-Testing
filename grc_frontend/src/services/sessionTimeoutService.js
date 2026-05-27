@@ -102,6 +102,8 @@ class SessionTimeoutService {
     }
 
     const loggedIn =
+      sessionStorage.getItem('is_logged_in') === 'true' ||
+      sessionStorage.getItem('isAuthenticated') === 'true' ||
       localStorage.getItem('is_logged_in') === 'true' ||
       localStorage.getItem('isAuthenticated') === 'true'
     if (!loggedIn) {
@@ -120,11 +122,17 @@ class SessionTimeoutService {
         const elapsedTime = Date.now() / 1000 - loginTime
         remainingTime = this.timeoutSeconds - elapsedTime
       } else {
-        const expiresStr = localStorage.getItem('access_token_expires')
-        if (!expiresStr) {
+        // access_token is HttpOnly — use session_login_time (non-sensitive timestamp set at login)
+        const loginTimeStr = sessionStorage.getItem('session_login_time') || localStorage.getItem('session_login_time')
+        const expiresStr = sessionStorage.getItem('access_token_expires') || localStorage.getItem('access_token_expires')
+        if (loginTimeStr) {
+          const elapsed = Date.now() / 1000 - parseInt(loginTimeStr, 10)
+          remainingTime = this.timeoutSeconds - elapsed
+        } else if (expiresStr) {
+          remainingTime = (new Date(expiresStr).getTime() - Date.now()) / 1000
+        } else {
           return
         }
-        remainingTime = (new Date(expiresStr).getTime() - Date.now()) / 1000
       }
 
       if (remainingTime <= this.warningSeconds && remainingTime > 0 && !this.isWarningShown) {
@@ -255,7 +263,13 @@ class SessionTimeoutService {
         const elapsedTime = Date.now() / 1000 - loginTime
         return Math.max(0, this.timeoutSeconds - elapsedTime)
       }
-      const expiresStr = localStorage.getItem('access_token_expires')
+      // access_token is HttpOnly — use session_login_time (non-sensitive timestamp set at login)
+      const loginTimeStr = sessionStorage.getItem('session_login_time') || localStorage.getItem('session_login_time')
+      if (loginTimeStr) {
+        const elapsed = Date.now() / 1000 - parseInt(loginTimeStr, 10)
+        return Math.max(0, this.timeoutSeconds - elapsed)
+      }
+      const expiresStr = sessionStorage.getItem('access_token_expires') || localStorage.getItem('access_token_expires')
       if (!expiresStr) return 0
       return Math.max(0, (new Date(expiresStr).getTime() - Date.now()) / 1000)
     } catch (error) {

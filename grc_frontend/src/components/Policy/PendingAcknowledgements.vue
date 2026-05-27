@@ -153,7 +153,7 @@ export default {
       
       // Mark ONLY the specific notification for this policy as read (action completed)
       try {
-        const userId = localStorage.getItem('user_id') || 'default_user'
+        const userId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || 'default_user'
         const policyId = selectedAcknowledgement.value?.policy_id
         const policyName = selectedAcknowledgement.value?.policy_name
         

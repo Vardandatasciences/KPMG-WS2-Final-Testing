@@ -39,8 +39,8 @@ class DocumentService {
    */
   async fetchAllDocumentData() {
     // Check if user is authenticated before fetching
-    const isAuthenticated = localStorage.getItem('is_logged_in') === 'true' && 
-                           localStorage.getItem('access_token') !== null;
+    const isAuthenticated = (sessionStorage.getItem('is_logged_in') === 'true' || localStorage.getItem('is_logged_in') === 'true') &&
+                           (sessionStorage.getItem('access_token') !== null || localStorage.getItem('access_token') !== null);
     
     if (!isAuthenticated) {
       console.warn('[Document Service] ⚠️ User not authenticated, cannot fetch documents');

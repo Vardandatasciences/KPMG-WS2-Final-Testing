@@ -138,7 +138,7 @@ export default {
     }
     
     // Load user info
-    const userId = localStorage.getItem('user_id')
+    const userId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id')
     const userRole = localStorage.getItem('user_role') || localStorage.getItem('role')
     this.userInfo = {
       userId: userId,
@@ -214,15 +214,13 @@ export default {
           return
         }
         
-        const userId = localStorage.getItem('user_id')
+        const userId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id')
         if (!userId) {
           this.message = 'Please log in to request access.'
           this.messageType = 'error'
           this.isRequesting = false
           return
         }
-        
-        const accessToken = localStorage.getItem('access_token')
         
         const requestData = {
           request_type: 'ACCESS',
@@ -240,9 +238,9 @@ export default {
           requestData,
           {
             headers: {
-              'Authorization': `Bearer ${accessToken}`,
               'Content-Type': 'application/json'
-            }
+            },
+            withCredentials: true
           }
         )
         

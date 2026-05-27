@@ -227,7 +227,8 @@ apiClient.interceptors.response.use((response) => {
       
       // Update non-sensitive session metadata for compatibility with legacy components
       if (refreshResponse.data && refreshResponse.data.access_token_expires) {
-        localStorage.setItem('access_token_expires', refreshResponse.data.access_token_expires);
+        sessionStorage.setItem('access_token_expires', refreshResponse.data.access_token_expires);
+        localStorage.removeItem('access_token_expires');
       }
       
       // Dispatch event for components that might be listening for session updates

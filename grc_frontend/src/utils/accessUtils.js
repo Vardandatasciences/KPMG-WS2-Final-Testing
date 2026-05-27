@@ -14,16 +14,20 @@ export const SessionUtils = {
   setUserSession(userData) {
     console.log('[SESSION_UTILS] Setting user session:', userData);
     if (userData.user_id) {
-      localStorage.setItem('user_id', userData.user_id.toString());
+      sessionStorage.setItem('user_id', userData.user_id.toString());
+      localStorage.removeItem('user_id');
     }
     if (userData.email) {
-      localStorage.setItem('user_email', userData.email);
+      sessionStorage.setItem('user_email', userData.email);
+      localStorage.removeItem('user_email');
     }
     if (userData.name) {
-      localStorage.setItem('user_name', userData.name);
+      sessionStorage.setItem('user_name', userData.name);
+      localStorage.removeItem('user_name');
     }
-    // Set a flag to indicate user is logged in
-    localStorage.setItem('is_logged_in', 'true');
+    // Set a flag to indicate user is logged in (sessionStorage clears on browser close)
+    sessionStorage.setItem('is_logged_in', 'true');
+    localStorage.removeItem('is_logged_in');
   },
 
   /**
@@ -32,10 +36,10 @@ export const SessionUtils = {
    */
   getUserSession() {
     return {
-      user_id: localStorage.getItem('user_id'),
-      email: localStorage.getItem('user_email'),
-      name: localStorage.getItem('user_name'),
-      is_logged_in: localStorage.getItem('is_logged_in') === 'true'
+      user_id: sessionStorage.getItem('user_id') || localStorage.getItem('user_id'),
+      email: sessionStorage.getItem('user_email') || localStorage.getItem('user_email'),
+      name: sessionStorage.getItem('user_name') || localStorage.getItem('user_name'),
+      is_logged_in: sessionStorage.getItem('is_logged_in') === 'true' || localStorage.getItem('is_logged_in') === 'true'
     };
   },
 
@@ -44,10 +48,16 @@ export const SessionUtils = {
    */
   clearUserSession() {
     console.log('[SESSION_UTILS] Clearing user session');
+    sessionStorage.removeItem('user_id');
+    sessionStorage.removeItem('user_email');
+    sessionStorage.removeItem('user_name');
+    sessionStorage.removeItem('is_logged_in');
+    sessionStorage.removeItem('isAuthenticated');
     localStorage.removeItem('user_id');
     localStorage.removeItem('user_email');
     localStorage.removeItem('user_name');
     localStorage.removeItem('is_logged_in');
+    localStorage.removeItem('isAuthenticated');
   },
 
   /**
@@ -55,7 +65,7 @@ export const SessionUtils = {
    * @returns {boolean} True if user is logged in
    */
   isLoggedIn() {
-    return localStorage.getItem('is_logged_in') === 'true';
+    return sessionStorage.getItem('is_logged_in') === 'true' || localStorage.getItem('is_logged_in') === 'true';
   },
 
   /**
@@ -63,7 +73,7 @@ export const SessionUtils = {
    * @returns {string|null} User ID or null if not logged in
    */
   getUserId() {
-    return localStorage.getItem('user_id');
+    return sessionStorage.getItem('user_id') || localStorage.getItem('user_id');
   }
 };
 

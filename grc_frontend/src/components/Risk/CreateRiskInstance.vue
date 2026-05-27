@@ -2578,8 +2578,8 @@ export default {
       const currentUser = sessionStorage.getItem('current_user') || localStorage.getItem('current_user');
       const legacyUser = localStorage.getItem('user');
       const user = currentUser || legacyUser;
-      const userId = localStorage.getItem('user_id');
-      const isAuthenticated = localStorage.getItem('isAuthenticated');
+      const userId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id');
+      const isAuthenticated = sessionStorage.getItem('isAuthenticated') || localStorage.getItem('isAuthenticated');
       
       console.log('🔐 Authentication Status Check:');
       console.log('Access Token:', accessToken ? 'Present' : 'Missing');

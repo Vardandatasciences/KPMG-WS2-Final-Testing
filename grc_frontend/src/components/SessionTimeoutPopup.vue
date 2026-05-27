@@ -111,6 +111,8 @@ export default {
     },
     checkAuthAndStart() {
       const loggedIn =
+        sessionStorage.getItem('is_logged_in') === 'true' ||
+        sessionStorage.getItem('isAuthenticated') === 'true' ||
         localStorage.getItem('is_logged_in') === 'true' ||
         localStorage.getItem('isAuthenticated') === 'true'
       if (loggedIn) {

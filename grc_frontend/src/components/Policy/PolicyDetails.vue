@@ -694,7 +694,7 @@ export default {
     // Helper method to get current user name
     getCurrentUserName() {
       // For current user, use stored username or fallback to localStorage
-      return this.currentUserName || localStorage.getItem('user_name') || '';
+      return this.currentUserName || sessionStorage.getItem('user_name') || localStorage.getItem('user_name') || '';
     },
 
     // Helper method to check if review can be submitted
