@@ -5438,6 +5438,25 @@ def login_user(request):
             
             # Password logging is now handled in the password expiry check above
             
+            # ========================================
+            # CONCURRENT LOGIN PREVENTION (Session-based auth)
+            # ========================================
+            # Check if the user already has an active JWT session in cache.
+            # If found, log a CONCURRENT_LOGIN_DETECTED audit event before overwriting.
+            try:
+                from .authentication import _get_user_session_token, _log_concurrent_login_event
+                existing_session = _get_user_session_token(user.UserId)
+                if existing_session:
+                    logger.warning(
+                        "[AUTH] Concurrent login detected (session-based) for user %s (ID: %s) — terminating previous session (IP: %s)",
+                        user.UserName, user.UserId, client_ip
+                    )
+                    _log_concurrent_login_event(
+                        user.UserId, user.UserName, client_ip, login_type
+                    )
+            except Exception as conc_ex:
+                logger.warning("[AUTH] Concurrent login check failed (non-blocking): %s", conc_ex)
+
             # Set session data
             import time
             # Regenerate session identifier on successful authentication to prevent session fixation

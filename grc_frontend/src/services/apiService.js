@@ -9,31 +9,31 @@
  * 4. Secure Cookie-First Authentication (automatic token purging)
  * 5. Reactive Progress & Global Loading States
  */
- 
+
 import { ref } from 'vue';
 import { API_BASE_URL, createAxiosInstance } from '../config/api.js';
- 
+
 // --- Global State ---
 export const globalLoading = ref(false);
 const pendingRequests = new Map(); // For deduplication: url -> promise
 const responseCache = new Map();   // For caching: url -> { data, timestamp }
- 
+
 const CACHE_TTL = 30000; // 30 seconds default TTL
 const FRAMEWORKS_LIST_CACHE_TTL = 15 * 60 * 1000; // 15 minutes
 const FRAMEWORKS_LIST_CACHE_KEY = 'api_cache_frameworks_list_v1';
 /** Slow incident list GET — dedupe identical params in apiService (Pinia still leads for UX). */
 const INCIDENT_INCIDENTS_LIST_CACHE_TTL_MS = 60 * 1000;
 const AUDIT_FINDINGS_LIST_CACHE_TTL_MS = 60 * 1000;
- 
+
 // --- Helpers ---
- 
+
 const purgeTokens = () => {
   ['user_id', 'userId', 'current_user', 'rbac_roles', 'user_permissions'].forEach(k => {
     localStorage.removeItem(k);
     sessionStorage.removeItem(k);
   });
 };
- 
+
 const getSessionUserId = () => {
   let userId = sessionStorage.getItem('user_id') || sessionStorage.getItem('userId');
   if (!userId) {
@@ -102,7 +102,7 @@ const persistFrameworksListCache = (data, timestamp) => {
     // best-effort persistence only
   }
 };
- 
+
 // --- Core Axios Instance ---
 const apiClient = createAxiosInstance(API_BASE_URL);
 // Must not override createAxiosInstance timeout: policy/framework submit-review and
@@ -112,12 +112,12 @@ apiClient.defaults.timeout = Math.max(
   Number(apiClient.defaults.timeout) || 0,
   600000
 ); // at least 10 minutes for long approval workflows
- 
+
 // --- Interceptors ---
- 
+
 let isRefreshing = false;
 let failedQueue = [];
- 
+
 const processQueue = (error) => {
   failedQueue.forEach(prom => {
     if (error) {
@@ -128,7 +128,7 @@ const processQueue = (error) => {
   });
   failedQueue = [];
 };
- 
+
 /** Request: Multi-Tenancy & Security Hardening */
 apiClient.interceptors.request.use((config) => {
   if (!config.background) {
@@ -164,12 +164,12 @@ apiClient.interceptors.request.use((config) => {
       }
     }
   }
- 
+
   // 2. Security: Cookie-only authentication.
   // The backend uses HttpOnly cookies for tokens. 
   // No tokens should be read from or written to local/session storage.
   // axiosInstance is already configured with withCredentials: true in config/api.js.
- 
+
   return config;
 }, (error) => {
   if (!error.config?.background) {
@@ -177,7 +177,7 @@ apiClient.interceptors.request.use((config) => {
   }
   return Promise.reject(error);
 });
- 
+
 /** Response: Progress & Error Normalization */
 apiClient.interceptors.response.use((response) => {
   if (!response.config?.background) {
@@ -186,30 +186,45 @@ apiClient.interceptors.response.use((response) => {
   return response;
 }, async (error) => {
   const originalRequest = error.config;
- 
+
   if (!originalRequest?.background) {
     globalLoading.value = false;
   }
- 
+
   // Standardize Session Expiry (401/403) with automatic token refresh attempt
   const isRefreshRequest = originalRequest.url?.includes('/api/refresh/');
   const isAuthError = error.response?.status === 401 || (error.response?.status === 403 && error.response.data?.detail?.includes('session'));
-  
+
   if (isAuthError && originalRequest && !originalRequest._retry && !isRefreshRequest) {
     const detail = error.response.data?.detail || error.response.data?.message || '';
-   
+
     // Explicit hard-expiry (do not attempt refresh)
     if (detail.toLowerCase().includes('expired') || error.response.data?.session_expired) {
       console.warn('⏰ [API] Session expired explicitly - purging and redirecting');
       purgeTokens();
+      localStorage.setItem('auth_logout_reason', 'session_expired');
       if (window.location.pathname !== '/login') {
         window.location.href = '/login';
       }
       return Promise.reject(error);
     }
- 
+
+    // Concurrent login: session was revoked by a newer login on another device/tab.
+    // Do NOT attempt refresh — the session is gone by design.
+    if (error.response.data?.session_invalidated === true) {
+      console.warn('🔒 [API] Session invalidated by concurrent login - purging and redirecting');
+      purgeTokens();
+      localStorage.removeItem('is_logged_in');
+      localStorage.removeItem('isAuthenticated');
+      localStorage.setItem('auth_logout_reason', 'session_invalidated');
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
+      return Promise.reject(error);
+    }
+
     if (isRefreshing) {
-      return new Promise(function(resolve, reject) {
+      return new Promise(function (resolve, reject) {
         failedQueue.push({ resolve, reject });
       }).then(() => {
         return apiClient(originalRequest);
@@ -217,20 +232,20 @@ apiClient.interceptors.response.use((response) => {
         return Promise.reject(err);
       });
     }
- 
+
     originalRequest._retry = true;
     isRefreshing = true;
- 
+
     try {
       // Send refresh request. Relies on HttpOnly refresh token cookie sent implicitly.
       const refreshResponse = await apiClient.post('/api/refresh/', {}, { background: true });
-      
+
       // Update non-sensitive session metadata for compatibility with legacy components
       if (refreshResponse.data && refreshResponse.data.access_token_expires) {
         sessionStorage.setItem('access_token_expires', refreshResponse.data.access_token_expires);
         localStorage.removeItem('access_token_expires');
       }
-      
+
       // Dispatch event for components that might be listening for session updates
       window.dispatchEvent(new Event('authChanged'));
 
@@ -248,10 +263,10 @@ apiClient.interceptors.response.use((response) => {
       isRefreshing = false;
     }
   }
- 
+
   return Promise.reject(error);
 });
- 
+
 /**
  * Intelligent Proxy Wrapper
  */
@@ -264,13 +279,13 @@ const request = async (method, url, data = null, config = {}) => {
       : isAuditFindingsListEndpoint(url)
         ? AUDIT_FINDINGS_LIST_CACHE_TTL_MS
         : (config.ttl || CACHE_TTL);
- 
+
   // 1. Deduplication: If an identical GET is already pending, return it
   if (method === 'get' && pendingRequests.has(cacheKey)) {
     console.log(`🌀 [API] Deduplicating request: ${url}`);
     return pendingRequests.get(cacheKey);
   }
- 
+
   // 2. Caching: Return fresh cached data if available
   if (method === 'get' && !config.skipCache && responseCache.has(cacheKey)) {
     const cached = responseCache.get(cacheKey);
@@ -289,7 +304,7 @@ const request = async (method, url, data = null, config = {}) => {
       return persisted.data;
     }
   }
- 
+
   // Define the actual request execution
   const executeRequest = async () => {
     try {
@@ -299,9 +314,9 @@ const request = async (method, url, data = null, config = {}) => {
         data,
         ...config
       });
- 
+
       const result = response.data;
- 
+
       // Cache successful GET results
       if (method === 'get' && !config.skipCache) {
         const timestamp = Date.now();
@@ -310,22 +325,22 @@ const request = async (method, url, data = null, config = {}) => {
           persistFrameworksListCache(result, timestamp);
         }
       }
- 
+
       return result;
     } finally {
       if (method === 'get') pendingRequests.delete(cacheKey);
     }
   };
- 
+
   if (method === 'get') {
     const requestPromise = executeRequest();
     pendingRequests.set(cacheKey, requestPromise);
     return requestPromise;
   }
- 
+
   return executeRequest();
 };
- 
+
 // --- Exported Unified Service ---
 export const apiService = {
   get: (url, params = {}, config = {}) => request('get', url, null, { ...config, params }),
@@ -333,7 +348,7 @@ export const apiService = {
   put: (url, data, config = {}) => request('put', url, data, config),
   patch: (url, data, config = {}) => request('patch', url, data, config),
   delete: (url, config = {}) => request('delete', url, null, config),
- 
+
   // Custom: Buffered/Batch upload helper
   upload: (url, formData, onProgress, allowedTypes = null) => {
     // Add client-side validation for files inside formData if allowedTypes is passed
@@ -342,17 +357,17 @@ export const apiService = {
         if (value instanceof File) {
           const extension = value.name.split('.').pop().toLowerCase();
           const mimeType = value.type.toLowerCase();
-         
+
           // Check if either the extension or the exact mimeType is in the allowed whitelist
           if (!allowedTypes.map(t => t.toLowerCase()).includes(extension) &&
-              !allowedTypes.map(t => t.toLowerCase()).includes(mimeType)) {
-             console.error(`[API] Upload blocked: Invalid file type detected '${extension}' / '${mimeType}'`);
-             return Promise.reject(new Error(`Invalid file type: ${value.name}. Allowed types are: ${allowedTypes.join(', ')}`));
+            !allowedTypes.map(t => t.toLowerCase()).includes(mimeType)) {
+            console.error(`[API] Upload blocked: Invalid file type detected '${extension}' / '${mimeType}'`);
+            return Promise.reject(new Error(`Invalid file type: ${value.name}. Allowed types are: ${allowedTypes.join(', ')}`));
           }
         }
       }
     }
- 
+
     return apiClient.post(url, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
       background: true, // Bypass global loading for uploads if you only want progress bar
@@ -364,20 +379,19 @@ export const apiService = {
       }
     }).then(r => r.data);
   },
- 
+
   // Cache Utilities
   clearCache: () => {
     responseCache.clear();
     console.log('🧹 [API] Global cache cleared');
   },
- 
+
   invalidate: (urlPart) => {
     for (const key of responseCache.keys()) {
       if (key.includes(urlPart)) responseCache.delete(key);
     }
   }
 };
- 
+
 export default apiService;
- 
- 
+

@@ -208,7 +208,7 @@ console.log('🛡️ Setting up HTTP interceptor for access control')
 const app = createApp(App)
 const pinia = createPinia()
 app.config.performance = true
-app.config.warnHandler = () => null 
+app.config.warnHandler = () => null
 
 // Compatibility shim for legacy typo calls observed in some Options API components.
 // If a component accidentally calls `this.initializedFramework()`, delegate to
@@ -242,20 +242,20 @@ window.addEventListener('unhandledrejection', (event) => {
   const errorMessage = error?.message || '';
   const errorString = error?.toString() || '';
   const errorStack = error?.stack || '';
-  
+
   // Suppress reCAPTCHA timeout errors
   if (errorMessage.includes('Timeout') || errorString.includes('Timeout') ||
-      errorMessage.includes('timeout') || errorString.includes('timeout') ||
-      errorStack.includes('recaptcha') || errorStack.includes('recaptcha_en.js') ||
-      errorMessage.includes('recaptcha') || errorString.includes('recaptcha')) {
+    errorMessage.includes('timeout') || errorString.includes('timeout') ||
+    errorStack.includes('recaptcha') || errorStack.includes('recaptcha_en.js') ||
+    errorMessage.includes('recaptcha') || errorString.includes('recaptcha')) {
     console.warn('⚠️ Suppressed unhandled promise rejection (likely reCAPTCHA timeout):', errorMessage);
     event.preventDefault(); // Prevent the error from being logged to console
     return;
   }
-  
+
   // Suppress network errors
   if (errorMessage.includes('Network Error') || errorMessage.includes('ERR_NETWORK') ||
-      errorString.includes('Network Error') || errorString.includes('ERR_NETWORK')) {
+    errorString.includes('Network Error') || errorString.includes('ERR_NETWORK')) {
     console.warn('⚠️ Suppressed unhandled promise rejection (network error):', errorMessage);
     event.preventDefault();
     return;
@@ -268,12 +268,12 @@ window.addEventListener('error', (event) => {
   const errorMessage = error?.message || '';
   const errorString = error?.toString() || '';
   const errorStack = error?.stack || '';
-  
+
   // Suppress reCAPTCHA timeout errors
   if (errorMessage.includes('Timeout') || errorString.includes('Timeout') ||
-      errorMessage.includes('timeout') || errorString.includes('timeout') ||
-      errorStack.includes('recaptcha') || errorStack.includes('recaptcha_en.js') ||
-      errorMessage.includes('recaptcha') || errorString.includes('recaptcha')) {
+    errorMessage.includes('timeout') || errorString.includes('timeout') ||
+    errorStack.includes('recaptcha') || errorStack.includes('recaptcha_en.js') ||
+    errorMessage.includes('recaptcha') || errorString.includes('recaptcha')) {
     console.warn('⚠️ Suppressed error (likely reCAPTCHA timeout):', errorMessage);
     event.preventDefault();
     return;
@@ -285,16 +285,16 @@ const initializeTheme = () => {
     // Load theme from localStorage first (for immediate application)
     const savedTheme = localStorage.getItem('selected-theme') || 'light'
     const savedColorblind = localStorage.getItem('selected-colorblind')
-    
+
     document.documentElement.setAttribute('data-theme', savedTheme)
     document.body.setAttribute('data-theme', savedTheme)
-    
+
     // Apply color-blindness mode if set
     if (savedColorblind) {
       document.documentElement.setAttribute('data-colorblind', savedColorblind)
       document.body.setAttribute('data-colorblind', savedColorblind)
     }
-    
+
     // Apply to app element after it's created
     setTimeout(() => {
       const appElement = document.getElementById('app')
@@ -463,3 +463,4 @@ router.afterEach(() => {
     restoreCurrentRouteDraft()
   }, 0)
 })
+

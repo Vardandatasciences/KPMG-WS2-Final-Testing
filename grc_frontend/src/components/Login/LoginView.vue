@@ -53,6 +53,20 @@
           </div>
         </div>
 
+        <!-- Security alert banner: shown when redirected due to concurrent login or session expiry -->
+        <div v-if="securityAlert.show" class="security-alert-banner" :class="`security-alert--${securityAlert.type}`">
+          <div class="security-alert-icon">
+            <AlertTriangle :size="18" />
+          </div>
+          <div class="security-alert-body">
+            <strong>{{ securityAlert.title }}</strong>
+            <span>{{ securityAlert.message }}</span>
+          </div>
+          <button class="security-alert-close" @click="securityAlert.show = false" type="button" aria-label="Dismiss">
+            <X :size="14" />
+          </button>
+        </div>
+
         <!-- MFA Step -->
         <div v-if="showMfaPanel" class="mfa-step">
           <div class="card-header">
@@ -280,6 +294,7 @@ import ConsentForm from './ConsentForm.vue'
 import logo from '../../assets/RiskaVaire.png'
 import { RECAPTCHA_SITE_KEY, MFA_ENABLED } from '../../config/api.js'
 import {
+  AlertTriangle,
   BadgeCheck,
   CheckCircle,
   ChevronLeft,
@@ -332,6 +347,33 @@ const showForgotPasswordModal = ref(false)
 const showConsentForm = ref(false)
 const isVendorUser = ref(false)
 const showMfaStep = ref(false)
+
+// ─── Security alert (concurrent login / session expiry redirect) ─────────────
+const SECURITY_ALERT_MESSAGES = {
+  concurrent_login: {
+    type: 'warning',
+    title: 'Session Terminated — Security Notice',
+    message:
+      'Your previous session was ended because this account signed in from another device or browser. If this was not you, please change your password immediately.',
+  },
+  session_expired: {
+    type: 'info',
+    title: 'Session Expired',
+    message: 'Your session has expired due to inactivity. Please sign in again.',
+  },
+}
+
+const securityAlert = ref({ show: false, type: 'warning', title: '', message: '' })
+
+onMounted(() => {
+  const reason = localStorage.getItem('auth_logout_reason')
+  if (reason && SECURITY_ALERT_MESSAGES[reason]) {
+    const alert = SECURITY_ALERT_MESSAGES[reason]
+    securityAlert.value = { show: true, ...alert }
+    // Clear the flag so it doesn't show again on next visit
+    localStorage.removeItem('auth_logout_reason')
+  }
+})
 
 /** Avoid v-else adjacency bugs: show exactly one of MFA panel or login form */
 const showMfaPanel = computed(() => Boolean(MFA_ENABLED && showMfaStep.value))

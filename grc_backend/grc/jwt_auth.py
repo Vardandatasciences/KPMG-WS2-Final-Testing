@@ -17,7 +17,17 @@ class UnifiedJWTAuthentication(BaseAuthentication):
     Custom JWT authentication for DRF that authenticates users based on JWT tokens.
     Works for both GRC and TPRM modules with GRC user credentials.
     """
-    
+
+    def authenticate_header(self, request):
+        """
+        Return a string to be used as the value of the `WWW-Authenticate`
+        header in a `401 Unauthenticated` response.
+        DRF uses this to decide whether to return 401 or 403:
+        - Returns non-None here  → DRF sends 401 (correct for auth failures)
+        - Returns None           → DRF silently converts to 403 (wrong — hides session_invalidated from frontend)
+        """
+        return 'Bearer realm="grc"'
+
     def authenticate(self, request):
         """
         Authenticate the request and return a two-tuple of (user, token).
@@ -68,16 +78,14 @@ class UnifiedJWTAuthentication(BaseAuthentication):
             except AuthenticationFailed as e:
                 last_auth_error = e
                 detail_lower = _detail_str(e).lower()
-                # Falling back to Authorization almost always retries an *older* Bearer from JS storage and
-                # surfaces as confusing 403s; but in case of a race during refresh, the header might
-                # actually be more up-to-date. So we allow the loop to continue.
-                if source == 'cookie' and (
-                    'session invalidated' in detail_lower or 'newer login' in detail_lower
+                # ── Session invalidated = concurrent login. This is a TERMINAL error.
+                # Do NOT fall through to another token — the session is terminated regardless
+                # of which credential is presented. Raise immediately.
+                if 'session_invalidated' in detail_lower or (
+                    hasattr(e, 'detail') and isinstance(e.detail, dict) and
+                    e.detail.get('code') == 'session_invalidated'
                 ):
-                    logger.info(
-                        "[Unified JWT Auth] Cookie rejected for session mismatch; will try Authorization header if present"
-                    )
-                    continue
+                    raise e
                 logger.info(
                     "[Unified JWT Auth] Token from %s rejected: %s; trying next credential if any",
                     source,
@@ -125,15 +133,21 @@ class UnifiedJWTAuthentication(BaseAuthentication):
                     request.tenant = type('SimpleTenant', (), {'tenant_id': tenant_id, 'id': tenant_id})()
             
             # Enforce single active session across devices/browsers.
-            # RELAXED: Log warning but allow request if token is otherwise valid.
-            # This prevents disruptive 403/401 errors in multi-tab environments.
+            # If the session token does not match the active session in cache, reject the request.
+            # This prevents concurrent logins using the same credentials from different browsers/devices.
+            # A 120-second grace period is maintained for multi-tab token refresh scenarios.
             if not _is_session_token_valid(user_id, session_token):
                 logger.warning(
-                    "[Unified JWT Auth] Session JTI mismatch for user_id %s (stale session); allowing request due to valid token signature",
+                    "[Unified JWT Auth] Session invalidated for user_id %s — concurrent login detected. "
+                    "Rejecting stale session token %s.",
                     sanitize_for_log(user_id, 32),
+                    sanitize_for_log(session_token, 36) if session_token else "None",
                 )
-                # We allow the request to proceed to avoid breaking user experience, 
-                # but the mismatch is logged for security auditing.
+                raise AuthenticationFailed({
+                    'detail': 'Your session has been terminated because you signed in from another device or browser.',
+                    'code': 'session_invalidated',
+                    'session_invalidated': True,
+                })
             
             # Try to get the user from the database
             User = get_user_model()

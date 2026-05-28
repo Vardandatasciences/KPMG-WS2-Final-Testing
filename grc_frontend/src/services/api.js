@@ -1,7 +1,7 @@
 import { API_BASE_URL, API_ENDPOINTS, createAxiosInstance } from '../config/api.js';
 import { clearLegacyClientJwtKeys } from '../utils/legacyAuthStorage.js';
 import { useFrameworkStore } from '@/stores/framework';
- 
+
 // Use centralized axios instance configuration (includes withCredentials: true)
 const api = createAxiosInstance(API_BASE_URL);
 
@@ -12,7 +12,7 @@ function authErrorText(data) {
   if (Array.isArray(d)) return d.map((x) => (x && typeof x === 'object' ? JSON.stringify(x) : String(x))).join(' ');
   return String(data.message || data.error || '');
 }
- 
+
 // Add response interceptor for error handling
 api.interceptors.response.use(
   response => response,
@@ -20,13 +20,13 @@ api.interceptors.response.use(
     // Handle 401 Unauthorized - Session expired
     if (error.response && error.response.status === 401) {
       const responseData = error.response.data || {};
-      const isSessionExpired = responseData.session_expired === true || 
-                               responseData.message?.toLowerCase().includes('session expired') ||
-                               responseData.message?.toLowerCase().includes('expired');
-      
+      const isSessionExpired = responseData.session_expired === true ||
+        responseData.message?.toLowerCase().includes('session expired') ||
+        responseData.message?.toLowerCase().includes('expired');
+
       if (isSessionExpired) {
         console.warn('⏰ [API] Session expired - logging out user');
-        
+
         clearLegacyClientJwtKeys();
         // Clear session-scoped auth data
         sessionStorage.removeItem('access_token');
@@ -36,7 +36,7 @@ api.interceptors.response.use(
         sessionStorage.removeItem('user_email');
         sessionStorage.removeItem('user_name');
         sessionStorage.removeItem('is_logged_in');
-        
+
         // Stop session timeout service
         try {
           const { default: sessionTimeoutService } = require('../services/sessionTimeoutService.js');
@@ -44,23 +44,40 @@ api.interceptors.response.use(
         } catch (e) {
           // Ignore if service not available
         }
-        
+
         // Trigger auth changed event
         window.dispatchEvent(new Event('authChanged'));
-        
+
         // Redirect to login if not already there
         if (window.location.pathname !== '/login') {
           console.log('🔄 Redirecting to login page due to session expiration');
           window.location.href = '/login';
         }
-        
+
         // Return a rejected promise with session expired error
         const sessionError = new Error('Session expired. Please login again.');
         sessionError.isSessionExpired = true;
         return Promise.reject(sessionError);
       }
+      // Concurrent login: this session was revoked by a newer login elsewhere.
+      const isSessionInvalidated = responseData.session_invalidated === true;
+      if (isSessionInvalidated) {
+        console.warn('🔒 [API] Session invalidated by concurrent login - logging out user');
+        clearLegacyClientJwtKeys();
+        sessionStorage.clear();
+        localStorage.removeItem('is_logged_in');
+        localStorage.removeItem('isAuthenticated');
+        localStorage.setItem('auth_logout_reason', 'session_invalidated');
+        window.dispatchEvent(new Event('authChanged'));
+        if (window.location.pathname !== '/login') {
+          window.location.href = '/login';
+        }
+        const invalidatedError = new Error('Logged in from another device. Please log in again.');
+        invalidatedError.isSessionInvalidated = true;
+        return Promise.reject(invalidatedError);
+      }
     }
-    
+
     // Handle timeout errors gracefully
     if (error.code === 'ECONNABORTED' || error.message?.includes('timeout') || error.message?.includes('Timeout')) {
       console.error('⏱️ [API] Request timeout:', {
@@ -68,12 +85,12 @@ api.interceptors.response.use(
         method: error.config?.method,
         timeout: error.config?.timeout
       });
-      
+
       const timeoutError = new Error(`Request timed out after ${(error.config?.timeout || 120000) / 1000} seconds. The server may be slow or overloaded. Please try again.`);
       timeoutError.isTimeout = true;
       return Promise.reject(timeoutError);
     }
-    
+
     // Handle network errors gracefully
     if (error.code === 'ERR_NETWORK' || error.message?.includes('Network Error')) {
       console.error('🌐 [API] Network error:', {
@@ -81,7 +98,7 @@ api.interceptors.response.use(
         method: error.config?.method,
         message: error.message
       });
-      
+
       const networkError = new Error('Network error: Unable to connect to the server. Please check your connection and ensure the backend server is running.');
       networkError.isNetworkError = true;
       return Promise.reject(networkError);
@@ -104,7 +121,7 @@ api.interceptors.response.use(
         }
       }
     }
-    
+
     // Avoid console noise: this endpoint uses server session only; 401 is common before
     // cookies/session are ready or when storage is stale vs session.
     const url = String(error.config?.url || '');
@@ -114,7 +131,7 @@ api.interceptors.response.use(
     if (!silent401ReviewerQueue) {
       console.error('API Error:', error);
     }
-   
+
     // Add more detailed logging for other errors
     if (error.code === 'ERR_NETWORK') {
       console.error('Network error details:', {
@@ -126,7 +143,7 @@ api.interceptors.response.use(
         }
       });
     }
-   
+
     return Promise.reject(error);
   }
 );
@@ -139,7 +156,7 @@ api.interceptors.request.use((config) => {
     if (!config.headers) {
       config.headers = {};
     }
-    
+
     // Remove Content-Type header - browser will set it automatically with boundary
     try {
       // Delete from main headers
@@ -157,7 +174,7 @@ api.interceptors.request.use((config) => {
     } catch (e) {
       console.warn(`⚠️ [API] Error removing Content-Type header:`, e);
     }
-    
+
     console.log(`📤 [API] FormData detected - removed Content-Type header to let browser set it with boundary for: ${config.method?.toUpperCase()} ${config.url}`);
     try {
       const formDataKeys = Array.from(config.data.keys());
@@ -166,7 +183,7 @@ api.interceptors.request.use((config) => {
       // Ignore errors when reading FormData keys
     }
   }
-  
+
   // Check if this is a cookie preferences endpoint
   const isCookiePreferencesEndpoint = config.url && (
     config.url.includes('/api/cookie/preferences/') ||
@@ -192,8 +209,8 @@ api.interceptors.request.use((config) => {
   // CRITICAL: Add user_id to request if available (for backward compatibility)
   // Read from session only; do not trust localStorage identity.
   let userId = sessionStorage.getItem('user_id') ||
-               sessionStorage.getItem('userId');
-  
+    sessionStorage.getItem('userId');
+
   // Also check current_user object
   if (!userId) {
     try {
@@ -206,12 +223,12 @@ api.interceptors.request.use((config) => {
       // Ignore parse errors
     }
   }
-  
+
   // Convert to integer if it's a string
   if (userId) {
     userId = parseInt(userId);
   }
-  
+
   // CRITICAL: For cookie preferences endpoint, ALWAYS add user_id if available
   // This ensures user_id is sent even if it was null/undefined in the original data
   if (userId && !isNaN(userId) && !config.url.includes('api/incidents/recent/') && !isComplianceApi && !isDocumentHandlingApi && !isDataAnalysisApi && !isChangeManagementApi) {
@@ -245,12 +262,12 @@ api.interceptors.request.use((config) => {
           // Make sure we're working with a mutable object (not frozen)
           config.data = { ...config.data };
         }
-        
+
         // ALWAYS override user_id if we found one (even if it was null/undefined in original data)
         // This is critical for cookie preferences - we want to link them to the user
         const originalUserId = config.data.user_id;
         config.data.user_id = userId;
-        
+
         if (isCookiePreferencesEndpoint) {
           if (originalUserId !== userId) {
             console.log(`🍪 [API] Interceptor: Added/Updated user_id=${userId} to request body (was: ${originalUserId})`);
@@ -270,13 +287,13 @@ api.interceptors.request.use((config) => {
       console.log(`🍪 [API] Interceptor: user_id found but isNaN: ${userId}`);
     }
   }
- 
+
   // CRITICAL: Final verification and fix for cookie preferences
   if (isCookiePreferencesEndpoint && (config.method === 'post' || config.method === 'put')) {
     // Double-check that user_id is in the data
     const userId = sessionStorage.getItem('user_id') ||
-                   sessionStorage.getItem('userId');
-    
+      sessionStorage.getItem('userId');
+
     if (userId && !isNaN(parseInt(userId))) {
       const parsedUserId = parseInt(userId);
       // Ensure config.data is an object
@@ -286,9 +303,9 @@ api.interceptors.request.use((config) => {
       // Force set user_id one more time as a safety measure
       config.data.user_id = parsedUserId;
     }
-    
+
   }
-  
+
   // Log outgoing requests AFTER all modifications
   if (isCookiePreferencesEndpoint) {
     console.log(`🍪 [API] Final request config for ${config.method?.toUpperCase()} ${config.url}:`, {
@@ -308,7 +325,7 @@ api.interceptors.request.use((config) => {
 
   return config;
 });
- 
+
 // Policy document upload service
 export const policyService = {
   // Upload policy document to S3
@@ -319,7 +336,7 @@ export const policyService = {
     formData.append('fileName', file.name);
     formData.append('type', docType);
     formData.append('policyName', policyName);
-   
+
     // Use multipart/form-data for file uploads
     return api.post('/upload-policy-document/', formData, {
       headers: {
@@ -328,14 +345,14 @@ export const policyService = {
     });
   }
 };
- 
+
 export const incidentService = {
   // Incident main endpoints
   // IMPORTANT: Always prefix with "/" so axios doesn't build bad URLs when baseURL is '' or a domain
   getIncidents: (params) => api.get('/api/incidents/', { params }),
   createIncident: (data) => api.post('/api/incidents/create/', data),
   updateIncidentStatus: (incidentId, data) => api.put(`/api/incidents/${incidentId}/status/`, data),
- 
+
   // Incident analytics endpoints
   getIncidentMetrics: (params) => api.get('/api/incidents/metrics/', { params }),
   getIncidentMTTD: (params) => api.get('/api/incidents/metrics/mttd/', { params }),
@@ -351,14 +368,14 @@ export const incidentService = {
   getIncidentClosureRate: (params) => api.get('/api/incidents/metrics/closure-rate/', { params }),
   getIncidentReopenedCount: (params) => api.get('/api/incidents/metrics/reopened-count/', { params }),
   getIncidentCount: (params) => api.get('/api/incidents/metrics/count/', { params }),
- 
+
   // Incident analytics for dashboard
   getIncidentDashboard: (params) => api.get('/api/incidents/dashboard/', { params }),
   getIncidentAnalytics: (data) => api.post('/api/incidents/dashboard/analytics/', data),
- 
+
   // Recent incidents for dashboard
   getRecentIncidents: (limit = 3) => api.get('/api/incidents/recent/', { params: { limit } }),
- 
+
   // Framework endpoints for incident filtering
   getIncidentFrameworks: () => api.get('/api/compliance/frameworks/public/'),
   getSelectedFramework: async () => {
@@ -374,16 +391,16 @@ export const incidentService = {
   // Other incident-related endpoints
   getIncidentCountsByStatus: () => api.get('/api/incidents/counts-by-status/')
 };
- 
+
 export const auditService = {
   // Audit findings related endpoints
   getAuditFindings: (params) => api.get('api/audit-findings/', { params }),
   getAuditFindingsDetail: (complianceId) => api.get(`api/audit-findings/${complianceId}/details/`),
- 
+
   // Get data from lastchecklistitemverified table
   getChecklistVerified: (params = {}) => {
     const url = new URL(`${api.defaults.baseURL}/api/lastchecklistitemverified/`);
-   
+
     // Add complied parameters if present
     if (params.complied && Array.isArray(params.complied)) {
       params.complied.forEach(value => {
@@ -394,44 +411,44 @@ export const auditService = {
       url.searchParams.append('complied[]', '0');
       url.searchParams.append('complied[]', '1');
     }
-   
+
     return api.get(url.toString());
   },
- 
+
   // Get specific audit finding details
   getAuditDetail: (auditId) => api.get(`api/audits/${auditId}/`),
- 
+
   // Get audit findings by compliance id
   getAuditFindingsByCompliance: (complianceId) => api.get(`api/audit-findings/compliance/${complianceId}/`),
   getUsers: () => api.get('api/users/'),
- 
+
   getOntimeMitigationPercentage: () => api.get('api/compliance/kpi-dashboard/analytics/ontime-mitigation/'),
- 
+
   // Get compliance audit information
   getComplianceAuditInfo: (complianceId) => api.get(API_ENDPOINTS.COMPLIANCE_AUDIT_INFO(complianceId)),
 };
- 
+
 export const complianceService = {
   // Framework endpoints
   getFrameworks: () => api.get('api/compliance/frameworks/public/'),
   getComplianceFrameworks: (params = {}) => api.get('api/compliance/frameworks/public/', { params }),
- 
+
   // Policy endpoints
   getPolicies: (frameworkId) => api.get(API_ENDPOINTS.COMPLIANCE_POLICIES(frameworkId)),
   getCompliancePolicies: (frameworkId) => api.get(API_ENDPOINTS.COMPLIANCE_POLICIES(frameworkId)),
- 
+
   // SubPolicy endpoints
   getSubPolicies: (policyId) => api.get(API_ENDPOINTS.COMPLIANCE_SUBPOLICIES(policyId)),
   getComplianceSubPolicies: (policyId) => api.get(API_ENDPOINTS.COMPLIANCE_SUBPOLICIES(policyId)),
- 
+
   // View all compliances by type (framework, policy, subpolicy)
   getCompliancesByType: (type, id) => api.get(API_ENDPOINTS.COMPLIANCE_VIEW_BY_TYPE(type, id)),
- 
+
   // CategoryBusinessUnit endpoints
   getCategoryBusinessUnits: (source) => api.get(API_ENDPOINTS.CATEGORY_BUSINESS_UNITS, { params: { source } }),
   getCategoryBusinessPolicies: (source) => api.get(API_ENDPOINTS.CATEGORY_BUSINESS_UNITS, { params: { source } }),
   addCategoryBusinessUnit: (data) => api.post(API_ENDPOINTS.CATEGORY_BUSINESS_UNITS_ADD, data),
- 
+
   // Compliance endpoints
   createCompliance: (data) => {
     // Add default values for required fields
@@ -442,7 +459,7 @@ export const complianceService = {
       ComplianceVersion: '1.0',
       ...data
     };
-   
+
     // Ensure all required fields are present and properly formatted
     const formattedData = {
       SubPolicy: defaultData.SubPolicy,
@@ -476,10 +493,10 @@ export const complianceService = {
       PermanentTemporary: defaultData.PermanentTemporary || 'Permanent',
       ApprovalDueDate: defaultData.ApprovalDueDate
     };
- 
+
     // Debug log
     console.log('Sending compliance data:', formattedData);
-   
+
     return api.post(API_ENDPOINTS.COMPLIANCE_CREATE, formattedData).then(response => {
       console.log('Compliance create response:', response.data);
       return {
@@ -495,11 +512,11 @@ export const complianceService = {
       throw error;
     });
   },
- 
+
   // Add updateCompliance function
   updateCompliance: (complianceId, data) => {
     // Format the data similar to createCompliance
-        // Always get user_id from session and set as UserId
+    // Always get user_id from session and set as UserId
     let userId = sessionStorage.getItem('user_id') || sessionStorage.getItem('userId');
     if (!userId) {
       const userObj = sessionStorage.getItem('user');
@@ -558,17 +575,17 @@ export const complianceService = {
       ActiveInactive: 'Active',
       PermanentTemporary: data.PermanentTemporary || 'Permanent',
       // Ensure versionType is properly capitalized (must be 'Major' or 'Minor')
-      versionType: data.versionType ? 
-                   (data.versionType === 'Major' || data.versionType === 'Minor' ? data.versionType :
-                    data.versionType.toLowerCase() === 'major' ? 'Major' :
-                    data.versionType.toLowerCase() === 'minor' ? 'Minor' : 'Minor') : 
-                   'Minor', // Default to Minor if not provided
+      versionType: data.versionType ?
+        (data.versionType === 'Major' || data.versionType === 'Minor' ? data.versionType :
+          data.versionType.toLowerCase() === 'major' ? 'Major' :
+            data.versionType.toLowerCase() === 'minor' ? 'Minor' : 'Minor') :
+        'Minor', // Default to Minor if not provided
       PreviousComplianceVersionId: data.PreviousComplianceVersionId
     };
- 
+
     // Debug log
     console.log('Updating compliance data:', formattedData);
-   
+
     return api.put(API_ENDPOINTS.COMPLIANCE_UPDATE(complianceId), formattedData)
       .then(response => {
         console.log('Compliance update response:', response.data);
@@ -579,17 +596,17 @@ export const complianceService = {
         throw error;
       });
   },
- 
+
   editCompliance: (complianceId, data) => api.put(API_ENDPOINTS.COMPLIANCE_UPDATE(complianceId), data),
   cloneCompliance: (complianceId, data) => {
     console.log('Cloning compliance with ID:', complianceId, 'Data:', data);
-   
+
     // Ensure SubPolicy is set correctly (it might be called target_subpolicy_id in the UI)
     const cloneData = { ...data };
     if (cloneData.target_subpolicy_id && !cloneData.SubPolicy) {
       cloneData.SubPolicy = cloneData.target_subpolicy_id;
     }
-   
+
     return api.post(API_ENDPOINTS.COMPLIANCE_CLONE(complianceId), cloneData, { timeout: 60000 })
       .then(response => {
         console.log('Compliance clone response:', response.data);
@@ -608,7 +625,7 @@ export const complianceService = {
   deactivateCompliance: (complianceId, data) => api.post(API_ENDPOINTS.COMPLIANCE_DEACTIVATE(complianceId), data),
   approveComplianceDeactivation: (approvalId, data) => api.post(API_ENDPOINTS.COMPLIANCE_DEACTIVATION_APPROVE(approvalId), data),
   rejectComplianceDeactivation: (approvalId, data) => api.post(API_ENDPOINTS.COMPLIANCE_DEACTIVATION_REJECT(approvalId), data),
- 
+
   // KPI endpoints
   getMaturityLevelKPI: (params) => api.get(API_ENDPOINTS.COMPLIANCE_MATURITY_LEVEL_KPI, { params }),
   getNonComplianceCount: (params) => api.get(API_ENDPOINTS.COMPLIANCE_NON_COMPLIANCE_COUNT, { params }),
@@ -620,7 +637,7 @@ export const complianceService = {
   getReputationalImpact: (params) => api.get(API_ENDPOINTS.COMPLIANCE_REPUTATIONAL_IMPACT, { params }),
   getRemediationCost: (params) => api.get(API_ENDPOINTS.COMPLIANCE_REMEDIATION_COST, { params }),
   getNonCompliantIncidents: (period, params) => api.get(API_ENDPOINTS.COMPLIANCE_NON_COMPLIANT_INCIDENTS, { params: { period, ...params } }),
- 
+
   // Compliance approval endpoints with more robust error handling
   getCompliancePolicyApprovals: (params) => api.get(API_ENDPOINTS.COMPLIANCE_POLICY_APPROVALS_REVIEWER, { params }),
   getComplianceRejectedApprovals: (reviewerId) => api.get(API_ENDPOINTS.COMPLIANCE_REJECTED_APPROVALS(reviewerId)),
@@ -639,12 +656,12 @@ export const complianceService = {
   },
   resubmitComplianceApproval: (approvalId, data) =>
     api.put(API_ENDPOINTS.COMPLIANCE_APPROVALS_RESUBMIT(approvalId), data, { timeout: 60000 }),
- 
+
   // User endpoints
   getUsers: () => api.get(API_ENDPOINTS.COMPLIANCE_USERS),
- 
+
   getOntimeMitigationPercentage: (params) => api.get(API_ENDPOINTS.COMPLIANCE_ONTIME_MITIGATION_PERCENTAGE, { params }),
-  
+
   // New KPI endpoints for compliance status
   getIsoFrameworkComplianceStatus: () => api.get('/compliance/kpi-dashboard/analytics/iso-framework-status/'),
   getPolicyComplianceStatus: (policyId) => api.get('/compliance/kpi-dashboard/analytics/policy-compliance-status/', { params: { policy_id: policyId } }),
@@ -654,131 +671,131 @@ export const complianceService = {
 export const eventService = {
   // Get frameworks for event creation
   getFrameworks: () => api.get(API_ENDPOINTS.EVENTS_FRAMEWORKS),
-  
+
   // Get modules for event creation
   getModules: () => api.get('api/events/modules/'),
-  
+
   // Get event types by framework (prefer framework_id, fallback to name)
   getEventTypesByFramework: (frameworkName, frameworkId = null) => api.get('api/events/event-types-by-framework/', {
     params: { framework_name: frameworkName, framework_id: frameworkId }
   }),
-  
+
   // Get dynamic fields for event creation based on framework and event type
   getDynamicFieldsForEvent: (frameworkName, eventTypeId, subEventTypeId = null) => api.get('api/events/dynamic-fields/', {
-    params: { 
+    params: {
       framework_name: frameworkName,
       event_type_id: eventTypeId,
       sub_event_type_id: subEventTypeId
     }
   }),
-  
+
   // Create new event type
   createEventType: (frameworkName, eventTypeName, eventSubtypes = null) => api.post('api/events/create-event-type/', {
     framework_name: frameworkName,
     event_type_name: eventTypeName,
     event_subtypes: eventSubtypes
   }),
-  
+
   // Update event type sub-types
   updateEventTypeSubtypes: (eventTypeId, eventSubtypes) => api.put(`api/events/update-event-type-subtypes/${eventTypeId}/`, {
     event_subtypes: eventSubtypes
   }),
-  
+
   // Create new module
   createModule: (moduleName) => api.post('api/events/create-module/', {
     module_name: moduleName
   }),
-  
+
   // Get records by module type
   getRecordsByModule: (frameworkId, module) => api.get(API_ENDPOINTS.EVENTS_RECORDS, {
     params: { framework_id: frameworkId, module: module }
   }),
-  
+
   // Get event templates
   getTemplates: () => api.get(API_ENDPOINTS.EVENTS_TEMPLATES),
-  
+
   // Create new event
   createEvent: (eventData) => api.post(API_ENDPOINTS.EVENTS_CREATE, eventData),
-  
+
   // Get events list
   getEventsList: () => api.get(API_ENDPOINTS.EVENTS_LIST),
 
   // Export events list to S3
   exportEventsToS3: (payload) => api.post('api/events/export/', payload),
-  
+
   // Get user event permissions
   getUserEventPermissions: () => api.get('api/events/permissions/'),
-  
+
   // Get event details
   getEventDetails: (eventId) => api.get(API_ENDPOINTS.EVENT_DETAILS(eventId)),
-  
+
   // Get current user information (identity from session; no client user_id)
   getCurrentUser: () => api.get('api/events/current-user/'),
-  
+
   // Get users for reviewer selection (all users except current user)
   getUsersForReviewer: () => api.get('api/events/users-for-reviewer/'),
-  
+
   // Get users for owner/reviewer dropdowns in event module
   getUsers: () => api.get('api/events/users-for-reviewer/'),
-  
+
   // Get events for calendar (recurring events only)
   getEventsForCalendar: () => api.get(API_ENDPOINTS.EVENTS_CALENDAR),
-  
+
   // Get events dashboard data
   getEventsDashboard: (queryString = '') => {
     const url = queryString ? `${API_ENDPOINTS.EVENTS_DASHBOARD}?${queryString}` : API_ENDPOINTS.EVENTS_DASHBOARD
     return api.get(url)
   },
-  
+
   // Approve event
   approveEvent: (eventId, data) => api.post(`api/events/${eventId}/approve/`, data),
-  
+
   // Reject event
   rejectEvent: (eventId, data) => api.post(`api/events/${eventId}/reject/`, data),
-  
+
   // Create events table if it doesn't exist
   createEventsTable: () => api.post('api/events/create-table/'),
-  
+
   // Get RiskaVaire events for the queue
   getRiskaVaireEvents: () => api.get('api/riskavaire/events/'),
-  
+
   // Update event
   updateEvent: (eventId, data) => api.put(`api/events/${eventId}/update/`, data),
-  
+
   // Archive event
   archiveEvent: (eventId, data) => api.post(`api/events/${eventId}/archive/`, data),
-  
+
   // Attach evidence to event
   attachEvidence: (eventId, formData) => api.post(`api/events/${eventId}/attach-evidence/`, formData, {
     headers: {
       'Content-Type': 'multipart/form-data'
     }
   }),
-  
+
   // Get archived events
   getArchivedEvents: () => api.get('api/events/archived/'),
-  
+
   // Get archived queue items (integration and Riskavaire events)
   getArchivedQueueItems: () => api.get('api/events/archived-queue-items/'),
-  
+
   // Unarchive an event
   unarchiveEvent: (eventId, userId) => api.post(`api/events/${eventId}/unarchive/`, { user_id: userId }),
-  
+
   // Delete an event permanently
   deleteEventPermanently: (eventId, userId) => api.post(`api/events/${eventId}/delete-permanently/`, { user_id: userId }),
-  
+
   // Get integration events (Jira, etc.)
   getIntegrationEvents: () => api.get('api/events/integration-events/'),
-  
+
   // Create event from integration item
   createEventFromIntegration: (data) => api.post('api/events/create-from-integration/', data),
-  
+
   // Get file operations for document handling
   getFileOperations: (params = {}) => api.get('api/file-operations/', { params }),
-  
+
   // Get all events (general method)
   getEvents: (params = {}) => api.get('api/events/', { params }),
-  
+
   // Get document handling events
   getDocumentHandlingEvents: (params = {}) => api.get('api/events/document-handling/', { params })
 };
@@ -793,7 +810,7 @@ export const s3Service = {
     if (customFileName) {
       formData.append('custom_file_name', customFileName);
     }
-    
+
     return api.post('/api/s3/upload/', formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
@@ -801,16 +818,16 @@ export const s3Service = {
       timeout: 60000 // 60 seconds timeout for file uploads
     });
   },
-  
+
   // Download file from S3
   downloadFile: (s3Key, fileName) => {
     return api.get(`/api/s3/download/${s3Key}/${fileName}/`, {
       responseType: 'blob'
     });
   },
-  
+
   // Test S3 connection
   testConnection: () => api.get('/api/s3/test-connection/')
 };
- 
+
 export default api;

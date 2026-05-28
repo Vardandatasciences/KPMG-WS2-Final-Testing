@@ -62,11 +62,38 @@ const authApi = createAxiosInstance(`${API_BASE_URL}/api`)
 authApi.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
-      const data = error.response?.data || {}
-      // ONLY clear tokens and redirect on true session expiry.
-      // Do NOT clear tokens on every 401 - a transient 401 should not wipe
-      // valid sessionStorage tokens and kill all subsequent requests.
+    const status = error.response?.status
+    const data = error.response?.data || {}
+
+    // ── Concurrent login: backend terminated this session because the user
+    //    signed in from another device or browser. ──────────────────────────
+    // Check on BOTH 401 AND 403:
+    //   - 401 = returned when UnifiedJWTAuthentication.authenticate_header() is set (correct)
+    //   - 403 = returned when authenticate_header() is missing (DRF default fallback)
+    if (status === 401 || status === 403) {
+      const isConcurrentLogin =
+        data.code === 'session_invalidated' ||
+        data.detail?.code === 'session_invalidated' ||
+        data.session_invalidated === true ||
+        data.session_invalidated === 'True' ||
+        (typeof data.detail === 'string' && data.detail.toLowerCase().includes('session_invalidated'))
+
+      if (isConcurrentLogin) {
+        // Clear all auth data — this session is no longer valid
+        removeSensitive('session_token')
+        removeSensitive('access_token')
+        removeSensitive('refresh_token')
+        removeSensitive('current_user')
+        localStorage.setItem('auth_logout_reason', 'concurrent_login')
+        if (window.location.pathname !== '/login' && window.location.pathname !== '/Login') {
+          window.location.href = '/login'
+        }
+        return Promise.reject(error)
+      }
+    }
+
+    // ── Normal session expiry (401 only) ─────────────────────────────────────
+    if (status === 401) {
       if (data.session_expired === true) {
         removeSensitive('session_token')
         removeSensitive('access_token')
@@ -77,12 +104,24 @@ authApi.interceptors.response.use(
           window.location.href = '/login'
         }
       }
-      // Note: session_invalidated is no longer used since we disabled the session
-      // token cache check. Don't treat it as a reason to wipe tokens.
+      if (data.session_invalidated === true) {
+        removeSensitive('session_token')
+        removeSensitive('access_token')
+        removeSensitive('refresh_token')
+        removeSensitive('current_user')
+        localStorage.removeItem('is_logged_in')
+        localStorage.removeItem('isAuthenticated')
+        localStorage.setItem('auth_logout_reason', 'session_invalidated')
+        if (window.location.pathname !== '/login' && window.location.pathname !== '/Login') {
+          window.location.href = '/login'
+        }
+      }
     }
+
     return Promise.reject(error)
   }
 )
+
  
 export default {
   /**

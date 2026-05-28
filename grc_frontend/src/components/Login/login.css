@@ -823,8 +823,91 @@ color: #3f4a5b;
   color: #223045;
 }
 
+
 .license-note {
   margin-top: 1px;
   font-size: 12px;
   color: #5f6d82;
+}
+
+/* ── Security alert banner (concurrent login / session expiry) ─────────────── */
+.security-alert-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  animation: fadeInDown 0.35s ease;
+  position: relative;
+}
+
+@keyframes fadeInDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Warning variant — concurrent login */
+.security-alert--warning {
+  background: #fffbeb;
+  border: 1px solid #f59e0b;
+  color: #78350f;
+}
+
+.security-alert--warning .security-alert-icon {
+  color: #d97706;
+}
+
+/* Info variant — session expired */
+.security-alert--info {
+  background: #eff6ff;
+  border: 1px solid #93c5fd;
+  color: #1e3a5f;
+}
+
+.security-alert--info .security-alert-icon {
+  color: #3b82f6;
+}
+
+.security-alert-icon {
+  display: inline-flex;
+  align-items: flex-start;
+  flex-shrink: 0;
+  padding-top: 1px;
+}
+
+.security-alert-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.security-alert-body strong {
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.security-alert-body span {
+  font-size: 12px;
+  opacity: 0.9;
+}
+
+.security-alert-close {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  opacity: 0.6;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  color: inherit;
+  margin-left: 4px;
+}
+
+.security-alert-close:hover {
+  opacity: 1;
 }
