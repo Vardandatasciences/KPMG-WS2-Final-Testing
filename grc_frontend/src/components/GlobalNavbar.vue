@@ -98,7 +98,7 @@ export default {
       this.isScrolled = window.scrollY > 10
     },
     loadUserData() {
-      const userName = localStorage.getItem('user_name') || 'User'
+      const userName = sessionStorage.getItem('user_name') || localStorage.getItem('user_name') || 'User'
       this.userName = userName
       this.userInitials = userName.split(' ').map(name => name.charAt(0)).join('').toUpperCase()
     },

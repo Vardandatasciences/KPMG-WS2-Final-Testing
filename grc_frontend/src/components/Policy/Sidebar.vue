@@ -1422,12 +1422,12 @@ export default {
     const fetchUsername = async () => {
       try {
         // Prefer explicit name keys set during auth/profile flows
-        const storedUserName = localStorage.getItem('user_name')
-        const storedFullName = localStorage.getItem('fullName')
-        const storedUsername = localStorage.getItem('username')
+        const storedUserName = sessionStorage.getItem('user_name') || localStorage.getItem('user_name')
+        const storedFullName = sessionStorage.getItem('fullName') || localStorage.getItem('fullName')
+        const storedUsername = sessionStorage.getItem('username') || localStorage.getItem('username')
 
         // Fallback to any stored user object
-        const userData = localStorage.getItem('current_user') || localStorage.getItem('user')
+        const userData = sessionStorage.getItem('current_user') || localStorage.getItem('current_user') || localStorage.getItem('user')
         let fallback = 'User'
 
         if (userData) {
@@ -1435,7 +1435,7 @@ export default {
             const userObj = JSON.parse(userData)
             fallback =
               userObj.full_name ||
-              userObj.firstName && userObj.lastName ? `${userObj.firstName} ${userObj.lastName}` :
+              (userObj.firstName && userObj.lastName ? `${userObj.firstName} ${userObj.lastName}` : null) ||
               userObj.UserName ||
               userObj.user_name ||
               userObj.username ||
