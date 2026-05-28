@@ -94,7 +94,19 @@ urlpatterns = [
     path('api/csrf/', csrf_token_view, name='csrf-token'),
     # Versioned prefix for core GRC APIs (adds /api/v1/grc/* without breaking existing paths)
     path('api/v1/grc/', include('grc.urls')),
+
+    # =========================================================================
+    # API VERSIONING - v1.0 and v2.0
+    # =========================================================================
+    # GRC APIs - v1.0 (exposes same APIs as /api/ under /api/v1.0/)
+    path('api/v1.0/', include('grc.urls')),
+    # GRC APIs - v2.0 (dummy/future version for testing)
+    path('api/v2.0/', include('grc.urls')),
+
     path('api/', include('backend.api.urls')),  # Include API module URLs
+    # KPI/AI APIs - v1.0 and v2.0
+    path('api/v1.0/kpi/', include('backend.api.urls')),
+    path('api/v2.0/kpi/', include('backend.api.urls')),
     # POST to /policies/... (no /api/) used to hit SPA catch-all → 403 CSRF, not this view. Alias for Postman/legacy clients.
     path(
         'policies/<int:policy_id>/request-status-change/',
@@ -166,9 +178,120 @@ urlpatterns = [
     path('api/integrations/connect/', connect_integration, name='connect-integration'),
     path('api/integrations/status/', get_integration_status, name='get-integration-status'),
     path('api/integrations/bulk-update/', bulk_update_integration_status, name='bulk-update-integration-status'),
-    
+
+    # =========================================================================
+    # INTEGRATION API VERSIONING - v1.0 and v2.0
+    # =========================================================================
+    # BambooHR v1.0
+    path('api/v1.0/bamboohr/oauth/', bamboohr_oauth, name='bamboohr-oauth-v1'),
+    path('api/v1.0/bamboohr/oauth-callback/', bamboohr_oauth_callback, name='bamboohr-oauth-callback-v1'),
+    path('api/v1.0/bamboohr/stored-data/', bamboohr_stored_data, name='bamboohr-stored-data-v1'),
+    path('api/v1.0/bamboohr/employees/', bamboohr_employees, name='bamboohr-employees-v1'),
+    path('api/v1.0/bamboohr/departments/', bamboohr_departments, name='bamboohr-departments-v1'),
+    path('api/v1.0/bamboohr/sync-data/', bamboohr_sync_data, name='bamboohr-sync-data-v1'),
+    path('api/v1.0/bamboohr/reports/', bamboohr_reports, name='bamboohr-reports-v1'),
+    path('api/v1.0/bamboohr/debug/', bamboohr_debug, name='bamboohr-debug-v1'),
+    # Jira v1.0
+    path('api/v1.0/jira/oauth/', jira_oauth, name='jira-oauth-v1'),
+    path('api/v1.0/jira/oauth-callback/', jira_oauth_callback, name='jira-oauth-callback-v1'),
+    path('api/v1.0/jira/projects/', jira_projects, name='jira-projects-v1'),
+    path('api/v1.0/jira/project-details/', jira_project_details, name='jira-project-details-v1'),
+    path('api/v1.0/jira/resources/', jira_resources, name='jira-resources-v1'),
+    path('api/v1.0/jira/stored-data/', jira_stored_data, name='jira-stored-data-v1'),
+    path('api/v1.0/jira/users/', jira_users, name='jira-users-v1'),
+    path('api/v1.0/jira/assign-project/', jira_assign_project, name='jira-assign-project-v1'),
+    path('api/v1.0/jira/project-issues/', jira_project_issues, name='jira-project-issues-v1'),
+    # Streamline v1.0
+    path('api/v1.0/streamline/user-projects/', get_user_projects, name='streamline-user-projects-v1'),
+    path('api/v1.0/streamline/project-details/', get_project_details, name='streamline-project-details-v1'),
+    path('api/v1.0/streamline/user-statistics/', get_user_statistics, name='streamline-user-statistics-v1'),
+    path('api/v1.0/streamline/save-task-action/', save_task_action, name='streamline-save-task-action-v1'),
+    path('api/v1.0/streamline/save-project-tasks/', save_project_tasks, name='streamline-save-project-tasks-v1'),
+    path('api/v1.0/streamline/user-task-actions/', get_user_task_actions, name='streamline-user-task-actions-v1'),
+    # Gmail v1.0
+    path('api/v1.0/gmail/oauth-initiate/', gmail_oauth_initiate, name='gmail-oauth-initiate-v1'),
+    path('api/v1.0/gmail/oauth-callback/', gmail_oauth_callback, name='gmail-oauth-callback-v1'),
+    path('api/v1.0/gmail/connection-status/', get_gmail_connection_status, name='gmail-connection-status-v1'),
+    path('api/v1.0/gmail/messages/', get_gmail_messages, name='gmail-messages-v1'),
+    path('api/v1.0/gmail/calendar-events/', get_calendar_events, name='gmail-calendar-events-v1'),
+    path('api/v1.0/gmail/download-attachment/', download_attachment, name='gmail-download-attachment-v1'),
+    path('api/v1.0/gmail/stored-data/', get_stored_gmail_data, name='gmail-stored-data-v1'),
+    path('api/v1.0/gmail/stored-data-formatted/', get_stored_gmail_data_formatted, name='gmail-stored-data-formatted-v1'),
+    path('api/v1.0/gmail/save-to-db/', save_gmail_data_to_db, name='gmail-save-to-db-v1'),
+    path('api/v1.0/gmail/disconnect/', disconnect_gmail, name='gmail-disconnect-v1'),
+    path('api/v1.0/gmail/test-headers/', test_gmail_headers, name='gmail-test-headers-v1'),
+    path('api/v1.0/gmail/save-message-to-integration/', save_gmail_message_to_integration_list, name='gmail-save-message-to-integration-v1'),
+    path('api/v1.0/gmail/save-event-to-integration/', save_calendar_event_to_integration_list, name='gmail-save-event-to-integration-v1'),
+    path('api/v1.0/gmail/debug-decrypt/', debug_decrypt_projects_data, name='gmail-debug-decrypt-v1'),
+    path('api/v1.0/gmail/debug-database/', debug_gmail_database_state, name='gmail-debug-database-v1'),
+    # External Applications v1.0
+    path('api/v1.0/external-applications/', get_external_applications, name='get-external-applications-v1'),
+    path('api/v1.0/external-applications/refresh/', refresh_application_status, name='refresh-application-status-v1'),
+    path('api/v1.0/external-applications/<int:application_id>/', get_application_details, name='get-application-details-v1'),
+    path('api/v1.0/external-applications/connect/', connect_external_application, name='connect-external-application-v1'),
+    path('api/v1.0/external-applications/disconnect/', disconnect_external_application, name='disconnect-external-application-v1'),
+    # Integrations v1.0
+    path('api/v1.0/integrations/disconnect/', disconnect_integration, name='disconnect-integration-v1'),
+    path('api/v1.0/integrations/connect/', connect_integration, name='connect-integration-v1'),
+    path('api/v1.0/integrations/status/', get_integration_status, name='get-integration-status-v1'),
+    path('api/v1.0/integrations/bulk-update/', bulk_update_integration_status, name='bulk-update-integration-status-v1'),
+
+    # BambooHR v2.0
+    path('api/v2.0/bamboohr/oauth/', bamboohr_oauth, name='bamboohr-oauth-v2'),
+    path('api/v2.0/bamboohr/oauth-callback/', bamboohr_oauth_callback, name='bamboohr-oauth-callback-v2'),
+    path('api/v2.0/bamboohr/stored-data/', bamboohr_stored_data, name='bamboohr-stored-data-v2'),
+    path('api/v2.0/bamboohr/employees/', bamboohr_employees, name='bamboohr-employees-v2'),
+    path('api/v2.0/bamboohr/departments/', bamboohr_departments, name='bamboohr-departments-v2'),
+    path('api/v2.0/bamboohr/sync-data/', bamboohr_sync_data, name='bamboohr-sync-data-v2'),
+    path('api/v2.0/bamboohr/reports/', bamboohr_reports, name='bamboohr-reports-v2'),
+    path('api/v2.0/bamboohr/debug/', bamboohr_debug, name='bamboohr-debug-v2'),
+    # Jira v2.0
+    path('api/v2.0/jira/oauth/', jira_oauth, name='jira-oauth-v2'),
+    path('api/v2.0/jira/oauth-callback/', jira_oauth_callback, name='jira-oauth-callback-v2'),
+    path('api/v2.0/jira/projects/', jira_projects, name='jira-projects-v2'),
+    path('api/v2.0/jira/project-details/', jira_project_details, name='jira-project-details-v2'),
+    path('api/v2.0/jira/resources/', jira_resources, name='jira-resources-v2'),
+    path('api/v2.0/jira/stored-data/', jira_stored_data, name='jira-stored-data-v2'),
+    path('api/v2.0/jira/users/', jira_users, name='jira-users-v2'),
+    path('api/v2.0/jira/assign-project/', jira_assign_project, name='jira-assign-project-v2'),
+    path('api/v2.0/jira/project-issues/', jira_project_issues, name='jira-project-issues-v2'),
+    # Streamline v2.0
+    path('api/v2.0/streamline/user-projects/', get_user_projects, name='streamline-user-projects-v2'),
+    path('api/v2.0/streamline/project-details/', get_project_details, name='streamline-project-details-v2'),
+    path('api/v2.0/streamline/user-statistics/', get_user_statistics, name='streamline-user-statistics-v2'),
+    path('api/v2.0/streamline/save-task-action/', save_task_action, name='streamline-save-task-action-v2'),
+    path('api/v2.0/streamline/save-project-tasks/', save_project_tasks, name='streamline-save-project-tasks-v2'),
+    path('api/v2.0/streamline/user-task-actions/', get_user_task_actions, name='streamline-user-task-actions-v2'),
+    # Gmail v2.0
+    path('api/v2.0/gmail/oauth-initiate/', gmail_oauth_initiate, name='gmail-oauth-initiate-v2'),
+    path('api/v2.0/gmail/oauth-callback/', gmail_oauth_callback, name='gmail-oauth-callback-v2'),
+    path('api/v2.0/gmail/connection-status/', get_gmail_connection_status, name='gmail-connection-status-v2'),
+    path('api/v2.0/gmail/messages/', get_gmail_messages, name='gmail-messages-v2'),
+    path('api/v2.0/gmail/calendar-events/', get_calendar_events, name='gmail-calendar-events-v2'),
+    path('api/v2.0/gmail/download-attachment/', download_attachment, name='gmail-download-attachment-v2'),
+    path('api/v2.0/gmail/stored-data/', get_stored_gmail_data, name='gmail-stored-data-v2'),
+    path('api/v2.0/gmail/stored-data-formatted/', get_stored_gmail_data_formatted, name='gmail-stored-data-formatted-v2'),
+    path('api/v2.0/gmail/save-to-db/', save_gmail_data_to_db, name='gmail-save-to-db-v2'),
+    path('api/v2.0/gmail/disconnect/', disconnect_gmail, name='gmail-disconnect-v2'),
+    path('api/v2.0/gmail/test-headers/', test_gmail_headers, name='gmail-test-headers-v2'),
+    path('api/v2.0/gmail/save-message-to-integration/', save_gmail_message_to_integration_list, name='gmail-save-message-to-integration-v2'),
+    path('api/v2.0/gmail/save-event-to-integration/', save_calendar_event_to_integration_list, name='gmail-save-event-to-integration-v2'),
+    path('api/v2.0/gmail/debug-decrypt/', debug_decrypt_projects_data, name='gmail-debug-decrypt-v2'),
+    path('api/v2.0/gmail/debug-database/', debug_gmail_database_state, name='gmail-debug-database-v2'),
+    # External Applications v2.0
+    path('api/v2.0/external-applications/', get_external_applications, name='get-external-applications-v2'),
+    path('api/v2.0/external-applications/refresh/', refresh_application_status, name='refresh-application-status-v2'),
+    path('api/v2.0/external-applications/<int:application_id>/', get_application_details, name='get-application-details-v2'),
+    path('api/v2.0/external-applications/connect/', connect_external_application, name='connect-external-application-v2'),
+    path('api/v2.0/external-applications/disconnect/', disconnect_external_application, name='disconnect-external-application-v2'),
+    # Integrations v2.0
+    path('api/v2.0/integrations/disconnect/', disconnect_integration, name='disconnect-integration-v2'),
+    path('api/v2.0/integrations/connect/', connect_integration, name='connect-integration-v2'),
+    path('api/v2.0/integrations/status/', get_integration_status, name='get-integration-status-v2'),
+    path('api/v2.0/integrations/bulk-update/', bulk_update_integration_status, name='bulk-update-integration-status-v2'),
+
     path('oauth/callback/', bamboohr_oauth_callback, name='oauth-callback'),  # OAuth callback at root level
-    
+
     # =========================================================================
     # TPRM INTEGRATION - Third Party Risk Management API Routes
     # =========================================================================
@@ -281,7 +404,74 @@ urlpatterns = [
     path('api/tprm/v1/vendor-lifecycle/', include('tprm_backend.apps.vendor_lifecycle.urls')),
     path('api/tprm/v1/vendor-approval/', include('tprm_backend.apps.vendor_approval.urls')),
     path('api/tprm/v1/risk-analysis-vendor/', include('tprm_backend.risk_analysis_vendor.urls')),
-    
+
+    # =========================================================================
+    # TPRM API VERSIONING - v1.0 and v2.0
+    # =========================================================================
+    # All TPRM modules exposed under /api/v1.0/tprm/ and /api/v2.0/tprm/
+
+    # TPRM v1.0 routes
+    path('api/v1.0/tprm/auth/', include('tprm_backend.mfa_auth.urls')),
+    path('api/v1.0/tprm/rbac/', include('tprm_backend.rbac.tprm_urls')),
+    path('api/v1.0/tprm/consent/', include('tprm_backend.consent.urls')),
+    path('api/v1.0/tprm/admin-access/', include('tprm_backend.admin_access.urls')),
+    path('api/v1.0/tprm/global-search/', include('tprm_backend.global_search.urls')),
+    path('api/v1.0/tprm/core/', include('tprm_backend.core.urls')),
+    path('api/v1.0/tprm/ocr/', include('tprm_backend.ocr_app.urls')),
+    path('api/v1.0/tprm/slas/', include('tprm_backend.slas.urls')),
+    path('api/v1.0/tprm/audits/', include('tprm_backend.audits.urls')),
+    path('api/v1.0/tprm/notifications/', include('tprm_backend.notifications.urls')),
+    path('api/v1.0/tprm/quick-access/', include('tprm_backend.quick_access.urls')),
+    path('api/v1.0/tprm/compliance/', include('tprm_backend.compliance.urls')),
+    path('api/v1.0/tprm/bcpdrp/', include('tprm_backend.bcpdrp.urls')),
+    path('api/v1.0/tprm/risk-analysis/', include('tprm_backend.risk_analysis.urls')),
+    path('api/v1.0/tprm/contracts/', include('tprm_backend.contracts.urls')),
+    path('api/v1.0/tprm/audits-contract/', include('tprm_backend.audits_contract.urls')),
+    path('api/v1.0/tprm/contract-risk-analysis/', include('tprm_backend.contract_risk_analysis.urls')),
+    path('api/v1.0/tprm/rfp/', include('tprm_backend.rfp.urls')),
+    path('api/v1.0/tprm/rfp-approval/', include('tprm_backend.rfp_approval.urls')),
+    path('api/v1.0/tprm/rfp-risk-analysis/', include('tprm_backend.rfp_risk_analysis.urls')),
+    path('api/v1.0/tprm/vendor-core/', include('tprm_backend.apps.vendor_core.urls')),
+    path('api/v1.0/tprm/vendor-auth/', include('tprm_backend.apps.vendor_auth.urls')),
+    path('api/v1.0/tprm/vendor-risk/', include('tprm_backend.apps.vendor_risk.urls')),
+    path('api/v1.0/tprm/vendor-questionnaire/', include('tprm_backend.apps.vendor_questionnaire.urls')),
+    path('api/v1.0/tprm/vendor-dashboard/', include('tprm_backend.apps.vendor_dashboard.urls')),
+    path('api/v1.0/tprm/vendor-lifecycle/', include('tprm_backend.apps.vendor_lifecycle.urls')),
+    path('api/v1.0/tprm/vendor-approval/', include('tprm_backend.apps.vendor_approval.urls')),
+    path('api/v1.0/tprm/risk-analysis-vendor/', include('tprm_backend.risk_analysis_vendor.urls')),
+    path('api/v1.0/tprm/management/', include('tprm_backend.apps.management.urls')),
+
+    # TPRM v2.0 routes (dummy/future version)
+    path('api/v2.0/tprm/auth/', include('tprm_backend.mfa_auth.urls')),
+    path('api/v2.0/tprm/rbac/', include('tprm_backend.rbac.tprm_urls')),
+    path('api/v2.0/tprm/consent/', include('tprm_backend.consent.urls')),
+    path('api/v2.0/tprm/admin-access/', include('tprm_backend.admin_access.urls')),
+    path('api/v2.0/tprm/global-search/', include('tprm_backend.global_search.urls')),
+    path('api/v2.0/tprm/core/', include('tprm_backend.core.urls')),
+    path('api/v2.0/tprm/ocr/', include('tprm_backend.ocr_app.urls')),
+    path('api/v2.0/tprm/slas/', include('tprm_backend.slas.urls')),
+    path('api/v2.0/tprm/audits/', include('tprm_backend.audits.urls')),
+    path('api/v2.0/tprm/notifications/', include('tprm_backend.notifications.urls')),
+    path('api/v2.0/tprm/quick-access/', include('tprm_backend.quick_access.urls')),
+    path('api/v2.0/tprm/compliance/', include('tprm_backend.compliance.urls')),
+    path('api/v2.0/tprm/bcpdrp/', include('tprm_backend.bcpdrp.urls')),
+    path('api/v2.0/tprm/risk-analysis/', include('tprm_backend.risk_analysis.urls')),
+    path('api/v2.0/tprm/contracts/', include('tprm_backend.contracts.urls')),
+    path('api/v2.0/tprm/audits-contract/', include('tprm_backend.audits_contract.urls')),
+    path('api/v2.0/tprm/contract-risk-analysis/', include('tprm_backend.contract_risk_analysis.urls')),
+    path('api/v2.0/tprm/rfp/', include('tprm_backend.rfp.urls')),
+    path('api/v2.0/tprm/rfp-approval/', include('tprm_backend.rfp_approval.urls')),
+    path('api/v2.0/tprm/rfp-risk-analysis/', include('tprm_backend.rfp_risk_analysis.urls')),
+    path('api/v2.0/tprm/vendor-core/', include('tprm_backend.apps.vendor_core.urls')),
+    path('api/v2.0/tprm/vendor-auth/', include('tprm_backend.apps.vendor_auth.urls')),
+    path('api/v2.0/tprm/vendor-risk/', include('tprm_backend.apps.vendor_risk.urls')),
+    path('api/v2.0/tprm/vendor-questionnaire/', include('tprm_backend.apps.vendor_questionnaire.urls')),
+    path('api/v2.0/tprm/vendor-dashboard/', include('tprm_backend.apps.vendor_dashboard.urls')),
+    path('api/v2.0/tprm/vendor-lifecycle/', include('tprm_backend.apps.vendor_lifecycle.urls')),
+    path('api/v2.0/tprm/vendor-approval/', include('tprm_backend.apps.vendor_approval.urls')),
+    path('api/v2.0/tprm/risk-analysis-vendor/', include('tprm_backend.risk_analysis_vendor.urls')),
+    path('api/v2.0/tprm/management/', include('tprm_backend.apps.management.urls')),
+
     # Vendor management & lifecycle (management app)
     path('api/v1/management/', include('tprm_backend.apps.management.urls')),          # Core management endpoints
     path('api/tprm/v1/management/', include('tprm_backend.apps.management.urls')),    # TPRM-prefixed compatibility
