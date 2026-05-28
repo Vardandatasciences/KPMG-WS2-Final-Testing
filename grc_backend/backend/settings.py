@@ -198,6 +198,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    "backend.api_version_middleware.APIVersionMiddleware",  # ADDED: Detect and expose API version in response header
     "grc.middleware.RequestLoggingMiddleware",  # ADDED: Log all requests FIRST
     "grc.middleware.ApiAbuseDetectionMiddleware",  # Real-time abuse detection and alerting
     "corsheaders.middleware.CorsMiddleware",

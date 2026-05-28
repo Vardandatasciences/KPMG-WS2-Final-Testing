@@ -1199,13 +1199,6 @@ def send_audit_for_review(request, audit_id):
                     'missing_count': missing_count,
                     'missing_compliances': compliance_descriptions[:5]  # Limit to first 5 for display
                 }, status=400)
-                
-                # Add CORS headers
-                response["Access-Control-Allow-Origin"] = "http://localhost:8080"
-                response["Access-Control-Allow-Methods"] = "POST, OPTIONS"
-                response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-                response["Access-Control-Allow-Credentials"] = "true"
-                
                 return response
             
             # All compliances have status set, proceed with updating audit status

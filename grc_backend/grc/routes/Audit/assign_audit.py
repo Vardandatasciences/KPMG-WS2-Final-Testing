@@ -1,4 +1,4 @@
-from rest_framework.decorators import api_view, permission_classes, authentication_classes
+from rest_framework.decorators import api_view, permission_classes, authentication_classes, throttle_classes
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import AllowAny
@@ -28,6 +28,7 @@ from ...rbac.permissions import (
     AuditViewPermission, AuditConductPermission, AuditReviewPermission,
     AuditAssignPermission, AuditAnalyticsPermission, AuditViewAllPermission
 )
+from ...throttles import AuditWriteThrottle
 from ...rbac.decorators import (
     audit_assign_required,
     audit_conduct_required,
@@ -301,6 +302,7 @@ def get_users_audit(request):
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([AuditAssignPermission])
+@throttle_classes([AuditWriteThrottle])
 @audit_assign_required
 @require_consent('create_audit')
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
@@ -986,13 +988,8 @@ def add_compliance_to_audit(request, audit_id):
     
     # Handle preflight OPTIONS request
     if request.method == 'OPTIONS':
-        
-        response = JsonResponse({})
-        response["Access-Control-Allow-Origin"] = "http://localhost:8080"
-        response["Access-Control-Allow-Methods"] = "POST, OPTIONS"
-        response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-        response["Access-Control-Allow-Credentials"] = "true"
-        return response
+        # CORS preflight is handled centrally by `corsheaders.middleware.CorsMiddleware`.
+        return Response(status=status.HTTP_200_OK)
     
     try:
         # Validate audit_id parameter
@@ -1298,13 +1295,6 @@ def add_compliance_to_audit(request, audit_id):
             'version_date': datetime.now().isoformat(),
             'refresh_required': True  # Signal to frontend that a full refresh is needed
         }, status=status.HTTP_201_CREATED)
-        
-        # Add CORS headers
-        response["Access-Control-Allow-Origin"] = "http://localhost:8080"
-        response["Access-Control-Allow-Methods"] = "POST, OPTIONS"
-        response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-        response["Access-Control-Allow-Credentials"] = "true"
-        
         return response
         
     except Exception as e:
@@ -1319,13 +1309,6 @@ def add_compliance_to_audit(request, audit_id):
             'error': f'Error adding compliance: {str(e)}',
             'traceback': error_traceback
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
-        # Add CORS headers
-        response["Access-Control-Allow-Origin"] = "http://:8080"
-        response["Access-Control-Allow-Methods"] = "POST, OPTIONS"
-        response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-        response["Access-Control-Allow-Credentials"] = "true"
-        
         return response
 
 @csrf_exempt
