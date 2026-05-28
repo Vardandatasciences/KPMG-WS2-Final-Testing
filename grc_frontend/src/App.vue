@@ -322,7 +322,9 @@ export default {
     startConcurrentLoginPoll() {
       this.stopConcurrentLoginPoll()
       this.concurrentLoginPollTimer = setInterval(async () => {
-        const isLoggedIn = localStorage.getItem('is_logged_in') === 'true' ||
+        const isLoggedIn = sessionStorage.getItem('is_logged_in') === 'true' ||
+                           sessionStorage.getItem('isAuthenticated') === 'true' ||
+                           localStorage.getItem('is_logged_in') === 'true' ||
                            localStorage.getItem('isAuthenticated') === 'true'
         if (!isLoggedIn) {
           this.stopConcurrentLoginPoll()

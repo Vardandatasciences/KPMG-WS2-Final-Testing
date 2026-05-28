@@ -1255,6 +1255,7 @@ def jwt_login(request):
         request.session['grc_user_id'] = user.UserId  # Backup key for RBAC
         request.session['grc_username'] = username_plain
         request.session['session_created_at'] = time.time()  # Store session creation time for timeout check
+        request.session['session_token'] = tokens['session_token']
         
         # Always reset framework to "All Frameworks" on login - never auto-select a specific framework
         try:
@@ -2311,6 +2312,7 @@ def mfa_verify_otp(request):
         request.session['username'] = user.UserName
         request.session['grc_user_id'] = user.UserId
         request.session['grc_username'] = user.UserName
+        request.session['session_token'] = tokens['session_token']
         
         # Always reset framework to "All Frameworks" on login
         try:
@@ -2960,6 +2962,7 @@ def google_oauth_callback(request):
         request.session['grc_user_id'] = user.UserId
         request.session['grc_username'] = user.UserName
         request.session['session_created_at'] = time.time()  # Store session creation time for timeout check
+        request.session['session_token'] = tokens['session_token']
         
         # Always reset framework to "All Frameworks" on login
         try:

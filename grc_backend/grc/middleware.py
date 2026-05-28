@@ -8,7 +8,7 @@ from django.conf import settings
 from django.http import JsonResponse
 from django.utils.deprecation import MiddlewareMixin
 from .models import Users, ProductVersion
-from .authentication import verify_jwt_token, _compare_versions
+from .authentication import verify_jwt_token, _compare_versions, _is_session_token_valid, _get_user_session_token
 from rest_framework_simplejwt.tokens import AccessToken
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from .rbac.utils import RBACUtils
@@ -313,12 +313,36 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
 
         payload = None
         token = None
+        session_invalidated_detected = False
+
         for cand in jwt_candidates:
-            p = verify_jwt_token(cand, check_session=True)
-            if p and p.get('user_id'):
-                payload = p
-                token = cand
-                break
+            # First verify signature and expiration without checking the session validity
+            p_basic = verify_jwt_token(cand, check_session=False)
+            if p_basic and p_basic.get('user_id'):
+                user_id = p_basic.get('user_id')
+                session_token = p_basic.get('jti')
+                
+                # Check if this specific session token has been revoked in the database
+                if user_id and not _is_session_token_valid(user_id, session_token):
+                    session_invalidated_detected = True
+                    break
+                else:
+                    payload = p_basic
+                    token = cand
+                    break
+
+        if session_invalidated_detected:
+            # Terminate immediate request processing and return explicit concurrent login error
+            try:
+                request.session.flush()
+                request.session.delete()
+            except Exception:
+                pass
+            return JsonResponse({
+                'error': 'Your session has been terminated because you signed in from another device or browser.',
+                'session_invalidated': True,
+                'code': 'session_invalidated'
+            }, status=401)
 
         if token:
             #logger.debug(f"[JWT Middleware] Processing JWT token for path: {path}")
@@ -469,6 +493,34 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
         elif request.session.get('user_id'):
             user_id = request.session['user_id']
             #logger.debug(f"[JWT Middleware] Processing session authentication for user ID: {user_id}")
+            
+            # Check if this Django session has a revoked session token
+            session_token = request.session.get('session_token')
+            if not session_token:
+                # Auto-heal: Look up active session token from DB for backward compatibility/existing sessions
+                session_token = _get_user_session_token(user_id)
+                if session_token:
+                    request.session['session_token'] = session_token
+                    try:
+                        request.session.save()
+                    except Exception:
+                        pass
+            
+            if session_token and not _is_session_token_valid(user_id, session_token):
+                logger.warning(
+                    "[JWT Middleware] Session invalidated for user_id %s (session fallback) — concurrent login detected.",
+                    sanitize_for_log(user_id, 32)
+                )
+                try:
+                    request.session.flush()
+                    request.session.delete()
+                except Exception:
+                    pass
+                return JsonResponse({
+                    'error': 'Your session has been terminated because you signed in from another device or browser.',
+                    'session_invalidated': True,
+                    'code': 'session_invalidated'
+                }, status=401)
             
             try:
                 user = Users.objects.get(UserId=user_id)
