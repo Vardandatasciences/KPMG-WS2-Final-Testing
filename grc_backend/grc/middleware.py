@@ -8,7 +8,7 @@ from django.conf import settings
 from django.http import JsonResponse
 from django.utils.deprecation import MiddlewareMixin
 from .models import Users, ProductVersion
-from .authentication import verify_jwt_token, _compare_versions, _is_session_token_valid, _get_user_session_token
+from .authentication import verify_jwt_token, _compare_versions
 from rest_framework_simplejwt.tokens import AccessToken
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from .rbac.utils import RBACUtils
@@ -18,10 +18,6 @@ import hashlib
 import json
 from urllib.parse import urlparse
 from .utils.log_sanitize import sanitize_for_log, mask_sensitive_data
-from backend.tprm_router import (
-    clear_tprm_router_debug_scope,
-    set_tprm_router_debug_scope_from_path,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -114,21 +110,21 @@ class RequestLoggingMiddleware(MiddlewareMixin):
     
     def process_request(self, request):
         """Log every incoming request (only when ENABLE_DEBUG_LOGGING=true)"""
-        # Scope TPRM router debug logs to TPRM module requests only.
-        set_tprm_router_debug_scope_from_path(request.path)
-        # Avoid duplicate per-request terminal spam; Django server/request logs + audit logs remain.
+        if not getattr(settings, 'ENABLE_DEBUG_LOGGING', False):
+            return None
+        timestamp = datetime.now().strftime('%d/%b/%Y %H:%M:%S')
+        print(f"🔵 [{timestamp}] {request.method} {request.path}", file=sys.stdout, flush=True)
         return None
     
     def process_response(self, request, response):
         """Log response status (only when ENABLE_DEBUG_LOGGING=true)"""
-        clear_tprm_router_debug_scope()
-        # Avoid duplicate per-request terminal spam; Django server/request logs + audit logs remain.
+        if not getattr(settings, 'ENABLE_DEBUG_LOGGING', False):
+            return response
+        timestamp = datetime.now().strftime('%d/%b/%Y %H:%M:%S')
+        status_code = response.status_code
+        status_emoji = "✅" if 200 <= status_code < 300 else "❌"
+        print(f"{status_emoji} [{timestamp}] {request.method} {request.path} - {status_code}", file=sys.stdout, flush=True)
         return response
-
-    def process_exception(self, request, exception):
-        # Ensure request-scoped debug flag does not leak across threads on unhandled exceptions.
-        clear_tprm_router_debug_scope()
-        return None
 
 class JWTAuthenticationMiddleware(MiddlewareMixin):
     """
@@ -148,6 +144,8 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
         public_path_prefixes = [
             # Auth / session bootstrap
             '/api/login/',
+            '/api/v1.0/login/',  # Versioned login (v1.0)
+            '/api/v2.0/login/',  # Versioned login (v2.0)
             '/api/jwt/login/',
             '/api/jwt/refresh/',
             '/api/jwt/verify/',
@@ -290,6 +288,15 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
                 )
                 return None
         
+        # Regex-based bypass for any versioned login route: /api/v{major}.{minor}/login/
+        # This handles v1.0, v2.0, and future versions without explicit list updates
+        if re.match(r'^/api/v\d+\.\d+/login/', path):
+            logger.debug(
+                "[JWT Middleware] Skipping authentication for versioned login path: %s",
+                _safe_path_for_log(path),
+            )
+            return None
+        
         # Try JWT authentication first.
         # Prefer HttpOnly access_token cookie over Authorization: Bearer (matches UnifiedJWTAuthentication).
         # Stale tokens in localStorage must not block a valid cookie from the latest login.
@@ -313,36 +320,12 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
 
         payload = None
         token = None
-        session_invalidated_detected = False
-
         for cand in jwt_candidates:
-            # First verify signature and expiration without checking the session validity
-            p_basic = verify_jwt_token(cand, check_session=False)
-            if p_basic and p_basic.get('user_id'):
-                user_id = p_basic.get('user_id')
-                session_token = p_basic.get('jti')
-                
-                # Check if this specific session token has been revoked in the database
-                if user_id and not _is_session_token_valid(user_id, session_token):
-                    session_invalidated_detected = True
-                    break
-                else:
-                    payload = p_basic
-                    token = cand
-                    break
-
-        if session_invalidated_detected:
-            # Terminate immediate request processing and return explicit concurrent login error
-            try:
-                request.session.flush()
-                request.session.delete()
-            except Exception:
-                pass
-            return JsonResponse({
-                'error': 'Your session has been terminated because you signed in from another device or browser.',
-                'session_invalidated': True,
-                'code': 'session_invalidated'
-            }, status=401)
+            p = verify_jwt_token(cand, check_session=True)
+            if p and p.get('user_id'):
+                payload = p
+                token = cand
+                break
 
         if token:
             #logger.debug(f"[JWT Middleware] Processing JWT token for path: {path}")
@@ -494,34 +477,6 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
             user_id = request.session['user_id']
             #logger.debug(f"[JWT Middleware] Processing session authentication for user ID: {user_id}")
             
-            # Check if this Django session has a revoked session token
-            session_token = request.session.get('session_token')
-            if not session_token:
-                # Auto-heal: Look up active session token from DB for backward compatibility/existing sessions
-                session_token = _get_user_session_token(user_id)
-                if session_token:
-                    request.session['session_token'] = session_token
-                    try:
-                        request.session.save()
-                    except Exception:
-                        pass
-            
-            if session_token and not _is_session_token_valid(user_id, session_token):
-                logger.warning(
-                    "[JWT Middleware] Session invalidated for user_id %s (session fallback) — concurrent login detected.",
-                    sanitize_for_log(user_id, 32)
-                )
-                try:
-                    request.session.flush()
-                    request.session.delete()
-                except Exception:
-                    pass
-                return JsonResponse({
-                    'error': 'Your session has been terminated because you signed in from another device or browser.',
-                    'session_invalidated': True,
-                    'code': 'session_invalidated'
-                }, status=401)
-            
             try:
                 user = Users.objects.get(UserId=user_id)
                 
@@ -620,6 +575,8 @@ class SessionTimeoutMiddleware(MiddlewareMixin):
         # Skip timeout check for login/logout endpoints
         skip_paths = [
             '/api/login/',
+            '/api/v1.0/login/',  # Versioned login (v1.0)
+            '/api/v2.0/login/',  # Versioned login (v2.0)
             '/api/jwt/login/',
             '/api/logout/',
             '/api/jwt/logout/',
@@ -641,6 +598,10 @@ class SessionTimeoutMiddleware(MiddlewareMixin):
         for skip_path in skip_paths:
             if path.startswith(skip_path):
                 return None
+        
+        # Regex-based bypass for any versioned login route: /api/v{major}.{minor}/login/
+        if re.match(r'^/api/v\d+\.\d+/login/', path):
+            return None
         
         # Only check if user has a session
         if not request.session or not request.session.get('user_id'):
@@ -715,9 +676,6 @@ class AuditLoggingMiddleware(MiddlewareMixin):
         """Log request details to database"""
         # Skip logging for certain paths
         skip_paths = [
-            '/api/jwt/login/',
-            '/api/jwt/refresh/',
-            '/api/jwt/logout/',
             '/api/jwt/verify/',
             '/api/test-connection/',
             '/api/ai-incident-upload/',
@@ -751,9 +709,6 @@ class AuditLoggingMiddleware(MiddlewareMixin):
         
         # Skip logging for certain paths
         skip_paths = [
-            '/api/jwt/login/',
-            '/api/jwt/refresh/',
-            '/api/jwt/logout/',
             '/api/jwt/verify/',
             '/api/test-connection/',
             '/api/ai-incident-upload/',
@@ -934,54 +889,11 @@ class EnterpriseSecurityHeadersMiddleware(MiddlewareMixin):
         Add enterprise-grade security headers to all responses
         """
         
-        # =====================================================================
-        # 1. X-Content-Type-Options: Prevent MIME type sniffing
-        # =====================================================================
-        # Prevents browser from guessing MIME types, reducing risk of XSS
-        response['X-Content-Type-Options'] = 'nosniff'
-        
-        # =====================================================================
-        # 2. X-Frame-Options: Prevent clickjacking attacks
-        # =====================================================================
-        # Prevents page from being embedded in iframes (clickjacking protection)
-        # Changed from 'DENY' to 'SAMEORIGIN' to allow framing within the same domain (e.g., GRC framing TPRM)
-        response['X-Frame-Options'] = 'SAMEORIGIN'
-        
-        # =====================================================================
-        # 3. X-XSS-Protection: Enable browser XSS filter
-        # =====================================================================
-        # Enables browser's built-in XSS protection (legacy, but still useful)
-        response['X-XSS-Protection'] = '1; mode=block'
-        
-        # =====================================================================
-        # 4. Referrer-Policy: Control referrer information
-        # =====================================================================
-        # Controls how much referrer information is sent with requests
-        # 'strict-origin-when-cross-origin' - Only send full URL for same-origin, 
-        #                                      send only origin for cross-origin
-        response['Referrer-Policy'] = 'strict-origin-when-cross-origin'
-        
-        # =====================================================================
-        # 5. Permissions-Policy (formerly Feature-Policy): Disable unnecessary features
-        # =====================================================================
-        # Disables browser features that aren't needed (geolocation, camera, etc.)
-        # Reduces attack surface
-        permissions_policy = [
-            'geolocation=()',
-            'microphone=()',
-            'camera=()',
-            'payment=()',
-            'usb=()',
-            'magnetometer=()',
-            'gyroscope=()',
-            'accelerometer=()',
-            'ambient-light-sensor=()',
-            'autoplay=()',
-            'fullscreen=(self)',
-            'picture-in-picture=()',
-        ]
-        response['Permissions-Policy'] = ', '.join(permissions_policy)
-        
+        # Standard security headers (X-Content-Type-Options, X-Frame-Options,
+        # X-XSS-Protection, Referrer-Policy, Permissions-Policy) are set by the
+        # upstream nginx reverse proxy to avoid duplication. Keep dynamic or
+        # application-specific headers below.
+
         # HSTS is applied by django.middleware.security.SecurityMiddleware from
         # SECURE_HSTS_SECONDS / SECURE_HSTS_INCLUDE_SUBDOMAINS / SECURE_HSTS_PRELOAD in settings.
         
@@ -1039,13 +951,13 @@ class EnterpriseSecurityHeadersMiddleware(MiddlewareMixin):
         directives.append("default-src 'self'")
         
         # script-src: Where JavaScript can be loaded from
-        # Hardened: disallow inline scripts but allow dynamic code evaluation for Vue runtime
-        directives.append("script-src 'self' 'unsafe-eval'")
+        # Hardened: disallow inline scripts and dynamic code evaluation
+        directives.append("script-src 'self'")
         
         # style-src: Where CSS can be loaded from
-        # Allow same-origin styles and inline styles (needed for dynamic styles)
-        # SECURITY: do not allow inline styles.
-        directives.append("style-src 'self'")
+        # Allow same-origin styles and inline styles (needed for Vue SPA dynamic styles)
+        directives.append("style-src 'self' 'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=' 'sha256-2eUuRsfrTOp0PVDl1zEPNsQnR1uifI4sHiW25TjR2ZI='")
+        directives.append("style-src-attr 'unsafe-inline'")
         
         # img-src: Where images can be loaded from
         # Allow same-origin, data URIs (base64 images), and HTTPS images
