@@ -1,11 +1,16 @@
 import { defineStore } from 'pinia';
 
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-const HOMEPAGE_CACHE_STORAGE_KEY = 'homepage_pinia_cache_v1';
+
+const getCacheStorageKey = () => {
+  const userId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || 'default_user';
+  const tenantId = sessionStorage.getItem('tenant_id') || localStorage.getItem('tenant_id') || 'default_tenant';
+  return `homepage_pinia_cache_v1_${userId}_${tenantId}`;
+};
 
 const loadPersistedCache = () => {
   try {
-    const raw = localStorage.getItem(HOMEPAGE_CACHE_STORAGE_KEY);
+    const raw = localStorage.getItem(getCacheStorageKey());
     if (!raw) return {};
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== 'object') return {};
@@ -18,7 +23,7 @@ const loadPersistedCache = () => {
 
 const persistCache = (cache) => {
   try {
-    localStorage.setItem(HOMEPAGE_CACHE_STORAGE_KEY, JSON.stringify(cache || {}));
+    localStorage.setItem(getCacheStorageKey(), JSON.stringify(cache || {}));
   } catch (error) {
     console.warn('[HomepageStore] Failed to persist cache:', error?.message || error);
   }

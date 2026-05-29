@@ -3531,8 +3531,8 @@ watch(selectedFrameworkId, async (newFrameworkId, oldFrameworkId) => {
       console.log('');
       
       // Try to refresh data from unified endpoint first
-      console.log('🔄 Calling fetchDynamicHomepageData()...');
-      const success = await fetchDynamicHomepageData();
+      console.log('🔄 Calling fetchDynamicHomepageData({ bypassCache: true })...');
+      const success = await fetchDynamicHomepageData({ bypassCache: true });
       
       console.log('');
       console.log('🔄 ================================================');

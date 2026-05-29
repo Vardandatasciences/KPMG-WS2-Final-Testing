@@ -261,10 +261,9 @@ export default {
     window.removeEventListener('framework-changed', this.syncLockedFramework);
   },
   methods: {
-    async syncLockedFramework() {
+    syncLockedFramework() {
       try {
         const frameworkStore = useFrameworkStore();
-        await frameworkStore.loadFrameworkFromSession();
         if (frameworkStore.selectedFrameworkId && frameworkStore.selectedFrameworkId !== 'all') {
           this.lockedFrameworkId = String(frameworkStore.selectedFrameworkId);
           this.lockedFrameworkName = frameworkStore.selectedFrameworkName || '';
