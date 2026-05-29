@@ -336,11 +336,20 @@ export default {
           if (result && result.isAuthError === true) {
             console.warn('🔒 [App] Session no longer valid (concurrent login detected) - logging out')
             this.stopConcurrentLoginPoll()
+            // CRITICAL: Clear ALL auth flags from BOTH storages to prevent router guard race condition
             sessionStorage.removeItem('cookie_session_validated')
+            sessionStorage.removeItem('user_id')
+            sessionStorage.removeItem('is_logged_in')
+            sessionStorage.removeItem('isAuthenticated')
+            sessionStorage.removeItem('current_user')
+            sessionStorage.removeItem('user')
+            localStorage.removeItem('user_id')
             localStorage.removeItem('is_logged_in')
             localStorage.removeItem('isAuthenticated')
             localStorage.setItem('auth_logout_reason', 'session_invalidated')
-            window.location.href = '/login'
+            window.dispatchEvent(new Event('authChanged'))
+            // Use replace() instead of href to avoid browser history issues and race conditions
+            window.location.replace('/login')
           }
         } catch (e) {
           // Network error - ignore, will retry next interval

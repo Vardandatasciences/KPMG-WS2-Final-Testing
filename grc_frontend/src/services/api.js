@@ -64,17 +64,23 @@ api.interceptors.response.use(
       if (isSessionInvalidated) {
         console.warn('🔒 [API] Session invalidated by concurrent login - logging out user');
         clearLegacyClientJwtKeys();
-        sessionStorage.clear();
+        // CRITICAL: Clear ALL auth flags from BOTH storages to prevent router guard race condition
+        sessionStorage.removeItem('user_id');
+        sessionStorage.removeItem('is_logged_in');
+        sessionStorage.removeItem('isAuthenticated');
+        sessionStorage.removeItem('current_user');
+        sessionStorage.removeItem('user');
+        localStorage.removeItem('user_id');
         localStorage.removeItem('is_logged_in');
         localStorage.removeItem('isAuthenticated');
         localStorage.setItem('auth_logout_reason', 'session_invalidated');
         window.dispatchEvent(new Event('authChanged'));
-        if (window.location.pathname !== '/login') {
-          window.location.href = '/login';
+        if (window.location.pathname !== '/login' && window.location.pathname !== '/Login') {
+          // Use replace() instead of href to avoid browser history issues and race conditions
+          window.location.replace('/login');
         }
-        const invalidatedError = new Error('Logged in from another device. Please log in again.');
-        invalidatedError.isSessionInvalidated = true;
-        return Promise.reject(invalidatedError);
+        // Return a pending promise that never resolves to prevent further execution
+        return new Promise(() => {});
       }
     }
 

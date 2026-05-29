@@ -21,7 +21,12 @@ module.exports = defineConfig({
   
   // Output directory
   outputDir: 'dist',
-  
+
+  // Extract all CSS to external files (required for strict CSP style-src 'self')
+  css: {
+    extract: true
+  },
+
   // Disable source maps in production for smaller bundle size
   productionSourceMap: false,
 
