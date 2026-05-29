@@ -1,0 +1,137 @@
+Collecting FlagEmbedding
+  Downloading flagembedding-1.4.0-py3-none-any.whl.metadata (23 kB)
+Requirement already satisfied: torch>=1.6.0 in c:\users\akank\appdata\local\programs\python\python311\lib\site-packages (from FlagEmbedding) (2.10.0)
+Requirement already satisfied: transformers<6.0.0,>=4.44.2 in c:\users\akank\appdata\local\programs\python\python311\lib\site-packages (from FlagEmbedding) (4.57.6)
+Collecting datasets>=2.19.0 (from FlagEmbedding)
+  Downloading datasets-4.8.5-py3-none-any.whl.metadata (19 kB)
+Requirement already satisfied: accelerate>=0.20.1 in c:\users\akank\appdata\local\programs\python\python311\lib\site-packages (from FlagEmbedding) (1.12.0)
+Requirement already satisfied: sentence_transformers in c:\users\akank\appdata\local\programs\python\python311\lib\site-packages (from FlagEmbedding) (2.7.0)
+Collecting peft (from FlagEmbedding)
+  Downloading peft-0.19.1-py3-none-any.whl.metadata (15 kB)
+Collecting ir-datasets (from FlagEmbedding)
+  Downloading ir_datasets-0.5.11-py3-none-any.whl.metadata (12 kB)
+Collecting sentencepiece (from FlagEmbedding)
+  Downloading sentencepiece-0.2.1-cp311-cp311-win_amd64.whl.metadata (10 kB)
+Requirement already satisfied: protobuf in c:\users\akank\appdata\local\programs\python\python311\lib\site-packages (from FlagEmbedding) (6.33.5)
+Requirement already satisfied: filelock in c:\users\akank\appdata\local\programs\python\python311\lib\site-packages (from transformers<6.0.0,>=4.44.2->FlagEmbedding) (3.20.3)
+Requirement already satisfied: huggingface-hub<1.0,>=0.34.0 in c:\users\akank\appdata\local\programs\python\python311\lib\site-packages (from transformers<6.0.0,>=4.44.2->FlagEmbedding) (0.36.0)
+Requirement already satisfied: numpy>=1.17 in c:\users\akank\appdata\local\programs\python\python311\lib\site-packages (from transformers<6.0.0,>=4.44.2->FlagEmbedding) (1.26.4)
+Requirement already satisfied: packaging>=20.0 in c:\users\akank\appdata\local\programs\python\python311\lib\site-packages (from transformers<6.0.0,>=4.44.2->FlagEmbedding) (24.2)
+Requirement already satisfied: pyyaml>=5.1 in c:\users\akank\appdata\local\programs\python\python311\lib\site-packages (from transformers<6.0.0,>=4.44.2->FlagEmbedding) (6.0.2)
+Requirement already satisfied: regex!=2019.12.17 in c:\users\akank\appdata\local\programs\python\python311\lib\site-packages (from transformers<6.0.0,>=4.44.2->FlagEmbedding) (2026.1.15)
+Requirement already satisfied: requests in c:\users\akank\appdata\local\programs\python\python311\lib\site-packages (from transformers<6.0.0,>=4.44.2->FlagEmbedding) (2.32.5)
+Requirement already satisfied: tokenizers<=0.23.0,>=0.22.0 in c:\users\akank\appdata\local\programs\python\python311\lib\site-packages (from transformers<6.0.0,>=4.44.2->FlagEmbedding) (0.22.2)
+Requirement already satisfied: safetensors>=0.4.3 in c:\users\akank\appdata\local\programs\python\python311\lib\site-packages (from transformers<6.0.0,>=4.44.2->FlagEmbedding) (0.7.0)
+Requirement already satisfied: tqdm>=4.27 in c:\users\akank\appdata\local\programs\python\python311\lib\site-packages (from transformers<6.0.0,>=4.44.2->FlagEmbedding) (4.67.1)
+Requirement already satisfied: fsspec>=2023.5.0 in c:\users\akank\appdata\local\programs\python\python311\lib\site-packages (from huggingface-hub<1.0,>=0.34.0->transformers<6.0.0,>=4.44.2->FlagEmbedding) (2026.1.0)
+Requirement already satisfied: typing-extensions>=3.7.4.3 in c:\users\akank\appdata\local\programs\python\python311\lib\site-packages (from huggingface-hub<1.0,>=0.34.0->transformers<6.0.0,>=4.44.2->FlagEmbedding) (4.15.0)
+Requirement already satisfied: psutil in c:\users\akank\appdata\local\programs\python\python311\lib\site-packages (from accelerate>=0.20.1->FlagEmbedding) (7.2.1)
+Collecting pyarrow>=21.0.0 (from datasets>=2.19.0->FlagEmbedding)
+  Downloading pyarrow-24.0.0-cp311-cp311-win_amd64.whl.metadata (3.0 kB)
+Collecting dill<0.4.2,>=0.3.0 (from datasets>=2.19.0->FlagEmbedding)
+  Downloading dill-0.4.1-py3-none-any.whl.metadata (10 kB)
+Requirement already satisfied: pandas in c:\users\akank\appdata\local\programs\python\python311\lib\site-packages (from datasets>=2.19.0->FlagEmbedding) (3.0.0)
+Requirement already satisfied: httpx<1.0.0 in c:\users\akank\appdata\local\programs\python\python311\lib\site-packages (from datasets>=2.19.0->FlagEmbedding) (0.26.0)
+Collecting xxhash (from datasets>=2.19.0->FlagEmbedding)
+  Downloading xxhash-3.7.0-cp311-cp311-win_amd64.whl.metadata (13 kB)
+Collecting multiprocess<0.70.20 (from datasets>=2.19.0->FlagEmbedding)
+  Downloading multiprocess-0.70.19-py311-none-any.whl.metadata (7.5 kB)
+Requirement already satisfied: aiohttp!=4.0.0a0,!=4.0.0a1 in c:\users\akank\appdata\local\programs\python\python311\lib\site-packages (from fsspec[http]<=2026.2.0,>=2023.1.0->datasets>=2.19.0->FlagEmbedding) (3.13.3)
+Requirement already satisfied: anyio in c:\users\akank\appdata\local\programs\python\python311\lib\site-packages (from httpx<1.0.0->datasets>=2.19.0->FlagEmbedding) (4.12.1)
+Requirement already satisfied: certifi in c:\users\akank\appdata\local\programs\python\python311\lib\site-packages (from httpx<1.0.0->datasets>=2.19.0->FlagEmbedding) (2026.1.4)
+Requirement already satisfied: httpcore==1.* in c:\users\akank\appdata\local\programs\python\python311\lib\site-packages (from httpx<1.0.0->datasets>=2.19.0->FlagEmbedding) (1.0.9)
+Requirement already satisfied: idna in c:\users\akank\appdata\local\programs\python\python311\lib\site-packages (from httpx<1.0.0->datasets>=2.19.0->FlagEmbedding) (3.11)
+Requirement already satisfied: sniffio in c:\users\akank\appdata\local\programs\python\python311\lib\site-packages (from httpx<1.0.0->datasets>=2.19.0->FlagEmbedding) (1.3.1)
+Requirement already satisfied: h11>=0.16 in c:\users\akank\appdata\local\programs\python\python311\lib\site-packages (from httpcore==1.*->httpx<1.0.0->datasets>=2.19.0->FlagEmbedding) (0.16.0)
+Requirement already satisfied: aiohappyeyeballs>=2.5.0 in c:\users\akank\appdata\local\programs\python\python311\lib\site-packages (from aiohttp!=4.0.0a0,!=4.0.0a1->fsspec[http]<=2026.2.0,>=2023.1.0->datasets>=2.19.0->FlagEmbedding) (2.6.1)
+Requirement already satisfied: aiosignal>=1.4.0 in c:\users\akank\appdata\local\programs\python\python311\lib\site-packages (from aiohttp!=4.0.0a0,!=4.0.0a1->fsspec[http]<=2026.2.0,>=2023.1.0->datasets>=2.19.0->FlagEmbedding) (1.4.0)
+Requirement already satisfied: attrs>=17.3.0 in c:\users\akank\appdata\local\programs\python\python311\lib\site-packages (from aiohttp!=4.0.0a0,!=4.0.0a1->fsspec[http]<=2026.2.0,>=2023.1.0->datasets>=2.19.0->FlagEmbedding) (25.4.0)
+Requirement already satisfied: frozenlist>=1.1.1 in c:\users\akank\appdata\local\programs\python\python311\lib\site-packages (from aiohttp!=4.0.0a0,!=4.0.0a1->fsspec[http]<=2026.2.0,>=2023.1.0->datasets>=2.19.0->FlagEmbedding) (1.8.0)
+Requirement already satisfied: multidict<7.0,>=4.5 in c:\users\akank\appdata\local\programs\python\python311\lib\site-packages (from aiohttp!=4.0.0a0,!=4.0.0a1->fsspec[http]<=2026.2.0,>=2023.1.0->datasets>=2.19.0->FlagEmbedding) (6.7.1)
+Requirement already satisfied: propcache>=0.2.0 in c:\users\akank\appdata\local\programs\python\python311\lib\site-packages (from aiohttp!=4.0.0a0,!=4.0.0a1->fsspec[http]<=2026.2.0,>=2023.1.0->datasets>=2.19.0->FlagEmbedding) (0.4.1)
+Requirement already satisfied: yarl<2.0,>=1.17.0 in c:\users\akank\appdata\local\programs\python\python311\lib\site-packages (from aiohttp!=4.0.0a0,!=4.0.0a1->fsspec[http]<=2026.2.0,>=2023.1.0->datasets>=2.19.0->FlagEmbedding) (1.22.0)
+Requirement already satisfied: charset_normalizer<4,>=2 in c:\users\akank\appdata\local\programs\python\python311\lib\site-packages (from requests->transformers<6.0.0,>=4.44.2->FlagEmbedding) (3.4.4)
+Requirement already satisfied: urllib3<3,>=1.21.1 in c:\users\akank\appdata\local\programs\python\python311\lib\site-packages (from requests->transformers<6.0.0,>=4.44.2->FlagEmbedding) (2.6.3)
+Requirement already satisfied: sympy>=1.13.3 in c:\users\akank\appdata\local\programs\python\python311\lib\site-packages (from torch>=1.6.0->FlagEmbedding) (1.14.0)
+Requirement already satisfied: networkx>=2.5.1 in c:\users\akank\appdata\local\programs\python\python311\lib\site-packages (from torch>=1.6.0->FlagEmbedding) (3.6.1)
+Requirement already satisfied: jinja2 in c:\users\akank\appdata\local\programs\python\python311\lib\site-packages (from torch>=1.6.0->FlagEmbedding) (3.1.3)
+Requirement already satisfied: mpmath<1.4,>=1.1.0 in c:\users\akank\appdata\local\programs\python\python311\lib\site-packages (from sympy>=1.13.3->torch>=1.6.0->FlagEmbedding) (1.3.0)
+Requirement already satisfied: colorama in c:\users\akank\appdata\local\programs\python\python311\lib\site-packages (from tqdm>=4.27->transformers<6.0.0,>=4.44.2->FlagEmbedding) (0.4.6)
+Collecting beautifulsoup4>=4.4.1 (from ir-datasets->FlagEmbedding)
+  Downloading beautifulsoup4-4.14.3-py3-none-any.whl.metadata (3.8 kB)
+Collecting inscriptis>=2.2.0 (from ir-datasets->FlagEmbedding)
+  Downloading inscriptis-2.7.1-py3-none-any.whl.metadata (27 kB)
+Requirement already satisfied: lxml>=4.5.2 in c:\users\akank\appdata\local\programs\python\python311\lib\site-packages (from ir-datasets->FlagEmbedding) (6.0.2)
+Collecting trec-car-tools>=2.5.4 (from ir-datasets->FlagEmbedding)
+  Downloading trec_car_tools-2.6-py3-none-any.whl.metadata (640 bytes)
+Collecting lz4>=3.1.10 (from ir-datasets->FlagEmbedding)
+  Downloading lz4-4.4.5-cp311-cp311-win_amd64.whl.metadata (3.9 kB)
+Collecting warc3-wet>=0.2.3 (from ir-datasets->FlagEmbedding)
+  Downloading warc3_wet-0.2.5-py3-none-any.whl.metadata (2.2 kB)
+Collecting warc3-wet-clueweb09>=0.2.5 (from ir-datasets->FlagEmbedding)
+  Downloading warc3-wet-clueweb09-0.2.5.tar.gz (17 kB)
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Getting requirements to build wheel: started
+  Getting requirements to build wheel: finished with status 'done'
+  Preparing metadata (pyproject.toml): started
+  Preparing metadata (pyproject.toml): finished with status 'done'
+Collecting zlib-state>=0.1.3 (from ir-datasets->FlagEmbedding)
+  Downloading zlib_state-0.1.12-cp311-cp311-win_amd64.whl.metadata (3.6 kB)
+Collecting ijson>=3.1.3 (from ir-datasets->FlagEmbedding)
+  Downloading ijson-3.5.0-cp311-cp311-win_amd64.whl.metadata (24 kB)
+Collecting unlzw3>=0.2.1 (from ir-datasets->FlagEmbedding)
+  Downloading unlzw3-0.2.3-py3-none-any.whl.metadata (2.3 kB)
+Requirement already satisfied: soupsieve>=1.6.1 in c:\users\akank\appdata\local\programs\python\python311\lib\site-packages (from beautifulsoup4>=4.4.1->ir-datasets->FlagEmbedding) (2.8.3)
+Collecting cbor>=1.0.0 (from trec-car-tools>=2.5.4->ir-datasets->FlagEmbedding)
+  Downloading cbor-1.0.0.tar.gz (20 kB)
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Getting requirements to build wheel: started
+  Getting requirements to build wheel: finished with status 'done'
+  Preparing metadata (pyproject.toml): started
+  Preparing metadata (pyproject.toml): finished with status 'done'
+Requirement already satisfied: MarkupSafe>=2.0 in c:\users\akank\appdata\local\programs\python\python311\lib\site-packages (from jinja2->torch>=1.6.0->FlagEmbedding) (3.0.3)
+Requirement already satisfied: python-dateutil>=2.8.2 in c:\users\akank\appdata\local\programs\python\python311\lib\site-packages (from pandas->datasets>=2.19.0->FlagEmbedding) (2.9.0.post0)
+Requirement already satisfied: tzdata in c:\users\akank\appdata\local\programs\python\python311\lib\site-packages (from pandas->datasets>=2.19.0->FlagEmbedding) (2025.3)
+Requirement already satisfied: six>=1.5 in c:\users\akank\appdata\local\programs\python\python311\lib\site-packages (from python-dateutil>=2.8.2->pandas->datasets>=2.19.0->FlagEmbedding) (1.17.0)
+Requirement already satisfied: scikit-learn in c:\users\akank\appdata\local\programs\python\python311\lib\site-packages (from sentence_transformers->FlagEmbedding) (1.8.0)
+Requirement already satisfied: scipy in c:\users\akank\appdata\local\programs\python\python311\lib\site-packages (from sentence_transformers->FlagEmbedding) (1.17.0)
+Requirement already satisfied: Pillow in c:\users\akank\appdata\local\programs\python\python311\lib\site-packages (from sentence_transformers->FlagEmbedding) (12.1.0)
+Requirement already satisfied: joblib>=1.3.0 in c:\users\akank\appdata\local\programs\python\python311\lib\site-packages (from scikit-learn->sentence_transformers->FlagEmbedding) (1.5.3)
+Requirement already satisfied: threadpoolctl>=3.2.0 in c:\users\akank\appdata\local\programs\python\python311\lib\site-packages (from scikit-learn->sentence_transformers->FlagEmbedding) (3.6.0)
+Downloading flagembedding-1.4.0-py3-none-any.whl (247 kB)
+Downloading datasets-4.8.5-py3-none-any.whl (528 kB)
+   ---------------------------------------- 529.0/529.0 kB 8.6 MB/s  0:00:00
+Downloading dill-0.4.1-py3-none-any.whl (120 kB)
+Downloading multiprocess-0.70.19-py311-none-any.whl (144 kB)
+Downloading pyarrow-24.0.0-cp311-cp311-win_amd64.whl (27.3 MB)
+   ---------------------------------------- 27.3/27.3 MB 12.0 MB/s  0:00:02
+Downloading ir_datasets-0.5.11-py3-none-any.whl (866 kB)
+   ---------------------------------------- 866.1/866.1 kB 9.7 MB/s  0:00:00
+Downloading beautifulsoup4-4.14.3-py3-none-any.whl (107 kB)
+Downloading ijson-3.5.0-cp311-cp311-win_amd64.whl (55 kB)
+Downloading inscriptis-2.7.1-py3-none-any.whl (45 kB)
+Downloading lz4-4.4.5-cp311-cp311-win_amd64.whl (99 kB)
+Downloading trec_car_tools-2.6-py3-none-any.whl (8.4 kB)
+Downloading unlzw3-0.2.3-py3-none-any.whl (6.7 kB)
+Downloading warc3_wet-0.2.5-py3-none-any.whl (18 kB)
+Downloading zlib_state-0.1.12-cp311-cp311-win_amd64.whl (12 kB)
+Downloading peft-0.19.1-py3-none-any.whl (680 kB)
+   ---------------------------------------- 680.7/680.7 kB 13.5 MB/s  0:00:00
+Downloading sentencepiece-0.2.1-cp311-cp311-win_amd64.whl (1.1 MB)
+   ---------------------------------------- 1.1/1.1 MB 12.6 MB/s  0:00:00
+Downloading xxhash-3.7.0-cp311-cp311-win_amd64.whl (31 kB)
+Building wheels for collected packages: cbor, warc3-wet-clueweb09
+  Building wheel for cbor (pyproject.toml): started
+  Building wheel for cbor (pyproject.toml): finished with status 'done'
+  Created wheel for cbor: filename=cbor-1.0.0-py3-none-any.whl size=10086 sha256=dd4620dcbf625bdb4cf2ca01f641bce7ca29908df0a84fe993a2ae944e178688
+  Stored in directory: c:\users\akank\appdata\local\pip\cache\wheels\21\6b\45\0c34253b1af07d1d9dc524f6d44d74a6b191c43152e6aaf641
+  Building wheel for warc3-wet-clueweb09 (pyproject.toml): started
+  Building wheel for warc3-wet-clueweb09 (pyproject.toml): finished with status 'done'
+  Created wheel for warc3-wet-clueweb09: filename=warc3_wet_clueweb09-0.2.5-py3-none-any.whl size=19020 sha256=6ae5e87151df587a1d636cb0bacd57174a844983331811eb772480fecd4a67ad
+  Stored in directory: c:\users\akank\appdata\local\pip\cache\wheels\63\f9\dc\2dd16d3330e327236e4d407941975c42d5159d200cdb7922d8
+Successfully built cbor warc3-wet-clueweb09
+Installing collected packages: warc3-wet-clueweb09, warc3-wet, cbor, zlib-state, xxhash, unlzw3, trec-car-tools, sentencepiece, pyarrow, lz4, ijson, dill, beautifulsoup4, multiprocess, inscriptis, ir-datasets, datasets, peft, FlagEmbedding
+
+Successfully installed FlagEmbedding-1.4.0 beautifulsoup4-4.14.3 cbor-1.0.0 datasets-4.8.5 dill-0.4.1 ijson-3.5.0 inscriptis-2.7.1 ir-datasets-0.5.11 lz4-4.4.5 multiprocess-0.70.19 peft-0.19.1 pyarrow-24.0.0 sentencepiece-0.2.1 trec-car-tools-2.6 unlzw3-0.2.3 warc3-wet-0.2.5 warc3-wet-clueweb09-0.2.5 xxhash-3.7.0 zlib-state-0.1.12

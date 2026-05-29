@@ -52,6 +52,7 @@ SECURITY NOTE:
 
 # External service keys (load from environment / .env)
 PERPLEXITY_API_KEY = os.environ.get("PERPLEXITY_API_KEY", "")
+NVIDIA_API_KEY = os.environ.get("NVIDIA_API_KEY", "")
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
@@ -132,7 +133,30 @@ EXPORT_ALLOWED_DOMAINS = _env_csv("EXPORT_ALLOWED_DOMAINS", "")
 # RiskAvaire EventHandling: HMAC-SHA256 of raw request body, header X-Riskavaire-Signature: sha256=<hex>
 # When DEBUG is False, this must be non-empty or webhooks return 503 (misconfiguration).
 RISKAVAIRE_WEBHOOK_SECRET = os.environ.get("RISKAVAIRE_WEBHOOK_SECRET", "").strip()
+# Policy self-healing cron (scheduler microservice webhook). Must be non-empty in production to call the endpoint.
+POLICY_SELF_HEAL_CRON_SECRET = os.environ.get("POLICY_SELF_HEAL_CRON_SECRET", "").strip()
+# Falls back to policy secret when unset (one shared cron secret for dev / Scheduler).
+_scheduled_audits_secret = os.environ.get("SCHEDULED_AUDITS_CRON_SECRET", "").strip()
+SCHEDULED_AUDITS_CRON_SECRET = _scheduled_audits_secret or POLICY_SELF_HEAL_CRON_SECRET
+# Self-heal: set POLICY_SELF_HEAL_SEND_EMAIL=false to skip SMTP (in-app notifications still sent).
+POLICY_SELF_HEAL_SEND_EMAIL = os.environ.get("POLICY_SELF_HEAL_SEND_EMAIL", "true").strip().lower() not in (
+    "0",
+    "false",
+    "no",
+)
+# Cap manager escalation emails per policy per run (in-app still goes to all managers).
+try:
+    POLICY_SELF_HEAL_MAX_MANAGER_EMAILS = int(os.environ.get("POLICY_SELF_HEAL_MAX_MANAGER_EMAILS", "5"))
+except ValueError:
+    POLICY_SELF_HEAL_MAX_MANAGER_EMAILS = 5
 
+# Scheduler microservice API base URL (used to create per-policy reminder schedules).
+SCHEDULER_API_BASE_URL = os.environ.get("SCHEDULER_API_BASE_URL", "http://127.0.0.1:8000").strip().rstrip("/")
+# Django backend base URL (used by scheduler webhooks to call back into Django).
+DJANGO_BASE_URL = os.environ.get("DJANGO_BASE_URL", "http://127.0.0.1:8000").strip().rstrip("/")
+
+# Links in policy review reminder emails (renewal page, tailoring).
+FRONTEND_BASE_URL = os.environ.get("FRONTEND_BASE_URL", "http://localhost:8080").strip().rstrip("/")
 # EventHandling: allow outside DEBUG (off by default): schema DDL endpoints and
 # test_integration_db_connection (creates integration DB / tables — use only for maintenance).
 ALLOW_EVENT_SCHEMA_MAINTENANCE = os.environ.get(

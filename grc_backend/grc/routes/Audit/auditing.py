@@ -1222,7 +1222,14 @@ def send_audit_for_review(request, audit_id):
                 }, status=404)
             
             debug_print(f"Successfully updated audit {validated_audit_id} status to 'Under Review'")
-            
+
+            try:
+                from ...services.audit_review_service import handle_audit_sent_for_review
+
+                handle_audit_sent_for_review(validated_audit_id, tenant_id)
+            except Exception as review_notify_err:
+                debug_print(f"Review notification after send-for-review failed: {review_notify_err}")
+
             response = JsonResponse({
                 'success': True,
                 'message': f'Audit {validated_audit_id} sent for review successfully',

@@ -2,6 +2,13 @@
   <div class="TT-page-wrapper">
     <!-- Add PopupModal component -->
     <PopupModal />
+
+    <div v-if="asyncSimilarityMasterId" class="tt-async-banner">
+      <p>{{ ttSimilarityBannerText }}</p>
+      <button type="button" class="tt-async-banner-btn" @click="openSimilarityReview">
+        Open review
+      </button>
+    </div>
     
     <!-- Breadcrumb Section for Selected Filters - Positioned at top -->
     <div v-if="selectedTab === 'framework' && selectedFramework && selectedFramework !== '' && getSelectedFrameworkName !== ''" class="filter-breadcrumbs">
@@ -2522,24 +2529,38 @@
       <button class="btn-submit" @click="submitTailoredPolicy" :disabled="isPolicyCreatorReviewerSame || ttPolicyCreateInFlight">Submit</button>
       </div>
     </div>
+
+    <SimilaritySubmitGate ref="similarityRunner" itemType="Framework" :item-data="{ name: '' }" />
   </template>
   
   <script>
 import './TT.css'
 import CustomDropdown from '../CustomDropdown.vue'
+import SimilaritySubmitGate from '@/components/SimilaritySubmitGate.vue'
 import apiService from '@/services/apiService'
 import policyDataService from '@/services/policyService'
 import { PopupService, PopupModal } from '@/modules/popup'  // Fix the import path
 import {  API_ENDPOINTS } from '../../config/api.js'
 import { useFrameworkStore } from '@/stores/framework'
 import { usePolicyStore } from '@/stores/policy'
+import {
+  buildTailoringSimilarityChecks,
+  buildVersioningSimilarityChecks,
+  startAsyncUpdateFromChecks,
+} from '@/utils/similaritySubmitHelper'
+import {
+  getSimilarityBannerMessage,
+  getSimilarityReadyPopup,
+  resolveSimilarityEntity,
+} from '@/utils/similarityNotificationText'
 
 
   export default {
   name: 'TT',
   components: {
     CustomDropdown,
-    PopupModal
+    PopupModal,
+    SimilaritySubmitGate
   },
   data() {
     return {
@@ -2579,6 +2600,10 @@ import { usePolicyStore } from '@/stores/policy'
       loading: false,
       ttFrameworkCreateInFlight: false,
       ttPolicyCreateInFlight: false,
+      asyncSimilarityMasterId: null,
+      asyncSimilarityCheckCount: 0,
+      asyncSimilarityEntity: 'Policy',
+      asyncSimilarityPollTimer: null,
       error: null,
       entities: [], // Initialize as empty array
       existingFrameworkIdentifiers: [], // Add this to track existing identifiers
@@ -2624,6 +2649,9 @@ import { usePolicyStore } from '@/stores/policy'
     }
   },
   computed: {
+    ttSimilarityBannerText() {
+      return getSimilarityBannerMessage(this.asyncSimilarityEntity, this.asyncSimilarityCheckCount);
+    },
     // Check if creator and reviewer are the same person for framework
     isFrameworkCreatorReviewerSame() {
       if (!this.frameworkForm.reviewer || !this.currentUser.UserName) return false;
@@ -2642,8 +2670,12 @@ import { usePolicyStore } from '@/stores/policy'
       if (!currentPolicy.reviewer) return false;
       
       const creatorUser = this.users.find(u => u.name === this.currentUser.UserName);
-      const reviewerUser = this.users.find(u => u.id === currentPolicy.reviewer);
-      return creatorUser && reviewerUser && creatorUser.id === reviewerUser.id;
+      const pr = currentPolicy.reviewer;
+      const reviewerUser = this.users.find(
+        (u) => String(u.id) === String(pr) ||
+          String(u.name || '').toLowerCase() === String(pr).toLowerCase()
+      );
+      return !!(creatorUser && reviewerUser && creatorUser.id === reviewerUser.id);
     },
     
     // Framework dropdown configuration for framework tab
@@ -2724,8 +2756,10 @@ import { usePolicyStore } from '@/stores/policy'
           this.handleFrameworkSelection(this.selectedFramework)
         }
       } else if (newVal === 'policy') {
-        this.selectedPolicy = ''
         this.policyTabs = []
+        if (!this.isSelfHealRouteQuery()) {
+          this.selectedPolicy = ''
+        }
         this.fetchFrameworks()
       }
     },
@@ -2756,6 +2790,12 @@ import { usePolicyStore } from '@/stores/policy'
       if (this.selectedTab === 'policy' && this.selectedFramework && newVal) {
         console.log('Policy selected:', newVal)
         this.fetchPolicyDetails(newVal)
+      }
+    },
+    '$route.query': {
+      deep: true,
+      handler() {
+        this.applySelfHealDeepLinkFromRoute()
       }
     },
     'policyTabs[activePolicyTab].type': {
@@ -2797,6 +2837,7 @@ import { usePolicyStore } from '@/stores/policy'
         this.fetchUsers(),
         this.fetchDepartments()
       ])
+      await this.applySelfHealDeepLinkFromRoute()
     } catch (error) {
       console.error('Error in component creation:', error)
       this.error = 'Failed to initialize component'
@@ -2947,7 +2988,35 @@ import { usePolicyStore } from '@/stores/policy'
       // Validate subpolicy name uniqueness
       this.validateSubPolicyName(value, policyIdx, subIdx);
     },
-    
+    isSelfHealRouteQuery() {
+      const q = (this.$route && this.$route.query) || {}
+      return (
+        String(q.selfHeal || '') === '1' &&
+        q.policyId != null &&
+        String(q.policyId).trim() !== '' &&
+        q.frameworkId != null &&
+        String(q.frameworkId).trim() !== ''
+      )
+    },
+
+    async applySelfHealDeepLinkFromRoute() {
+      try {
+        if (!this.isSelfHealRouteQuery()) return
+        const q = this.$route.query || {}
+        const policyId = String(q.policyId).trim()
+        const frameworkId = String(q.frameworkId).trim()
+        this.selectTab('policy')
+        await this.$nextTick()
+        // Watcher calls fetchFrameworks() without await — list may still be framework-tab (Internal-only).
+        await this.fetchFrameworks()
+        this.selectedFramework = frameworkId
+        await this.fetchPoliciesByFramework(this.selectedFramework)
+        await this.$nextTick()
+        this.selectedPolicy = policyId
+      } catch (e) {
+        console.error('Self-heal deep link failed:', e)
+      }
+    },
     selectTab(tab) {
       this.selectedTab = tab
       
@@ -2989,45 +3058,24 @@ import { usePolicyStore } from '@/stores/policy'
       try {
         this.loading = true
         const policyStore = usePolicyStore()
-        console.log('🔍 TT: frameworks — Pinia/cache first (no await on policyService prefetch)')
+        console.log('🔍 TT: loading full tenant framework list (include_all_status, no user_id filter)')
 
         // Warm other policy pages in background only — never block TT on fetchAllPolicyData()
-        if (!window.policyDataFetchPromise && !policyStore.hasFrameworksCache() && !policyDataService.hasFrameworksListCache()) {
+        if (!window.policyDataFetchPromise && !policyDataService.hasFrameworksListCache()) {
           window.policyDataFetchPromise = policyDataService.fetchAllPolicyData()
+          void window.policyDataFetchPromise.catch((err) => {
+            console.warn('⚠️ TT: policy prefetch failed (non-blocking)', err?.message || err)
+          })
         }
 
-        let frameworksSource = []
-        let usedWarmCache = false
-
-        if (policyStore.hasFrameworksCache()) {
-          usedWarmCache = true
-          frameworksSource = policyStore.getFrameworksCached() || []
-          console.log('✅ TT: using Pinia frameworks cache', frameworksSource.length)
-        } else if (policyDataService.hasFrameworksListCache()) {
-          usedWarmCache = true
-          frameworksSource = policyDataService.getFrameworksList() || []
-          console.log('✅ TT: using policyDataService frameworks list cache', frameworksSource.length)
-        } else {
-          console.log('⚠️ TT: cold cache — single getAllFrameworks() via Pinia')
-          frameworksSource = await policyStore.getAllFrameworks({ force: false })
-          policyDataService.setFrameworksList(frameworksSource || [])
-        }
+        const frameworksSource = await policyStore.getAllFrameworks({ force: true })
+        policyDataService.setFrameworksList(frameworksSource || [])
 
         const allFrameworks = this.mapRawFrameworksToTT(frameworksSource)
         this.frameworks = this.applyTTFrameworkFilter(allFrameworks)
-        console.log('TT mapped frameworks:', this.frameworks.length)
+        console.log('TT mapped frameworks:', this.frameworks.length, '(tab:', this.selectedTab, ')')
 
         await this.checkSelectedFrameworkFromSession()
-
-        // Revalidate only when we showed cached data (cold path already hit the network once)
-        if (usedWarmCache) {
-          void policyStore.getAllFrameworks({ force: true }).then((fresh) => {
-            if (!Array.isArray(fresh) || !fresh.length) return
-            policyDataService.setFrameworksList(fresh)
-            const mapped = this.mapRawFrameworksToTT(fresh)
-            this.frameworks = this.applyTTFrameworkFilter(mapped)
-          }).catch(() => {})
-        }
       } catch (error) {
         console.error('Error fetching frameworks:', error)
         this.error = 'Failed to fetch frameworks'
@@ -3039,6 +3087,10 @@ import { usePolicyStore } from '@/stores/policy'
     // Check for selected framework from session and set it as default
     async checkSelectedFrameworkFromSession() {
       try {
+         // Policy self-heal deep link sets framework/policy from URL; session sync would clear or overwrite it.
+         if (this.isSelfHealRouteQuery()) {
+          return
+        }
         console.log('🔍 DEBUG: Checking for selected framework from session in TT...')
         const frameworkStore = useFrameworkStore()
         await frameworkStore.loadFrameworkFromSession()
@@ -3177,7 +3229,8 @@ import { usePolicyStore } from '@/stores/policy'
           identifier: sp.Identifier,
           control: sp.Control,
           description: sp.Description,
-          status: sp.Status
+          status: sp.Status,
+          originalSubPolicyId: sp.SubPolicyId,
         }))
 
         const p = rawFrameworkPolicy  // alias for readability
@@ -3201,17 +3254,56 @@ import { usePolicyStore } from '@/stores/policy'
           entities: Array.isArray(p.Entities) ? p.Entities : (p.Entities === 'all' ? 'all' : []),
           startDate: p.StartDate || '',
           endDate: p.EndDate || '',
+          docURL: p.DocURL || '',
+          permanentTemporary: p.PermanentTemporary || '',
           file: null,
           createdByName: p.CreatedByName || '',
           reviewer: p.Reviewer || '',
           subPolicies: mappedSubpolicies,
-          activeSubPolicyTab: 0
+          activeSubPolicyTab: 0,
+          originalPolicyId: p.PolicyId,
+          _similarityBaseline: {
+            name: p.PolicyName || '',
+            description: p.PolicyDescription || '',
+            identifier: p.Identifier || '',
+            department: this.normalizeDepartmentValue(p.Department || p.department),
+            scope: p.Scope || '',
+            objective: p.Objective || '',
+            type: p.PolicyType || '',
+            category: p.PolicyCategory || '',
+            subCategory: p.PolicySubCategory || '',
+            subPolicies: mappedSubpolicies.map((sp) => ({
+              id: sp.id,
+              name: sp.name,
+              identifier: sp.identifier,
+              control: sp.control,
+              description: sp.description,
+            })),
+          },
         }
 
         console.log('Created policy tab:', policyTab)
         this.policyTabs = [policyTab]
         this.activePolicyTab = 0
-        
+        // API returns Reviewer as UserName string; reviewer <select> binds user id. Resolve so submit sends Reviewer correctly.
+          const rawReviewer = (p.Reviewer || '').trim()
+        if (rawReviewer) {
+          if (!this.users || this.users.length === 0) {
+            try {
+              await this.fetchUsers()
+            } catch {
+              /* fetchUsers sets error; continue with username fallback on submit */
+            }
+          }
+          const lower = rawReviewer.toLowerCase()
+          const match = (this.users || []).find(
+            (u) => String(u.name || '').toLowerCase() === lower || String(u.id) === rawReviewer
+          )
+          if (match) {
+            this.policyTabs[0].reviewer = match.id
+          }
+        }
+
         // Initialize policyFieldDataTypes for the loaded policy with all fields set to 'regular' by default
         this.policyFieldDataTypes = [{
           policyName: 'regular',
@@ -3260,6 +3352,198 @@ import { usePolicyStore } from '@/stores/policy'
         this.loading = false
       }
     },
+    _onAsyncSimilarityStarted(masterCheckId, checkCount = 0, entityType = 'Policy') {
+      this.asyncSimilarityMasterId = masterCheckId
+      this.asyncSimilarityCheckCount = checkCount || 0
+      this.asyncSimilarityEntity = entityType || 'Policy'
+      this._startAsyncSimilarityPoll()
+    },
+    openSimilarityReview() {
+      if (!this.asyncSimilarityMasterId) return
+      this.$router.push({ path: '/similarity/review', query: { checkId: this.asyncSimilarityMasterId } })
+    },
+    _startAsyncSimilarityPoll() {
+      if (this.asyncSimilarityPollTimer) {
+        clearInterval(this.asyncSimilarityPollTimer)
+      }
+      const poll = async () => {
+        if (!this.asyncSimilarityMasterId) return
+        try {
+          const { getAsyncUpdateStatus } = await import('@/services/similarityAsyncUpdateService')
+          const status = await getAsyncUpdateStatus(this.asyncSimilarityMasterId)
+          if (status.background_status === 'READY') {
+            clearInterval(this.asyncSimilarityPollTimer)
+            this.asyncSimilarityPollTimer = null
+            const readyCopy = getSimilarityReadyPopup(this.asyncSimilarityEntity)
+            PopupService.success(readyCopy.message, readyCopy.heading)
+          } else if (status.background_status === 'FAILED') {
+            clearInterval(this.asyncSimilarityPollTimer)
+            this.asyncSimilarityPollTimer = null
+            this.asyncSimilarityMasterId = null
+            PopupService.error(status.error || 'Similarity check failed', 'Error')
+          }
+        } catch (e) {
+          console.warn('Async similarity poll:', e)
+        }
+      }
+      this.asyncSimilarityPollTimer = setInterval(poll, 5000)
+      void poll()
+    },
+    async _tryStartTtAsyncSimilarity(scope, pendingSave) {
+      const fwId = parseInt(this.selectedFramework, 10) || null
+      let checks = []
+      if (scope === 'framework') {
+        checks = buildTailoringSimilarityChecks({
+          gate: this.$refs.similarityRunner,
+          frameworkForm: this.frameworkForm,
+          policyTabs: this.policyTabs,
+          frameworkId: fwId,
+        })
+      } else if (this.policyTabs?.[this.activePolicyTab]) {
+        checks = buildVersioningSimilarityChecks({
+          gate: this.$refs.similarityRunner,
+          frameworkForm: null,
+          previousFramework: null,
+          policyTabs: [this.policyTabs[this.activePolicyTab]],
+          frameworkId: fwId,
+          policyOnly: true,
+        })
+      }
+      const { started, masterCheckId, checkCount } = await startAsyncUpdateFromChecks(
+        checks,
+        pendingSave,
+        { PopupService }
+      )
+      if (!started) return false
+      const itemTypes = checks.map((c) => c.params?.item_type).filter(Boolean)
+      const entityType = resolveSimilarityEntity(pendingSave?.operation, itemTypes)
+      this._onAsyncSimilarityStarted(masterCheckId, checkCount, entityType)
+      return true
+    },
+    async _executeTtFrameworkPendingSave(pendingSave) {
+      const meta = pendingSave.meta || {}
+      const loggedInUser = meta.loggedInUser || this.loggedInUsername || 'default_user'
+      this.ttFrameworkCreateInFlight = true
+      try {
+        const response = await apiService.post(
+          '/api/tailoring/create-framework/',
+          pendingSave.payload,
+          { background: true }
+        )
+        const ps = usePolicyStore()
+        if (response.FrameworkId) {
+          ps.mergeFrameworkRowFromCreate({
+            FrameworkId: response.FrameworkId,
+            FrameworkName: response.FrameworkName || meta.frameworkNameSnapshot,
+            Category: meta.frameworkCategorySnapshot,
+            InternalExternal: meta.frameworkInternalExternalSnapshot || 'Internal',
+            ActiveInactive: 'Inactive',
+            Status: response.Status || 'Under Review',
+            CurrentVersion: 1,
+            FrameworkDescription: meta.frameworkDescSnapshot,
+          })
+          policyDataService.mergeExplorerFrameworkRow({
+            id: response.FrameworkId,
+            name: response.FrameworkName || meta.frameworkNameSnapshot,
+            category: meta.frameworkCategorySnapshot || '',
+            description: meta.frameworkDescSnapshot || '',
+            status: 'Inactive',
+            internalExternal: meta.frameworkInternalExternalSnapshot || 'Internal',
+            versions: [{ version: 1 }],
+          })
+        }
+        this.$emit('framework-created')
+        this.resetForm()
+        this.error = null
+        PopupService.success('Framework created successfully!', 'Success')
+        void this.sendPushNotification({
+          title: 'New Framework Created',
+          message: `A new framework "${meta.frameworkNameSnapshot}" has been created in the Tailoring & Templating module.`,
+          category: 'framework',
+          priority: 'high',
+          user_id: loggedInUser,
+        })
+      } catch (error) {
+        const errMsg = error.response?.data?.error || error.message || 'Failed to submit framework'
+        PopupService.error(errMsg, 'Error Creating Framework')
+        void this.sendPushNotification({
+          title: 'Framework Creation Failed',
+          message: `Failed to create framework "${meta.frameworkNameSnapshot}": ${errMsg}`,
+          category: 'framework',
+          priority: 'high',
+          user_id: loggedInUser,
+        })
+        throw error
+      } finally {
+        this.ttFrameworkCreateInFlight = false
+      }
+    },
+    async _executeTtPolicyPendingSave(pendingSave) {
+      const meta = pendingSave.meta || {}
+      const loggedInUser = meta.loggedInUser || this.loggedInUsername || 'default_user'
+      this.ttPolicyCreateInFlight = true
+      try {
+        if (pendingSave.operation === 'policy_version') {
+          const response = await apiService.post(
+            `/api/policies/${pendingSave.entity_pk}/create-version/`,
+            pendingSave.payload
+          )
+          this.$emit('policy-created')
+          this.resetForm()
+          this.error = null
+          PopupService.success('New policy version submitted for review.', 'Success')
+          void this.sendPushNotification({
+            title: 'Policy version created',
+            message: `A new version of "${pendingSave.label}" was submitted from policy renewal.`,
+            category: 'policy',
+            priority: 'high',
+            user_id: loggedInUser,
+          })
+          return response
+        }
+        const response = await apiService.post(
+          '/api/tailoring/create-policy/',
+          pendingSave.payload,
+          { background: true }
+        )
+        if (response.PolicyId && response.FrameworkId) {
+          usePolicyStore().prependPolicyTailoringCache(response.FrameworkId, {
+            PolicyId: response.PolicyId,
+            PolicyName: response.PolicyName || meta.policyNameSnapshot,
+            PolicyDescription: meta.policyDescSnapshot,
+            Status: response.Status || 'Under Review',
+            FrameworkId: response.FrameworkId,
+            ActiveInactive: 'Inactive',
+          })
+        }
+        this.$emit('policy-created')
+        this.resetForm()
+        this.error = null
+        PopupService.success('Policy created successfully!', 'Success')
+        void this.sendPushNotification({
+          title: 'New Policy Created',
+          message: `A new policy "${meta.policyNameSnapshot}" has been created in the Tailoring & Templating module.`,
+          category: 'policy',
+          priority: 'high',
+          user_id: loggedInUser,
+        })
+        return response
+      } catch (error) {
+        const errMsg = error.response?.data?.error || error.message || 'Failed to submit policy'
+        PopupService.error(errMsg, 'Error Creating Policy')
+        void this.sendPushNotification({
+          title: 'Policy Creation Failed',
+          message: `Failed to create policy "${meta.policyNameSnapshot || pendingSave.label}": ${errMsg}`,
+          category: 'policy',
+          priority: 'high',
+          user_id: loggedInUser,
+        })
+        throw error
+      } finally {
+        this.ttPolicyCreateInFlight = false
+      }
+    },
+
     async submitTailoredFramework() {
       if (!this.validateForm('framework')) {
         return;
@@ -3281,7 +3565,6 @@ import { usePolicyStore } from '@/stores/policy'
 
         this.loading = false;
 
-        // Format framework data
         // Convert reviewer ID to reviewer name
         const reviewerUser = this.users.find(u => u.id === this.frameworkForm.reviewer);
         const reviewerName = reviewerUser ? reviewerUser.name : '';
@@ -3415,65 +3698,24 @@ import { usePolicyStore } from '@/stores/policy'
           })
         };
 
-        this.ttFrameworkCreateInFlight = true;
-
-        PopupService.success(
-          'Framework created successfully!',
-          'Success'
-        );
-        this.resetForm();
-        this.error = null;
-
-        void apiService
-          .post(`/api/tailoring/create-framework/`, frameworkData, { background: true })
-          .then((response) => {
-            console.log('Framework creation response:', response);
-            const ps = usePolicyStore();
-            if (response.FrameworkId) {
-              ps.mergeFrameworkRowFromCreate({
-                FrameworkId: response.FrameworkId,
-                FrameworkName: response.FrameworkName || frameworkNameSnapshot,
-                Category: frameworkCategorySnapshot,
-                InternalExternal: frameworkInternalExternalSnapshot || 'Internal',
-                ActiveInactive: 'Inactive',
-                Status: response.Status || 'Under Review',
-                CurrentVersion: 1,
-                FrameworkDescription: frameworkDescSnapshot
-              });
-              policyDataService.mergeExplorerFrameworkRow({
-                id: response.FrameworkId,
-                name: response.FrameworkName || frameworkNameSnapshot,
-                category: frameworkCategorySnapshot || '',
-                description: frameworkDescSnapshot || '',
-                status: 'Inactive',
-                internalExternal: frameworkInternalExternalSnapshot || 'Internal',
-                versions: [{ version: 1 }]
-              });
-            }
-            this.$emit('framework-created');
-            void this.sendPushNotification({
-              title: 'New Framework Created',
-              message: `A new framework "${frameworkNameSnapshot}" has been created in the Tailoring & Templating module.`,
-              category: 'framework',
-              priority: 'high',
-              user_id: loggedInUser
-            });
-          })
-          .catch((error) => {
-            console.error('Error submitting framework:', error);
-            const errMsg = error.response?.data?.error || 'Failed to submit framework';
-            PopupService.error(errMsg, 'Error Creating Framework');
-            void this.sendPushNotification({
-              title: 'Framework Creation Failed',
-              message: `Failed to create framework "${frameworkNameSnapshot}": ${errMsg}`,
-              category: 'framework',
-              priority: 'high',
-              user_id: loggedInUser
-            });
-          })
-          .finally(() => {
-            this.ttFrameworkCreateInFlight = false;
-          });
+        const pendingSave = {
+          operation: 'tt_create_framework',
+          entity_pk: parseInt(this.selectedFramework, 10) || null,
+          payload: frameworkData,
+          label: this.frameworkForm.name,
+          summary: 'Tailoring framework submit',
+          meta: {
+            loggedInUser,
+            frameworkNameSnapshot,
+            frameworkDescSnapshot,
+            frameworkCategorySnapshot,
+            frameworkInternalExternalSnapshot,
+          },
+        };
+        if (await this._tryStartTtAsyncSimilarity('framework', pendingSave)) {
+          return;
+        }
+        await this._executeTtFrameworkPendingSave(pendingSave);
       } catch (error) {
         console.error('Error preparing framework submission:', error);
         this.loading = false;
@@ -3961,22 +4203,25 @@ import { usePolicyStore } from '@/stores/policy'
 
     async saveDepartment(departmentName) {
       try {
-        const response = await apiService.post(API_ENDPOINTS.DEPARTMENTS_SAVE, {
+        const payload = {
           DepartmentName: departmentName,
-          EntityId: 1, // Default entity
-          DepartmentHead: 1, // Default head
-          BusinessUnitId: 1 // Default business unit
-        });
-        
-        if (response.success) {
+          EntityId: 1,
+          DepartmentHead: 1,
+          BusinessUnitId: 1
+        };
+        if (this.selectedFramework) {
+          payload.FrameworkId = this.selectedFramework;
+        }
+        const response = await apiService.post(API_ENDPOINTS.DEPARTMENTS_SAVE, payload);
+
+        if (response && response.success !== false) {
           console.log('Department saved:', response.department);
-          // Refresh departments list
           await this.fetchDepartments();
           return response.department;
         }
       } catch (error) {
-        console.error('Error saving department:', error);
-        throw error;
+        // Non-fatal: policy submit stores department as text on the policy row.
+        console.warn('Department save skipped:', error);
       }
     },
 
@@ -4674,6 +4919,7 @@ import { usePolicyStore } from '@/stores/policy'
       if (this.isPolicyCreatorReviewerSame) {
         return;
       }
+
       if (this.ttPolicyCreateInFlight) {
         return;
       }
@@ -4683,8 +4929,11 @@ import { usePolicyStore } from '@/stores/policy'
       try {
         this.loading = true;
 
-        await this.saveNewDepartments();
-        await this.saveNewPolicyCategories();
+        // Renewal/self-heal edits an existing policy; department/categories already exist in DB.
+        if (!this.isSelfHealRouteQuery()) {
+          await this.saveNewDepartments();
+          await this.saveNewPolicyCategories();
+        }
 
         this.loading = false;
 
@@ -4694,9 +4943,20 @@ import { usePolicyStore } from '@/stores/policy'
           throw new Error('Coverage Rate must be a number between 0 and 100');
         }
 
-        // Convert reviewer ID to reviewer name
-        const policyReviewerUser = this.users.find(u => u.id === currentPolicy.reviewer);
-        const policyReviewerName = policyReviewerUser ? policyReviewerUser.name : '';
+        // Convert reviewer (dropdown stores UserId, or legacy username from API) to Reviewer username for backend
+        const rid = currentPolicy.reviewer
+        let policyReviewerName = ''
+        if (rid !== '' && rid != null) {
+          const policyReviewerUser = this.users.find(
+            (u) => String(u.id) === String(rid)
+          )
+          if (policyReviewerUser) {
+            policyReviewerName = policyReviewerUser.name
+          } else {
+            policyReviewerName = String(rid).trim()
+          }
+        }
+
 
         const policyFieldLabelMap = {
           policyName: 'Policy Name',
@@ -4733,7 +4993,100 @@ import { usePolicyStore } from '@/stores/policy'
           subPolicyDescription: 'Description',
           subPolicyControl: 'Control'
         };
+        if (this.isSelfHealRouteQuery()) {
+          const baseId = String((this.$route.query && this.$route.query.policyId) || '').trim()
+          if (!baseId) {
+            throw new Error('Missing policy id for renewal version submit.')
+          }
+          const ridForVersion = currentPolicy.reviewer
+          let reviewerUserId = null
+          if (ridForVersion !== '' && ridForVersion != null) {
+            const u1 = this.users.find((u) => String(u.id) === String(ridForVersion))
+            const u2 = this.users.find(
+              (u) => String(u.name || '').toLowerCase() === String(ridForVersion).toLowerCase()
+            )
+            const u = u1 || u2
+            if (u) reviewerUserId = u.id
+          }
 
+          const versionData = {
+            version_type: 'minor',
+            PolicyName: currentPolicy.name,
+            PolicyDescription: currentPolicy.description,
+            Department: currentPolicy.department,
+            Scope: currentPolicy.scope,
+            Objective: currentPolicy.objective,
+            Identifier: currentPolicy.identifier,
+            CoverageRate: coverageRate,
+            Applicability: currentPolicy.applicability,
+            CreatedByName: currentPolicy.createdByName || this.loggedInUsername,
+            StartDate: currentPolicy.startDate,
+            EndDate: currentPolicy.endDate,
+            PermanentTemporary: currentPolicy.permanentTemporary || '',
+            DocURL: currentPolicy.docURL || '',
+            PolicyType: currentPolicy.type,
+            PolicyCategory: currentPolicy.category,
+            PolicySubCategory: currentPolicy.subCategory,
+            Entities: currentPolicy.entities,
+            Reviewer: reviewerUserId != null ? reviewerUserId : ridForVersion,
+            data_inventory: policyDataInventory
+          }
+
+          const subpolicies = []
+          const new_subpolicies = []
+          ;(currentPolicy.subPolicies || []).forEach((sub, subIndex) => {
+            const subPolicyDataInventory = {}
+            if (
+              this.subPolicyFieldDataTypes[this.activePolicyTab] &&
+              this.subPolicyFieldDataTypes[this.activePolicyTab][subIndex]
+            ) {
+              Object.keys(subPolicyFieldLabelMap).forEach((key) => {
+                if (this.subPolicyFieldDataTypes[this.activePolicyTab][subIndex][key]) {
+                  subPolicyDataInventory[subPolicyFieldLabelMap[key]] =
+                    this.subPolicyFieldDataTypes[this.activePolicyTab][subIndex][key]
+                }
+              })
+            }
+            if (sub.id && !String(sub.id).startsWith('new-')) {
+              subpolicies.push({
+                original_subpolicy_id: parseInt(String(sub.id), 10),
+                SubPolicyName: sub.name,
+                Description: sub.description,
+                Identifier: sub.identifier,
+                CreatedByName: sub.createdByName || currentPolicy.createdByName || this.loggedInUsername,
+                PermanentTemporary: sub.permanentTemporary || '',
+                Control: sub.control,
+                exclude: sub.exclude || false,
+                data_inventory: subPolicyDataInventory
+              })
+            } else if (!sub.exclude) {
+              new_subpolicies.push({
+                SubPolicyName: sub.name,
+                Description: sub.description,
+                Identifier: sub.identifier,
+                CreatedByName: sub.createdByName || currentPolicy.createdByName || this.loggedInUsername,
+                PermanentTemporary: sub.permanentTemporary || '',
+                Control: sub.control,
+                data_inventory: subPolicyDataInventory
+              })
+            }
+          })
+          versionData.subpolicies = subpolicies
+          versionData.new_subpolicies = new_subpolicies
+
+          const pendingSave = {
+            operation: 'policy_version',
+            entity_pk: parseInt(baseId, 10),
+            payload: versionData,
+            label: currentPolicy.name,
+            summary: 'Policy renewal version',
+            meta: { loggedInUser },
+          }
+          if (await this._tryStartTtAsyncSimilarity('policy', pendingSave)) {
+            return
+          }
+          await this._executeTtPolicyPendingSave(pendingSave)
+        } else {
         const policyNameSnapshot = currentPolicy.name;
         const policyDescSnapshot = currentPolicy.description;
 
@@ -4777,55 +5130,19 @@ import { usePolicyStore } from '@/stores/policy'
           }) : []
         };
 
-        console.log('Submitting policy data:', policyData);
-
-        this.ttPolicyCreateInFlight = true;
-
-        PopupService.success(
-          'Policy created successfully!',
-          'Success'
-        );
-        this.resetForm();
-        this.error = null;
-
-        void apiService
-          .post(`/api/tailoring/create-policy/`, policyData, { background: true })
-          .then((response) => {
-            console.log('Policy creation response:', response);
-            if (response.PolicyId && response.FrameworkId) {
-              usePolicyStore().prependPolicyTailoringCache(response.FrameworkId, {
-                PolicyId: response.PolicyId,
-                PolicyName: response.PolicyName || policyNameSnapshot,
-                PolicyDescription: policyDescSnapshot,
-                Status: response.Status || 'Under Review',
-                FrameworkId: response.FrameworkId,
-                ActiveInactive: 'Inactive'
-              });
-            }
-            this.$emit('policy-created');
-            void this.sendPushNotification({
-              title: 'New Policy Created',
-              message: `A new policy "${policyNameSnapshot}" has been created in the Tailoring & Templating module.`,
-              category: 'policy',
-              priority: 'high',
-              user_id: loggedInUser
-            });
-          })
-          .catch((error) => {
-            console.error('Error submitting policy:', error);
-            const errMsg = error.response?.data?.error || 'Failed to submit policy';
-            PopupService.error(errMsg, 'Error Creating Policy');
-            void this.sendPushNotification({
-              title: 'Policy Creation Failed',
-              message: `Failed to create policy "${policyNameSnapshot}": ${errMsg}`,
-              category: 'policy',
-              priority: 'high',
-              user_id: loggedInUser
-            });
-          })
-          .finally(() => {
-            this.ttPolicyCreateInFlight = false;
-          });
+        const pendingSave = {
+          operation: 'tt_create_policy',
+          entity_pk: parseInt(this.selectedFramework, 10) || null,
+          payload: policyData,
+          label: currentPolicy.name,
+          summary: 'Tailoring policy submit',
+          meta: { loggedInUser, policyNameSnapshot, policyDescSnapshot },
+        }
+        if (await this._tryStartTtAsyncSimilarity('policy', pendingSave)) {
+          return
+        }
+        await this._executeTtPolicyPendingSave(pendingSave)
+        }
       } catch (error) {
         console.error('Error preparing policy submission:', error);
         this.loading = false;
@@ -5128,7 +5445,11 @@ import { usePolicyStore } from '@/stores/policy'
         // Validate that creator and reviewer are not the same person
         if (this.currentUser.UserName && policy.reviewer) {
           const creatorUser = this.users.find(u => u.name === this.currentUser.UserName);
-          const reviewerUser = this.users.find(u => u.id === policy.reviewer);
+          const pr = policy.reviewer
+          const reviewerUser = this.users.find(
+            (u) => String(u.id) === String(pr) ||
+              String(u.name || '').toLowerCase() === String(pr).toLowerCase()
+          )
           
           if (creatorUser && reviewerUser && creatorUser.id === reviewerUser.id) {
             PopupService.warning('Creator and reviewer cannot be the same person. Please select a different reviewer.', 'Validation Error');
@@ -5364,6 +5685,10 @@ import { usePolicyStore } from '@/stores/policy'
   beforeUnmount() {
     document.removeEventListener('click', this.handleClickOutside);
     window.removeEventListener('userDataUpdated', this.updateLoggedInUsername);
+    if (this.asyncSimilarityPollTimer) {
+      clearInterval(this.asyncSimilarityPollTimer);
+      this.asyncSimilarityPollTimer = null;
+    }
   },
   }
   </script>

@@ -271,6 +271,17 @@
           </div>
         </div>
         
+        <SimilaritySubmitGate
+          ref="similarityGate"
+          itemType="Framework"
+          :item-data="{
+            name: formData.frameworkName,
+            description: formData.version,
+            identifier: formData.frameworkId,
+            created_by: formData.createdBy
+          }"
+        />
+
         <button class="btn-submit" type="submit">Submit</button>
       </form>
     </div>
@@ -373,9 +384,15 @@
 import { ref } from 'vue'
 import frameworkSample from '../../data/frameworkSample.json'
 import './CreateFramework.css'
+import SimilaritySubmitGate from '../SimilaritySubmitGate.vue'
+import { runSimilarityBeforeSubmit, handleSimilarityGateResult } from '@/utils/similaritySubmitHelper'
+import { PopupService } from '@/modules/popup'
 
 export default {
   name: 'CreateFramework',
+  components: {
+    SimilaritySubmitGate
+  },
   props: {
     sendPushNotification: {
       type: Function,
@@ -383,6 +400,7 @@ export default {
     }
   },
   setup(props) {
+    const similarityGate = ref(null)
     const showExtractionScreens = ref(false)
     const extractionStep = ref(0)
     const extractionSlides = ref([])
@@ -448,6 +466,11 @@ export default {
             priority: 'high',
             user_id: formData.value.createdBy || 'default_user'
           });
+          return;
+        }
+
+        const gateResult = await runSimilarityBeforeSubmit(similarityGate);
+        if (!handleSimilarityGateResult(gateResult, { PopupService })) {
           return;
         }
 
@@ -528,6 +551,7 @@ export default {
     }
 
     return {
+      similarityGate,
       showExtractionScreens,
       extractionStep,
       extractionSlides,

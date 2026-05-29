@@ -419,33 +419,34 @@
         <h2>Policy Assignment & Audit Details</h2>
         <p class="tab-description">Assign policies to team members and configure audit details.</p>
 
-        <!-- Compliance scope: add new compliances by typing (not in database) -->
-        <div v-if="auditData.framework && firstMemberWithPolicy" class="policy-assignment-compliance-scope">
-          <h3 class="compliance-scope-heading">Compliance scope (optional)</h3>
-          <p class="dynamic-desc">Type any new compliance name (even if not in the database) and click Add to include it in the audit scope.</p>
-          <div class="compliance-add-by-typing">
-            <div class="compliance-typing-row">
-              <input
-                v-model="complianceTypeToAdd"
-                type="text"
-                class="compliance-typing-input"
-                placeholder="Type new compliance name..."
-                @keyup.enter="addCustomComplianceLabel()"
-              />
-              <button type="button" class="btn btn-small" @click="addCustomComplianceLabel()">
-                <i class="fas fa-plus"></i> Add
-              </button>
+        <div class="dynamic-fields-row assign-scope-row">
+          <div class="dynamic-field-col">
+            <label class="dynamic-label">Assignment scope</label>
+            <div class="dynamic-desc">Sub-policy: one schedule for the whole sub-policy. Compliance: frequency comes from each compliance record.</div>
+            <div class="assign-scope-toggle">
+              <label class="scope-option">
+                <input type="radio" v-model="auditData.assignScope" value="subpolicy" />
+                Sub-policy level
+              </label>
+              <label class="scope-option">
+                <input type="radio" v-model="auditData.assignScope" value="compliance" />
+                Compliance level
+              </label>
             </div>
-            <div v-if="(auditData.selectedComplianceIds.length > 0 || auditData.manuallyAddedComplianceLabels.length > 0)" class="compliance-added-chips">
-              <span v-for="id in auditData.selectedComplianceIds" :key="'id-' + id" class="compliance-chip">
-                {{ getComplianceLabelById(id) || id }}
-                <button type="button" class="compliance-chip-remove" @click="removeComplianceId(id)" aria-label="Remove">&times;</button>
-              </span>
-              <span v-for="(label, idx) in auditData.manuallyAddedComplianceLabels" :key="'custom-' + idx" class="compliance-chip">
-                {{ label }}
-                <button type="button" class="compliance-chip-remove" @click="removeCustomComplianceLabel(idx)" aria-label="Remove">&times;</button>
-              </span>
-            </div>
+          </div>
+          <div v-if="auditData.assignScope === 'subpolicy'" class="dynamic-field-col">
+            <label class="dynamic-label">Audit frequency (whole sub-policy)</label>
+            <SelectInput
+              v-model="auditData.subpolicyFrequency"
+              :options="auditFrequencyOptions"
+              label="Frequency"
+              placeholder="Select Frequency"
+            />
+          </div>
+          <div class="dynamic-field-col">
+            <label class="dynamic-label">Schedule end date</label>
+            <input type="date" class="dynamic-input" :value="auditData.frameworkEndDate" readonly />
+            <small class="dynamic-desc">From framework end date (recurring audits stop after this date)</small>
           </div>
         </div>
 
@@ -558,6 +559,86 @@
                       @change="onSubPolicyChange(index)"
                     />
                   </div>
+                </div>
+
+                <!-- Step 2: compliances (after policy + sub-policy) -->
+                <div
+                  v-if="auditData.assignScope === 'compliance' && auditData.framework && index === 0"
+                  class="policy-assignment-compliance-scope compliance-scope-after-policy"
+                >
+                  <h3 class="compliance-scope-heading">Select compliances to audit</h3>
+                  <p v-if="!member.assignedPolicy" class="dynamic-desc compliance-scope-hint">
+                    Select <strong>Assigned Policy</strong> and <strong>Sub Policy</strong> above first — then compliances for that scope will appear here.
+                  </p>
+                  <template v-else>
+                    <p class="dynamic-desc">
+                      Select one or more approved, active compliances. Each uses its own <strong>Audit Frequency</strong> from the compliance record.
+                      <span v-if="complianceScopePolicySummary"> Scope: {{ complianceScopePolicySummary }}</span>
+                    </p>
+                    <div class="compliance-scope-toolbar">
+                      <input
+                        v-model="complianceSearchFilter"
+                        type="text"
+                        class="compliance-typing-input"
+                        placeholder="Search by identifier or title..."
+                      />
+                      <button
+                        type="button"
+                        class="btn btn-small"
+                        :disabled="loadingScopeCompliances"
+                        @click="loadScopeCompliancesForPolicyAssignment()"
+                      >
+                        <i class="fas fa-sync-alt"></i> Refresh list
+                      </button>
+                    </div>
+                    <div v-if="loadingScopeCompliances" class="compliance-scope-loading">Loading compliances...</div>
+                    <div v-else-if="scopeCompliances.length === 0" class="compliance-scope-empty">
+                      No approved, active compliances found for this policy/sub-policy. Approve compliances first, or change policy/sub-policy above.
+                    </div>
+                    <div v-else class="compliance-scope-section">
+                      <label class="compliance-scope-select-all">
+                        <input
+                          type="checkbox"
+                          :checked="allScopeCompliancesSelected"
+                          @change="toggleAllScopeCompliances"
+                        />
+                        Select all ({{ scopeCompliances.length }})
+                      </label>
+                      <div class="compliance-scope-list">
+                        <div class="compliance-scope-items">
+                          <label
+                            v-for="c in filteredScopeCompliancesForList"
+                            :key="c.ComplianceId"
+                            class="compliance-scope-item"
+                            :title="c.ComplianceTitle || c.label"
+                          >
+                            <input
+                              type="checkbox"
+                              :checked="isComplianceIdSelected(c.ComplianceId)"
+                              @change="toggleComplianceSelection(c.ComplianceId, $event)"
+                            />
+                            <span>
+                              {{ c.label || c.Identifier || c.ComplianceTitle }}
+                              <small v-if="c.AuditFrequency" class="compliance-freq-tag"> — {{ c.AuditFrequency }}</small>
+                            </span>
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                    <div
+                      v-if="auditData.selectedComplianceIds.length > 0"
+                      class="compliance-added-chips compliance-selected-summary"
+                    >
+                      <strong>{{ auditData.selectedComplianceIds.length }} selected:</strong>
+                      <span v-for="cid in auditData.selectedComplianceIds" :key="'id-' + cid" class="compliance-chip">
+                        {{ getComplianceLabelById(cid) || cid }}
+                        <button type="button" class="compliance-chip-remove" @click="removeComplianceId(cid)" aria-label="Remove">&times;</button>
+                      </span>
+                    </div>
+                  </template>
+                </div>
+
+                <div class="dynamic-fields-row">
                   <div class="dynamic-field-col">
                     <label class="dynamic-label">
                       Reviewer
@@ -862,97 +943,21 @@
                     </small>
                   </div>
                 </div>
-                <div class="dynamic-fields-row">
-                  <div v-if="auditData.type !== 'AI'" class="dynamic-field-col frequency-field">
-                    <label class="dynamic-label">
-                      Frequency
-                      <!-- Data Type Circle Toggle -->
-                      <div class="audit-data-type-circle-toggle-wrapper">
-                        <div class="audit-data-type-circle-toggle">
-                          <div 
-                            class="audit-circle-option personal-circle" 
-                            :class="{ active: fieldDataTypes?.frequency === 'personal' }"
-                            @click="setDataType('frequency', 'personal')"
-                            title="Personal Data"
-                          >
-                            <div class="audit-circle-inner"></div>
-                          </div>
-                          <div 
-                            class="audit-circle-option confidential-circle" 
-                            :class="{ active: fieldDataTypes?.frequency === 'confidential' }"
-                            @click="setDataType('frequency', 'confidential')"
-                            title="Confidential Data"
-                          >
-                            <div class="audit-circle-inner"></div>
-                          </div>
-                          <div 
-                            class="audit-circle-option regular-circle" 
-                            :class="{ active: fieldDataTypes?.frequency === 'regular' }"
-                            @click="setDataType('frequency', 'regular')"
-                            title="Regular Data"
-                          >
-                            <div class="audit-circle-inner"></div>
-                          </div>
-                        </div>
-                      </div>
-                    </label>
-                    <div class="dynamic-desc">How often should this audit occur?</div>
-                    <SelectInput
-                      v-model="member.frequency"
-                      :options="[
-                        { value: '0', label: 'Only Once' },
-                        { value: '1', label: 'Daily' },
-                        { value: '30', label: 'Monthly' },
-                        { value: '60', label: 'Every 2 Months' },
-                        { value: '120', label: 'Every 4 Months' },
-                        { value: '182', label: 'Half Yearly' },
-                        { value: '365', label: 'Yearly' }
-                      ]"
-                      label="Frequency"
-                      placeholder="Select Frequency"
-                      :error="getFieldError('frequency', index)"
+                <div v-if="auditData.type !== 'AI' && index === 0" class="dynamic-fields-row">
+                  <div class="dynamic-field-col completion-days-field">
+                    <label class="dynamic-label">Complete within (days)</label>
+                    <div class="dynamic-desc">Due date = start date + these days (each recurring round uses the same window).</div>
+                    <input
+                      v-model.number="auditData.completionDays"
+                      type="number"
+                      min="1"
+                      max="365"
+                      class="dynamic-input"
+                      placeholder="30"
                     />
                   </div>
-                  <div class="dynamic-field-col due-date-field">
-                    <label class="dynamic-label">
-                      Due Date
-                      <!-- Data Type Circle Toggle -->
-                      <div class="audit-data-type-circle-toggle-wrapper">
-                        <div class="audit-data-type-circle-toggle">
-                          <div 
-                            class="audit-circle-option personal-circle" 
-                            :class="{ active: fieldDataTypes?.dueDate === 'personal' }"
-                            @click="setDataType('dueDate', 'personal')"
-                            title="Personal Data"
-                          >
-                            <div class="audit-circle-inner"></div>
-                          </div>
-                          <div 
-                            class="audit-circle-option confidential-circle" 
-                            :class="{ active: fieldDataTypes?.dueDate === 'confidential' }"
-                            @click="setDataType('dueDate', 'confidential')"
-                            title="Confidential Data"
-                          >
-                            <div class="audit-circle-inner"></div>
-                          </div>
-                          <div 
-                            class="audit-circle-option regular-circle" 
-                            :class="{ active: fieldDataTypes?.dueDate === 'regular' }"
-                            @click="setDataType('dueDate', 'regular')"
-                            title="Regular Data"
-                          >
-                            <div class="audit-circle-inner"></div>
-                          </div>
-                        </div>
-                      </div>
-                    </label>
-                    <div class="dynamic-desc">Select the due date for this audit.</div>
-                    <DateInput
-                      v-model="member.dueDate"
-                      label="Due Date"
-                      placeholder="Select due date"
-                      :error="getFieldError('dueDate', index)"
-                    />
+                  <div v-if="auditData.assignScope === 'compliance'" class="dynamic-field-col">
+                    <p class="dynamic-desc">Frequency comes from each selected compliance’s Audit Frequency field.</p>
                   </div>
                 </div>
               </div>
@@ -961,38 +966,26 @@
             <div class="compliance-preview" v-if="member.assignedPolicy">
               <div class="preview-header">Compliance Items to be Audited:</div>
               <div class="preview-content">
-                <div class="compliance-count" :class="{ 'loading': complianceCountLoading[`${member.assignedPolicy}-loading`] }">
-                  <span v-if="complianceCountLoading[`${member.assignedPolicy}-loading`]">Loading...</span>
-                  <span v-else>{{ getComplianceCount(member.assignedPolicy, member.assignedSubPolicy) }} items</span>
-                </div>
-                <div class="compliance-scope-desc" v-if="!member.assignedSubPolicy">
-                  Will include permanent compliances from all subpolicies under this policy
-                </div>
-                <p class="compliance-typing-desc">Type any new compliance name (even if not in the database) and click Add.</p>
-                <div class="compliance-add-by-typing">
-                  <div class="compliance-typing-row">
-                    <input
-                      v-model="complianceTypeToAdd"
-                      type="text"
-                      class="compliance-typing-input"
-                      placeholder="Type new compliance name..."
-                      @keyup.enter="addCustomComplianceLabel()"
-                    />
-                    <button type="button" class="btn btn-small" @click="addCustomComplianceLabel()">
-                      <i class="fas fa-plus"></i> Add
-                    </button>
-                  </div>
-                  <div v-if="(auditData.selectedComplianceIds.length > 0 || auditData.manuallyAddedComplianceLabels.length > 0)" class="compliance-added-chips">
-                    <span v-for="id in auditData.selectedComplianceIds" :key="'id-' + id" class="compliance-chip">
-                      {{ getComplianceLabelById(id) || id }}
-                      <button type="button" class="compliance-chip-remove" @click="removeComplianceId(id)" aria-label="Remove">&times;</button>
+                <template v-if="auditData.assignScope === 'compliance'">
+                  <p class="compliance-scope-desc">
+                    <span v-if="auditData.selectedComplianceIds.length">
+                      {{ auditData.selectedComplianceIds.length }} compliance(s) selected in Policy Assignment.
                     </span>
-                    <span v-for="(label, idx) in auditData.manuallyAddedComplianceLabels" :key="'custom-' + idx" class="compliance-chip">
-                      {{ label }}
-                      <button type="button" class="compliance-chip-remove" @click="removeCustomComplianceLabel(idx)" aria-label="Remove">&times;</button>
-                    </span>
+                    <span v-else class="compliance-scope-warn">Select at least one compliance in Policy Assignment above.</span>
+                  </p>
+                </template>
+                <template v-else>
+                  <div class="compliance-count" :class="{ 'loading': complianceCountLoading[`${member.assignedPolicy}-loading`] }">
+                    <span v-if="complianceCountLoading[`${member.assignedPolicy}-loading`]">Loading...</span>
+                    <span v-else>{{ getComplianceCount(member.assignedPolicy, member.assignedSubPolicy) }} items</span>
                   </div>
-                </div>
+                  <div class="compliance-scope-desc" v-if="!member.assignedSubPolicy">
+                    All approved, active permanent compliances under this policy will be included.
+                  </div>
+                  <div class="compliance-scope-desc" v-else>
+                    All approved, active permanent compliances under this sub-policy will be included.
+                  </div>
+                </template>
               </div>
             </div>
           </div>
@@ -1263,90 +1256,9 @@
                       style="background-color: #f3f4f6; cursor: not-allowed;"
                     />
                   </div>
-                  <div v-if="auditData.type !== 'AI'" class="dynamic-field-col">
-                    <label class="dynamic-label">
-                      Frequency
-                      <!-- Data Type Circle Toggle -->
-                      <div class="audit-data-type-circle-toggle-wrapper">
-                        <div class="audit-data-type-circle-toggle">
-                          <div 
-                            class="audit-circle-option personal-circle" 
-                            :class="{ active: fieldDataTypes?.frequency === 'personal' }"
-                            @click="setDataType('frequency', 'personal')"
-                            title="Personal Data"
-                          >
-                            <div class="audit-circle-inner"></div>
-                          </div>
-                          <div 
-                            class="audit-circle-option confidential-circle" 
-                            :class="{ active: fieldDataTypes?.frequency === 'confidential' }"
-                            @click="setDataType('frequency', 'confidential')"
-                            title="Confidential Data"
-                          >
-                            <div class="audit-circle-inner"></div>
-                          </div>
-                          <div 
-                            class="audit-circle-option regular-circle" 
-                            :class="{ active: fieldDataTypes?.frequency === 'regular' }"
-                            @click="setDataType('frequency', 'regular')"
-                            title="Regular Data"
-                          >
-                            <div class="audit-circle-inner"></div>
-                          </div>
-                        </div>
-                      </div>
-                    </label>
-                    <div class="dynamic-desc">How often should this audit occur?</div>
-                    <SelectInput
-                      v-model="member.frequency"
-                      :options="[
-                        { value: '0', label: 'Only Once' },
-                        { value: '1', label: 'Daily' },
-                        { value: '30', label: 'Monthly' },
-                        { value: '60', label: 'Every 2 Months' },
-                        { value: '120', label: 'Every 4 Months' },
-                        { value: '182', label: 'Half Yearly' },
-                        { value: '365', label: 'Yearly' }
-                      ]"
-                      label="Frequency"
-                      placeholder="Select Frequency"
-                      :error="getFieldError('frequency', index)"
-                    />
-                  </div>
-                  <div class="dynamic-field-col due-date-field">
-                    <label class="dynamic-label">
-                      Due Date
-                      <!-- Data Type Circle Toggle -->
-                      <div class="audit-data-type-circle-toggle-wrapper">
-                        <div class="audit-data-type-circle-toggle">
-                          <div 
-                            class="audit-circle-option personal-circle" 
-                            :class="{ active: fieldDataTypes?.dueDate === 'personal' }"
-                            @click="setDataType('dueDate', 'personal')"
-                            title="Personal Data"
-                          >
-                            <div class="audit-circle-inner"></div>
-                          </div>
-                          <div 
-                            class="audit-circle-option confidential-circle" 
-                            :class="{ active: fieldDataTypes?.dueDate === 'confidential' }"
-                            @click="setDataType('dueDate', 'confidential')"
-                            title="Confidential Data"
-                          >
-                            <div class="audit-circle-inner"></div>
-                          </div>
-                          <div 
-                            class="audit-circle-option regular-circle" 
-                            :class="{ active: fieldDataTypes?.dueDate === 'regular' }"
-                            @click="setDataType('dueDate', 'regular')"
-                            title="Regular Data"
-                          >
-                            <div class="audit-circle-inner"></div>
-                          </div>
-                        </div>
-                      </div>
-                    </label>
-                    <div class="dynamic-desc">Select the due date for this audit.</div>
+                  <div v-if="auditData.type === 'AI'" class="dynamic-field-col due-date-field">
+                    <label class="dynamic-label">Due Date</label>
+                    <div class="dynamic-desc">Select the due date for this AI audit.</div>
                     <DateInput
                       v-model="member.dueDate"
                       label="Due Date"
@@ -1428,38 +1340,26 @@
             <div class="compliance-preview" v-if="member.assignedPolicy">
               <div class="preview-header">Compliance Items to be Audited:</div>
               <div class="preview-content">
-                <div class="compliance-count" :class="{ 'loading': complianceCountLoading[`${member.assignedPolicy}-loading`] }">
-                  <span v-if="complianceCountLoading[`${member.assignedPolicy}-loading`]">Loading...</span>
-                  <span v-else>{{ getComplianceCount(member.assignedPolicy, member.assignedSubPolicy) }} items</span>
-                </div>
-                <div class="compliance-scope-desc" v-if="!member.assignedSubPolicy">
-                  Will include permanent compliances from all subpolicies under this policy
-                </div>
-                <p class="compliance-typing-desc">Type any new compliance name (even if not in the database) and click Add.</p>
-                <div class="compliance-add-by-typing">
-                  <div class="compliance-typing-row">
-                    <input
-                      v-model="complianceTypeToAdd"
-                      type="text"
-                      class="compliance-typing-input"
-                      placeholder="Type new compliance name..."
-                      @keyup.enter="addCustomComplianceLabel()"
-                    />
-                    <button type="button" class="btn btn-small" @click="addCustomComplianceLabel()">
-                      <i class="fas fa-plus"></i> Add
-                    </button>
-                  </div>
-                  <div v-if="(auditData.selectedComplianceIds.length > 0 || auditData.manuallyAddedComplianceLabels.length > 0)" class="compliance-added-chips">
-                    <span v-for="id in auditData.selectedComplianceIds" :key="'id-' + id" class="compliance-chip">
-                      {{ getComplianceLabelById(id) || id }}
-                      <button type="button" class="compliance-chip-remove" @click="removeComplianceId(id)" aria-label="Remove">&times;</button>
+                <template v-if="auditData.assignScope === 'compliance'">
+                  <p class="compliance-scope-desc">
+                    <span v-if="auditData.selectedComplianceIds.length">
+                      {{ auditData.selectedComplianceIds.length }} compliance(s) selected in Policy Assignment.
                     </span>
-                    <span v-for="(label, idx) in auditData.manuallyAddedComplianceLabels" :key="'custom-' + idx" class="compliance-chip">
-                      {{ label }}
-                      <button type="button" class="compliance-chip-remove" @click="removeCustomComplianceLabel(idx)" aria-label="Remove">&times;</button>
-                    </span>
+                    <span v-else class="compliance-scope-warn">Select at least one compliance in Policy Assignment above.</span>
+                  </p>
+                </template>
+                <template v-else>
+                  <div class="compliance-count" :class="{ 'loading': complianceCountLoading[`${member.assignedPolicy}-loading`] }">
+                    <span v-if="complianceCountLoading[`${member.assignedPolicy}-loading`]">Loading...</span>
+                    <span v-else>{{ getComplianceCount(member.assignedPolicy, member.assignedSubPolicy) }} items</span>
                   </div>
-                </div>
+                  <div class="compliance-scope-desc" v-if="!member.assignedSubPolicy">
+                    All approved, active permanent compliances under this policy will be included.
+                  </div>
+                  <div class="compliance-scope-desc" v-else>
+                    All approved, active permanent compliances under this sub-policy will be included.
+                  </div>
+                </template>
               </div>
             </div>
           </div>
@@ -1616,12 +1516,24 @@
                     <span class="review-value">{{ getAuditTypeLabel(member.type) }}</span>
                   </div>
                   <div v-if="auditData.type !== 'AI'" class="review-item">
-                    <span class="review-label">Frequency:</span>
-                    <span class="review-value">{{ getFrequencyLabel(member.frequency) }}</span>
+                    <span class="review-label">Assignment scope:</span>
+                    <span class="review-value">{{ auditData.assignScope === 'compliance' ? 'Compliance level' : 'Sub-policy level' }}</span>
                   </div>
-                  <div class="review-item">
+                  <div v-if="auditData.type !== 'AI' && auditData.assignScope === 'subpolicy'" class="review-item">
+                    <span class="review-label">Frequency:</span>
+                    <span class="review-value">{{ getFrequencyLabel(auditData.subpolicyFrequency) }}</span>
+                  </div>
+                  <div v-if="auditData.type !== 'AI'" class="review-item">
+                    <span class="review-label">Complete within:</span>
+                    <span class="review-value">{{ auditData.completionDays || 30 }} days</span>
+                  </div>
+                  <div v-if="auditData.type === 'AI'" class="review-item">
                     <span class="review-label">Due Date:</span>
                     <span class="review-value">{{ formatDate(member.dueDate) }}</span>
+                  </div>
+                  <div v-if="auditData.frameworkEndDate" class="review-item">
+                    <span class="review-label">Schedule ends:</span>
+                    <span class="review-value">{{ formatDate(auditData.frameworkEndDate) }}</span>
                   </div>
                   <div v-if="auditData.type === 'AI'" class="review-item">
                     <span class="review-label">Alert if no evidence within:</span>
@@ -1720,24 +1632,11 @@
                         style="background-color: #f3f4f6; cursor: not-allowed;"
                       />
                     </div>
-                    <div v-if="auditData.type !== 'AI'" class="dynamic-field-col frequency-field">
-                      <label class="dynamic-label">Frequency</label>
-                      <SelectInput
-                        v-model="member.frequency"
-                        :options="[
-                          { value: '0', label: 'Only Once' },
-                          { value: '1', label: 'Daily' },
-                          { value: '60', label: 'Every 2 Months' },
-                          { value: '120', label: 'Every 4 Months' },
-                          { value: '182', label: 'Half Yearly' },
-                          { value: '365', label: 'Yearly' }
-                        ]"
-                        label="Frequency"
-                        placeholder="Select Frequency"
-                        :error="getFieldError('frequency', index)"
-                      />
+                    <div v-if="auditData.type !== 'AI'" class="dynamic-field-col">
+                      <label class="dynamic-label">Complete within (days)</label>
+                      <input v-model.number="auditData.completionDays" type="number" min="1" max="365" class="dynamic-input" />
                     </div>
-                    <div class="dynamic-field-col due-date-field">
+                    <div v-if="auditData.type === 'AI'" class="dynamic-field-col due-date-field">
                       <label class="dynamic-label">Due Date</label>
                       <DateInput
                         v-model="member.dueDate"
@@ -1841,23 +1740,34 @@
               </div>
             </div>
 
-            <!-- Compliance Items: display-only on Review (added on previous steps) -->
+            <!-- Compliance Items: display-only on Review -->
             <div class="compliance-preview" v-if="member.assignedPolicy || auditData.type === 'AI'">
               <div class="preview-header">Compliance Items to be Audited:</div>
               <div class="preview-content">
                 <div class="compliance-count">
-                  {{ (auditData.selectedComplianceIds || []).length + (auditData.manuallyAddedComplianceLabels || []).length }} items
+                  {{ reviewComplianceItemsCount }} items
                 </div>
-                <p class="compliance-typing-desc">Items you added on the previous step.</p>
-                <div v-if="(auditData.selectedComplianceIds && auditData.selectedComplianceIds.length > 0) || (auditData.manuallyAddedComplianceLabels && auditData.manuallyAddedComplianceLabels.length > 0)" class="compliance-added-chips compliance-chips-readonly">
+                <p class="compliance-typing-desc">{{ reviewComplianceItemsDescription }}</p>
+                <div
+                  v-if="auditData.assignScope === 'compliance' && ((auditData.selectedComplianceIds && auditData.selectedComplianceIds.length > 0) || (auditData.manuallyAddedComplianceLabels && auditData.manuallyAddedComplianceLabels.length > 0))"
+                  class="compliance-added-chips compliance-chips-readonly"
+                >
                   <span v-for="id in (auditData.selectedComplianceIds || [])" :key="'id-' + id" class="compliance-chip">
-                    {{ getComplianceLabelById(id) || id }}
+                    {{ getComplianceLabelById(id) || ('Compliance #' + id) }}
                   </span>
                   <span v-for="(label, idx) in (auditData.manuallyAddedComplianceLabels || [])" :key="'custom-' + idx" class="compliance-chip">
                     {{ label }}
                   </span>
                 </div>
-                <p v-else class="compliance-none">No compliance items added.</p>
+                <p
+                  v-else-if="auditData.assignScope === 'compliance'"
+                  class="compliance-none compliance-scope-warn"
+                >
+                  No compliances selected — go back to Policy Assignment and check at least one item.
+                </p>
+                <p v-else-if="reviewComplianceItemsCount === 0" class="compliance-none">
+                  No approved compliances found for this policy/sub-policy.
+                </p>
               </div>
             </div>
           </div>
@@ -2075,12 +1985,26 @@ export default {
         responsibilities: '',
         selectedComplianceIds: [],
         manuallyAddedComplianceLabels: [],
-        evidenceReminderDays: 7  // AI audit: show alert if no evidence uploaded within this many days
+        evidenceReminderDays: 7,  // AI audit: show alert if no evidence uploaded within this many days
+        assignScope: 'subpolicy', // 'subpolicy' | 'compliance'
+        subpolicyFrequency: '',
+        completionDays: 30,
+        frameworkEndDate: ''
       },
+      auditFrequencyOptions: [
+        { value: '0', label: 'Only Once' },
+        { value: '1', label: 'Daily' },
+        { value: '30', label: 'Monthly' },
+        { value: '60', label: 'Every 2 Months' },
+        { value: '120', label: 'Every 4 Months' },
+        { value: '182', label: 'Half Yearly' },
+        { value: '365', label: 'Yearly' }
+      ],
       scopeCompliances: [],
       loadingScopeCompliances: false,
       expandedComplianceScopeMemberIndex: null,
       complianceTypeToAdd: '',
+      complianceSearchFilter: '',
       // Store data type per field
       fieldDataTypes: {
         framework: 'regular',
@@ -2194,7 +2118,7 @@ export default {
         { name: 'Framework Selection', required: ['framework', 'type'] },
         { name: 'Team Creation', required: [] },
         { name: 'Policy Assignment', required: [] },
-        { name: 'Review & Assign', required: ['scope', 'objective', 'type', 'frequency', 'dueDate'] }
+        { name: 'Review & Assign', required: ['scope', 'objective', 'type', 'completionDays'] }
       ];
     },
     canProceed() {
@@ -2279,6 +2203,49 @@ export default {
         return label.indexOf(q) !== -1;
       });
     },
+
+    filteredScopeCompliancesForList() {
+      const q = (this.complianceSearchFilter || '').trim().toLowerCase();
+      if (!q) return this.scopeCompliances;
+      return this.scopeCompliances.filter(c => {
+        const label = (c.label || c.Identifier || c.ComplianceTitle || '').toString().toLowerCase();
+        const freq = (c.AuditFrequency || '').toString().toLowerCase();
+        return label.includes(q) || freq.includes(q);
+      });
+    },
+
+    allScopeCompliancesSelected() {
+      if (!this.scopeCompliances.length) return false;
+      const selected = new Set((this.auditData.selectedComplianceIds || []).map(id => Number(id)));
+      return this.scopeCompliances.every(c => selected.has(Number(c.ComplianceId)));
+    },
+
+    complianceScopePolicySummary() {
+      const member = this.firstMemberWithPolicy;
+      if (!member) return '';
+      const policyName = this.getPolicyName(member.assignedPolicy);
+      const subName = member.assignedSubPolicy
+        ? this.getSubPolicyName(member.assignedSubPolicy)
+        : 'all sub-policies';
+      return `${policyName || 'Policy'} / ${subName}`;
+    },
+
+    reviewComplianceItemsCount() {
+      if (this.auditData.assignScope === 'compliance') {
+        return (this.auditData.selectedComplianceIds || []).length
+          + (this.auditData.manuallyAddedComplianceLabels || []).length;
+      }
+      const member = this.firstMemberWithPolicy;
+      if (!member || !member.assignedPolicy) return 0;
+      return this.getComplianceCount(member.assignedPolicy, member.assignedSubPolicy);
+    },
+
+    reviewComplianceItemsDescription() {
+      if (this.auditData.assignScope === 'compliance') {
+        return 'Compliances you checked on the Policy Assignment step.';
+      }
+      return 'All approved, active compliances under the assigned policy/sub-policy.';
+    },
     
     assignButtonTitle() {
       if (this.assigning) return 'Assigning...';
@@ -2315,11 +2282,16 @@ export default {
                                 ? (member.reviewer && member.reviewer !== '') // Only reviewer required for AI audits
                                 : (member.assignedPolicy && member.reviewer && member.reviewer !== '' && member.auditor && member.auditor !== '')); // Policy, reviewer, and auditor required for non-AI audits
                                 
+        const scopeFreqOk = this.auditData.assignScope !== 'subpolicy' || !!this.auditData.subpolicyFrequency;
+        const complianceScopeOk = this.auditData.assignScope !== 'compliance'
+          || (this.auditData.selectedComplianceIds && this.auditData.selectedComplianceIds.length > 0);
         const hasAuditDetails = member.scope && 
                               member.objective && 
                               member.type && 
-                              member.dueDate &&
-                              (this.auditData.type === 'AI' ? true : (member.frequency && member.role && member.responsibilities));
+                              (this.auditData.type === 'AI'
+                                ? member.dueDate
+                                : (this.auditData.completionDays > 0 && scopeFreqOk && complianceScopeOk
+                                  && member.role && member.responsibilities));
 
         const isValid = hasAssignmentInfo && hasAuditDetails;
         console.log(`✅ Team member ${index} validation result:`, {
@@ -2575,6 +2547,7 @@ export default {
       this.auditData.subPolicy = '';
       this.auditData.selectedComplianceIds = [];
       this.auditData.manuallyAddedComplianceLabels = [];
+      this.auditData.frameworkEndDate = '';
       this.policies = [];
       this.subpolicies = [];
       this.scopeCompliances = [];
@@ -2582,6 +2555,11 @@ export default {
         // Handle dropdown selection (could be an object {value, label} or just the ID)
         const fwId = typeof frameworkId === 'object' ? frameworkId.value : frameworkId;
         if (!fwId) return;
+
+        const fwMeta = this.frameworks.find(f => String(f.FrameworkId) === String(fwId));
+        if (fwMeta && fwMeta.EndDate) {
+          this.auditData.frameworkEndDate = fwMeta.EndDate;
+        }
 
         try {
           console.log(`🔄 [AssignAudit] Fetching policies for framework ${fwId}...`);
@@ -2624,9 +2602,25 @@ export default {
     },
     toggleAllScopeCompliances(e) {
       if (e.target.checked) {
-        this.auditData.selectedComplianceIds = this.scopeCompliances.map(c => c.ComplianceId);
+        this.auditData.selectedComplianceIds = this.scopeCompliances.map(c => Number(c.ComplianceId));
       } else {
         this.auditData.selectedComplianceIds = [];
+      }
+    },
+    isComplianceIdSelected(id) {
+      const numId = Number(id);
+      return (this.auditData.selectedComplianceIds || []).some(x => Number(x) === numId);
+    },
+    toggleComplianceSelection(id, e) {
+      const numId = Number(id);
+      if (Number.isNaN(numId)) return;
+      const current = (this.auditData.selectedComplianceIds || []).map(x => Number(x));
+      if (e.target.checked) {
+        if (!current.includes(numId)) {
+          this.auditData.selectedComplianceIds = [...current, numId];
+        }
+      } else {
+        this.auditData.selectedComplianceIds = current.filter(x => x !== numId);
       }
     },
     getComplianceLabelById(id) {
@@ -3096,8 +3090,11 @@ export default {
           framework_id: this.auditData.framework,
           policy_id: this.auditData.type === 'AI' ? (this.auditData.policy || null) : (templateMember.assignedPolicy || null),
           subpolicy_id: this.auditData.type === 'AI' ? (this.auditData.subPolicy || null) : (templateMember.assignedSubPolicy || null),
-          due_date: templateMember.dueDate,
-          frequency: templateMember.frequency,
+          due_date: this.auditData.type === 'AI' ? templateMember.dueDate : null,
+          frequency: this.auditData.type === 'AI' ? templateMember.frequency : '0',
+          assign_scope: this.auditData.assignScope || 'subpolicy',
+          subpolicy_frequency: this.auditData.subpolicyFrequency || '0',
+          completion_days: this.auditData.completionDays || 30,
           audit_type: templateMember.type,
           reports: templateMember.reports || '',
           data_inventory: dataInventory,
@@ -3323,6 +3320,10 @@ export default {
             console.log('❌ No subpolicies found for member:', memberIndex);
           }
           await this.fetchComplianceCount(memberIndex);
+          if (this.auditData.assignScope === 'compliance') {
+            this.auditData.selectedComplianceIds = [];
+            await this.loadScopeCompliancesForPolicyAssignment();
+          }
           
         } catch (error) {
           console.error('Error in onMemberPolicyChange:', error);
@@ -3366,7 +3367,7 @@ export default {
         };
       }
     },
-    async onSubPolicyChange(memberIndex) {
+    async onSubPolicyChange(memberIndex, { reloadScopeList = true, clearSelectedCompliances = true } = {}) {
       const member = this.teamMembers[memberIndex];
       if (!member || !member.assignedPolicy) return;
 
@@ -3377,6 +3378,12 @@ export default {
         };
 
         await this.fetchComplianceCount(memberIndex);
+        if (this.auditData.assignScope === 'compliance' && reloadScopeList) {
+          if (clearSelectedCompliances) {
+            this.auditData.selectedComplianceIds = [];
+          }
+          await this.loadScopeCompliancesForPolicyAssignment();
+        }
       } catch (error) {
         console.error('Error in onSubPolicyChange:', error);
       } finally {
@@ -4002,14 +4009,13 @@ export default {
     },
   },
   watch: {
-    'teamMembers': {
-      deep: true,
-      handler(newVal) {
-        newVal.forEach((member, index) => {
-          if (member.assignedSubPolicy) {
-            this.onSubPolicyChange(index);
-          }
-        });
+    'auditData.assignScope'(scope) {
+      if (scope === 'compliance' && this.firstMemberWithPolicy && this.auditData.framework) {
+        this.$nextTick(() => this.loadScopeCompliancesForPolicyAssignment());
+      }
+      if (scope === 'subpolicy') {
+        this.auditData.selectedComplianceIds = [];
+        this.complianceSearchFilter = '';
       }
     },
     'auditors': {
@@ -4026,10 +4032,13 @@ export default {
       if (this.isReviewTab) { // Review & Assign tab
         this.$nextTick(() => {
           this.resetCollapsibleSections();
-          console.log('Reset collapsible sections for Review & Assign tab');
-          // Reload scope compliances if we have selected compliance IDs but scopeCompliances is empty
-          if (this.auditData.selectedComplianceIds && this.auditData.selectedComplianceIds.length > 0 && 
-              this.scopeCompliances.length === 0 && this.firstMemberWithPolicy) {
+          // Restore labels for selected compliances on Review (list may have been loaded earlier)
+          if (
+            this.auditData.assignScope === 'compliance' &&
+            this.auditData.selectedComplianceIds?.length > 0 &&
+            this.scopeCompliances.length === 0 &&
+            this.firstMemberWithPolicy
+          ) {
             this.loadScopeCompliancesForPolicyAssignment();
           }
         });

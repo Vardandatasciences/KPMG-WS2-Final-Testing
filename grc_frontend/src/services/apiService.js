@@ -150,7 +150,13 @@ apiClient.interceptors.request.use((config) => {
     delete config.headers['content-type'];
   }
 
-  if (userId && !isComplianceApi) {
+  // Dropdown/list endpoints must return tenant-wide data — do not inject user_id (backend filters to creator/reviewer only).
+  const skipUserIdInjection =
+    isFrameworksListEndpoint(requestUrl) ||
+    requestUrl.includes('/api/framework-explorer') ||
+    requestUrl.includes('/api/framework-explorer/');
+
+  if (userId && !isComplianceApi && !skipUserIdInjection) {
     if (config.method === 'get' && !config.params?.user_id) {
       config.params = { ...config.params, user_id: userId };
     }

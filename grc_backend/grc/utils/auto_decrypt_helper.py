@@ -18,6 +18,7 @@ Usage:
 """
 
 import logging
+import re
 from typing import List, Dict, Any, Optional
 from .data_encryption import decrypt_data, is_encrypted_data, GCM_ENVELOPE_PREFIX
 from .encryption_config import get_encrypted_fields_for_model
@@ -343,3 +344,27 @@ def decrypt_response_data(data: Any) -> Any:
         return Response(decrypt_response_data(data), status=status.HTTP_200_OK)
     """
     return decrypt_all_encrypted_in_dict(data)
+
+
+_GRC_TOKEN_IN_TEXT = re.compile(r'GRCv2\$[^"\s]+')
+
+
+def display_audit_title(title: Any) -> str:
+    """Human-readable audit title for notifications and UI labels."""
+    if title is None or title == '':
+        return 'Untitled audit'
+    plain = decrypt_any_encrypted_value(title)
+    return str(plain) if plain else str(title)
+
+
+def decrypt_encrypted_substrings_in_text(text: Any) -> Any:
+    """Decrypt GRCv2$ tokens embedded in notification message bodies."""
+    if not text or not isinstance(text, str) or GCM_ENVELOPE_PREFIX not in text:
+        return text
+
+    def _repl(match):
+        token = match.group(0)
+        plain = decrypt_any_encrypted_value(token)
+        return plain if plain and plain != token else token
+
+    return _GRC_TOKEN_IN_TEXT.sub(_repl, text)

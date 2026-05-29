@@ -1,7 +1,7 @@
 import json
 import os
 import time
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -403,13 +403,20 @@ def _persist_policy_draft(data: dict[str, Any], request=None, tenant_id=None):
 
         for section in sections_data:
             for policy_data in section.get("policies", []):
+                sd = policy_data.get("StartDate") or date.today()
+                if not isinstance(sd, date):
+                    sd = date.today()
+                ed = policy_data.get("EndDate")
+                if not isinstance(ed, date):
+                    ed = sd + timedelta(days=365)
                 policy = Policy.objects.create(
                     FrameworkId=framework,
                     CurrentVersion=str(policy_data.get("CurrentVersion", "1.0")),
                     Status=policy_data.get("Status", "Under Review"),
                     PolicyDescription=policy_data.get("policy_description", ""),
                     PolicyName=policy_data.get("policy_title", "Untitled Policy"),
-                    StartDate=policy_data.get("StartDate") or date.today(),
+                    StartDate=sd,
+                    EndDate=ed,
                     Department=policy_data.get("Department", ""),
                     CreatedByName=policy_data.get("CreatedByName") or created_by_name,
                     CreatedByDate=date.today(),

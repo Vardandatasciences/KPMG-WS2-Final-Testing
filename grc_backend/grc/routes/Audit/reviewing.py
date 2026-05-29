@@ -1262,6 +1262,7 @@ def update_audit_review_status(request, audit_id):
         elif new_status_str == 'Accept' and all_accepted:
             debug_print(f"DEBUG: Audit {audit_id} accepted, updating status to Completed")
             audit.Status = 'Completed'
+            audit.ReviewEscalatedAt = None
             # Ensure completion date is captured when audit is accepted
             if not audit.CompletionDate:
                 audit.CompletionDate = current_time

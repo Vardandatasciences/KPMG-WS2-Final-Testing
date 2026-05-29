@@ -389,12 +389,22 @@
 /* Button container - Submit Compliance aligned left */
 .compliance-submit-container {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-start;
   align-items: center;
+  gap: 10px;
   width: 100%;
   margin-top: 2.5rem;
   padding-top: 1.5rem;
   border-top: 1px solid #e2e8f0;
+}
+
+.submit-hint-text {
+  flex: 1 1 100%;
+  margin: 0;
+  font-size: 0.875rem;
+  color: #b45309;
+  text-align: center;
 }
 
 @media (max-width: 1400px) {

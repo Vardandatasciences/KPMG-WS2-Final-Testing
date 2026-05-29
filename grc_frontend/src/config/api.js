@@ -164,6 +164,9 @@ export const API_ENDPOINTS = {
   // Policy Management
   POLICIES: `${API_BASE_URL}/api/policies/`,
   POLICY: (policyId) => `${API_BASE_URL}/api/policies/${policyId}/`,
+  POLICY_SELF_HEAL_DECISION: (policyId) => `${API_BASE_URL}/api/policies/${policyId}/self-healing/decision/`,
+  POLICY_SELF_HEAL_ESCALATIONS_PENDING: `${API_BASE_URL}/api/policies/self-healing/escalations/pending/`,
+  POLICY_SELF_HEAL_ASSIGN_CUSTODIAN: (policyId) => `${API_BASE_URL}/api/policies/${policyId}/self-healing/assign-custodian/`,
   HOME_POLICIES_BY_STATUS: `${API_BASE_URL}/api/home/policies-by-status/`,
   HOME_POLICIES_BY_STATUS_PUBLIC: () => `${API_BASE_URL}/api/home/policies-by-status-public/`,
   HOME_POLICY_DETAILS: (policyId) => `${API_BASE_URL}/api/home/policy-details/${policyId}/`,
@@ -763,6 +766,11 @@ export const API_ENDPOINTS = {
 
   // Audit Creation and Assignment
   AUDIT_CREATE: `${API_BASE_URL}/api/create-audit/`,
+  AUDIT_REASSIGN: (auditId) => `${API_BASE_URL}/api/audit/${auditId}/reassign/`,
+  AUDIT_OVERDUE_ESCALATIONS_PENDING: `${API_BASE_URL}/api/audits/overdue-escalations/pending/`,
+  AUDIT_REVIEW_ESCALATIONS_PENDING: `${API_BASE_URL}/api/audits/review-escalations/pending/`,
+  AUDIT_REASSIGN_REVIEWER: (auditId) => `${API_BASE_URL}/api/audit/${auditId}/reassign-reviewer/`,
+  SCHEDULED_AUDITS_RUN: `${API_BASE_URL}/api/audits/scheduling/run/`,
   AUDIT_COMPLIANCE_COUNT: `${API_BASE_URL}/api/compliance-count/`,
   AUDIT_COMPLIANCES_FOR_SCOPE: `${API_BASE_URL}/api/audit/compliances-for-scope/`,
 
@@ -861,7 +869,12 @@ export const API_ENDPOINTS = {
   CHANGE_MGMT_DOCUMENT_INFO: (frameworkId) => `${API_BASE_URL}/api/change-management/framework/${frameworkId}/document-info/`,
   CHANGE_MGMT_AUTO_CHECK_ALL: `${API_BASE_URL}/api/change-management/auto-check-frameworks/`,
   CHANGE_MGMT_START_ANALYSIS: (frameworkId) => `${API_BASE_URL}/api/change-management/framework/${frameworkId}/start-analysis/`,
-  CHANGE_MGMT_CANCEL_ANALYSIS: (frameworkId) => `${API_BASE_URL}/api/change-management/framework/${frameworkId}/cancel-analysis/`
+  CHANGE_MGMT_CANCEL_ANALYSIS: (frameworkId) => `${API_BASE_URL}/api/change-management/framework/${frameworkId}/cancel-analysis/`,
+  // PHASE 1: Update existing compliances
+  CHANGE_MGMT_DETECT_CHANGES: (frameworkId, complianceId) => `${API_BASE_URL}/api/change-management/framework/${frameworkId}/compliances/${complianceId}/detect-changes/`,
+  CHANGE_MGMT_CREATE_UPDATE_APPROVAL: (frameworkId) => `${API_BASE_URL}/api/change-management/framework/${frameworkId}/create-update-approval/`,
+  // PHASE 2: Risk integration
+  CHANGE_MGMT_AFFECTED_RISKS: (frameworkId, complianceId) => `${API_BASE_URL}/api/change-management/framework/${frameworkId}/compliances/${complianceId}/affected-risks/`
 };
 
 // Axios instance configuration with JWT authentication

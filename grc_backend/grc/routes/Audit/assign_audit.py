@@ -1,9 +1,18 @@
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.authentication import SessionAuthentication, BasicAuthentication
 from ...models import Framework, Policy, SubPolicy, Users, Audit, AuditFinding, Compliance
+from ...services.audit_recurrence_service import (
+    compute_due_date,
+    parse_frequency_to_days,
+    resolve_audit_start_date,
+    resolve_frequency_for_assignment,
+    resolve_framework_end_date,
+    store_in_app_audit_notification,
+)
+from ...utils.auto_decrypt_helper import display_audit_title
 from django.http import JsonResponse
 from django.utils import timezone
 from django.db import connection
@@ -61,14 +70,24 @@ def get_frameworks(request):
         
         if framework_id:
             debug_print(f"✅ [GET FRAMEWORKS] Framework filter active: {framework_id}")
-            frameworks = Framework.objects.filter(FrameworkId=framework_id, tenant_id=tenant_id).values('FrameworkId', 'FrameworkName')
+            frameworks = Framework.objects.filter(FrameworkId=framework_id, tenant_id=tenant_id).values(
+                'FrameworkId', 'FrameworkName', 'StartDate', 'EndDate'
+            )
             debug_print(f"✅ [GET FRAMEWORKS] Returning {frameworks.count()} filtered framework(s)")
         else:
             debug_print(f"✅ [GET FRAMEWORKS] No framework filter - returning ALL frameworks")
-            frameworks = Framework.objects.filter(tenant_id=tenant_id).values('FrameworkId', 'FrameworkName')
+            frameworks = Framework.objects.filter(tenant_id=tenant_id).values(
+                'FrameworkId', 'FrameworkName', 'StartDate', 'EndDate'
+            )
             debug_print(f"✅ [GET FRAMEWORKS] Returning {frameworks.count()} total frameworks")
         
-        frameworks_list = list(frameworks)
+        frameworks_list = []
+        for fw in frameworks:
+            row = dict(fw)
+            for key in ('StartDate', 'EndDate'):
+                if row.get(key) is not None and hasattr(row[key], 'isoformat'):
+                    row[key] = row[key].isoformat()
+            frameworks_list.append(row)
         debug_print(f"✅ [GET FRAMEWORKS] Final response: {frameworks_list}")
         
         # Log the action
@@ -207,7 +226,9 @@ def get_compliances_for_scope(request):
         with connection.cursor() as cursor:
             if subpolicy_id:
                 cursor.execute("""
-                    SELECT c.ComplianceId, c.Identifier, c.ComplianceTitle, c.SubPolicyId, sp.SubPolicyName, p.PolicyId, p.PolicyName
+                    SELECT c.ComplianceId, c.Identifier, c.ComplianceTitle, c.SubPolicyId,
+                           sp.SubPolicyName, p.PolicyId, p.PolicyName,
+                           c.StartDate, c.EndDate, c.AuditFrequency
                     FROM compliance c
                     INNER JOIN subpolicies sp ON c.SubPolicyId = sp.SubPolicyId
                     INNER JOIN policies p ON sp.PolicyId = p.PolicyId
@@ -218,7 +239,9 @@ def get_compliances_for_scope(request):
                 """, [subpolicy_id, tenant_id, tenant_id, tenant_id])
             elif policy_id:
                 cursor.execute("""
-                    SELECT c.ComplianceId, c.Identifier, c.ComplianceTitle, c.SubPolicyId, sp.SubPolicyName, p.PolicyId, p.PolicyName
+                    SELECT c.ComplianceId, c.Identifier, c.ComplianceTitle, c.SubPolicyId,
+                           sp.SubPolicyName, p.PolicyId, p.PolicyName,
+                           c.StartDate, c.EndDate, c.AuditFrequency
                     FROM compliance c
                     INNER JOIN subpolicies sp ON c.SubPolicyId = sp.SubPolicyId
                     INNER JOIN policies p ON sp.PolicyId = p.PolicyId
@@ -229,7 +252,9 @@ def get_compliances_for_scope(request):
                 """, [policy_id, tenant_id, tenant_id, tenant_id])
             else:
                 cursor.execute("""
-                    SELECT c.ComplianceId, c.Identifier, c.ComplianceTitle, c.SubPolicyId, sp.SubPolicyName, p.PolicyId, p.PolicyName
+                    SELECT c.ComplianceId, c.Identifier, c.ComplianceTitle, c.SubPolicyId,
+                           sp.SubPolicyName, p.PolicyId, p.PolicyName,
+                           c.StartDate, c.EndDate, c.AuditFrequency
                     FROM compliance c
                     INNER JOIN subpolicies sp ON c.SubPolicyId = sp.SubPolicyId
                     INNER JOIN policies p ON sp.PolicyId = p.PolicyId
@@ -243,6 +268,9 @@ def get_compliances_for_scope(request):
         out = [dict(zip(columns, row)) for row in rows]
         for o in out:
             o['label'] = (o.get('Identifier') or o.get('ComplianceTitle') or str(o.get('ComplianceId')))
+            for dk in ('StartDate', 'EndDate'):
+                if o.get(dk) is not None and hasattr(o[dk], 'isoformat'):
+                    o[dk] = o[dk].isoformat()
         return Response(out, status=status.HTTP_200_OK)
     except (ValueError, TypeError) as e:
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -349,6 +377,24 @@ def create_audit(request):
                 'error': 'Validation error',
                 'details': str(e)
             }, status=status.HTTP_400_BAD_REQUEST)
+
+        assign_scope_early = (data.get('assign_scope') or 'subpolicy').strip().lower()
+        compliance_ids_early = data.get('compliance_ids') or []
+        if assign_scope_early == 'compliance' and data.get('audit_type') not in ('AI', 'A'):
+            ids_clean_early = [
+                x for x in (compliance_ids_early if isinstance(compliance_ids_early, list) else [])
+                if x is not None and str(x).strip() != ''
+            ]
+            if not ids_clean_early:
+                return Response({
+                    'error': 'Compliance scope requires at least one selected compliance',
+                }, status=status.HTTP_400_BAD_REQUEST)
+        if assign_scope_early == 'subpolicy' and data.get('audit_type') not in ('AI', 'A'):
+            sp_freq = data.get('subpolicy_frequency') or data.get('frequency')
+            if sp_freq is None or str(sp_freq).strip() == '':
+                return Response({
+                    'error': 'Sub-policy scope requires audit frequency',
+                }, status=status.HTTP_400_BAD_REQUEST)
 
         created_audits = []
         findings_created = 0
@@ -500,12 +546,48 @@ def create_audit(request):
             
             debug_print(f"DEBUG: Final AuditType value: '{audit_type}' (length: {len(audit_type)})")
             
-            # Parse due date with error handling
-            try:
-                due_date = datetime.datetime.strptime(str(validated_data['due_date']), '%Y-%m-%d').date()
-            except (ValueError, TypeError) as e:
-                debug_print(f"Error parsing due_date '{validated_data.get('due_date')}': {e}")
-                due_date = datetime.date.today()
+            assign_scope = (validated_data.get('assign_scope') or 'subpolicy').strip().lower()
+            if assign_scope not in ('subpolicy', 'compliance'):
+                assign_scope = 'subpolicy'
+
+            completion_days_raw = validated_data.get('completion_days')
+            completion_days = None
+            if completion_days_raw is not None and completion_days_raw != '':
+                try:
+                    completion_days = max(1, int(completion_days_raw))
+                except (TypeError, ValueError):
+                    completion_days = 30
+
+            assign_date = timezone.now().date()
+            compliance_ids_for_schedule = validated_data.get('compliance_ids') or []
+            if isinstance(compliance_ids_for_schedule, list):
+                compliance_ids_for_schedule = [
+                    int(x) for x in compliance_ids_for_schedule
+                    if x is not None and str(x).strip() != ''
+                ]
+            else:
+                compliance_ids_for_schedule = []
+
+            compliance_starts = []
+            if compliance_ids_for_schedule:
+                for c in Compliance.objects.filter(
+                    ComplianceId__in=compliance_ids_for_schedule, tenant_id=tenant_id
+                ).only('StartDate'):
+                    compliance_starts.append(c.StartDate)
+
+            audit_start = resolve_audit_start_date(assign_scope, assign_date, compliance_starts)
+            schedule_end = resolve_framework_end_date(framework_obj)
+
+            # Parse due date — prefer completion_days over calendar due_date
+            due_date = None
+            if completion_days:
+                due_date = compute_due_date(audit_start, completion_days)
+            else:
+                try:
+                    due_date = datetime.datetime.strptime(str(validated_data['due_date']), '%Y-%m-%d').date()
+                except (ValueError, TypeError) as e:
+                    debug_print(f"Error parsing due_date '{validated_data.get('due_date')}': {e}")
+                    due_date = compute_due_date(audit_start, 30)
             
             # Persist single-letter code (I/E/S/A/R). DB column will be altered to VARCHAR(10).
             db_audit_type = audit_type
@@ -546,8 +628,16 @@ def create_audit(request):
                 else:
                     evidence_reminder_days = 7  # default: alert if no evidence within 7 days
             else:
-                frequency_val = int(str(validated_data['frequency']).replace('a', '')) if str(validated_data['frequency']).endswith('a') else int(validated_data['frequency'])
+                subpolicy_freq = validated_data.get('subpolicy_frequency') or validated_data.get('frequency')
+                frequency_val = resolve_frequency_for_assignment(
+                    assign_scope,
+                    subpolicy_freq,
+                    compliance_ids_for_schedule,
+                    tenant_id,
+                )
                 evidence_reminder_days = None
+
+            is_recurrence_root = db_audit_type != 'A' and int(frequency_val or 0) > 0
 
             audit_fields = {
                 'Title': validated_data['title'],
@@ -577,6 +667,11 @@ def create_audit(request):
                 'CompletionDate': None,
                 'data_inventory': data_inventory,  # Store data inventory mapping
                 'EvidenceReminderDays': evidence_reminder_days,  # AI audit: days after assign to show "no evidence" alert
+                'StartDate': audit_start,
+                'EndDate': schedule_end,
+                'AssignScope': assign_scope,
+                'CompletionDays': completion_days,
+                'IsRecurrenceRoot': is_recurrence_root,
                 'tenant_id': tenant_id  # MULTI-TENANCY: Add tenant_id to audit
             }
 
@@ -590,6 +685,16 @@ def create_audit(request):
                 debug_print(f"✅ Created audit {audit.AuditId} for member {member_id}")
                 debug_print(f"🔍 [AUDIT CREATE] Verified FrameworkId in created audit: {audit.FrameworkId.FrameworkId if audit.FrameworkId else 'None'}")
                 created_audits.append(audit)
+
+                if db_audit_type != 'A':
+                    store_in_app_audit_notification(
+                        audit.Auditor_id,
+                        'audit_assigned',
+                        'Audit assigned to you',
+                        f'You have been assigned audit "{display_audit_title(audit.Title)}" due {audit.DueDate}.',
+                        audit.FrameworkId_id,
+                        {'audit_id': audit.AuditId, 'due_date': audit.DueDate.isoformat() if audit.DueDate else None},
+                    )
                 
                 # Handle AI Audit special processing
                 if audit_type == 'A':
@@ -1752,3 +1857,65 @@ def get_report_details(request):
         return Response({
             'error': f'Error fetching report details: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@csrf_exempt
+@api_view(['POST'])
+@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@permission_classes([IsAuthenticated])
+@require_tenant
+@tenant_filter
+def reassign_audit(request, audit_id):
+    """Reassign overdue audit to a new auditor (Compliance Manager or assign_audit permission)."""
+    from ...rbac.utils import RBACUtils
+    from ...models import RBAC
+
+    requester_id = RBACUtils.get_user_id_from_request(request)
+    if not requester_id:
+        return Response({'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
+    is_compliance_manager = RBAC.objects.filter(
+        user_id=requester_id,
+        is_active='Y',
+        role='Compliance Manager',
+    ).exists()
+    if not is_compliance_manager and not RBACUtils.has_permission(requester_id, 'audit', 'assign'):
+        return Response({'error': 'Forbidden'}, status=status.HTTP_403_FORBIDDEN)
+
+    tenant_id = get_tenant_id_from_request(request)
+    try:
+        audit_id = int(audit_id)
+    except (TypeError, ValueError):
+        return Response({'error': 'Invalid audit id'}, status=status.HTTP_400_BAD_REQUEST)
+
+    new_auditor_id = request.data.get('new_auditor_id') or request.data.get('auditor_id')
+    if not new_auditor_id:
+        return Response({'error': 'new_auditor_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        audit = Audit.objects.get(AuditId=audit_id, tenant_id=tenant_id)
+        new_auditor = Users.objects.get(UserId=int(new_auditor_id), tenant_id=tenant_id)
+    except Audit.DoesNotExist:
+        return Response({'error': 'Audit not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Users.DoesNotExist:
+        return Response({'error': 'Auditor not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    audit.Auditor = new_auditor
+    audit.OverdueEscalatedAt = None
+    audit.Status = 'Yet to Start'
+    audit.save(update_fields=['Auditor', 'OverdueEscalatedAt', 'Status'])
+
+    store_in_app_audit_notification(
+        new_auditor.UserId,
+        'audit_reassigned',
+        'Audit reassigned to you',
+        f'Audit "{display_audit_title(audit.Title)}" has been reassigned to you. Due date: {audit.DueDate}.',
+        audit.FrameworkId_id,
+        {'audit_id': audit.AuditId},
+    )
+
+    return Response({
+        'success': True,
+        'audit_id': audit.AuditId,
+        'auditor_id': new_auditor.UserId,
+        'message': 'Audit reassigned successfully',
+    }, status=status.HTTP_200_OK)

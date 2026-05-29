@@ -649,6 +649,9 @@ class FrameworkVersion(EncryptedFieldsMixin, models.Model):
     CreatedBy = models.CharField(max_length=255)
     CreatedDate = models.DateField()
     PreviousVersionId = models.IntegerField(null=True, blank=True)
+    # Date fields for hierarchy validation
+    StartDate = models.DateField(null=True, blank=True, help_text="Framework version start date")
+    EndDate = models.DateField(null=True, blank=True, help_text="Framework version end date (auto-set from Framework.EndDate)")
     retentionExpiry = models.DateField(null=True, blank=True)
  
     class Meta:
@@ -668,6 +671,7 @@ class Policy(EncryptedFieldsMixin, models.Model):
     PolicyName = models.CharField(max_length=1000)  # Increased for encryption support
     StartDate = models.DateField()
     EndDate = models.DateField(null=True, blank=True)
+    ReviewReminderFrequencyDays = models.IntegerField(default=30)
     Department = models.CharField(max_length=255, null=True, blank=True)
     CreatedByName = models.CharField(max_length=255, null=True, blank=True)
     CreatedByDate = models.DateField(null=True, blank=True)
@@ -705,6 +709,9 @@ class PolicyVersion(EncryptedFieldsMixin, models.Model):
     CreatedDate = models.DateField()
     PreviousVersionId = models.IntegerField(null=True, blank=True)
     FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
+    # Date fields for hierarchy validation
+    StartDate = models.DateField(null=True, blank=True, help_text="Policy version start date (must be >= Framework.StartDate)")
+    EndDate = models.DateField(null=True, blank=True, help_text="Policy version end date (auto-set from Framework.EndDate)")
     retentionExpiry = models.DateField(null=True, blank=True)
     class Meta:
         db_table = 'policyversions'
@@ -741,6 +748,9 @@ class SubPolicy(EncryptedFieldsMixin, models.Model):
     PermanentTemporary = models.CharField(max_length=50, null=True, blank=True)
     Control = models.TextField(null=True, blank=True)
     FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
+    # Date fields for hierarchy validation
+    StartDate = models.DateField(null=True, blank=True, help_text="SubPolicy start date (must be >= Policy.StartDate and within Framework period)")
+    EndDate = models.DateField(null=True, blank=True, help_text="SubPolicy end date (auto-set from Framework.EndDate)")
     # Data Inventory - JSON field mapping field labels to data types (personal, confidential, regular)
     data_inventory = models.JSONField(null=True, blank=True)
     retentionExpiry = models.DateField(null=True, blank=True)
@@ -766,6 +776,134 @@ class PolicyApproval(EncryptedFieldsMixin, models.Model):
  
     class Meta:
         db_table = 'policyapproval'
+
+
+class PolicyReviewReminderSent(models.Model):
+    """Tracks policy review self-heal reminders sent per calendar day (dedup)."""
+    id = models.BigAutoField(primary_key=True)
+    policy = models.ForeignKey(
+        'Policy',
+        on_delete=models.CASCADE,
+        db_column='PolicyId',
+        related_name='review_reminders_sent',
+    )
+    reminder_date = models.DateField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'policy_review_reminder_sent'
+        unique_together = ('policy', 'reminder_date')
+
+
+class PolicySelfHealEscalation(models.Model):
+    """Creator unavailable: policy manager assigns a new custodian for renewal review."""
+    STATUS_PENDING = 'pending_assignment'
+    STATUS_ASSIGNED = 'assigned'
+    STATUS_CHOICES = [
+        (STATUS_PENDING, 'Pending assignment'),
+        (STATUS_ASSIGNED, 'Assigned'),
+    ]
+
+    id = models.AutoField(primary_key=True)
+    policy = models.ForeignKey(
+        'Policy',
+        on_delete=models.CASCADE,
+        db_column='PolicyId',
+        related_name='self_heal_escalations',
+    )
+    status = models.CharField(max_length=32, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    original_created_by_name = models.CharField(max_length=255, null=True, blank=True)
+    assigned_user_id = models.IntegerField(null=True, blank=True)
+    assigned_by_user_id = models.IntegerField(null=True, blank=True)
+    assigned_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'policy_self_heal_escalation'
+        indexes = [
+            models.Index(fields=['status', 'policy']),
+        ]
+
+
+class PolicyReminderRule(models.Model):
+    """User-configured reminder rule for a policy (e.g. 6 months before EndDate, monthly)."""
+
+    START_UNIT_CHOICES = [
+        ('year', 'Year'),
+        ('months', 'Months'),
+        ('weeks', 'Weeks'),
+        ('days', 'Days'),
+        ('hours', 'Hours'),
+    ]
+
+    FREQUENCY_UNIT_CHOICES = [
+        ('monthly', 'Monthly'),
+        ('quarterly', 'Quarterly'),
+        ('half_yearly', 'Half-Yearly'),
+        ('weekly', 'Weekly'),
+        ('daily', 'Daily'),
+        ('hourly', 'Hourly'),
+    ]
+
+    id = models.AutoField(primary_key=True)
+    policy = models.ForeignKey(
+        'Policy',
+        on_delete=models.CASCADE,
+        db_column='PolicyId',
+        related_name='reminder_rules',
+    )
+    start_value = models.PositiveIntegerField(default=1)
+    start_unit = models.CharField(max_length=16, choices=START_UNIT_CHOICES, default='months')
+    frequency_unit = models.CharField(max_length=16, choices=FREQUENCY_UNIT_CHOICES, default='monthly')
+    sort_order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'policy_reminder_rule'
+        ordering = ['sort_order', 'id']
+
+
+class PolicyReminderSchedule(models.Model):
+    """Pre-calculated reminder date mapped to a scheduler microservice schedule_id."""
+    STATUS_SCHEDULED = 'scheduled'
+    STATUS_SENT = 'sent'
+    STATUS_CANCELLED = 'cancelled'
+    STATUS_CHOICES = [
+        (STATUS_SCHEDULED, 'Scheduled'),
+        (STATUS_SENT, 'Sent'),
+        (STATUS_CANCELLED, 'Cancelled'),
+    ]
+
+    id = models.AutoField(primary_key=True)
+    policy = models.ForeignKey(
+        'Policy',
+        on_delete=models.CASCADE,
+        db_column='PolicyId',
+        related_name='reminder_schedules',
+    )
+    reminder_rule = models.ForeignKey(
+        PolicyReminderRule,
+        on_delete=models.CASCADE,
+        db_column='rule_id',
+        related_name='schedules',
+        null=True,
+        blank=True,
+    )
+    schedule_id = models.IntegerField(null=True, blank=True, db_index=True)
+    scheduled_at = models.DateTimeField()
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=STATUS_SCHEDULED)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'policy_reminder_schedule'
+        indexes = [
+            models.Index(fields=['policy', 'status']),
+            models.Index(fields=['scheduled_at', 'status']),
+        ]
+
 
 class ComplianceApproval(EncryptedFieldsMixin, models.Model):
     ApprovalId = models.AutoField(primary_key=True)
@@ -801,9 +939,10 @@ class FrameworkApproval(EncryptedFieldsMixin, models.Model):
     retentionExpiry = models.DateField(null=True, blank=True)
     def __str__(self):
         return f"FrameworkApproval {self.FrameworkId_id} (Version {self.Version})"
- 
+
     class Meta:
         db_table = 'frameworkapproval'
+
 
 # Users model (Django built-in User model is used)
 class Compliance(EncryptedFieldsMixin, models.Model):
@@ -868,9 +1007,18 @@ class Compliance(EncryptedFieldsMixin, models.Model):
     RiskBusinessImpact = models.CharField(max_length=45, null=True, blank=True)
     FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
     
+    # Date fields for hierarchy validation
+    StartDate = models.DateField(null=True, blank=True, help_text="Compliance start date (must be within SubPolicy period)")
+    EndDate = models.DateField(null=True, blank=True, help_text="Compliance end date (auto-set from SubPolicy.EndDate = Framework.EndDate)")
+    
     # Data Inventory - JSON field mapping field labels to data types (personal, confidential, regular)
     data_inventory = models.JSONField(null=True, blank=True)
     retentionExpiry = models.DateField(null=True, blank=True)
+    # Track amendment-driven changes over time (Phase 1: update existing rules)
+    ComplianceHistory = models.JSONField(null=True, blank=True, help_text="Array of previous versions of this compliance")
+    AmendmentSource = models.CharField(max_length=500, null=True, blank=True, help_text="Which amendment last updated this compliance")
+    LastAmendmentDate = models.DateField(null=True, blank=True, help_text="Date of last amendment update")
+
     class Meta:
         db_table = 'compliance'
 
@@ -1026,6 +1174,47 @@ class Audit(EncryptedFieldsMixin, models.Model):
     )
     AIReportSignedAt = models.DateTimeField(null=True, blank=True)
     
+    # Date fields for hierarchy validation
+    StartDate = models.DateField(null=True, blank=True, help_text="Audit start date (must be within Framework/Policy/SubPolicy period)")
+    EndDate = models.DateField(null=True, blank=True, help_text="Audit end date (auto-set from Framework.EndDate)")
+
+    ASSIGN_SCOPE_CHOICES = [
+        ('subpolicy', 'Sub-policy'),
+        ('compliance', 'Compliance'),
+    ]
+    AssignScope = models.CharField(
+        max_length=20,
+        choices=ASSIGN_SCOPE_CHOICES,
+        default='subpolicy',
+        null=True,
+        blank=True,
+        help_text="Assignment at sub-policy or compliance level",
+    )
+    CompletionDays = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Days from period start to finish each audit round",
+    )
+    ParentAudit = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='recurrence_children',
+        db_column='ParentAuditId',
+        help_text="Source audit for a recurring occurrence",
+    )
+    IsRecurrenceRoot = models.BooleanField(
+        default=False,
+        help_text="First audit in a recurring series",
+    )
+    OverdueEscalatedAt = models.DateTimeField(null=True, blank=True)
+    ReviewEscalatedAt = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='When review backlog was escalated to Audit Manager',
+    )
+
     # Data Inventory - JSON field mapping field labels to data types (personal, confidential, regular)
     data_inventory = models.JSONField(null=True, blank=True)
     retentionExpiry = models.DateField(null=True, blank=True)
@@ -1417,6 +1606,9 @@ class AuditVersion(EncryptedFieldsMixin, models.Model):
     Date = models.DateTimeField(auto_now_add=True)
     ActiveInactive = models.CharField(max_length=1, default='1')
     FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
+    # Date fields for hierarchy validation
+    StartDate = models.DateField(null=True, blank=True, help_text="Audit version start date (must be within Framework/Policy/SubPolicy period)")
+    EndDate = models.DateField(null=True, blank=True, help_text="Audit version end date (auto-set from Framework.EndDate)")
     retentionExpiry = models.DateField(null=True, blank=True)
     class Meta:
         db_table = 'audit_version'

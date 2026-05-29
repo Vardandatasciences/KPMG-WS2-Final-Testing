@@ -1215,6 +1215,7 @@
       </div>
     </div>
 
+    <SimilaritySubmitGate ref="similarityRunner" itemType="Framework" :item-data="{ name: '' }" />
 </template>
 
 <script>
@@ -1225,6 +1226,12 @@ import eventBus, { LOGOUT_EVENT } from '../../utils/eventBus.js'
 import { API_ENDPOINTS, API_BASE_URL } from '@/config/api.js'
 import { compressFile, shouldCompressFile } from '@/utils/fileCompression.js'
 import CustomDropdown from '../CustomDropdown.vue'
+import SimilaritySubmitGate from '@/components/SimilaritySubmitGate.vue'
+import {
+  runSimilarityCheckSequence,
+  buildUploadFrameworkSimilarityChecks
+} from '@/utils/similaritySubmitHelper'
+import { PopupService } from '@/modules/popup'
 // AI Centralized Module Optimizations
 import moduleAiAnalysisService from '@/services/moduleAiAnalysisService'
 import policyFrameworkCacheService from '@/services/policyFrameworkCacheService'
@@ -1232,10 +1239,12 @@ import policyFrameworkCacheService from '@/services/policyFrameworkCacheService'
 export default {
   name: 'UploadFramework',
   components: {
-    CustomDropdown
+    CustomDropdown,
+    SimilaritySubmitGate
   },
   setup() {
     const router = useRouter()
+    const similarityRunner = ref(null)
     
     // Use router to prevent ESLint warning
     const navigateTo = (path) => {
@@ -3100,6 +3109,17 @@ export default {
     // Save all edited data to database
     const saveToDatabase = async () => {
       try {
+        const sections = checkedSectionsData.value?.sections || []
+        const uploadChecks = buildUploadFrameworkSimilarityChecks({
+          gate: similarityRunner,
+          frameworkForm: frameworkForm.value,
+          sections
+        })
+        const similarityOk = await runSimilarityCheckSequence(uploadChecks, { PopupService })
+        if (!similarityOk) {
+          return
+        }
+
         isSavingToDatabase.value = true
         
         const payload = {
@@ -4109,6 +4129,7 @@ export default {
       loadCheckedSectionsData,
       getCompliancesForSubpolicy,
       saveToDatabase,
+      similarityRunner,
       // OPTIMIZATION: Cache monitoring functions for debugging and performance analysis
       getCacheStatistics: () => ({
         policyFramework: policyFrameworkCacheService.getCacheStats(),

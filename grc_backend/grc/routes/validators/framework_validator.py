@@ -2,7 +2,7 @@
 Framework validator module for validating framework-related inputs.
 """
 import re
-from datetime import date
+from datetime import date, timedelta
 from typing import Dict, Any, Union, Optional, List
 
 class ValidationError(Exception):
@@ -259,6 +259,25 @@ def validate_framework_post_data(data: Dict[str, Any]) -> Dict[str, Any]:
     
     return validated
 
+
+def validate_review_reminder_frequency_days(data: Dict[str, Any], index: int, default: int = 30) -> int:
+    """Review reminder interval (days) from policy create payload."""
+    raw = data.get('ReviewReminderFrequencyDays', default)
+    if raw is None or raw == '':
+        return default
+    try:
+        days = int(raw)
+    except (TypeError, ValueError):
+        raise ValidationError(
+            f'ReviewReminderFrequencyDays for policy {index} must be a valid number'
+        )
+    if days < 1 or days > 365:
+        raise ValidationError(
+            f'ReviewReminderFrequencyDays for policy {index} must be between 1 and 365'
+        )
+    return days
+
+
 def validate_policy_data(data: Dict[str, Any], index: int) -> Dict[str, Any]:
     """
     Validate policy data within a framework.
@@ -300,9 +319,17 @@ def validate_policy_data(data: Dict[str, Any], index: int) -> Dict[str, Any]:
     validated['EndDate'] = validate_date(
         data.get('EndDate'), 
         f'EndDate for policy {index}', 
-        allow_none=True
+        allow_none=False
     )
-    
+
+    # Optional: legacy field (deprecated in favor of reminder_rules)
+    validated['ReviewReminderFrequencyDays'] = validate_review_reminder_frequency_days(data, index)
+
+    # Optional: new pre-scheduled reminder rules
+    reminder_rules = data.get('reminder_rules')
+    if reminder_rules is not None:
+        validated['reminder_rules'] = reminder_rules
+
     # Optional fields
     validated['Department'] = validate_string(
         data.get('Department', ''), 
@@ -584,9 +611,17 @@ def validate_policy_for_add(data: Dict[str, Any], index: int) -> Dict[str, Any]:
     validated['EndDate'] = validate_date(
         data.get('EndDate'), 
         f'EndDate for policy {index}', 
-        allow_none=True
+        allow_none=False
     )
-    
+
+    # Optional: legacy field (deprecated in favor of reminder_rules)
+    validated['ReviewReminderFrequencyDays'] = validate_review_reminder_frequency_days(data, index)
+
+    # Optional: new pre-scheduled reminder rules
+    reminder_rules = data.get('reminder_rules')
+    if reminder_rules is not None:
+        validated['reminder_rules'] = reminder_rules
+
     # Optional fields
     validated['Department'] = validate_string(
         data.get('Department', ''), 
@@ -1562,6 +1597,54 @@ def validate_framework_version_data(data: Dict[str, Any]) -> Dict[str, Any]:
     
     return validated
 
+def _date_field_empty(value: Any) -> bool:
+    return value is None or (isinstance(value, str) and not str(value).strip())
+
+
+def _fill_framework_version_policy_dates(data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    When versioning, the UI may omit policy dates if only framework fields changed.
+    Fill StartDate/EndDate from the source Policy row before validation.
+    """
+    merged = dict(data)
+    if merged.get('exclude') or not merged.get('original_policy_id'):
+        return merged
+
+    if not _date_field_empty(merged.get('StartDate')) and not _date_field_empty(merged.get('EndDate')):
+        return merged
+
+    try:
+        from ...models import Policy
+
+        orig = Policy.objects.filter(PolicyId=int(merged['original_policy_id'])).only(
+            'StartDate', 'EndDate'
+        ).first()
+        if not orig:
+            return merged
+
+        if _date_field_empty(merged.get('StartDate')) and orig.StartDate:
+            merged['StartDate'] = orig.StartDate.isoformat()
+
+        if _date_field_empty(merged.get('EndDate')) and orig.EndDate:
+            merged['EndDate'] = orig.EndDate.isoformat()
+
+        if _date_field_empty(merged.get('EndDate')):
+            start_val = merged.get('StartDate')
+            if _date_field_empty(start_val) and orig.StartDate:
+                start_val = orig.StartDate.isoformat()
+            if not _date_field_empty(start_val):
+                if isinstance(start_val, date):
+                    end = start_val + timedelta(days=365)
+                else:
+                    year, month, day = map(int, str(start_val).split('T')[0].split('-'))
+                    end = date(year, month, day) + timedelta(days=365)
+                merged['EndDate'] = end.isoformat()
+    except Exception:
+        pass
+
+    return merged
+
+
 def validate_framework_version_policy_data(data: Dict[str, Any], index: int) -> Dict[str, Any]:
     """
     Validate policy data within a framework version (existing policies).
@@ -1576,6 +1659,7 @@ def validate_framework_version_policy_data(data: Dict[str, Any], index: int) -> 
     Raises:
         ValidationError: If validation fails
     """
+    data = _fill_framework_version_policy_dates(data)
     validated = {}
     
     # Exclude flag
@@ -1616,7 +1700,7 @@ def validate_framework_version_policy_data(data: Dict[str, Any], index: int) -> 
     validated['EndDate'] = validate_date(
         data.get('EndDate'), 
         f'EndDate for policy {index}', 
-        allow_none=True
+        allow_none=False
     )
     
     # Optional fields
@@ -1815,7 +1899,7 @@ def validate_framework_version_new_policy_data(data: Dict[str, Any], index: int)
     validated['EndDate'] = validate_date(
         data.get('EndDate'), 
         f'EndDate for new policy {index}', 
-        allow_none=True
+        allow_none=False
     )
     
     # Optional fields

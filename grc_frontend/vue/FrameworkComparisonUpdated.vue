@@ -484,26 +484,45 @@
                 Matched Compliances
               </h5>
               <div class="FC_compliance-list">
-                <div 
-                  v-for="(match, index) in complianceMatches.matched" 
-                  :key="'matched-' + index" 
-                  :class="['FC_compliance-match-item', 'FC_matched-item', 'FC_expandable-item', { 'FC_expanded': expandedComplianceIndex === index }]"
+                <div
+                  v-for="(match, index) in complianceMatches.matched"
+                  :key="'matched-' + index"
+                  :class="['FC_compliance-match-item', 'FC_matched-item', 'FC_expandable-item', { 'FC_expanded': expandedComplianceIndex === index }, { 'FC_changed-item': match.change_detected }]"
                   @click="toggleComplianceDetails(index)"
                 >
                   <div class="FC_compliance-match-header">
-                    <div class="FC_match-status-icon FC_match-success">
-                      <i class="fas fa-check"></i>
+                    <div class="FC_match-status-icon" :class="match.change_detected ? 'FC_match-warning' : 'FC_match-success'">
+                      <i :class="match.change_detected ? 'fas fa-exclamation-circle' : 'fas fa-check'"></i>
                     </div>
                     <div class="FC_compliance-match-info">
                       <h6 class="FC_target-compliance-title">
                         {{ match.target_compliance.compliance_title || 'Compliance' }}
+                        <span v-if="match.change_detected" class="FC_changed-badge">CHANGED</span>
                       </h6>
                       <p class="FC_target-compliance-desc">
                         {{ match.target_compliance.compliance_description || '' }}
                       </p>
                     </div>
-                    <div class="FC_expand-icon">
-                      <i :class="expandedComplianceIndex === index ? 'fas fa-chevron-up' : 'fas fa-chevron-down'"></i>
+                    <div class="FC_match-actions">
+                      <button
+                        v-if="match.change_detected"
+                        class="FC_view-diff-button"
+                        @click.stop="openDiffModal(match)"
+                        title="View changes"
+                      >
+                        <i class="fas fa-eye"></i> View Diff
+                      </button>
+                      <button
+                        v-if="match.change_detected"
+                        class="FC_update-compliance-button"
+                        @click.stop="openUpdateComplianceModal(match)"
+                        title="Update existing compliance"
+                      >
+                        <i class="fas fa-pen"></i> Update
+                      </button>
+                      <div class="FC_expand-icon">
+                        <i :class="expandedComplianceIndex === index ? 'fas fa-chevron-up' : 'fas fa-chevron-down'"></i>
+                      </div>
                     </div>
                   </div>
                   
@@ -545,11 +564,31 @@
                       <label>Criticality:</label>
                       <span>{{ match.matched_compliance.criticality }}</span>
                     </div>
+
+                    <!-- Phase 2: Affected Risks -->
+                    <div v-if="match.affected_risks && match.affected_risks.length > 0" class="FC_detail-section FC_risk-section">
+                      <label><i class="fas fa-shield-alt"></i> Affected Risks:</label>
+                      <div class="FC_risk-list">
+                        <div
+                          v-for="(risk, rIdx) in match.affected_risks"
+                          :key="'risk-' + rIdx"
+                          class="FC_risk-chip"
+                          :class="'FC_risk-' + (risk.Criticality || 'medium').toLowerCase()"
+                        >
+                          <span class="FC_risk-title">{{ risk.RiskTitle || 'Unnamed Risk' }}</span>
+                          <span class="FC_risk-criticality">{{ risk.Criticality || 'Medium' }}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div v-else-if="match.change_detected && match.affected_risks_loaded && match.affected_risks.length === 0" class="FC_detail-section FC_risk-section">
+                      <label><i class="fas fa-shield-alt"></i> Affected Risks:</label>
+                      <span class="FC_no-risks">No linked risk entries found.</span>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-            
+
             <!-- Unmatched Compliances -->
             <div v-if="complianceMatches.unmatched && complianceMatches.unmatched.length > 0" class="FC_compliance-section">
               <h5 class="FC_section-title FC_unmatched-title">
@@ -813,6 +852,133 @@
       </div>
     </div>
 
+    <!-- Phase 1: Diff Modal -->
+    <div v-if="showDiffModal" class="FC_modal-backdrop">
+      <div class="FC_modal FC_diff-modal">
+        <div class="FC_modal-header">
+          <h3><i class="fas fa-exchange-alt"></i> Compliance Changes</h3>
+          <button class="FC_modal-close" @click="closeDiffModal">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="FC_modal-body">
+          <div v-if="diffModalData" class="FC_diff-container">
+            <div class="FC_diff-field" v-for="field in diffModalData.diff_fields" :key="field">
+              <h5 class="FC_diff-field-name">{{ field }}</h5>
+              <div class="FC_diff-compare">
+                <div class="FC_diff-old">
+                  <label>Current (Database)</label>
+                  <div class="FC_diff-box">{{ diffModalData.old_values[field] || '(empty)' }}</div>
+                </div>
+                <div class="FC_diff-arrow"><i class="fas fa-arrow-right"></i></div>
+                <div class="FC_diff-new">
+                  <label>New (Amendment)</label>
+                  <div class="FC_diff-box FC_diff-new-box">{{ diffModalData.new_values[field] || '(empty)' }}</div>
+                </div>
+              </div>
+            </div>
+            <div class="FC_diff-similarity">
+              <span>Text Similarity: <strong>{{ (diffModalData.similarity_score * 100).toFixed(1) }}%</strong></span>
+            </div>
+          </div>
+        </div>
+        <div class="FC_modal-footer">
+          <button class="FC_modal-secondary" @click="closeDiffModal">Close</button>
+          <button
+            v-if="diffModalData && diffModalData.compliance_id"
+            class="FC_modal-primary"
+            @click="closeDiffModal(); openUpdateComplianceModalFromDiff()"
+          >
+            <i class="fas fa-pen"></i> Update Compliance
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Phase 1: Update Compliance Modal -->
+    <div v-if="showUpdateComplianceModal" class="FC_modal-backdrop">
+      <div class="FC_modal">
+        <div class="FC_modal-header">
+          <h3><i class="fas fa-pen"></i> Update Existing Compliance</h3>
+          <button class="FC_modal-close" @click="closeUpdateComplianceModal">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="FC_modal-body">
+          <div v-if="updateComplianceModalData" class="FC_update-intro">
+            <p>Updating: <strong>{{ updateComplianceModalData.matched_compliance?.compliance_title || '' }}</strong></p>
+            <p class="FC_update-subtitle">Proposed changes from the amendment are pre-filled below. Review and submit for approval.</p>
+          </div>
+          <div class="FC_form-group">
+            <label>Compliance Title</label>
+            <input v-model="updateComplianceForm.compliance_title" type="text" class="FC_form-input" />
+          </div>
+          <div class="FC_form-group">
+            <label>Compliance Description</label>
+            <textarea v-model="updateComplianceForm.compliance_description" class="FC_form-textarea" rows="4"></textarea>
+          </div>
+          <div class="FC_form-row">
+            <div class="FC_form-group">
+              <label>Type</label>
+              <select v-model="updateComplianceForm.compliance_type" class="FC_form-select">
+                <option value="">Select Type</option>
+                <option value="Preventive">Preventive</option>
+                <option value="Detective">Detective</option>
+                <option value="Corrective">Corrective</option>
+              </select>
+            </div>
+            <div class="FC_form-group">
+              <label>Criticality</label>
+              <select v-model="updateComplianceForm.criticality" class="FC_form-select">
+                <option value="Low">Low</option>
+                <option value="Medium">Medium</option>
+                <option value="High">High</option>
+                <option value="Critical">Critical</option>
+              </select>
+            </div>
+          </div>
+          <div class="FC_form-row">
+            <div class="FC_form-group">
+              <label>Mandatory / Optional</label>
+              <select v-model="updateComplianceForm.mandatory" class="FC_form-select">
+                <option value="Mandatory">Mandatory</option>
+                <option value="Optional">Optional</option>
+              </select>
+            </div>
+            <div class="FC_form-group">
+              <label>Manual / Automatic</label>
+              <select v-model="updateComplianceForm.manual_automatic" class="FC_form-select">
+                <option value="Manual">Manual</option>
+                <option value="Automatic">Automatic</option>
+              </select>
+            </div>
+          </div>
+          <div class="FC_form-group">
+            <label>Reviewer <span class="FC_required">*</span></label>
+            <select v-model="selectedReviewerId" class="FC_form-select">
+              <option value="">Select Reviewer</option>
+              <option v-for="reviewer in availableReviewers" :key="reviewer.UserId" :value="reviewer.UserId">
+                {{ reviewer.UserName }}
+              </option>
+            </select>
+            <p v-if="reviewerError" class="FC_form-error">{{ reviewerError }}</p>
+          </div>
+          <p v-if="updateComplianceSaveError" class="FC_modal-error">{{ updateComplianceSaveError }}</p>
+        </div>
+        <div class="FC_modal-footer">
+          <button class="FC_modal-secondary" @click="closeUpdateComplianceModal">Cancel</button>
+          <button
+            class="FC_modal-primary"
+            :disabled="submittingUpdateCompliance || !selectedReviewerId"
+            @click="submitUpdateComplianceForm"
+          >
+            <span v-if="!submittingUpdateCompliance"><i class="fas fa-paper-plane"></i> Send for Approval</span>
+            <span v-else><i class="fas fa-spinner fa-spin"></i> Sending...</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Progress Popup Modal -->
     <div v-if="showProgressModal" class="FC_progress-modal-backdrop">
       <div class="FC_progress-modal">
@@ -1038,6 +1204,24 @@ export default {
       selectedReviewerId: '',
       availableReviewers: [],
       loadingReviewers: false,
+
+      // Phase 1: Diff modal
+      showDiffModal: false,
+      diffModalData: null,
+
+      // Phase 1: Update compliance modal
+      showUpdateComplianceModal: false,
+      updateComplianceModalData: null,
+      updateComplianceForm: {
+        compliance_title: '',
+        compliance_description: '',
+        compliance_type: '',
+        criticality: 'Medium',
+        mandatory: 'Mandatory',
+        manual_automatic: 'Manual'
+      },
+      updateComplianceSaveError: '',
+      submittingUpdateCompliance: false,
       reviewerError: ''
     }
   },
@@ -2140,6 +2324,11 @@ export default {
         this.expandedComplianceIndex = null
       } else {
         this.expandedComplianceIndex = index
+        // Phase 2: fetch affected risks when expanding a changed compliance
+        const match = this.complianceMatches?.matched?.[index]
+        if (match && match.change_detected && match.matched_compliance?.compliance_id) {
+          this.loadAffectedRisksForMatch(match, index)
+        }
       }
       this.$forceUpdate()
     },
@@ -2336,7 +2525,141 @@ export default {
       this.showAddAllModal = false
       this.selectedCompliancesForAdd = []
     },
-    
+
+    // =================================================================
+    // Phase 1: Diff Modal Methods
+    // =================================================================
+
+    openDiffModal(match) {
+      this.diffModalData = {
+        compliance_id: match.matched_compliance?.compliance_id || null,
+        diff_fields: match.diff_fields || [],
+        old_values: match.old_values || {},
+        new_values: match.new_values || {},
+        similarity_score: match.similarity_score || 0
+      }
+      this.showDiffModal = true
+    },
+
+    closeDiffModal() {
+      this.showDiffModal = false
+      this.diffModalData = null
+    },
+
+    // =================================================================
+    // Phase 1: Update Compliance Modal Methods
+    // =================================================================
+
+    openUpdateComplianceModal(match) {
+      const target = match.target_compliance || {}
+      const matched = match.matched_compliance || {}
+      this.updateComplianceModalData = match
+      this.updateComplianceForm = {
+        compliance_title: target.compliance_title || matched.compliance_title || '',
+        compliance_description: target.compliance_description || matched.compliance_description || '',
+        compliance_type: target.compliance_type || matched.compliance_type || '',
+        criticality: target.criticality || matched.criticality || 'Medium',
+        mandatory: target.mandatory || matched.mandatory || 'Mandatory',
+        manual_automatic: target.manual_automatic || matched.manual_automatic || 'Manual'
+      }
+      this.updateComplianceSaveError = ''
+      this.selectedReviewerId = ''
+      this.reviewerError = ''
+      this.showUpdateComplianceModal = true
+      this.fetchReviewers()
+    },
+
+    openUpdateComplianceModalFromDiff() {
+      // Called from diff modal after closing it
+      if (this.diffModalData && this.diffModalData.compliance_id) {
+        // Find the matching compliance in complianceMatches
+        const match = this.complianceMatches?.matched?.find(
+          m => m.matched_compliance?.compliance_id === this.diffModalData.compliance_id
+        )
+        if (match) {
+          this.openUpdateComplianceModal(match)
+        }
+      }
+    },
+
+    closeUpdateComplianceModal() {
+      if (this.submittingUpdateCompliance) return
+      this.showUpdateComplianceModal = false
+      this.updateComplianceModalData = null
+      this.selectedReviewerId = ''
+      this.reviewerError = ''
+    },
+
+    async submitUpdateComplianceForm() {
+      if (!this.selectedFrameworkId) return
+      if (!this.selectedReviewerId) {
+        this.reviewerError = 'Please select a reviewer before submitting.'
+        return
+      }
+      try {
+        this.submittingUpdateCompliance = true
+        this.updateComplianceSaveError = ''
+        this.reviewerError = ''
+
+        const matched = this.updateComplianceModalData?.matched_compliance || {}
+        const payload = {
+          compliance_id: matched.compliance_id,
+          reviewer_id: this.selectedReviewerId,
+          proposed_values: {
+            ComplianceTitle: this.updateComplianceForm.compliance_title,
+            ComplianceItemDescription: this.updateComplianceForm.compliance_description,
+            ComplianceType: this.updateComplianceForm.compliance_type,
+            Criticality: this.updateComplianceForm.criticality,
+            MandatoryOptional: this.updateComplianceForm.mandatory,
+            ManualAutomatic: this.updateComplianceForm.manual_automatic
+          }
+        }
+        const response = await frameworkComparisonService.createUpdateApproval(
+          this.selectedFrameworkId,
+          payload
+        )
+        if (response && response.success) {
+          PopupService.success(
+            `Update sent for "${this.updateComplianceForm.compliance_title}". Reviewer will review it in the standard approval queue.`,
+            'Sent for Approval'
+          )
+        }
+        this.showUpdateComplianceModal = false
+        this.updateComplianceModalData = null
+        this.selectedReviewerId = ''
+      } catch (error) {
+        this.updateComplianceSaveError = error?.response?.data?.error || error.message || 'Failed to create update approval'
+        PopupService.error(
+          `Failed to submit update: ${this.updateComplianceSaveError}`,
+          'Error'
+        )
+      } finally {
+        this.submittingUpdateCompliance = false
+      }
+    },
+
+    // =================================================================
+    // Phase 2: Affected Risks Methods
+    // =================================================================
+
+    async loadAffectedRisksForMatch(match, index) {
+      const complianceId = match.matched_compliance?.compliance_id
+      if (!complianceId || !this.selectedFrameworkId) return
+      try {
+        const response = await frameworkComparisonService.getAffectedRisks(
+          this.selectedFrameworkId,
+          complianceId
+        )
+        if (response && response.success) {
+          // Mutate the match object directly (Vue 2 reactivity)
+          this.$set(this.complianceMatches.matched[index], 'affected_risks', response.risks || [])
+          this.$set(this.complianceMatches.matched[index], 'affected_risks_loaded', true)
+        }
+      } catch (error) {
+        console.error(`Error fetching affected risks for compliance ${complianceId}:`, error)
+      }
+    },
+
     processSelectedCompliances() {
       if (this.selectedCompliancesForAdd.length === 0) {
         PopupService.warning('Please select at least one compliance to add.', 'No Selection')
@@ -4885,5 +5208,239 @@ export default {
 
 .FC_progress-stat span {
   font-weight: 500;
+}
+
+/* =================================================================
+   Phase 1 + Phase 2 New Styles
+   ================================================================= */
+
+/* Changed badge */
+.FC_changed-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  background: #f97316;
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Changed item highlight */
+.FC_changed-item {
+  border-left: 4px solid #f97316 !important;
+}
+
+/* Match actions container */
+.FC_match-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* View diff button */
+.FC_view-diff-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.FC_view-diff-button:hover {
+  background: #2563eb;
+  transform: translateY(-1px);
+}
+
+/* Update compliance button */
+.FC_update-compliance-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: #f97316;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.FC_update-compliance-button:hover {
+  background: #ea580c;
+  transform: translateY(-1px);
+}
+
+/* Diff modal styles */
+.FC_diff-modal .FC_modal-body {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.FC_diff-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.FC_diff-field-name {
+  margin: 0 0 10px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  text-transform: capitalize;
+}
+
+.FC_diff-compare {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+}
+
+.FC_diff-old,
+.FC_diff-new {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.FC_diff-old label,
+.FC_diff-new label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.FC_diff-box {
+  padding: 12px;
+  background: #f3f4f6;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #374151;
+  line-height: 1.5;
+  min-height: 60px;
+  word-break: break-word;
+}
+
+.FC_diff-new-box {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+}
+
+.FC_diff-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #9ca3af;
+  font-size: 18px;
+  align-self: center;
+}
+
+.FC_diff-similarity {
+  text-align: center;
+  padding: 10px;
+  background: #eff6ff;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #1e40af;
+}
+
+/* Update compliance modal intro */
+.FC_update-intro {
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 16px;
+}
+
+.FC_update-intro p {
+  margin: 0;
+  font-size: 14px;
+  color: #7c2d12;
+}
+
+.FC_update-subtitle {
+  font-size: 12px;
+  color: #9a3412;
+  margin-top: 4px !important;
+}
+
+/* Risk section styles */
+.FC_risk-section {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border-color);
+}
+
+.FC_risk-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.FC_risk-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.FC_risk-high {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fca5a5;
+}
+
+.FC_risk-medium {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+}
+
+.FC_risk-low {
+  background: #d1fae5;
+  color: #065f46;
+  border: 1px solid #6ee7b7;
+}
+
+.FC_risk-critical {
+  background: #fee2e2;
+  color: #7f1d1d;
+  border: 1px solid #f87171;
+}
+
+.FC_risk-title {
+  font-weight: 600;
+}
+
+.FC_risk-criticality {
+  font-size: 10px;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+
+.FC_no-risks {
+  font-size: 13px;
+  color: #9ca3af;
+  font-style: italic;
 }
 </style>

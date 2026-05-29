@@ -447,10 +447,15 @@
                     <div class="global-form-helper-text">Date when the framework expires or requires review</div>
                   </div>
                 </div>
-                <div class="form-actions">
-                  <button class="btn-submit" @click="handleCreateFramework">
+                <div class="form-actions" style="display: flex; gap: 10px; align-items: center;">
+                  <button
+                    type="button"
+                    class="btn-submit"
+                    :disabled="frameworkContinueInFlight"
+                    @click="handleCreateFramework"
+                  >
                     <i class="fas fa-arrow-right"></i>
-                    Continue to Policies
+                    {{ frameworkContinueInFlight ? 'Checking…' : 'Continue to Policies' }}
                   </button>
                 </div>
               </div>
@@ -697,10 +702,15 @@
               <div class="helper-text">Date when the framework expires or requires review</div>
             </div>
           </div>
-          <div class="form-actions">
-            <button class="btn-submit" @click="handleCreateFramework">
+          <div class="form-actions" style="display: flex; gap: 10px; align-items: center;">
+            <button
+              type="button"
+              class="btn-submit"
+              :disabled="frameworkContinueInFlight"
+              @click="handleCreateFramework"
+            >
               <i class="fas fa-arrow-right icon-md"></i>
-              Continue to Policies
+              {{ frameworkContinueInFlight ? 'Checking…' : 'Continue to Policies' }}
             </button>
           </div>
         </div>
@@ -1535,12 +1545,14 @@
                   <input
                     type="date"
                     class="global-form-date-input"
+                    :class="{ 'error': policyStartDateErrors[selectedPolicyIdx] }"
                     v-model="policiesForm[selectedPolicyIdx].StartDate"
                     @input="handlePolicyChange(selectedPolicyIdx, 'StartDate', $event.target.value)"
                     title="Date when this policy takes effect and becomes enforceable"
                   />
                 </div>
-                <div class="global-form-helper-text">Date when this policy takes effect and becomes enforceable</div>
+                <div v-if="policyStartDateErrors[selectedPolicyIdx]" class="global-form-error-message">{{ policyStartDateErrors[selectedPolicyIdx] }}</div>
+                <div v-else class="global-form-helper-text">Date when this policy takes effect and becomes enforceable</div>
               </div>
               <div class="global-form-group">
                 <label class="global-form-label">
@@ -1582,9 +1594,64 @@
                     v-model="policiesForm[selectedPolicyIdx].EndDate"
                     @input="handlePolicyChange(selectedPolicyIdx, 'EndDate', $event.target.value)"
                     title="Date when this policy expires or requires review/renewal"
+                    readonly
                   />
                 </div>
-                <div class="global-form-helper-text">Date when this policy expires or requires review/renewal</div>
+                <div class="global-form-helper-text">Auto-set from Framework End Date</div>
+              </div>
+              <div class="global-form-group">
+                <label class="global-form-label">Policy Reminders</label>
+                <div
+                  v-for="(rule, rIdx) in policiesForm[selectedPolicyIdx].reminder_rules"
+                  :key="rIdx"
+                  class="reminder-rule-row"
+                  style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px;"
+                >
+                  <select
+                    class="global-form-input"
+                    v-model="rule.start_unit"
+                    style="flex: 1;"
+                    @change="onReminderStartUnitChange(selectedPolicyIdx, rIdx)"
+                  >
+                    <option value="year">1 Year before End Date</option>
+                    <option value="months">6 Months before End Date</option>
+                    <option value="weeks">1 Month before End Date</option>
+                    <option value="days">1 Week before End Date</option>
+                    <option value="hours">1 Day before End Date</option>
+                  </select>
+                  <select
+                    class="global-form-input"
+                    v-model="rule.frequency_unit"
+                    style="flex: 1;"
+                  >
+                    <option
+                      v-for="opt in getReminderFrequencyOptions(rule.start_unit)"
+                      :key="opt.value"
+                      :value="opt.value"
+                    >
+                      {{ opt.label }}
+                    </option>
+                  </select>
+                  <button
+                    type="button"
+                    class="remove-btn"
+                    @click="removeReminderRule(selectedPolicyIdx, rIdx)"
+                    title="Remove rule"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  class="btn-add"
+                  @click="addReminderRule(selectedPolicyIdx)"
+                  style="margin-top: 4px;"
+                >
+                  <i class="fas fa-plus icon-sm"></i> Add Reminder Rule
+                </button>
+                <div class="global-form-helper-text">
+                  Configure multiple reminder rules. Each rule defines when reminders start and how frequently they repeat.
+                </div>
               </div>
             </div>
               <button class="btn-upload-document" type="button" @click="() => handlePolicyFileUpload(selectedPolicyIdx)" title="Upload supporting documentation for this policy">
@@ -1835,10 +1902,103 @@
                   <div class="global-form-helper-text">Explain the purpose, scope, and specific requirements of this sub-policy</div>
                 </div>
               </div>
+              <div class="global-form-row">
+                <div class="global-form-group">
+                  <label class="global-form-label">
+                    Start Date <span class="global-form-label-required">*</span>
+                    <!-- Data Type Circle Toggle -->
+                    <div class="policy-data-type-circle-toggle-wrapper">
+                      <div class="policy-data-type-circle-toggle">
+                        <div 
+                          class="policy-circle-option personal-circle" 
+                          :class="{ active: (subPolicyFieldDataTypes[selectedPolicyIdx]?.[selectedSubPolicyIdx[selectedPolicyIdx]]?.subPolicyStartDate || 'regular') === 'personal' }"
+                          @click="setSubPolicyDataType(selectedPolicyIdx, selectedSubPolicyIdx[selectedPolicyIdx], 'subPolicyStartDate', 'personal')"
+                          title="Personal Data"
+                        >
+                          <div class="policy-circle-inner"></div>
+                        </div>
+                        <div 
+                          class="policy-circle-option confidential-circle" 
+                          :class="{ active: (subPolicyFieldDataTypes[selectedPolicyIdx]?.[selectedSubPolicyIdx[selectedPolicyIdx]]?.subPolicyStartDate || 'regular') === 'confidential' }"
+                          @click="setSubPolicyDataType(selectedPolicyIdx, selectedSubPolicyIdx[selectedPolicyIdx], 'subPolicyStartDate', 'confidential')"
+                          title="Confidential Data"
+                        >
+                          <div class="policy-circle-inner"></div>
+                        </div>
+                        <div 
+                          class="policy-circle-option regular-circle" 
+                          :class="{ active: (subPolicyFieldDataTypes[selectedPolicyIdx]?.[selectedSubPolicyIdx[selectedPolicyIdx]]?.subPolicyStartDate || 'regular') === 'regular' }"
+                          @click="setSubPolicyDataType(selectedPolicyIdx, selectedSubPolicyIdx[selectedPolicyIdx], 'subPolicyStartDate', 'regular')"
+                          title="Regular Data"
+                        >
+                          <div class="policy-circle-inner"></div>
+                        </div>
+                      </div>
+                    </div>
+                  </label>
+                  <div class="input-with-icon">
+                    <input
+                      type="date"
+                      class="global-form-date-input"
+                      :class="{ 'error': subPolicyStartDateErrors[selectedPolicyIdx]?.[selectedSubPolicyIdx[selectedPolicyIdx]] }"
+                      v-model="policiesForm[selectedPolicyIdx].subpolicies[selectedSubPolicyIdx[selectedPolicyIdx]].StartDate"
+                      @input="handleSubPolicyChange(selectedPolicyIdx, selectedSubPolicyIdx[selectedPolicyIdx], 'StartDate', $event.target.value)"
+                      title="Date when this sub-policy takes effect"
+                    />
+                  </div>
+                  <div v-if="subPolicyStartDateErrors[selectedPolicyIdx]?.[selectedSubPolicyIdx[selectedPolicyIdx]]" class="global-form-error-message">{{ subPolicyStartDateErrors[selectedPolicyIdx][selectedSubPolicyIdx[selectedPolicyIdx]] }}</div>
+                  <div v-else class="global-form-helper-text">Date when this sub-policy takes effect</div>
+                </div>
+                <div class="global-form-group">
+                  <label class="global-form-label">
+                    End Date
+                    <!-- Data Type Circle Toggle -->
+                    <div class="policy-data-type-circle-toggle-wrapper">
+                      <div class="policy-data-type-circle-toggle">
+                        <div 
+                          class="policy-circle-option personal-circle" 
+                          :class="{ active: (subPolicyFieldDataTypes[selectedPolicyIdx]?.[selectedSubPolicyIdx[selectedPolicyIdx]]?.subPolicyEndDate || 'regular') === 'personal' }"
+                          @click="setSubPolicyDataType(selectedPolicyIdx, selectedSubPolicyIdx[selectedPolicyIdx], 'subPolicyEndDate', 'personal')"
+                          title="Personal Data"
+                        >
+                          <div class="policy-circle-inner"></div>
+                        </div>
+                        <div 
+                          class="policy-circle-option confidential-circle" 
+                          :class="{ active: (subPolicyFieldDataTypes[selectedPolicyIdx]?.[selectedSubPolicyIdx[selectedPolicyIdx]]?.subPolicyEndDate || 'regular') === 'confidential' }"
+                          @click="setSubPolicyDataType(selectedPolicyIdx, selectedSubPolicyIdx[selectedPolicyIdx], 'subPolicyEndDate', 'confidential')"
+                          title="Confidential Data"
+                        >
+                          <div class="policy-circle-inner"></div>
+                        </div>
+                        <div 
+                          class="policy-circle-option regular-circle" 
+                          :class="{ active: (subPolicyFieldDataTypes[selectedPolicyIdx]?.[selectedSubPolicyIdx[selectedPolicyIdx]]?.subPolicyEndDate || 'regular') === 'regular' }"
+                          @click="setSubPolicyDataType(selectedPolicyIdx, selectedSubPolicyIdx[selectedPolicyIdx], 'subPolicyEndDate', 'regular')"
+                          title="Regular Data"
+                        >
+                          <div class="policy-circle-inner"></div>
+                        </div>
+                      </div>
+                    </div>
+                  </label>
+                  <div class="input-with-icon">
+                    <input
+                      type="date"
+                      class="global-form-date-input"
+                      v-model="policiesForm[selectedPolicyIdx].subpolicies[selectedSubPolicyIdx[selectedPolicyIdx]].EndDate"
+                      @input="handleSubPolicyChange(selectedPolicyIdx, selectedSubPolicyIdx[selectedPolicyIdx], 'EndDate', $event.target.value)"
+                      title="Date when this sub-policy expires"
+                      readonly
+                    />
+                  </div>
+                  <div class="global-form-helper-text">Auto-set from Policy End Date</div>
+                </div>
+              </div>
             </div>
             </div>
 
-      <div class="form-actions" v-if="policiesForm.length > 0">
+      <div class="form-actions" v-if="policiesForm.length > 0" style="display: flex; gap: 10px; align-items: center;">
         <button 
           class="btn-submit" 
           @click="handleSubmitPolicy" 
@@ -1875,7 +2035,7 @@
               v-model="approvalForm.createdByName"
               readonly
               :disabled="loading"
-                :placeholder="currentUser.UserName || 'Loading user...'"
+                placeholder="Your account name"
               title="This policy will be created under your username"
             />
             </div>
@@ -1953,6 +2113,12 @@
       </div>
     </div>
 
+    <SimilaritySubmitGate
+      ref="similarityRunner"
+      itemType="Framework"
+      :item-data="{ name: '' }"
+    />
+
     <!-- Popup Modal -->
     <PopupModal />
   </div>
@@ -1970,15 +2136,27 @@ import { PopupService, PopupModal } from '@/modules/popus'
 import CustomDropdown from '@/components/CustomDropdown.vue'
 
 import { API_ENDPOINTS } from '../../config/api.js'
+import SimilaritySubmitGate from '@/components/SimilaritySubmitGate.vue'
+import {
+  runSimilarityBeforeSubmit,
+  handleSimilarityGateResult,
+  runSimilarityCheckSequence,
+  buildCreatePolicySimilarityChecks,
+  buildNewFrameworkSimilarityParams
+} from '@/utils/similaritySubmitHelper'
  
 export default {
   name: 'CreatePolicy',
   components: {
     PopupModal,
-    CustomDropdown
+    CustomDropdown,
+    SimilaritySubmitGate
   },
   setup() {
     const selectedSubPolicyIdx = ref([]) // <-- Declare this at the very top!
+    const similarityRunner = ref(null)
+    const frameworkSimilarityPassed = ref(false)
+    const frameworkContinueInFlight = ref(false)
     const frameworkStore = useFrameworkStore()
     const policyStore = usePolicyStore()
     const router = useRouter()
@@ -1988,16 +2166,40 @@ export default {
     const selectedPolicyIdx = ref(null)
     const showApprovalForm = ref(false)
     const showFrameworkForm = ref(false)
+    const resolveLoggedInDisplayName = () => (
+      localStorage.getItem('user_name')
+      || localStorage.getItem('username')
+      || localStorage.getItem('UserName')
+      || ''
+    )
+
+    const resolveLoggedInUserId = () => (
+      localStorage.getItem('user_id')
+      || localStorage.getItem('userId')
+      || ''
+    )
+
+    const applyCreatorToApprovalForm = (userId, userName) => {
+      if (userName) {
+        currentUser.value.UserName = userName
+        approvalForm.value.createdByName = userName
+      }
+      if (userId) {
+        currentUser.value.UserId = userId
+        approvalForm.value.createdBy = userId
+      }
+    }
+
     const approvalForm = ref({
-      createdBy: '',
-      createdByName: localStorage.getItem('username') || '', // Initialize with logged-in username
+      createdBy: resolveLoggedInUserId(),
+      createdByName: resolveLoggedInDisplayName(),
       reviewer: ''
     })
 
     // Add reactive ref for current user info
     const currentUser = ref({
-      UserId: null,
-      UserName: localStorage.getItem('username') || '',
+      UserId: resolveLoggedInUserId() || null,
+      UserName: resolveLoggedInDisplayName(),
       Role: null
     })
     const frameworks = ref([])
@@ -2095,6 +2297,12 @@ export default {
     // Add reactive ref for framework name validation
     const frameworkNameError = ref('')
     const existingFrameworkNames = ref([])
+
+    // Policy StartDate validation errors (one per policy index)
+    const policyStartDateErrors = ref([])
+
+    // Subpolicy StartDate validation errors (one per policy index, then per subpolicy index)
+    const subPolicyStartDateErrors = ref([])
 
     const newFramework = ref({
       FrameworkName: '',
@@ -2267,11 +2475,64 @@ export default {
       }
     })
 
+    // Watch for framework EndDate changes (for new frameworks) to update policy EndDate
+    watch(() => newFramework.value.EndDate, (newEndDate) => {
+      if (selectedFramework.value === '__new__' && newEndDate) {
+        policiesForm.value.forEach(policy => {
+          policy.EndDate = newEndDate
+          if (policy.subpolicies) {
+            policy.subpolicies.forEach(sub => {
+              sub.EndDate = newEndDate
+            })
+          }
+        })
+        revalidateAllPolicyStartDates()
+      }
+    })
+
+    // Watch for frameworkFormData EndDate changes to update policy EndDate
+    watch(() => frameworkFormData.value?.EndDate, (newEndDate) => {
+      if (selectedFramework.value === '__new__' && newEndDate) {
+        policiesForm.value.forEach(policy => {
+          policy.EndDate = newEndDate
+          if (policy.subpolicies) {
+            policy.subpolicies.forEach(sub => {
+              sub.EndDate = newEndDate
+            })
+          }
+        })
+        revalidateAllPolicyStartDates()
+      }
+    })
+
+    watch(
+      () => [newFramework.value.StartDate, frameworkFormData.value?.StartDate],
+      () => {
+        if (selectedFramework.value === '__new__') {
+          revalidateAllPolicyStartDates()
+        }
+      }
+    )
+
     // Watch for policy name changes to validate uniqueness
     watch(() => policiesForm.value, (newPolicies) => {
       newPolicies.forEach((policy, index) => {
         if (policy.PolicyName) {
           validatePolicyName(policy.PolicyName, index)
+        }
+      })
+    }, { deep: true })
+
+    // Watch for policy EndDate changes to update subpolicy EndDates
+    watch(() => policiesForm.value.map(p => p.EndDate), (newEndDates, oldEndDates) => {
+      newEndDates.forEach((newEndDate, policyIdx) => {
+        if (newEndDate && newEndDate !== oldEndDates?.[policyIdx]) {
+          const policy = policiesForm.value[policyIdx]
+          if (policy && policy.subpolicies) {
+            policy.subpolicies.forEach(sub => {
+              sub.EndDate = newEndDate
+            })
+          }
         }
       })
     }, { deep: true })
@@ -2282,7 +2543,9 @@ export default {
         .map((fw) => ({
           id: fw.FrameworkId ?? fw.id ?? fw.frameworkId,
           name: fw.FrameworkName ?? fw.name ?? fw.frameworkName,
-          InternalExternal: fw.InternalExternal ?? fw.internalExternal ?? fw.internal_external ?? ''
+          InternalExternal: fw.InternalExternal ?? fw.internalExternal ?? fw.internal_external ?? '',
+          startDate: fw.StartDate ?? fw.startDate ?? fw.start_date ?? '',
+          endDate: fw.EndDate ?? fw.endDate ?? fw.end_date ?? ''
         }))
         .filter((fw) => fw.id !== undefined && fw.id !== null && !!fw.name)
     }
@@ -2296,7 +2559,8 @@ export default {
         return (
           String(item.id) === String(other.id) &&
           String(item.name || '') === String(other.name || '') &&
-          String(item.InternalExternal || '') === String(other.InternalExternal || '')
+          String(item.InternalExternal || '') === String(other.InternalExternal || '') &&
+          String(item.endDate || '') === String(other.endDate || '')
         )
       })
     }
@@ -2452,6 +2716,22 @@ export default {
           console.log('🔄 DEBUG: Framework set programmatically (oldValue:', oldValue, '), skipping save')
         }
         
+        // Update EndDate for existing policies when framework changes
+        const framework = frameworks.value.find(f => f.id === newValue)
+        const frameworkEndDate = framework?.endDate || framework?.EndDate
+        if (framework && frameworkEndDate) {
+          policiesForm.value.forEach(policy => {
+            policy.EndDate = frameworkEndDate
+            // Also update all subpolicies' EndDate
+            if (policy.subpolicies) {
+              policy.subpolicies.forEach(sub => {
+                sub.EndDate = frameworkEndDate
+              })
+            }
+          })
+        }
+        revalidateAllPolicyStartDates()
+        
         // If a framework is selected and no policies exist, add the first policy and select it
         if (policiesForm.value.length === 0) {
           handleAddPolicy();
@@ -2484,35 +2764,53 @@ export default {
     )
 
     const handleCreateFramework = async () => {
+      if (frameworkContinueInFlight.value) {
+        return
+      }
+
       // Validate framework name using the real-time validation
       if (!validateFrameworkName()) {
         return
       }
-      
-      // Only store framework details in memory and move to add policy
-      error.value = null
-      frameworkFormData.value = { ...newFramework.value }
-      showFrameworkForm.value = false
-      // Add an initial empty policy
-      handleAddPolicy()
-      // Set selectedFramework to a dummy value to show the policy form
-      selectedFramework.value = '__new__'
-      // Reset the framework form
-      newFramework.value = {
-        FrameworkName: '',
-        Identifier: '',
-        FrameworkDescription: '',
-        Category: '',
-        StartDate: '',
-        EndDate: '',
-        DocURL: '',
-        InternalExternal: ''
+
+      frameworkContinueInFlight.value = true
+      try {
+        const fwParams = buildNewFrameworkSimilarityParams(newFramework.value)
+        if (fwParams) {
+          const gateResult = await runSimilarityBeforeSubmit(similarityRunner, fwParams)
+          if (!gateResult || gateResult.action === 'cancel') {
+            return
+          }
+          if (!handleSimilarityGateResult(gateResult, { PopupService })) {
+            return
+          }
+          frameworkSimilarityPassed.value = true
+        }
+
+        // Only store framework details in memory and move to add policy
+        error.value = null
+        frameworkFormData.value = { ...newFramework.value }
+        showFrameworkForm.value = false
+        handleAddPolicy()
+        selectedFramework.value = '__new__'
+        newFramework.value = {
+          FrameworkName: '',
+          Identifier: '',
+          FrameworkDescription: '',
+          Category: '',
+          StartDate: '',
+          EndDate: '',
+          DocURL: '',
+          InternalExternal: ''
+        }
+        fetchExistingFrameworkIdentifiers()
+      } finally {
+        frameworkContinueInFlight.value = false
       }
-      // Refresh existing identifiers after framework creation
-      fetchExistingFrameworkIdentifiers()
     }
 
     const goBackToFramework = () => {
+      frameworkSimilarityPassed.value = false
       // Restore the framework data to the form
       newFramework.value = { ...frameworkFormData.value }
       // Show the framework form again
@@ -2527,6 +2825,17 @@ export default {
 
     // Policy form handlers
     const handleAddPolicy = () => {
+      // Get framework EndDate to auto-set policy EndDate
+      let frameworkEndDate = ''
+      if (selectedFramework.value && selectedFramework.value !== '__new__') {
+        const framework = frameworks.value.find(f => f.id === selectedFramework.value)
+        if (framework && framework.endDate) {
+          frameworkEndDate = framework.endDate
+        }
+      } else if (selectedFramework.value === '__new__' && frameworkFormData.value) {
+        frameworkEndDate = frameworkFormData.value.EndDate || ''
+      }
+
       const newPolicy = {
         PolicyName: '',
         Identifier: '',
@@ -2536,7 +2845,8 @@ export default {
         Department: [],
         Applicability: '',
         StartDate: '',
-        EndDate: '',
+        EndDate: frameworkEndDate, // Auto-set from Framework EndDate
+        reminder_rules: [],
         CreatedByName: '',
         DocURL: '',
         PolicyType: '',
@@ -2584,6 +2894,63 @@ export default {
           autoGeneratePolicyIdentifiers(policiesForm.value.length - 1)
         }, 100)
       }
+    }
+
+    // Reminder rule helpers
+    const getReminderFrequencyOptions = (startUnit) => {
+      const map = {
+        year: [
+          { value: 'monthly', label: 'Monthly' },
+          { value: 'quarterly', label: 'Quarterly' },
+          { value: 'half_yearly', label: 'Half-Yearly' },
+        ],
+        months: [
+          { value: 'monthly', label: 'Monthly' },
+          { value: 'quarterly', label: 'Quarterly' },
+        ],
+        weeks: [
+          { value: 'weekly', label: 'Weekly' },
+        ],
+        days: [
+          { value: 'daily', label: 'Daily' },
+        ],
+        hours: [
+          { value: 'hourly', label: 'Hourly' },
+        ],
+      }
+      return map[startUnit] || []
+    }
+
+    const addReminderRule = (policyIdx) => {
+      const policy = policiesForm.value[policyIdx]
+      if (!policy) return
+      const startUnitMap = { year: 1, months: 6, weeks: 1, days: 1, hours: 1 }
+      const defaultStartUnit = 'months'
+      policy.reminder_rules.push({
+        start_value: startUnitMap[defaultStartUnit],
+        start_unit: defaultStartUnit,
+        frequency_unit: 'monthly',
+      })
+    }
+
+    const removeReminderRule = (policyIdx, ruleIdx) => {
+      const policy = policiesForm.value[policyIdx]
+      if (!policy || !policy.reminder_rules) return
+      policy.reminder_rules.splice(ruleIdx, 1)
+    }
+
+    const onReminderStartUnitChange = (policyIdx, ruleIdx) => {
+      const policy = policiesForm.value[policyIdx]
+      if (!policy || !policy.reminder_rules[ruleIdx]) return
+      const rule = policy.reminder_rules[ruleIdx]
+      const opts = getReminderFrequencyOptions(rule.start_unit)
+      // If current frequency is not valid for new start_unit, reset to first option
+      if (opts.length && !opts.find(o => o.value === rule.frequency_unit)) {
+        rule.frequency_unit = opts[0].value
+      }
+      // Set start_value based on typical presets
+      const valueMap = { year: 1, months: 6, weeks: 1, days: 1, hours: 1 }
+      rule.start_value = valueMap[rule.start_unit] || 1
     }
 
     // Validate policy name uniqueness within the framework
@@ -2641,6 +3008,95 @@ export default {
       }
     };
 
+    const resolveFrameworkDates = () => {
+      if (selectedFramework.value === '__new__') {
+        const fw = frameworkFormData.value || newFramework.value
+        return {
+          startDate: fw?.StartDate || fw?.startDate || null,
+          endDate: fw?.EndDate || fw?.endDate || null
+        }
+      }
+      if (selectedFramework.value && selectedFramework.value !== 'create') {
+        const fw = frameworks.value.find(
+          (f) => String(f.id) === String(selectedFramework.value)
+        )
+        return {
+          startDate: fw?.startDate || fw?.StartDate || null,
+          endDate: fw?.endDate || fw?.EndDate || null
+        }
+      }
+      return { startDate: null, endDate: null }
+    }
+
+    const validatePolicyStartDate = (idx, value) => {
+      if (!policyStartDateErrors.value) {
+        policyStartDateErrors.value = []
+      }
+      if (!value) {
+        policyStartDateErrors.value[idx] = ''
+        return
+      }
+
+      const { startDate: frameworkStartDate, endDate: frameworkEndDate } = resolveFrameworkDates()
+      const messages = []
+
+      if (frameworkStartDate && value < frameworkStartDate) {
+        messages.push(`Start Date must be on or after Framework Start Date (${frameworkStartDate})`)
+      }
+      if (frameworkEndDate && value > frameworkEndDate) {
+        messages.push(`Start Date must be on or before Framework End Date (${frameworkEndDate})`)
+      }
+
+      policyStartDateErrors.value[idx] = messages.length ? messages.join('. ') : ''
+    }
+
+    const validateSubPolicyStartDate = (policyIdx, subIdx, value) => {
+      if (!subPolicyStartDateErrors.value) {
+        subPolicyStartDateErrors.value = []
+      }
+      if (!subPolicyStartDateErrors.value[policyIdx]) {
+        subPolicyStartDateErrors.value[policyIdx] = []
+      }
+      if (!value) {
+        subPolicyStartDateErrors.value[policyIdx][subIdx] = ''
+        return
+      }
+
+      const parentPolicy = policiesForm.value[policyIdx]
+      const { startDate: frameworkStartDate, endDate: frameworkEndDate } = resolveFrameworkDates()
+      const messages = []
+
+      if (parentPolicy?.StartDate && value < parentPolicy.StartDate) {
+        messages.push(`Start Date must be on or after Policy Start Date (${parentPolicy.StartDate})`)
+      }
+      if (frameworkStartDate && value < frameworkStartDate) {
+        messages.push(`Start Date must be on or after Framework Start Date (${frameworkStartDate})`)
+      }
+      if (frameworkEndDate && value > frameworkEndDate) {
+        messages.push(`Start Date must be on or before Framework End Date (${frameworkEndDate})`)
+      }
+
+      subPolicyStartDateErrors.value[policyIdx][subIdx] = messages.length ? messages.join('. ') : ''
+    }
+
+    const revalidateAllPolicyStartDates = () => {
+      policiesForm.value.forEach((policy, policyIdx) => {
+        if (policy.StartDate) {
+          validatePolicyStartDate(policyIdx, policy.StartDate)
+        } else {
+          validatePolicyStartDate(policyIdx, '')
+        }
+        const subpolicies = policy.subpolicies || []
+        subpolicies.forEach((sub, subIdx) => {
+          if (sub.StartDate) {
+            validateSubPolicyStartDate(policyIdx, subIdx, sub.StartDate)
+          } else {
+            validateSubPolicyStartDate(policyIdx, subIdx, '')
+          }
+        })
+      })
+    }
+
     const handlePolicyChange = (idx, field, value) => {
       policiesForm.value[idx][field] = value
       
@@ -2648,19 +3104,32 @@ export default {
       if (field === 'PolicyName') {
         autoGeneratePolicyIdentifiers(idx)
       }
+
+      if (field === 'StartDate') {
+        validatePolicyStartDate(idx, value)
+        const subpolicies = policiesForm.value[idx].subpolicies || []
+        subpolicies.forEach((sub, subIdx) => {
+          if (sub.StartDate) {
+            validateSubPolicyStartDate(idx, subIdx, sub.StartDate)
+          }
+        })
+      }
     }
 
     const handleAddSubPolicy = (policyIdx) => {
+      const parentPolicy = policiesForm.value[policyIdx]
       policiesForm.value[policyIdx].subpolicies.push({
         SubPolicyName: '',
         Identifier: '',
         Control: '',
         Description: '',
         CreatedByName: '',
-        PermanentTemporary: ''
+        PermanentTemporary: '',
+        StartDate: '',
+        EndDate: parentPolicy?.EndDate || '' // Auto-set from parent policy EndDate
       })
       const newSubPolicyIndex = policiesForm.value[policyIdx].subpolicies.length - 1
-      
+
       // Initialize field data types for the new subpolicy
       if (!subPolicyFieldDataTypes.value[policyIdx]) {
         subPolicyFieldDataTypes.value[policyIdx] = []
@@ -2669,9 +3138,11 @@ export default {
         subPolicyName: 'regular',
         subPolicyIdentifier: 'regular',
         subPolicyControl: 'regular',
-        subPolicyDescription: 'regular'
+        subPolicyDescription: 'regular',
+        subPolicyStartDate: 'regular',
+        subPolicyEndDate: 'regular'
       })
-      
+
       // Only auto-generate identifier for internal frameworks
       if (isInternalFramework()) {
         autoGenerateSubPolicyIdentifier(policyIdx, newSubPolicyIndex)
@@ -2696,16 +3167,24 @@ export default {
 
     const handleSubPolicyChange = (policyIdx, subIdx, field, value) => {
       policiesForm.value[policyIdx].subpolicies[subIdx][field] = value
-      
+
       // Auto-generate identifier when SubPolicyName changes (only for internal frameworks)
       if (field === 'SubPolicyName') {
         autoGenerateSubPolicyIdentifier(policyIdx, subIdx)
         // Validate subpolicy name uniqueness
         validateSubPolicyName(value, policyIdx, subIdx)
       }
+
+      if (field === 'StartDate') {
+        validateSubPolicyStartDate(policyIdx, subIdx, value)
+      }
     }
 
-    const handleSubmitPolicy = () => {
+    const handleSubmitPolicy = async () => {
+      applyCreatorToApprovalForm(resolveLoggedInUserId(), resolveLoggedInDisplayName())
+      if (!approvalForm.value.createdByName) {
+        await fetchCurrentUser()
+      }
       showApprovalForm.value = true
       if (!hasLoadedReviewerUsers.value) {
         fetchUsers()
@@ -2714,27 +3193,27 @@ export default {
 
     // Fetch current logged-in user information
     async function fetchCurrentUser() {
+      const fallbackName = resolveLoggedInDisplayName()
+      const fallbackId = resolveLoggedInUserId()
+      if (fallbackName || fallbackId) {
+        applyCreatorToApprovalForm(fallbackId, fallbackName)
+      }
+
       try {
         const data = await apiService.get(API_ENDPOINTS.USER_ROLE)
-        if (data.success) {
+        if (data?.success) {
           currentUser.value = {
             UserId: data.user_id,
-            UserName: data.username || data.user_name || localStorage.getItem('username') || '',
+            UserName: data.username || data.user_name || fallbackName || '',
             Role: data.role
           }
-          // Update approval form with current user name
-          approvalForm.value.createdByName = currentUser.value.UserName
-          approvalForm.value.createdBy = currentUser.value.UserId
-          
+          applyCreatorToApprovalForm(data.user_id, currentUser.value.UserName)
           console.log('Current user loaded:', currentUser.value)
         }
       } catch (err) {
         console.error('Error fetching current user:', err)
-        // Fallback to localStorage if API fails
-        const storedUsername = localStorage.getItem('username')
-        if (storedUsername) {
-          currentUser.value.UserName = storedUsername
-          approvalForm.value.createdByName = storedUsername
+        if (fallbackName) {
+          applyCreatorToApprovalForm(fallbackId, fallbackName)
         }
       }
     }
@@ -3415,11 +3894,11 @@ export default {
           return
         }
 
-        loading.value = true
         error.value = null
 
-        // Only check framework fields if creating a new framework
         const isCreatingNewFramework = selectedFramework.value === '__new__';
+
+        loading.value = true
         if (isCreatingNewFramework) {
                   if (!frameworkFormData.value || !frameworkFormData.value.FrameworkName) {
           PopupService.error('Please fill in all required framework fields.', 'Validation Error')
@@ -3467,6 +3946,20 @@ export default {
           return
         }
 
+        // Block submission if any StartDate errors exist
+        if (policyStartDateErrors.value.some(e => e)) {
+          PopupService.error('Please fix the Start Date errors before submitting.', 'Validation Error')
+          loading.value = false
+          return
+        }
+
+        // Block submission if any subpolicy StartDate errors exist
+        if (subPolicyStartDateErrors.value && subPolicyStartDateErrors.value.some(policyErrors => policyErrors && policyErrors.some(e => e))) {
+          PopupService.error('Please fix the SubPolicy Start Date errors before submitting.', 'Validation Error')
+          loading.value = false
+          return
+        }
+
         // Validate required fields for each policy
         for (const policy of policiesForm.value) {
           if (!policy.PolicyName || !policy.Identifier || !policy.StartDate) {
@@ -3474,12 +3967,28 @@ export default {
             sendPushNotification({
               title: 'Policy Creation Failed',
               message: 'Please fill in all required fields (Policy Name, Identifier, and Start Date) for all policies',
-              category: 'policy',
               priority: 'high',
               user_id: creatorUser?.UserId || 'default_user'
             });
             loading.value = false
             return
+          }
+
+          // Validate required fields for each subpolicy
+          if (policy.subpolicies && policy.subpolicies.length > 0) {
+            for (const sub of policy.subpolicies) {
+              if (!sub.SubPolicyName || !sub.Identifier || !sub.StartDate) {
+                PopupService.error('Please fill in all required fields (SubPolicy Name, Identifier, and Start Date) for all subpolicies', 'Validation Error')
+                sendPushNotification({
+                  title: 'Policy Creation Failed',
+                  message: 'Please fill in all required fields (SubPolicy Name, Identifier, and Start Date) for all subpolicies',
+                  priority: 'high',
+                  user_id: creatorUser?.UserId || 'default_user'
+                });
+                loading.value = false
+                return
+              }
+            }
           }
         }
 
@@ -3595,6 +4104,31 @@ export default {
         // Debug: Check entities after validation
         console.log('DEBUG: Policies after validation:', policiesForm.value.map(p => ({ PolicyName: p.PolicyName, Entities: p.Entities })))
 
+        loading.value = false
+        const similarityChecks = buildCreatePolicySimilarityChecks({
+          gate: similarityRunner,
+          isNewFramework: isCreatingNewFramework,
+          frameworkFormData: frameworkFormData.value,
+          policiesForm: policiesForm.value,
+          frameworkId: policySimilarityFrameworkId.value,
+          skipFrameworkCheck: frameworkSimilarityPassed.value
+        })
+        console.log(
+          '[similarity] Submit for Review — checks queued:',
+          similarityChecks.map((c) => ({
+            type: c.params?.item_type,
+            name: c.params?.item_data?.name,
+            alwaysShowReview: !!c.alwaysShowReview
+          }))
+        )
+        const similarityOk = await runSimilarityCheckSequence(similarityChecks, { PopupService })
+        if (!similarityOk) {
+          loading.value = false
+          showApprovalForm.value = false
+          return
+        }
+
+        loading.value = true
         if (isCreatingNewFramework) {
           // Upload framework document if exists
           if (frameworkFormData.value.DocURL && frameworkFormData.value.DocURL instanceof File) {
@@ -3759,89 +4293,77 @@ export default {
           }
           const policyCount = policiesForm.value.length
 
-          PopupService.show({
-            type: 'success',
-            heading: 'Submitted for review',
-            message: 'Redirecting to Framework Explorer now…',
-            buttons: [],
-            autoClose: 0,
-          })
-
-          resetFormAfterSubmit()
-          loading.value = false
-          await nextTick()
           try {
-            await router.push('/framework-explorer')
-          } finally {
-            PopupService.hide()
-          }
-
-          void (async () => {
-            try {
-              const data = await apiService.post(API_ENDPOINTS.FRAMEWORKS, payload)
-              if (data.error) {
-                throw new Error(data.error)
-              }
-              const newFwId = data.FrameworkId ?? data.framework_id
-              if (newFwId != null && formForMerge) {
-                policyStore.mergeFrameworkRowFromCreate({
+            const data = await apiService.post(API_ENDPOINTS.FRAMEWORKS, payload)
+            if (data.error) {
+              throw new Error(data.error)
+            }
+            const newFwId = data.FrameworkId ?? data.framework_id
+            if (newFwId != null && formForMerge) {
+              policyStore.mergeFrameworkRowFromCreate({
+                FrameworkId: newFwId,
+                FrameworkName: formForMerge.FrameworkName,
+                Category: formForMerge.Category,
+                InternalExternal: formForMerge.InternalExternal,
+                ActiveInactive: 'Inactive',
+                Status: 'Under Review',
+                CurrentVersion: data.Version ?? 1,
+                FrameworkDescription: formForMerge.FrameworkDescription,
+              })
+              policyDataService.mergeExplorerFrameworkRow({
+                id: newFwId,
+                name: formForMerge.FrameworkName,
+                category: formForMerge.Category || '',
+                description: formForMerge.FrameworkDescription || '',
+                status: 'Inactive',
+                internalExternal: formForMerge.InternalExternal || 'Internal',
+                versions: data.Version != null ? [{ version: data.Version }] : [],
+              })
+              const norm = normalizeFrameworkList([
+                {
                   FrameworkId: newFwId,
                   FrameworkName: formForMerge.FrameworkName,
-                  Category: formForMerge.Category,
                   InternalExternal: formForMerge.InternalExternal,
-                  ActiveInactive: 'Inactive',
-                  Status: 'Under Review',
-                  CurrentVersion: data.Version ?? 1,
-                  FrameworkDescription: formForMerge.FrameworkDescription,
-                })
-                policyDataService.mergeExplorerFrameworkRow({
-                  id: newFwId,
-                  name: formForMerge.FrameworkName,
-                  category: formForMerge.Category || '',
-                  description: formForMerge.FrameworkDescription || '',
-                  status: 'Inactive',
-                  internalExternal: formForMerge.InternalExternal || 'Internal',
-                  versions: data.Version != null ? [{ version: data.Version }] : [],
-                })
-                const norm = normalizeFrameworkList([
-                  {
-                    FrameworkId: newFwId,
-                    FrameworkName: formForMerge.FrameworkName,
-                    InternalExternal: formForMerge.InternalExternal,
-                  },
-                ])
-                if (norm.length) {
-                  const merged = [norm[0], ...frameworks.value.filter((f) => String(f.id) !== String(norm[0].id))]
-                  frameworks.value = merged
-                  frameworkStore.setFrameworks(merged.map((fw) => ({ ...fw })))
-                }
+                },
+              ])
+              if (norm.length) {
+                const merged = [norm[0], ...frameworks.value.filter((f) => String(f.id) !== String(norm[0].id))]
+                frameworks.value = merged
+                frameworkStore.setFrameworks(merged.map((fw) => ({ ...fw })))
               }
-              void sendPushNotification({
-                title: 'Framework and Policies Created Successfully',
-                message: `New framework "${formForMerge.FrameworkName}" with ${policyCount} policies has been created successfully.`,
-                category: 'framework',
-                priority: 'medium',
-                user_id: creatorUser?.UserId || 'default_user'
-              })
-            } catch (err) {
-              console.error('Error submitting policies (background):', err)
-              const errorMessage =
-                err.response?.data?.details || err.response?.data?.error || err.message || 'Failed to submit policies'
-              PopupService.error(
-                typeof errorMessage === 'object' ? JSON.stringify(errorMessage) : errorMessage,
-                'Submission Error'
-              )
-              void sendPushNotification({
-                title: 'Policy Submission Failed',
-                message: typeof errorMessage === 'object' ? JSON.stringify(errorMessage) : errorMessage,
-                category: 'policy',
-                priority: 'high',
-                user_id: currentUser.value?.UserId || 'default_user'
-              })
-            } finally {
-              submitForReviewInFlight.value = false
             }
-          })()
+            void sendPushNotification({
+              title: 'Framework and Policies Created Successfully',
+              message: `New framework "${formForMerge.FrameworkName}" with ${policyCount} policies has been created successfully.`,
+              category: 'framework',
+              priority: 'medium',
+              user_id: creatorUser?.UserId || 'default_user'
+            })
+            resetFormAfterSubmit()
+            PopupService.success(
+              `Framework "${formForMerge.FrameworkName}" and ${policyCount} policy/policies submitted for review.`,
+              'Submitted for review'
+            )
+            await router.push('/framework-explorer')
+          } catch (err) {
+            console.error('Error submitting framework and policies:', err)
+            const errorMessage =
+              err.response?.data?.details || err.response?.data?.error || err.message || 'Failed to submit'
+            PopupService.error(
+              typeof errorMessage === 'object' ? JSON.stringify(errorMessage) : errorMessage,
+              'Submission Error'
+            )
+            void sendPushNotification({
+              title: 'Policy Submission Failed',
+              message: typeof errorMessage === 'object' ? JSON.stringify(errorMessage) : errorMessage,
+              category: 'policy',
+              priority: 'high',
+              user_id: creatorUser?.UserId || 'default_user'
+            })
+          } finally {
+            submitForReviewInFlight.value = false
+            loading.value = false
+          }
 
           return
         } else {
@@ -3932,57 +4454,45 @@ export default {
           submitForReviewInFlight.value = true
           const batchPolicyCount = policiesForm.value.length
 
-          PopupService.show({
-            type: 'success',
-            heading: 'Submitted for review',
-            message: 'Redirecting to Framework Explorer now…',
-            buttons: [],
-            autoClose: 0,
-          })
-
-          resetFormAfterSubmit()
-          loading.value = false
-          await nextTick()
           try {
-            await router.push('/framework-explorer')
-          } finally {
-            PopupService.hide()
-          }
-
-          void (async () => {
-            try {
-              const data = await apiService.post(API_ENDPOINTS.FRAMEWORK_ADD_POLICIES(frameworkId), {
-                policies: policiesPayload,
-              })
-              if (data.error) {
-                throw new Error(data.error)
-              }
-              void sendPushNotification({
-                title: 'Policies Added Successfully',
-                message: `Successfully added ${batchPolicyCount} policies to the existing framework.`,
-                category: 'policy',
-                priority: 'medium',
-                user_id: creatorUser?.UserId || 'default_user'
-              })
-            } catch (err) {
-              console.error('Error submitting policies (background):', err)
-              const errorMessage =
-                err.response?.data?.details || err.response?.data?.error || 'Failed to submit policies'
-              PopupService.error(
-                typeof errorMessage === 'object' ? JSON.stringify(errorMessage) : errorMessage,
-                'Submission Error'
-              )
-              void sendPushNotification({
-                title: 'Policy Submission Failed',
-                message: typeof errorMessage === 'object' ? JSON.stringify(errorMessage) : errorMessage,
-                category: 'policy',
-                priority: 'high',
-                user_id: creatorUser?.UserId || 'default_user'
-              })
-            } finally {
-              submitForReviewInFlight.value = false
+            const data = await apiService.post(API_ENDPOINTS.FRAMEWORK_ADD_POLICIES(frameworkId), {
+              policies: policiesPayload,
+            })
+            if (data.error) {
+              throw new Error(data.error)
             }
-          })()
+            void sendPushNotification({
+              title: 'Policies Added Successfully',
+              message: `Successfully added ${batchPolicyCount} policies to the existing framework.`,
+              category: 'policy',
+              priority: 'medium',
+              user_id: creatorUser?.UserId || 'default_user'
+            })
+            resetFormAfterSubmit()
+            PopupService.success(
+              `${batchPolicyCount} policy/policies submitted for review.`,
+              'Submitted for review'
+            )
+            await router.push('/framework-explorer')
+          } catch (err) {
+            console.error('Error submitting policies:', err)
+            const errorMessage =
+              err.response?.data?.details || err.response?.data?.error || 'Failed to submit policies'
+            PopupService.error(
+              typeof errorMessage === 'object' ? JSON.stringify(errorMessage) : errorMessage,
+              'Submission Error'
+            )
+            void sendPushNotification({
+              title: 'Policy Submission Failed',
+              message: typeof errorMessage === 'object' ? JSON.stringify(errorMessage) : errorMessage,
+              category: 'policy',
+              priority: 'high',
+              user_id: creatorUser?.UserId || 'default_user'
+            })
+          } finally {
+            submitForReviewInFlight.value = false
+            loading.value = false
+          }
 
           return
         }
@@ -4207,6 +4717,14 @@ export default {
       return creatorUser && reviewerUser && creatorUser.UserId === reviewerUser.UserId
     })
 
+    const policySimilarityFrameworkId = computed(() => {
+      const fw = selectedFramework.value
+      if (fw === '__new__' || fw == null || fw === '') return null
+      if (typeof fw === 'object') return fw.id ?? fw.FrameworkId ?? null
+      const n = parseInt(fw, 10)
+      return Number.isNaN(n) ? fw : n
+    })
+
     // Character counter function
     const getCharacterCounterClass = (text, maxLength) => {
       if (!text) return ''
@@ -4231,6 +4749,8 @@ export default {
       error,
       frameworkNameError,
       existingFrameworkNames,
+      policyStartDateErrors,
+      subPolicyStartDateErrors,
       users,
       currentUser,
       policyCategories,
@@ -4247,7 +4767,10 @@ export default {
       handleSubPolicyChange,
       handleSubmitPolicy,
       handleFinalSubmit,
+      similarityRunner,
+      policySimilarityFrameworkId,
       handleCreateFramework,
+      frameworkContinueInFlight,
       handleInternalExternalChange,
       goBackToFramework,
       getSelectedFrameworkName,
@@ -4321,6 +4844,12 @@ export default {
       setDataType,
       setPolicyDataType,
       setSubPolicyDataType,
+      getReminderFrequencyOptions,
+      addReminderRule,
+      removeReminderRule,
+      onReminderStartUnitChange,
+
+      // Similarity check event handlers
     }
   }
 }

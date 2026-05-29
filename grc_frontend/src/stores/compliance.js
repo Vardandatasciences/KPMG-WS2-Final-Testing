@@ -866,11 +866,18 @@ export const useComplianceStore = defineStore('compliance', {
       }
     },
 
-    async submitComplianceReview({ approvalId, approved, comments } = {}) {
+    async submitComplianceReview({ approvalId, approved, comments, payload } = {}) {
       try {
-        await apiService.post(API_ENDPOINTS.COMPLIANCE_APPROVALS(approvalId), {
-          approved,
-          comments,
+        const body =
+          payload && typeof payload === 'object'
+            ? payload
+            : {
+                ApprovedNot: approved,
+                approved,
+                remarks: comments ?? '',
+              }
+        await apiService.put(API_ENDPOINTS.COMPLIANCE_APPROVALS(approvalId), body, {
+          timeout: 60000,
         })
         await this.refreshApprovalsAfterMutation()
       } catch (err) {
@@ -881,9 +888,10 @@ export const useComplianceStore = defineStore('compliance', {
 
     async resubmitComplianceApproval({ approvalId, payload } = {}) {
       try {
-        await apiService.post(
+        await apiService.put(
           API_ENDPOINTS.COMPLIANCE_APPROVALS_RESUBMIT(approvalId),
-          payload
+          payload,
+          { timeout: 60000 }
         )
         this.invalidate('approvals')
       } catch (err) {
@@ -1753,7 +1761,11 @@ export const useComplianceStore = defineStore('compliance', {
       await this.submitComplianceReview({
         approvalId,
         approved: payload?.ApprovedNot ?? payload?.approved,
-        comments: payload?.ExtractedData?.compliance_approval?.remarks ?? payload?.remarks ?? '',
+        comments:
+          payload?.remarks ??
+          payload?.ExtractedData?.compliance_approval?.remarks ??
+          '',
+        payload,
       })
       return { data: { success: true } }
     },

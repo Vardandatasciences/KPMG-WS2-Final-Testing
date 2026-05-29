@@ -82,9 +82,9 @@ class CookieService {
       return response.data
     } catch (error) {
       const status = error.response?.status
-      // Backend may 401 if middleware blocks; still allow UI (login page) to load
-      if (status === 401 || status === 403) {
-        console.warn('🍪 [CookieService] getPreferences unauthorized — using defaults', { status })
+      // Backend may 401/400 after logout (blacklisted session / invalid user_id); keep login UI usable
+      if (status === 401 || status === 403 || status === 400) {
+        console.warn('🍪 [CookieService] getPreferences unavailable — using defaults', { status })
         return {
           status: 'success',
           data: {

@@ -7,16 +7,46 @@ from django.views.decorators.csrf import csrf_protect as csrf_exempt
 
 from .authentication import jwt_login, jwt_refresh, jwt_logout, jwt_verify, accept_consent, test_consent_auth, test_consent_simple, mfa_verify_otp, mfa_resend_otp, google_oauth_initiate, google_oauth_callback, google_oauth_callback_payload, product_version_info, test_token_version
 
-from .views import test_jwt_auth, list_users, clear_ai_cache
+# Import from views.py file directly (don't use views folder package)
+# Use sys.path manipulation to avoid circular import
+import sys
+import os
+
+# Import from views.py file
+_grc_dir = os.path.dirname(__file__)
+_views_py_path = os.path.join(_grc_dir, 'views.py')
+if os.path.exists(_views_py_path):
+    import importlib.util
+    _spec = importlib.util.spec_from_file_location("grc.views_file", _views_py_path)
+    _views_module = importlib.util.module_from_spec(_spec)
+    _spec.loader.exec_module(_views_module)
+    test_jwt_auth = _views_module.test_jwt_auth
+    list_users = _views_module.list_users
+    clear_ai_cache = _views_module.clear_ai_cache
+    serve_document = _views_module.serve_document
+else:
+    # Fallback - import as normal (won't work with folder)
+    from .views import test_jwt_auth, list_users, clear_ai_cache, serve_document
+
+# Similarity views live in views/similarity_views.py (not importable as .views.* because
+# grc/views.py is a module file and shadows a views/ package).
+_similarity_path = os.path.join(_grc_dir, 'views', 'similarity_views.py')
+if not os.path.exists(_similarity_path):
+    raise ImportError(f'Similarity views module not found: {_similarity_path}')
+_spec2 = importlib.util.spec_from_file_location('grc.views.similarity_views', _similarity_path)
+_similarity_module = importlib.util.module_from_spec(_spec2)
+_spec2.loader.exec_module(_similarity_module)
+check_similarity = _similarity_module.check_similarity
+get_similarity_result = _similarity_module.get_similarity_result
+user_similarity_decision = _similarity_module.user_similarity_decision
+async_update_similarity = _similarity_module.async_update_similarity
+get_async_update_status = _similarity_module.get_async_update_status
+get_pending_save_payload = _similarity_module.get_pending_save_payload
+mark_pending_save_executed = _similarity_module.mark_pending_save_executed
 
 # Import settings to check for DEBUG mode
 from django.conf import settings
 
-
-
-
-
-from .views import serve_document
 
 # MULTI-TENANCY: Tenant management views
 from .routes.Global import tenant_views, security_audit_views
@@ -71,6 +101,13 @@ from .routes.Integrations.event_integration import (
     get_application_details,
     refresh_application_status,
     get_sync_logs,
+)
+from .routes.Policy.policy_self_healing import (
+    run_policy_self_heal_reminders,
+    run_single_policy_reminder,
+    policy_self_heal_decision,
+    list_pending_self_heal_escalations,
+    assign_self_heal_custodian,
 )
 from .routes.Policy.policy import (
 
@@ -356,8 +393,15 @@ from .routes.Audit.assign_audit import (
     get_frameworks, get_policies, get_subpolicies, get_users_audit,get_compliances_for_scope,
 
 
-    create_audit, add_compliance_to_audit, get_compliance_count
+    create_audit, add_compliance_to_audit, get_compliance_count, reassign_audit
 
+)
+
+from .routes.Audit.audit_scheduling import (
+    list_pending_audit_overdue_escalations,
+    list_pending_audit_review_escalations,
+    reassign_audit_reviewer,
+    run_scheduled_audits_cron,
 )
 
 from .routes.Audit.auditing import (
@@ -803,6 +847,12 @@ policy_urlpatterns += [
 
     path('policies/', policy_list, name='policy-list'),
 
+    path('policies/self-healing/reminders/run/', run_policy_self_heal_reminders, name='policy-self-heal-reminders-run'),
+    path('policies/self-healing/reminders/run', run_policy_self_heal_reminders, name='policy-self-heal-reminders-run-no-slash'),
+    path('policies/self-healing/reminders/run_single/', run_single_policy_reminder, name='policy-single-reminder-run'),
+    path('policies/self-healing/reminders/run_single', run_single_policy_reminder, name='policy-single-reminder-run-no-slash'),
+    path('policies/self-healing/escalations/pending/', list_pending_self_heal_escalations, name='policy-self-heal-escalations-pending'),
+
     path('policies/<int:pk>/', policy_detail, name='policy-detail'),
 
     path('policies/<int:policy_id>/create-version/', policy_version_create, name='create-policy-version'),
@@ -815,6 +865,9 @@ policy_urlpatterns += [
 
     path('policies/<int:policy_id>/approve-version/', approve_policy_version, name='approve-policy-version'),
 
+    path('policies/<int:policy_id>/self-healing/decision/', policy_self_heal_decision, name='policy-self-heal-decision'),
+    path('policies/<int:policy_id>/self-healing/assign-custodian/', assign_self_heal_custodian, name='policy-self-heal-assign-custodian'),
+    
     path('policy-versions/rejected/', get_rejected_policy_versions, name='get-rejected-policy-versions'),
 
     path('policy-versions/rejected/<int:user_id>/', get_rejected_policy_versions, name='get-rejected-policy-versions-by-user'),
@@ -1575,6 +1628,26 @@ audit_urlpatterns = [
     path('assign-data/', get_assign_data, name='get_assign_data'),
 
     path('create-audit/', create_audit, name='create_audit'),
+
+    path('audit/<int:audit_id>/reassign/', reassign_audit, name='reassign_audit'),
+
+    path('audits/scheduling/run/', run_scheduled_audits_cron, name='run_scheduled_audits_cron'),
+    path('audits/scheduling/run', run_scheduled_audits_cron, name='run_scheduled_audits_cron_no_slash'),
+    path(
+        'audits/overdue-escalations/pending/',
+        list_pending_audit_overdue_escalations,
+        name='audit-overdue-escalations-pending',
+    ),
+    path(
+        'audits/review-escalations/pending/',
+        list_pending_audit_review_escalations,
+        name='audit-review-escalations-pending',
+    ),
+    path(
+        'audit/<int:audit_id>/reassign-reviewer/',
+        reassign_audit_reviewer,
+        name='reassign_audit_reviewer',
+    ),
 
     
 
@@ -2762,6 +2835,27 @@ if settings.DEBUG:
 
 # ============================================================================
 
+# SIMILARITY DETECTION URLs (Steps 7-9)
+
+# ============================================================================
+
+similarity_urlpatterns = [
+    # Step 7: Run similarity check (Steps 1-6)
+    path('similarity/check/', check_similarity, name='similarity-check'),
+    
+    # Get results for UI display
+    path('similarity/check/<int:check_id>/', get_similarity_result, name='similarity-result'),
+    
+    # Step 8: Record user decision
+    path('similarity/check/<int:check_id>/decision/', user_similarity_decision, name='similarity-decision'),
+    path('similarity/async-update/', async_update_similarity, name='similarity-async-update'),
+    path('similarity/async-update/<int:check_id>/status/', get_async_update_status, name='similarity-async-update-status'),
+    path('similarity/async-update/<int:check_id>/pending-save/', get_pending_save_payload, name='similarity-pending-save'),
+    path('similarity/async-update/<int:check_id>/executed/', mark_pending_save_executed, name='similarity-pending-save-executed'),
+]
+
+# ============================================================================
+
 # TREE / DATA WORKFLOW URLs
 
 # ============================================================================
@@ -3048,6 +3142,8 @@ urlpatterns = [
     # ========================================================================
 
     *event_handling_urlpatterns,
+    
+    *similarity_urlpatterns,
 
     
 
@@ -3255,6 +3351,11 @@ urlpatterns = [
     path('change-management/compare-versions/', framework_comparison.compare_framework_versions, name='compare-framework-versions'),
     path('change-management/frameworks/update-notifications/', login_framework_checking.get_framework_update_notifications, name='get-framework-update-notifications'),
     path('change-management/auto-check-frameworks/', login_framework_checking.auto_check_all_frameworks, name='auto-check-frameworks'),
+    # PHASE 1: Update existing compliances
+    path('change-management/framework/<int:framework_id>/compliances/<int:compliance_id>/detect-changes/', framework_comparison.detect_control_changes, name='detect-control-changes'),
+    path('change-management/framework/<int:framework_id>/create-update-approval/', framework_comparison.create_update_approval, name='create-update-approval'),
+    # PHASE 2: Risk integration
+    path('change-management/framework/<int:framework_id>/compliances/<int:compliance_id>/affected-risks/', framework_comparison.get_affected_risks, name='get-affected-risks'),
 
 path('bamboohr/oauth/', bamboohr_oauth, name='bamboohr-oauth'),
     path('bamboohr/oauth-callback/', bamboohr_oauth_callback, name='bamboohr-oauth-callback'),

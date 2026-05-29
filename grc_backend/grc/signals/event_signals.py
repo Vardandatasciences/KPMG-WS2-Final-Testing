@@ -145,6 +145,9 @@ def handle_audit_changes(sender, instance, created, **kwargs):
         from ..routes.EventHandling.riskavaire_integration import RiskAvaireEventTrigger
         
         if created:
+            # Skip auto-events for recurrence children (scheduler creates many rows)
+            if getattr(instance, 'ParentAudit_id', None):
+                return
             # New audit record created
             event = RiskAvaireEventTrigger.create_audit_event(instance, "audit_scheduled")
             if event:

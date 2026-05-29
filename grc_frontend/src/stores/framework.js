@@ -121,7 +121,8 @@ export const useFrameworkStore = defineStore('framework', {
       globalCache.setSelectedFramework({ id: this.selectedFrameworkId, name: this.selectedFrameworkName })
 
       try {
-        const userId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || 'default_user'
+        const userId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id')
+        if (!userId) return
         const frameworkId = nextId
 
         const response = await axios.post(
@@ -157,7 +158,10 @@ export const useFrameworkStore = defineStore('framework', {
             this.selectedFrameworkName = globalCache.selectedFrameworkName || 'Selected Framework'
           }
 
-          const userId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || 'default_user'
+          const userId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id')
+          if (!userId) {
+            return
+          }
           const response = await axios.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED, {
             params: { userId },
             withCredentials: true,
@@ -225,7 +229,8 @@ export const useFrameworkStore = defineStore('framework', {
       this.resetFrameworkLocal()
 
       try {
-        const userId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || 'default_user'
+        const userId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id')
+        if (!userId) return
         await axios.post(
           API_ENDPOINTS.FRAMEWORK_SET_SELECTED,
           { frameworkId: null, userId },

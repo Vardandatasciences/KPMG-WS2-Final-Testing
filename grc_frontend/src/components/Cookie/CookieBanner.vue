@@ -192,11 +192,16 @@ export default {
       if (cookieService.hasPreferencesSaved()) {
         // Try to load preferences from server
         try {
-          const userId = localStorage.getItem('user_id')
+          const loggedIn = localStorage.getItem('is_logged_in') === 'true' ||
+            sessionStorage.getItem('is_logged_in') === 'true'
+          const rawUserId = loggedIn
+            ? (localStorage.getItem('user_id') || sessionStorage.getItem('user_id'))
+            : null
+          const userId = rawUserId ? parseInt(rawUserId, 10) : null
           const sessionId = cookieService.getSessionId()
           
           const response = await cookieService.getPreferences(
-            userId ? parseInt(userId) : null,
+            Number.isFinite(userId) ? userId : null,
             sessionId
           )
           

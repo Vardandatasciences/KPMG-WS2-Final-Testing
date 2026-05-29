@@ -1119,6 +1119,18 @@ export default {
       if (isResubmitted) {
         return 'Under Review';
       }
+      // Compliance table Status wins over stale ApprovedNot from an old approval row in sessionStorage.
+      const tableStatus = this.selectedApproval.Status;
+      const version = String(
+        this.selectedApproval.Version || this.selectedApproval.version || ''
+      );
+      if (
+        tableStatus === 'Under Review' &&
+        (version.startsWith('u') || !version) &&
+        this.selectedApproval.ApprovedNot === true
+      ) {
+        return 'Under Review';
+      }
       if (this.selectedApproval.ApprovedNot === true) {
         return 'Approved';
       }

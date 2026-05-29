@@ -1102,6 +1102,42 @@ select[multiple] option:hover {
 .policy-assignment-compliance-scope .compliance-scope-list {
   margin-top: 0.75rem;
 }
+.compliance-scope-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+.compliance-scope-toolbar .compliance-typing-input {
+  flex: 1;
+  min-width: 200px;
+  max-width: none;
+}
+.compliance-scope-loading,
+.compliance-scope-empty {
+  padding: 0.75rem;
+  font-size: 0.9rem;
+  color: var(--text-secondary, #64748b);
+}
+.compliance-scope-hint {
+  padding: 0.5rem 0;
+}
+.compliance-scope-warn {
+  color: #b45309;
+  font-weight: 600;
+}
+.compliance-freq-tag {
+  color: var(--text-secondary, #64748b);
+  font-weight: normal;
+}
+.compliance-selected-summary {
+  margin-top: 0.75rem;
+}
+.compliance-scope-after-policy {
+  margin: 1rem 0 1.25rem;
+  width: 100%;
+}
 
 .compliance-preview .manually-add-compliance-btn {
   margin-top: 0.5rem;

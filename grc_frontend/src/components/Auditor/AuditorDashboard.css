@@ -1560,4 +1560,139 @@ td .auditor-card-status {
   padding: 40px 20px;
   color: var(--text-secondary, #6b7280);
   font-size: 14px;
-} 
+}
+
+/* Stalled review escalation panel (shared with compliance overdue panel pattern) */
+.audit-overdue-escalations-panel {
+  margin: 0 0 20px;
+  padding: 20px;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.07);
+  border-left: 4px solid #4f6cff;
+  max-height: 360px;
+  overflow: hidden;
+}
+.audit-overdue-escalations-title {
+  font-size: 1.1rem;
+  margin: 0 0 12px;
+  color: #1e293b;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.audit-overdue-escalations-hint {
+  color: #64748b;
+  margin: 0;
+}
+.audit-overdue-escalations-instructions {
+  color: #475569;
+  font-size: 0.9rem;
+  margin: 0 0 12px;
+  line-height: 1.45;
+}
+.audit-overdue-escalations-warn {
+  color: #b45309;
+  font-size: 0.9rem;
+  margin: 0 0 12px;
+}
+.audit-overdue-escalations-table-wrap {
+  max-height: 260px;
+  overflow-y: auto;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+.audit-overdue-escalations-table {
+  width: 100%;
+  min-width: 720px;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+.audit-overdue-escalations-table th,
+.audit-overdue-escalations-table td {
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid #e2e8f0;
+  vertical-align: middle;
+}
+.audit-overdue-escalations-table th {
+  color: #475569;
+  font-weight: 600;
+  background: #f8fafc;
+}
+.audit-overdue-escalations-table .col-audit {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.audit-overdue-escalations-table .col-framework {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.audit-overdue-escalations-table .col-due {
+  white-space: nowrap;
+  width: 110px;
+}
+.audit-overdue-escalations-table .col-current {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.audit-overdue-escalations-table .col-action {
+  position: sticky;
+  right: 0;
+  z-index: 2;
+  min-width: 300px;
+  background: #fff;
+  box-shadow: -8px 0 12px rgba(15, 23, 42, 0.06);
+}
+.audit-overdue-escalations-table thead .col-action {
+  background: #f8fafc;
+}
+.audit-overdue-escalations-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: nowrap;
+}
+.audit-overdue-escalations-select {
+  flex: 1 1 auto;
+  min-width: 160px;
+  max-width: 220px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid #94a3b8;
+  background: #fff;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.audit-overdue-escalations-assign-btn {
+  flex: 0 0 auto;
+  background: #4f6cff;
+  color: #fff;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.audit-overdue-escalations-assign-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.audit-overdue-escalations-success {
+  color: #15803d;
+  margin-top: 12px;
+}
+.audit-overdue-escalations-error {
+  color: #b91c1c;
+  margin-top: 12px;
+}

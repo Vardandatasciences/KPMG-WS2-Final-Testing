@@ -20,6 +20,7 @@ import time
 from threading import Lock
 from collections import defaultdict
 from ...throttles import NotificationWriteThrottle
+from ...utils.auto_decrypt_helper import decrypt_encrypted_substrings_in_text
 
 # Simple in-memory storage for notifications (in production, use database)
 notifications_storage = []
@@ -194,6 +195,36 @@ def get_user_email_from_id(user_id):
     except Exception as e:
         debug_print(f"Error getting user email for user_id {user_id}: {e}")
         return None
+
+
+def _user_is_policy_manager(user_id: int) -> bool:
+    """Policy self-heal manager escalations are visible only to Policy Manager role."""
+    try:
+        from ...models import RBAC
+
+        return RBAC.objects.filter(user_id=user_id, is_active="Y", role="Policy Manager").exists()
+    except Exception:
+        return False
+
+
+def _user_is_compliance_manager(user_id: int) -> bool:
+    """Audit overdue escalations are visible only to Compliance Manager role."""
+    try:
+        from ...models import RBAC
+
+        return RBAC.objects.filter(user_id=user_id, is_active="Y", role="Compliance Manager").exists()
+    except Exception:
+        return False
+
+
+def _user_is_audit_manager(user_id: int) -> bool:
+    """Stalled review escalations are visible only to Audit Manager role."""
+    try:
+        from ...models import RBAC
+
+        return RBAC.objects.filter(user_id=user_id, is_active="Y", role="Audit Manager").exists()
+    except Exception:
+        return False
  
 def create_audit_completion_notification(audit_id, audit_name, document_count, user_id):
     """
@@ -403,12 +434,16 @@ def get_notifications(request):
             requested_user_id = str(user_id_param_int)
 
         user_id = str(requested_user_id)
-       
+        user_id_int = int(user_id)
+        is_policy_manager = _user_is_policy_manager(user_id_int)
+        is_compliance_manager = _user_is_compliance_manager(user_id_int)
+        is_audit_manager = _user_is_audit_manager(user_id_int)
+
         # Get user email to query database
         user_email = None
         if user_id:
             try:
-                user_email = get_user_email_from_id(int(user_id))
+                user_email = get_user_email_from_id(user_id_int)
             except (ValueError, TypeError):
                 pass
        
@@ -417,13 +452,126 @@ def get_notifications(request):
         try:
             with connection.cursor() as cursor:
                 if user_email:
-                    cursor.execute("""
-                        SELECT id, recipient, type, channel, success, error, created_at, FrameworkId
-                        FROM notifications
-                        WHERE recipient = %s AND type IN ('audit_completion', 'ai_audit_evidence_reminder') AND channel = 'in_app'
-                        ORDER BY created_at DESC
-                        LIMIT 100
-                    """, (user_email,))
+                    manager_uid_tag = f'"manager_user_id": {user_id}'
+                    if is_policy_manager:
+                        cursor.execute(
+                            """
+                            SELECT id, recipient, type, channel, success, error, created_at, FrameworkId
+                            FROM notifications
+                            WHERE channel = 'in_app' AND (
+                                (
+                                    type IN (
+                                        'audit_completion',
+                                        'ai_audit_evidence_reminder',
+                                        'audit_assigned',
+                                        'audit_due_reminder',
+                                        'audit_recurrence_assigned',
+                                        'audit_reassigned',
+                                        'audit_ready_for_review',
+                                        'policy_review_self_heal',
+                                        'policy_self_heal_assigned',
+                                        'similarity_check_ready'
+                                    )
+                                    AND recipient = %s
+                                )
+                                OR (
+                                    type = 'policy_self_heal_manager_escalation'
+                                    AND error LIKE %s
+                                )
+                            )
+                            ORDER BY created_at DESC
+                            LIMIT 100
+                            """,
+                            (user_email, f"%{manager_uid_tag}%"),
+                        )
+                    elif is_compliance_manager:
+                        cursor.execute(
+                            """
+                            SELECT id, recipient, type, channel, success, error, created_at, FrameworkId
+                            FROM notifications
+                            WHERE channel = 'in_app' AND (
+                                (
+                                    type IN (
+                                        'audit_completion',
+                                        'ai_audit_evidence_reminder',
+                                        'audit_assigned',
+                                        'audit_due_reminder',
+                                        'audit_recurrence_assigned',
+                                        'audit_reassigned',
+                                        'audit_ready_for_review',
+                                        'policy_review_self_heal',
+                                        'policy_self_heal_assigned',
+                                        'similarity_check_ready'
+                                    )
+                                    AND recipient = %s
+                                )
+                                OR (
+                                    type = 'audit_overdue_manager_escalation'
+                                    AND error LIKE %s
+                                )
+                                OR (
+                                    type = 'audit_overdue_escalation'
+                                    AND recipient = %s
+                                )
+                            )
+                            ORDER BY created_at DESC
+                            LIMIT 100
+                            """,
+                            (user_email, f"%{manager_uid_tag}%", user_email),
+                        )
+                    elif is_audit_manager:
+                        cursor.execute(
+                            """
+                            SELECT id, recipient, type, channel, success, error, created_at, FrameworkId
+                            FROM notifications
+                            WHERE channel = 'in_app' AND (
+                                (
+                                    type IN (
+                                        'audit_completion',
+                                        'ai_audit_evidence_reminder',
+                                        'audit_assigned',
+                                        'audit_due_reminder',
+                                        'audit_recurrence_assigned',
+                                        'audit_reassigned',
+                                        'audit_ready_for_review',
+                                        'policy_review_self_heal',
+                                        'policy_self_heal_assigned',
+                                        'similarity_check_ready'
+                                    )
+                                    AND recipient = %s
+                                )
+                                OR (
+                                    type = 'audit_review_manager_escalation'
+                                    AND error LIKE %s
+                                )
+                            )
+                            ORDER BY created_at DESC
+                            LIMIT 100
+                            """,
+                            (user_email, f"%{manager_uid_tag}%"),
+                        )
+                    else:
+                        cursor.execute(
+                            """
+                            SELECT id, recipient, type, channel, success, error, created_at, FrameworkId
+                            FROM notifications
+                            WHERE channel = 'in_app' AND type IN (
+                                'audit_completion',
+                                'ai_audit_evidence_reminder',
+                                'audit_assigned',
+                                'audit_due_reminder',
+                                'audit_recurrence_assigned',
+                                'audit_reassigned',
+                                'audit_ready_for_review',
+                                'policy_review_self_heal',
+                                'policy_self_heal_assigned',
+                                'similarity_check_ready'
+                            ) AND (recipient = %s OR recipient = %s)
+                            ORDER BY created_at DESC
+                            LIMIT 100
+                            """,
+                            (user_email, f"user_{user_id}"),
+                        )
                 else:
                     # If we can't map to an email, do not attempt a wildcard lookup (can leak cross-user data).
                     db_notifications = []
@@ -460,6 +608,326 @@ def get_notifications(request):
                                 'action_url': f'/audit/{audit_id}/ai-audit' if audit_id else None
                             }
                         })
+                    elif notif_type in ('policy_review_self_heal', 'policy_self_heal_assigned'):
+                        policy_id = None
+                        err = db_notif.get('error') or ''
+                        if err.startswith('policy_id:'):
+                            try:
+                                policy_id = int(err.split(':', 1)[1].split(';')[0].strip())
+                            except (ValueError, IndexError):
+                                pass
+                        policy_label = None
+                        end_s = 'its end date'
+                        if policy_id:
+                            try:
+                                from ...models import Policy
+
+                                p = Policy.objects.filter(PolicyId=policy_id).only('PolicyName', 'EndDate').first()
+                                if p:
+                                    raw_name = (p.PolicyName or '').strip()
+                                    if raw_name:
+                                        policy_label = raw_name
+                                    if p.EndDate:
+                                        end_s = p.EndDate.isoformat()
+                            except Exception:
+                                policy_label = None
+                        meta_type = 'policy_self_heal_assigned' if notif_type == 'policy_self_heal_assigned' else 'policy_self_heal'
+                        if policy_label:
+                            title = f'Policy review: "{policy_label}"'
+                            message = (
+                                f'"{policy_label}" is due for review before {end_s}. '
+                                'Open the renewal page to keep it as-is or start an update in tailoring.'
+                            )
+                        else:
+                            title = 'Policy review reminder'
+                            message = (
+                                'A policy is due for review before its end date. '
+                                'Open the renewal page to keep it as-is or start an update in tailoring.'
+                            )
+                        db_notifications.append({
+                            'id': str(db_notif['id']),
+                            'title': title,
+                            'message': message,
+                            'category': 'policy',
+                            'priority': 'high',
+                            'createdAt': created_at,
+                            'status': {'isRead': False, 'readAt': None},
+                            'user_id': user_id,
+                            'metadata': {
+                                'type': meta_type,
+                                'db_id': db_notif['id'],
+                                'policy_id': policy_id,
+                                'policy_name': policy_label,
+                                'framework_id': db_notif.get('FrameworkId'),
+                                'action_url': f'/policy/renewal-review?policyId={policy_id}' if policy_id else None,
+                            },
+                        })
+                    elif notif_type in (
+                        'audit_overdue_manager_escalation',
+                        'audit_overdue_escalation',
+                    ):
+                        if not is_compliance_manager:
+                            continue
+                        meta = {}
+                        err = db_notif.get('error') or ''
+                        if err.startswith('{'):
+                            try:
+                                meta = json.loads(err)
+                            except json.JSONDecodeError:
+                                meta = {}
+                        if notif_type == 'audit_overdue_manager_escalation':
+                            mgr_tag = f'"manager_user_id": {user_id}'
+                            if mgr_tag not in err:
+                                continue
+                        audit_id = meta.get('audit_id')
+                        raw_message = meta.get('message') or (
+                            err if not err.startswith('{') else (
+                                f'Audit {audit_id} is overdue. Open the Compliance Dashboard to reassign.'
+                                if audit_id
+                                else 'Open the Compliance Dashboard to reassign overdue audits.'
+                            )
+                        )
+                        db_notifications.append({
+                            'id': str(db_notif['id']),
+                            'title': meta.get('title') or 'Audit overdue – action required',
+                            'message': decrypt_encrypted_substrings_in_text(raw_message),
+                            'category': 'compliance',
+                            'priority': 'high',
+                            'createdAt': created_at,
+                            'status': {'isRead': False, 'readAt': None},
+                            'user_id': user_id,
+                            'metadata': {
+                                'type': 'audit_overdue_manager',
+                                'db_id': db_notif['id'],
+                                'audit_id': audit_id,
+                                'framework_id': db_notif.get('FrameworkId'),
+                                'action_url': '/compliance/user-dashboard?auditOverdueEscalations=1',
+                            },
+                        })
+                    elif notif_type == 'audit_ready_for_review':
+                        meta = {}
+                        err = db_notif.get('error') or ''
+                        if err.startswith('{'):
+                            try:
+                                meta = json.loads(err)
+                            except json.JSONDecodeError:
+                                meta = {}
+                        audit_id = meta.get('audit_id')
+                        raw_message = meta.get('message') or (
+                            err if not err.startswith('{') else (
+                                f'Audit {audit_id} is ready for your review.'
+                                if audit_id
+                                else 'Open the reviewer workspace to complete your review.'
+                            )
+                        )
+                        db_notifications.append({
+                            'id': str(db_notif['id']),
+                            'title': meta.get('title') or 'Audit ready for review',
+                            'message': decrypt_encrypted_substrings_in_text(raw_message),
+                            'category': 'audit',
+                            'priority': 'high',
+                            'createdAt': created_at,
+                            'status': {'isRead': False, 'readAt': None},
+                            'user_id': user_id,
+                            'metadata': {
+                                'type': 'audit_ready_for_review',
+                                'db_id': db_notif['id'],
+                                'audit_id': audit_id,
+                                'framework_id': db_notif.get('FrameworkId'),
+                                'action_url': meta.get('action_url') or '/auditor/reviews',
+                            },
+                        })
+                    elif notif_type == 'audit_review_manager_escalation':
+                        if not is_audit_manager:
+                            continue
+                        meta = {}
+                        err = db_notif.get('error') or ''
+                        if err.startswith('{'):
+                            try:
+                                meta = json.loads(err)
+                            except json.JSONDecodeError:
+                                meta = {}
+                        mgr_tag = f'"manager_user_id": {user_id}'
+                        if mgr_tag not in err:
+                            continue
+                        audit_id = meta.get('audit_id')
+                        raw_message = meta.get('message') or (
+                            err if not err.startswith('{') else (
+                                f'Audit {audit_id} review is stalled. Open the Audit Dashboard to reassign.'
+                                if audit_id
+                                else 'Open the Audit Dashboard to reassign stalled reviews.'
+                            )
+                        )
+                        db_notifications.append({
+                            'id': str(db_notif['id']),
+                            'title': meta.get('title') or 'Audit review overdue – action required',
+                            'message': decrypt_encrypted_substrings_in_text(raw_message),
+                            'category': 'audit',
+                            'priority': 'high',
+                            'createdAt': created_at,
+                            'status': {'isRead': False, 'readAt': None},
+                            'user_id': user_id,
+                            'metadata': {
+                                'type': 'audit_review_manager',
+                                'db_id': db_notif['id'],
+                                'audit_id': audit_id,
+                                'framework_id': db_notif.get('FrameworkId'),
+                                'action_url': '/auditor/dashboard?reviewEscalations=1',
+                            },
+                        })
+                    elif notif_type in (
+                        'audit_assigned',
+                        'audit_due_reminder',
+                        'audit_recurrence_assigned',
+                        'audit_reassigned',
+                    ):
+                        meta = {}
+                        err = db_notif.get('error') or ''
+                        if err.startswith('{'):
+                            try:
+                                meta = json.loads(err)
+                            except json.JSONDecodeError:
+                                meta = {}
+                        audit_id = meta.get('audit_id')
+                        titles = {
+                            'audit_assigned': 'Audit assigned',
+                            'audit_due_reminder': 'Audit due soon',
+                            'audit_recurrence_assigned': 'Recurring audit',
+                            'audit_reassigned': 'Audit reassigned',
+                        }
+                        raw_message = meta.get('message') or (
+                            err if not err.startswith('{') else (
+                                f'Audit {audit_id}' if audit_id else 'Open the audit for details.'
+                            )
+                        )
+                        db_notifications.append({
+                            'id': str(db_notif['id']),
+                            'title': meta.get('title') or titles.get(notif_type, 'Audit notification'),
+                            'message': decrypt_encrypted_substrings_in_text(raw_message),
+                            'category': 'audit',
+                            'priority': 'medium',
+                            'createdAt': created_at,
+                            'status': {'isRead': False, 'readAt': None},
+                            'user_id': user_id,
+                            'metadata': {
+                                'type': notif_type,
+                                'db_id': db_notif['id'],
+                                'audit_id': audit_id,
+                                'action_url': meta.get('action_url') or (
+                                    f'/auditor/reviews' if audit_id else None
+                                ),
+                            },
+                        })
+                    elif notif_type == 'similarity_check_ready':
+                        check_id = None
+                        entity_type = None
+                        operation = None
+                        err = db_notif.get('error') or ''
+                        for part in err.split(';'):
+                            part = part.strip()
+                            if part.startswith('check_id:'):
+                                try:
+                                    check_id = int(part.split(':', 1)[1].strip())
+                                except (ValueError, IndexError):
+                                    pass
+                            elif part.startswith('entity:'):
+                                entity_type = part.split(':', 1)[1].strip() or None
+                            elif part.startswith('op:'):
+                                operation = part.split(':', 1)[1].strip() or None
+                        ready = None
+                        if check_id:
+                            try:
+                                from ...services.similarity_async_update_service import (
+                                    get_similarity_notification_display,
+                                )
+                                ready = get_similarity_notification_display(check_id)
+                            except Exception:
+                                ready = None
+                        if not ready:
+                            try:
+                                from ...services.similarity_async_update_service import _build_ready_notification
+                                fallback_types = [entity_type] if entity_type else []
+                                ready = _build_ready_notification(operation, fallback_types, '')
+                            except Exception:
+                                ready = {
+                                    'title': 'Similar records ready to review',
+                                    'message': (
+                                        'Possible matches are ready. '
+                                        'Open the review, then confirm save to apply your changes.'
+                                    ),
+                                    'category': 'policy',
+                                    'entity_type': entity_type or 'Policy',
+                                }
+                        db_notifications.append({
+                            'id': str(db_notif['id']),
+                            'title': ready['title'],
+                            'message': ready['message'],
+                            'category': ready.get('category', 'policy'),
+                            'priority': 'medium',
+                            'createdAt': created_at,
+                            'status': {'isRead': False, 'readAt': None},
+                            'user_id': user_id,
+                            'metadata': {
+                                'type': 'similarity_check_ready',
+                                'db_id': db_notif['id'],
+                                'check_id': check_id,
+                                'entity_type': ready.get('entity_type', entity_type),
+                                'operation': operation,
+                                'action_url': f'/similarity/review?checkId={check_id}' if check_id else '/similarity/review',
+                            },
+                        })
+                    elif notif_type == 'policy_self_heal_manager_escalation':
+                        if not is_policy_manager:
+                            continue
+                        err = db_notif.get('error') or ''
+                        if f"manager_user_id:{user_id}" not in err:
+                            continue
+                        policy_id = None
+                        creator_name = None
+                        for part in err.split(';'):
+                            part = part.strip()
+                            if part.startswith('policy_id:'):
+                                try:
+                                    policy_id = int(part.split(':', 1)[1].strip())
+                                except (ValueError, IndexError):
+                                    pass
+                            elif part.startswith('creator:'):
+                                creator_name = part.split(':', 1)[1].strip()
+                        policy_label = None
+                        if policy_id:
+                            try:
+                                from ...models import Policy
+
+                                p = Policy.objects.filter(PolicyId=policy_id).only('PolicyName').first()
+                                if p and (p.PolicyName or '').strip():
+                                    policy_label = (p.PolicyName or '').strip()
+                            except Exception:
+                                policy_label = None
+                        title = f'Assign renewal custodian: "{policy_label}"' if policy_label else 'Assign renewal custodian'
+                        who = creator_name or 'the original creator'
+                        message = (
+                            f'The creator ({who}) is no longer active. '
+                            f'Assign someone to handle renewal'
+                            + (f' for "{policy_label}".' if policy_label else '.')
+                        )
+                        db_notifications.append({
+                            'id': str(db_notif['id']),
+                            'title': title,
+                            'message': message,
+                            'category': 'policy',
+                            'priority': 'high',
+                            'createdAt': created_at,
+                            'status': {'isRead': False, 'readAt': None},
+                            'user_id': user_id,
+                            'metadata': {
+                                'type': 'policy_self_heal_manager',
+                                'db_id': db_notif['id'],
+                                'policy_id': policy_id,
+                                'policy_name': policy_label,
+                                'framework_id': db_notif.get('FrameworkId'),
+                                'action_url': '/policy/performance/dashboard?renewalEscalations=1',
+                            },
+                        })
                     else:
                         db_notifications.append({
                             'id': str(db_notif['id']),
@@ -479,7 +947,39 @@ def get_notifications(request):
         memory_notifications = [
             n for n in notifications_storage
             if str(n.get('user_id', '')) == str(user_id)
+            and (
+                is_policy_manager
+                or (n.get('metadata') or {}).get('type') != 'policy_self_heal_manager'
+            )
+            and (
+                is_compliance_manager
+                or (n.get('metadata') or {}).get('type') != 'audit_overdue_manager'
+            )
+            and (
+                is_audit_manager
+                or (n.get('metadata') or {}).get('type') != 'audit_review_manager'
+            )
         ]
+        try:
+            from ...services.similarity_async_update_service import get_similarity_notification_display
+            for mem in memory_notifications:
+                meta = mem.get('metadata') or {}
+                if meta.get('type') != 'similarity_check_ready':
+                    continue
+                cid = meta.get('check_id')
+                if cid is None:
+                    continue
+                try:
+                    ready = get_similarity_notification_display(int(cid))
+                except (TypeError, ValueError):
+                    ready = None
+                if ready:
+                    mem['title'] = ready['title']
+                    mem['message'] = ready['message']
+                    mem['category'] = ready.get('category', mem.get('category'))
+                    meta['entity_type'] = ready.get('entity_type', meta.get('entity_type'))
+        except Exception:
+            pass
        
         # Combine and deduplicate (prefer memory notifications as they have full metadata)
         all_notifications = memory_notifications.copy()

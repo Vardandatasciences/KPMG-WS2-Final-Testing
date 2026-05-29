@@ -116,6 +116,89 @@
       </div>
     </div>
 
+    <!-- Overdue audit reassignments (Compliance Manager only) -->
+    <div
+      v-if="showAuditOverdueEscalations"
+      id="audit-overdue-escalations"
+      class="audit-overdue-escalations-panel"
+    >
+      <h2 class="audit-overdue-escalations-title">
+        <i class="fas fa-user-clock"></i>
+        Overdue audit reassignments
+      </h2>
+      <p v-if="auditOverdueEscalationsLoading" class="audit-overdue-escalations-hint">Loading…</p>
+      <p v-else-if="auditOverdueEscalations.length === 0" class="audit-overdue-escalations-hint">
+        No overdue audits need reassignment right now.
+      </p>
+      <template v-else>
+        <p class="audit-overdue-escalations-instructions">
+          Choose a new auditor in the dropdown, then click <strong>Reassign</strong>.
+          The audit’s auditor is updated in the database and the new auditor is notified.
+        </p>
+        <p v-if="auditAuditors.length === 0" class="audit-overdue-escalations-warn">
+          No auditors available in the list. Check audit permissions or refresh the page.
+        </p>
+        <div class="audit-overdue-escalations-table-wrap">
+          <table class="audit-overdue-escalations-table">
+            <thead>
+              <tr>
+                <th class="col-audit">Audit</th>
+                <th class="col-framework">Framework</th>
+                <th class="col-due">Due</th>
+                <th class="col-current">Current auditor</th>
+                <th class="col-action">Reassign auditor</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="row in auditOverdueEscalations" :key="row.audit_id">
+                <td class="col-audit" :title="row.title">
+                  {{ row.title || `Audit ${row.audit_id}` }}
+                </td>
+                <td class="col-framework" :title="row.framework_name">
+                  {{ row.framework_name || '—' }}
+                </td>
+                <td class="col-due">{{ row.due_date || '—' }}</td>
+                <td class="col-current">{{ row.auditor_name || '—' }}</td>
+                <td class="col-action">
+                  <div class="audit-overdue-escalations-actions">
+                    <select
+                      v-model="row._assigneeId"
+                      class="audit-overdue-escalations-select"
+                      :disabled="row._assigning || auditAuditors.length === 0"
+                      aria-label="Select new auditor"
+                    >
+                      <option value="" disabled>Select auditor…</option>
+                      <option
+                        v-for="u in auditAuditors"
+                        :key="u.UserId"
+                        :value="String(u.UserId)"
+                      >
+                        {{ u.UserName }}
+                      </option>
+                    </select>
+                    <button
+                      type="button"
+                      class="audit-overdue-escalations-assign-btn"
+                      :disabled="!row._assigneeId || row._assigning"
+                      @click="reassignOverdueAudit(row)"
+                    >
+                      {{ row._assigning ? 'Saving…' : 'Reassign' }}
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </template>
+      <p v-if="auditOverdueEscalationsMessage" class="audit-overdue-escalations-success">
+        {{ auditOverdueEscalationsMessage }}
+      </p>
+      <p v-if="auditOverdueEscalationsError" class="audit-overdue-escalations-error">
+        {{ auditOverdueEscalationsError }}
+      </p>
+    </div>
+
     <!-- Filter Summary -->
     <div v-if="hasActiveFilters" class="filter-summary" style="background: transparent; color: #475569; padding: 16px 20px; border-radius: 12px; margin-bottom: 24px;">
       <div style="display: flex; align-items: center; gap: 12px;">
@@ -345,6 +428,10 @@ import { useDashboardsStore } from '@/stores/dashboards'
 import { useAppDataStore } from '@/stores/appData'
 import { useComplianceStore } from '@/stores/compliance'
 import { useFrameworkStore } from '@/stores/framework'
+import { usePermissionStore } from '@/stores/permission'
+import apiService from '@/services/apiService'
+import api from '@/services/api'
+import { API_ENDPOINTS } from '@/config/api'
 import html2canvas from 'html2canvas'
 import { convertColorForColorblind as convertColorFromUtil } from '@/utils/colorblindness'
 import jsPDF from 'jspdf'
@@ -383,7 +470,8 @@ export default {
     const appDataStore = useAppDataStore()
     const complianceStore = useComplianceStore()
     const frameworkStore = useFrameworkStore()
-    return { dashboardsStore, appDataStore, complianceStore, frameworkStore }
+    const permissionStore = usePermissionStore()
+    return { dashboardsStore, appDataStore, complianceStore, frameworkStore, permissionStore }
   },
   data() {
     return {
@@ -441,7 +529,13 @@ export default {
       isComponentActive: false,
       chartRenderRetryTimeout: null,
       chartRenderRetryCount: 0,
-      frameworkInitTimeout: null
+      frameworkInitTimeout: null,
+      showAuditOverdueEscalations: false,
+      auditOverdueEscalations: [],
+      auditOverdueEscalationsLoading: false,
+      auditOverdueEscalationsError: null,
+      auditOverdueEscalationsMessage: null,
+      auditAuditors: []
     }
   },
   computed: {
@@ -524,6 +618,8 @@ export default {
     console.log('🚀 ComplianceDashboard mounted - starting instant loading...')
     this.isComponentActive = true
     this.isInitializingFrameworkSelection = true
+
+    this.fetchAuditOverdueEscalations().then(() => this.scrollToAuditOverdueEscalationsIfNeeded())
 
     this.checkFontAwesome()
     this.initColorblindnessTracking()
@@ -663,6 +759,7 @@ export default {
       await this.renderChartsAfterDataLoad()
     }
     this.fetchDashboardData({ silent: true }).catch(() => {})
+    this.fetchAuditOverdueEscalations().then(() => this.scrollToAuditOverdueEscalationsIfNeeded())
     // Restart periodic activity refresh if it was stopped
     if (!this.activityRefreshInterval) {
       this.activityRefreshInterval = setInterval(() => {
@@ -721,6 +818,113 @@ export default {
     }
   },
   methods: {
+    isComplianceManagerRole(role) {
+      return String(role || '').trim() === 'Compliance Manager'
+    },
+
+    async fetchAuditOverdueEscalations() {
+      try {
+        await this.permissionStore.fetchAndSetUserRole()
+      } catch (e) {
+        console.warn('Could not load user role for audit overdue escalations', e)
+      }
+      if (!this.isComplianceManagerRole(this.permissionStore.role)) {
+        this.showAuditOverdueEscalations = false
+        return
+      }
+
+      this.auditOverdueEscalationsLoading = true
+      this.auditOverdueEscalationsError = null
+      try {
+        const res = await apiService.get(API_ENDPOINTS.AUDIT_OVERDUE_ESCALATIONS_PENDING)
+        if (res && res.success !== false) {
+          this.showAuditOverdueEscalations = true
+          this.auditOverdueEscalations = (res.escalations || []).map((e) => ({
+            ...e,
+            _assigneeId: '',
+            _assigning: false
+          }))
+          await this.fetchAuditorsForReassign()
+        }
+      } catch (e) {
+        if (e.response && e.response.status === 403) {
+          this.showAuditOverdueEscalations = false
+        } else {
+          this.auditOverdueEscalationsError =
+            (e.response && e.response.data && e.response.data.error) ||
+            e.message ||
+            'Failed to load overdue audits'
+        }
+      } finally {
+        this.auditOverdueEscalationsLoading = false
+      }
+    },
+
+    async fetchAuditorsForReassign() {
+      if (!this.isComplianceManagerRole(this.permissionStore.role)) return
+      try {
+        const currentUserId =
+          sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || ''
+        const list = await api.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
+          params: {
+            module: 'audit',
+            permission_type: 'auditor',
+            current_user_id: currentUserId
+          }
+        })
+        const rows = Array.isArray(list) ? list : (list?.data || [])
+        this.auditAuditors = rows
+          .map((u) => ({
+            UserId: u.UserId ?? u.user_id,
+            UserName: u.UserName ?? u.user_name ?? u.username ?? ''
+          }))
+          .filter((u) => u.UserId != null && String(u.UserName).trim())
+      } catch (e) {
+        console.warn('Could not load auditors for reassignment', e)
+        this.auditOverdueEscalationsError =
+          (e.response && e.response.data && e.response.data.error) ||
+          e.message ||
+          'Could not load auditors for reassignment'
+      }
+    },
+
+    async reassignOverdueAudit(row) {
+      if (!row._assigneeId || row._assigning) return
+      row._assigning = true
+      this.auditOverdueEscalationsMessage = null
+      this.auditOverdueEscalationsError = null
+      try {
+        const res = await api.post(API_ENDPOINTS.AUDIT_REASSIGN(row.audit_id), {
+          new_auditor_id: Number(row._assigneeId)
+        })
+        const data = res?.data || res
+        if (data.success === false) {
+          throw new Error(data.message || data.error || 'Reassign failed')
+        }
+        this.auditOverdueEscalations = this.auditOverdueEscalations.filter(
+          (r) => r.audit_id !== row.audit_id
+        )
+        this.auditOverdueEscalationsMessage = `Audit "${row.title || row.audit_id}" reassigned.`
+      } catch (e) {
+        this.auditOverdueEscalationsError =
+          (e.response && e.response.data && e.response.data.error) ||
+          (e.response && e.response.data && e.response.data.message) ||
+          e.message ||
+          'Failed to reassign audit'
+      } finally {
+        row._assigning = false
+      }
+    },
+
+    scrollToAuditOverdueEscalationsIfNeeded() {
+      if (this.$route.query.auditOverdueEscalations === '1' && this.showAuditOverdueEscalations) {
+        this.$nextTick(() => {
+          const el = document.getElementById('audit-overdue-escalations')
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        })
+      }
+    },
+
     chartHasRenderableData(chart) {
       return !!(
         chart &&

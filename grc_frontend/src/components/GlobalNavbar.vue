@@ -173,7 +173,8 @@ export default {
     async logout() {
       try {
         console.log('🔄 [GlobalNavbar] Logout button clicked - starting logout process...')
-        
+        window.__grcLoggingOut = true
+
         // Stop notification polling
         if (this.pollInterval) {
           clearInterval(this.pollInterval)
@@ -189,6 +190,10 @@ export default {
         await authService.logout()
         
         console.log('✅ [GlobalNavbar] Logout successful')
+
+        if (typeof window.onLogout === 'function') {
+          await window.onLogout()
+        }
         
         // Dispatch auth change event
         window.dispatchEvent(new CustomEvent('authChanged'))
@@ -198,8 +203,16 @@ export default {
         this.$router.push('/login')
       } catch (error) {
         console.error('❌ [GlobalNavbar] Logout error:', error)
+        if (typeof window.onLogout === 'function') {
+          try {
+            await window.onLogout()
+          } catch (_) { /* ignore */ }
+        }
+        window.dispatchEvent(new CustomEvent('authChanged'))
         // Force redirect to login even if logout fails
         this.$router.push('/login')
+      } finally {
+        window.__grcLoggingOut = false
       }
     }
   }

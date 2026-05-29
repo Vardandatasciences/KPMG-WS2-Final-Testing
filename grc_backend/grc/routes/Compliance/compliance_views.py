@@ -248,6 +248,13 @@ def _run_compliance_deactivation_request_notification(compliance_id, reviewer_id
 # Centralized validation module for allow-list input validation
 class ComplianceInputValidator:
     """Centralized validation for all compliance input fields following allow-list pattern"""
+
+    @staticmethod
+    def validate_optional_date_field(value: Any, field_name: str):
+        """Validate optional date fields; returns None when empty."""
+        if value is None or value == '':
+            return None
+        return ComplianceInputValidator.validate_date_field(value, field_name)
     
     # Character sets for validation
     ALPHANUMERIC_PATTERN = re.compile(r'^[a-zA-Z0-9\s\.\-_]+$')
@@ -267,6 +274,10 @@ class ComplianceInputValidator:
     ALLOWED_PERMANENT_TEMPORARY = ['Permanent', 'Temporary']
     ALLOWED_VERSIONING_TYPE = ['Minor', 'Major']
     ALLOWED_RISK_TYPES = ['Current', 'Residual', 'Inherent', 'Emerging', 'Accepted']
+    ALLOWED_AUDIT_FREQUENCIES = [
+        'Only Once', 'Daily', 'Monthly', 'Every 2 Months',
+        'Every 4 Months', 'Half Yearly', 'Yearly',
+    ]
     
     @staticmethod
     def sanitize_string(value: str) -> str:
@@ -785,6 +796,31 @@ class ComplianceInputValidator:
             )
         except ValidationError as e:
             errors['reviewer'] = [str(e)]
+
+        try:
+            validated_data['StartDate'] = cls.validate_date_field(
+                request_data.get('StartDate'), 'StartDate'
+            )
+        except ValidationError as e:
+            errors['StartDate'] = [str(e)]
+
+        try:
+            validated_data['EndDate'] = cls.validate_optional_date_field(
+                request_data.get('EndDate'), 'EndDate'
+            )
+        except ValidationError as e:
+            errors['EndDate'] = [str(e)]
+
+        try:
+            raw_af = request_data.get('AuditFrequency') or request_data.get('auditFrequency')
+            if raw_af is None or str(raw_af).strip() == '':
+                validated_data['AuditFrequency'] = None
+            else:
+                validated_data['AuditFrequency'] = cls.validate_choice_field(
+                    raw_af, 'AuditFrequency', cls.ALLOWED_AUDIT_FREQUENCIES
+                )
+        except ValidationError as e:
+            errors['AuditFrequency'] = [str(e)]
         
         try:
             # Validate ApprovalDueDate (required date)
@@ -986,7 +1022,9 @@ def get_frameworks(request):
                 'Category', 
                 'ActiveInactive', 
                 'FrameworkDescription',
-                'Status'
+                'Status',
+                'StartDate',
+                'EndDate',
             ).order_by('FrameworkName')
         else:
             # Show only active frameworks (default for dropdowns)
@@ -996,7 +1034,9 @@ def get_frameworks(request):
                 'Category', 
                 'ActiveInactive', 
                 'FrameworkDescription',
-                'Status'
+                'Status',
+                'StartDate',
+                'EndDate',
             ).order_by('FrameworkName')
         
         # Format the response directly from values() query (much faster)
@@ -1008,6 +1048,8 @@ def get_frameworks(request):
                 'category': fw.get('Category', ''),
                 'status': fw.get('ActiveInactive', ''),
                 'description': fw.get('FrameworkDescription', '')[:200] if fw.get('FrameworkDescription') else '',  # Truncate long descriptions
+                'StartDate': fw.get('StartDate').isoformat() if fw.get('StartDate') else None,
+                'EndDate': fw.get('EndDate').isoformat() if fw.get('EndDate') else None,
             }
             formatted_frameworks.append(formatted_fw)
         
@@ -1058,6 +1100,8 @@ def get_policies(request, framework_id):
                 'applicability': p.Applicability or '',
                 'status': p.ActiveInactive or '',
                 'scope': p.Applicability or '',  # Add scope field for compatibility
+                'StartDate': p.StartDate.isoformat() if p.StartDate else None,
+                'EndDate': p.EndDate.isoformat() if p.EndDate else None,
             }
             formatted_policies.append(formatted_policy)
             debug_print(f"Formatted policy: {formatted_policy}")
@@ -1118,6 +1162,8 @@ def get_subpolicies(request, policy_id):
                 'description': sp_data.get('Description', ''),
                 'control': sp_data.get('Control', ''),
                 'identifier': sp_data.get('Identifier', ''),
+                'StartDate': sp_data.get('StartDate'),
+                'EndDate': sp_data.get('EndDate'),
             }
             formatted_subpolicies.append(formatted_sp)
             debug_print(f"Formatted subpolicy: {formatted_sp}")
@@ -1250,7 +1296,9 @@ def create_compliance(request):
         # Get the SubPolicy object
         from ...models import SubPolicy
         try:
-            subpolicy = SubPolicy.objects.get(SubPolicyId=validated_data['SubPolicy'], tenant_id=tenant_id)
+            subpolicy = SubPolicy.objects.select_related('PolicyId', 'FrameworkId').get(
+                SubPolicyId=validated_data['SubPolicy'], tenant_id=tenant_id
+            )
         except SubPolicy.DoesNotExist:
             debug_print(f"WARNING: SubPolicy {validated_data['SubPolicy']} not found")
             return Response({
@@ -1298,6 +1346,49 @@ def create_compliance(request):
         framework_id = subpolicy.PolicyId.FrameworkId_id
         #debug_print(f"DEBUG: Using FrameworkId_id: {framework_id} for compliance creation")
         
+        def _parse_compliance_date(value):
+            if not value:
+                return None
+            if isinstance(value, datetime.date) and not isinstance(value, datetime.datetime):
+                return value
+            return datetime.datetime.strptime(str(value), '%Y-%m-%d').date()
+
+        start_date = _parse_compliance_date(validated_data.get('StartDate'))
+        end_date = _parse_compliance_date(validated_data.get('EndDate'))
+        framework = subpolicy.FrameworkId
+        policy = subpolicy.PolicyId
+
+        if not end_date:
+            end_date = subpolicy.EndDate or (framework.EndDate if framework else None)
+
+        date_errors = {}
+        if subpolicy.StartDate and start_date < subpolicy.StartDate:
+            date_errors['StartDate'] = [
+                f'Start Date must be on or after SubPolicy Start Date ({subpolicy.StartDate})'
+            ]
+        elif policy and policy.StartDate and start_date < policy.StartDate:
+            date_errors['StartDate'] = [
+                f'Start Date must be on or after Policy Start Date ({policy.StartDate})'
+            ]
+        elif framework and framework.StartDate and start_date < framework.StartDate:
+            date_errors['StartDate'] = [
+                f'Start Date must be on or after Framework Start Date ({framework.StartDate})'
+            ]
+
+        parent_end = subpolicy.EndDate or (framework.EndDate if framework else None)
+        if parent_end and start_date > parent_end:
+            parent_name = 'SubPolicy' if subpolicy.EndDate else 'Framework'
+            date_errors['StartDate'] = [
+                f'Start Date must be on or before {parent_name} End Date ({parent_end})'
+            ]
+
+        if date_errors:
+            return Response({
+                'success': False,
+                'message': 'Input validation failed',
+                'errors': date_errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
         # Duplicate name check: prevent two compliances with the same title in the same framework
         compliance_title = validated_data['ComplianceTitle']
         if compliance_title and Compliance.objects.filter(
@@ -1373,6 +1464,9 @@ def create_compliance(request):
             Identifier=identifier,
             Applicability=validated_data['Applicability'],
             FrameworkId_id=framework_id,  # Use _id suffix to assign foreign key directly by ID
+            StartDate=start_date,
+            EndDate=end_date,
+            AuditFrequency=validated_data.get('AuditFrequency'),
             data_inventory=data_inventory  # Store data inventory mapping
         )
         debug_print(f"DEBUG: Created compliance with data_inventory: {new_compliance.data_inventory}")
@@ -2238,7 +2332,7 @@ def get_compliances_by_subpolicy(request, subpolicy_id):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
  
 @csrf_exempt
-@api_view(['PUT', 'OPTIONS'])
+@api_view(['PUT', 'POST', 'OPTIONS'])
 @authentication_classes([SessionAuthentication, BasicAuthentication])
 @permission_classes([ComplianceApprovePermission])
 @compliance_approve_required
@@ -2478,13 +2572,16 @@ def submit_compliance_review(request, approval_id):
         # ===== CRITICAL: UPDATE THE ACTUAL COMPLIANCE RECORD =====
         if 'SubPolicy' in extracted_data or approval.Identifier:
             try:
+                # Check if this is an update request (Phase 1: framework comparison update)
+                is_update_request = extracted_data.get('request_type') == 'update' or extracted_data.get('type') == 'compliance_update'
+
                 # Check if this is a deactivation request first
                 is_deactivation_request = (
                     extracted_data.get('type') == 'compliance_deactivation' or
                     extracted_data.get('RequestType') == 'Change Status to Inactive' or
                     (approval.Identifier and 'COMP-DEACTIVATE' in approval.Identifier)
                 )
-                
+
                 # For deactivation requests, use compliance_id from ExtractedData
                 # For regular approvals, use Identifier
                 if is_deactivation_request and extracted_data.get('compliance_id'):
@@ -2517,6 +2614,46 @@ def submit_compliance_review(request, approval_id):
                             # For deactivation requests, set to Inactive
                             current_compliance.ActiveInactive = 'Inactive'
                             debug_print(f"Setting compliance to Approved and Inactive (deactivation approved)")
+                        elif is_update_request:
+                            # Phase 1: For update requests, apply proposed values and save history
+                            debug_print(f"Applying compliance update for {current_compliance.ComplianceId}")
+                            proposed = extracted_data.get('proposed_values', {})
+                            old_vals = extracted_data.get('old_values', {})
+
+                            # Save old values to ComplianceHistory
+                            import datetime as dt
+                            history_entry = {
+                                'updated_at': dt.datetime.now().isoformat(),
+                                'old_values': old_vals,
+                                'proposed_values': proposed,
+                                'reviewer_id': approval.ReviewerId,
+                                'approval_id': approval.ApprovalId,
+                                'source': 'amendment_update'
+                            }
+                            existing_history = current_compliance.ComplianceHistory or []
+                            if isinstance(existing_history, list):
+                                existing_history.append(history_entry)
+                            else:
+                                existing_history = [history_entry]
+                            current_compliance.ComplianceHistory = existing_history
+
+                            # Apply proposed values
+                            if 'ComplianceTitle' in proposed:
+                                current_compliance.ComplianceTitle = proposed['ComplianceTitle']
+                            if 'ComplianceItemDescription' in proposed:
+                                current_compliance.ComplianceItemDescription = proposed['ComplianceItemDescription']
+                            if 'ComplianceType' in proposed:
+                                current_compliance.ComplianceType = proposed['ComplianceType']
+                            if 'Criticality' in proposed:
+                                current_compliance.Criticality = proposed['Criticality']
+                            if 'MandatoryOptional' in proposed:
+                                current_compliance.MandatoryOptional = proposed['MandatoryOptional']
+                            if 'ManualAutomatic' in proposed:
+                                current_compliance.ManualAutomatic = proposed['ManualAutomatic']
+
+                            current_compliance.AmendmentSource = f"Amendment update (Approval {approval.ApprovalId})"
+                            current_compliance.LastAmendmentDate = timezone.now().date()
+                            debug_print(f"✅ Applied proposed values to compliance {current_compliance.ComplianceId}")
                         else:
                             # For regular compliance approvals, set to Active
                             current_compliance.ActiveInactive = 'Active'
@@ -2533,10 +2670,15 @@ def submit_compliance_review(request, approval_id):
                                 except Exception as e:
                                     debug_print(f"Error deactivating previous version: {e}")
                     else:
-                        # If rejected, mark as rejected
-                        current_compliance.Status = 'Rejected'
-                        current_compliance.ActiveInactive = 'Inactive'
-                        debug_print(f"Setting compliance to Rejected and Inactive")
+                        # If rejected
+                        if is_update_request:
+                            # For update requests, leave compliance unchanged (still Approved/Active)
+                            debug_print(f"Update request rejected. Compliance {current_compliance.ComplianceId} left unchanged.")
+                        else:
+                            # For regular requests, mark as rejected
+                            current_compliance.Status = 'Rejected'
+                            current_compliance.ActiveInactive = 'Inactive'
+                            debug_print(f"Setting compliance to Rejected and Inactive")
                         
                     current_compliance.save()
                     debug_print(f"✅ SUCCESSFULLY UPDATED compliance status to: {current_compliance.Status}")
@@ -2544,7 +2686,8 @@ def submit_compliance_review(request, approval_id):
 
                     # Chain activation: Update parent SubPolicy and Policy if they are also 'Under Review'
                     # This handles the "Match Compliance" flow where new policies/subpolicies are created on the fly
-                    if approved_not is True and not is_deactivation_request:
+                    # Skip for update requests (parents are already active)
+                    if approved_not is True and not is_deactivation_request and not is_update_request:
                         try:
                             # Use select_related if possible, but here we just follow the FKs
                             subpolicy = current_compliance.SubPolicy
@@ -5214,10 +5357,15 @@ def all_policies_get_frameworks(request):
             
             framework_data = {
                 'id': framework.FrameworkId,
+                'FrameworkId': framework.FrameworkId,
                 'name': framework.FrameworkName,
+                'FrameworkName': framework.FrameworkName,
                 'category': framework.Category,
                 'status': framework.ActiveInactive,
+                'ActiveInactive': framework.ActiveInactive,
                 'description': framework.FrameworkDescription,
+                'StartDate': framework.StartDate.isoformat() if framework.StartDate else None,
+                'EndDate': framework.EndDate.isoformat() if framework.EndDate else None,
                 'versions': []
             }
            
@@ -6747,7 +6895,7 @@ def get_compliance_details(request, compliance_id):
                     scoped_user_versions.append(a)
             all_user_versions = scoped_user_versions
             
-            debug_print(f"🔍 DEBUG: Found {all_user_versions.count()} total user versions")
+            debug_print(f"🔍 DEBUG: Found {len(all_user_versions)} total user versions")
             
             # Helper function to check if an approval is approved
             def is_approved(approval):
@@ -6772,7 +6920,7 @@ def get_compliance_details(request, compliance_id):
             debug_print(f"🔍 DEBUG: Found {len(approved_approvals_list)} approved user versions (checking ApprovedNot=True OR Status='Approved' OR compliance_approval.approved=true)")
             
             # Debug: Check ALL versions for this identifier to see what exists
-            debug_print(f"🔍 DEBUG: Total ComplianceApproval records for {compliance.Identifier}: {all_user_versions.count()}")
+            debug_print(f"🔍 DEBUG: Total ComplianceApproval records for {compliance.Identifier}: {len(all_user_versions)}")
             for v in all_user_versions[:5]:  # Show first 5
                 is_approved_status = is_approved(v)
                 status_in_data = v.ExtractedData.get('Status') if isinstance(v.ExtractedData, dict) else 'N/A'
@@ -6825,7 +6973,7 @@ def get_compliance_details(request, compliance_id):
                         or str(a.ExtractedData.get('compliance_id') or a.ExtractedData.get('ComplianceId')) == str(compliance.ComplianceId)
                     ]
                     
-                    if pending_approvals.exists():
+                    if pending_approvals:
                         latest_approval = get_latest_version(pending_approvals)
                         if latest_approval:
                             extracted_data = latest_approval.ExtractedData
@@ -6876,10 +7024,18 @@ def get_compliance_details(request, compliance_id):
                 'CreatedByName': extracted_data.get('CreatedByName') or compliance.CreatedByName,
                 'CreatedByDate': extracted_data.get('CreatedByDate') or (compliance.CreatedByDate.isoformat() if compliance.CreatedByDate else None),
                 'SubPolicy': extracted_data.get('SubPolicy') or compliance.SubPolicy_id,
+                'SubPolicyId': extracted_data.get('SubPolicy') or extracted_data.get('SubPolicyId') or compliance.SubPolicy_id,
                 'PotentialRiskScenarios': extracted_data.get('PotentialRiskScenarios') or compliance.PotentialRiskScenarios,
                 'RiskType': extracted_data.get('RiskType') or compliance.RiskType,
                 'RiskCategory': extracted_data.get('RiskCategory') or compliance.RiskCategory,
-                'RiskBusinessImpact': extracted_data.get('RiskBusinessImpact') or compliance.RiskBusinessImpact
+                'RiskBusinessImpact': extracted_data.get('RiskBusinessImpact') or compliance.RiskBusinessImpact,
+                'AuditFrequency': extracted_data.get('AuditFrequency') or compliance.AuditFrequency,
+                'StartDate': extracted_data.get('StartDate') or (
+                    compliance.StartDate.isoformat() if compliance.StartDate else None
+                ),
+                'EndDate': extracted_data.get('EndDate') or (
+                    compliance.EndDate.isoformat() if compliance.EndDate else None
+                ),
             }
         else:
             # For editing/copying: Always use Compliance table
@@ -6911,10 +7067,14 @@ def get_compliance_details(request, compliance_id):
                 'CreatedByName': compliance.CreatedByName,
                 'CreatedByDate': compliance.CreatedByDate.isoformat() if compliance.CreatedByDate else None,
                 'SubPolicy': compliance.SubPolicy_id,
+                'SubPolicyId': compliance.SubPolicy_id,
                 'PotentialRiskScenarios': compliance.PotentialRiskScenarios,
                 'RiskType': compliance.RiskType,
                 'RiskCategory': compliance.RiskCategory,
-                'RiskBusinessImpact': compliance.RiskBusinessImpact
+                'RiskBusinessImpact': compliance.RiskBusinessImpact,
+                'AuditFrequency': compliance.AuditFrequency,
+                'StartDate': compliance.StartDate.isoformat() if compliance.StartDate else None,
+                'EndDate': compliance.EndDate.isoformat() if compliance.EndDate else None,
             }
         
         # Add the subpolicy, policy and framework names
@@ -7882,6 +8042,26 @@ def edit_compliance(request, compliance_id):
                 debug_print(f"Warning: Invalid type for data_inventory, setting to None: {type(data_inventory_raw)}")
                 data_inventory = None
         
+        raw_audit_frequency = request.data.get('AuditFrequency') or request.data.get('auditFrequency')
+        audit_frequency = None
+        if raw_audit_frequency is not None and str(raw_audit_frequency).strip() != '':
+            try:
+                audit_frequency = ComplianceInputValidator.validate_choice_field(
+                    raw_audit_frequency, 'AuditFrequency', ComplianceInputValidator.ALLOWED_AUDIT_FREQUENCIES
+                )
+            except ValidationError:
+                audit_frequency = str(raw_audit_frequency).strip()[:50]
+
+        def _parse_edit_date(value):
+            if not value:
+                return None
+            if isinstance(value, datetime.date) and not isinstance(value, datetime.datetime):
+                return value
+            return datetime.datetime.strptime(str(value)[:10], '%Y-%m-%d').date()
+
+        edit_start = _parse_edit_date(request.data.get('StartDate'))
+        edit_end = _parse_edit_date(request.data.get('EndDate'))
+
         # Create a new compliance instance with updated data
         new_compliance = Compliance.objects.create(
             SubPolicy=compliance.SubPolicy,  # Use the ForeignKey field directly
@@ -7915,6 +8095,9 @@ def edit_compliance(request, compliance_id):
             CreatedByDate=datetime.date.today(),
             Identifier=compliance.Identifier,  # Preserve the original identifier
             FrameworkId_id=framework_id,  # Use _id suffix to assign foreign key directly by ID
+            AuditFrequency=audit_frequency or compliance.AuditFrequency,
+            StartDate=edit_start or compliance.StartDate,
+            EndDate=edit_end or compliance.EndDate,
             data_inventory=data_inventory  # Store data inventory mapping
         )
 
@@ -7939,7 +8122,10 @@ def edit_compliance(request, compliance_id):
             'CreatedByDate': new_compliance.CreatedByDate.isoformat() if new_compliance.CreatedByDate else None,  # Add CreatedByDate
             'ComplianceVersion': new_compliance.ComplianceVersion,  # Add ComplianceVersion
             'Impact': new_compliance.Impact,  # Add Impact field
-            'Probability': new_compliance.Probability  # Add Probability field
+            'Probability': new_compliance.Probability,  # Add Probability field
+            'AuditFrequency': new_compliance.AuditFrequency,
+            'StartDate': new_compliance.StartDate.isoformat() if new_compliance.StartDate else None,
+            'EndDate': new_compliance.EndDate.isoformat() if new_compliance.EndDate else None,
         }
 
         # Create approval for the new user version.

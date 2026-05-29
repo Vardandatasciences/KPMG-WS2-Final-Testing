@@ -214,7 +214,13 @@ api.interceptors.request.use((config) => {
   
   // CRITICAL: For cookie preferences endpoint, ALWAYS add user_id if available
   // This ensures user_id is sent even if it was null/undefined in the original data
-  if (userId && !isNaN(userId) && !config.url.includes('api/incidents/recent/') && !isComplianceApi && !isDocumentHandlingApi && !isDataAnalysisApi && !isChangeManagementApi) {
+  const isFrameworksListGet =
+    config.method === 'get' &&
+    config.url &&
+    (String(config.url).includes('/api/frameworks/') ||
+      String(config.url).includes('/api/framework-explorer'));
+
+  if (userId && !isNaN(userId) && !config.url.includes('api/incidents/recent/') && !isComplianceApi && !isDocumentHandlingApi && !isDataAnalysisApi && !isChangeManagementApi && !isFrameworksListGet) {
     // Add user_id to query params for GET requests
     if (config.method === 'get') {
       config.params = config.params || {};

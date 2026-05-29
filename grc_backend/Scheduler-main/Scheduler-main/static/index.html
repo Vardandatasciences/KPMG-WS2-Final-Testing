@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <title>Scheduler Microservice</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; padding: 1rem; background: #f5f7fa; color: #222; }
+    h1 { margin: 0 0 1rem; font-size: 1.5rem; color: #333; }
+    a { color: #0d6efd; }
+    .card { background: #fff; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+    .row { display: flex; gap: 1rem; flex-wrap: wrap; align-items: center; margin-bottom: 0.5rem; }
+    label { min-width: 100px; color: #444; }
+    input, select, textarea { padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; background: #fff; color: #222; }
+    button { padding: 8px 14px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
+    .btn-primary { background: #0d6efd; color: #fff; }
+    .btn-danger { background: #dc3545; color: #fff; }
+    .btn-sm { padding: 4px 10px; font-size: 12px; margin-right: 4px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 8px; border-bottom: 1px solid #ddd; }
+    th { background: #f0f0f0; color: #333; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; color: #fff; }
+    .badge-success { background: #198754; }
+    .badge-danger { background: #dc3545; }
+    .badge-secondary { background: #6c757d; }
+    #runsModal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); align-items: center; justify-content: center; z-index: 10; }
+    #runsModal.show { display: flex; }
+    .modal-content { background: #fff; padding: 1.5rem; border-radius: 8px; max-width: 600px; width: 90%; max-height: 80vh; overflow: auto; box-shadow: 0 4px 16px rgba(0,0,0,0.2); }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <h1>Scheduler Microservice</h1>
+  <p>Create schedules. At the chosen time the service will <strong>do one thing</strong>: call a URL, open a file, or run a command.</p>
+
+  <div class="card">
+    <h2 style="margin-top:0;">Add schedule</h2>
+    <div class="row">
+      <label>Name</label>
+      <input type="text" id="name" placeholder="My job" style="width:200px;">
+    </div>
+    <div class="row">
+      <label>When</label>
+      <select id="schedule_type">
+        <option value="one_minute">One time (in 1 min)</option>
+        <option value="exact_date">Exact date/time</option>
+        <option value="daily">Daily</option>
+        <option value="weekly" data-cron="recurring">Weekly</option>
+        <option value="monthly">Monthly</option>
+        <option value="every_minute">Every minute</option>
+        <option value="cron">Cron (5 fields)</option>
+      </select>
+    </div>
+    <div class="row hidden" id="row_scheduled_at">
+      <label>Scheduled at</label>
+      <input type="datetime-local" id="scheduled_at">
+    </div>
+    <div class="row hidden" id="row_daily">
+      <label>Time (hour:min)</label>
+      <input type="number" id="hour" min="0" max="23" value="9" style="width:60px;"> :
+      <input type="number" id="minute" min="0" max="59" value="0" style="width:60px;">
+    </div>
+    <div class="row hidden" id="row_monthly">
+      <label>Day of month</label>
+      <input type="number" id="day_of_month" min="1" max="28" value="1" style="width:60px;">
+      <label>Time</label>
+      <input type="number" id="monthly_hour" min="0" max="23" value="9" style="width:60px;"> :
+      <input type="number" id="monthly_minute" min="0" max="59" value="0" style="width:60px;">
+    </div>
+    <div class="row hidden" id="row_weekly">
+      <label>Day (0=Mon..6=Sun)</label>
+      <input type="number" id="day_of_week" min="0" max="6" value="1" style="width:60px;">
+      <label>Time</label>
+      <input type="number" id="weekly_hour" min="0" max="23" value="9" style="width:60px;"> :
+      <input type="number" id="weekly_minute" min="0" max="59" value="0" style="width:60px;">
+    </div>
+    <div class="row hidden" id="row_cron">
+      <label>Cron (5 fields)</label>
+      <input type="text" id="cron_expression" placeholder="0 9 * * 1-5" style="width:200px;">
+    </div>
+    <div class="row">
+      <label>What to do</label>
+      <select id="action_type">
+        <option value="call_url">Call a URL — trigger your app or any API</option>
+        <option value="open_file">Open a file — e.g. PDF on this PC</option>
+        <option value="run_command">Run a command — e.g. open link in browser, run a script</option>
+      </select>
+    </div>
+    <div class="row" id="row_callback_url">
+      <label>URL</label>
+      <input type="url" id="callback_url" placeholder="https://your-app.com/api/run-task" style="flex:1; max-width:400px;">
+    </div>
+    <div class="row" id="row_url_method">
+      <label>Send data?</label>
+      <select id="url_method">
+        <option value="get">No — just trigger the URL (GET)</option>
+        <option value="post">Yes — send JSON with the request (POST)</option>
+      </select>
+    </div>
+    <div class="row" id="row_payload">
+      <label>JSON to send (optional)</label>
+      <textarea id="payload" placeholder='{"key": "value"}' rows="2" style="width:300px;"></textarea>
+    </div>
+    <div class="row hidden" id="row_target_file">
+      <label>File path</label>
+      <input type="text" id="target_file" placeholder="C:\Users\You\Downloads\report.pdf" style="flex:1; max-width:400px;">
+    </div>
+    <div class="row hidden" id="row_target_cmd">
+      <label>Command</label>
+      <input type="text" id="target_cmd" placeholder="start https://example.com  or  python my_script.py" style="flex:1; max-width:400px;">
+    </div>
+    <div class="row">
+      <button type="button" class="btn-primary" id="btnCreate">Create schedule</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0;">Schedules</h2>
+    <div id="scheduleList">Loading…</div>
+  </div>
+
+  <div id="runsModal">
+    <div class="modal-content">
+      <h3 id="runsTitle">Run history</h3>
+      <div id="runsList"></div>
+      <button type="button" class="btn-primary" style="margin-top:1rem;" id="btnCloseRuns">Close</button>
+    </div>
+  </div>
+
+  <script>
+    const API = '';
+    const typeMap = { weekly: 'recurring' };
+    const scheduleType = document.getElementById('schedule_type');
+    const rows = {
+      scheduled_at: document.getElementById('row_scheduled_at'),
+      daily: document.getElementById('row_daily'),
+      monthly: document.getElementById('row_monthly'),
+      weekly: document.getElementById('row_weekly'),
+      cron: document.getElementById('row_cron'),
+    };
+    scheduleType.addEventListener('change', () => {
+      Object.values(rows).forEach(r => r.classList.add('hidden'));
+      const v = scheduleType.value;
+      if (v === 'exact_date') rows.scheduled_at.classList.remove('hidden');
+      if (v === 'daily') rows.daily.classList.remove('hidden');
+      if (v === 'monthly') rows.monthly.classList.remove('hidden');
+      if (v === 'weekly') rows.weekly.classList.remove('hidden');
+      if (v === 'cron') rows.cron.classList.remove('hidden');
+    });
+    scheduleType.dispatchEvent(new Event('change'));
+
+    const actionType = document.getElementById('action_type');
+    const rowCallbackUrl = document.getElementById('row_callback_url');
+    const rowUrlMethod = document.getElementById('row_url_method');
+    const rowPayload = document.getElementById('row_payload');
+    const rowTargetFile = document.getElementById('row_target_file');
+    const rowTargetCmd = document.getElementById('row_target_cmd');
+    const urlMethod = document.getElementById('url_method');
+    function toggleActionRows() {
+      const v = actionType.value;
+      const isCallUrl = v === 'call_url';
+      rowCallbackUrl.classList.toggle('hidden', !isCallUrl);
+      rowUrlMethod.classList.toggle('hidden', !isCallUrl);
+      rowPayload.classList.toggle('hidden', !isCallUrl || urlMethod.value !== 'post');
+      rowTargetFile.classList.toggle('hidden', v !== 'open_file');
+      rowTargetCmd.classList.toggle('hidden', v !== 'run_command');
+    }
+    actionType.addEventListener('change', toggleActionRows);
+    urlMethod.addEventListener('change', toggleActionRows);
+    toggleActionRows();
+
+    async function listSchedules() {
+      const r = await fetch(API + '/api/schedules');
+      const d = await r.json();
+      if (!d.success) { document.getElementById('scheduleList').textContent = 'Failed to load'; return; }
+      const list = document.getElementById('scheduleList');
+      if (!d.schedules.length) { list.innerHTML = '<p>No schedules yet.</p>'; return; }
+      list.innerHTML = '<table><thead><tr><th>Name</th><th>When</th><th>Do</th><th>Next run</th><th>Active</th><th>Actions</th></tr></thead><tbody>' +
+        d.schedules.map(s => `
+          <tr>
+            <td>${escapeHtml(s.name)}</td>
+            <td>${escapeHtml(s.schedule_type)}</td>
+            <td>${escapeHtml(actionLabel(s.action_type))}</td>
+            <td>${formatLocalTime(s.next_run_at)}</td>
+            <td><span class="badge ${s.is_active ? 'badge-success' : 'badge-secondary'}">${s.is_active ? 'Yes' : 'No'}</span></td>
+            <td>
+              <button class="btn-sm btn-primary" data-id="${s.id}" data-action="runs">Runs</button>
+              <button class="btn-sm btn-primary" data-id="${s.id}" data-action="toggle" data-active="${!s.is_active}">${s.is_active ? 'Pause' : 'Resume'}</button>
+              <button class="btn-sm btn-danger" data-id="${s.id}" data-action="delete">Delete</button>
+            </td>
+          </tr>
+        `).join('') + '</tbody></table>';
+      list.querySelectorAll('button[data-action]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const id = btn.dataset.id;
+          if (btn.dataset.action === 'runs') showRuns(id);
+          else if (btn.dataset.action === 'toggle') toggleActive(id, btn.dataset.active === 'true');
+          else if (btn.dataset.action === 'delete') deleteSchedule(id);
+        });
+      });
+    }
+
+    function escapeHtml(s) {
+      if (s == null) return '';
+      const div = document.createElement('div');
+      div.textContent = s;
+      return div.innerHTML;
+    }
+    function actionLabel(type) {
+      const t = (type || 'webhook').toLowerCase();
+      if (t === 'webhook') return 'Call URL (POST)';
+      if (t === 'get_url') return 'Call URL (GET)';
+      if (t === 'open_file') return 'Open file';
+      if (t === 'run_command') return 'Run command';
+      return type || '—';
+    }
+    // Times from API are in UTC; show in user's local time
+    function formatLocalTime(s) {
+      if (!s) return '—';
+      const iso = (s.includes('Z') || s.includes('+') || s.includes('-') && s.lastIndexOf('-') > 10) ? s : s + 'Z';
+      const d = new Date(iso);
+      return isNaN(d.getTime()) ? s : d.toLocaleString();
+    }
+
+    async function showRuns(scheduleId) {
+      const r = await fetch(API + `/api/schedules/${scheduleId}/runs`);
+      const d = await r.json();
+      document.getElementById('runsTitle').textContent = 'Run history (schedule ' + scheduleId + ')';
+      const list = document.getElementById('runsList');
+      if (!d.runs || !d.runs.length) { list.innerHTML = '<p>No runs yet.</p>'; return; }
+      list.innerHTML = '<table><thead><tr><th>Started</th><th>Finished</th><th>Status</th><th>Error</th></tr></thead><tbody>' +
+        d.runs.map(run => `
+          <tr>
+            <td>${formatLocalTime(run.started_at)}</td>
+            <td>${formatLocalTime(run.finished_at)}</td>
+            <td><span class="badge ${run.status === 'success' ? 'badge-success' : 'badge-danger'}">${escapeHtml(run.status)}</span></td>
+            <td>${escapeHtml(run.error_message || '')}</td>
+          </tr>
+        `).join('') + '</tbody></table>';
+      document.getElementById('runsModal').classList.add('show');
+    }
+
+    document.getElementById('btnCloseRuns').addEventListener('click', () => {
+      document.getElementById('runsModal').classList.remove('show');
+    });
+
+    async function toggleActive(id, active) {
+      await fetch(API + `/api/schedules/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_active: active }),
+      });
+      listSchedules();
+    }
+
+    async function deleteSchedule(id) {
+      if (!confirm('Delete this schedule?')) return;
+      await fetch(API + `/api/schedules/${id}`, { method: 'DELETE' });
+      listSchedules();
+    }
+
+    document.getElementById('btnCreate').addEventListener('click', async () => {
+      const name = document.getElementById('name').value.trim();
+      let schedule_type = scheduleType.value;
+      if (typeMap[schedule_type]) schedule_type = typeMap[schedule_type];
+      const action = actionType.value;
+      const body = { name, schedule_type };
+      if (action === 'call_url') {
+        body.callback_url = document.getElementById('callback_url').value.trim() || null;
+        if (!body.callback_url) { alert('URL required'); return; }
+        body.action_type = urlMethod.value === 'post' ? 'webhook' : 'get_url';
+        if (body.action_type === 'webhook') {
+          const payloadStr = document.getElementById('payload').value.trim();
+          if (payloadStr) try { body.payload = JSON.parse(payloadStr); } catch (e) { alert('Invalid JSON'); return; }
+        }
+      } else if (action === 'open_file') {
+        body.action_type = 'open_file';
+        body.target = document.getElementById('target_file').value.trim() || null;
+        if (!body.target) { alert('File path required'); return; }
+      } else if (action === 'run_command') {
+        body.action_type = 'run_command';
+        body.target = document.getElementById('target_cmd').value.trim() || null;
+        if (!body.target) { alert('Command required'); return; }
+      }
+      if (schedule_type === 'exact_date') {
+        const v = document.getElementById('scheduled_at').value;
+        if (!v) { alert('Set scheduled at'); return; }
+        // datetime-local is in local time; convert to UTC for the server
+        const localDate = new Date(v);
+        body.scheduled_at = localDate.toISOString();
+      }
+      if (schedule_type === 'daily') {
+        body.hour = parseInt(document.getElementById('hour').value, 10) || 9;
+        body.minute = parseInt(document.getElementById('minute').value, 10) || 0;
+        body.timezone_offset_minutes = new Date().getTimezoneOffset(); // so "Next run" matches the time you set (local)
+      }
+      if (schedule_type === 'monthly') {
+        body.day_of_month = parseInt(document.getElementById('day_of_month').value, 10) || 1;
+        body.hour = parseInt(document.getElementById('monthly_hour').value, 10) || 9;
+        body.minute = parseInt(document.getElementById('monthly_minute').value, 10) || 0;
+        body.timezone_offset_minutes = new Date().getTimezoneOffset();
+      }
+      if (schedule_type === 'recurring') {
+        body.day_of_week = parseInt(document.getElementById('day_of_week').value, 10) ?? 1;
+        body.hour = parseInt(document.getElementById('weekly_hour').value, 10) || 9;
+        body.minute = parseInt(document.getElementById('weekly_minute').value, 10) || 0;
+        body.timezone_offset_minutes = new Date().getTimezoneOffset();
+      }
+      if (schedule_type === 'cron') {
+        body.cron_expression = document.getElementById('cron_expression').value.trim();
+        if (!body.cron_expression) { alert('Cron expression required'); return; }
+        body.timezone_offset_minutes = new Date().getTimezoneOffset(); // cron = your local time
+      }
+      const r = await fetch(API + '/api/schedules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const d = await r.json();
+      if (d.success) { listSchedules(); document.getElementById('name').value = ''; }
+      else alert(d.detail || JSON.stringify(d));
+    });
+
+    document.getElementById('runsModal').addEventListener('click', (e) => {
+      if (e.target === document.getElementById('runsModal')) document.getElementById('runsModal').classList.remove('show');
+    });
+
+    listSchedules();
+  </script>
+</body>
+</html>

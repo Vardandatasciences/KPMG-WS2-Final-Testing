@@ -16,7 +16,7 @@ import FrameworkApprover from '../components/Framework/FrameworkApprover.vue'
 import StatusChangeRequests from '../components/Policy/StatusChangeRequests.vue'
 import StatusChangeDetails from '../components/Policy/StatusChangeDetails.vue'
 import TT from '../components/Policy/TT.vue'
- 
+import PolicySelfHealReview from '../components/Policy/PolicySelfHealReview.vue'
 import AssignAudit from '../components/Auditor/AssignAudit.vue'
 import AIAuditDocumentUpload from '../components/Auditor/AIAuditDocumentUpload.vue'
 import AuditorDashboard from '../components/Auditor/AuditorDashboard.vue'
@@ -211,6 +211,12 @@ const routes = [
     path: '/create-policy/tailoring',
     name: 'TT',
     component: TT,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/create-policy/self-heal-review',
+    name: 'PolicySelfHealReview',
+    component: PolicySelfHealReview,
     meta: { requiresAuth: true }
   },
   {

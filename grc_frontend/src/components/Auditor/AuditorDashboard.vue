@@ -4,6 +4,89 @@
     <div class="dashboard-header-title">
       Audit Dashboard
     </div>
+
+    <!-- Stalled review reassignments (Audit Manager only) -->
+    <div
+      v-if="showAuditReviewEscalations"
+      id="audit-review-escalations"
+      class="audit-overdue-escalations-panel"
+    >
+      <h2 class="audit-overdue-escalations-title">
+        <i class="fas fa-user-edit"></i>
+        Stalled audit reviews
+      </h2>
+      <p v-if="auditReviewEscalationsLoading" class="audit-overdue-escalations-hint">Loading…</p>
+      <p v-else-if="auditReviewEscalations.length === 0" class="audit-overdue-escalations-hint">
+        No audits need reviewer reassignment right now.
+      </p>
+      <template v-else>
+        <p class="audit-overdue-escalations-instructions">
+          Choose a new reviewer, then click <strong>Reassign</strong>.
+          The audit stays under review and the new reviewer is notified.
+        </p>
+        <p v-if="auditReviewers.length === 0" class="audit-overdue-escalations-warn">
+          No reviewers available. Check audit permissions or refresh the page.
+        </p>
+        <div class="audit-overdue-escalations-table-wrap">
+          <table class="audit-overdue-escalations-table">
+            <thead>
+              <tr>
+                <th class="col-audit">Audit</th>
+                <th class="col-framework">Framework</th>
+                <th class="col-due">Review since</th>
+                <th class="col-current">Current reviewer</th>
+                <th class="col-action">Reassign reviewer</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="row in auditReviewEscalations" :key="row.audit_id">
+                <td class="col-audit" :title="row.title">
+                  {{ row.title || `Audit ${row.audit_id}` }}
+                </td>
+                <td class="col-framework" :title="row.framework_name">
+                  {{ row.framework_name || '—' }}
+                </td>
+                <td class="col-due">{{ row.review_start_date || '—' }}</td>
+                <td class="col-current">{{ row.reviewer_name || '—' }}</td>
+                <td class="col-action">
+                  <div class="audit-overdue-escalations-actions">
+                    <select
+                      v-model="row._assigneeId"
+                      class="audit-overdue-escalations-select"
+                      :disabled="row._assigning || auditReviewers.length === 0"
+                      aria-label="Select new reviewer"
+                    >
+                      <option value="" disabled>Select reviewer…</option>
+                      <option
+                        v-for="u in auditReviewers"
+                        :key="u.UserId"
+                        :value="String(u.UserId)"
+                      >
+                        {{ u.UserName }}
+                      </option>
+                    </select>
+                    <button
+                      type="button"
+                      class="audit-overdue-escalations-assign-btn"
+                      :disabled="!row._assigneeId || row._assigning"
+                      @click="reassignReviewAudit(row)"
+                    >
+                      {{ row._assigning ? 'Saving…' : 'Reassign' }}
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </template>
+      <p v-if="auditReviewEscalationsMessage" class="audit-overdue-escalations-success">
+        {{ auditReviewEscalationsMessage }}
+      </p>
+      <p v-if="auditReviewEscalationsError" class="audit-overdue-escalations-error">
+        {{ auditReviewEscalationsError }}
+      </p>
+    </div>
     
     <div
       v-if="showAuditorSkeleton"
@@ -230,14 +313,20 @@ import { useAuditStore } from '@/stores/audit';
 import DynamicTable from '../DynamicTable.vue';
 import CustomButton from '../CustomButton.vue';
 import apiService from '@/services/apiService';
+import api from '@/services/api';
 import { AccessUtils } from '@/utils/accessUtils';
 import { API_ENDPOINTS } from '@/config/api.js';
+import { usePermissionStore } from '@/stores/permission';
 
 export default {
   name: 'AuditorDashboard',
   components: {
     DynamicTable,
     CustomButton
+  },
+  setup() {
+    const permissionStore = usePermissionStore();
+    return { permissionStore };
   },
   data() {
     return {
@@ -290,7 +379,13 @@ export default {
         { key: 'assigned_date', label: 'Assigned Date', defaultVisible: false },
         { key: 'review_start_date', label: 'Review Start Date', defaultVisible: false },
         { key: 'review_date', label: 'Review Date', defaultVisible: false }
-      ]
+      ],
+      showAuditReviewEscalations: false,
+      auditReviewEscalations: [],
+      auditReviewEscalationsLoading: false,
+      auditReviewEscalationsError: null,
+      auditReviewEscalationsMessage: null,
+      auditReviewers: []
     }
   },
   computed: {
@@ -349,6 +444,7 @@ export default {
     this.fetchBusinessUnits()
   },
   mounted() {
+    this.fetchAuditReviewEscalations().then(() => this.scrollToAuditReviewEscalationsIfNeeded())
     this.auditStoreUnsub = useAuditStore().$subscribe(() => {
       this.mergeOptimisticAssignmentsIntoAudits()
     })
@@ -357,6 +453,18 @@ export default {
     }
     document.addEventListener('visibilitychange', this.visHandler)
     this.pollTimer = setInterval(() => this.refreshAuditsQuiet(), 45000)
+  },
+  activated() {
+    // keep-alive re-entry (e.g. from Notifications): reload stalled-review panel
+    this.fetchAuditReviewEscalations().then(() => this.scrollToAuditReviewEscalationsIfNeeded())
+    this.refreshAuditsQuiet()
+  },
+  watch: {
+    '$route.query.reviewEscalations'(val) {
+      if (val === '1') {
+        this.fetchAuditReviewEscalations().then(() => this.scrollToAuditReviewEscalationsIfNeeded())
+      }
+    }
   },
   beforeUnmount() {
     if (typeof this.auditStoreUnsub === 'function') {
@@ -370,6 +478,118 @@ export default {
     }
   },
   methods: {
+    isAuditManagerRole(role) {
+      return String(role || '').trim() === 'Audit Manager'
+    },
+
+    async fetchAuditReviewEscalations() {
+      const deepLink = this.$route.query.reviewEscalations === '1'
+      try {
+        await this.permissionStore.fetchAndSetUserRole()
+      } catch (e) {
+        console.warn('Could not load user role for review escalations', e)
+      }
+      if (!this.isAuditManagerRole(this.permissionStore.role)) {
+        this.showAuditReviewEscalations = false
+        return
+      }
+
+      if (deepLink) {
+        this.showAuditReviewEscalations = true
+      }
+
+      this.auditReviewEscalationsLoading = true
+      this.auditReviewEscalationsError = null
+      try {
+        const res = await apiService.get(API_ENDPOINTS.AUDIT_REVIEW_ESCALATIONS_PENDING)
+        if (res && res.success !== false) {
+          this.showAuditReviewEscalations = true
+          this.auditReviewEscalations = (res.escalations || []).map((e) => ({
+            ...e,
+            _assigneeId: '',
+            _assigning: false
+          }))
+          await this.fetchReviewersForReassign()
+        }
+      } catch (e) {
+        if (e.response && e.response.status === 403) {
+          this.showAuditReviewEscalations = false
+        } else {
+          this.auditReviewEscalationsError =
+            (e.response && e.response.data && e.response.data.error) ||
+            e.message ||
+            'Failed to load stalled reviews'
+        }
+      } finally {
+        this.auditReviewEscalationsLoading = false
+      }
+    },
+
+    async fetchReviewersForReassign() {
+      if (!this.isAuditManagerRole(this.permissionStore.role)) return
+      try {
+        const currentUserId =
+          sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || ''
+        const list = await api.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
+          params: {
+            module: 'audit',
+            permission_type: 'reviewer',
+            current_user_id: currentUserId
+          }
+        })
+        const rows = Array.isArray(list) ? list : (list?.data || [])
+        this.auditReviewers = rows
+          .map((u) => ({
+            UserId: u.UserId ?? u.user_id,
+            UserName: u.UserName ?? u.user_name ?? u.username ?? ''
+          }))
+          .filter((u) => u.UserId != null && String(u.UserName).trim())
+      } catch (e) {
+        console.warn('Could not load reviewers for reassignment', e)
+        this.auditReviewEscalationsError =
+          (e.response && e.response.data && e.response.data.error) ||
+          e.message ||
+          'Could not load reviewers for reassignment'
+      }
+    },
+
+    async reassignReviewAudit(row) {
+      if (!row._assigneeId || row._assigning) return
+      row._assigning = true
+      this.auditReviewEscalationsMessage = null
+      this.auditReviewEscalationsError = null
+      try {
+        const res = await api.post(API_ENDPOINTS.AUDIT_REASSIGN_REVIEWER(row.audit_id), {
+          new_reviewer_id: Number(row._assigneeId)
+        })
+        const data = res?.data || res
+        if (data.success === false) {
+          throw new Error(data.message || data.error || 'Reassign failed')
+        }
+        this.auditReviewEscalations = this.auditReviewEscalations.filter(
+          (r) => r.audit_id !== row.audit_id
+        )
+        this.auditReviewEscalationsMessage = `Audit "${row.title || row.audit_id}" reviewer reassigned.`
+      } catch (e) {
+        this.auditReviewEscalationsError =
+          (e.response && e.response.data && e.response.data.error) ||
+          (e.response && e.response.data && e.response.data.message) ||
+          e.message ||
+          'Failed to reassign reviewer'
+      } finally {
+        row._assigning = false
+      }
+    },
+
+    scrollToAuditReviewEscalationsIfNeeded() {
+      if (this.$route.query.reviewEscalations === '1' && this.showAuditReviewEscalations) {
+        this.$nextTick(() => {
+          const el = document.getElementById('audit-review-escalations')
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        })
+      }
+    },
+
     retryLoading() {
       this.fetchAudits()
     },

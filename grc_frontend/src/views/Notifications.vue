@@ -52,7 +52,7 @@
         </tr>
       </thead>
       <tbody>
-        <tr v-for="notification in filteredNotifications" :key="notification.id" :class="{ unread: !notification.status.isRead, clickable: isClickable(notification) }" @click="handleNotificationClick(notification)">
+        <tr v-for="notification in filteredNotifications" :key="notification.id" :class="{ unread: !notification.status.isRead, clickable: isClickable(notification) || isPolicySelfHeal(notification) || isSimilarityReady(notification) || isAuditOverdueManager(notification) || isAuditReviewNotification(notification) }" @click="handleNotificationClick(notification)">
           <td>
             <div class="notification-main">
               <span :class="['module-icon', notification.category.toLowerCase()]">
@@ -114,6 +114,7 @@
         <div class="popup-message">{{ popupData.message }}</div>
       </div>
     </transition>
+
   </div>
 </template>
 
@@ -121,7 +122,7 @@
 import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { Bar } from 'vue-chartjs';
-import { API_BASE_URL } from '../config/api.js';
+import api from '../services/api.js';
 import {
   Chart,
   BarElement,
@@ -184,28 +185,36 @@ const loadNotifications = async () => {
   loading.value = true;
   error.value = null;
   try {
-    // Try to load from backend first
-    const response = await fetch(`${API_BASE_URL}/api/get-notifications/`, {
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-        'Content-Type': 'application/json'
-      }
+    const userId =
+      localStorage.getItem('user_id') ||
+      sessionStorage.getItem('user_id') ||
+      sessionStorage.getItem('userId');
+    if (!userId) {
+      notifications.value = [];
+      error.value = 'Sign in required to load notifications.';
+      return;
+    }
+
+    // Cookie-first session (same as rest of app); raw fetch + Bearer breaks after login clears storage tokens.
+    const response = await api.get('/api/get-notifications/', {
+      params: { user_id: userId }
     });
-    if (response.ok) {
-      const data = await response.json();
-      if (data.status === 'success') {
-        notifications.value = data.notifications;
-      } else {
-        throw new Error('Failed to load notifications from backend');
-      }
+    const data = response.data;
+    if (data.status === 'success') {
+      notifications.value = data.notifications;
     } else {
-      throw new Error('Backend not available');
+      throw new Error(data.message || 'Failed to load notifications from backend');
     }
   } catch (err) {
     console.error('Error loading notifications:', err);
-    // No fallback to dummy data - show empty state
+
     notifications.value = [];
-    error.value = 'Failed to load notifications';
+    const msg =
+      err.response?.data?.message ||
+      err.response?.data?.error ||
+      err.message ||
+      'Failed to load notifications';
+    error.value = typeof msg === 'string' ? msg : 'Failed to load notifications';
   } finally {
     loading.value = false;
   }
@@ -249,14 +258,7 @@ const markAsRead = async (notificationId) => {
   }
   // Try to update backend
   try {
-    await fetch(`${API_BASE_URL}/api/mark-as-read/`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ notification_id: notificationId })
-    });
+    await api.post('/api/mark-as-read/', { notification_id: notificationId });
     // Reload notifications from backend to get the updated status
     await loadNotifications();
   } catch (error) {
@@ -282,17 +284,14 @@ const markAllAsRead = async () => {
   
   // Try to update backend (backend should also exclude acknowledgement notifications)
   try {
-    const userId = localStorage.getItem('user_id') || 'default_user';
-    await fetch(`${API_BASE_URL}/api/mark-all-as-read/`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ 
-        user_id: userId,
-        exclude_acknowledgements: true // Tell backend to exclude acknowledgement notifications
-      })
+    const userId =
+      localStorage.getItem('user_id') ||
+      sessionStorage.getItem('user_id') ||
+      sessionStorage.getItem('userId');
+    if (!userId) return;
+    await api.post('/api/mark-all-as-read/', {
+      user_id: userId,
+      exclude_acknowledgements: true
     });
     // Reload notifications to get updated status
     await loadNotifications();
@@ -330,9 +329,99 @@ const isClickable = (notification) => {
     notification.title.includes('Policy Acknowledgement')
   );
 };
+const POLICY_SELF_HEAL_TYPES = new Set([
+  'policy_self_heal',
+  'policy_self_heal_assigned',
+  'policy_self_heal_manager',
+]);
+
+/** Policy self-heal / manager escalation: row click navigates to renewal or dashboard. */
+const isPolicySelfHeal = (notification) => {
+  const t = notification.metadata?.type;
+  if (!POLICY_SELF_HEAL_TYPES.has(t)) return false;
+  if (typeof notification.metadata?.action_url === 'string' && notification.metadata.action_url.startsWith('/')) {
+    return true;
+  }
+  return notification.metadata?.policy_id != null || t === 'policy_self_heal_manager';
+};
+
+const isSimilarityReady = (notification) => {
+  return notification.metadata?.type === 'similarity_check_ready'
+    && typeof notification.metadata?.action_url === 'string'
+    && notification.metadata.action_url.startsWith('/');
+};
+
+const AUDIT_OVERDUE_MANAGER_TYPES = new Set(['audit_overdue_manager', 'audit_overdue_escalation']);
+
+const isAuditOverdueManager = (notification) => {
+  const t = notification.metadata?.type;
+  if (!AUDIT_OVERDUE_MANAGER_TYPES.has(t)) return false;
+  const url = notification.metadata?.action_url;
+  return typeof url === 'string' && url.startsWith('/');
+};
+
+const auditOverdueManagerRoute = () => '/compliance/user-dashboard?auditOverdueEscalations=1';
+
+const AUDIT_REVIEW_NOTIFICATION_TYPES = new Set(['audit_review_manager', 'audit_ready_for_review']);
+
+const isAuditReviewNotification = (notification) => {
+  const t = notification.metadata?.type;
+  if (!AUDIT_REVIEW_NOTIFICATION_TYPES.has(t)) return false;
+  // Audit Manager escalation: always navigate to dashboard panel (like policy_self_heal_manager)
+  if (t === 'audit_review_manager') return true;
+  const url = notification.metadata?.action_url;
+  return typeof url === 'string' && url.startsWith('/');
+};
+
+const auditReviewRoute = (notification) => {
+  const url = notification.metadata?.action_url;
+  if (typeof url === 'string' && url.startsWith('/')) return url;
+  if (notification.metadata?.type === 'audit_review_manager') {
+    return '/auditor/dashboard?reviewEscalations=1';
+  }
+  return '/auditor/reviews';
+};
+
+const similarityReviewRoute = (notification) => {
+  const url = notification.metadata?.action_url;
+  if (typeof url === 'string' && url.startsWith('/')) return url;
+  const checkId = notification.metadata?.check_id;
+  if (checkId != null) return `/similarity/review?checkId=${checkId}`;
+  return '/similarity/review';
+};
+
+const policySelfHealRoute = (notification) => {
+  const url = notification.metadata?.action_url;
+  if (typeof url === 'string' && url.startsWith('/')) return url;
+  const policyId = notification.metadata?.policy_id;
+  if (notification.metadata?.type === 'policy_self_heal_manager') {
+    return '/policy/performance/dashboard?renewalEscalations=1';
+  }
+  if (policyId != null) return `/policy/renewal-review?policyId=${policyId}`;
+  return null;
+};
 
 // Handle notification click
 const handleNotificationClick = (notification) => {
+  if (isAuditOverdueManager(notification)) {
+    router.push(auditOverdueManagerRoute());
+    return;
+  }
+  if (isAuditReviewNotification(notification)) {
+    router.push(auditReviewRoute(notification));
+    return;
+  }
+  if (isSimilarityReady(notification)) {
+    router.push(similarityReviewRoute(notification));
+    return;
+  }
+  if (isPolicySelfHeal(notification)) {
+    const target = policySelfHealRoute(notification);
+    if (target) {
+      router.push(target);
+    }
+    return;
+  }
   if (isClickable(notification)) {
     // Don't mark as read yet - keep notification visible until action is taken
     // Navigate to pending acknowledgements page
@@ -652,7 +741,17 @@ onMounted(async () => {
 .notifications-table tbody tr.clickable:hover {
   background-color: #f5f5f5 !important;
 }
+.notif-action-link {
+  display: inline-block;
+  margin-left: 8px;
+  color: #1976d2;
+  font-weight: 600;
+  text-decoration: underline;
+}
 
+.notif-action-link:hover {
+  color: #0d47a1;
+}
 /* Modal Styles */
 .modal-overlay {
   position: fixed;

@@ -108,6 +108,13 @@
         :disabled="policies.length === 0 || !selectedFramework || loading"
       />
       </div>
+    <div v-if="asyncSimilarityMasterId" class="vv-async-banner">
+      <i class="fas fa-clock" />
+      <span>{{ vvSimilarityBannerText }}</span>
+      <button type="button" class="vv-async-banner-btn" @click="openSimilarityReview">
+        Open review
+      </button>
+    </div>
     <div v-if="selectedTab === 'framework' && selectedFramework">
       <div class="VV-container">
         <!-- Framework Form -->
@@ -1556,6 +1563,10 @@
     <div v-if="showVersionModal" class="version-modal-overlay" @click="showVersionModal = false">
       <div class="version-modal" @click.stop>
         <h2>Version Type</h2>
+        <p class="version-modal-hint">
+          After OK, similarity runs in the background for <strong>fields you changed only</strong>.
+          Nothing is saved until you open the notification and confirm.
+        </p>
         <div class="version-type-options">
           <label class="version-type-option">
             <input type="radio" value="minor" v-model="selectedVersionType" />
@@ -2627,24 +2638,36 @@
       </div>
     </div>
     <!-- Add submit button for policy tab -->
+
+    <SimilaritySubmitGate ref="similarityRunner" itemType="Framework" :item-data="{ name: '' }" />
   </template>
   
   <script>
 import './VV.css'
 import CustomDropdown from '../CustomDropdown.vue'
+import SimilaritySubmitGate from '@/components/SimilaritySubmitGate.vue'
 import apiService from '@/services/apiService'
-import policyDataService from '@/services/policyService'
 import { PopupService } from '@/modules/popup'  // Fix the import path
 
 import { API_ENDPOINTS } from '../../config/api.js'
 import { useFrameworkStore } from '@/stores/framework'
 import { usePolicyStore } from '@/stores/policy'
+import {
+  buildVersioningSimilarityChecks,
+  startAsyncUpdateFromChecks
+} from '@/utils/similaritySubmitHelper'
+import {
+  getSimilarityBannerMessage,
+  getSimilarityReadyPopup,
+  resolveSimilarityEntity,
+} from '@/utils/similarityNotificationText'
 
 
   export default {
 name: 'VV',
   components: {
-    CustomDropdown
+    CustomDropdown,
+    SimilaritySubmitGate
   },
   data() {
     return {
@@ -2683,6 +2706,10 @@ name: 'VV',
       activePolicyTab: 0,
       loading: false,
       vvFrameworkVersionInFlight: false,
+      asyncSimilarityMasterId: null,
+      asyncSimilarityCheckCount: 0,
+      asyncSimilarityEntity: 'Framework',
+      asyncSimilarityPollTimer: null,
       vvPolicyVersionInFlight: false,
       error: null,
       showVersionModal: false,
@@ -2732,6 +2759,9 @@ name: 'VV',
     }
   },
   computed: {
+    vvSimilarityBannerText() {
+      return getSimilarityBannerMessage(this.asyncSimilarityEntity, this.asyncSimilarityCheckCount);
+    },
     // Check if creator and reviewer are the same person for framework
     isFrameworkCreatorReviewerSame() {
       if (!this.frameworkForm.reviewer || !this.currentUser.UserName) return false;
@@ -3927,6 +3957,8 @@ name: 'VV',
               entities: p.Entities,
               startDate: p.StartDate,
               endDate: p.EndDate,
+              _sourceStartDate: p.StartDate,
+              _sourceEndDate: p.EndDate,
               file: null,
               createdByName: p.CreatedByName || framework.CreatedByName,
               reviewer: (() => {
@@ -3942,6 +3974,7 @@ name: 'VV',
               })(), // Convert user name to user ID for dropdown
               exclude: false, // Initialize exclude as false
               activeSubPolicyTab: 0,
+              originalPolicyId: p.PolicyId,
               subPolicies: subpoliciesResponse.map(sp => ({
                 id: sp.SubPolicyId.toString(), // Ensure ID is a string
                 name: sp.SubPolicyName,
@@ -3949,7 +3982,25 @@ name: 'VV',
                 control: sp.Control,
                 description: sp.Description,
                 status: sp.Status
-              }))
+              })),
+              _similarityBaseline: {
+                name: p.PolicyName,
+                description: p.PolicyDescription,
+                identifier: p.Identifier,
+                department: p.Department,
+                scope: p.Scope,
+                objective: p.Objective,
+                type: p.PolicyType,
+                category: p.PolicyCategory,
+                subCategory: p.PolicySubCategory,
+                subPolicies: subpoliciesResponse.map((sp) => ({
+                  id: sp.SubPolicyId.toString(),
+                  name: sp.SubPolicyName,
+                  identifier: sp.Identifier,
+                  control: sp.Control,
+                  description: sp.Description,
+                })),
+              },
             }
             
             policiesWithDetails.push(policyWithDetails)
@@ -3975,6 +4026,8 @@ name: 'VV',
               entities: p.Entities,
               startDate: p.StartDate,
               endDate: p.EndDate,
+              _sourceStartDate: p.StartDate,
+              _sourceEndDate: p.EndDate,
               file: null,
               createdByName: p.CreatedByName || framework.CreatedByName,
               reviewer: (() => {
@@ -4106,6 +4159,43 @@ name: 'VV',
       const user = this.users.find(u => u.name === userName);
       return user ? user.id : '';
     },
+    _onAsyncSimilarityStarted(masterCheckId, checkCount = 0, entityType = 'Framework') {
+      this.asyncSimilarityMasterId = masterCheckId;
+      this.asyncSimilarityCheckCount = checkCount || 0;
+      this.asyncSimilarityEntity = entityType || 'Framework';
+      this._startAsyncSimilarityPoll();
+    },
+    openSimilarityReview() {
+      if (!this.asyncSimilarityMasterId) return;
+      this.$router.push({ path: '/similarity/review', query: { checkId: this.asyncSimilarityMasterId } });
+    },
+    async _startAsyncSimilarityPoll() {
+      if (this.asyncSimilarityPollTimer) {
+        clearInterval(this.asyncSimilarityPollTimer);
+      }
+      const poll = async () => {
+        if (!this.asyncSimilarityMasterId) return;
+        try {
+          const { getAsyncUpdateStatus } = await import('@/services/similarityAsyncUpdateService');
+          const status = await getAsyncUpdateStatus(this.asyncSimilarityMasterId);
+          if (status.background_status === 'READY') {
+            clearInterval(this.asyncSimilarityPollTimer);
+            this.asyncSimilarityPollTimer = null;
+            const readyCopy = getSimilarityReadyPopup(this.asyncSimilarityEntity);
+            PopupService.success(readyCopy.message, readyCopy.heading);
+          } else if (status.background_status === 'FAILED') {
+            clearInterval(this.asyncSimilarityPollTimer);
+            this.asyncSimilarityPollTimer = null;
+            this.asyncSimilarityMasterId = null;
+            PopupService.error(status.error || 'Similarity check failed', 'Error');
+          }
+        } catch (e) {
+          console.warn('Async similarity poll:', e);
+        }
+      };
+      this.asyncSimilarityPollTimer = setInterval(poll, 5000);
+      void poll();
+    },
     submitFramework() {
       this.showVersionModal = true;
     },
@@ -4137,6 +4227,17 @@ name: 'VV',
         return;
       }
 
+      const fwId = parseInt(this.selectedFramework, 10) || null
+      const frameworkChecks = buildVersioningSimilarityChecks({
+        gate: this.$refs.similarityRunner,
+        frameworkForm: this.frameworkForm,
+        previousFramework: this.previousFrameworkData,
+        policyTabs: this.policyTabs,
+        frameworkId: fwId,
+        excludeFrameworkId: fwId,
+        policyOnly: false,
+      })
+
       try {
         // Build data inventory for framework
         const frameworkFieldLabelMap = {
@@ -4159,14 +4260,20 @@ name: 'VV',
           }
         });
 
+        const toApiDate = (val) => {
+          if (val == null || val === '') return null;
+          const s = String(val).trim();
+          return s.includes('T') ? s.split('T')[0] : s;
+        };
+
         // Format data for submission
         const versionData = {
           version_type: this.selectedVersionType,
           FrameworkName: this.frameworkForm.name,
           FrameworkDescription: this.frameworkForm.description,
           Category: this.frameworkForm.category,
-          StartDate: this.frameworkForm.startDate,
-          EndDate: this.frameworkForm.endDate,
+          StartDate: toApiDate(this.frameworkForm.startDate),
+          EndDate: toApiDate(this.frameworkForm.endDate),
           Identifier: this.frameworkForm.identifier,
           CreatedByName: this.frameworkForm.createdByName,
           ReviewerName: this.getUserNameById(this.frameworkForm.reviewer),
@@ -4226,8 +4333,8 @@ name: 'VV',
             PolicyCategory: policy.category,
             PolicySubCategory: policy.subCategory,
             Entities: policy.entities,
-            StartDate: policy.startDate,
-            EndDate: policy.endDate,
+            StartDate: toApiDate(policy.startDate) || toApiDate(policy._sourceStartDate),
+            EndDate: toApiDate(policy.endDate) || toApiDate(policy._sourceEndDate),
             CreatedByName: policy.createdByName,
             ReviewerName: this.getUserNameById(policy.reviewer),
             data_inventory: policyDataInventory,
@@ -4290,56 +4397,21 @@ name: 'VV',
           }
         });
 
-        console.log('Submitting version data:', versionData);
+        console.log('Queueing framework version similarity (deferred save):', versionData);
 
-        const selectedFwId = this.selectedFramework;
-        const fwNameSnap = this.frameworkForm.name;
-        const fwDescSnap = this.frameworkForm.description;
-        const fwCatSnap = this.frameworkForm.category;
-        const fwIeSnap = this.frameworkForm.internalExternal;
-
-        this.vvFrameworkVersionInFlight = true;
-        PopupService.success('Framework version created successfully!', 'Success');
-        this.resetForm();
-        this.$router.push('/framework-explorer');
-
-        void apiService
-          .post(`/api/frameworks/${selectedFwId}/create-version/`, versionData, { background: true })
-          .then((response) => {
-            console.log('Framework version creation response:', response);
-            if (response.FrameworkId) {
-              const ps = usePolicyStore();
-              ps.mergeFrameworkRowFromCreate({
-                FrameworkId: response.FrameworkId,
-                FrameworkName: response.FrameworkName || fwNameSnap,
-                Category: fwCatSnap,
-                InternalExternal: fwIeSnap || 'Internal',
-                ActiveInactive: 'Inactive',
-                Status: 'Under Review',
-                CurrentVersion: response.NewVersion,
-                FrameworkDescription: fwDescSnap,
-              });
-              policyDataService.mergeExplorerFrameworkRow({
-                id: response.FrameworkId,
-                name: response.FrameworkName || fwNameSnap,
-                category: fwCatSnap || '',
-                description: fwDescSnap || '',
-                status: 'Inactive',
-                internalExternal: fwIeSnap || 'Internal',
-                versions:
-                  response.NewVersion != null ? [{ version: response.NewVersion }] : [],
-              });
-            }
-          })
-          .catch((error) => {
-            console.error('Error submitting framework version:', error);
-            const errorMessage =
-              error.response?.data?.error || 'Failed to submit framework version';
-            PopupService.error(errorMessage, 'Error Creating Framework Version');
-          })
-          .finally(() => {
-            this.vvFrameworkVersionInFlight = false;
-          });
+        const { started, masterCheckId, checkCount } = await startAsyncUpdateFromChecks(frameworkChecks, {
+          operation: 'framework_version',
+          entity_pk: parseInt(this.selectedFramework, 10),
+          payload: versionData,
+          label: this.frameworkForm.name,
+          summary: 'Framework version update',
+        }, { PopupService });
+        if (started) {
+          const itemTypes = frameworkChecks.map((c) => c.params?.item_type).filter(Boolean);
+          const entityType = resolveSimilarityEntity('framework_version', itemTypes);
+          this._onAsyncSimilarityStarted(masterCheckId, checkCount, entityType);
+          return;
+        }
       } catch (error) {
         console.error('Error building framework version payload:', error);
         const errorMessage =
@@ -4493,6 +4565,16 @@ name: 'VV',
         return;
       }
 
+      const fwId = parseInt(this.selectedFramework, 10) || null
+      const policyChecks = buildVersioningSimilarityChecks({
+        gate: this.$refs.similarityRunner,
+        frameworkForm: null,
+        previousFramework: null,
+        policyTabs: this.policyTabs.length ? this.policyTabs : [],
+        frameworkId: fwId,
+        policyOnly: true,
+      })
+
       try {
         // Build data inventory for policy
         const policyFieldLabelMap = {
@@ -4600,40 +4682,21 @@ name: 'VV',
         versionData.subpolicies = subpolicies;
         versionData.new_subpolicies = new_subpolicies;
 
-        console.log('Submitting version data:', versionData);
+        console.log('Queueing policy version similarity (deferred save):', versionData);
 
-        const selectedPolId = this.selectedPolicy;
-        const policyNameSnap = this.policyTabs[0]?.name;
-
-        this.vvPolicyVersionInFlight = true;
-        PopupService.success('Policy version created successfully!', 'Success');
-        this.resetForm();
-        this.$router.push('/framework-explorer');
-
-        void apiService
-          .post(`/api/policies/${selectedPolId}/create-version/`, versionData, { background: true })
-          .then((response) => {
-            console.log('Policy version created:', response);
-            if (response.PolicyId && response.FrameworkId) {
-              usePolicyStore().prependPolicyTailoringCache(response.FrameworkId, {
-                PolicyId: response.PolicyId,
-                PolicyName: response.PolicyName || policyNameSnap,
-                Status: 'Under Review',
-                FrameworkId: response.FrameworkId,
-                ActiveInactive: 'Inactive',
-                CurrentVersion: response.NewVersion,
-              });
-            }
-          })
-          .catch((error) => {
-            console.error('Error creating policy version:', error);
-            const errorMessage =
-              error.response?.data?.error || 'Failed to create policy version';
-            PopupService.error(errorMessage, 'Error Creating Policy Version');
-          })
-          .finally(() => {
-            this.vvPolicyVersionInFlight = false;
-          });
+        const { started, masterCheckId, checkCount } = await startAsyncUpdateFromChecks(policyChecks, {
+          operation: 'policy_version',
+          entity_pk: parseInt(this.selectedPolicy, 10),
+          payload: versionData,
+          label: this.policyTabs[0]?.name,
+          summary: 'Policy version update',
+        }, { PopupService });
+        if (started) {
+          const itemTypes = policyChecks.map((c) => c.params?.item_type).filter(Boolean);
+          const entityType = resolveSimilarityEntity('policy_version', itemTypes);
+          this._onAsyncSimilarityStarted(masterCheckId, checkCount, entityType);
+          return;
+        }
       } catch (error) {
         console.error('Error building policy version payload:', error);
         const errorMessage =
@@ -4788,22 +4851,24 @@ name: 'VV',
 
     async saveDepartment(departmentName) {
       try {
-        const response = await apiService.post(API_ENDPOINTS.DEPARTMENTS_SAVE, {
+        const payload = {
           DepartmentName: departmentName,
-          EntityId: 1, // Default entity
-          DepartmentHead: 1, // Default head
-          BusinessUnitId: 1 // Default business unit
-        });
-        
-        if (response.success) {
+          EntityId: 1,
+          DepartmentHead: 1,
+          BusinessUnitId: 1
+        };
+        if (this.selectedFramework) {
+          payload.FrameworkId = this.selectedFramework;
+        }
+        const response = await apiService.post(API_ENDPOINTS.DEPARTMENTS_SAVE, payload);
+
+        if (response && response.success !== false) {
           console.log('Department saved:', response.department);
-          // Refresh departments list
           await this.fetchDepartments();
           return response.department;
         }
       } catch (error) {
-        console.error('Error saving department:', error);
-        throw error;
+        console.warn('Department save skipped:', error);
       }
     },
 
@@ -5109,6 +5174,34 @@ background: rgba(0,0,0,0.3); display: flex; align-items: center; justify-content
 }
 .version-modal {
 background: #fff; padding: 2rem 2.5rem; border-radius: 12px; min-width: 350px; box-shadow: 0 2px 16px rgba(0,0,0,0.15);
+}
+.version-modal-hint {
+color: #6b7280;
+font-size: 0.9rem;
+margin: 0 0 0.5rem;
+}
+.vv-async-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 12px 16px;
+  padding: 12px 16px;
+  background: #eff6ff;
+  border: 1px solid #93c5fd;
+  border-radius: 8px;
+  color: #1e40af;
+  font-size: 0.9rem;
+}
+.vv-async-banner-btn {
+  margin-left: auto;
+  padding: 6px 14px;
+  background: #3b6cf6;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
 }
 .version-type-options {
 display: flex; gap: 2rem; margin: 1.5rem 0;

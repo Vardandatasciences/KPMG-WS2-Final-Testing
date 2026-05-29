@@ -285,11 +285,14 @@ NEW COMPLIANCE REQUIREMENT (from amendment):
 EXISTING COMPLIANCE REQUIREMENTS (in database):
 {chr(10).join(db_compliance_list)}
 
-TASK:
+TASK 1 - MATCHING:
 Determine if the NEW compliance requirement matches any of the EXISTING requirements. Consider:
 1. Semantic similarity (same concept, different wording)
 2. Overlapping requirements (partial match)
 3. Exact or near-exact matches
+
+TASK 2 - CHANGE DETECTION (only if has_match is true):
+Compare the EXISTING requirement against the NEW amendment requirement and determine if the actual requirements materially changed. Check these fields: description/criteria, criticality, mandatory vs optional, compliance type.
 
 Return JSON with this structure:
 {{
@@ -298,7 +301,12 @@ Return JSON with this structure:
   "match_score": 0.0-1.0,
   "match_reason": "Brief explanation of match or why no match",
   "compliance_status": "COMPLIANT|PARTIALLY_COMPLIANT|NON_COMPLIANT",
-  "recommendation": "Action recommendation"
+  "recommendation": "Action recommendation",
+  "change_detected": true/false,
+  "similarity_score": 0.0-1.0,
+  "diff_fields": ["field names that changed, e.g. ComplianceItemDescription, Criticality"],
+  "old_values": {{"field_name": "old value"}},
+  "new_values": {{"field_name": "new value"}}
 }}
 
 SCORING RULES:
@@ -306,6 +314,11 @@ SCORING RULES:
 - 0.7-0.89: Strong semantic match (COMPLIANT)
 - 0.5-0.69: Partial overlap (PARTIALLY_COMPLIANT)
 - Below 0.5: No significant match (NON_COMPLIANT)
+
+CHANGE DETECTION RULES:
+- change_detected = true if: requirements/criteria changed, criticality changed, mandatory/optional changed, type changed, OR if the text similarity is below 0.85 despite being the same concept.
+- change_detected = false if: only wording changed but requirements stayed identical.
+- List the exact old and new values for each changed field.
 
 JSON:"""
         
@@ -348,6 +361,201 @@ JSON:"""
             'match_reason': f'AI Service Error: {str(e)}',
             'compliance_status': 'NON_COMPLIANT'
         }
+
+
+# =============================================================================
+# PHASE 1 + PHASE 2 HELPERS: change detection, update requests, risk integration
+# =============================================================================
+
+
+def _detect_control_changes_with_ai(target_compliance: dict, origin_compliance: dict, framework_name: str = '') -> dict:
+    """
+    Use centralized AI to compare an amendment compliance against a matched
+    database compliance and detect material changes.
+
+    Returns:
+        {
+            "change_detected": bool,
+            "similarity_score": float,
+            "diff_fields": list,
+            "old_values": dict,
+            "new_values": dict
+        }
+    """
+    try:
+        from grc.ai.service import get_ai_service
+        from grc.ai.types import AIRequestOptions
+
+        ai_service = get_ai_service()
+
+        old_text = f"{origin_compliance.get('title', '')}: {origin_compliance.get('description', '')}"
+        new_text = f"{target_compliance.get('compliance_title', '')}: {target_compliance.get('compliance_description', '')}"
+
+        old_crit = origin_compliance.get('criticality', '') or origin_compliance.get('Criticality', '')
+        new_crit = target_compliance.get('criticality', '')
+        old_mand = origin_compliance.get('mandatory', '') or origin_compliance.get('MandatoryOptional', '')
+        new_mand = target_compliance.get('mandatory', '')
+        old_type = origin_compliance.get('type', '') or origin_compliance.get('ComplianceType', '')
+        new_type = target_compliance.get('compliance_type', '')
+
+        prompt = f"""You are an expert compliance auditor.
+
+Compare the following two compliance requirements and determine if the actual requirements have materially changed.
+
+EXISTING RULE (currently in database):
+Title: {old_text}
+Criticality: {old_crit}
+Mandatory/Optional: {old_mand}
+Type: {old_type}
+
+NEW RULE (from amendment):
+Title: {new_text}
+Criticality: {new_crit}
+Mandatory/Optional: {new_mand}
+Type: {new_type}
+
+TASK:
+1. Calculate an overall text similarity score (0.0-1.0).
+2. Determine if a MATERIAL change occurred. A material change means: the actual requirement/criteria changed (not just wording), OR criticality changed, OR mandatory/optional status changed, OR type changed.
+3. If changed, list which fields changed and their old vs new values.
+
+Return JSON:
+{{
+  "change_detected": true/false,
+  "similarity_score": 0.0-1.0,
+  "diff_fields": ["field names"],
+  "old_values": {{"field": "value"}},
+  "new_values": {{"field": "value"}}
+}}
+
+JSON:"""
+
+        options = AIRequestOptions(task_name="compliance.change_detection")
+        result = ai_service.generate_json(
+            task_name="compliance.change_detection",
+            prompt=prompt,
+            options=options
+        )
+
+        if result:
+            return {
+                'change_detected': result.get('change_detected', False),
+                'similarity_score': result.get('similarity_score', 0.0),
+                'diff_fields': result.get('diff_fields', []),
+                'old_values': result.get('old_values', {}),
+                'new_values': result.get('new_values', {})
+            }
+    except Exception as e:
+        logger.warning(f"AI change detection failed, using heuristic fallback: {e}")
+
+    # Fallback heuristic when AI is unavailable
+    old_desc = str(origin_compliance.get('description', '') or origin_compliance.get('ComplianceItemDescription', '')).lower()
+    new_desc = str(target_compliance.get('compliance_description', '') or target_compliance.get('description', '')).lower()
+
+    old_crit = str(origin_compliance.get('criticality', '') or origin_compliance.get('Criticality', '')).lower()
+    new_crit = str(target_compliance.get('criticality', '') or '').lower()
+    old_mand = str(origin_compliance.get('mandatory', '') or origin_compliance.get('MandatoryOptional', '')).lower()
+    new_mand = str(target_compliance.get('mandatory', '') or '').lower()
+    old_type = str(origin_compliance.get('type', '') or origin_compliance.get('ComplianceType', '')).lower()
+    new_type = str(target_compliance.get('compliance_type', '') or '').lower()
+
+    diff_fields = []
+    old_vals = {}
+    new_vals = {}
+
+    if old_desc != new_desc:
+        diff_fields.append('ComplianceItemDescription')
+        old_vals['ComplianceItemDescription'] = old_desc
+        new_vals['ComplianceItemDescription'] = new_desc
+    if old_crit != new_crit:
+        diff_fields.append('Criticality')
+        old_vals['Criticality'] = old_crit
+        new_vals['Criticality'] = new_crit
+    if old_mand != new_mand:
+        diff_fields.append('MandatoryOptional')
+        old_vals['MandatoryOptional'] = old_mand
+        new_vals['MandatoryOptional'] = new_mand
+    if old_type != new_type:
+        diff_fields.append('ComplianceType')
+        old_vals['ComplianceType'] = old_type
+        new_vals['ComplianceType'] = new_type
+
+    # Simple word-overlap heuristic for similarity
+    old_words = set(old_desc.split())
+    new_words = set(new_desc.split())
+    if old_words:
+        sim = len(old_words & new_words) / len(old_words)
+    else:
+        sim = 0.0
+
+    return {
+        'change_detected': sim < 0.85 or bool(diff_fields),
+        'similarity_score': round(sim, 3),
+        'diff_fields': diff_fields,
+        'old_values': old_vals,
+        'new_values': new_vals
+    }
+
+
+def _detect_control_changes(target_compliance: dict, origin_compliance: dict) -> dict:
+    """
+    Wrapper for AI-powered change detection.
+    """
+    return _detect_control_changes_with_ai(target_compliance, origin_compliance)
+
+
+def _get_affected_risks_for_compliance(compliance_id: int) -> list:
+    """
+    Find Risk entries in the Risk module linked to a specific compliance.
+    Phase 2: Risk module integration.
+    """
+    try:
+        from ...models import Risk
+        risks = Risk.objects.filter(ComplianceId=compliance_id)
+        return [
+            {
+                'RiskId': r.RiskId,
+                'RiskTitle': r.RiskTitle or '',
+                'Criticality': r.Criticality or '',
+                'RiskDescription': r.RiskDescription or '',
+                'RiskLikelihood': r.RiskLikelihood,
+                'RiskImpact': r.RiskImpact,
+                'RiskExposureRating': r.RiskExposureRating
+            }
+            for r in risks
+        ]
+    except Exception as e:
+        logger.warning(f"Error fetching affected risks for compliance {compliance_id}: {e}")
+        return []
+
+
+def _notify_risk_owners(compliance_id: int, compliance_title: str, change_summary: str):
+    """
+    Send notification to risk owners when a compliance linked to their risk changes.
+    Phase 2: Risk module integration.
+    """
+    try:
+        affected_risks = _get_affected_risks_for_compliance(compliance_id)
+        if not affected_risks:
+            return
+
+        from ...routes.Global.notification_service import NotificationService
+        notification_service = NotificationService()
+
+        for risk in affected_risks:
+            try:
+                notification_service.send_notification(
+                    title=f"Compliance Updated: {compliance_title}",
+                    message=f"The compliance rule linked to your risk '{risk['RiskTitle']}' has been updated. "
+                            f"Change: {change_summary}",
+                    recipients=[],  # populated by notification service based on risk assignments
+                    entity_type='Risk',
+                    entity_id=risk['RiskId']
+                )
+            except Exception as notif_err:
+                logger.warning(f"Failed to notify risk owner for Risk {risk['RiskId']}: {notif_err}")
+    except Exception as e:
+        logger.warning(f"Error in risk owner notification for compliance {compliance_id}: {e}")
 
 
 def _extract_compliances_from_sections(sections: list) -> list:
@@ -406,14 +614,34 @@ def _match_compliances_with_ai(target_compliances: list, db_compliances: list, f
             match_score = match_result.get('match_score', 0) or 0
 
             if match_result.get('has_match') and match_score >= threshold:
-                results['matched'].append({
+                matched_comp = match_result.get('matched_compliance', {})
+                # Use AI change detection directly from the same API call
+                ai_change_detected = match_result.get('change_detected', False)
+                ai_similarity = match_result.get('similarity_score', match_score)
+                ai_diff_fields = match_result.get('diff_fields', [])
+                ai_old_vals = match_result.get('old_values', {})
+                ai_new_vals = match_result.get('new_values', {})
+
+                # Fallback: if AI didn't return change fields, build basic ones from matched data
+                if not ai_diff_fields and ai_change_detected:
+                    ai_diff_fields = ['ComplianceItemDescription']
+                    ai_old_vals = {'ComplianceItemDescription': matched_comp.get('description', matched_comp.get('ComplianceItemDescription', ''))}
+                    ai_new_vals = {'ComplianceItemDescription': target.get('compliance_description', target.get('description', ''))}
+
+                matched_entry = {
                     'target_compliance': target,
-                    'matched_compliance': match_result.get('matched_compliance', {}),
+                    'matched_compliance': matched_comp,
                     'match_score': match_score,
                     'match_reason': match_result.get('match_reason'),
                     'compliance_status': match_result.get('compliance_status', 'COMPLIANT'),
-                    'recommendation': match_result.get('recommendation')
-                })
+                    'recommendation': match_result.get('recommendation'),
+                    'change_detected': ai_change_detected,
+                    'similarity_score': ai_similarity,
+                    'diff_fields': ai_diff_fields,
+                    'old_values': ai_old_vals,
+                    'new_values': ai_new_vals
+                }
+                results['matched'].append(matched_entry)
                 results['matched_count'] += 1
                 continue
             else:
@@ -443,12 +671,20 @@ def _match_compliances_with_ai(target_compliances: list, db_compliances: list, f
                     best_match = db_comp
 
         if best_match and best_score >= threshold:
+            # Use AI-powered change detection (or a simple heuristic when AI is unavailable)
+            # Heuristic: if text similarity is below 0.85, flag as changed
+            fallback_changed = best_score < 0.85
             results['matched'].append({
                 'target_compliance': target,
                 'matched_compliance': best_match,
                 'match_score': best_score,
                 'match_reason': f'Text similarity: {best_score:.2%}',
-                'compliance_status': 'COMPLIANT' if best_score > 0.8 else 'PARTIALLY_COMPLIANT'
+                'compliance_status': 'COMPLIANT' if best_score > 0.8 else 'PARTIALLY_COMPLIANT',
+                'change_detected': fallback_changed,
+                'similarity_score': round(best_score, 3),
+                'diff_fields': ['ComplianceItemDescription'] if fallback_changed else [],
+                'old_values': {'ComplianceItemDescription': best_match.get('description', best_match.get('ComplianceItemDescription', ''))} if fallback_changed else {},
+                'new_values': {'ComplianceItemDescription': target.get('compliance_description', target.get('description', ''))} if fallback_changed else {}
             })
             results['matched_count'] += 1
         else:
@@ -698,6 +934,253 @@ def add_compliance_from_amendment(request, framework_id):
             'error': str(e)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
+# =============================================================================
+# PHASE 1 API: Compliance Update Request endpoints
+# =============================================================================
+
+@api_view(['POST'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def detect_control_changes(request, framework_id, compliance_id):
+    """
+    Compare a specific amendment compliance against its matched database compliance
+    and return whether material changes were detected.
+
+    POST body:
+    {
+        "target_compliance": { ... },
+        "origin_compliance": { ... }
+    }
+    """
+    try:
+        target = request.data.get('target_compliance', {})
+        origin = request.data.get('origin_compliance', {})
+
+        if not target or not origin:
+            return Response({
+                'success': False,
+                'error': 'Both target_compliance and origin_compliance are required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        change_info = _detect_control_changes(target, origin)
+
+        return Response({
+            'success': True,
+            'framework_id': framework_id,
+            'compliance_id': compliance_id,
+            'change_info': change_info
+        }, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        logger.error(f"Error detecting control changes: {str(e)}")
+        return Response({
+            'success': False,
+            'error': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def create_update_approval(request, framework_id):
+    """
+    Create a ComplianceApproval record for UPDATING an existing compliance.
+    Reuses the existing approval workflow (ComplianceApproval table).
+    The reviewer will use the standard compliance review endpoint.
+
+    POST body:
+    {
+        "compliance_id": <int>,
+        "proposed_values": { "ComplianceItemDescription": "...", "Criticality": "..." },
+        "reviewer_id": <int>,
+        "approval_due_date": "YYYY-MM-DD" (optional, default 7 days)
+    }
+    """
+    try:
+        from ...models import ComplianceApproval
+        from ...tenant_utils import get_tenant_id_from_request
+        import datetime
+
+        framework = Framework.objects.get(FrameworkId=framework_id)
+        payload = request.data or {}
+
+        compliance_id = payload.get('compliance_id')
+        reviewer_id = payload.get('reviewer_id')
+        proposed_values = payload.get('proposed_values', {})
+
+        if not compliance_id or not reviewer_id or not proposed_values:
+            return Response({
+                'success': False,
+                'error': 'compliance_id, reviewer_id, and proposed_values are required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            compliance = Compliance.objects.get(ComplianceId=compliance_id, FrameworkId=framework)
+        except Compliance.DoesNotExist:
+            return Response({
+                'success': False,
+                'error': f'Compliance {compliance_id} not found in framework {framework_id}'
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        # Resolve creator user
+        try:
+            user_id = RBACUtils.get_user_id_from_request(request)
+        except Exception:
+            user_id = None
+        if not user_id:
+            user_id = request.session.get('user_id')
+
+        user = getattr(request, 'user', None)
+        user_name = getattr(user, 'UserName', None) or getattr(user, 'username', None) or 'System'
+        today = timezone.now().date()
+        tenant_id = get_tenant_id_from_request(request)
+
+        approval_due_date = payload.get(
+            'approval_due_date',
+            (datetime.date.today() + datetime.timedelta(days=7)).isoformat()
+        )
+
+        # Build ExtractedData with request_type='update' so the approval handler knows
+        old_values = {
+            'ComplianceTitle': compliance.ComplianceTitle or '',
+            'ComplianceItemDescription': compliance.ComplianceItemDescription or '',
+            'ComplianceType': compliance.ComplianceType or '',
+            'Criticality': compliance.Criticality or '',
+            'MandatoryOptional': compliance.MandatoryOptional or '',
+            'ManualAutomatic': compliance.ManualAutomatic or ''
+        }
+
+        extracted_data = {
+            'type': 'compliance_update',
+            'request_type': 'update',
+            'compliance_id': compliance.ComplianceId,
+            'ComplianceTitle': compliance.ComplianceTitle or '',
+            'ComplianceItemDescription': compliance.ComplianceItemDescription or '',
+            'ComplianceType': compliance.ComplianceType or '',
+            'Criticality': compliance.Criticality or '',
+            'MandatoryOptional': compliance.MandatoryOptional or '',
+            'ManualAutomatic': compliance.ManualAutomatic or '',
+            'old_values': old_values,
+            'proposed_values': proposed_values,
+            'source': 'amendment_update',
+            'compliance_approval': {
+                'approved': None,
+                'remarks': '',
+                'ApprovalDueDate': approval_due_date
+            }
+        }
+
+        # Also include the proposed values at the top level so the reviewer can see them
+        for k, v in proposed_values.items():
+            if k not in extracted_data:
+                extracted_data[k] = v
+
+        compliance_approval = ComplianceApproval.objects.create(
+            PolicyId=compliance.SubPolicy.PolicyId if compliance.SubPolicy else None,
+            Identifier=compliance.Identifier or f"COMP-UPDATE-{compliance.ComplianceId}-{today.strftime('%y%m%d')}",
+            ExtractedData=extracted_data,
+            UserId=user_id or 0,
+            ReviewerId=int(reviewer_id),
+            ApprovedNot=None,
+            Version='u1',
+            ApprovalDueDate=approval_due_date,
+            FrameworkId_id=framework.FrameworkId
+        )
+
+        # Notify reviewer
+        try:
+            from ...routes.Global.notification_service import NotificationService
+            notification_service = NotificationService()
+            notification_service.send_compliance_clone_notification(
+                compliance=compliance,
+                reviewer_id=int(reviewer_id)
+            )
+        except Exception as notif_err:
+            logger.warning(f"Failed to send notification: {notif_err}")
+
+        # Log action
+        try:
+            send_log(
+                module='Framework Comparison',
+                actionType='CREATE_COMPLIANCE_UPDATE_APPROVAL',
+                description=f'Update approval created for compliance "{compliance.ComplianceTitle}" (Framework: {framework.FrameworkName})',
+                userId=user_id,
+                userName=user_name,
+                entityType='Compliance',
+                entityId=str(compliance.ComplianceId),
+                frameworkId=framework_id,
+                additionalInfo={
+                    'approval_id': compliance_approval.ApprovalId,
+                    'reviewer_id': reviewer_id,
+                    'compliance_id': compliance.ComplianceId
+                }
+            )
+        except Exception as log_err:
+            logger.warning(f"Failed to log update approval action: {log_err}")
+
+        return Response({
+            'success': True,
+            'message': 'Compliance update sent for approval. Reviewer will review it in the standard approval queue.',
+            'approval_id': compliance_approval.ApprovalId,
+            'compliance_id': compliance.ComplianceId,
+            'status': 'pending'
+        }, status=status.HTTP_201_CREATED)
+
+    except Framework.DoesNotExist:
+        return Response({
+            'success': False,
+            'error': f'Framework with ID {framework_id} not found'
+        }, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        logger.error(f"Error creating update approval: {str(e)}")
+        return Response({
+            'success': False,
+            'error': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# =============================================================================
+# PHASE 2 API: Risk integration endpoints
+# =============================================================================
+
+@api_view(['GET'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def get_affected_risks(request, framework_id, compliance_id):
+    """
+    Return Risk entries linked to a specific compliance.
+    """
+    try:
+        # Verify compliance belongs to framework
+        compliance = Compliance.objects.get(ComplianceId=compliance_id, FrameworkId_id=framework_id)
+        risks = _get_affected_risks_for_compliance(compliance_id)
+
+        return Response({
+            'success': True,
+            'framework_id': framework_id,
+            'compliance_id': compliance_id,
+            'compliance_title': compliance.ComplianceTitle or '',
+            'risks_count': len(risks),
+            'risks': risks
+        }, status=status.HTTP_200_OK)
+
+    except Compliance.DoesNotExist:
+        return Response({
+            'success': False,
+            'error': f'Compliance {compliance_id} not found in framework {framework_id}'
+        }, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        logger.error(f"Error fetching affected risks: {str(e)}")
+        return Response({
+            'success': False,
+            'error': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# =============================================================================
+# END PHASE 1 + PHASE 2 APIs
+# =============================================================================
 
 @api_view(['GET'])
 def get_frameworks_with_amendments(request):

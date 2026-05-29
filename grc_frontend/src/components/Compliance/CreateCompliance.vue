@@ -179,7 +179,7 @@
       <!-- Tab content - only show active tab -->
       <div 
         v-for="(compliance, idx) in complianceList" 
-        :key="idx" 
+        :key="compliance.localKey || idx" 
         class="compliance-item-form"
         v-show="activeTab === idx"
       >
@@ -196,9 +196,9 @@
           <div class="global-form-row">
             <div class="global-form-group">
               <label class="global-form-label">Identifier</label>
-              <input 
-                v-model="compliance.Identifier" 
-                class="compliance-input" 
+              <input
+                v-model="compliance.Identifier"
+                class="compliance-input"
                 placeholder="Auto-generated if left empty"
                 title="Unique identifier for this compliance item (auto-generated if left blank)"
               />
@@ -210,6 +210,114 @@
                 <input type="checkbox" v-model="compliance.IsRisk" @change="onFieldChange(idx, 'IsRisk', $event)" style="margin-right: 6px; width: auto;" />
                 Is Risk
               </label>
+            </div>
+          </div>
+
+          <!-- Start Date and End Date in one row -->
+          <div class="global-form-row">
+            <div class="global-form-group">
+              <label class="global-form-label">
+                Start Date <span class="global-form-label-required">*</span>
+                <!-- Data Type Circle Toggle -->
+                <div class="compliance-data-type-circle-toggle-wrapper">
+                  <div class="compliance-data-type-circle-toggle">
+                    <div
+                      class="compliance-circle-option personal-circle"
+                      :class="{ active: fieldDataTypes?.startDate === 'personal' }"
+                      @click="setDataType('startDate', 'personal')"
+                      title="Personal Data"
+                    >
+                      <div class="compliance-circle-inner"></div>
+                    </div>
+                    <div
+                      class="compliance-circle-option confidential-circle"
+                      :class="{ active: fieldDataTypes?.startDate === 'confidential' }"
+                      @click="setDataType('startDate', 'confidential')"
+                      title="Confidential Data"
+                    >
+                      <div class="compliance-circle-inner"></div>
+                    </div>
+                    <div
+                      class="compliance-circle-option regular-circle"
+                      :class="{ active: fieldDataTypes?.startDate === 'regular' }"
+                      @click="setDataType('startDate', 'regular')"
+                      title="Regular Data"
+                    >
+                      <div class="compliance-circle-inner"></div>
+                    </div>
+                  </div>
+                </div>
+              </label>
+              <input
+                type="date"
+                class="global-form-date-input"
+                :class="{ error: !!startDateErrorMessages[idx] }"
+                v-model="compliance.StartDate"
+                @input="onStartDateChange(idx, $event)"
+                @change="onStartDateChange(idx, $event)"
+                @blur="onStartDateBlur(idx, $event)"
+                title="Date when this compliance item takes effect"
+              />
+              <div v-if="startDateErrorMessages[idx]" class="global-form-error-message">
+                {{ startDateErrorMessages[idx] }}
+              </div>
+              <small v-else class="global-form-helper-text">Date when this compliance item takes effect</small>
+            </div>
+            <div class="global-form-group">
+              <label class="global-form-label">
+                End Date
+                <!-- Data Type Circle Toggle -->
+                <div class="compliance-data-type-circle-toggle-wrapper">
+                  <div class="compliance-data-type-circle-toggle">
+                    <div
+                      class="compliance-circle-option personal-circle"
+                      :class="{ active: fieldDataTypes?.endDate === 'personal' }"
+                      @click="setDataType('endDate', 'personal')"
+                      title="Personal Data"
+                    >
+                      <div class="compliance-circle-inner"></div>
+                    </div>
+                    <div
+                      class="compliance-circle-option confidential-circle"
+                      :class="{ active: fieldDataTypes?.endDate === 'confidential' }"
+                      @click="setDataType('endDate', 'confidential')"
+                      title="Confidential Data"
+                    >
+                      <div class="compliance-circle-inner"></div>
+                    </div>
+                    <div
+                      class="compliance-circle-option regular-circle"
+                      :class="{ active: fieldDataTypes?.endDate === 'regular' }"
+                      @click="setDataType('endDate', 'regular')"
+                      title="Regular Data"
+                    >
+                      <div class="compliance-circle-inner"></div>
+                    </div>
+                  </div>
+                </div>
+              </label>
+              <input
+                type="date"
+                class="compliance-input"
+                v-model="compliance.EndDate"
+                @input="onFieldChange(idx, 'EndDate', $event)"
+                title="Date when this compliance item expires"
+                readonly
+              />
+              <small class="global-form-helper-text">Auto-set from SubPolicy End Date, or Framework End Date when SubPolicy has none</small>
+            </div>
+            <div class="global-form-group">
+              <label class="global-form-label">Audit Frequency</label>
+              <select v-model="compliance.AuditFrequency" class="compliance-input" title="How often this compliance should be audited">
+                <option value="Only Once">Only Once</option>
+                <option value="Daily">Daily</option>
+                <option value="Monthly">Monthly</option>
+                <option value="Every 2 Months">Every 2 Months</option>
+                <option value="Every 4 Months">Every 4 Months</option>
+                <option value="Half Yearly">Half Yearly</option>
+                <option value="Yearly">Yearly</option>
+              </select>
+              <small class="global-form-helper-text">Used when assigning audits at compliance level</small>
             </div>
           </div>
           
@@ -1240,17 +1348,28 @@
       </div>
     </div>
     
-    <!-- Submit button container - uses .btn .btn-submit from main.css -->
-    <div class="compliance-submit-container">
+    <SimilaritySubmitGate
+      v-if="similarityUiReady"
+      ref="similarityGate"
+      itemType="Compliance"
+      :itemData="similarityItemData"
+      :parentFrameworkId="frameworkIdForSuggest"
+      :parentPolicyId="policyIdForSuggest"
+      :parentSubpolicyId="subPolicyIdForSuggest"
+    />
+
+    <div class="compliance-submit-container" style="display: flex; gap: 10px; justify-content: center;">
       <button 
-        class="compliance-submit-btn" 
+        class="btn btn-submit" 
         @click="submitCompliance"
-        :disabled="loading"
+        :disabled="!canSubmitCompliance"
+        :title="submitDisabledHint"
       >
-        <span v-if="loading" class="btn-icon">⏳</span>
-        <span v-if="loading">Saving...</span>
+        <span v-if="submitting" class="btn-icon">⏳</span>
+        <span v-if="submitting">Saving...</span>
         <span v-else>Submit Compliance</span>
       </button>
+      <p v-if="submitDisabledHint" class="submit-hint-text">{{ submitDisabledHint }}</p>
     </div>
   </div>
 </template>
@@ -1261,12 +1380,68 @@
   import { CompliancePopups } from './utils/popupUtils';
   import CustomDropdown from '@/components/CustomDropdown.vue';
   import AccessUtils from '@/utils/accessUtils';
+import SimilaritySubmitGate from '@/components/SimilaritySubmitGate.vue';
+
+function resolveSelectionId(selection) {
+  if (selection == null || selection === '') return null;
+  if (typeof selection === 'object') {
+    const id = selection.id ?? selection.FrameworkId ?? selection.PolicyId ?? selection.SubPolicyId;
+    return id != null && id !== '' ? id : null;
+  }
+  const n = Number(selection);
+  return Number.isNaN(n) ? selection : n;
+}
+
+let complianceLocalKeySeq = 0;
+function nextComplianceLocalKey() {
+  complianceLocalKeySeq += 1;
+  return `compliance-${complianceLocalKeySeq}`;
+}
+
+function createEmptyComplianceItem(extra = {}) {
+  return {
+    localKey: nextComplianceLocalKey(),
+    ComplianceTitle: '',
+    ComplianceItemDescription: '',
+    ComplianceType: '',
+    Scope: '',
+    Objective: '',
+    BusinessUnitsCovered: '',
+    Identifier: '',
+    IsRisk: false,
+    PossibleDamage: '',
+    mitigation: '',
+    PotentialRiskScenarios: '',
+    RiskType: '',
+    RiskCategory: '',
+    RiskBusinessImpact: '',
+    Criticality: 'Medium',
+    MandatoryOptional: 'Mandatory',
+    ManualAutomatic: 'Manual',
+    Impact: 5.0,
+    Probability: 5.0,
+    Status: 'Under Review',
+    reviewer_id: '',
+    CreatedByName: '',
+    Applicability: '',
+    MaturityLevel: 'Initial',
+    ActiveInactive: 'Active',
+    PermanentTemporary: 'Permanent',
+    mitigationSteps: [{ stepNumber: 1, description: '' }],
+    StartDate: '',
+    EndDate: '',
+    AuditFrequency: 'Monthly',
+    validationErrors: {},
+    ...extra
+  };
+}
 
 export default {
   name: 'CreateCompliance',
   components: {
     PopupModal,
-    CustomDropdown // Registered CustomDropdown component
+    CustomDropdown, // Registered CustomDropdown component
+    SimilaritySubmitGate
   },
   setup() {
     const complianceStore = useComplianceStore()
@@ -1309,39 +1484,10 @@ export default {
         index: null,
         field: null
       },
-      complianceList: [
-        {
-          ComplianceTitle: '',
-          ComplianceItemDescription: '',
-          ComplianceType: '',
-          Scope: '',
-          Objective: '',
-          BusinessUnitsCovered: '',
-          Identifier: '',
-          IsRisk: false,
-          PossibleDamage: '',
-          mitigation: '',
-          PotentialRiskScenarios: '',
-          RiskType: '',
-          RiskCategory: '',
-          RiskBusinessImpact: '',
-          Criticality: 'Medium',
-          MandatoryOptional: 'Mandatory',
-          ManualAutomatic: 'Manual',
-          Impact: 5.0,
-          Probability: 5.0,
-          Status: 'Under Review',
-          reviewer_id: '', // No default reviewer
-          CreatedByName: '', // No default creator
-          Applicability: '',
-          MaturityLevel: 'Initial',
-          ActiveInactive: 'Active',
-          PermanentTemporary: 'Permanent',
-          mitigationSteps: [{ stepNumber: 1, description: '' }],
-          validationErrors: {}
-        }
-      ],
+      complianceList: [createEmptyComplianceItem()],
       loading: false,
+      submitting: false,
+      similarityUiReady: false,
       activeTab: 0,
       existingComplianceTitles: [], // Store existing compliance titles for duplicate checking
       duplicateCheckTimeout: null, // Timeout for duplicate title checking
@@ -1476,76 +1622,88 @@ export default {
         complianceTitleErrorMessage: this.getComplianceTitleErrorMessage(compliance),
         validationErrors: compliance.validationErrors
       }));
+    },
+
+    activeCompliance() {
+      if (!this.complianceList?.length) {
+        return null;
+      }
+      const idx = Number.isInteger(this.activeTab) ? this.activeTab : 0;
+      return this.complianceList[idx] ?? this.complianceList[0];
+    },
+
+    similarityItemData() {
+      const c = this.activeCompliance;
+      if (!c) {
+        return { name: '', description: '', compliance_type: '', identifier: '' };
+      }
+      return {
+        name: c.ComplianceTitle || '',
+        description: c.ComplianceItemDescription || '',
+        compliance_type: c.ComplianceType || '',
+        identifier: c.Identifier || ''
+      };
+    },
+
+    frameworkIdForSuggest() {
+      return resolveSelectionId(this.selectedFramework);
+    },
+
+    policyIdForSuggest() {
+      return resolveSelectionId(this.selectedPolicy);
+    },
+
+    subPolicyIdForSuggest() {
+      return resolveSelectionId(this.selectedSubPolicy);
+    },
+
+    canRunSimilarityCheck() {
+      const title = this.activeCompliance?.ComplianceTitle?.trim();
+      return !!(
+        title &&
+        this.frameworkIdForSuggest &&
+        this.policyIdForSuggest &&
+        this.subPolicyIdForSuggest
+      );
+    },
+
+    canSubmitCompliance() {
+      return this.complianceList.length > 0 && !this.submitting;
+    },
+
+    submitDisabledHint() {
+      if (this.submitting) return 'Saving compliance…';
+      if (!this.frameworkIdForSuggest) return 'Select Framework at the top of the form';
+      if (!this.policyIdForSuggest) return 'Select Policy at the top of the form';
+      if (!this.subPolicyIdForSuggest) return 'Select Sub Policy at the top of the form';
+      const c = this.activeCompliance;
+      if (!c?.ComplianceTitle?.trim()) return 'Enter Compliance Title';
+      if (!c?.ComplianceItemDescription?.trim()) return 'Enter Compliance Description';
+      if (!c?.reviewer_id) return 'Select Assign Reviewer (required)';
+      return '';
+    },
+
+    startDateErrorMessages() {
+      if (!Array.isArray(this.complianceList)) {
+        return [];
+      }
+      return this.complianceList.map((compliance) => {
+        const errors = compliance?.validationErrors?.StartDate;
+        if (!Array.isArray(errors) || errors.length === 0) {
+          return '';
+        }
+        return errors.join(', ');
+      });
     }
   },
   
   watch: {
-    'complianceList': {
-      handler(newVal) {
-        // Force update when compliance list changes
-        this.$forceUpdate();
-        
-        // Check if validation errors changed
-        newVal.forEach((compliance, index) => {
-          if (compliance.validationErrors && 
-              compliance.validationErrors.ComplianceTitle && 
-              compliance.validationErrors.ComplianceTitle.length > 0) {
-            console.log('Validation errors detected for index:', index, compliance.validationErrors.ComplianceTitle);
-            // Force update for this specific compliance item
-            this.$nextTick(() => {
-              this.$forceUpdate();
-            });
-          }
-        });
-      },
-      deep: true
-    },
-    
     // Watch for changes in filteredFrameworks to update the dropdown config
     filteredFrameworks: {
       handler() {
         this.updateFrameworkConfig();
       },
       immediate: true
-    }
-  },
-  async created() {
-    try {
-      await this.loadFrameworks();
-      
-      // Check for selected framework from session after loading frameworks
-      await this.checkSelectedFrameworkFromSession();
-      
-      await this.loadUsers();
-      await this.loadCategoryOptions();
-      
-      // Initialize search arrays with empty strings for the first compliance item
-      this.businessUnitSearch = [''];
-      this.riskTypeSearch = [''];
-      this.riskCategorySearch = [''];
-      this.riskBusinessImpactSearch = [''];
-      
-      // Add click event listener to close dropdowns when clicking outside
-      document.addEventListener('click', this.handleClickOutside);
-      
-      // Initialize mitigation data for the initial compliance item
-      this.onMitigationStepChange(0);
-    } catch (error) {
-      // If there's an overall access error during component initialization
-      if (AccessUtils.handleApiError(error, 'create compliance')) {
-        return;
-      }
-      console.error('Error initializing CreateCompliance component:', error);
-    }
-  },
-  
-  beforeUnmount() {
-    // Remove event listener when component is unmounted
-    document.removeEventListener('click', this.handleClickOutside);
-    
-    // Clear any pending timeout
-    if (this.duplicateCheckTimeout) {
-      clearTimeout(this.duplicateCheckTimeout);
     }
   },
 
@@ -1556,6 +1714,7 @@ export default {
         console.log(`Data type selected for ${fieldName}:`, type);
       }
     },
+    
     // Framework session management — delegated to frameworkStore (no direct FRAMEWORK_* API calls)
     async checkSelectedFrameworkFromSession() {
       if (!this.frameworkStore.selectedFrameworkId) {
@@ -1567,6 +1726,7 @@ export default {
         const frameworkExists = this.frameworks.find(f => f.id.toString() === frameworkIdFromSession.toString())
         if (frameworkExists) {
           this.selectedFramework = frameworkExists
+          this.applyComplianceEndDate(frameworkExists.EndDate)
           if (frameworkExists.id) {
             await this.loadPolicies(frameworkExists.id)
           }
@@ -1703,6 +1863,150 @@ export default {
       
       return { value, errors };
     },
+
+    validateRequiredDateField(value, fieldName) {
+      const errors = [];
+      const trimmed = String(value || '').trim();
+
+      if (!trimmed) {
+        errors.push(`${fieldName} is required`);
+        return { value: trimmed, errors };
+      }
+
+      const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+      if (!datePattern.test(trimmed)) {
+        errors.push(`${fieldName} must be a valid date (YYYY-MM-DD)`);
+        return { value: trimmed, errors };
+      }
+
+      const date = new Date(`${trimmed}T00:00:00`);
+      if (isNaN(date.getTime())) {
+        errors.push(`${fieldName} must be a valid date`);
+      }
+
+      return { value: trimmed, errors };
+    },
+
+    getParentDateBounds() {
+      let parentStartDate = null;
+      let parentEndDate = null;
+      let parentStartName = '';
+      let parentEndName = '';
+      let parentStartLabel = '';
+      let parentEndLabel = '';
+
+      if (this.selectedSubPolicy?.StartDate) {
+        parentStartDate = new Date(`${this.selectedSubPolicy.StartDate}T00:00:00`);
+        parentStartName = 'SubPolicy';
+        parentStartLabel = this.selectedSubPolicy.StartDate;
+      } else if (this.selectedFramework?.StartDate) {
+        parentStartDate = new Date(`${this.selectedFramework.StartDate}T00:00:00`);
+        parentStartName = 'Framework';
+        parentStartLabel = this.selectedFramework.StartDate;
+      }
+
+      if (this.selectedSubPolicy?.EndDate) {
+        parentEndDate = new Date(`${this.selectedSubPolicy.EndDate}T00:00:00`);
+        parentEndName = 'SubPolicy';
+        parentEndLabel = this.selectedSubPolicy.EndDate;
+      } else if (this.selectedFramework?.EndDate) {
+        parentEndDate = new Date(`${this.selectedFramework.EndDate}T00:00:00`);
+        parentEndName = 'Framework';
+        parentEndLabel = this.selectedFramework.EndDate;
+      }
+
+      return { parentStartDate, parentEndDate, parentStartName, parentEndName, parentStartLabel, parentEndLabel };
+    },
+
+    validateStartDateAgainstParents(value) {
+      const result = this.validateRequiredDateField(value, 'Start Date');
+      if (result.errors.length > 0) {
+        return result;
+      }
+
+      const complianceDate = new Date(`${result.value}T00:00:00`);
+      const {
+        parentStartDate,
+        parentEndDate,
+        parentStartName,
+        parentEndName,
+        parentStartLabel,
+        parentEndLabel,
+      } = this.getParentDateBounds();
+
+      if (parentStartDate && complianceDate < parentStartDate) {
+        result.errors.push(
+          `Start Date must be on or after ${parentStartName} Start Date (${parentStartLabel})`
+        );
+      }
+
+      if (parentEndDate && complianceDate > parentEndDate) {
+        result.errors.push(
+          `Start Date must be on or before ${parentEndName} End Date (${parentEndLabel})`
+        );
+      }
+
+      return result;
+    },
+
+    applyComplianceEndDate(endDate) {
+      if (!endDate) return;
+      this.complianceList.forEach((compliance) => {
+        compliance.EndDate = endDate;
+      });
+    },
+
+    revalidateAllStartDates() {
+      this.complianceList.forEach((compliance) => {
+        if (!compliance) return;
+        if (compliance.StartDate && String(compliance.StartDate).trim()) {
+          this.validateComplianceField(compliance, 'StartDate', compliance.StartDate);
+        } else if (compliance.validationErrors?.StartDate) {
+          delete compliance.validationErrors.StartDate;
+        }
+      });
+    },
+
+    onStartDateChange(complianceIndex, event) {
+      const compliance = this.complianceList[complianceIndex];
+      if (!compliance) return;
+
+      const value = event.target.value;
+      if (!compliance.validationErrors) {
+        compliance.validationErrors = {};
+      }
+
+      if (!value || !String(value).trim()) {
+        delete compliance.validationErrors.StartDate;
+        return;
+      }
+
+      const result = this.validateStartDateAgainstParents(value);
+      const rangeErrors = result.errors.filter(
+        (message) => !message.toLowerCase().includes('required')
+      );
+      if (rangeErrors.length > 0) {
+        compliance.validationErrors.StartDate = rangeErrors;
+      } else {
+        delete compliance.validationErrors.StartDate;
+      }
+    },
+
+    onStartDateBlur(complianceIndex, event) {
+      const compliance = this.complianceList[complianceIndex];
+      if (!compliance) return;
+
+      const value = event.target.value;
+      if (!value || !String(value).trim()) {
+        if (!compliance.validationErrors) {
+          compliance.validationErrors = {};
+        }
+        compliance.validationErrors.StartDate = ['Start Date is required'];
+        return;
+      }
+
+      this.validateComplianceField(compliance, 'StartDate', value);
+    },
     
     validateComplianceField(compliance, fieldName, value) {
       const rules = this.validationRules;
@@ -1770,6 +2074,10 @@ export default {
           }
           break;
           
+        case 'StartDate':
+          result = this.validateStartDateAgainstParents(value);
+          break;
+
         case 'Identifier':
           if (value && value.trim()) {
             result = this.validateOptionalString(
@@ -1937,7 +2245,7 @@ export default {
         value = event.target.value;
         // Update the field value directly without sanitization during typing
         compliance[fieldName] = value;
-        
+
         // For ComplianceTitle, we handle validation differently to preserve duplicate checks
         if (fieldName === 'ComplianceTitle') {
           // Only do basic validation (required, length, pattern) but don't clear duplicate errors
@@ -2212,12 +2520,13 @@ export default {
         // Required fields validation - only backend-required fields
         const requiredFields = [
           'ComplianceTitle',
-          'ComplianceItemDescription', 
+          'ComplianceItemDescription',
           'ComplianceType',
           'Scope',
           'Objective',
           'BusinessUnitsCovered',
-          'Criticality'
+          'Criticality',
+          'StartDate'
         ];
         
         // Validate reviewer selection
@@ -2260,10 +2569,18 @@ export default {
             const status = fw.ActiveInactive ?? fw.status ?? '';
             return status.toLowerCase() === 'active';
           })
-          .map(fw => ({
-            id: fw.FrameworkId ?? fw.id,
-            name: fw.FrameworkName ?? fw.name,
-          }));
+          .map(fw => {
+            console.log('Raw framework data:', fw);
+            console.log('Raw StartDate:', fw.StartDate, 'Raw EndDate:', fw.EndDate);
+            const mapped = {
+              id: fw.FrameworkId ?? fw.id,
+              name: fw.FrameworkName ?? fw.name,
+              StartDate: fw.StartDate ?? fw.startDate ?? '',
+              EndDate: fw.EndDate ?? fw.endDate ?? ''
+            };
+            console.log('Mapped framework:', mapped);
+            return mapped;
+          });
 
         if (Array.isArray(this.complianceStore.frameworks) && this.complianceStore.frameworks.length > 0) {
           this.frameworks = mapActive(this.complianceStore.frameworks);
@@ -2278,6 +2595,7 @@ export default {
 
         // Use complianceStore — replaces complianceDataService cache pattern
         await this.complianceStore.fetchFrameworks();
+        console.log('Raw frameworks from store:', this.complianceStore.frameworks);
         this.frameworks = mapActive(this.complianceStore.frameworks);
         this.updateFrameworkConfig();
       } catch (error) {
@@ -2304,7 +2622,9 @@ export default {
           this.policies = response.data.policies.map(p => ({
             id: p.id || p.PolicyId,
             name: p.name || p.PolicyName,
-            applicability: p.applicability || p.scope || p.Applicability || ''
+            applicability: p.applicability || p.scope || p.Applicability || '',
+            StartDate: p.StartDate || p.startDate || '',
+            EndDate: p.EndDate || p.endDate || ''
           }));
           this.policyConfig.values = this.policies.map(p => ({
             value: p,
@@ -2314,7 +2634,9 @@ export default {
           this.policies = response.data.map(p => ({
             id: p.id || p.PolicyId,
             name: p.name || p.PolicyName,
-            applicability: p.applicability || p.scope || p.Applicability || ''
+            applicability: p.applicability || p.scope || p.Applicability || '',
+            StartDate: p.StartDate || p.startDate || '',
+            EndDate: p.EndDate || p.endDate || ''
           }));
           this.policyConfig.values = this.policies.map(p => ({
             value: p,
@@ -2347,7 +2669,9 @@ export default {
         if (response.data.success && Array.isArray(response.data.subpolicies)) {
           this.subPolicies = response.data.subpolicies.map(sp => ({
             id: sp.id || sp.SubPolicyId,
-            name: sp.name || sp.SubPolicyName
+            name: sp.name || sp.SubPolicyName,
+            StartDate: sp.StartDate || sp.startDate || '',
+            EndDate: sp.EndDate || sp.endDate || ''
           }));
           this.subPolicyConfig.values = this.subPolicies.map(sp => ({
             value: sp,
@@ -2356,7 +2680,9 @@ export default {
         } else if (Array.isArray(response.data)) {
           this.subPolicies = response.data.map(sp => ({
             id: sp.id || sp.SubPolicyId,
-            name: sp.name || sp.SubPolicyName
+            name: sp.name || sp.SubPolicyName,
+            StartDate: sp.StartDate || sp.startDate || '',
+            EndDate: sp.EndDate || sp.endDate || ''
           }));
           this.subPolicyConfig.values = this.subPolicies.map(sp => ({
             value: sp,
@@ -2708,36 +3034,9 @@ export default {
     
     addCompliance() {
       const policyApplicability = this.selectedPolicy ? this.selectedPolicy.applicability || '' : '';
-      this.complianceList.push({
-        ComplianceTitle: '',
-        ComplianceItemDescription: '',
-        ComplianceType: '',
-        Scope: '',
-        Objective: '',
-        BusinessUnitsCovered: '',
-        Identifier: '',
-        IsRisk: false,
-        PossibleDamage: '',
-        mitigation: '',
-        PotentialRiskScenarios: '',
-        RiskType: '',
-        RiskCategory: '',
-        RiskBusinessImpact: '',
-        Criticality: 'Medium',
-        MandatoryOptional: 'Mandatory',
-        ManualAutomatic: 'Manual',
-        Impact: 5.0,
-        Probability: 5.0,
-        Status: 'Under Review',
-        reviewer_id: '', // No default reviewer
-        CreatedByName: '', // No default creator
-        Applicability: policyApplicability,
-        MaturityLevel: 'Initial',
-        ActiveInactive: 'Active',
-        PermanentTemporary: 'Permanent',
-        mitigationSteps: [{ stepNumber: 1, description: '' }],
-        validationErrors: {}
-      });
+      this.complianceList.push(createEmptyComplianceItem({
+        Applicability: policyApplicability
+      }));
       this.businessUnitSearch.push('');
       this.riskTypeSearch.push('');
       this.riskCategorySearch.push('');
@@ -2797,7 +3096,24 @@ export default {
           PopupService.error(`Validation failed: ${validation.errors.join(', ')}`);
           return;
         }
-        this.loading = true;
+
+        const {
+          buildComplianceCreateSimilarityChecks,
+          runSimilarityCheckSequence,
+        } = await import('@/utils/similaritySubmitHelper');
+        const similarityChecks = buildComplianceCreateSimilarityChecks({
+          gate: this.$refs.similarityGate,
+          complianceList: this.complianceList,
+          frameworkId: this.frameworkIdForSuggest,
+          policyId: this.policyIdForSuggest,
+          subPolicyId: this.subPolicyIdForSuggest,
+        });
+        const similarityOk = await runSimilarityCheckSequence(similarityChecks, { PopupService });
+        if (!similarityOk) {
+          return;
+        }
+
+        this.submitting = true;
         const createdCompliances = [];
         const errors = [];
         if (this.complianceList.length > 1) {
@@ -2881,10 +3197,13 @@ export default {
               ActiveInactive: compliance.ActiveInactive || 'Active',
               PermanentTemporary: compliance.PermanentTemporary || 'Permanent',
               ApprovalDueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+              StartDate: compliance.StartDate || '',
+              EndDate: compliance.EndDate || '',
+              AuditFrequency: compliance.AuditFrequency || 'Monthly',
               data_inventory: dataInventory
             };
             
-            const requiredFields = ['SubPolicy', 'ComplianceTitle', 'ComplianceItemDescription', 'reviewer'];
+            const requiredFields = ['SubPolicy', 'ComplianceTitle', 'ComplianceItemDescription', 'StartDate', 'reviewer'];
             const missingFields = requiredFields.filter(field => !complianceData[field]);
             if (missingFields.length > 0) {
               throw new Error(`Missing required fields: ${missingFields.join(', ')}`);
@@ -2955,7 +3274,7 @@ export default {
         }
         this.$toast?.error(error.response?.data?.message || error.message || 'Failed to create compliance items');
       } finally {
-        this.loading = false;
+        this.submitting = false;
       }
     },
     addStep(complianceIndex) {
@@ -2994,36 +3313,7 @@ export default {
     },
 
     resetForm() {
-      this.complianceList = [{
-        ComplianceTitle: '',
-        ComplianceItemDescription: '',
-        ComplianceType: '',
-        Scope: '',
-        Objective: '',
-        BusinessUnitsCovered: '',
-        Identifier: '',
-        IsRisk: false,
-        PossibleDamage: '',
-        mitigation: '',
-        PotentialRiskScenarios: '',
-        RiskType: '',
-        RiskCategory: '',
-        RiskBusinessImpact: '',
-        Criticality: 'Medium',
-        MandatoryOptional: 'Mandatory',
-        ManualAutomatic: 'Manual',
-        Impact: 5.0,
-        Probability: 5.0,
-        Status: 'Under Review',
-        reviewer_id: '', // No default reviewer
-        CreatedByName: '', // No default creator
-        Applicability: '',
-        MaturityLevel: 'Initial',
-        ActiveInactive: 'Active',
-        PermanentTemporary: 'Permanent',
-        mitigationSteps: [{ stepNumber: 1, description: '' }],
-        validationErrors: {}
-      }];
+      this.complianceList = [createEmptyComplianceItem()];
       this.selectedFramework = '';
       this.selectedPolicy = '';
       this.selectedSubPolicy = '';
@@ -3048,10 +3338,14 @@ export default {
     },
          onFrameworkChange(option) {
        this.selectedFramework = option.value;
+       console.log('Framework selected:', option.value);
        if (option.value && option.value.id) {
          // Save the selected framework to session
          this.saveFrameworkToSession(option.value.id);
-         
+
+         this.applyComplianceEndDate(option.value.EndDate);
+         this.$nextTick(() => this.revalidateAllStartDates());
+
          this.loadPolicies(option.value.id);
          this.selectedPolicy = '';
          this.selectedSubPolicy = '';
@@ -3076,14 +3370,19 @@ export default {
      },
            onSubPolicyChange(option) {
         this.selectedSubPolicy = option.value;
-        
+        console.log('SubPolicy selected:', option.value);
+
         // Set the applicability for all compliance items from the selected sub-policy
         if (option.value && option.value.applicability) {
           this.complianceList.forEach(compliance => {
             compliance.Applicability = option.value.applicability;
           });
         }
-        
+
+        const endDate = option.value?.EndDate || this.selectedFramework?.EndDate || '';
+        this.applyComplianceEndDate(endDate);
+        this.$nextTick(() => this.revalidateAllStartDates());
+
         // Load existing compliance titles for this subpolicy to help with duplicate detection
         if (option.value && option.value.id) {
           this.loadExistingComplianceTitles(option.value.id);
@@ -3199,6 +3498,46 @@ export default {
         
         console.log('Enhanced error display for index:', index);
       }
+  },
+
+  mounted() {
+    this.$nextTick(() => {
+      this.similarityUiReady = true;
+    });
+  },
+
+  async created() {
+    try {
+      await this.loadFrameworks();
+
+      await this.checkSelectedFrameworkFromSession();
+
+      await this.loadUsers();
+      await this.loadCategoryOptions();
+
+      this.businessUnitSearch = [''];
+      this.riskTypeSearch = [''];
+      this.riskCategorySearch = [''];
+      this.riskBusinessImpactSearch = [''];
+
+      document.addEventListener('click', this.handleClickOutside);
+
+      this.onMitigationStepChange(0);
+    } catch (error) {
+      if (AccessUtils.handleApiError(error, 'create compliance')) {
+        return;
+      }
+      console.error('Error initializing CreateCompliance component:', error);
+    }
+  },
+
+  beforeUnmount() {
+    document.removeEventListener('click', this.handleClickOutside);
+
+    if (this.duplicateCheckTimeout) {
+      clearTimeout(this.duplicateCheckTimeout);
+      this.duplicateCheckTimeout = null;
+    }
   }
 }
 </script>
@@ -3266,11 +3605,7 @@ export default {
   font-size: 0.9rem;
 }
 
-.validation-error {
-  font-size: 0.75rem;
-}
-
-/* Removed - using global-form-helper-text from form.css instead */
+/* Removed - using global-form-error-message from form.css for field errors */
 
 .mitigation-steps {
   display: flex;

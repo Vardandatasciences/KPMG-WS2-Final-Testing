@@ -8,7 +8,7 @@ from rest_framework.response import Response
 from rest_framework.authentication import SessionAuthentication, BasicAuthentication
 from ...jwt_auth import UnifiedJWTAuthentication
 from rest_framework.parsers import MultiPartParser, FormParser
-from ...models import Framework, Policy, SubPolicy, FrameworkVersion, PolicyVersion, PolicyApproval, Users, FrameworkApproval, ExportTask, PolicyCategory, Entity, LastChecklistItemVerified
+from ...models import Framework, Policy, SubPolicy, FrameworkVersion, PolicyVersion, PolicyApproval, Users, FrameworkApproval, ExportTask, PolicyCategory, Entity, LastChecklistItemVerified, PolicyReminderRule
 from ...serializers import FrameworkSerializer, PolicySerializer, SubPolicySerializer, PolicyApprovalSerializer, UserSerializer, EntitySerializer   
 from django.db import transaction, models
 from django.db.transaction import TransactionManagementError
@@ -18,6 +18,7 @@ import traceback
 import sys
 from datetime import datetime, date, timedelta
 from ...routes.Global.s3_fucntions import export_data, _sanitize_export_payload
+from ...routes.Policy.policy_reminders import sync_policy_reminder_schedules
 import re
 from django.utils import timezone
 from datetime import timedelta
@@ -82,6 +83,41 @@ import threading
 
 # Set up logger for policy RBAC
 logger = logging.getLogger(__name__)
+
+
+def _save_policy_reminder_rules(policy, reminder_rules_raw):
+    """
+    Parse reminder_rules array and create PolicyReminderRule records,
+    then sync scheduler jobs.
+    """
+    if not reminder_rules_raw or not isinstance(reminder_rules_raw, list):
+        return
+    # Delete existing rules
+    PolicyReminderRule.objects.filter(policy=policy).delete()
+    for idx, rule in enumerate(reminder_rules_raw):
+        if not isinstance(rule, dict):
+            continue
+        start_value = rule.get('start_value') or rule.get('startValue')
+        start_unit = rule.get('start_unit') or rule.get('startUnit')
+        frequency_unit = rule.get('frequency_unit') or rule.get('frequencyUnit')
+        if not start_value or not start_unit or not frequency_unit:
+            continue
+        try:
+            start_value = int(start_value)
+        except (TypeError, ValueError):
+            continue
+        PolicyReminderRule.objects.create(
+            policy=policy,
+            start_value=start_value,
+            start_unit=start_unit,
+            frequency_unit=frequency_unit,
+            sort_order=idx,
+        )
+    # Create scheduler jobs
+    try:
+        sync_policy_reminder_schedules(policy)
+    except Exception as e:
+        logger.exception("Failed to sync reminder schedules for policy %s: %s", policy.PolicyId, e)
 
 
 def convert_department_to_name(department_value, tenant_id=None):
@@ -628,6 +664,9 @@ def framework_list(request):
             )
  
     elif request.method == 'POST':
+        # Step 1: Text Cleaning - Import text cleaner for framework name/description
+        from ...utils.text_cleaner import clean_framework_text
+        
         # Debug: Check for framework context before framework creation
         from ...framework_context import get_framework_context
         
@@ -743,6 +782,21 @@ def framework_list(request):
             for field in string_fields_to_escape:
                 if field in validated_data and validated_data[field]:
                     validated_data[field] = escape_html(validated_data[field])
+            
+            # Step 1: Text Cleaning - Clean framework name and description for similarity detection
+            logger.info("[STEP 1] Starting text cleaning for framework creation")
+            cleaning_result = clean_framework_text({
+                'FrameworkName': validated_data.get('FrameworkName', ''),
+                'FrameworkDescription': validated_data.get('FrameworkDescription', ''),
+                'Category': validated_data.get('Category', ''),
+                'Domain': validated_data.get('Domain'),
+                'InternalExternal': validated_data.get('InternalExternal', ''),
+                'Identifier': validated_data.get('Identifier', '')
+            })
+            logger.info(f"[STEP 1] Text cleaning complete. Changes: {cleaning_result.changes_made}")
+            logger.info(f"[STEP 1] Original name: '{cleaning_result.original_values.get('FrameworkName')}' -> Cleaned: '{cleaning_result.structured_json.get('name')}'")
+            logger.debug(f"[STEP 1] Structured JSON: {cleaning_result.structured_json}")
+            logger.debug(f"[STEP 1] Embedding text: {cleaning_result.embedding_text}")
 
             # Security: Sanitize policy data
             if 'policies' in validated_data:
@@ -1000,9 +1054,14 @@ def framework_list(request):
                             # Convert department ID(s) to department name(s)
                             department_value = policy_data.get('Department', '')
                             department_name = convert_department_to_name(department_value, tenant_id)
-                            
+                            if not policy_data.get('EndDate'):
+                                return Response(
+                                    {'error': 'EndDate is required for each policy (used for review reminders and renewal).'},
+                                    status=status.HTTP_400_BAD_REQUEST,
+                                )
                             policy = Policy.objects.create(
                                 FrameworkId=framework,
+                                tenant_id=tenant_id,
                                 PolicyName=policy_data['PolicyName'],
                                 PolicyDescription=policy_data['PolicyDescription'],
                                 Status='Under Review',
@@ -1038,7 +1097,10 @@ def framework_list(request):
                                 PreviousVersionId=None,
                                 FrameworkId=framework
                             )
-                            
+
+                            # Save reminder rules and create scheduler jobs
+                            _save_policy_reminder_rules(policy, policy_data.get('reminder_rules'))
+
                             # Security: Process subpolicies with proper validation
                             if 'subpolicies' in policy_data:
                                 for subpolicy_data in policy_data['subpolicies']:
@@ -1069,6 +1131,20 @@ def framework_list(request):
                                     else:
                                         debug_print(f"DEBUG: No data_inventory found in subpolicy_data. Available keys: {list(subpolicy_data.keys())}")
 
+                                    # Validate SubPolicy StartDate against Policy StartDate
+                                    subpolicy_start_date = subpolicy_data.get('StartDate')
+                                    if subpolicy_start_date and policy.StartDate:
+                                        try:
+                                            from datetime import datetime
+                                            parsed_sub_start = datetime.strptime(subpolicy_start_date, '%Y-%m-%d').date()
+                                            if parsed_sub_start < policy.StartDate:
+                                                return Response(
+                                                    {'error': f'SubPolicy StartDate ({parsed_sub_start}) must be on or after Policy StartDate ({policy.StartDate})'},
+                                                    status=status.HTTP_400_BAD_REQUEST,
+                                                )
+                                        except (ValueError, TypeError):
+                                            pass
+
                                     SubPolicy.objects.create(
                                         PolicyId=policy,
                                         SubPolicyName=subpolicy_data['SubPolicyName'],
@@ -1080,6 +1156,8 @@ def framework_list(request):
                                         PermanentTemporary=subpolicy_data['PermanentTemporary'],
                                         Control=subpolicy_data['Control'],
                                         FrameworkId=framework,
+                                        StartDate=subpolicy_data.get('StartDate'),
+                                        EndDate=policy.EndDate,  # Auto-set from Policy EndDate
                                         data_inventory=subpolicy_data_inventory  # Add data inventory
                                     )
                             
@@ -1686,7 +1764,10 @@ def policy_detail(request, pk):
                 serializer = PolicySerializer(policy, data=update_data, partial=True)
                 if serializer.is_valid():
                     serializer.save()
-                    
+
+                    # Save reminder rules and sync scheduler jobs
+                    _save_policy_reminder_rules(policy, update_data.get('reminder_rules'))
+
                     # Log successful policy update
                     send_log(
                         module="Policy",
@@ -1977,7 +2058,8 @@ def add_policy_to_framework(request, framework_id):
             framework = Framework.objects.select_related().filter(
                 FrameworkId=framework_id
             ).only(
-                'FrameworkId', 'FrameworkName', 'CurrentVersion', 'Status', 'ActiveInactive'
+                'FrameworkId', 'FrameworkName', 'CurrentVersion', 'Status', 'ActiveInactive',
+                'StartDate', 'EndDate'
             ).first()
             
             if not framework:
@@ -2127,13 +2209,29 @@ def add_policy_to_framework(request, framework_id):
                     department_value = policy_data.get('Department', '')
                     department_name = convert_department_to_name(department_value, tenant_id)
                     
+                    # Validate StartDate >= Framework.StartDate
+                    start_date = policy_data.get('StartDate')
+                    if start_date and framework.StartDate:
+                        try:
+                            if isinstance(start_date, str):
+                                parsed_start = datetime.strptime(start_date, '%Y-%m-%d').date()
+                            else:
+                                parsed_start = start_date
+                            if parsed_start < framework.StartDate:
+                                return Response(
+                                    {'error': f'Policy StartDate ({parsed_start}) must be on or after Framework StartDate ({framework.StartDate})'},
+                                    status=status.HTTP_400_BAD_REQUEST,
+                                )
+                        except (ValueError, TypeError):
+                            pass
+                    
                     policy_create_data = {
                         'FrameworkId': framework,
                         'PolicyName': escape_html(policy_data['PolicyName']),
                         'PolicyDescription': escape_html(policy_data['PolicyDescription']),
                         'Status': 'Under Review',
                         'StartDate': policy_data['StartDate'],
-                        'EndDate': policy_data['EndDate'],
+                        'EndDate': framework.EndDate,  # Auto-set from Framework.EndDate
                         'Department': escape_html(department_name),
                         'CreatedByName': escape_html(policy_data['CreatedByName']),
                         'CreatedByDate': datetime.now().date(),
@@ -2153,6 +2251,8 @@ def add_policy_to_framework(request, framework_id):
                         'Entities': entities_data,
                         'data_inventory': policy_data_inventory  # Add data inventory
                     }
+                    if tenant_id is not None:
+                        policy_create_data['tenant_id'] = tenant_id
                     
                     # Check if policy name already exists in this framework
                     policy_name = escape_html(policy_data['PolicyName'])
@@ -2185,7 +2285,10 @@ def add_policy_to_framework(request, framework_id):
                         PreviousVersionId=None,
                         FrameworkId=framework
                     )
-                    
+
+                    # Save reminder rules and create scheduler jobs
+                    _save_policy_reminder_rules(policy, policy_data.get('reminder_rules'))
+
                     # Security: Process subpolicies with proper validation
                     if 'subpolicies' in policy_data and isinstance(policy_data['subpolicies'], list):
                         logger.info(f"Processing {len(policy_data['subpolicies'])} subpolicies for policy {policy.PolicyName}")
@@ -4182,10 +4285,42 @@ def submit_policy_approval_review(request, policy_id):
     tenant_id = get_tenant_id_from_request(request)
     """
     """
-    debug_print(
-        f"DEBUG: submit_policy_approval_review policy_id={policy_id} "
-        f"path={request.path} user={getattr(request.user, 'UserId', getattr(request.user, 'id', None))}"
-    )
+    debug_print(f"DEBUG: ===== SUBMIT POLICY APPROVAL REVIEW CALLED =====")
+    debug_print(f"DEBUG: submit_policy_approval_review - Request path: {request.path}")
+    debug_print(f"DEBUG: submit_policy_approval_review - Request method: {request.method}")
+    debug_print(f"DEBUG: submit_policy_approval_review - Request headers: {dict(request.headers)}")
+    debug_print(f"DEBUG: submit_policy_approval_review - User object: {request.user}")
+    debug_print(f"DEBUG: submit_policy_approval_review - User type: {type(request.user)}")
+    debug_print(f"DEBUG: submit_policy_approval_review - User attributes: {dir(request.user) if hasattr(request.user, '__dict__') else 'No __dict__'}")
+    debug_print(f"DEBUG: submit_policy_approval_review - User is authenticated: {request.user.is_authenticated if hasattr(request.user, 'is_authenticated') else 'No is_authenticated attribute'}")
+    debug_print(f"DEBUG: submit_policy_approval_review - User is anonymous: {request.user.is_anonymous if hasattr(request.user, 'is_anonymous') else 'No is_anonymous attribute'}")
+    if hasattr(request.user, 'id'):
+        debug_print(f"DEBUG: submit_policy_approval_review - User ID: {request.user.id}")
+    if hasattr(request.user, 'UserId'):
+        debug_print(f"DEBUG: submit_policy_approval_review - User UserId: {request.user.UserId}")
+    if hasattr(request.user, 'username'):
+        debug_print(f"DEBUG: submit_policy_approval_review - User username: {request.user.username}")
+    if hasattr(request.user, 'UserName'):
+        debug_print(f"DEBUG: submit_policy_approval_review - User UserName: {request.user.UserName}")
+    if hasattr(request.user, 'Role'):
+        debug_print(f"DEBUG: submit_policy_approval_review - User Role: {request.user.Role}")
+    debug_print(f"DEBUG: submit_policy_approval_review - Request method: {request.method}")
+    debug_print(f"DEBUG: submit_policy_approval_review - Request path: {request.path}")
+    debug_print(f"DEBUG: submit_policy_approval_review - Request content type: {request.content_type}")
+    debug_print(f"DEBUG: submit_policy_approval_review - Request data: {request.data}")
+    debug_print(f"DEBUG: submit_policy_approval_review - Authentication header: {request.headers.get('Authorization', 'Not found')}")
+    debug_print(f"DEBUG: submit_policy_approval_review - Session data: {dict(request.session) if hasattr(request, 'session') else 'No session'}")
+    
+    # Check if user is authenticated and has admin role
+    if hasattr(request.user, 'Role'):
+        debug_print(f"DEBUG: submit_policy_approval_review - User Role: {request.user.Role}")
+        if request.user.Role == 'GRC Administrator':
+            debug_print(f"DEBUG: submit_policy_approval_review - User is GRC Administrator - allowing access")
+        else:
+            debug_print(f"DEBUG: submit_policy_approval_review - User Role: {request.user.Role} - checking permissions")
+    
+    debug_print(f"DEBUG: ===== END DEBUG INFO =====")
+    debug_print(f"DEBUG: ===== FUNCTION IS BEING CALLED - THIS SHOULD APPEAR IF THE FUNCTION IS REACHED =====")
     
     # Check if user is authenticated and has proper permissions
     if hasattr(request.user, 'Role') and request.user.Role == 'GRC Administrator':
@@ -5232,6 +5367,8 @@ def get_framework_explorer_data(request):
                 'description': fw.FrameworkDescription,
                 'status': fw.ActiveInactive,  # 'Active' or 'Inactive'
                 'internalExternal': fw.InternalExternal or 'External',  # Add Internal/External field
+                'StartDate': fw.StartDate,
+                'EndDate': fw.EndDate,
                 'active_policies_count': active_policies,
                 'inactive_policies_count': inactive_policies
             })
@@ -5942,6 +6079,8 @@ def all_policies_get_frameworks(request):
                 'category': framework.Category,
                 'status': framework.ActiveInactive,
                 'description': framework.FrameworkDescription,
+                'StartDate': framework.StartDate.strftime('%Y-%m-%d') if framework.StartDate else None,
+                'EndDate': framework.EndDate.strftime('%Y-%m-%d') if framework.EndDate else None,
                 'versions': []
             }
             
@@ -9965,9 +10104,9 @@ def resubmit_policy_approval(request, approval_id):
             "ExtractedData": extracted_data
         })
         
-    except Policy.DoesNotExist:
-        debug_print(f"DEBUG: Policy with ID {policy_id} not found")
-        return Response({"error": "Policy not found"}, status=404)
+    except PolicyApproval.DoesNotExist:
+        debug_print(f"DEBUG: Policy approval with ID {approval_id} not found")
+        return Response({"error": "Policy approval not found"}, status=404)
     except Exception as e:
         debug_print(f"DEBUG: Error in resubmit_policy_approval: {str(e)}")
         return Response({"error": str(e)}, status=500)
@@ -10160,7 +10299,8 @@ def update_policy_status_from_subpolicies(policy_id):
     try:
         from datetime import date
         debug_print(f"DEBUG: Starting update_policy_status_from_subpolicies for policy_id: {policy_id}")
-        policy = Policy.objects.get(PolicyId=policy_id, tenant_id=tenant_id)
+        policy = Policy.objects.get(PolicyId=policy_id)
+        tenant_id = policy.tenant_id
         subpolicies = SubPolicy.objects.filter(tenant_id=tenant_id, PolicyId=policy)
         
         debug_print(f"DEBUG: Found {subpolicies.count()} subpolicies for policy {policy_id}")
@@ -10234,7 +10374,8 @@ def deactivate_previous_version_policies(policy_id):
         debug_print(f"DEBUG: Starting deactivate_previous_version_policies for policy_id: {policy_id}")
         
         # Get the current policy
-        current_policy = Policy.objects.get(PolicyId=policy_id, tenant_id=tenant_id)
+        current_policy = Policy.objects.get(PolicyId=policy_id)
+        tenant_id = current_policy.tenant_id
         debug_print(f"DEBUG: Found current policy: {current_policy.PolicyName}, Identifier: {current_policy.Identifier}")
         
         # Get the current policy version
@@ -11641,10 +11782,12 @@ def get_policy_extraction_progress(request, task_id):
     tenant_id = get_tenant_id_from_request(request)
 
     try:
-        from grc.routes.UploadFramework.policy_text_extract import get_progress
-        
-        # Get progress from the extraction module
-        progress_data = get_progress(task_id)
+        try:
+            from grc.routes.UploadFramework.policy_text_extract import get_progress  # type: ignore[import-untyped]
+        except ImportError:
+            get_progress = None
+
+        progress_data = get_progress(task_id) if get_progress else None
         
         if not progress_data:
             # If no specific progress is available, check general processing status
@@ -11676,13 +11819,11 @@ def get_policy_extraction_progress(request, task_id):
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_policy_counts_by_status(request):
     """
-    # MULTI-TENANCY: Extract tenant_id from request
-    tenant_id = get_tenant_id_from_request(request)
-
-    Get policy counts by status for dashboard display
-    Returns counts for Under Review, Approved, and Rejected policies
-    Automatically applies framework filter from session
+    Get policy counts by status for dashboard display.
+    Returns counts for Under Review, Approved, and Rejected policies.
+    Automatically applies framework filter from session.
     """
+    tenant_id = get_tenant_id_from_request(request)
     from .framework_filter_helper import apply_framework_filter_with_relation
     
     debug_print(f"DEBUG: Getting policy counts by status")
@@ -12150,7 +12291,6 @@ def list_policy_approvals_for_user(request, user_id):
                     
                     # Get framework names for these IDs
                     try:
-                        from ..models import Framework
                         if frameworks_with_approvals:
                             framework_names = Framework.objects.filter(tenant_id=tenant_id, FrameworkId__in=frameworks_with_approvals).values('FrameworkId', 'FrameworkName')
                             debug_print(f"🔍 DEBUG: Framework names with data: {list(framework_names)}")
@@ -12284,7 +12424,6 @@ def list_policy_approvals_for_reviewer_by_id(request, user_id):
                     
                     # Get framework names for these IDs
                     try:
-                        from ..models import Framework
                         if frameworks_with_reviewer_approvals:
                             framework_names = Framework.objects.filter(tenant_id=tenant_id, FrameworkId__in=frameworks_with_reviewer_approvals).values('FrameworkId', 'FrameworkName')
                             debug_print(f"🔍 DEBUG: Framework names with reviewer data: {list(framework_names)}")
@@ -12711,13 +12850,15 @@ def save_department(request):
                 'error': 'Department name is required'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        # Check if department already exists
-        existing_dept = Department.objects.filter(
+        # Check if department already exists (by name; avoid duplicate insert)
+        existing_qs = Department.objects.filter(
             DepartmentName__iexact=department_name,
-            EntityId=entity_id,
-            IsActive=True
-        ).first()
-        
+            IsActive=True,
+        )
+        if tenant_id is not None:
+            existing_qs = existing_qs.filter(tenant_id=tenant_id)
+        existing_dept = existing_qs.first()
+
         if existing_dept:
             return Response({
                 'success': True,
@@ -12729,26 +12870,74 @@ def save_department(request):
                     'business_unit_id': existing_dept.BusinessUnitId
                 }
             })
-        
-        # Create new department
-        new_department = Department.objects.create(
-            DepartmentName=department_name,
-            EntityId=entity_id,
-            DepartmentHead=department_head,
-            BusinessUnitId=business_unit_id,
-            IsActive=True,
-            CreatedDate=timezone.now()
-        )
-        
+
+        framework_id = request.data.get('FrameworkId')
+        if not framework_id and tenant_id is not None:
+            framework_id = (
+                Framework.objects.filter(tenant_id=tenant_id)
+                .values_list('FrameworkId', flat=True)
+                .first()
+            )
+
+        def _dept_payload(dept_obj=None):
+            if dept_obj:
+                return {
+                    'id': dept_obj.DepartmentId,
+                    'name': dept_obj.DepartmentName,
+                    'head_id': dept_obj.DepartmentHead,
+                    'business_unit_id': dept_obj.BusinessUnitId,
+                }
+            return {
+                'id': None,
+                'name': department_name,
+                'head_id': department_head,
+                'business_unit_id': business_unit_id,
+            }
+
+        # Policy.Department is free text; master row is optional — never block submit on insert issues.
+        if not framework_id:
+            return Response({
+                'success': True,
+                'message': 'Department name accepted',
+                'department': _dept_payload(),
+            })
+
+        create_kwargs = {
+            'DepartmentName': department_name,
+            'EntityId': entity_id,
+            'DepartmentHead': department_head,
+            'BusinessUnitId': business_unit_id,
+            'IsActive': True,
+            'CreatedDate': timezone.now(),
+            'FrameworkId_id': framework_id,
+        }
+        if tenant_id is not None:
+            create_kwargs['tenant_id'] = tenant_id
+
+        new_department = None
+        try:
+            new_department = Department.objects.create(**create_kwargs)
+        except Exception as create_err:
+            logger.warning("Department ORM create failed (%s); trying explicit DepartmentId", create_err)
+            try:
+                from django.db import connection
+                with connection.cursor() as cur:
+                    cur.execute('SELECT COALESCE(MAX(DepartmentId), 0) + 1 FROM department')
+                    next_id = int(cur.fetchone()[0])
+                new_department = Department(DepartmentId=next_id, **create_kwargs)
+                new_department.save(force_insert=True)
+            except Exception as manual_err:
+                logger.warning("Department manual create failed (%s)", manual_err)
+                return Response({
+                    'success': True,
+                    'message': 'Department name accepted (master record not created)',
+                    'department': _dept_payload(),
+                })
+
         return Response({
             'success': True,
             'message': 'Department created successfully',
-            'department': {
-                'id': new_department.DepartmentId,
-                'name': new_department.DepartmentName,
-                'head_id': new_department.DepartmentHead,
-                'business_unit_id': new_department.BusinessUnitId
-            }
+            'department': _dept_payload(new_department),
         })
         
     except Exception as e:

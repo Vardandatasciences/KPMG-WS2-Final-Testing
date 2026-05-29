@@ -179,6 +179,11 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
             # Health/test connectivity (keep narrow; prefer removing in production)
             '/api/test-connection/',
 
+            # Policy self-heal cron webhook (auth via POLICY_SELF_HEAL_CRON_SECRET in view)
+            '/api/policies/self-healing/reminders/run',
+            # Scheduled audits cron webhook (auth via SCHEDULED_AUDITS_CRON_SECRET / policy secret in view)
+            '/api/audits/scheduling/run',
+
             # Vendor invitation redirect (handled below via regex as well)
             '/rfp/',
         ]
@@ -1112,6 +1117,7 @@ class RequestSignatureVerificationMiddleware(MiddlewareMixin):
             "/api/send-otp/", "/api/verify-otp/", "/api/reset-password/",
             "/api/google/", "/api/gmail/", "/oauth/",
             "/api/tprm/", "/api/v1/vendor-",
+            "/api/policies/self-healing/reminders/",
         ])
         self.methods = set(getattr(settings, "REQUEST_SIGNATURE_ENFORCE_METHODS", ["POST", "PUT", "PATCH", "DELETE"]))
 

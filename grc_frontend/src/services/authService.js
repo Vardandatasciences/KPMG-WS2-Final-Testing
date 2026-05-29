@@ -2,6 +2,7 @@ import { API_BASE_URL, createAxiosInstance } from '../config/api.js'
 import { navigateTopLevelToGoogleOAuth } from '../utils/safeExternalNavigation'
 import { clearLegacyClientJwtKeys } from '../utils/legacyAuthStorage.js'
 import { clearAllFrameworkCaches } from '@/stores/frameworkGlobalCache'
+import policyDataService from '@/services/policyService.js'
 import { useComplianceStore } from '@/stores/compliance'
 import { usePermissionStore } from '@/stores/permission'
 import { useRiskStore } from '@/stores/risk'
@@ -343,6 +344,14 @@ export default {
     }
     clearAllFrameworkCaches()
     try {
+      policyDataService.resetOnLogout()
+    } catch (e) {
+      console.warn('Unable to reset policy prefetch cache during logout:', e?.message || e)
+    }
+    if (typeof window !== 'undefined') {
+      window.__grcLoggingOut = false
+    }
+    try {
       useComplianceStore().resetState()
     } catch (e) {
       console.warn('Unable to reset compliance Pinia state during logout:', e?.message || e)
@@ -422,6 +431,9 @@ export default {
    * Logout user
    */
   async logout() {
+    if (typeof window !== 'undefined') {
+      window.__grcLoggingOut = true
+    }
     try {
       console.log('AuthService: Calling logout API...')
       const response = await authApi.post('/jwt/logout/')

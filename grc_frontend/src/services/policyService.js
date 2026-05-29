@@ -10,6 +10,23 @@
 import { axiosInstance, API_ENDPOINTS } from '@/config/api.js';
 import { summarizeExplorerFromFrameworkRows } from '@/composables/usePolicyExplorerPinia.js';
 
+/** Cookie-first auth: skip protected prefetch when shell flags are cleared (e.g. logout). */
+export function isPolicyPrefetchAllowed() {
+  if (typeof window !== 'undefined' && window.__grcLoggingOut) {
+    return false;
+  }
+  const userId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id');
+  const loggedIn =
+    (sessionStorage.getItem('is_logged_in') || localStorage.getItem('is_logged_in')) === 'true' ||
+    (sessionStorage.getItem('isAuthenticated') || localStorage.getItem('isAuthenticated')) === 'true';
+  return !!(userId && loggedIn);
+}
+
+function isAuthRelatedPrefetchError(error) {
+  const status = error?.response?.status;
+  return status === 401 || status === 403 || status === 400;
+}
+
 class PolicyService {
   constructor() {
     this.dataStore = {
@@ -27,6 +44,11 @@ class PolicyService {
    * Prefetch all major policy data sets
    */
   async fetchAllPolicyData() {
+    if (!isPolicyPrefetchAllowed()) {
+      console.log('[Policy Service] Skipping prefetch — user not authenticated');
+      return this.dataStore;
+    }
+
     if (this.dataStore.isFetching) {
       console.log('[Policy Service] Already fetching, skipping duplicate request');
       return this.dataStore;
@@ -53,6 +75,11 @@ class PolicyService {
 
       return this.dataStore;
     } catch (error) {
+      if (!isPolicyPrefetchAllowed() || isAuthRelatedPrefetchError(error)) {
+        console.warn('[Policy Service] Prefetch skipped after auth loss:', error?.message || error);
+        this.dataStore.fetchError = null;
+        return this.dataStore;
+      }
       console.error('[Policy Service] ❌ Prefetch failed:', error);
       this.dataStore.fetchError = error.message;
       throw error;
@@ -65,6 +92,10 @@ class PolicyService {
    * Fetch frameworks list (lightweight) from FRAMEWORKS endpoint
    */
   async fetchFrameworksList() {
+    if (!isPolicyPrefetchAllowed()) {
+      this.dataStore.frameworksList = [];
+      return;
+    }
     try {
       const response = await axiosInstance.get(API_ENDPOINTS.FRAMEWORKS, {
         timeout: 60000
@@ -82,6 +113,7 @@ class PolicyService {
     } catch (error) {
       console.error('[Policy Service] Error fetching frameworks list:', error);
       this.dataStore.frameworksList = [];
+      if (!isPolicyPrefetchAllowed() || isAuthRelatedPrefetchError(error)) return;
       throw error;
     }
   }
@@ -90,6 +122,10 @@ class PolicyService {
    * Fetch detailed frameworks used in All Policies view
    */
   async fetchAllPoliciesFrameworks() {
+    if (!isPolicyPrefetchAllowed()) {
+      this.dataStore.policyFrameworks = [];
+      return;
+    }
     try {
       const response = await axiosInstance.get(API_ENDPOINTS.POLICY_ALL_POLICIES_FRAMEWORKS, {
         timeout: 60000
@@ -107,6 +143,7 @@ class PolicyService {
     } catch (error) {
       console.error('[Policy Service] Error fetching policy frameworks:', error);
       this.dataStore.policyFrameworks = [];
+      if (!isPolicyPrefetchAllowed() || isAuthRelatedPrefetchError(error)) return;
       throw error;
     }
   }
@@ -116,6 +153,11 @@ class PolicyService {
    * @param {object} params Optional query parameters (for filters)
    */
   async fetchFrameworkExplorerData(params = {}) {
+    if (!isPolicyPrefetchAllowed()) {
+      this.dataStore.explorerFrameworks = [];
+      this.dataStore.explorerSummary = null;
+      return;
+    }
     try {
       const response = await axiosInstance.get(API_ENDPOINTS.FRAMEWORK_EXPLORER, {
         params,
@@ -135,6 +177,7 @@ class PolicyService {
       console.error('[Policy Service] Error fetching framework explorer data:', error);
       this.dataStore.explorerFrameworks = [];
       this.dataStore.explorerSummary = null;
+      if (!isPolicyPrefetchAllowed() || isAuthRelatedPrefetchError(error)) return;
       throw error;
     }
   }
@@ -225,7 +268,19 @@ class PolicyService {
     this.dataStore.explorerSummary = null;
     this.dataStore.lastFetchTime = null;
     this.dataStore.fetchError = null;
+    this.dataStore.isFetching = false;
     console.log('[Policy Service] Cache cleared');
+  }
+
+  /** Cancel in-flight prefetch dedupe (call on logout). */
+  resetOnLogout() {
+    this.clearCache();
+    if (typeof window !== 'undefined') {
+      delete window.policyDataFetchPromise;
+      try {
+        sessionStorage.removeItem('api_cache_frameworks_list_v1');
+      } catch (_) { /* ignore */ }
+    }
   }
 
   getCacheStats() {

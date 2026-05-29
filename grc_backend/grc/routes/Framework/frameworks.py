@@ -4008,7 +4008,9 @@ def get_approved_active_frameworks(request):
                     'CurrentVersion': getattr(framework, 'CurrentVersion', 1.0) or 1.0,
                     'EffectiveDate': framework.EffectiveDate.isoformat() if hasattr(framework, 'EffectiveDate') and framework.EffectiveDate else None,
                     'Identifier': getattr(framework, 'Identifier', '') or '',
-                    'InternalExternal': getattr(framework, 'InternalExternal', '') or ''
+                    'InternalExternal': getattr(framework, 'InternalExternal', '') or '',
+                    'StartDate': framework.StartDate.strftime('%Y-%m-%d') if hasattr(framework, 'StartDate') and framework.StartDate else None,
+                    'EndDate': framework.EndDate.strftime('%Y-%m-%d') if hasattr(framework, 'EndDate') and framework.EndDate else None
                 }
                 frameworks_list.append(framework_dict)
             except Exception as framework_error:

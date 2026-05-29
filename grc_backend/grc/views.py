@@ -13,6 +13,7 @@ import re
 from datetime import datetime, timedelta
 from django.utils import timezone
 from .routes.Consent import require_consent
+from .utils.similarity_indexer import index_record
 
 from django.db.models import Count, Avg, Case, When, Value, FloatField, F
 from django.db.models.functions import Coalesce, Cast
@@ -276,7 +277,13 @@ def framework_list(request):
                 framework = framework_serializer.save()
                 framework.CurrentVersion = new_version
                 framework.save()
- 
+
+                # Auto-index into ChromaDB for similarity search
+                try:
+                    index_record(framework, 'Framework')
+                except Exception:
+                    pass
+
                 # Create FrameworkVersion
                 framework_version = FrameworkVersion(
                     FrameworkId=framework,
@@ -316,7 +323,13 @@ def framework_list(request):
  
                     policy = policy_serializer.save()
                     created_policies_count += 1
- 
+
+                    # Auto-index policy into ChromaDB
+                    try:
+                        index_record(policy, 'Policy')
+                    except Exception:
+                        pass
+
                     policy_version = PolicyVersion(
                         PolicyId=policy,
                         Version=policy.CurrentVersion,

@@ -41,6 +41,8 @@ class TenantContextMiddleware(MiddlewareMixin):
             '/static/',
             '/media/',
             '/api/test-connection/',
+            '/api/policies/self-healing/reminders/run',
+            '/api/audits/scheduling/run',
         ]
         
         path = request.path_info
@@ -194,6 +196,8 @@ class TenantIsolationMiddleware(MiddlewareMixin):
             '/static/',
             '/media/',
             '/api/test-connection/',
+            '/api/policies/self-healing/reminders/run',
+            '/api/audits/scheduling/run',
         ]
         
         path = request.path_info

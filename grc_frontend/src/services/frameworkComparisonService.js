@@ -341,6 +341,56 @@ const frameworkComparisonService = {
       console.error(`Error getting compliance generation progress for user ${userId}:`, error);
       throw error;
     }
+  },
+
+  // ===================================================================
+  // PHASE 1: Update existing compliance from amendment
+  // Reuses existing ComplianceApproval workflow
+  // ===================================================================
+
+  async detectControlChanges(frameworkId, complianceId, targetCompliance, originCompliance) {
+    try {
+      const response = await axios.post(
+        API_ENDPOINTS.CHANGE_MGMT_DETECT_CHANGES(frameworkId, complianceId),
+        { target_compliance: targetCompliance, origin_compliance: originCompliance },
+        { withCredentials: true }
+      );
+      return response.data;
+    } catch (error) {
+      console.error(`Error detecting changes for compliance ${complianceId}:`, error);
+      throw error;
+    }
+  },
+
+  async createUpdateApproval(frameworkId, payload) {
+    try {
+      const response = await axios.post(
+        API_ENDPOINTS.CHANGE_MGMT_CREATE_UPDATE_APPROVAL(frameworkId),
+        payload,
+        { withCredentials: true }
+      );
+      return response.data;
+    } catch (error) {
+      console.error(`Error creating update approval for framework ${frameworkId}:`, error);
+      throw error;
+    }
+  },
+
+  // ===================================================================
+  // PHASE 2: Risk integration
+  // ===================================================================
+
+  async getAffectedRisks(frameworkId, complianceId) {
+    try {
+      const response = await axios.get(
+        API_ENDPOINTS.CHANGE_MGMT_AFFECTED_RISKS(frameworkId, complianceId),
+        { withCredentials: true }
+      );
+      return response.data;
+    } catch (error) {
+      console.error(`Error fetching affected risks for compliance ${complianceId}:`, error);
+      throw error;
+    }
   }
 };
 

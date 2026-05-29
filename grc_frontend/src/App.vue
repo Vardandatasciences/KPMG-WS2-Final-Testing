@@ -26,7 +26,7 @@
             'EventCreation',
             'EventEditModal',
           ]">
-            <component :is="Component" :key="`${$route.fullPath}::${frameworkRenderKey}`" />
+            <component :is="Component" :key="routeComponentKey" />
           </keep-alive>
         </router-view>
       </div>
@@ -133,6 +133,27 @@ export default {
     frameworkRenderKey() {
       const frameworkStore = useFrameworkStore()
       return frameworkStore.selectedFrameworkId || 'all'
+    },
+    // Form routes load framework from session in created() — remounting on frameworkRenderKey
+    // change mid-init causes "Cannot read properties of null (reading 'component')".
+    routeComponentKey() {
+      const formRouteNames = new Set([
+        'CreatePolicy',
+        'CreateCompliance',
+        'EditCompliance',
+        'CreateRisk',
+        'CreateRiskInstance',
+        'UploadFramework',
+        'CreateFramework',
+        'AssignAudit',
+        'IncidentManagement',
+        'EventCreation',
+        'EventEditModal',
+      ])
+      if (formRouteNames.has(this.$route.name)) {
+        return this.$route.fullPath
+      }
+      return `${this.$route.fullPath}::${this.frameworkRenderKey}`
     },
   },
   methods: {
@@ -278,8 +299,16 @@ export default {
    
     // Method to be called when user logs out
     async onLogout() {
+      window.__grcLoggingOut = true
       this.hasExplicitlyLoggedIn = false
       this.isAuthenticated = false
+      try {
+        const { default: policyDataService } = await import('./services/policyService.js')
+        policyDataService.resetOnLogout()
+      } catch (error) {
+        console.warn('Unable to reset policy prefetch on logout:', error?.message || error)
+      }
+      sessionStorage.removeItem('cookie_session_validated')
       sessionStorage.removeItem('access_token')
       sessionStorage.removeItem('refresh_token')
       sessionStorage.removeItem('user_id')
@@ -301,6 +330,8 @@ export default {
         console.log('🛑 Periodic token refresh stopped on logout')
       } catch (error) {
         console.error('❌ Error stopping periodic token refresh:', error)
+      } finally {
+        window.__grcLoggingOut = false
       }
     },
    

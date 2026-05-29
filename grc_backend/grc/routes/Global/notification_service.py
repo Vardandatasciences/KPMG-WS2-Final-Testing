@@ -1096,6 +1096,23 @@ class NotificationService:
                     </div>
                 '''
             },
+            'policyReviewSelfHeal': {
+                'subject': 'Policy "{policy_title}" — time to review or renew',
+                'template': lambda policy_title, end_date, review_url, days_left: f'''
+                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff;">
+                      <div style="background-color: #f39c12; padding: 20px; text-align: center;">
+                        <h1 style="color: #ffffff; margin: 0; font-size: 28px;">Policy Review Reminder</h1>
+                      </div>
+                      <div style="padding: 20px;">
+                        <p style="color: #333333; font-size: 16px;">Your policy <strong>{policy_title}</strong> has an end date of <strong>{end_date}</strong>.</p>
+                        <p style="color: #333333; font-size: 16px;">Please sign in to the GRC portal and open the renewal page to <strong>keep the policy as-is</strong> (extends the cycle) or <strong>start an update</strong> in tailoring and templating (creates a new version when you submit).</p>
+                        {f'<p style="color: #333333; font-size: 14px;">Days until end date: <strong>{days_left}</strong></p>' if days_left and str(days_left).strip() else ''}
+                        <p style="margin-top: 24px;"><a href="{review_url}" style="background-color: #3498db; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;">Open renewal page</a></p>
+                        <p style="color: #333333; margin-top: 20px;">– GRC Team</p>
+                      </div>
+                    </div>
+                '''
+            },
             'frameworkActivate': {
                 'subject': 'Framework "{framework_title}" Will Be Activated Soon',
                 'template': lambda framework_title, start_date: f'''

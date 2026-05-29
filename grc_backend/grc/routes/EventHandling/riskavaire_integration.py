@@ -355,21 +355,41 @@ class RiskAvaireEventTrigger:
             return None
     
     @staticmethod
+    def _audit_display_name(audit):
+        """Audit model field is Title, not AuditTitle."""
+        return (
+            getattr(audit, 'Title', None)
+            or getattr(audit, 'AuditTitle', None)
+            or f'Audit {getattr(audit, "AuditId", "")}'
+        )
+
+    @staticmethod
+    def _audit_display_description(audit):
+        return (
+            getattr(audit, 'Objective', None)
+            or getattr(audit, 'Scope', None)
+            or getattr(audit, 'Comments', None)
+            or ''
+        )
+
+    @staticmethod
     def create_audit_event(audit, trigger_type="audit_finding"):
         """
         Create an event when audit findings are detected
         """
         try:
+            audit_name = RiskAvaireEventTrigger._audit_display_name(audit)
+            audit_desc = RiskAvaireEventTrigger._audit_display_description(audit)
             event_titles = {
-                "audit_finding": f"Audit Finding: {audit.AuditTitle}",
-                "audit_overdue": f"Audit Overdue: {audit.AuditTitle}",
-                "audit_approved": f"Audit Approved: {audit.AuditTitle}",
-                "audit_rejected": f"Audit Rejected: {audit.AuditTitle}",
-                "audit_scheduled": f"Audit Scheduled: {audit.AuditTitle}"
+                "audit_finding": f"Audit Finding: {audit_name}",
+                "audit_overdue": f"Audit Overdue: {audit_name}",
+                "audit_approved": f"Audit Approved: {audit_name}",
+                "audit_rejected": f"Audit Rejected: {audit_name}",
+                "audit_scheduled": f"Audit Scheduled: {audit_name}"
             }
             
             event_descriptions = {
-                "audit_finding": f"Audit finding identified: {audit.AuditDescription}",
+                "audit_finding": f"Audit finding identified: {audit_desc}",
                 "audit_overdue": f"Audit is overdue for completion",
                 "audit_approved": f"Audit has been approved",
                 "audit_rejected": f"Audit has been rejected and requires attention",
@@ -377,11 +397,11 @@ class RiskAvaireEventTrigger:
             }
             
             event_data = {
-                'EventTitle': event_titles.get(trigger_type, f"Audit Event: {audit.AuditTitle}"),
-                'Description': event_descriptions.get(trigger_type, f"Audit-related event: {audit.AuditDescription}"),
+                'EventTitle': event_titles.get(trigger_type, f"Audit Event: {audit_name}"),
+                'Description': event_descriptions.get(trigger_type, f"Audit-related event: {audit_desc}"),
                 'LinkedRecordType': 'audit',
                 'LinkedRecordId': audit.AuditId,
-                'LinkedRecordName': audit.AuditTitle,
+                'LinkedRecordName': audit_name,
                 'Category': 'Audit Management',
                 'Priority': 'High',  # Audit findings are typically high priority
                 'Status': 'Pending Review',

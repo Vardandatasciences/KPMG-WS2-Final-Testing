@@ -108,6 +108,72 @@
         </div>
       </div>
     
+    <!-- Renewal custodian reassignment (Policy Manager) -->
+    <div
+      v-if="showRenewalEscalations"
+      id="renewal-escalations"
+      class="renewal-escalations-panel"
+    >
+      <h2 class="renewal-escalations-title">
+        <i class="fas fa-user-clock"></i>
+        Renewal custodian assignments
+      </h2>
+      <p v-if="renewalEscalationsLoading" class="renewal-escalations-hint">Loading…</p>
+      <p v-else-if="renewalEscalations.length === 0" class="renewal-escalations-hint">
+        No policies need custodian assignment right now.
+      </p>
+      <div v-else class="renewal-escalations-table-wrap">
+        <table class="renewal-escalations-table">
+          <thead>
+            <tr>
+              <th>Policy</th>
+              <th>Framework</th>
+              <th>End date</th>
+              <th>Original creator</th>
+              <th>Assign to</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in renewalEscalations" :key="row.escalation_id">
+              <td>{{ row.policy_name }}</td>
+              <td>{{ row.framework_name || '—' }}</td>
+              <td>{{ row.end_date || '—' }}</td>
+              <td>{{ row.original_created_by_name || '—' }}</td>
+              <td>
+                <select
+                  v-model="row._assigneeId"
+                  class="renewal-escalations-select"
+                  :disabled="row._assigning"
+                >
+                  <option :value="null" disabled>Select user</option>
+                  <option
+                    v-for="u in policyUsers"
+                    :key="u.UserId"
+                    :value="u.UserId"
+                  >
+                    {{ u.UserName }}
+                  </option>
+                </select>
+              </td>
+              <td>
+                <button
+                  type="button"
+                  class="renewal-escalations-assign-btn"
+                  :disabled="!row._assigneeId || row._assigning"
+                  @click="assignRenewalCustodian(row)"
+                >
+                  {{ row._assigning ? 'Assigning…' : 'Assign' }}
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p v-if="renewalEscalationsMessage" class="renewal-escalations-success">{{ renewalEscalationsMessage }}</p>
+      <p v-if="renewalEscalationsError" class="renewal-escalations-error">{{ renewalEscalationsError }}</p>
+    </div>
+
     <!-- Filter Dropdowns -->
     <div class="filter-dropdowns">
       <div class="filter-dropdown">
@@ -294,11 +360,15 @@
 </template>
 
 <script>
-import { ref, reactive, watch, onMounted, onUnmounted, onActivated, onDeactivated, computed } from 'vue'
+import { ref, reactive, watch, onMounted, onUnmounted, onActivated, onDeactivated, computed, nextTick } from 'vue'
+import { useRoute } from 'vue-router'
+import apiService from '@/services/apiService'
+import { API_ENDPOINTS } from '@/config/api'
 import { useFrameworkStore } from '@/stores/framework'
 import { useDashboardsStore } from '@/stores/dashboards'
 import { useAppDataStore } from '@/stores/appData'
 import { usePolicyStore } from '@/stores/policy'
+import { usePermissionStore } from '@/stores/permission'
 import { Chart, ArcElement, BarElement, CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend } from 'chart.js'
 import DashboardChartCard from '@/assets/css/DashboardChartCard.vue'
 import html2canvas from 'html2canvas'
@@ -317,10 +387,12 @@ export default {
     DashboardChartCard
   },
   setup() {
+    const route = useRoute()
     const frameworkStore = useFrameworkStore()
     const dashboardsStore = useDashboardsStore()
     const appDataStore = useAppDataStore()
     const policyStore = usePolicyStore()
+    const permissionStore = usePermissionStore()
     const showPolicyDetails = ref(true)
     const selectedFramework = ref('all')
     const isInitializingFrameworkSelection = ref(true)
@@ -331,6 +403,101 @@ export default {
     const frameworks = ref([])
     const policies = ref([])
     const categories = ref([])
+
+    const showRenewalEscalations = ref(false)
+    const renewalEscalations = ref([])
+    const renewalEscalationsLoading = ref(false)
+    const renewalEscalationsError = ref(null)
+    const renewalEscalationsMessage = ref(null)
+    const policyUsers = ref([])
+
+    const isPolicyManagerRole = (role) => String(role || '').trim() === 'Policy Manager'
+
+    const fetchRenewalEscalations = async () => {
+      try {
+        await permissionStore.fetchAndSetUserRole()
+      } catch (e) {
+        console.warn('Could not load user role for renewal escalations', e)
+      }
+      if (!isPolicyManagerRole(permissionStore.role)) {
+        showRenewalEscalations.value = false
+        return
+      }
+
+      renewalEscalationsLoading.value = true
+      renewalEscalationsError.value = null
+      try {
+        const res = await apiService.get(API_ENDPOINTS.POLICY_SELF_HEAL_ESCALATIONS_PENDING)
+        if (res && res.success !== false) {
+          showRenewalEscalations.value = true
+          renewalEscalations.value = (res.escalations || []).map((e) => ({
+            ...e,
+            _assigneeId: null,
+            _assigning: false
+          }))
+          await fetchPolicyUsersForAssign()
+        }
+      } catch (e) {
+        if (e.response && e.response.status === 403) {
+          showRenewalEscalations.value = false
+        } else {
+          renewalEscalationsError.value =
+            (e.response && e.response.data && e.response.data.error) || e.message || 'Failed to load escalations'
+        }
+      } finally {
+        renewalEscalationsLoading.value = false
+      }
+    }
+
+    const fetchPolicyUsersForAssign = async () => {
+      if (!isPolicyManagerRole(permissionStore.role)) return
+      try {
+        const users = await apiService.get(API_ENDPOINTS.POLICY_USERS)
+        const list = Array.isArray(users) ? users : (users?.results || users?.users || [])
+        policyUsers.value = list
+          .map((u) => ({
+            UserId: u.UserId ?? u.user_id,
+            UserName: u.UserName ?? u.user_name ?? u.username ?? ''
+          }))
+          .filter((u) => u.UserId != null && String(u.UserName).trim())
+      } catch (e) {
+        console.warn('Could not load users for custodian assignment', e)
+        renewalEscalationsError.value =
+          (e.response && e.response.data && e.response.data.error) ||
+          e.message ||
+          'Could not load users for assignment'
+      }
+    }
+
+    const assignRenewalCustodian = async (row) => {
+      if (!row._assigneeId) return
+      row._assigning = true
+      renewalEscalationsMessage.value = null
+      renewalEscalationsError.value = null
+      try {
+        await apiService.post(API_ENDPOINTS.POLICY_SELF_HEAL_ASSIGN_CUSTODIAN(row.policy_id), {
+          assignee_user_id: row._assigneeId
+        })
+        renewalEscalations.value = renewalEscalations.value.filter(
+          (r) => r.escalation_id !== row.escalation_id
+        )
+        renewalEscalationsMessage.value = `Custodian assigned for "${row.policy_name}".`
+      } catch (e) {
+        renewalEscalationsError.value =
+          (e.response && e.response.data && e.response.data.error) || e.message || 'Assignment failed'
+      } finally {
+        row._assigning = false
+      }
+    }
+
+    const scrollToRenewalEscalationsIfNeeded = () => {
+      if (route.query.renewalEscalations === '1' && showRenewalEscalations.value) {
+        nextTick(() => {
+          const el = document.getElementById('renewal-escalations')
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        })
+      }
+    }
     
     // Framework session filtering properties
     const sessionFrameworkId = ref(null)
@@ -1408,6 +1575,8 @@ export default {
     onMounted(async () => {
       isComponentActive.value = true
       isInitializingFrameworkSelection.value = true
+      await fetchRenewalEscalations()
+      scrollToRenewalEscalationsIfNeeded()
       // Load framework from Pinia store
       const storeFrameworkId = frameworkStore.selectedFrameworkId
       if (storeFrameworkId && storeFrameworkId !== 'all') {
@@ -2133,7 +2302,14 @@ export default {
       getSelectedFrameworkName,
       getSelectedPolicyName,
       clearFrameworkSelection,
-      clearPolicySelection
+      clearPolicySelection,
+      showRenewalEscalations,
+      renewalEscalations,
+      renewalEscalationsLoading,
+      renewalEscalationsError,
+      renewalEscalationsMessage,
+      policyUsers,
+      assignRenewalCustodian
     }
   }
 }
@@ -2266,5 +2442,71 @@ export default {
 @media (max-width: 900px) {
   .skeleton-kpi-grid { grid-template-columns: repeat(2, 1fr); }
   .skeleton-charts-grid { grid-template-columns: 1fr; }
+}
+
+.renewal-escalations-panel {
+  margin: 0 24px 20px;
+  padding: 20px;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.07);
+  border-left: 4px solid #4f6cff;
+}
+.renewal-escalations-title {
+  font-size: 1.1rem;
+  margin: 0 0 12px;
+  color: #1e293b;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.renewal-escalations-hint {
+  color: #64748b;
+  margin: 0;
+}
+.renewal-escalations-table-wrap {
+  overflow-x: auto;
+}
+.renewal-escalations-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+.renewal-escalations-table th,
+.renewal-escalations-table td {
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid #e2e8f0;
+}
+.renewal-escalations-table th {
+  color: #475569;
+  font-weight: 600;
+}
+.renewal-escalations-select {
+  min-width: 180px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+}
+.renewal-escalations-assign-btn {
+  background: #4f6cff;
+  color: #fff;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+.renewal-escalations-assign-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.renewal-escalations-success {
+  color: #15803d;
+  margin-top: 12px;
+}
+.renewal-escalations-error {
+  color: #b91c1c;
+  margin-top: 12px;
 }
 </style> 

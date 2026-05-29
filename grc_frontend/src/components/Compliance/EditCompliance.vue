@@ -1,5 +1,12 @@
 <template>
   <div class="create-compliance-container">
+    <div v-if="asyncSimilarityMasterId" class="tt-async-banner">
+      <p>{{ complianceSimilarityBannerText }}</p>
+      <button type="button" class="tt-async-banner-btn" @click="openSimilarityReview">
+        Open review
+      </button>
+    </div>
+
     <!-- Header section -->
     <div class="compliance-header">
       <div class="header-content" style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
@@ -1042,6 +1049,25 @@
               {{ validationErrors.Criticality.join(', ') }}
             </div>
           </div>
+
+          <div class="global-form-group">
+            <label class="global-form-label">Audit Frequency</label>
+            <select
+              v-model="compliance.AuditFrequency"
+              class="global-form-select"
+              title="How often this compliance should be audited (compliance-level assign)"
+            >
+              <option value="">Select frequency</option>
+              <option value="Only Once">Only Once</option>
+              <option value="Daily">Daily</option>
+              <option value="Monthly">Monthly</option>
+              <option value="Every 2 Months">Every 2 Months</option>
+              <option value="Every 4 Months">Every 4 Months</option>
+              <option value="Half Yearly">Half Yearly</option>
+              <option value="Yearly">Yearly</option>
+            </select>
+            <small class="global-form-helper-text">Used when assigning audits at compliance level</small>
+          </div>
           
           <div class="global-form-group">
             <label class="global-form-label">
@@ -1469,6 +1495,17 @@
       </div>
     </div>
     
+    <SimilaritySubmitGate
+      v-if="compliance"
+      ref="similarityGate"
+      itemType="Compliance"
+      :item-data="similarityEditItemData"
+      :exclude-entity-id="originalComplianceId"
+      :parent-framework-id="complianceFrameworkId"
+      :parent-policy-id="compliancePolicyId"
+      :parent-subpolicy-id="complianceSubpolicyId"
+    />
+
     <div class="compliance-submit-container">
       <button 
         class="btn btn-submit" 
@@ -1493,10 +1530,18 @@
 import { useComplianceStore } from '@/stores/compliance';
 import { CompliancePopups } from './utils/popupUtils';
 import AccessUtils from '@/utils/accessUtils';
-import { PopupService } from '@/modules/popus/popupService';
+import { PopupService } from '@/modules/popup';
+import SimilaritySubmitGate from '@/components/SimilaritySubmitGate.vue';
+import {
+  getSimilarityBannerMessage,
+  getSimilarityReadyPopup,
+} from '@/utils/similarityNotificationText';
 
 export default {
   name: 'EditCompliance',
+  components: {
+    SimilaritySubmitGate
+  },
   setup() {
     const complianceStore = useComplianceStore()
     return { complianceStore }
@@ -1513,6 +1558,10 @@ export default {
       impactError: false,
       probabilityError: false,
       originalComplianceId: null,
+      similarityBaseline: null,
+      asyncSimilarityMasterId: null,
+      asyncSimilarityCheckCount: 0,
+      asyncSimilarityPollTimer: null,
       categoryOptions: {
         BusinessUnitsCovered: [],
         RiskType: [],
@@ -1658,6 +1707,49 @@ export default {
     }
   },
   computed: {
+    similarityEditItemData() {
+      const c = this.compliance;
+      if (!c) {
+        return { name: '', description: '', compliance_type: '', identifier: '' };
+      }
+      return {
+        name: c.ComplianceTitle || '',
+        description: c.ComplianceItemDescription || '',
+        compliance_type: c.ComplianceType || '',
+        identifier: c.Identifier || ''
+      };
+    },
+
+    complianceFrameworkId() {
+      const id = this.compliance?.FrameworkId ?? this.compliance?.framework_id;
+      const n = parseInt(id, 10);
+      return Number.isNaN(n) ? null : n;
+    },
+
+    compliancePolicyId() {
+      const id = this.compliance?.PolicyId ?? this.compliance?.policy_id;
+      const n = parseInt(id, 10);
+      return Number.isNaN(n) ? null : n;
+    },
+
+    complianceSimilarityBannerText() {
+      return getSimilarityBannerMessage(
+        'Compliance',
+        this.asyncSimilarityCheckCount
+      );
+    },
+
+    complianceSubpolicyId() {
+      const raw = this.compliance?.SubPolicyId
+        ?? this.compliance?.SubPolicy
+        ?? this.compliance?.subpolicy_id;
+      const id = typeof raw === 'object' && raw != null
+        ? (raw.SubPolicyId ?? raw.id)
+        : raw;
+      const n = parseInt(id, 10);
+      return Number.isNaN(n) ? null : n;
+    },
+
     filteredReviewers() {
       if (!this.searchQueries.reviewer) {
         return this.users;
@@ -1687,8 +1779,11 @@ export default {
     document.addEventListener('click', this.handleClickOutside);
   },
   beforeUnmount() {
-    // Remove event listener when component is unmounted
     document.removeEventListener('click', this.handleClickOutside);
+    if (this.asyncSimilarityPollTimer) {
+      clearInterval(this.asyncSimilarityPollTimer);
+      this.asyncSimilarityPollTimer = null;
+    }
   },
   methods: {
     setDataType(fieldName, type) {
@@ -1768,6 +1863,9 @@ export default {
         const response = await this.complianceStore.getComplianceById(complianceId);
         if (response.data && response.data.success) {
           this.compliance = { ...response.data.data };
+          if (!this.compliance.AuditFrequency) {
+            this.compliance.AuditFrequency = 'Monthly';
+          }
 
           // Normalize RiskCategory from possible alternate keys (case/format insensitive)
           if (!this.compliance.RiskCategory) {
@@ -1868,6 +1966,12 @@ export default {
           
           // Clear version preview initially
           this.versionPreview = '';
+          this.similarityBaseline = {
+            name: this.compliance.ComplianceTitle || '',
+            description: this.compliance.ComplianceItemDescription || '',
+            compliance_type: this.compliance.ComplianceType || '',
+            identifier: this.compliance.Identifier || '',
+          };
         } else {
           this.error = 'Failed to load compliance data';
         }
@@ -2520,7 +2624,36 @@ export default {
         // Remove any old/hardcoded user_id/reviewer_id fields
         delete editData.user_id;
         delete editData.reviewer_id;
-        // Use the complianceService to save the edit
+
+        const {
+          buildComplianceVersioningSimilarityChecks,
+          startAsyncUpdateFromChecks,
+        } = await import('@/utils/similaritySubmitHelper');
+        const checks = buildComplianceVersioningSimilarityChecks({
+          gate: this.$refs.similarityGate,
+          compliance: this.compliance,
+          baseline: this.similarityBaseline,
+          excludeEntityId: this.originalComplianceId,
+          frameworkId: this.complianceFrameworkId,
+          policyId: this.compliancePolicyId,
+          subPolicyId: this.complianceSubpolicyId,
+        });
+        const { started, masterCheckId, checkCount } = await startAsyncUpdateFromChecks(checks, {
+          operation: 'compliance_update',
+          entity_pk: this.originalComplianceId,
+          payload: {
+            originalComplianceId: this.originalComplianceId,
+            editData,
+          },
+          label: this.compliance.ComplianceTitle || 'Compliance update',
+          summary: 'Compliance version update',
+        }, { PopupService });
+        if (started) {
+          this._onAsyncSimilarityStarted(masterCheckId, checkCount);
+          this.isSaving = false;
+          return;
+        }
+
         const response = await this.complianceStore.updateComplianceCompat(this.originalComplianceId, editData);
         if (response.data && response.data.success) {
           CompliancePopups.complianceUpdated({
@@ -2540,6 +2673,42 @@ export default {
       } finally {
         this.isSaving = false;
       }
+    },
+    _onAsyncSimilarityStarted(masterCheckId, checkCount = 0) {
+      this.asyncSimilarityMasterId = masterCheckId;
+      this.asyncSimilarityCheckCount = checkCount || 0;
+      this._startAsyncSimilarityPoll();
+    },
+    openSimilarityReview() {
+      if (!this.asyncSimilarityMasterId) return;
+      this.$router.push({ path: '/similarity/review', query: { checkId: this.asyncSimilarityMasterId } });
+    },
+    _startAsyncSimilarityPoll() {
+      if (this.asyncSimilarityPollTimer) {
+        clearInterval(this.asyncSimilarityPollTimer);
+      }
+      const poll = async () => {
+        if (!this.asyncSimilarityMasterId) return;
+        try {
+          const { getAsyncUpdateStatus } = await import('@/services/similarityAsyncUpdateService');
+          const status = await getAsyncUpdateStatus(this.asyncSimilarityMasterId);
+          if (status.background_status === 'READY') {
+            clearInterval(this.asyncSimilarityPollTimer);
+            this.asyncSimilarityPollTimer = null;
+            const readyCopy = getSimilarityReadyPopup('Compliance');
+            PopupService.success(readyCopy.message, readyCopy.heading);
+          } else if (status.background_status === 'FAILED') {
+            clearInterval(this.asyncSimilarityPollTimer);
+            this.asyncSimilarityPollTimer = null;
+            this.asyncSimilarityMasterId = null;
+            PopupService.error(status.error || 'Similarity check failed', 'Error');
+          }
+        } catch (e) {
+          console.warn('Async similarity poll:', e);
+        }
+      };
+      this.asyncSimilarityPollTimer = setInterval(poll, 5000);
+      void poll();
     },
     goBack() {
       // Navigate back to the previous page
@@ -3449,6 +3618,7 @@ export default {
 @import './CreateCompliance.css';
 @import '@/assets/css/form.css';
 @import '@/assets/css/dropdown.css';
+@import '../Policy/TT.css';
 
 /* Initial page skeleton */
 .edit-skeleton {
@@ -3797,6 +3967,7 @@ input[type="number"]::-webkit-outer-spin-button {
 
 input[type="number"] {
   -moz-appearance: textfield;
+  appearance: textfield;
 }
 
 .validation-message.error {

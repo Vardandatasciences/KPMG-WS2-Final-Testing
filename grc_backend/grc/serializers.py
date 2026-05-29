@@ -12,7 +12,7 @@ from .models import (
     Audit, Framework, Policy, GRCLog, Users, SubPolicy, Compliance, ComplianceBaseline,
     AuditFinding, Incident, Risk, RiskInstance, Workflow, PolicyApproval, 
     ComplianceApproval, ExportTask, LastChecklistItemVerified, Notification, S3File, 
-    PolicyCategory, RiskAssignment
+    PolicyCategory, RiskAssignment, FrameworkVersion, PolicyVersion, AuditVersion
 )
 
 # =============================================================================
@@ -39,36 +39,114 @@ class FrameworkSerializer(AutoDecryptingModelSerializer):
         ]
 
 
+class FrameworkVersionSerializer(AutoDecryptingModelSerializer):
+    def validate(self, attrs):
+        framework = attrs.get('FrameworkId')
+        start_date = attrs.get('StartDate')
+        end_date = attrs.get('EndDate')
+        
+        # Validate EndDate = Framework.EndDate
+        if framework and end_date and framework.EndDate:
+            if end_date != framework.EndDate:
+                raise serializers.ValidationError({
+                    'EndDate': f'FrameworkVersion EndDate must equal Framework EndDate ({framework.EndDate})'
+                })
+        
+        return attrs
+    
+    class Meta:
+        model = FrameworkVersion
+        fields = '__all__'
+
+
 # =============================================================================
 # POLICY MODULE SERIALIZERS
 # =============================================================================
 
 
 
+class PolicyReminderRuleSerializer(serializers.Serializer):
+    id = serializers.IntegerField(required=False)
+    start_value = serializers.IntegerField(min_value=1)
+    start_unit = serializers.ChoiceField(choices=['year', 'months', 'weeks', 'days', 'hours'])
+    frequency_unit = serializers.ChoiceField(choices=['monthly', 'quarterly', 'half_yearly', 'weekly', 'daily', 'hourly'])
+    sort_order = serializers.IntegerField(required=False, default=0)
+
+
 class PolicySerializer(AutoDecryptingModelSerializer):
     FrameworkCategory = serializers.CharField(source='FrameworkId.Category', read_only=True)
     FrameworkName = serializers.CharField(source='FrameworkId.FrameworkName', read_only=True)
     subpolicies = serializers.SerializerMethodField()
+    reminder_rules = serializers.SerializerMethodField()
     CreatedByName = serializers.CharField(required=False, allow_blank=True)
     Reviewer = serializers.CharField(required=False, allow_blank=True)
     Status = serializers.CharField(required=False, default='Under Review')
     ActiveInactive = serializers.CharField(required=False, default='Inactive')
     CoverageRate = serializers.FloatField(required=False, allow_null=True)
+    ReviewReminderFrequencyDays = serializers.IntegerField(required=False, min_value=1, max_value=365, default=30)
+
+    def validate(self, attrs):
+        framework = attrs.get('FrameworkId')
+        start_date = attrs.get('StartDate')
+        
+        # Validate StartDate >= Framework.StartDate
+        if framework and start_date:
+            if not framework.StartDate:
+                raise serializers.ValidationError({
+                    'StartDate': 'Framework must have a StartDate set before creating a Policy'
+                })
+            if start_date < framework.StartDate:
+                raise serializers.ValidationError({
+                    'StartDate': f'Policy StartDate must be >= Framework StartDate ({framework.StartDate})'
+                })
+        
+        return attrs
+
+    def create(self, validated_data):
+        framework = validated_data.get('FrameworkId')
+        if framework and framework.EndDate:
+            validated_data['EndDate'] = framework.EndDate
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        framework = validated_data.get('FrameworkId', instance.FrameworkId)
+        if framework and framework.EndDate:
+            validated_data['EndDate'] = framework.EndDate
+        return super().update(instance, validated_data)
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # Add EndDate for read operations (it's auto-set from Framework.EndDate)
+        data['EndDate'] = instance.EndDate
+        return data
 
     def get_subpolicies(self, obj):
         # Get all subpolicies without filtering by status
         subpolicies = obj.subpolicy_set.all()
         return SubPolicySerializer(subpolicies, many=True).data
 
+    def get_reminder_rules(self, obj):
+        rules = obj.reminder_rules.order_by('sort_order', 'id')
+        return [
+            {
+                'id': r.id,
+                'start_value': r.start_value,
+                'start_unit': r.start_unit,
+                'frequency_unit': r.frequency_unit,
+                'sort_order': r.sort_order,
+            }
+            for r in rules
+        ]
+
     class Meta:
         model = Policy
         fields = [
             'PolicyId', 'CurrentVersion', 'Status', 'PolicyName', 'PolicyDescription',
-            'StartDate', 'EndDate', 'Department', 'CreatedByName', 'CreatedByDate',
+            'StartDate', 'EndDate', 'ReviewReminderFrequencyDays', 'Department', 'CreatedByName', 'CreatedByDate',
             'Applicability', 'DocURL', 'Scope', 'Objective', 'Identifier',
             'PermanentTemporary', 'ActiveInactive', 'FrameworkId', 'Reviewer',
             'FrameworkCategory', 'FrameworkName', 'subpolicies', 'CoverageRate','PolicyType',
-            'PolicyCategory', 'PolicySubCategory', 'Entities'
+            'PolicyCategory', 'PolicySubCategory', 'Entities', 'reminder_rules'
         ]
 
 
@@ -78,6 +156,34 @@ class PolicyApprovalSerializer(AutoDecryptingModelSerializer):
     PolicyName = serializers.CharField(source='PolicyId.PolicyName', read_only=True)
     PolicyIdentifier = serializers.CharField(source='PolicyId.Identifier', read_only=True)
     PolicyStatus = serializers.CharField(source='PolicyId.Status', read_only=True)
+
+
+class PolicyVersionSerializer(AutoDecryptingModelSerializer):
+    def validate(self, attrs):
+        framework = attrs.get('FrameworkId')
+        policy = attrs.get('PolicyId')
+        start_date = attrs.get('StartDate')
+        end_date = attrs.get('EndDate')
+        
+        # Validate StartDate >= Framework.StartDate
+        if framework and start_date and framework.StartDate:
+            if start_date < framework.StartDate:
+                raise serializers.ValidationError({
+                    'StartDate': f'PolicyVersion StartDate must be >= Framework StartDate ({framework.StartDate})'
+                })
+        
+        # Validate EndDate = Framework.EndDate
+        if framework and end_date and framework.EndDate:
+            if end_date != framework.EndDate:
+                raise serializers.ValidationError({
+                    'EndDate': f'PolicyVersion EndDate must equal Framework EndDate ({framework.EndDate})'
+                })
+        
+        return attrs
+    
+    class Meta:
+        model = PolicyVersion
+        fields = '__all__'
     
     def to_representation(self, instance):
         """
@@ -240,12 +346,55 @@ class SubPolicySerializer(AutoDecryptingModelSerializer):
         
         return value
 
+    def validate(self, attrs):
+        policy = attrs.get('PolicyId')
+        framework = attrs.get('FrameworkId')
+        start_date = attrs.get('StartDate')
+        
+        # Validate StartDate >= Policy.StartDate
+        if policy and start_date:
+            if not policy.StartDate:
+                raise serializers.ValidationError({
+                    'StartDate': 'Policy must have a StartDate set before creating a SubPolicy'
+                })
+            if start_date < policy.StartDate:
+                raise serializers.ValidationError({
+                    'StartDate': f'SubPolicy StartDate must be >= Policy StartDate ({policy.StartDate})'
+                })
+        
+        # Validate StartDate within Framework period
+        if framework and start_date and framework.StartDate and framework.EndDate:
+            if start_date < framework.StartDate or start_date > framework.EndDate:
+                raise serializers.ValidationError({
+                    'StartDate': f'SubPolicy StartDate must be within Framework period ({framework.StartDate} to {framework.EndDate})'
+                })
+
+        return attrs
+
+    def create(self, validated_data):
+        framework = validated_data.get('FrameworkId')
+        if framework and framework.EndDate:
+            validated_data['EndDate'] = framework.EndDate
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        framework = validated_data.get('FrameworkId', instance.FrameworkId)
+        if framework and framework.EndDate:
+            validated_data['EndDate'] = framework.EndDate
+        return super().update(instance, validated_data)
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # Add EndDate for read operations (it's auto-set from Framework.EndDate)
+        data['EndDate'] = instance.EndDate
+        return data
+
     class Meta:
         model = SubPolicy
         fields = [
             'SubPolicyId', 'SubPolicyName', 'CreatedByName', 'CreatedByDate',
             'Identifier', 'Description', 'Status', 'PermanentTemporary',
-            'Control', 'PolicyId'
+            'Control', 'PolicyId', 'FrameworkId', 'StartDate', 'EndDate'
         ]
 
 
@@ -271,11 +420,52 @@ class ComplianceSerializer(AutoDecryptingModelSerializer):
     Status = serializers.CharField(default='Under Review')
     ActiveInactive = serializers.CharField(default='Active')
     ComplianceVersion = serializers.CharField(required=True)
+    StartDate = serializers.DateField(required=True)
+    EndDate = serializers.DateField(read_only=True, required=False)
     mitigation = serializers.JSONField(required=False, allow_null=True)
+
+    def validate(self, attrs):
+        subpolicy = attrs.get('SubPolicy')
+        start_date = attrs.get('StartDate')
+
+        # Validate StartDate >= SubPolicy StartDate
+        if subpolicy and start_date:
+            if not subpolicy.StartDate:
+                raise serializers.ValidationError({
+                    'StartDate': 'SubPolicy must have a StartDate set before creating a Compliance'
+                })
+            if start_date < subpolicy.StartDate:
+                raise serializers.ValidationError({
+                    'StartDate': f'Compliance StartDate must be >= SubPolicy StartDate ({subpolicy.StartDate})'
+                })
+
+        return attrs
+
+    def create(self, validated_data):
+        subpolicy = validated_data.get('SubPolicy')
+        if subpolicy and subpolicy.EndDate:
+            validated_data['EndDate'] = subpolicy.EndDate
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        subpolicy = validated_data.get('SubPolicy', instance.SubPolicy)
+        if subpolicy and subpolicy.EndDate:
+            validated_data['EndDate'] = subpolicy.EndDate
+        return super().update(instance, validated_data)
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # Add EndDate for read operations (it's auto-set from SubPolicy.EndDate)
+        data['EndDate'] = instance.EndDate
+        return data
     
     class Meta:
         model = Compliance
         fields = '__all__'
+        # Exclude EndDate from write operations - it's auto-set
+        extra_kwargs = {
+            'EndDate': {'read_only': True}
+        }
 
     def validate_ComplianceTitle(self, value):
         if len(value) < 3:
@@ -440,9 +630,58 @@ class AuditSerializer(AutoDecryptingModelSerializer):
         help_text="Framework ID is optional - only add if framework is selected"
     )
     
+    def validate(self, attrs):
+        framework = attrs.get('FrameworkId')
+        policy = attrs.get('PolicyId')
+        subpolicy = attrs.get('SubPolicyId')
+        start_date = attrs.get('StartDate')
+        
+        # Determine the valid period based on what's available
+        valid_start = None
+        valid_end = None
+        
+        if framework and framework.StartDate and framework.EndDate:
+            valid_start = framework.StartDate
+            valid_end = framework.EndDate
+        
+        if policy and policy.StartDate:
+            if valid_start is None or policy.StartDate > valid_start:
+                valid_start = policy.StartDate
+        
+        if subpolicy and subpolicy.StartDate:
+            if valid_start is None or subpolicy.StartDate > valid_start:
+                valid_start = subpolicy.StartDate
+        
+        # Validate StartDate within the determined period
+        if start_date and valid_start and valid_end:
+            if start_date < valid_start or start_date > valid_end:
+                raise serializers.ValidationError({
+                    'StartDate': f'Audit StartDate must be within the valid period ({valid_start} to {valid_end})'
+                })
+        
+        return attrs
+
+    def create(self, validated_data):
+        framework = validated_data.get('FrameworkId')
+        if framework and framework.EndDate:
+            validated_data['EndDate'] = framework.EndDate
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        framework = validated_data.get('FrameworkId', instance.FrameworkId)
+        if framework and framework.EndDate:
+            validated_data['EndDate'] = framework.EndDate
+        return super().update(instance, validated_data)
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # Add EndDate for read operations (it's auto-set from Framework.EndDate)
+        data['EndDate'] = instance.EndDate
+        return data
+    
     class Meta:
         model = Audit
-        fields = ['AuditId', 'Assignee', 'Auditor', 'Reviewer', 'FrameworkId', 'PolicyId', 'DueDate', 'Frequency', 'AuditType', 'Status']
+        fields = ['AuditId', 'Assignee', 'Auditor', 'Reviewer', 'FrameworkId', 'PolicyId', 'SubPolicyId', 'DueDate', 'Frequency', 'AuditType', 'Status', 'StartDate']
 
 
 class AuditFindingSerializer(AutoDecryptingModelSerializer):
@@ -475,6 +714,33 @@ class AuditFindingSerializer(AutoDecryptingModelSerializer):
 
     def get_compliance_mitigation(self, obj):
         return obj.ComplianceId.mitigation if obj.ComplianceId and hasattr(obj.ComplianceId, 'mitigation') else None
+
+
+class AuditVersionSerializer(AutoDecryptingModelSerializer):
+    def validate(self, attrs):
+        framework = attrs.get('FrameworkId')
+        start_date = attrs.get('StartDate')
+        end_date = attrs.get('EndDate')
+        
+        # Validate StartDate within Framework period
+        if framework and start_date and framework.StartDate and framework.EndDate:
+            if start_date < framework.StartDate or start_date > framework.EndDate:
+                raise serializers.ValidationError({
+                    'StartDate': f'AuditVersion StartDate must be within Framework period ({framework.StartDate} to {framework.EndDate})'
+                })
+        
+        # Validate EndDate = Framework.EndDate
+        if framework and end_date and framework.EndDate:
+            if end_date != framework.EndDate:
+                raise serializers.ValidationError({
+                    'EndDate': f'AuditVersion EndDate must equal Framework EndDate ({framework.EndDate})'
+                })
+        
+        return attrs
+    
+    class Meta:
+        model = AuditVersion
+        fields = '__all__'
 
 
 # =============================================================================
