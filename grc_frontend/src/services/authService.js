@@ -84,11 +84,21 @@ authApi.interceptors.response.use(
         removeSensitive('access_token')
         removeSensitive('refresh_token')
         removeSensitive('current_user')
+        // CRITICAL: Clear ALL auth flags from BOTH storages to prevent router guard race condition
+        sessionStorage.removeItem('user_id')
+        sessionStorage.removeItem('is_logged_in')
+        sessionStorage.removeItem('isAuthenticated')
+        localStorage.removeItem('user_id')
+        localStorage.removeItem('is_logged_in')
+        localStorage.removeItem('isAuthenticated')
         localStorage.setItem('auth_logout_reason', 'concurrent_login')
+        window.dispatchEvent(new Event('authChanged'))
         if (window.location.pathname !== '/login' && window.location.pathname !== '/Login') {
-          window.location.href = '/login'
+          // Use replace() instead of href to avoid browser history issues and race conditions
+          window.location.replace('/login')
         }
-        return Promise.reject(error)
+        // Return a pending promise that never resolves to prevent further execution
+        return new Promise(() => {})
       }
     }
 
@@ -109,11 +119,18 @@ authApi.interceptors.response.use(
         removeSensitive('access_token')
         removeSensitive('refresh_token')
         removeSensitive('current_user')
+        // CRITICAL: Clear ALL auth flags from BOTH storages to prevent router guard race condition
+        sessionStorage.removeItem('user_id')
+        sessionStorage.removeItem('is_logged_in')
+        sessionStorage.removeItem('isAuthenticated')
+        localStorage.removeItem('user_id')
         localStorage.removeItem('is_logged_in')
         localStorage.removeItem('isAuthenticated')
         localStorage.setItem('auth_logout_reason', 'session_invalidated')
+        window.dispatchEvent(new Event('authChanged'))
         if (window.location.pathname !== '/login' && window.location.pathname !== '/Login') {
-          window.location.href = '/login'
+          // Use replace() instead of href to avoid browser history issues and race conditions
+          window.location.replace('/login')
         }
       }
     }
