@@ -1,0 +1,109 @@
+name: PR Checks
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+    branches: [ main, master, develop ]
+
+env:
+  PYTHON_VERSION: '3.11'
+  NODE_VERSION: '18'
+
+jobs:
+  # ============================================
+  # JOB 1: Code Quality Checks
+  # ============================================
+  code-quality:
+    name: Code Quality
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Python linting tools
+        run: |
+          pip install black isort flake8
+
+      - name: Check Python formatting (black)
+        working-directory: ./grc_backend
+        run: |
+          black --check --diff .
+
+      - name: Check Python import sorting (isort)
+        working-directory: ./grc_backend
+        run: |
+          isort --check-only --diff .
+
+      - name: Python linting (flake8)
+        working-directory: ./grc_backend
+        run: |
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+
+  # ============================================
+  # JOB 2: Frontend Linting
+  # ============================================
+  frontend-lint:
+    name: Frontend Lint
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: grc_frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: ./grc_frontend
+        run: npm ci
+
+      - name: Run ESLint
+        working-directory: ./grc_frontend
+        run: npm run lint
+
+  # ============================================
+  # JOB 3: Size Diff (bundle size check)
+  # ============================================
+  size-diff:
+    name: Bundle Size Check
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: grc_frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./grc_frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: ./grc_frontend
+        run: npm run build
+
+      - name: Check bundle size
+        working-directory: ./grc_frontend
+        run: |
+          echo "=== Bundle Size Report ==="
+          du -sh dist/
+          find dist -type f -name "*.js" -exec ls -lh {} \; | awk '{print $5, $9}'
